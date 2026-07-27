@@ -1,0 +1,160 @@
+/**
+ * Clasificacion de los movimientos de `wod.ts` por dominio de estimulo, y prescripcion
+ * de reps/unidad realista por movimiento. Metodologia general de programacion CrossFit
+ * (balance gimnastico / con carga externa / monoestructural, tambien llamado "trifecta"),
+ * no programacion propietaria de ningun servicio de pago.
+ */
+
+export const GYMNASTICS_IDS = [
+  'strict-pull-up',
+  'kipping-pull-up',
+  'chest-to-bar-pull-up',
+  'butterfly-pull-up',
+  'toes-to-bar',
+  'knees-to-elbow',
+  'push-up',
+  'handstand-push-up',
+  'kipping-hspu',
+  'ring-dip',
+  'bar-muscle-up',
+  'ring-muscle-up',
+  'handstand-walk',
+  'wall-walk',
+  'rope-climb',
+  'pistol-squat',
+  'box-jump',
+  'box-jump-over',
+  'burpee',
+  'burpee-box-jump-over',
+  'air-squat',
+  'abmat-situp',
+  'l-sit',
+];
+
+export const MONOSTRUCTURAL_IDS = ['run', 'row', 'air-bike', 'ski-erg', 'double-under', 'single-under'];
+
+export const WEIGHTED_IDS = [
+  'wall-ball',
+  'thruster',
+  'kettlebell-swing-russian',
+  'kettlebell-swing-american',
+  'dumbbell-snatch',
+  'dumbbell-clean-and-jerk',
+  'devils-press',
+  'man-maker',
+  'farmers-carry',
+  'sandbag-carry',
+  'sled-push',
+  'wall-walk-alt',
+];
+
+export type WodDomain = 'gymnastics' | 'monostructural' | 'weighted';
+
+export function getWodDomain(movementId: string): WodDomain {
+  if (MONOSTRUCTURAL_IDS.includes(movementId)) return 'monostructural';
+  if (WEIGHTED_IDS.includes(movementId)) return 'weighted';
+  return 'gymnastics';
+}
+
+/** Prescripcion realista por movimiento (reps, distancia o tiempo), no un "12-15" generico para todo. */
+export const WOD_PRESCRIPTION: Record<string, string> = {
+  'strict-pull-up': '5-8',
+  'kipping-pull-up': '8-12',
+  'chest-to-bar-pull-up': '6-10',
+  'butterfly-pull-up': '10-15',
+  'toes-to-bar': '8-12',
+  'knees-to-elbow': '10-15',
+  'push-up': '12-20',
+  'handstand-push-up': '5-8',
+  'kipping-hspu': '6-10',
+  'ring-dip': '8-12',
+  'bar-muscle-up': '3-6',
+  'ring-muscle-up': '3-6',
+  'handstand-walk': '2x15m',
+  'wall-walk': '3-5',
+  'rope-climb': '3-5',
+  'pistol-squat': '6-10 por pierna',
+  'box-jump': '12-15',
+  'box-jump-over': '12-15',
+  burpee: '10-15',
+  'burpee-box-jump-over': '8-12',
+  'air-squat': '20-30',
+  'abmat-situp': '15-25',
+  'l-sit': '20-30 seg',
+  run: '400m',
+  row: '500m',
+  'air-bike': '15-20 cal',
+  'ski-erg': '15-20 cal',
+  'double-under': '30-50',
+  'single-under': '50-80',
+  'wall-ball': '15-20',
+  thruster: '9-15',
+  'kettlebell-swing-russian': '15-20',
+  'kettlebell-swing-american': '12-15',
+  'dumbbell-snatch': '8-12',
+  'dumbbell-clean-and-jerk': '8-12',
+  'devils-press': '6-10',
+  'man-maker': '6-10',
+  'farmers-carry': '40m',
+  'sandbag-carry': '40m',
+  'sled-push': '20m',
+  'wall-walk-alt': '10-16 pasos',
+};
+
+export interface WodTimeDomain {
+  rounds: number;
+  amrapMin: number;
+  emomMin: number;
+}
+
+/** Dominio temporal del WOD segun la semana del mesociclo — mas largo en acumulacion, corto e intenso en pico. */
+export const WOD_TIME_DOMAIN: Record<1 | 2 | 3 | 4, WodTimeDomain> = {
+  1: { rounds: 5, amrapMin: 18, emomMin: 16 },
+  2: { rounds: 4, amrapMin: 15, emomMin: 14 },
+  3: { rounds: 3, amrapMin: 10, emomMin: 8 },
+  4: { rounds: 3, amrapMin: 12, emomMin: 10 },
+};
+
+/**
+ * Generador de nombres propios para WODs custom — vocabulario original, no tomado de
+ * ningun programa de pago. Da al WOD del dia identidad, igual que un coach de verdad
+ * le pone nombre a la sesion en vez de dejarla como "3 movimientos sueltos".
+ */
+const WOD_NAME_PART_A = [
+  'Tormenta',
+  'Furia',
+  'Trueno',
+  'Fuego',
+  'Hierro',
+  'Caos',
+  'Relámpago',
+  'Tempestad',
+  'Eco',
+  'Vértigo',
+  'Quiebre',
+  'Filo',
+  'Bestia',
+  'Motín',
+  'Pulso',
+];
+
+const WOD_NAME_PART_B = [
+  'Salvaje',
+  'de Acero',
+  'sin Freno',
+  'Cruzado',
+  'Ardiente',
+  'de Medianoche',
+  'Implacable',
+  'Rebelde',
+  'en Llamas',
+  'del Amanecer',
+  'de Hierro',
+  'Indomable',
+];
+
+export function generateWodName(): string {
+  const a = WOD_NAME_PART_A[Math.floor(Math.random() * WOD_NAME_PART_A.length)];
+  const b = WOD_NAME_PART_B[Math.floor(Math.random() * WOD_NAME_PART_B.length)];
+  return `${a} ${b}`;
+}

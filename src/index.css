@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-brand-bg text-neutral-100;
+  background-image:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(249, 115, 22, 0.12), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 110% 10%, rgba(212, 175, 55, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-brand-border/70 bg-gradient-to-b from-brand-surface to-brand-surfaceMuted shadow-lg shadow-black/30;
+  }
+}
