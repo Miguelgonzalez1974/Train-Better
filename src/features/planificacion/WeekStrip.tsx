@@ -1,21 +1,12 @@
-import { useState } from 'react';
-import { getDayPlan, getWeekdayIndex, toLocalIsoDate, type OlyFamily } from '../../engine/periodization';
+import { useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import { generateDailySession } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
-import type { MovementPattern } from '../../data/movements/types';
-import type { SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../../data/athlete/types';
+import { DaySessionBlocks } from './DaySessionBlocks';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
-const PATTERN_LABEL: Partial<Record<MovementPattern, string>> = {
-  squat: 'Sentadilla',
-  hinge: 'Bisagra de cadera',
-  horizontalPush: 'Empuje horizontal',
-  verticalPush: 'Empuje vertical',
-};
-
-function olyFamilyLabel(family: OlyFamily): string {
-  return family === 'snatch' ? 'Snatch' : 'Clean & Jerk';
-}
 
 function resolveMovementName(id: string): string {
   if (id.startsWith('benchmark:')) {
@@ -32,29 +23,76 @@ function startOfWeek(date: Date): Date {
   return start;
 }
 
+function formatShort(date: Date): string {
+  return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(date);
+}
+
 interface WeekStripProps {
-  trainingDaysPerWeek: 3 | 4 | 5 | 6;
+  profile: AthleteProfile;
   history: SessionHistoryEntry[];
+  goal: Goal | null;
   today?: Date;
 }
 
-export function WeekStrip({ trainingDaysPerWeek, history, today = new Date() }: WeekStripProps) {
+export function WeekStrip({ profile, history, goal, today = new Date() }: WeekStripProps) {
+  const { trainingDaysPerWeek, mesocycleStartDate } = profile;
+  const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const todayIndex = getWeekdayIndex(today);
   const todayIso = toLocalIsoDate(today);
   const monday = startOfWeek(today);
+  monday.setDate(monday.getDate() + weekOffset * 7);
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(d.getDate() + i);
     return d;
   });
 
+  const expandedPreview = useMemo<DailySession | null>(() => {
+    if (expanded === null) return null;
+    const dateIso = toLocalIsoDate(weekDates[expanded]);
+    if (history.some((h) => h.date === dateIso)) return null;
+    if (dateIso < mesocycleStartDate || dateIso < todayIso) return null;
+    const plan = getDayPlan(expanded, trainingDaysPerWeek);
+    if (!plan.isTrainingDay) return null;
+    return generateDailySession(profile, history, weekDates[expanded], goal);
+  }, [expanded, weekOffset, profile, history, goal]);
+
   return (
     <div className="card p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          onClick={() => setWeekOffset((prev) => prev - 1)}
+          title="Semana anterior"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition-colors duration-200 hover:bg-white/5 hover:text-white"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        <div className="flex items-center gap-2 text-xs text-neutral-400">
+          <span>
+            {formatShort(weekDates[0])} – {formatShort(weekDates[6])}
+          </span>
+          {weekOffset !== 0 && (
+            <button
+              onClick={() => setWeekOffset(0)}
+              className="rounded-md bg-white/5 px-2 py-0.5 font-semibold text-neutral-300 transition-colors duration-200 hover:bg-white/10"
+            >
+              Hoy
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => setWeekOffset((prev) => prev + 1)}
+          title="Semana siguiente"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition-colors duration-200 hover:bg-white/5 hover:text-white"
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
+
       <div className="flex justify-between gap-1">
         {DAY_LABELS.map((label, index) => {
           const plan = getDayPlan(index, trainingDaysPerWeek);
-          const isToday = index === todayIndex;
+          const isToday = toLocalIsoDate(weekDates[index]) === todayIso;
           const isSelected = expanded === index;
           return (
             <button
@@ -82,15 +120,14 @@ export function WeekStrip({ trainingDaysPerWeek, history, today = new Date() }: 
           const plan = getDayPlan(expanded, trainingDaysPerWeek);
           const entry = history.find((h) => h.date === dateIso);
           const isPast = dateIso < todayIso;
+          const beforeStart = dateIso < mesocycleStartDate;
 
           return (
             <div className="mt-3 rounded-xl bg-brand-surfaceMuted/80 p-3 text-sm">
               <p className="mb-1.5 font-semibold text-white">
                 {DAY_LABELS[expanded]} · {dateIso}
               </p>
-              {!plan.isTrainingDay ? (
-                <p className="text-neutral-400">Descanso</p>
-              ) : entry ? (
+              {entry ? (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <span
@@ -109,13 +146,15 @@ export function WeekStrip({ trainingDaysPerWeek, history, today = new Date() }: 
                   </div>
                   <p className="text-neutral-300">{entry.movementIds.map(resolveMovementName).join(' · ')}</p>
                 </div>
+              ) : beforeStart ? (
+                <p className="text-neutral-500">Sin programar todavía.</p>
+              ) : !plan.isTrainingDay ? (
+                <p className="text-neutral-400">Descanso</p>
               ) : isPast ? (
                 <p className="text-neutral-500">No registrado</p>
-              ) : (
-                <p className="text-neutral-300">
-                  Fuerza: {PATTERN_LABEL[plan.strengthPattern] ?? plan.strengthPattern} · Oly: {olyFamilyLabel(plan.olyFamily)}
-                </p>
-              )}
+              ) : expandedPreview ? (
+                <DaySessionBlocks session={expandedPreview} />
+              ) : null}
             </div>
           );
         })()}

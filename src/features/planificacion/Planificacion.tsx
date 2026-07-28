@@ -1,33 +1,50 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Block } from '../../data/movements/types';
-import type { AthleteProfile, DailySession, RxOrScaled, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
+import { RefreshCw, Pencil, Check } from 'lucide-react';
+import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import { generateDailySession, toHistoryEntry } from '../../engine/generateSession';
+import { toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { getWodScoreType } from '../../engine/wodScoring';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
-import { SessionBlockCard } from './SessionBlockCard';
+import { DaySessionBlocks } from './DaySessionBlocks';
 
-const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 const DURATION_PRESETS = [30, 45, 60, 75, 90];
 const numberInputClass = 'w-16 rounded-lg border border-brand-border bg-brand-bg px-2 py-1.5 text-center text-sm text-white';
+
+function emptySession(dateIso: string): DailySession {
+  return { date: dateIso, mesocycleWeek: 0, isRestDay: false, blocks: [] };
+}
+
+function formatMacrocycleDate(dateIso: string): string {
+  return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(dateIso));
+}
 
 export function Planificacion() {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const [goal] = useState(() => athleteRepository.getGoal());
-  const [session, setSession] = useState<DailySession>(() => generateDailySession(profile, history, new Date(), goal));
+  const todayIso = toLocalIsoDate(new Date());
+  const macrocycleNotStarted = todayIso < profile.mesocycleStartDate;
+  const [session, setSession] = useState<DailySession>(() => {
+    if (macrocycleNotStarted) return emptySession(todayIso);
+    const cached = athleteRepository.getTodaySession();
+    if (cached && cached.date === todayIso) return cached;
+    const fresh = generateDailySession(profile, history, new Date(), goal);
+    athleteRepository.saveTodaySession(fresh);
+    return fresh;
+  });
 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(60);
   const [spinning, setSpinning] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const [wodMinutes, setWodMinutes] = useState(0);
   const [wodSeconds, setWodSeconds] = useState(0);
@@ -39,34 +56,32 @@ export function Planificacion() {
   const alreadyCompletedToday = useMemo(() => history.some((h) => h.date === session.date), [history, session.date]);
   const goalMovement = goal?.movementId ? getMovementById(goal.movementId) : undefined;
   const wodScoreType = useMemo(() => getWodScoreType(session), [session]);
-  const blocksWithResults = useMemo(
-    () =>
-      BLOCK_ORDER.map((block) => ({ block, results: session.blocks.filter((b) => b.block === block) })).filter(
-        (entry) => entry.results.length > 0,
-      ),
-    [session.blocks],
-  );
+
+  function generateAndCache(nextProfile: AthleteProfile): DailySession {
+    if (todayIso < nextProfile.mesocycleStartDate) return emptySession(todayIso);
+    const next = generateDailySession(nextProfile, history, new Date(), goal);
+    athleteRepository.saveTodaySession(next);
+    return next;
+  }
+
+  function handleUpdateEntry(index: number, patch: Partial<SessionBlockResult>) {
+    setSession((prev) => {
+      const next = { ...prev, blocks: prev.blocks.map((b, i) => (i === index ? { ...b, ...patch } : b)) };
+      athleteRepository.saveTodaySession(next);
+      return next;
+    });
+  }
 
   function handleSaveProfile(newProfile: AthleteProfile) {
     athleteRepository.saveProfile(newProfile);
     setProfile(newProfile);
-    setSession(generateDailySession(newProfile, history, new Date(), goal));
+    setSession(generateAndCache(newProfile));
   }
 
   function handleRegenerate() {
-    setSession(generateDailySession(profile, history, new Date(), goal));
+    setSession(generateAndCache(profile));
     setSpinning(true);
     setTimeout(() => setSpinning(false), 500);
-  }
-
-  function handleAdjustWeek(direction: 1 | -1) {
-    const start = new Date(profile.mesocycleStartDate);
-    start.setDate(start.getDate() - direction * 7);
-    const shifted = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-    const newProfile = { ...profile, mesocycleStartDate: shifted };
-    athleteRepository.saveProfile(newProfile);
-    setProfile(newProfile);
-    setSession(generateDailySession(newProfile, history, new Date(), goal));
   }
 
   function buildWodResult(): WodResult | undefined {
@@ -102,34 +117,30 @@ export function Planificacion() {
         </div>
       )}
 
-      <WeekStrip trainingDaysPerWeek={profile.trainingDaysPerWeek} history={history} />
+      <WeekStrip profile={profile} history={history} goal={goal} />
 
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-1.5 text-sm text-neutral-400">
-            <button
-              onClick={() => handleAdjustWeek(-1)}
-              disabled={session.mesocycleWeek === 1}
-              title="Retroceder semana"
-              className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-500 transition-colors duration-200 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span>
+          {!macrocycleNotStarted && (
+            <p className="text-sm text-neutral-400">
               Semana {session.mesocycleWeek}/4 · Fase: {MESOCYCLE_PHASE[session.mesocycleWeek as 1 | 2 | 3 | 4]}
-            </span>
-            <button
-              onClick={() => handleAdjustWeek(1)}
-              title="Adelantar semana"
-              className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-500 transition-colors duration-200 hover:bg-white/5 hover:text-white"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-          <p className="text-lg font-semibold text-white">{session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}</p>
+            </p>
+          )}
+          <p className="text-lg font-semibold text-white">
+            {macrocycleNotStarted ? 'Sin programar' : session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}
+          </p>
         </div>
-        {!session.isRestDay && (
+        {!session.isRestDay && !macrocycleNotStarted && (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditMode((prev) => !prev)}
+              title={editMode ? 'Terminar edición' : 'Editar sesión'}
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 ${
+                editMode ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-brand-gold'
+              }`}
+            >
+              {editMode ? <Check size={17} /> : <Pencil size={16} />}
+            </button>
             <button
               onClick={handleRegenerate}
               title="Regenerar sesión"
@@ -290,16 +301,16 @@ export function Planificacion() {
         </div>
       )}
 
-      {session.isRestDay ? (
+      {macrocycleNotStarted ? (
+        <p className="card p-4 text-neutral-400">
+          Tu próximo macrociclo empieza el {formatMacrocycleDate(profile.mesocycleStartDate)}. Todavía no hay programación.
+        </p>
+      ) : session.isRestDay ? (
         <p className="card p-4 text-neutral-400">
           Hoy toca descansar. Aprovecha para movilidad ligera o recuperación activa.
         </p>
       ) : (
-        <div className="card flex flex-col p-4">
-          {blocksWithResults.map(({ block, results }, index) => (
-            <SessionBlockCard key={block} block={block} results={results} isLast={index === blocksWithResults.length - 1} />
-          ))}
-        </div>
+        <DaySessionBlocks session={session} editable={editMode} onUpdateEntry={handleUpdateEntry} />
       )}
     </div>
   );

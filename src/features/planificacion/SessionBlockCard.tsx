@@ -1,6 +1,6 @@
 import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { getMovementById, getMovementsByBlock, benchmarkWorkouts } from '../../data/movements';
 import type { SessionBlockResult } from '../../data/athlete/types';
 
 type Accent = 'orange' | 'gold' | 'neutral';
@@ -269,13 +269,110 @@ function groupBySubgroup(results: SessionBlockResult[]): SubgroupBucket[] {
   return groups;
 }
 
+const editInputClass = 'rounded-lg border border-brand-border bg-brand-bg px-2 py-1 text-center text-sm text-white';
+
+/** Modo edicion: sustituye las tarjetas visuales por una lista uniforme con select de movimiento + inputs de series/reps/kg. */
+function EditableBlockEntries({
+  block,
+  entries,
+  entryIndices,
+  onUpdateEntry,
+}: {
+  block: Block;
+  entries: SessionBlockResult[];
+  entryIndices: number[];
+  onUpdateEntry: (index: number, patch: Partial<SessionBlockResult>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {entries.map((entry, i) => {
+        const index = entryIndices[i];
+        if (entry.movementId.startsWith('benchmark:')) {
+          const benchmarkId = entry.movementId.replace('benchmark:', '');
+          const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);
+          return (
+            <div key={index} className="rounded-xl bg-brand-surfaceMuted/80 p-3">
+              <p className="font-semibold text-white">{wod?.name ?? benchmarkId}</p>
+              <p className="mt-1 text-xs text-neutral-500">Los WOD de referencia no se editan — usa Regenerar para otro.</p>
+            </div>
+          );
+        }
+
+        const currentMovement = getMovementById(entry.movementId);
+        const pool = getMovementsByBlock(block);
+        const samePattern = currentMovement ? pool.filter((m) => m.pattern === currentMovement.pattern) : [];
+        const options = samePattern.length >= 2 ? samePattern : pool;
+        const hasCurrentInOptions = options.some((m) => m.id === entry.movementId);
+
+        return (
+          <div key={index} className="flex flex-col gap-2 rounded-xl bg-brand-surfaceMuted/80 p-3">
+            <select
+              value={entry.movementId}
+              onChange={(e) => onUpdateEntry(index, { movementId: e.target.value })}
+              className={`${editInputClass} text-left`}
+            >
+              {!hasCurrentInOptions && currentMovement && <option value={entry.movementId}>{currentMovement.name}</option>}
+              {options.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex flex-wrap items-center gap-3">
+              {entry.sets !== undefined && (
+                <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+                  Series
+                  <input
+                    type="number"
+                    min={1}
+                    value={entry.sets}
+                    onChange={(e) => onUpdateEntry(index, { sets: Number(e.target.value) })}
+                    className={`${editInputClass} w-14`}
+                  />
+                </label>
+              )}
+              {entry.reps !== undefined && (
+                <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+                  Reps
+                  <input
+                    type="text"
+                    value={entry.reps}
+                    onChange={(e) => onUpdateEntry(index, { reps: e.target.value })}
+                    className={`${editInputClass} w-20`}
+                  />
+                </label>
+              )}
+              {entry.loadKg !== undefined && (
+                <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+                  Kg
+                  <input
+                    type="number"
+                    min={0}
+                    step={2.5}
+                    value={entry.loadKg}
+                    onChange={(e) => onUpdateEntry(index, { loadKg: Number(e.target.value) })}
+                    className={`${editInputClass} w-16`}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 interface SessionBlockCardProps {
   block: Block;
   results: SessionBlockResult[];
   isLast: boolean;
+  entryIndices?: number[];
+  editable?: boolean;
+  onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
 }
 
-export function SessionBlockCard({ block, results, isLast }: SessionBlockCardProps) {
+export function SessionBlockCard({ block, results, isLast, entryIndices, editable, onUpdateEntry }: SessionBlockCardProps) {
   if (results.length === 0) return null;
   const { label, blurb, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
@@ -297,7 +394,9 @@ export function SessionBlockCard({ block, results, isLast }: SessionBlockCardPro
           <span className="text-xs text-neutral-500">· {blurb}</span>
         </div>
 
-        {block === 'wod' ? (
+        {editable && onUpdateEntry && entryIndices ? (
+          <EditableBlockEntries block={block} entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
+        ) : block === 'wod' ? (
           isBenchmarkWod ? (
             <BenchmarkWodCard entry={results[0]} />
           ) : (

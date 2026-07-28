@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, ArrowRight } from 'lucide-react';
+import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
@@ -7,6 +7,7 @@ import { computeWeakPoints } from './weakPoints';
 import { AcwrGauge } from './AcwrGauge';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
+import { NextWeekPreview } from './NextWeekPreview';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -37,6 +38,7 @@ interface DashboardProps {
 export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   const [profile] = useState(() => athleteRepository.getProfile());
+  const [showNextWeek, setShowNextWeek] = useState(false);
   const stats = useMemo(() => getMonthlyStats(history), [history]);
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
@@ -49,15 +51,26 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
           <p className="text-sm text-neutral-400 capitalize">{MONTH_LABEL}</p>
           <p className="text-lg font-semibold text-white">Tu progreso</p>
         </div>
-        <button
-          onClick={onNavigateToPlanificacion}
-          className="flex items-center gap-2 rounded-lg bg-brand-orange px-3.5 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark hover:shadow-lg hover:shadow-brand-orange/30"
-        >
-          <CalendarRange size={16} strokeWidth={2.25} />
-          Entrenamiento de hoy
-          <ArrowRight size={16} strokeWidth={2.25} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNextWeek(true)}
+            title="Programar próxima semana"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <CalendarPlus size={17} strokeWidth={2.25} />
+          </button>
+          <button
+            onClick={onNavigateToPlanificacion}
+            className="flex items-center gap-2 rounded-lg bg-brand-orange px-3.5 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark hover:shadow-lg hover:shadow-brand-orange/30"
+          >
+            <CalendarRange size={16} strokeWidth={2.25} />
+            Entrenamiento de hoy
+            <ArrowRight size={16} strokeWidth={2.25} />
+          </button>
+        </div>
       </div>
+
+      {showNextWeek && <NextWeekPreview onClose={() => setShowNextWeek(false)} />}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <MetricCard icon={CalendarCheck} label="Días entrenados este mes" value={String(stats.diasEntrenados)} />
@@ -69,7 +82,11 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         <MetricCard icon={Gauge} label="RPE medio" value={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'} />
       </div>
 
-      <TrainingHeatmap history={history} trainingDaysPerWeek={profile.trainingDaysPerWeek} />
+      <TrainingHeatmap
+        history={history}
+        trainingDaysPerWeek={profile.trainingDaysPerWeek}
+        mesocycleStartDate={profile.mesocycleStartDate}
+      />
 
       <AcwrGauge result={acwr} />
 

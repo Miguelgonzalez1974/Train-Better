@@ -1,8 +1,9 @@
-import { AthleteProfile, DEFAULT_PROFILE, Goal, SessionHistoryEntry } from './types';
+import { AthleteProfile, DailySession, DEFAULT_PROFILE, Goal, SessionHistoryEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
 const GOAL_KEY = 'train-better:goal';
+const TODAY_SESSION_KEY = 'train-better:today-session';
 const HISTORY_LIMIT = 30;
 
 export interface AthleteRepository {
@@ -14,6 +15,8 @@ export interface AthleteRepository {
   getGoal(): Goal | null;
   saveGoal(goal: Goal): void;
   clearGoal(): void;
+  getTodaySession(): DailySession | null;
+  saveTodaySession(session: DailySession): void;
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -52,5 +55,11 @@ export const localAthleteRepository: AthleteRepository = {
   },
   clearGoal() {
     localStorage.removeItem(GOAL_KEY);
+  },
+  getTodaySession() {
+    return readJson<DailySession | null>(TODAY_SESSION_KEY, null);
+  },
+  saveTodaySession(session) {
+    localStorage.setItem(TODAY_SESSION_KEY, JSON.stringify(session));
   },
 };
