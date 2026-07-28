@@ -5,16 +5,27 @@ import { supabase } from '../../lib/supabaseClient';
 export function Login() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [errorDetail, setErrorDetail] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase) return;
     setStatus('sending');
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setStatus(error ? 'error' : 'sent');
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) {
+        setErrorDetail(`${error.name ?? ''} ${error.status ?? ''}: ${error.message}`);
+        setStatus('error');
+      } else {
+        setStatus('sent');
+      }
+    } catch (err) {
+      setErrorDetail(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+      setStatus('error');
+    }
   }
 
   return (
@@ -56,7 +67,11 @@ export function Login() {
             >
               {status === 'sending' ? 'Enviando...' : 'Enviar enlace de acceso'}
             </button>
-            {status === 'error' && <p className="text-xs text-red-400">No se pudo enviar el enlace. Inténtalo de nuevo.</p>}
+            {status === 'error' && (
+              <p className="text-xs text-red-400">
+                No se pudo enviar el enlace. {errorDetail}
+              </p>
+            )}
           </form>
         )}
       </div>
