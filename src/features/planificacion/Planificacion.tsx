@@ -3,7 +3,7 @@ import { RefreshCw, Pencil, Check } from 'lucide-react';
 import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
-import { generateDailySession, toHistoryEntry } from '../../engine/generateSession';
+import { generateSessionForDate, toHistoryEntry } from '../../engine/generateSession';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { getWodScoreType } from '../../engine/wodScoring';
@@ -16,26 +16,16 @@ const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 const DURATION_PRESETS = [30, 45, 60, 75, 90];
 const numberInputClass = 'w-16 rounded-lg border border-brand-border bg-brand-bg px-2 py-1.5 text-center text-sm text-white';
 
-function emptySession(dateIso: string): DailySession {
-  return { date: dateIso, mesocycleWeek: 0, isRestDay: false, blocks: [] };
-}
-
-function formatMacrocycleDate(dateIso: string): string {
-  return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(dateIso));
-}
-
 export function Planificacion() {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const [goal] = useState(() => athleteRepository.getGoal());
   const todayIso = toLocalIsoDate(new Date());
-  const macrocycleNotStarted = todayIso < profile.mesocycleStartDate;
   const [session, setSession] = useState<DailySession>(() => {
-    if (macrocycleNotStarted) return emptySession(todayIso);
-    const cached = athleteRepository.getTodaySession();
-    if (cached && cached.date === todayIso) return cached;
-    const fresh = generateDailySession(profile, history, new Date(), goal);
-    athleteRepository.saveTodaySession(fresh);
+    const cached = athleteRepository.getCachedSession(todayIso);
+    if (cached) return cached;
+    const fresh = generateSessionForDate(profile, history, new Date(), goal);
+    athleteRepository.saveCachedSession(fresh);
     return fresh;
   });
 
@@ -58,16 +48,15 @@ export function Planificacion() {
   const wodScoreType = useMemo(() => getWodScoreType(session), [session]);
 
   function generateAndCache(nextProfile: AthleteProfile): DailySession {
-    if (todayIso < nextProfile.mesocycleStartDate) return emptySession(todayIso);
-    const next = generateDailySession(nextProfile, history, new Date(), goal);
-    athleteRepository.saveTodaySession(next);
+    const next = generateSessionForDate(nextProfile, history, new Date(), goal);
+    athleteRepository.saveCachedSession(next);
     return next;
   }
 
   function handleUpdateEntry(index: number, patch: Partial<SessionBlockResult>) {
     setSession((prev) => {
       const next = { ...prev, blocks: prev.blocks.map((b, i) => (i === index ? { ...b, ...patch } : b)) };
-      athleteRepository.saveTodaySession(next);
+      athleteRepository.saveCachedSession(next);
       return next;
     });
   }
@@ -121,16 +110,21 @@ export function Planificacion() {
 
       <div className="flex items-center justify-between">
         <div>
-          {!macrocycleNotStarted && (
+          {session.mesocycleWeek > 0 && (
             <p className="text-sm text-neutral-400">
               Semana {session.mesocycleWeek}/4 · Fase: {MESOCYCLE_PHASE[session.mesocycleWeek as 1 | 2 | 3 | 4]}
             </p>
           )}
-          <p className="text-lg font-semibold text-white">
-            {macrocycleNotStarted ? 'Sin programar' : session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-lg font-semibold text-white">{session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}</p>
+            {!session.isRestDay && session.mesocycleWeek === 0 && (
+              <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
+                Mantenimiento
+              </span>
+            )}
+          </div>
         </div>
-        {!session.isRestDay && !macrocycleNotStarted && (
+        {!session.isRestDay && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setEditMode((prev) => !prev)}
@@ -301,11 +295,7 @@ export function Planificacion() {
         </div>
       )}
 
-      {macrocycleNotStarted ? (
-        <p className="card p-4 text-neutral-400">
-          Tu próximo macrociclo empieza el {formatMacrocycleDate(profile.mesocycleStartDate)}. Todavía no hay programación.
-        </p>
-      ) : session.isRestDay ? (
+      {session.isRestDay ? (
         <p className="card p-4 text-neutral-400">
           Hoy toca descansar. Aprovecha para movilidad ligera o recuperación activa.
         </p>

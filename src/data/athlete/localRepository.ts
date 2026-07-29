@@ -3,8 +3,9 @@ import { AthleteProfile, DailySession, DEFAULT_PROFILE, Goal, SessionHistoryEntr
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
 const GOAL_KEY = 'train-better:goal';
-const TODAY_SESSION_KEY = 'train-better:today-session';
+const SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
+const SESSION_CACHE_LIMIT = 60;
 
 export interface AthleteRepository {
   getProfile(): AthleteProfile;
@@ -15,8 +16,8 @@ export interface AthleteRepository {
   getGoal(): Goal | null;
   saveGoal(goal: Goal): void;
   clearGoal(): void;
-  getTodaySession(): DailySession | null;
-  saveTodaySession(session: DailySession): void;
+  getCachedSession(dateIso: string): DailySession | null;
+  saveCachedSession(session: DailySession): void;
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -27,6 +28,15 @@ function readJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/** Igual que HISTORY_LIMIT: evita que la cache de sesiones generadas crezca sin limite con el tiempo. */
+function pruneSessionCache(cache: Record<string, DailySession>): Record<string, DailySession> {
+  const dates = Object.keys(cache).sort();
+  if (dates.length <= SESSION_CACHE_LIMIT) return cache;
+  const pruned = { ...cache };
+  for (const date of dates.slice(0, dates.length - SESSION_CACHE_LIMIT)) delete pruned[date];
+  return pruned;
 }
 
 export const localAthleteRepository: AthleteRepository = {
@@ -56,10 +66,13 @@ export const localAthleteRepository: AthleteRepository = {
   clearGoal() {
     localStorage.removeItem(GOAL_KEY);
   },
-  getTodaySession() {
-    return readJson<DailySession | null>(TODAY_SESSION_KEY, null);
+  getCachedSession(dateIso) {
+    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
+    return cache[dateIso] ?? null;
   },
-  saveTodaySession(session) {
-    localStorage.setItem(TODAY_SESSION_KEY, JSON.stringify(session));
+  saveCachedSession(session) {
+    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
+    cache[session.date] = session;
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(pruneSessionCache(cache)));
   },
 };

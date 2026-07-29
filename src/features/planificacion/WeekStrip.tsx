@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
-import { generateDailySession } from '../../engine/generateSession';
+import { generateSessionForDate } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../../data/athlete/types';
 import { DaySessionBlocks } from './DaySessionBlocks';
 
@@ -35,7 +36,7 @@ interface WeekStripProps {
 }
 
 export function WeekStrip({ profile, history, goal, today = new Date() }: WeekStripProps) {
-  const { trainingDaysPerWeek, mesocycleStartDate } = profile;
+  const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
   const todayIso = toLocalIsoDate(today);
@@ -49,12 +50,16 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
 
   const expandedPreview = useMemo<DailySession | null>(() => {
     if (expanded === null) return null;
-    const dateIso = toLocalIsoDate(weekDates[expanded]);
+    const date = weekDates[expanded];
+    const dateIso = toLocalIsoDate(date);
     if (history.some((h) => h.date === dateIso)) return null;
-    if (dateIso < mesocycleStartDate || dateIso < todayIso) return null;
-    const plan = getDayPlan(expanded, trainingDaysPerWeek);
-    if (!plan.isTrainingDay) return null;
-    return generateDailySession(profile, history, weekDates[expanded], goal);
+    if (dateIso < todayIso) return null;
+
+    const cached = athleteRepository.getCachedSession(dateIso);
+    if (cached) return cached;
+    const fresh = generateSessionForDate(profile, history, date, goal);
+    athleteRepository.saveCachedSession(fresh);
+    return fresh;
   }, [expanded, weekOffset, profile, history, goal]);
 
   return (
@@ -117,10 +122,8 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
         (() => {
           const date = weekDates[expanded];
           const dateIso = toLocalIsoDate(date);
-          const plan = getDayPlan(expanded, trainingDaysPerWeek);
           const entry = history.find((h) => h.date === dateIso);
           const isPast = dateIso < todayIso;
-          const beforeStart = dateIso < mesocycleStartDate;
 
           return (
             <div className="mt-3 rounded-xl bg-brand-surfaceMuted/80 p-3 text-sm">
@@ -146,12 +149,10 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
                   </div>
                   <p className="text-neutral-300">{entry.movementIds.map(resolveMovementName).join(' · ')}</p>
                 </div>
-              ) : beforeStart ? (
-                <p className="text-neutral-500">Sin programar todavía.</p>
-              ) : !plan.isTrainingDay ? (
-                <p className="text-neutral-400">Descanso</p>
               ) : isPast ? (
                 <p className="text-neutral-500">No registrado</p>
+              ) : expandedPreview?.isRestDay ? (
+                <p className="text-neutral-400">Descanso</p>
               ) : expandedPreview ? (
                 <DaySessionBlocks session={expandedPreview} />
               ) : null}

@@ -78,7 +78,9 @@ export function PerfilRapido({ profile, onSave }: PerfilRapidoProps) {
           onChange={(e) => setDraft((prev) => ({ ...prev, mesocycleStartDate: e.target.value }))}
           className={`w-40 ${inputClass}`}
         />
-        <span className="text-neutral-600">Antes de esta fecha no se genera programación.</span>
+        <span className="text-neutral-600">
+          Antes de esta fecha entrenas en modo mantenimiento (sesiones ligeras); desde esta fecha arranca el macrociclo completo.
+        </span>
       </label>
 
       <div className="flex items-center justify-between gap-3">

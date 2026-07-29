@@ -609,6 +609,50 @@ export function generateDailySession(
   };
 }
 
+/**
+ * Sesion ligera de mantenimiento para dias fuera de un macrociclo activo (antes de mesocycleStartDate):
+ * cardio suave + skill + cooldown, sin cargas basadas en PRs ni periodizacion — la misma receta que ya
+ * usa el dia de recuperacion activa. Sirve para seguir entrenando y registrando RPE (alimenta el ACWR)
+ * mientras no hay un macrociclo estructurado en marcha.
+ */
+export function generateOffSeasonSession(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  date: Date = new Date(),
+): DailySession {
+  const dateIso = toLocalIsoDate(date);
+  const dayPlan = getDayPlan(getWeekdayIndex(date), profile.trainingDaysPerWeek);
+
+  if (!dayPlan.isTrainingDay) {
+    return { date: dateIso, mesocycleWeek: 0, isRestDay: true, blocks: [] };
+  }
+
+  const recentIds = getRecentMovementIds(history);
+  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, false);
+  const wodBlock = buildRecoveryWodBlock(recentIds);
+  const skillBlock = buildRecoverySkillBlock(recentIds);
+  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
+
+  return {
+    date: dateIso,
+    mesocycleWeek: 0,
+    isRestDay: false,
+    blocks: [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock],
+  };
+}
+
+/** Punto unico de decision: mantenimiento antes del inicio del macrociclo, programacion completa despues. */
+export function generateSessionForDate(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  date: Date,
+  goal: Goal | null,
+): DailySession {
+  return toLocalIsoDate(date) < profile.mesocycleStartDate
+    ? generateOffSeasonSession(profile, history, date)
+    : generateDailySession(profile, history, date, goal);
+}
+
 export function toHistoryEntry(
   session: DailySession,
   rxOrScaled: RxOrScaled,

@@ -6,7 +6,7 @@ const WEEKS = 12;
 /** RPE por debajo de este umbral se trata como recuperacion activa, no como entreno "duro". */
 const RECOVERY_RPE_THRESHOLD = 3;
 
-type CellKind = 'future' | 'rest' | 'trained' | 'recovery' | 'missed' | 'notStarted';
+type CellKind = 'future' | 'rest' | 'trained' | 'recovery' | 'missed' | 'offSeason';
 
 interface DayCell {
   iso: string;
@@ -24,7 +24,7 @@ const CELL_CLASS: Record<Exclude<CellKind, 'trained' | 'future'>, string> = {
   rest: 'bg-sky-500/15',
   recovery: 'bg-emerald-500/50',
   missed: 'border border-red-500/40 bg-transparent',
-  notStarted: 'bg-white/[0.04]',
+  offSeason: 'bg-white/[0.04]',
 };
 
 const KIND_TITLE: Record<CellKind, string> = {
@@ -33,7 +33,7 @@ const KIND_TITLE: Record<CellKind, string> = {
   recovery: 'Recuperación activa',
   trained: 'Entrenamiento',
   missed: 'Día de entreno no registrado',
-  notStarted: 'Aún no ha empezado tu macrociclo',
+  offSeason: 'Fase de mantenimiento (fuera del macrociclo) — entreno ligero opcional',
 };
 
 interface TrainingHeatmapProps {
@@ -67,7 +67,7 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, mesocycleStartDa
         return { iso, rpe: entry.rpe, kind };
       }
 
-      if (iso < mesocycleStartDate) return { iso, rpe: null, kind: 'notStarted' as CellKind };
+      if (iso < mesocycleStartDate) return { iso, rpe: null, kind: 'offSeason' as CellKind };
 
       const isTrainingDay = getDayPlan(d, trainingDaysPerWeek).isTrainingDay;
       return { iso, rpe: null, kind: isTrainingDay ? ('missed' as CellKind) : ('rest' as CellKind) };
@@ -117,7 +117,7 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, mesocycleStartDa
           <span className="h-3 w-3 rounded-sm border border-red-500/40" /> No registrado
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm bg-white/[0.04]" /> Sin macrociclo
+          <span className="h-3 w-3 rounded-sm bg-white/[0.04]" /> Mantenimiento
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-sm bg-brand-orange/40" />
