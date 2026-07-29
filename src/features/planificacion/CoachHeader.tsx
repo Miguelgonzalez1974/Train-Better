@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Brain, Settings } from 'lucide-react';
 import { Modal } from '../shell/Modal';
 import { PerfilRapido } from './PerfilRapido';
+import { AdminInviteUser } from '../auth/AdminInviteUser';
 import type { AthleteProfile } from '../../data/athlete/types';
 
 interface CoachHeaderProps {
@@ -42,6 +43,7 @@ export function CoachHeader({ profile, onSaveProfile }: CoachHeaderProps) {
             setOpen(false);
           }}
         />
+        <AdminInviteUser />
       </Modal>
     </>
   );
