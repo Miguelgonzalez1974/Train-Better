@@ -134,7 +134,7 @@ export function Planificacion() {
 
       <WeekStrip profile={profile} history={history} goal={goal} />
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           {session.mesocycleWeek > 0 && (
             <p className="text-sm text-neutral-400">
