@@ -5,6 +5,7 @@ import { generateSessionForDate } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../../data/athlete/types';
+import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from './DaySessionBlocks';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -128,12 +129,9 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
           const isToday = dateIso === todayIso;
 
           return (
-            <div className="mt-3 rounded-xl bg-brand-surfaceMuted/80 p-3 text-sm">
-              <p className="mb-1.5 font-semibold text-white">
-                {DAY_LABELS[expanded]} · {dateIso}
-              </p>
+            <Modal open onClose={() => setExpanded(null)} title={`${DAY_LABELS[expanded]} · ${dateIso}`}>
               {entry ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 text-sm">
                   <div className="flex items-center gap-2">
                     <span
                       className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
@@ -152,15 +150,15 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
                   <p className="text-neutral-300">{entry.movementIds.map(resolveMovementName).join(' · ')}</p>
                 </div>
               ) : isPast ? (
-                <p className="text-neutral-500">No registrado</p>
+                <p className="text-sm text-neutral-500">No registrado</p>
               ) : isToday ? (
-                <p className="text-neutral-400">Consulta el detalle completo en «Sesión de hoy», justo debajo.</p>
+                <p className="text-sm text-neutral-400">Consulta el detalle completo en «Sesión de hoy».</p>
               ) : expandedPreview?.isRestDay ? (
-                <p className="text-neutral-400">Descanso</p>
+                <p className="text-sm text-neutral-400">Descanso</p>
               ) : expandedPreview ? (
                 <DaySessionBlocks session={expandedPreview} />
               ) : null}
-            </div>
+            </Modal>
           );
         })()}
     </div>
