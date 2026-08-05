@@ -5,7 +5,6 @@ import { supabase } from '../../lib/supabaseClient';
 export function Login() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [errorDetail, setErrorDetail] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -17,13 +16,13 @@ export function Login() {
         options: { emailRedirectTo: window.location.origin },
       });
       if (error) {
-        setErrorDetail(`${error.name ?? ''} ${error.status ?? ''}: ${error.message}`);
+        console.error('signInWithOtp failed', error);
         setStatus('error');
       } else {
         setStatus('sent');
       }
     } catch (err) {
-      setErrorDetail(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+      console.error('signInWithOtp failed', err);
       setStatus('error');
     }
   }
@@ -69,7 +68,7 @@ export function Login() {
             </button>
             {status === 'error' && (
               <p className="text-xs text-red-400">
-                No se pudo enviar el enlace. {errorDetail}
+                No se pudo enviar el enlace. Inténtalo de nuevo en unos segundos.
               </p>
             )}
           </form>

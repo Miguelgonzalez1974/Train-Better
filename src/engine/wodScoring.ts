@@ -1,5 +1,5 @@
 import { benchmarkWorkouts } from '../data/movements';
-import type { DailySession, WodScoreType } from '../data/athlete/types';
+import type { DailySession, SessionBlockResult, WodScoreType } from '../data/athlete/types';
 
 function inferScoreTypeFromFormat(format: string): WodScoreType {
   if (format.startsWith('For Time')) return 'time';
@@ -22,4 +22,9 @@ export function getWodScoreType(session: DailySession): WodScoreType | null {
 
   const format = wodEntries[0]?.format;
   return format ? inferScoreTypeFromFormat(format) : null;
+}
+
+/** Encuentra el bloque de test de fuerza maxima del dia (si lo hay), para pedir el peso real levantado. */
+export function getStrengthTestBlock(session: DailySession): SessionBlockResult | null {
+  return session.blocks.find((b) => b.block === 'strength' && b.format === 'Test 1RM') ?? null;
 }

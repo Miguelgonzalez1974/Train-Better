@@ -25,8 +25,9 @@ import { getGoalProgress } from './goalProgress';
 import { generateWodName, getWodDomain, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
 import { computeAcwr, type AcwrZone } from './loadMetrics';
 import { getAutoregFactor, getAutoregNote } from './autoregulation';
+import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
 
-const STRENGTH_ROOT_PR_MAP: Record<string, keyof PersonalRecords> = {
+export const STRENGTH_ROOT_PR_MAP: Record<string, keyof PersonalRecords> = {
   'back-squat': 'backSquat',
   'front-squat': 'frontSquat',
   'bench-press': 'benchPress',
@@ -111,14 +112,20 @@ function isStrengthTestDay(week: 1 | 2 | 3 | 4): boolean {
   return week === 3 && Math.random() < 0.35;
 }
 
-function resolveStrengthPR(movement: Movement, prs: PersonalRecords): number {
+/** Recorre la cadena de progresiones del movimiento hasta encontrar el lift raiz que tiene PR propio. */
+export function resolveStrengthPRKey(movement: Movement): keyof PersonalRecords | undefined {
   let current: Movement | undefined = movement;
   while (current) {
     const key = STRENGTH_ROOT_PR_MAP[current.id];
-    if (key) return prs[key];
+    if (key) return key;
     current = current.progressionOf ? getMovementById(current.progressionOf) : undefined;
   }
-  return prs.backSquat;
+  return undefined;
+}
+
+function resolveStrengthPR(movement: Movement, prs: PersonalRecords): number {
+  const key = resolveStrengthPRKey(movement);
+  return key ? prs[key] : prs.backSquat;
 }
 
 function resolveOlyPR(movement: Movement, prs: PersonalRecords, family: OlyFamily): number {
@@ -346,6 +353,7 @@ function buildWodBlock(
   recentIds: Set<string>,
   excludePatterns: Set<MovementPattern>,
   goal: Goal | null,
+  isTaper: boolean,
 ): SessionBlockResult[] {
   const recentBenchmarkIds = new Set(
     [...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', '')),
@@ -353,7 +361,9 @@ function buildWodBlock(
 
   const isCompeticionGoal = goal?.type === 'preparar-competicion';
   const competicionProgress = isCompeticionGoal ? getGoalProgress(goal!) : 0;
+  // En taper no se fuerza testeo extra: un coach real no busca fatiga nueva a dias de competir.
   const forceBenchmarkByGoal =
+    !isTaper &&
     isCompeticionGoal &&
     (competicionProgress > 0.8 ||
       ((goal!.emphasis === 'intensivo' || competicionProgress > 0.4) && isEmphasisDay(dayPlan.trainingDayIndex)));
@@ -567,13 +577,13 @@ export function generateDailySession(
   date: Date = new Date(),
   goal: Goal | null = null,
 ): DailySession {
-  const week = getMesocycleWeek(profile.mesocycleStartDate, date);
+  const calendarWeek = getMesocycleWeek(profile.mesocycleStartDate, date);
   const weekdayIndex = getWeekdayIndex(date);
   const dayPlan = getDayPlan(weekdayIndex, profile.trainingDaysPerWeek);
   const dateIso = toLocalIsoDate(date);
 
   if (!dayPlan.isTrainingDay) {
-    return { date: dateIso, mesocycleWeek: week, isRestDay: true, blocks: [] };
+    return { date: dateIso, mesocycleWeek: calendarWeek, isRestDay: true, blocks: [] };
   }
 
   const recentIds = getRecentMovementIds(history);
@@ -586,16 +596,26 @@ export function generateDailySession(
 
     return {
       date: dateIso,
-      mesocycleWeek: week,
+      mesocycleWeek: calendarWeek,
       isRestDay: false,
       blocks: [...warmupBlock, ...recoveryWodBlock, ...recoverySkillBlock, ...cooldownBlock],
     };
   }
 
   const acwrZone = computeAcwr(history, date).zone;
+  const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goal, date);
+  const isTaper = isTaperActive(goal, date);
   const strengthBlock = buildStrengthBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone);
   const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone);
-  const wodBlock = buildWodBlock(dayPlan, week, profile.trainingDaysPerWeek, recentIds, new Set([dayPlan.strengthPattern]), goal);
+  const wodBlock = buildWodBlock(
+    dayPlan,
+    week,
+    profile.trainingDaysPerWeek,
+    recentIds,
+    new Set([dayPlan.strengthPattern]),
+    goal,
+    isTaper,
+  );
   const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds);
   const skillBlock = buildSkillBlock(history, goal);
   const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern);
@@ -606,6 +626,8 @@ export function generateDailySession(
     mesocycleWeek: week,
     isRestDay: false,
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
+    deloadReason,
+    deloadNote: deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined,
   };
 }
 
@@ -659,6 +681,7 @@ export function toHistoryEntry(
   rpe: number,
   durationMin: number,
   wodResult?: WodResult,
+  strengthTestKg?: number,
 ): SessionHistoryEntry {
   return {
     date: session.date,
@@ -668,5 +691,6 @@ export function toHistoryEntry(
     rpe,
     durationMin,
     wodResult,
+    strengthTestKg,
   };
 }

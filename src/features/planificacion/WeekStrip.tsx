@@ -52,6 +52,7 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
     if (expanded === null) return null;
     const date = weekDates[expanded];
     const dateIso = toLocalIsoDate(date);
+    if (dateIso === todayIso) return null;
     if (history.some((h) => h.date === dateIso)) return null;
     if (dateIso < todayIso) return null;
 
@@ -124,6 +125,7 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
           const dateIso = toLocalIsoDate(date);
           const entry = history.find((h) => h.date === dateIso);
           const isPast = dateIso < todayIso;
+          const isToday = dateIso === todayIso;
 
           return (
             <div className="mt-3 rounded-xl bg-brand-surfaceMuted/80 p-3 text-sm">
@@ -151,6 +153,8 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
                 </div>
               ) : isPast ? (
                 <p className="text-neutral-500">No registrado</p>
+              ) : isToday ? (
+                <p className="text-neutral-400">Consulta el detalle completo en «Sesión de hoy», justo debajo.</p>
               ) : expandedPreview?.isRestDay ? (
                 <p className="text-neutral-400">Descanso</p>
               ) : expandedPreview ? (

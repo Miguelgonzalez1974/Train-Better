@@ -38,6 +38,9 @@ export interface DailySession {
   mesocycleWeek: number;
   isRestDay: boolean;
   blocks: SessionBlockResult[];
+  /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */
+  deloadReason?: 'fatiga' | 'taper';
+  deloadNote?: string;
 }
 
 export type RxOrScaled = 'rx' | 'scaled';
@@ -61,6 +64,8 @@ export interface SessionHistoryEntry {
   durationMin: number;
   /** Resultado real del WOD de esa sesion, si se registro */
   wodResult?: WodResult;
+  /** Carga real levantada en un dia de test 1RM, si la sesion incluia uno */
+  strengthTestKg?: number;
 }
 
 export const DEFAULT_PROFILE: AthleteProfile = {

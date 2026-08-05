@@ -3,10 +3,10 @@ import { RefreshCw, Pencil, Check } from 'lucide-react';
 import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
-import { generateSessionForDate, toHistoryEntry } from '../../engine/generateSession';
+import { generateSessionForDate, resolveStrengthPRKey, toHistoryEntry } from '../../engine/generateSession';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
-import { getWodScoreType } from '../../engine/wodScoring';
+import { getStrengthTestBlock, getWodScoreType } from '../../engine/wodScoring';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -42,10 +42,14 @@ export function Planificacion() {
   const [wodExtraReps, setWodExtraReps] = useState(0);
   const [wodReps, setWodReps] = useState(0);
   const [wodLoad, setWodLoad] = useState(0);
+  const [testedLoadKg, setTestedLoadKg] = useState(0);
+  const [prUpdateMessage, setPrUpdateMessage] = useState<string | null>(null);
 
   const alreadyCompletedToday = useMemo(() => history.some((h) => h.date === session.date), [history, session.date]);
   const goalMovement = goal?.movementId ? getMovementById(goal.movementId) : undefined;
   const wodScoreType = useMemo(() => getWodScoreType(session), [session]);
+  const strengthTestBlock = useMemo(() => getStrengthTestBlock(session), [session]);
+  const strengthTestMovement = strengthTestBlock ? getMovementById(strengthTestBlock.movementId) : undefined;
 
   function generateAndCache(nextProfile: AthleteProfile): DailySession {
     const next = generateSessionForDate(nextProfile, history, new Date(), goal);
@@ -84,9 +88,31 @@ export function Planificacion() {
   }
 
   function handleConfirmComplete() {
-    athleteRepository.appendHistoryEntry(toHistoryEntry(session, rxOrScaled, rpe, durationMin, buildWodResult()));
+    let nextMessage: string | null = null;
+
+    if (strengthTestBlock && strengthTestMovement && testedLoadKg > 0) {
+      const prKey = resolveStrengthPRKey(strengthTestMovement);
+      if (prKey && testedLoadKg > profile.prs[prKey]) {
+        const nextProfile = { ...profile, prs: { ...profile.prs, [prKey]: testedLoadKg } };
+        athleteRepository.saveProfile(nextProfile);
+        setProfile(nextProfile);
+        nextMessage = `Nuevo PR registrado: ${strengthTestMovement.name} a ${testedLoadKg} kg. A partir de hoy tus sesiones se calculan sobre esta marca.`;
+      }
+    }
+
+    athleteRepository.appendHistoryEntry(
+      toHistoryEntry(
+        session,
+        rxOrScaled,
+        rpe,
+        durationMin,
+        buildWodResult(),
+        strengthTestBlock && testedLoadKg > 0 ? testedLoadKg : undefined,
+      ),
+    );
     setHistory(athleteRepository.getHistory());
     setShowCompletePanel(false);
+    setPrUpdateMessage(nextMessage);
   }
 
   return (
@@ -143,7 +169,11 @@ export function Planificacion() {
               <RefreshCw size={17} className={spinning ? 'animate-spin' : ''} />
             </button>
             <button
-              onClick={() => setShowCompletePanel(true)}
+              onClick={() => {
+                setTestedLoadKg(strengthTestBlock?.loadKg ?? 0);
+                setPrUpdateMessage(null);
+                setShowCompletePanel(true);
+              }}
               disabled={alreadyCompletedToday}
               className="rounded-lg bg-brand-orange px-3 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
@@ -152,6 +182,10 @@ export function Planificacion() {
           </div>
         )}
       </div>
+
+      {prUpdateMessage && (
+        <div className="rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-sm text-brand-gold">{prUpdateMessage}</div>
+      )}
 
       {showCompletePanel && !alreadyCompletedToday && (
         <div className="flex flex-col gap-4 card border-brand-gold/30 p-4">
@@ -227,6 +261,28 @@ export function Planificacion() {
             </div>
           )}
 
+          {strengthTestBlock && strengthTestMovement && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-neutral-300">
+                Test 1RM — {strengthTestMovement.name}
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  step={2.5}
+                  value={testedLoadKg}
+                  onChange={(e) => setTestedLoadKg(Number(e.target.value))}
+                  className={numberInputClass}
+                />
+                <span className="text-neutral-500">kg levantados</span>
+              </div>
+              <p className="mt-1 text-xs text-neutral-500">
+                Si supera tu marca actual, se actualiza tu PR y las próximas sesiones se calculan sobre el nuevo número.
+              </p>
+            </div>
+          )}
+
           <div>
             <p className="mb-2 text-sm font-medium text-neutral-300">¿Rx o escalado?</p>
             <div className="flex gap-2">
@@ -292,6 +348,12 @@ export function Planificacion() {
               Cancelar
             </button>
           </div>
+        </div>
+      )}
+
+      {session.deloadNote && (
+        <div className="rounded-lg border border-brand-orange/30 bg-brand-orange/10 px-3 py-2 text-sm text-brand-orange">
+          {session.deloadNote}
         </div>
       )}
 
