@@ -29,6 +29,11 @@ export function AcwrGauge({ result }: { result: AcwrResult }) {
             ) : (
               <p className="text-sm text-neutral-500">Necesitas más sesiones registradas para calcularlo.</p>
             )}
+            {result.coldStart && (
+              <p className="mt-1 text-xs text-neutral-500">
+                Aplicando carga conservadora mientras se genera tu historial reciente.
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -17,10 +17,15 @@ const AUTOREG_NOTE: Partial<Record<AcwrZone, string>> = {
   alta: 'Carga ajustada -12% por tu volumen acumulado (ACWR alto) — hoy toca bajar el pie del acelerador, no sumar más fatiga.',
 };
 
+/** Nota distinta a la de riesgo moderado real: aqui la cautela es por falta de historial, no por volumen acumulado. */
+const COLD_START_NOTE =
+  'Carga ajustada con cautela — todavía no hay suficiente historial reciente para calcular tu ACWR real, así que el coach empieza conservador hasta conocer tu tolerancia.';
+
 export function getAutoregFactor(zone: AcwrZone): number {
   return AUTOREG_FACTOR[zone];
 }
 
-export function getAutoregNote(zone: AcwrZone): string | undefined {
+export function getAutoregNote(zone: AcwrZone, coldStart = false): string | undefined {
+  if (coldStart) return COLD_START_NOTE;
   return AUTOREG_NOTE[zone];
 }

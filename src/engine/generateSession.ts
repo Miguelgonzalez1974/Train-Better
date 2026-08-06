@@ -191,10 +191,11 @@ function buildStrengthBlock(
   recentIds: Set<string>,
   goal: Goal | null,
   acwrZone: AcwrZone,
+  acwrColdStart: boolean,
   isTestDay: boolean,
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
-  const autoregNote = getAutoregNote(acwrZone);
+  const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
   const isStrengthGoal = goal?.type === 'elevar-fuerza' || goal?.type === 'subir-pr';
   const pref = isStrengthGoal ? goalPreference(goal, (m) => strengthMovements.some((s) => s.id === m.id)) : { preferChance: 0, progress: 0 };
 
@@ -284,10 +285,11 @@ function buildOlyBlock(
   recentIds: Set<string>,
   goal: Goal | null,
   acwrZone: AcwrZone,
+  acwrColdStart: boolean,
   isTestDay: boolean,
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
-  const autoregNote = getAutoregNote(acwrZone);
+  const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
   const isOlyGoal = goal?.type === 'mejorar-potencia' || goal?.type === 'subir-pr';
   const pref = isOlyGoal ? goalPreference(goal, (m) => olyMovements.some((o) => o.id === m.id)) : { preferChance: 0, progress: 0 };
 
@@ -648,12 +650,22 @@ export function generateDailySession(
     };
   }
 
-  const acwrZone = computeAcwr(history, date).zone;
+  const acwrResult = computeAcwr(history, date);
+  const acwrZone = acwrResult.zone;
   const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goal, date);
   const isTaper = isTaperActive(goal, date);
   const testDayFocus = resolveTestDayFocus(week);
-  const strengthBlock = buildStrengthBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, testDayFocus === 'strength');
-  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, testDayFocus === 'oly');
+  const strengthBlock = buildStrengthBlock(
+    dayPlan,
+    week,
+    profile.prs,
+    recentIds,
+    goal,
+    acwrZone,
+    acwrResult.coldStart,
+    testDayFocus === 'strength',
+  );
+  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, acwrResult.coldStart, testDayFocus === 'oly');
   const wodBlock = buildWodBlock(
     dayPlan,
     week,

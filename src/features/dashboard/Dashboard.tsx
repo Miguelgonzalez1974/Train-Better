@@ -46,7 +46,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-neutral-400 capitalize">{MONTH_LABEL}</p>
           <p className="text-lg font-semibold text-white">Tu progreso</p>
