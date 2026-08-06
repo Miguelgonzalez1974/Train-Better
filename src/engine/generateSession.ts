@@ -743,6 +743,20 @@ export function generateDailySession(
   };
 }
 
+/** Bloques de una sesion "estilo mantenimiento": sin cargas de PR ni periodizacion, con o sin recuperacion. */
+function buildMaintenanceStyleBlocks(
+  dayPlan: DayPlan,
+  history: SessionHistoryEntry[],
+  recentIds: Set<string>,
+  isRecovery: boolean,
+): SessionBlockResult[] {
+  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, false);
+  const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
+  const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds) : buildSkillBlock(history, null);
+  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
+  return [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock];
+}
+
 /**
  * Sesion de mantenimiento para dias fuera de un macrociclo activo (antes de mesocycleStartDate):
  * sin cargas basadas en PRs ni periodizacion, pero con variedad real — la mayoria de los dias
@@ -763,17 +777,45 @@ export function generateOffSeasonSession(
   }
 
   const recentIds = getRecentMovementIds(history);
-  const isRecovery = isMaintenanceRecoveryDay();
-  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, false);
-  const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
-  const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds) : buildSkillBlock(history, null);
-  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
+  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, isMaintenanceRecoveryDay());
+
+  return { date: dateIso, mesocycleWeek: 0, isRestDay: false, blocks };
+}
+
+export type SessionOverrideType = 'recovery' | 'random';
+
+const SESSION_OVERRIDE_LABEL: Record<SessionOverrideType, string> = {
+  recovery: 'Recuperación (elegida)',
+  random: 'WOD libre (elegido)',
+};
+
+/**
+ * Sustituye deliberadamente la sesion de hoy por recuperacion o un WOD variado sin cargas de PR,
+ * sea cual sea el dia real (dentro o fuera de macrociclo) — para cuando el atleta no tiene el dia
+ * para lo programado y prefiere elegir. No reescribe la periodizacion: es solo el contenido de hoy.
+ */
+export function generateOverrideSession(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  date: Date,
+  type: SessionOverrideType,
+): DailySession {
+  const dateIso = toLocalIsoDate(date);
+  const dayPlan = getDayPlan(getWeekdayIndex(date), profile.trainingDaysPerWeek);
+
+  if (!dayPlan.isTrainingDay) {
+    return { date: dateIso, mesocycleWeek: 0, isRestDay: true, blocks: [] };
+  }
+
+  const recentIds = getRecentMovementIds(history);
+  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, type === 'recovery');
 
   return {
     date: dateIso,
     mesocycleWeek: 0,
     isRestDay: false,
-    blocks: [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock],
+    blocks,
+    swapLabel: SESSION_OVERRIDE_LABEL[type],
   };
 }
 

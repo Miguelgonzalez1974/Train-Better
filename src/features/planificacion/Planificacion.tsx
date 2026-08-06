@@ -1,9 +1,16 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2 } from 'lucide-react';
 import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
-import { generateSessionForDate, resolveOlyPRKey, resolveStrengthPRKey, toHistoryEntry } from '../../engine/generateSession';
+import {
+  generateOverrideSession,
+  generateSessionForDate,
+  resolveOlyPRKey,
+  resolveStrengthPRKey,
+  toHistoryEntry,
+  type SessionOverrideType,
+} from '../../engine/generateSession';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
@@ -48,7 +55,9 @@ export function Planificacion() {
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [customTitleDraft, setCustomTitleDraft] = useState('');
   const [customNoteDraft, setCustomNoteDraft] = useState('');
+  const [showTypePicker, setShowTypePicker] = useState(false);
 
+  const isMacroAvailable = todayIso >= profile.mesocycleStartDate;
   const alreadyCompletedToday = useMemo(() => history.some((h) => h.date === session.date), [history, session.date]);
   const goalMovement = goal?.movementId ? getMovementById(goal.movementId) : undefined;
   const wodScoreType = useMemo(() => getWodScoreType(session), [session]);
@@ -99,10 +108,18 @@ export function Planificacion() {
       source: 'custom',
       customTitle: customTitleDraft.trim() || undefined,
       customNote: note,
+      swapLabel: 'Tu sesión',
     };
     athleteRepository.saveCachedSession(next);
     setSession(next);
     setShowCustomEditor(false);
+  }
+
+  function handlePickType(type: SessionOverrideType | 'macro') {
+    const next = type === 'macro' ? generateSessionForDate(profile, history, new Date(), goal) : generateOverrideSession(profile, history, new Date(), type);
+    athleteRepository.saveCachedSession(next);
+    setSession(next);
+    setShowTypePicker(false);
   }
 
   function buildWodResult(): WodResult | undefined {
@@ -173,16 +190,17 @@ export function Planificacion() {
             <p className="text-lg font-semibold text-white">{session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}</p>
             {!session.isRestDay && session.mesocycleWeek === 0 && (
               <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
-                Mantenimiento
+                {session.swapLabel ?? 'Mantenimiento'}
               </span>
             )}
-            {!session.isRestDay && session.mesocycleWeek === 0 && (
+            {!session.isRestDay && (
               <button
-                onClick={openCustomEditor}
-                className="flex items-center gap-1 text-xs font-medium text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors duration-200 hover:text-brand-gold"
+                onClick={() => setShowTypePicker(true)}
+                title="Elegir tipo de sesión"
+                className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-surfaceMuted transition-transform duration-200 hover:scale-110"
               >
-                <NotebookPen size={13} strokeWidth={2.25} />
-                {session.source === 'custom' ? 'Editar mi sesión' : 'Escribir mi sesión'}
+                <span className="absolute inset-0 animate-pulse rounded-full bg-brand-neon/20 blur-md" />
+                <Brain size={14} strokeWidth={2.25} className="relative text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.65)]" />
               </button>
             )}
           </div>
@@ -405,8 +423,7 @@ export function Planificacion() {
       <Modal open={showCustomEditor} onClose={() => setShowCustomEditor(false)} title="Tu sesión de hoy">
         <div className="flex flex-col gap-3">
           <p className="text-xs text-neutral-500">
-            Aún no arranca tu macrociclo — si ya tienes tu propia sesión pensada para hoy, escríbela aquí y el coach la guarda tal cual, sin
-            generar nada nuevo.
+            Si ya tienes tu propia sesión pensada para hoy, escríbela aquí y el coach la guarda tal cual, sin generar nada nuevo.
           </p>
           <label className="flex flex-col gap-1 text-xs text-neutral-400">
             Nombre (opcional)
@@ -443,6 +460,59 @@ export function Planificacion() {
               Cancelar
             </button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal open={showTypePicker} onClose={() => setShowTypePicker(false)} title="Elige tu sesión de hoy">
+        <div className="flex flex-col gap-2">
+          <p className="mb-1 text-xs text-neutral-500">
+            No tienes por qué seguir siempre lo mismo — elige qué te viene mejor hoy, sin desmontar tu programación.
+          </p>
+          <button
+            onClick={() => handlePickType('random')}
+            className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+          >
+            <Shuffle size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+            <span>
+              <span className="block text-sm font-semibold text-white">Aleatoria</span>
+              <span className="block text-xs text-neutral-500">WOD variado sorpresa — sin cargas basadas en tu PR.</span>
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              setShowTypePicker(false);
+              openCustomEditor();
+            }}
+            className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+          >
+            <NotebookPen size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+            <span>
+              <span className="block text-sm font-semibold text-white">Propia</span>
+              <span className="block text-xs text-neutral-500">Ya tienes tu sesión pensada — escríbela tal cual.</span>
+            </span>
+          </button>
+          <button
+            onClick={() => handlePickType('recovery')}
+            className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+          >
+            <HeartPulse size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+            <span>
+              <span className="block text-sm font-semibold text-white">Recuperación</span>
+              <span className="block text-xs text-neutral-500">Ritmo suave, sin buscar fatiga — para cuando no tienes el día para más.</span>
+            </span>
+          </button>
+          {isMacroAvailable && (
+            <button
+              onClick={() => handlePickType('macro')}
+              className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+            >
+              <CalendarCheck2 size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+              <span>
+                <span className="block text-sm font-semibold text-white">Programación del coach</span>
+                <span className="block text-xs text-neutral-500">Vuelve a lo que toca hoy según tu macrociclo.</span>
+              </span>
+            </button>
+          )}
         </div>
       </Modal>
     </div>
