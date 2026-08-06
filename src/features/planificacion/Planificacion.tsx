@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen } from 'lucide-react';
 import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
@@ -11,6 +11,7 @@ import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { DaySessionBlocks } from './DaySessionBlocks';
+import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 const DURATION_PRESETS = [30, 45, 60, 75, 90];
@@ -44,6 +45,9 @@ export function Planificacion() {
   const [wodLoad, setWodLoad] = useState(0);
   const [testedLoadKg, setTestedLoadKg] = useState(0);
   const [prUpdateMessage, setPrUpdateMessage] = useState<string | null>(null);
+  const [showCustomEditor, setShowCustomEditor] = useState(false);
+  const [customTitleDraft, setCustomTitleDraft] = useState('');
+  const [customNoteDraft, setCustomNoteDraft] = useState('');
 
   const alreadyCompletedToday = useMemo(() => history.some((h) => h.date === session.date), [history, session.date]);
   const goalMovement = goal?.movementId ? getMovementById(goal.movementId) : undefined;
@@ -76,6 +80,29 @@ export function Planificacion() {
     setSession(generateAndCache(profile));
     setSpinning(true);
     setTimeout(() => setSpinning(false), 500);
+  }
+
+  function openCustomEditor() {
+    setCustomTitleDraft(session.source === 'custom' ? (session.customTitle ?? '') : '');
+    setCustomNoteDraft(session.source === 'custom' ? (session.customNote ?? '') : '');
+    setShowCustomEditor(true);
+  }
+
+  function handleSaveCustomSession() {
+    const note = customNoteDraft.trim();
+    if (!note) return;
+    const next: DailySession = {
+      date: session.date,
+      mesocycleWeek: 0,
+      isRestDay: false,
+      blocks: [],
+      source: 'custom',
+      customTitle: customTitleDraft.trim() || undefined,
+      customNote: note,
+    };
+    athleteRepository.saveCachedSession(next);
+    setSession(next);
+    setShowCustomEditor(false);
   }
 
   function buildWodResult(): WodResult | undefined {
@@ -148,6 +175,15 @@ export function Planificacion() {
               <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
                 Mantenimiento
               </span>
+            )}
+            {!session.isRestDay && session.mesocycleWeek === 0 && (
+              <button
+                onClick={openCustomEditor}
+                className="flex items-center gap-1 text-xs font-medium text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors duration-200 hover:text-brand-gold"
+              >
+                <NotebookPen size={13} strokeWidth={2.25} />
+                {session.source === 'custom' ? 'Editar mi sesión' : 'Escribir mi sesión'}
+              </button>
             )}
           </div>
         </div>
@@ -365,6 +401,50 @@ export function Planificacion() {
       ) : (
         <DaySessionBlocks session={session} editable={editMode} onUpdateEntry={handleUpdateEntry} />
       )}
+
+      <Modal open={showCustomEditor} onClose={() => setShowCustomEditor(false)} title="Tu sesión de hoy">
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-neutral-500">
+            Aún no arranca tu macrociclo — si ya tienes tu propia sesión pensada para hoy, escríbela aquí y el coach la guarda tal cual, sin
+            generar nada nuevo.
+          </p>
+          <label className="flex flex-col gap-1 text-xs text-neutral-400">
+            Nombre (opcional)
+            <input
+              type="text"
+              value={customTitleDraft}
+              onChange={(e) => setCustomTitleDraft(e.target.value)}
+              placeholder="Ej. Fran a mi manera"
+              className="rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm text-white focus:border-brand-gold focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-neutral-400">
+            Sesión
+            <textarea
+              value={customNoteDraft}
+              onChange={(e) => setCustomNoteDraft(e.target.value)}
+              rows={8}
+              placeholder={'21-15-9\nThrusters\nPull-ups'}
+              className="rounded-lg border border-brand-border bg-brand-bg px-3 py-2 text-sm text-white focus:border-brand-gold focus:outline-none"
+            />
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveCustomSession}
+              disabled={!customNoteDraft.trim()}
+              className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            >
+              Guardar sesión
+            </button>
+            <button
+              onClick={() => setShowCustomEditor(false)}
+              className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

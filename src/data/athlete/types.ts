@@ -41,6 +41,10 @@ export interface DailySession {
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */
   deloadReason?: 'fatiga' | 'taper';
   deloadNote?: string;
+  /** 'custom' cuando el atleta escribio su propia sesion en vez de usar la generada (solo fuera de macrociclo) — `blocks` va vacio y el contenido vive en customTitle/customNote. */
+  source?: 'generated' | 'custom';
+  customTitle?: string;
+  customNote?: string;
 }
 
 export type RxOrScaled = 'rx' | 'scaled';
