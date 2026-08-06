@@ -1,4 +1,4 @@
-import { AthleteProfile, DailySession, DEFAULT_PROFILE, Goal, SessionHistoryEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, Goal, SessionHistoryEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
@@ -6,6 +6,7 @@ const GOAL_KEY = 'train-better:goal';
 const SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
 const SESSION_CACHE_LIMIT = 60;
+const BODYWEIGHT_LOG_LIMIT = 120;
 
 export interface AthleteRepository {
   getProfile(): AthleteProfile;
@@ -18,6 +19,8 @@ export interface AthleteRepository {
   clearGoal(): void;
   getCachedSession(dateIso: string): DailySession | null;
   saveCachedSession(session: DailySession): void;
+  getBodyweightLog(): BodyweightEntry[];
+  appendBodyweightEntry(entry: BodyweightEntry): void;
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -74,5 +77,14 @@ export const localAthleteRepository: AthleteRepository = {
     const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
     cache[session.date] = session;
     localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(pruneSessionCache(cache)));
+  },
+  getBodyweightLog() {
+    return readJson<AthleteProfile>(PROFILE_KEY, DEFAULT_PROFILE).bodyweightLog ?? [];
+  },
+  appendBodyweightEntry(entry) {
+    const profile = readJson<AthleteProfile>(PROFILE_KEY, DEFAULT_PROFILE);
+    const withoutSameDate = (profile.bodyweightLog ?? []).filter((e) => e.date !== entry.date);
+    const bodyweightLog = [...withoutSameDate, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-BODYWEIGHT_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, bodyweightLog }));
   },
 };

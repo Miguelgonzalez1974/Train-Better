@@ -21,4 +21,8 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.clearGoal();
     void pushRemote();
   },
+  appendBodyweightEntry(entry) {
+    localAthleteRepository.appendBodyweightEntry(entry);
+    void pushRemote();
+  },
 };

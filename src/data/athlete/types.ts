@@ -11,11 +11,19 @@ export interface PersonalRecords {
   cleanAndJerk: number;
 }
 
+export interface BodyweightEntry {
+  /** Fecha ISO (yyyy-mm-dd) del pesaje — un registro por dia, el mas reciente sustituye al anterior de ese mismo dia */
+  date: string;
+  kg: number;
+}
+
 export interface AthleteProfile {
   prs: PersonalRecords;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
   /** Fecha ISO en la que arranco el mesociclo actual (semana 1) */
   mesocycleStartDate: string;
+  /** Historial de peso corporal, opcional para no romper perfiles guardados antes de esta funcion */
+  bodyweightLog?: BodyweightEntry[];
 }
 
 export interface SessionBlockResult {

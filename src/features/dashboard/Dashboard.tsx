@@ -8,6 +8,7 @@ import { AcwrGauge } from './AcwrGauge';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { NextWeekPreview } from './NextWeekPreview';
+import { BodyweightCard } from './BodyweightCard';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -38,6 +39,7 @@ interface DashboardProps {
 export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   const [profile] = useState(() => athleteRepository.getProfile());
+  const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showNextWeek, setShowNextWeek] = useState(false);
   const stats = useMemo(() => getMonthlyStats(history), [history]);
   const acwr = useMemo(() => computeAcwr(history), [history]);
@@ -81,6 +83,8 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         />
         <MetricCard icon={Gauge} label="RPE medio" value={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'} />
       </div>
+
+      <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
 
       <TrainingHeatmap
         history={history}
