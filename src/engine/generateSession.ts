@@ -611,6 +611,59 @@ function buildRecoverySkillBlock(recentIds: Set<string>): SessionBlockResult[] {
   ];
 }
 
+/**
+ * Fuera de macrociclo, la mayoria de los dias de entreno llevan un WOD de mantenimiento con
+ * estimulo real (trifecta gimnastico/con carga/monoestructural, igual que en el macrociclo
+ * completo pero sin periodizacion ni cargas basadas en PR); la recuperacion activa es la
+ * excepcion deliberada — antes se generaba recuperacion todos los dias, lo cual no es una
+ * progresion realista para semanas seguidas de espera antes del macrociclo.
+ */
+function isMaintenanceRecoveryDay(): boolean {
+  return Math.random() < 0.25;
+}
+
+function buildMaintenanceWodBlock(recentIds: Set<string>): SessionBlockResult[] {
+  const pool = getMovementsByBlock('wod');
+  const timeDomain = WOD_TIME_DOMAIN[2];
+
+  const regularFormats: { label: string; kind: WodFormatKind }[] = [
+    { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' },
+    { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
+    { label: `EMOM ${timeDomain.emomMin} min (movimientos alternos)`, kind: 'emom' },
+    { label: `Cada 3:00 x ${timeDomain.rounds} rondas`, kind: 'interval' },
+  ];
+  const chosenFormat = regularFormats[Math.floor(Math.random() * regularFormats.length)];
+
+  // Misma trifecta clasica que en el macrociclo completo: 1 gimnastico + 1 con carga + 1 monoestructural.
+  const gymnasticsPool = pool.filter((m) => getWodDomain(m.id) === 'gymnastics');
+  const weightedPool = pool.filter((m) => getWodDomain(m.id) === 'weighted');
+  const monoPool = pool.filter((m) => getWodDomain(m.id) === 'monostructural');
+  const domainOrder = [gymnasticsPool, weightedPool, monoPool];
+
+  const picks: Movement[] = [];
+  const usedIds = new Set(recentIds);
+  function pickFrom(domainPool: Movement[]): void {
+    const remaining = domainPool.filter((m) => !picks.some((p) => p.id === m.id));
+    const fallback = pool.filter((m) => !picks.some((p) => p.id === m.id));
+    const pick = pickVaried(remaining.length > 0 ? remaining : fallback, usedIds);
+    if (pick) {
+      picks.push(pick);
+      usedIds.add(pick.id);
+    }
+  }
+  domainOrder.forEach(pickFrom);
+
+  const title = generateWodName();
+  return picks.map((m) => ({
+    block: 'wod',
+    movementId: m.id,
+    reps: WOD_PRESCRIPTION[m.id] ?? '12-15',
+    format: chosenFormat.label,
+    title,
+    notes: WOD_FORMAT_RATIONALE[chosenFormat.kind],
+  }));
+}
+
 function buildCooldownBlock(strengthPattern: MovementPattern): SessionBlockResult[] {
   const ids = COOLDOWN_BY_PATTERN[strengthPattern] ?? ['static-stretch-lower-body', 'static-stretch-upper-body', 'breathing-recovery'];
   return ids
@@ -691,10 +744,11 @@ export function generateDailySession(
 }
 
 /**
- * Sesion ligera de mantenimiento para dias fuera de un macrociclo activo (antes de mesocycleStartDate):
- * cardio suave + skill + cooldown, sin cargas basadas en PRs ni periodizacion — la misma receta que ya
- * usa el dia de recuperacion activa. Sirve para seguir entrenando y registrando RPE (alimenta el ACWR)
- * mientras no hay un macrociclo estructurado en marcha.
+ * Sesion de mantenimiento para dias fuera de un macrociclo activo (antes de mesocycleStartDate):
+ * sin cargas basadas en PRs ni periodizacion, pero con variedad real — la mayoria de los dias
+ * llevan un WOD de mantenimiento (trifecta gimnastico/con carga/monoestructural) y solo 1 de cada
+ * 4 aprox. es recuperacion activa pura, en vez de recuperacion todos los dias. Sirve para seguir
+ * entrenando y registrando RPE (alimenta el ACWR) mientras no hay un macrociclo estructurado en marcha.
  */
 export function generateOffSeasonSession(
   profile: AthleteProfile,
@@ -709,9 +763,10 @@ export function generateOffSeasonSession(
   }
 
   const recentIds = getRecentMovementIds(history);
+  const isRecovery = isMaintenanceRecoveryDay();
   const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, false);
-  const wodBlock = buildRecoveryWodBlock(recentIds);
-  const skillBlock = buildRecoverySkillBlock(recentIds);
+  const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
+  const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds) : buildSkillBlock(history, null);
   const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
 
   return {
