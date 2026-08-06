@@ -36,6 +36,8 @@ export function WeakPointsCard({ points }: { points: PatternStrain[] }) {
                 <p className="text-xs text-neutral-500">
                   {point.sessions} sesiones · RPE medio {point.avgRpe?.toFixed(1)}
                   {point.scaledRate ? ` · ${Math.round(point.scaledRate * 100)}% escalado` : ''}
+                  {point.loadTrend === 'estancado' && ' · carga estancada en tus últimos tests'}
+                  {point.loadTrend === 'subida' && ' · carga subiendo en tus últimos tests'}
                 </p>
               </div>
               <span className={`rounded-md px-2.5 py-1 text-xs font-semibold ${STATUS_META[point.status].badgeClass}`}>

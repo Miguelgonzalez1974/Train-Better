@@ -24,7 +24,7 @@ export function getWodScoreType(session: DailySession): WodScoreType | null {
   return format ? inferScoreTypeFromFormat(format) : null;
 }
 
-/** Encuentra el bloque de test de fuerza maxima del dia (si lo hay), para pedir el peso real levantado. */
-export function getStrengthTestBlock(session: DailySession): SessionBlockResult | null {
-  return session.blocks.find((b) => b.block === 'strength' && b.format === 'Test 1RM') ?? null;
+/** Encuentra el bloque de test 1RM del dia (fuerza u oly, si lo hay), para pedir el peso real levantado. */
+export function getTestDayBlock(session: DailySession): SessionBlockResult | null {
+  return session.blocks.find((b) => (b.block === 'strength' || b.block === 'oly') && b.format === 'Test 1RM') ?? null;
 }

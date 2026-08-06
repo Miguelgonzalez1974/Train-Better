@@ -3,10 +3,10 @@ import { RefreshCw, Pencil, Check } from 'lucide-react';
 import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
-import { generateSessionForDate, resolveStrengthPRKey, toHistoryEntry } from '../../engine/generateSession';
+import { generateSessionForDate, resolveOlyPRKey, resolveStrengthPRKey, toHistoryEntry } from '../../engine/generateSession';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
-import { getStrengthTestBlock, getWodScoreType } from '../../engine/wodScoring';
+import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -48,8 +48,9 @@ export function Planificacion() {
   const alreadyCompletedToday = useMemo(() => history.some((h) => h.date === session.date), [history, session.date]);
   const goalMovement = goal?.movementId ? getMovementById(goal.movementId) : undefined;
   const wodScoreType = useMemo(() => getWodScoreType(session), [session]);
-  const strengthTestBlock = useMemo(() => getStrengthTestBlock(session), [session]);
-  const strengthTestMovement = strengthTestBlock ? getMovementById(strengthTestBlock.movementId) : undefined;
+  const testDayBlock = useMemo(() => getTestDayBlock(session), [session]);
+  const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
+  const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
   function generateAndCache(nextProfile: AthleteProfile): DailySession {
     const next = generateSessionForDate(nextProfile, history, new Date(), goal);
@@ -90,13 +91,13 @@ export function Planificacion() {
   function handleConfirmComplete() {
     let nextMessage: string | null = null;
 
-    if (strengthTestBlock && strengthTestMovement && testedLoadKg > 0) {
-      const prKey = resolveStrengthPRKey(strengthTestMovement);
+    if (testDayBlock && testDayMovement && testedLoadKg > 0) {
+      const prKey = resolveTestDayPRKey(testDayMovement);
       if (prKey && testedLoadKg > profile.prs[prKey]) {
         const nextProfile = { ...profile, prs: { ...profile.prs, [prKey]: testedLoadKg } };
         athleteRepository.saveProfile(nextProfile);
         setProfile(nextProfile);
-        nextMessage = `Nuevo PR registrado: ${strengthTestMovement.name} a ${testedLoadKg} kg. A partir de hoy tus sesiones se calculan sobre esta marca.`;
+        nextMessage = `Nuevo PR registrado: ${testDayMovement.name} a ${testedLoadKg} kg. A partir de hoy tus sesiones se calculan sobre esta marca.`;
       }
     }
 
@@ -107,7 +108,7 @@ export function Planificacion() {
         rpe,
         durationMin,
         buildWodResult(),
-        strengthTestBlock && testedLoadKg > 0 ? testedLoadKg : undefined,
+        testDayBlock && testedLoadKg > 0 ? testedLoadKg : undefined,
       ),
     );
     setHistory(athleteRepository.getHistory());
@@ -170,7 +171,7 @@ export function Planificacion() {
             </button>
             <button
               onClick={() => {
-                setTestedLoadKg(strengthTestBlock?.loadKg ?? 0);
+                setTestedLoadKg(testDayBlock?.loadKg ?? 0);
                 setPrUpdateMessage(null);
                 setShowCompletePanel(true);
               }}
@@ -261,10 +262,10 @@ export function Planificacion() {
             </div>
           )}
 
-          {strengthTestBlock && strengthTestMovement && (
+          {testDayBlock && testDayMovement && (
             <div>
               <p className="mb-2 text-sm font-medium text-neutral-300">
-                Test 1RM — {strengthTestMovement.name}
+                Test 1RM — {testDayMovement.name}
               </p>
               <div className="flex items-center gap-2">
                 <input

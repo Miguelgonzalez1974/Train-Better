@@ -64,8 +64,8 @@ export interface SessionHistoryEntry {
   durationMin: number;
   /** Resultado real del WOD de esa sesion, si se registro */
   wodResult?: WodResult;
-  /** Carga real levantada en un dia de test 1RM, si la sesion incluia uno */
-  strengthTestKg?: number;
+  /** Carga real levantada en un dia de test 1RM (fuerza u oly), si la sesion incluia uno */
+  testLoadKg?: number;
 }
 
 export const DEFAULT_PROFILE: AthleteProfile = {

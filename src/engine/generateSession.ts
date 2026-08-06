@@ -107,9 +107,20 @@ function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4): StrengthSchemeStyle {
   return 'volumeSets';
 }
 
-/** Un coach testea maximos de vez en cuando, no solo en el WOD benchmark — concentrado en la semana pico. */
-function isStrengthTestDay(week: 1 | 2 | 3 | 4): boolean {
-  return week === 3 && Math.random() < 0.35;
+export type TestDayFocus = 'strength' | 'oly' | null;
+
+/**
+ * Un coach testea maximos de vez en cuando, no solo en el WOD benchmark — concentrado en la semana
+ * pico. Pero nunca testea fuerza maxima y el levantamiento completo de oly el mismo dia (demasiada
+ * fatiga de golpe para un test real), asi que es una unica tirada que reparte la misma probabilidad
+ * total de antes (35%) entre los dos focos en vez de dejar que compitan de forma independiente.
+ */
+function resolveTestDayFocus(week: 1 | 2 | 3 | 4): TestDayFocus {
+  if (week !== 3) return null;
+  const roll = Math.random();
+  if (roll < 0.175) return 'strength';
+  if (roll < 0.35) return 'oly';
+  return null;
 }
 
 /** Recorre la cadena de progresiones del movimiento hasta encontrar el lift raiz que tiene PR propio. */
@@ -126,6 +137,23 @@ export function resolveStrengthPRKey(movement: Movement): keyof PersonalRecords 
 function resolveStrengthPR(movement: Movement, prs: PersonalRecords): number {
   const key = resolveStrengthPRKey(movement);
   return key ? prs[key] : prs.backSquat;
+}
+
+const OLY_ROOT_PR_MAP: Record<string, keyof PersonalRecords> = {
+  snatch: 'snatch',
+  clean: 'clean',
+  'clean-and-jerk': 'cleanAndJerk',
+};
+
+/** Mismo criterio que `resolveStrengthPRKey`, pero para los levantamientos completos de oly. */
+export function resolveOlyPRKey(movement: Movement): keyof PersonalRecords | undefined {
+  let current: Movement | undefined = movement;
+  while (current) {
+    const key = OLY_ROOT_PR_MAP[current.id];
+    if (key) return key;
+    current = current.progressionOf ? getMovementById(current.progressionOf) : undefined;
+  }
+  return undefined;
 }
 
 function resolveOlyPR(movement: Movement, prs: PersonalRecords, family: OlyFamily): number {
@@ -163,6 +191,7 @@ function buildStrengthBlock(
   recentIds: Set<string>,
   goal: Goal | null,
   acwrZone: AcwrZone,
+  isTestDay: boolean,
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
   const autoregNote = getAutoregNote(acwrZone);
@@ -181,7 +210,7 @@ function buildStrengthBlock(
   const currentPR = resolveStrengthPR(movement, prs);
   const goalTag = pref.movementId && movement.id === pref.movementId ? ' Prioridad por tu objetivo activo.' : '';
 
-  if (isStrengthTestDay(week)) {
+  if (isTestDay) {
     const testLoadKg = roundToNearestPlate(currentPR);
     return [
       {
@@ -255,6 +284,7 @@ function buildOlyBlock(
   recentIds: Set<string>,
   goal: Goal | null,
   acwrZone: AcwrZone,
+  isTestDay: boolean,
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
   const autoregNote = getAutoregNote(acwrZone);
@@ -285,6 +315,22 @@ function buildOlyBlock(
 
   const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
   if (!movement) return [];
+
+  if (isTestDay && fullLiftIds.includes(movement.id)) {
+    const testLoadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family));
+    const goalTag = pref.movementId && movement.id === pref.movementId ? ' Prioridad por tu objetivo activo.' : '';
+    const liftLabel = family === 'snatch' ? 'snatch' : 'clean & jerk';
+    return [
+      {
+        block: 'oly',
+        movementId: movement.id,
+        format: 'Test 1RM',
+        reps: '1',
+        loadKg: testLoadKg,
+        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}`,
+      },
+    ];
+  }
 
   const scheme = OLY_WEEK_SCHEMES[week];
   const loadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family) * scheme.percent * autoregFactor);
@@ -605,8 +651,9 @@ export function generateDailySession(
   const acwrZone = computeAcwr(history, date).zone;
   const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goal, date);
   const isTaper = isTaperActive(goal, date);
-  const strengthBlock = buildStrengthBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone);
-  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone);
+  const testDayFocus = resolveTestDayFocus(week);
+  const strengthBlock = buildStrengthBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, testDayFocus === 'strength');
+  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, testDayFocus === 'oly');
   const wodBlock = buildWodBlock(
     dayPlan,
     week,
@@ -681,7 +728,7 @@ export function toHistoryEntry(
   rpe: number,
   durationMin: number,
   wodResult?: WodResult,
-  strengthTestKg?: number,
+  testLoadKg?: number,
 ): SessionHistoryEntry {
   return {
     date: session.date,
@@ -691,6 +738,6 @@ export function toHistoryEntry(
     rpe,
     durationMin,
     wodResult,
-    strengthTestKg,
+    testLoadKg,
   };
 }
