@@ -33,6 +33,7 @@ export const GYMNASTICS_IDS = [
   'bar-facing-burpee',
   'burpee-to-target',
   'lateral-burpee',
+  'ring-row',
 ];
 
 export const MONOSTRUCTURAL_IDS = ['run', 'row', 'air-bike', 'ski-erg', 'double-under', 'single-under', 'shuttle-run'];
@@ -114,6 +115,7 @@ export const WOD_PRESCRIPTION: Record<string, string> = {
   'dumbbell-hang-clean': '8-12',
   'dumbbell-push-jerk': '8-12',
   'shuttle-run': '4-6 x 10m',
+  'ring-row': '10-15',
 };
 
 export interface WodTimeDomain {

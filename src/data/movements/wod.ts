@@ -565,4 +565,17 @@ export const wodMovements: Movement[] = [
     scaling: { easier: [], harder: [] },
     tags: ['cardio'],
   },
+
+  // --- GIMNASIA (añadido a partir de programacion CrossFit Mayhem) ---
+  {
+    id: 'ring-row',
+    name: 'Ring Row',
+    blocks: ['wod', 'accessory'],
+    pattern: 'horizontalPull',
+    equipment: ['anillas'],
+    primaryMuscles: ['dorsales', 'romboides', 'biceps'],
+    standard: 'Cuerpo en linea recta con pies fijos en el suelo; el pecho toca las manos en cada repeticion, controlando el descenso.',
+    scaling: { easier: ['banded-ring-row'], harder: ['strict-pull-up'] },
+    tags: ['bodyweight', 'gimnasia'],
+  },
 ];
