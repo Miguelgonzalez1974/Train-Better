@@ -578,4 +578,18 @@ export const wodMovements: Movement[] = [
     scaling: { easier: ['banded-ring-row'], harder: ['strict-pull-up'] },
     tags: ['bodyweight', 'gimnasia'],
   },
+
+  // --- FUNCIONAL / CARGA EXTERNA (añadido a partir de programacion CrossFit Mayhem) ---
+  {
+    id: 'sumo-deadlift-high-pull',
+    name: 'Sumo Deadlift High Pull',
+    blocks: ['wod'],
+    pattern: 'hinge',
+    equipment: ['barbell'],
+    primaryMuscles: ['cadena posterior', 'trapecio', 'hombros'],
+    standard: 'Peso muerto con agarre estrecho y postura ancha tipo sumo, tirando la barra hasta la altura de la barbilla con los codos altos al finalizar cada repeticion.',
+    scaling: { easier: ['sumo-deadlift'], harder: [] },
+    progressionOf: 'sumo-deadlift',
+    tags: ['funcional', 'benchmark'],
+  },
 ];
