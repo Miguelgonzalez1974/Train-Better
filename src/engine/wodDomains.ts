@@ -29,9 +29,13 @@ export const GYMNASTICS_IDS = [
   'air-squat',
   'abmat-situp',
   'l-sit',
+  'burpee-pull-up',
+  'bar-facing-burpee',
+  'burpee-to-target',
+  'lateral-burpee',
 ];
 
-export const MONOSTRUCTURAL_IDS = ['run', 'row', 'air-bike', 'ski-erg', 'double-under', 'single-under'];
+export const MONOSTRUCTURAL_IDS = ['run', 'row', 'air-bike', 'ski-erg', 'double-under', 'single-under', 'shuttle-run'];
 
 export const WEIGHTED_IDS = [
   'wall-ball',
@@ -46,6 +50,9 @@ export const WEIGHTED_IDS = [
   'sandbag-carry',
   'sled-push',
   'wall-walk-alt',
+  'shoulder-to-overhead',
+  'dumbbell-hang-clean',
+  'dumbbell-push-jerk',
 ];
 
 export type WodDomain = 'gymnastics' | 'monostructural' | 'weighted';
@@ -99,6 +106,14 @@ export const WOD_PRESCRIPTION: Record<string, string> = {
   'sandbag-carry': '40m',
   'sled-push': '20m',
   'wall-walk-alt': '10-16 pasos',
+  'burpee-pull-up': '8-12',
+  'bar-facing-burpee': '10-15',
+  'burpee-to-target': '10-15',
+  'lateral-burpee': '10-15',
+  'shoulder-to-overhead': '8-12',
+  'dumbbell-hang-clean': '8-12',
+  'dumbbell-push-jerk': '8-12',
+  'shuttle-run': '4-6 x 10m',
 };
 
 export interface WodTimeDomain {
