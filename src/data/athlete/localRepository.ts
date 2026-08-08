@@ -7,6 +7,8 @@ const SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
 const SESSION_CACHE_LIMIT = 60;
 const BODYWEIGHT_LOG_LIMIT = 120;
+/** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
+const TRAINING_DATES_LOG_LIMIT = 400;
 
 export interface AthleteRepository {
   getProfile(): AthleteProfile;
@@ -56,6 +58,12 @@ export const localAthleteRepository: AthleteRepository = {
     const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
     const updated = [...history, entry].slice(-HISTORY_LIMIT);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+
+    const profile = readJson<AthleteProfile>(PROFILE_KEY, DEFAULT_PROFILE);
+    const trainingDatesLog = [...new Set([...(profile.trainingDatesLog ?? []), entry.date])]
+      .sort()
+      .slice(-TRAINING_DATES_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog }));
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));

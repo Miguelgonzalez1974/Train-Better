@@ -24,6 +24,13 @@ export interface AthleteProfile {
   mesocycleStartDate: string;
   /** Historial de peso corporal, opcional para no romper perfiles guardados antes de esta funcion */
   bodyweightLog?: BodyweightEntry[];
+  /**
+   * Fechas ISO (una por dia, deduplicadas) en las que se completo una sesion — a diferencia de
+   * `SessionHistoryEntry[]` (limitado a las ultimas 30 para no crecer sin limite), este log solo
+   * guarda la fecha y aguanta un cap mucho mayor, para poder calcular "dias entrenados este año"
+   * sin que el contador se quede clavado al llegar al limite del historial detallado.
+   */
+  trainingDatesLog?: string[];
 }
 
 export interface SessionBlockResult {

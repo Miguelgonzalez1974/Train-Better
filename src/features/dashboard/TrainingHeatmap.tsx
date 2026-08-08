@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import type { SessionHistoryEntry } from '../../data/athlete/types';
@@ -43,6 +44,19 @@ interface TrainingHeatmapProps {
 }
 
 export function TrainingHeatmap({ history, trainingDaysPerWeek, mesocycleStartDate }: TrainingHeatmapProps) {
+  const [pinnedIso, setPinnedIso] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // En movil no hay hover: un toque fija el tooltip. Tocar fuera del mapa lo cierra.
+  useEffect(() => {
+    if (!pinnedIso) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setPinnedIso(null);
+    }
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [pinnedIso]);
+
   const today = new Date();
   const todayIso = toLocalIsoDate(today);
   const currentMonday = new Date(today);
@@ -86,22 +100,37 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, mesocycleStartDa
         </div>
       </div>
 
-      <div className="mt-4 flex gap-[3px] overflow-x-auto pb-1">
+      <div ref={containerRef} className="mt-4 flex gap-[3px] overflow-x-auto pb-1">
         {columns.map((col, wi) => (
           <div key={wi} className="flex flex-col gap-[3px]">
-            {col.map((cell) => (
-              <div
-                key={cell.iso}
-                title={cell.kind === 'future' ? undefined : `${cell.iso} · ${KIND_TITLE[cell.kind]}${cell.rpe !== null ? ` (RPE ${cell.rpe})` : ''}`}
-                className={`h-3 w-3 rounded-sm transition-transform duration-150 hover:scale-125 ${
-                  cell.kind === 'future'
-                    ? 'bg-transparent'
-                    : cell.kind === 'trained'
-                      ? trainedBucketClass(cell.rpe!)
-                      : CELL_CLASS[cell.kind]
-                }`}
-              />
-            ))}
+            {col.map((cell) => {
+              if (cell.kind === 'future') {
+                return <div key={cell.iso} className="h-3 w-3 rounded-sm bg-transparent" />;
+              }
+              const label = `${cell.iso} · ${KIND_TITLE[cell.kind]}${cell.rpe !== null ? ` (RPE ${cell.rpe})` : ''}`;
+              const isPinned = pinnedIso === cell.iso;
+              return (
+                <div key={cell.iso} className="group relative">
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPinnedIso(isPinned ? null : cell.iso);
+                    }}
+                    className={`h-3 w-3 cursor-pointer rounded-sm transition-transform duration-150 hover:scale-125 ${
+                      cell.kind === 'trained' ? trainedBucketClass(cell.rpe!) : CELL_CLASS[cell.kind]
+                    }`}
+                  />
+                  <div
+                    role="tooltip"
+                    className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-lg border border-brand-border bg-brand-surface px-2 py-1 text-[11px] text-neutral-200 shadow-lg transition-opacity duration-100 ${
+                      isPinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                  >
+                    {label}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
