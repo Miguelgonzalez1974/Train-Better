@@ -1,4 +1,4 @@
-import type { Movement, MovementPattern } from '../data/movements/types';
+import type { BenchmarkWorkout, Movement, MovementPattern } from '../data/movements/types';
 import {
   getMovementById,
   getMovementsByBlock,
@@ -22,7 +22,7 @@ import { getDayPlan, getMesocycleWeek, getWeekdayIndex, isEmphasisDay, toLocalIs
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress } from './goalProgress';
-import { generateWodName, getWodDomain, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
+import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
 import { computeAcwr, type AcwrZone } from './loadMetrics';
 import { getAutoregFactor, getAutoregNote } from './autoregulation';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
@@ -394,6 +394,64 @@ function buildOlyBlock(
   return [primerEntry, mainEntry];
 }
 
+/**
+ * Cada cuantos dias de benchmark se fuerza un retest deliberado de un benchmark real ya hecho
+ * (~5-6 semanas a 1 benchmark/semana). Se mide en dias transcurridos desde el ultimo intento
+ * conocido (no un contador acumulado) porque el historial es una ventana rodante de HISTORY_LIMIT
+ * sesiones: un contador absoluto se desincroniza en cuanto empiezan a expirar entradas antiguas.
+ */
+const RETEST_INTERVAL = 6;
+
+function formatIsoDateShort(iso: string): string {
+  return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00:00`));
+}
+
+function countBenchmarkDaySessions(history: SessionHistoryEntry[]): number {
+  return history.filter((entry) => entry.movementIds.some((id) => id.startsWith('benchmark:'))).length;
+}
+
+/** Dias de benchmark ocurridos estrictamente despues de una fecha dada, dentro del historial visible. */
+function benchmarkDaysSince(history: SessionHistoryEntry[], sinceDateIso: string): number {
+  return history.filter(
+    (entry) => entry.date > sinceDateIso && entry.movementIds.some((id) => id.startsWith('benchmark:')),
+  ).length;
+}
+
+/** Domino predominante del ultimo benchmark completado, para que el siguiente no repita el mismo estimulo. */
+function getLastBenchmarkDomain(history: SessionHistoryEntry[]): ReturnType<typeof dominantWodDomain> | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const benchmarkId = history[i].movementIds.find((id) => id.startsWith('benchmark:'))?.replace('benchmark:', '');
+    if (!benchmarkId) continue;
+    const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);
+    if (wod) return dominantWodDomain(wod.movements);
+  }
+  return null;
+}
+
+/**
+ * Busca el benchmark real (girl/hero/open, no custom) cuyo ultimo intento registrado sea el mas
+ * antiguo — el mas "atrasado" para un retest. Un coach de verdad no reintroduce piezas custom sin
+ * identidad propia para medir progreso, solo los benchmarks reconocibles.
+ */
+function findRetestCandidate(
+  history: SessionHistoryEntry[],
+): { wod: BenchmarkWorkout; prevDate: string; prevResult: WodResult } | null {
+  const lastAttempt = new Map<string, { date: string; result: WodResult }>();
+  for (const entry of history) {
+    if (!entry.wodResult) continue;
+    const benchmarkId = entry.movementIds.find((id) => id.startsWith('benchmark:'))?.replace('benchmark:', '');
+    if (!benchmarkId) continue;
+    const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);
+    if (!wod || wod.category === 'custom') continue;
+    lastAttempt.set(benchmarkId, { date: entry.date, result: entry.wodResult });
+  }
+  if (lastAttempt.size === 0) return null;
+
+  const [oldestId, info] = [...lastAttempt.entries()].sort((a, b) => a[1].date.localeCompare(b[1].date))[0];
+  const wod = benchmarkWorkouts.find((w) => w.id === oldestId)!;
+  return { wod, prevDate: info.date, prevResult: info.result };
+}
+
 function buildWodBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -402,6 +460,7 @@ function buildWodBlock(
   excludePatterns: Set<MovementPattern>,
   goal: Goal | null,
   isTaper: boolean,
+  history: SessionHistoryEntry[],
 ): SessionBlockResult[] {
   const recentBenchmarkIds = new Set(
     [...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', '')),
@@ -420,9 +479,50 @@ function buildWodBlock(
   const isPeakWeekExtraBenchmark = week === 3 && dayPlan.trainingDayIndex === Math.floor(trainingDaysPerWeek / 2);
 
   if (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal) {
+    // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
+    // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
+    const retestCandidate = !isTaper ? findRetestCandidate(history) : null;
+    const isRetestDue = retestCandidate ? benchmarkDaysSince(history, retestCandidate.prevDate) >= RETEST_INTERVAL : false;
+
+    if (retestCandidate && isRetestDue) {
+      const { wod, prevDate, prevResult } = retestCandidate;
+      const chaseNote = wod.scoreType === 'time' ? 'Intenta bajar ese tiempo.' : 'Intenta superar esa marca.';
+      return [
+        {
+          block: 'wod',
+          movementId: `benchmark:${wod.id}`,
+          format: wod.format,
+          notes: `${wod.name} — ${wod.format}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}`,
+        },
+      ];
+    }
+
+    if (!isTaper && !retestCandidate) {
+      // Aun no hay ningun benchmark real (girl/hero/open) con marca registrada en el historial
+      // visible: sembramos uno real hoy, cada RETEST_INTERVAL dias de benchmark, en vez de dejarlo
+      // al azar entre un pool dominado por piezas custom sin identidad propia que comparar.
+      const benchmarkDayCount = countBenchmarkDaySessions(history);
+      const dueForSeed = benchmarkDayCount > 0 && benchmarkDayCount % RETEST_INTERVAL === 0;
+      if (dueForSeed) {
+        const realPool = benchmarkWorkouts.filter((w) => w.category !== 'custom' && !recentBenchmarkIds.has(w.id));
+        const seedPool = realPool.length > 0 ? realPool : benchmarkWorkouts.filter((w) => w.category !== 'custom');
+        if (seedPool.length > 0) {
+          const wod = pickSmartBenchmark(seedPool, week, getLastBenchmarkDomain(history));
+          return [
+            {
+              block: 'wod',
+              movementId: `benchmark:${wod.id}`,
+              format: wod.format,
+              notes: `${wod.name} — ${wod.format}. Benchmark de referencia: registra bien tu marca, en unas semanas lo repetimos para medir progreso real.`,
+            },
+          ];
+        }
+      }
+    }
+
     const freshBenchmarks = benchmarkWorkouts.filter((w) => !recentBenchmarkIds.has(w.id));
     const pool = freshBenchmarks.length > 0 ? freshBenchmarks : benchmarkWorkouts;
-    const wod = pool[Math.floor(Math.random() * pool.length)];
+    const wod = pickSmartBenchmark(pool, week, getLastBenchmarkDomain(history));
     return [
       {
         block: 'wod',
@@ -727,6 +827,7 @@ export function generateDailySession(
     new Set([dayPlan.strengthPattern]),
     goal,
     isTaper,
+    history,
   );
   const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds);
   const skillBlock = buildSkillBlock(history, goal);

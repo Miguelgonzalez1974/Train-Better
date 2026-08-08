@@ -5,6 +5,9 @@
  * no programacion propietaria de ningun servicio de pago.
  */
 
+import type { BenchmarkWorkout } from '../data/movements/types';
+import { olyMovements, strengthMovements } from '../data/movements';
+
 export const GYMNASTICS_IDS = [
   'strict-pull-up',
   'kipping-pull-up',
@@ -62,10 +65,53 @@ export const WEIGHTED_IDS = [
 
 export type WodDomain = 'gymnastics' | 'monostructural' | 'weighted';
 
+/** Levantamientos de halterofilia y fuerza con barra tambien cuentan como dominio "con carga" en la trifecta. */
+const LOAD_MOVEMENT_IDS = new Set([...olyMovements, ...strengthMovements].map((m) => m.id));
+
 export function getWodDomain(movementId: string): WodDomain {
   if (MONOSTRUCTURAL_IDS.includes(movementId)) return 'monostructural';
   if (WEIGHTED_IDS.includes(movementId)) return 'weighted';
+  if (LOAD_MOVEMENT_IDS.has(movementId)) return 'weighted';
   return 'gymnastics';
+}
+
+/** Dominio predominante de una lista de movimientos (mayoria simple), usado para no repetir el mismo estimulo dos benchmarks seguidos. */
+export function dominantWodDomain(movementIds: string[]): WodDomain {
+  const counts: Record<WodDomain, number> = { gymnastics: 0, monostructural: 0, weighted: 0 };
+  movementIds.forEach((id) => {
+    counts[getWodDomain(id)] += 1;
+  });
+  return (Object.entries(counts) as [WodDomain, number][]).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+export type BenchmarkDurationTag = 'corto' | 'medio' | 'largo' | 'muy-largo';
+
+/** Duracion de benchmark preferida por semana del mesociclo: acumulacion tolera mas volumen, pico exige corto e intenso. */
+const WEEK_DURATION_PREFERENCE: Record<1 | 2 | 3 | 4, BenchmarkDurationTag[]> = {
+  1: ['largo', 'muy-largo', 'medio'],
+  2: ['medio', 'largo'],
+  3: ['corto', 'medio'],
+  4: ['corto', 'medio'],
+};
+
+/**
+ * Elige un benchmark del pool priorizando: duracion acorde a la semana del mesociclo, y dominio de
+ * estimulo distinto al del ultimo benchmark realizado (para no repetir gimnasia/oly/monoestructural
+ * dos veces seguidas). Si el filtro deja el pool vacio en cualquier paso, cae al paso anterior.
+ */
+export function pickSmartBenchmark(
+  pool: BenchmarkWorkout[],
+  week: 1 | 2 | 3 | 4,
+  lastDomain: WodDomain | null,
+): BenchmarkWorkout {
+  const preference = WEEK_DURATION_PREFERENCE[week];
+  const byDuration = pool.filter((w) => w.tags.some((t) => preference.includes(t as BenchmarkDurationTag)));
+  const durationPool = byDuration.length > 0 ? byDuration : pool;
+
+  const byDomain = lastDomain ? durationPool.filter((w) => dominantWodDomain(w.movements) !== lastDomain) : durationPool;
+  const finalPool = byDomain.length > 0 ? byDomain : durationPool;
+
+  return finalPool[Math.floor(Math.random() * finalPool.length)];
 }
 
 /** Prescripcion realista por movimiento (reps, distancia o tiempo), no un "12-15" generico para todo. */
