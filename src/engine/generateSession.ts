@@ -26,14 +26,10 @@ import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, W
 import { computeAcwr, type AcwrZone } from './loadMetrics';
 import { getAutoregFactor, getAutoregNote } from './autoregulation';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
+import { resolveStrengthPRKey } from './prResolution';
+import { avoidOlyFamilyRepeat, avoidPatternRepeat } from './movementBalance';
 
-export const STRENGTH_ROOT_PR_MAP: Record<string, keyof PersonalRecords> = {
-  'back-squat': 'backSquat',
-  'front-squat': 'frontSquat',
-  'bench-press': 'benchPress',
-  deadlift: 'deadlift',
-  'strict-press': 'strictPress',
-};
+export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
 const ACCESSORY_COMPLEMENT: Partial<Record<MovementPattern, MovementPattern[]>> = {
   squat: ['hinge', 'lunge'],
@@ -123,37 +119,9 @@ function resolveTestDayFocus(week: 1 | 2 | 3 | 4): TestDayFocus {
   return null;
 }
 
-/** Recorre la cadena de progresiones del movimiento hasta encontrar el lift raiz que tiene PR propio. */
-export function resolveStrengthPRKey(movement: Movement): keyof PersonalRecords | undefined {
-  let current: Movement | undefined = movement;
-  while (current) {
-    const key = STRENGTH_ROOT_PR_MAP[current.id];
-    if (key) return key;
-    current = current.progressionOf ? getMovementById(current.progressionOf) : undefined;
-  }
-  return undefined;
-}
-
 function resolveStrengthPR(movement: Movement, prs: PersonalRecords): number {
   const key = resolveStrengthPRKey(movement);
   return key ? prs[key] : prs.backSquat;
-}
-
-const OLY_ROOT_PR_MAP: Record<string, keyof PersonalRecords> = {
-  snatch: 'snatch',
-  clean: 'clean',
-  'clean-and-jerk': 'cleanAndJerk',
-};
-
-/** Mismo criterio que `resolveStrengthPRKey`, pero para los levantamientos completos de oly. */
-export function resolveOlyPRKey(movement: Movement): keyof PersonalRecords | undefined {
-  let current: Movement | undefined = movement;
-  while (current) {
-    const key = OLY_ROOT_PR_MAP[current.id];
-    if (key) return key;
-    current = current.progressionOf ? getMovementById(current.progressionOf) : undefined;
-  }
-  return undefined;
 }
 
 function resolveOlyPR(movement: Movement, prs: PersonalRecords, family: OlyFamily): number {
@@ -168,12 +136,16 @@ interface GoalPreference {
   progress: number;
 }
 
-function goalPreference(goal: Goal | null, appliesTo: (movement: Movement) => boolean): GoalPreference {
+function goalPreference(
+  goal: Goal | null,
+  appliesTo: (movement: Movement) => boolean,
+  history: SessionHistoryEntry[],
+): GoalPreference {
   if (!goal || !goal.movementId) return { preferChance: 0, progress: 0 };
   const movement = getMovementById(goal.movementId);
   if (!movement || !appliesTo(movement)) return { preferChance: 0, progress: 0 };
 
-  const progress = getGoalProgress(goal);
+  const progress = getGoalProgress(goal, history);
   const base = goal.emphasis === 'intensivo' ? 0.9 : 0.6;
   const ramped = goal.emphasis === 'intensivo' ? 0.95 : 0.75;
   return { movementId: goal.movementId, preferChance: base + (ramped - base) * progress, progress };
@@ -193,16 +165,22 @@ function buildStrengthBlock(
   acwrZone: AcwrZone,
   acwrColdStart: boolean,
   isTestDay: boolean,
+  history: SessionHistoryEntry[],
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
   const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
   const isStrengthGoal = goal?.type === 'elevar-fuerza' || goal?.type === 'subir-pr';
-  const pref = isStrengthGoal ? goalPreference(goal, (m) => strengthMovements.some((s) => s.id === m.id)) : { preferChance: 0, progress: 0 };
+  const pref = isStrengthGoal
+    ? goalPreference(goal, (m) => strengthMovements.some((s) => s.id === m.id), history)
+    : { preferChance: 0, progress: 0 };
 
   let pattern = dayPlan.strengthPattern;
   if (pref.movementId && goal && actsIntensive(goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
     pattern = getMovementById(pref.movementId)!.pattern;
   }
+  // Se aplica siempre, no solo cuando el objetivo fuerza el patron: el ciclo natural de la semana
+  // tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas).
+  pattern = avoidPatternRepeat(pattern, history);
 
   const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
   const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
@@ -287,16 +265,22 @@ function buildOlyBlock(
   acwrZone: AcwrZone,
   acwrColdStart: boolean,
   isTestDay: boolean,
+  history: SessionHistoryEntry[],
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
   const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
   const isOlyGoal = goal?.type === 'mejorar-potencia' || goal?.type === 'subir-pr';
-  const pref = isOlyGoal ? goalPreference(goal, (m) => olyMovements.some((o) => o.id === m.id)) : { preferChance: 0, progress: 0 };
+  const pref = isOlyGoal
+    ? goalPreference(goal, (m) => olyMovements.some((o) => o.id === m.id), history)
+    : { preferChance: 0, progress: 0 };
 
   let family = dayPlan.olyFamily;
   if (pref.movementId && goal && actsIntensive(goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
     family = pref.movementId.includes('snatch') ? 'snatch' : 'clean';
   }
+  // Se aplica siempre, no solo cuando el objetivo fuerza la familia: el ciclo natural tambien
+  // puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas en calendarios de 3 dias).
+  family = avoidOlyFamilyRepeat(family, history);
 
   const fullLiftIds = family === 'snatch' ? ['snatch'] : ['clean-and-jerk', 'clean'];
   let candidates = getMovementsByBlock('oly').filter((m) =>
@@ -467,7 +451,7 @@ function buildWodBlock(
   );
 
   const isCompeticionGoal = goal?.type === 'preparar-competicion';
-  const competicionProgress = isCompeticionGoal ? getGoalProgress(goal!) : 0;
+  const competicionProgress = isCompeticionGoal ? getGoalProgress(goal!, history) : 0;
   // En taper no se fuerza testeo extra: un coach real no busca fatiga nueva a dias de competir.
   const forceBenchmarkByGoal =
     !isTaper &&
@@ -555,7 +539,7 @@ function buildWodBlock(
   const movementCount = chosenFormat.kind === 'chipper' ? 5 : 3;
 
   const isResistenciaGoal = goal?.type === 'elevar-resistencia';
-  const resistenciaProgress = isResistenciaGoal ? getGoalProgress(goal!) : 0;
+  const resistenciaProgress = isResistenciaGoal ? getGoalProgress(goal!, history) : 0;
   let monoTarget = 1;
   if (isResistenciaGoal) {
     const emphasisTarget = goal!.emphasis === 'intensivo' ? 2 : 1;
@@ -628,7 +612,9 @@ function buildAccessoryBlock(strengthPattern: MovementPattern, recentIds: Set<st
 function buildSkillBlock(history: SessionHistoryEntry[], goal: Goal | null): SessionBlockResult[] {
   const candidates = getMovementsByBlock('skill');
   const isSkillGoal = goal?.type === 'mejorar-gimnasticos' || goal?.type === 'subir-pr';
-  const pref = isSkillGoal ? goalPreference(goal, (m) => skillMovements.some((s) => s.id === m.id)) : { preferChance: 0, progress: 0 };
+  const pref = isSkillGoal
+    ? goalPreference(goal, (m) => skillMovements.some((s) => s.id === m.id), history)
+    : { preferChance: 0, progress: 0 };
 
   const movement = pref.movementId
     ? pickVariedWithPreference(candidates, new Set(), pref.movementId, pref.preferChance)
@@ -817,8 +803,9 @@ export function generateDailySession(
     acwrZone,
     acwrResult.coldStart,
     testDayFocus === 'strength',
+    history,
   );
-  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, acwrResult.coldStart, testDayFocus === 'oly');
+  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, acwrResult.coldStart, testDayFocus === 'oly', history);
   const wodBlock = buildWodBlock(
     dayPlan,
     week,
