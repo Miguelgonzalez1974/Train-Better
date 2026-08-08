@@ -55,6 +55,9 @@ export const WEIGHTED_IDS = [
   'dumbbell-hang-clean',
   'dumbbell-push-jerk',
   'sumo-deadlift-high-pull',
+  'kettlebell-front-squat',
+  'kettlebell-goblet-squat',
+  'suitcase-carry',
 ];
 
 export type WodDomain = 'gymnastics' | 'monostructural' | 'weighted';
@@ -118,6 +121,9 @@ export const WOD_PRESCRIPTION: Record<string, string> = {
   'shuttle-run': '4-6 x 10m',
   'ring-row': '10-15',
   'sumo-deadlift-high-pull': '12-15',
+  'kettlebell-front-squat': '8-12',
+  'kettlebell-goblet-squat': '12-15',
+  'suitcase-carry': '40m por lado',
 };
 
 export interface WodTimeDomain {
