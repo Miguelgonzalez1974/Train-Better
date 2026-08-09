@@ -413,9 +413,16 @@ export function Planificacion() {
       )}
 
       {session.isRestDay ? (
-        <p className="card p-4 text-neutral-400">
-          Hoy toca descansar. Aprovecha para movilidad ligera o recuperación activa.
-        </p>
+        <div className="card flex flex-col gap-3 p-4">
+          <p className="text-neutral-400">Hoy toca descansar. Aprovecha para movilidad ligera o recuperación activa.</p>
+          <button
+            onClick={openCustomEditor}
+            className="flex items-center gap-2 self-start rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <NotebookPen size={15} strokeWidth={2.25} />
+            ¿Tienes algo pensado? Añade tu sesión
+          </button>
+        </div>
       ) : (
         <DaySessionBlocks session={session} editable={editMode} onUpdateEntry={handleUpdateEntry} />
       )}
