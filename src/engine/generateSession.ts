@@ -12,13 +12,14 @@ import type {
   AthleteProfile,
   DailySession,
   Goal,
+  Macrocycle,
   PersonalRecords,
   RxOrScaled,
   SessionBlockResult,
   SessionHistoryEntry,
   WodResult,
 } from '../data/athlete/types';
-import { getActiveMacrocycle, getDayPlan, getMesocycleWeek, getWeekdayIndex, isEmphasisDay, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
+import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, isEmphasisDay, resolveMacrocyclePhase, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress } from './goalProgress';
@@ -771,17 +772,25 @@ function buildCooldownBlock(strengthPattern: MovementPattern): SessionBlockResul
 export function generateDailySession(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
-  macrocycleStartDate: string,
+  macro: Macrocycle,
   date: Date = new Date(),
   goals: Goal[] = [],
 ): DailySession {
-  const calendarWeek = getMesocycleWeek(macrocycleStartDate, date);
+  const phaseProgress = resolveMacrocyclePhase(macro, date);
+  const calendarWeek = phaseProgress.phaseIndex;
   const weekdayIndex = getWeekdayIndex(date);
   const dayPlan = getDayPlan(weekdayIndex, profile.trainingDaysPerWeek);
   const dateIso = toLocalIsoDate(date);
 
   if (!dayPlan.isTrainingDay) {
-    return { date: dateIso, mesocycleWeek: calendarWeek, isRestDay: true, blocks: [] };
+    return {
+      date: dateIso,
+      mesocycleWeek: calendarWeek,
+      isRestDay: true,
+      blocks: [],
+      phaseWeekInPhase: phaseProgress.weekInPhase,
+      phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
+    };
   }
 
   const recentIds = getRecentMovementIds(history);
@@ -797,6 +806,8 @@ export function generateDailySession(
       mesocycleWeek: calendarWeek,
       isRestDay: false,
       blocks: [...warmupBlock, ...recoveryWodBlock, ...recoverySkillBlock, ...cooldownBlock],
+      phaseWeekInPhase: phaseProgress.weekInPhase,
+      phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
     };
   }
 
@@ -839,6 +850,8 @@ export function generateDailySession(
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
     deloadReason,
     deloadNote: deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined,
+    phaseWeekInPhase: phaseProgress.weekInPhase,
+    phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
   };
 }
 
@@ -927,7 +940,7 @@ export function generateSessionForDate(
 ): DailySession {
   const activeMacro = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(date));
   return activeMacro
-    ? generateDailySession(profile, history, activeMacro.startDate, date, goals)
+    ? generateDailySession(profile, history, activeMacro, date, goals)
     : generateOffSeasonSession(profile, history, date);
 }
 

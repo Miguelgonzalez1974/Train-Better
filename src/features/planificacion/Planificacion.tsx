@@ -191,7 +191,9 @@ export function Planificacion() {
         <div>
           {session.mesocycleWeek > 0 && (
             <p className="text-sm text-neutral-400">
-              Semana {session.mesocycleWeek}/4 · Fase: {MESOCYCLE_PHASE[session.mesocycleWeek as 1 | 2 | 3 | 4]}
+              Fase: {MESOCYCLE_PHASE[session.mesocycleWeek as 1 | 2 | 3 | 4]}
+              {session.phaseWeekInPhase && session.phaseLengthWeeks && session.phaseLengthWeeks > 1 &&
+                ` · semana ${session.phaseWeekInPhase} de ${session.phaseLengthWeeks}`}
             </p>
           )}
           <div className="flex items-center gap-2">

@@ -48,14 +48,54 @@ export function getActiveMacrocycle(macrocycles: Macrocycle[], todayIso: string)
   return macrocycles.find((m) => m.startDate <= todayIso && todayIso <= m.endDate);
 }
 
-export function getMesocycleWeek(mesocycleStartDateIso: string, today: Date = new Date()): 1 | 2 | 3 | 4 {
-  const start = new Date(mesocycleStartDateIso);
+function weeksSinceStart(startDateIso: string, today: Date): number {
+  const start = new Date(startDateIso);
   const todayMidnight = new Date(today).setHours(0, 0, 0, 0);
   const startMidnight = new Date(start).setHours(0, 0, 0, 0);
   const diffMs = todayMidnight - startMidnight;
   const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-  const weeksSince = Math.floor(diffDays / 7);
-  return ((weeksSince % 4) + 1) as 1 | 2 | 3 | 4;
+  return Math.floor(diffDays / 7);
+}
+
+export interface PhaseProgress {
+  /** 1=acumulacion, 2=intensificacion, 3=pico, 4=descarga — mismo indice que usan las tablas de % de carga. */
+  phaseIndex: 1 | 2 | 3 | 4;
+  /** Semana dentro de la fase actual, 1-indexada. */
+  weekInPhase: number;
+  /** Duracion total en semanas de la fase actual. */
+  phaseLengthWeeks: number;
+}
+
+/**
+ * Resuelve en que fase del macrociclo cae `today`. Si el macrociclo no define `phaseWeeks`, usa
+ * el ciclo clasico de 4 semanas iguales en bucle indefinido (comportamiento historico). Si lo
+ * define, recorre esos bloques de duracion variable — un atleta puede pedir 6 semanas de
+ * acumulacion, 6 de intensificacion, 4 de pico y el resto de descarga, y esto lo respeta.
+ */
+export function resolveMacrocyclePhase(macro: Macrocycle, today: Date = new Date()): PhaseProgress {
+  const weeksSince = weeksSinceStart(macro.startDate, today);
+
+  if (!macro.phaseWeeks) {
+    // Ciclo clasico: cada fase dura exactamente 1 semana antes de rotar a la siguiente — el "4"
+    // es la duracion del ciclo completo, no de una fase individual, asi que weekInPhase/
+    // phaseLengthWeeks reflejan eso (1 de 1), no la posicion dentro del ciclo de 4.
+    const weekInCycle = weeksSince % 4;
+    return { phaseIndex: (weekInCycle + 1) as 1 | 2 | 3 | 4, weekInPhase: 1, phaseLengthWeeks: 1 };
+  }
+
+  let cursor = 0;
+  for (let i = 0; i < macro.phaseWeeks.length; i++) {
+    const length = Math.max(1, macro.phaseWeeks[i]);
+    if (weeksSince < cursor + length) {
+      return { phaseIndex: (i + 1) as 1 | 2 | 3 | 4, weekInPhase: weeksSince - cursor + 1, phaseLengthWeeks: length };
+    }
+    cursor += length;
+  }
+
+  // El macrociclo dura mas que la suma de fases planificadas: se queda en la ultima (normalmente descarga).
+  const lastIndex = macro.phaseWeeks.length as 1 | 2 | 3 | 4;
+  const lastLength = Math.max(1, macro.phaseWeeks[macro.phaseWeeks.length - 1]);
+  return { phaseIndex: lastIndex, weekInPhase: lastLength, phaseLengthWeeks: lastLength };
 }
 
 /** Para sesgo "intensivo" de objetivos: aprox. la mitad de los dias de entreno son "de enfasis". */

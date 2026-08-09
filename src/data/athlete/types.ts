@@ -25,6 +25,13 @@ export interface Macrocycle {
   startDate: string;
   /** Fecha ISO de fin — a partir de este dia, si no hay otro macrociclo activo, se cae a modo mantenimiento */
   endDate: string;
+  /**
+   * Duracion en semanas de cada fase — [acumulacion, intensificacion, pico, descarga], en ese
+   * orden fijo. Si se omite, se usa el ciclo clasico de 4 semanas iguales en bucle indefinido
+   * durante todo el macrociclo. Si se define, el atleta manda: puede tener 6 semanas de
+   * acumulacion, 6 de intensificacion, 4 de pico y el resto de descarga, por ejemplo.
+   */
+  phaseWeeks?: [number, number, number, number];
 }
 
 export interface AthleteProfile {
@@ -77,6 +84,10 @@ export interface DailySession {
   customNote?: string;
   /** Etiqueta a mostrar en vez de "Mantenimiento" cuando el atleta cambio deliberadamente el tipo de sesion de hoy (propia/recuperacion/aleatoria) en vez de usar lo programado. */
   swapLabel?: string;
+  /** En que semana de la fase actual del macrociclo cae hoy (1-indexado) — solo con macrociclo activo. */
+  phaseWeekInPhase?: number;
+  /** Duracion total en semanas de la fase actual — junto a `phaseWeekInPhase` da "semana 3 de 6". */
+  phaseLengthWeeks?: number;
 }
 
 export type RxOrScaled = 'rx' | 'scaled';

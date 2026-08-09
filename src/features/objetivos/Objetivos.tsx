@@ -46,6 +46,21 @@ function newMacroDraft(): Macrocycle {
   return { id: crypto.randomUUID(), label: '', startDate: todayIso(), endDate: toLocalIsoDate(end) };
 }
 
+const PHASE_LABELS = ['Acumulación', 'Intensificación', 'Pico'] as const;
+
+function totalMacroWeeks(macro: Macrocycle): number {
+  const start = new Date(macro.startDate);
+  const end = new Date(macro.endDate);
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+}
+
+/** Semanas de descarga restantes tras restar acumulacion/intensificacion/pico del total del macro. */
+function remainingDeloadWeeks(macro: Macrocycle): number {
+  if (!macro.phaseWeeks) return 0;
+  const [acc, int, peak] = macro.phaseWeeks;
+  return totalMacroWeeks(macro) - acc - int - peak;
+}
+
 function firstMovementId(type: GoalType): string | undefined {
   return GOAL_TYPE_META[type].movementGroups[0]?.movements[0]?.id;
 }
@@ -77,10 +92,15 @@ export function Objetivos() {
   function saveMacro(e: React.FormEvent) {
     e.preventDefault();
     if (!macroDraft || !macroDraft.label.trim()) return;
-    const exists = profile.macrocycles.some((m) => m.id === macroDraft.id);
+    // La duracion de descarga siempre se deriva del resto del macro en el momento de guardar,
+    // nunca se guarda un numero obsoleto si el atleta cambio las fechas despues de fijar las fases.
+    const finalDraft: Macrocycle = macroDraft.phaseWeeks
+      ? { ...macroDraft, phaseWeeks: [...macroDraft.phaseWeeks.slice(0, 3), Math.max(1, remainingDeloadWeeks(macroDraft))] as [number, number, number, number] }
+      : macroDraft;
+    const exists = profile.macrocycles.some((m) => m.id === finalDraft.id);
     const macrocycles = exists
-      ? profile.macrocycles.map((m) => (m.id === macroDraft.id ? macroDraft : m))
-      : [...profile.macrocycles, macroDraft];
+      ? profile.macrocycles.map((m) => (m.id === finalDraft.id ? finalDraft : m))
+      : [...profile.macrocycles, finalDraft];
     persist({ ...profile, macrocycles });
     setMacroDraft(null);
   }
@@ -145,6 +165,11 @@ export function Objetivos() {
                     <p className="text-xs text-neutral-500">
                       {m.startDate} → {m.endDate}
                     </p>
+                    {m.phaseWeeks && (
+                      <p className="mt-0.5 text-[11px] text-neutral-600">
+                        {m.phaseWeeks[0]}s acum. · {m.phaseWeeks[1]}s intens. · {m.phaseWeeks[2]}s pico · {m.phaseWeeks[3]}s descarga
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -201,6 +226,69 @@ export function Objetivos() {
                 />
               </label>
             </div>
+
+            <div className="flex flex-col gap-2.5 rounded-lg border border-brand-border/60 p-3">
+              <label className="flex items-center gap-2 text-xs font-medium text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={Boolean(macroDraft.phaseWeeks)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      const total = totalMacroWeeks(macroDraft);
+                      const chunk = Math.max(1, Math.floor(total / 4));
+                      setMacroDraft((prev) => (prev ? { ...prev, phaseWeeks: [chunk, chunk, chunk, Math.max(1, total - chunk * 3)] } : prev));
+                    } else {
+                      setMacroDraft((prev) => (prev ? { ...prev, phaseWeeks: undefined } : prev));
+                    }
+                  }}
+                />
+                Personalizar duración de fases
+              </label>
+              <p className="text-xs text-neutral-600">
+                Por defecto se repiten bloques de 4 semanas (Acumulación → Intensificación → Pico → Descarga) sin
+                parar mientras dure el macrociclo. Actívalo para dar a cada fase su propia duración — el resto del
+                macro, lo que sobre, siempre se reparte a descarga.
+              </p>
+
+              {macroDraft.phaseWeeks && (
+                <div className="flex flex-wrap items-end gap-3">
+                  {PHASE_LABELS.map((label, i) => (
+                    <label key={label} className="flex w-24 flex-col gap-1 text-xs text-neutral-400">
+                      {label}
+                      <input
+                        type="number"
+                        min={1}
+                        value={macroDraft.phaseWeeks![i]}
+                        onChange={(e) => {
+                          const value = Math.max(1, Number(e.target.value) || 1);
+                          setMacroDraft((prev) => {
+                            if (!prev?.phaseWeeks) return prev;
+                            const next = [...prev.phaseWeeks] as [number, number, number, number];
+                            next[i] = value;
+                            return { ...prev, phaseWeeks: next };
+                          });
+                        }}
+                        className={inputClass}
+                      />
+                    </label>
+                  ))}
+                  <div className="flex w-28 flex-col gap-1 text-xs text-neutral-400">
+                    Descarga
+                    <span className="rounded-lg border border-brand-border bg-brand-bg px-2.5 py-1.5 text-sm text-neutral-300">
+                      {Math.max(0, remainingDeloadWeeks(macroDraft))} sem. (resto)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {macroDraft.phaseWeeks && remainingDeloadWeeks(macroDraft) < 1 && (
+                <p className="text-xs text-brand-orange">
+                  Acumulación + intensificación + pico ya ocupan todo el macrociclo — no queda semana para descarga.
+                  Alarga el macro o reduce alguna fase.
+                </p>
+              )}
+            </div>
+
             <p className="text-xs text-neutral-600">
               Fuera de las fechas de todos tus macrociclos entrenas en modo mantenimiento (sesiones ligeras).
             </p>
