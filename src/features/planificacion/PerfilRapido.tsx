@@ -70,18 +70,9 @@ export function PerfilRapido({ profile, onSave }: PerfilRapidoProps) {
         </select>
       </label>
 
-      <label className="flex flex-col gap-1 text-xs text-neutral-400">
-        Inicio del macrociclo
-        <input
-          type="date"
-          value={draft.mesocycleStartDate}
-          onChange={(e) => setDraft((prev) => ({ ...prev, mesocycleStartDate: e.target.value }))}
-          className={`w-40 ${inputClass}`}
-        />
-        <span className="text-neutral-600">
-          Antes de esta fecha entrenas en modo mantenimiento (sesiones ligeras); desde esta fecha arranca el macrociclo completo.
-        </span>
-      </label>
+      <p className="text-xs text-neutral-600">
+        Tus macrociclos y objetivos se gestionan ahora en la pestaña "Objetivos".
+      </p>
 
       <div className="flex items-center justify-between gap-3">
         <button

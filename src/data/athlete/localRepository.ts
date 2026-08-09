@@ -1,8 +1,9 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, Goal, SessionHistoryEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, SessionHistoryEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
-const GOAL_KEY = 'train-better:goal';
+/** @deprecated Solo se lee para migrar el objetivo unico legado a `profile.goals`. */
+const LEGACY_GOAL_KEY = 'train-better:goal';
 const SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
 const SESSION_CACHE_LIMIT = 60;
@@ -16,9 +17,6 @@ export interface AthleteRepository {
   getHistory(): SessionHistoryEntry[];
   appendHistoryEntry(entry: SessionHistoryEntry): void;
   replaceHistory(history: SessionHistoryEntry[]): void;
-  getGoal(): Goal | null;
-  saveGoal(goal: Goal): void;
-  clearGoal(): void;
   getCachedSession(dateIso: string): DailySession | null;
   saveCachedSession(session: DailySession): void;
   getBodyweightLog(): BodyweightEntry[];
@@ -35,6 +33,37 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function formatIsoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Perfiles guardados antes de soportar varios macrociclos/objetivos tenian `mesocycleStartDate`
+ * (una fecha suelta) y un objetivo unico bajo su propia clave. Se migran una sola vez a las listas
+ * nuevas la primera vez que se lee el perfil, para no perder configuracion ya guardada.
+ */
+function migrateProfile(raw: AthleteProfile & { mesocycleStartDate?: string }): AthleteProfile {
+  const profile: AthleteProfile = { ...DEFAULT_PROFILE, ...raw };
+
+  if (!raw.macrocycles) {
+    if (raw.mesocycleStartDate) {
+      const start = new Date(raw.mesocycleStartDate);
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + 6);
+      profile.macrocycles = [{ id: 'legacy', label: 'Macrociclo', startDate: raw.mesocycleStartDate, endDate: formatIsoDate(end) }];
+    } else {
+      profile.macrocycles = [];
+    }
+  }
+
+  if (!raw.goals) {
+    const legacyGoal = readJson<(AthleteProfile['goals'][number] & { id?: string }) | null>(LEGACY_GOAL_KEY, null);
+    profile.goals = legacyGoal ? [{ ...legacyGoal, id: legacyGoal.id ?? 'legacy' }] : [];
+  }
+
+  return profile;
+}
+
 /** Igual que HISTORY_LIMIT: evita que la cache de sesiones generadas crezca sin limite con el tiempo. */
 function pruneSessionCache(cache: Record<string, DailySession>): Record<string, DailySession> {
   const dates = Object.keys(cache).sort();
@@ -46,7 +75,8 @@ function pruneSessionCache(cache: Record<string, DailySession>): Record<string, 
 
 export const localAthleteRepository: AthleteRepository = {
   getProfile() {
-    return readJson<AthleteProfile>(PROFILE_KEY, DEFAULT_PROFILE);
+    const raw = readJson<AthleteProfile & { mesocycleStartDate?: string }>(PROFILE_KEY, DEFAULT_PROFILE);
+    return migrateProfile(raw);
   },
   saveProfile(profile) {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
@@ -59,7 +89,7 @@ export const localAthleteRepository: AthleteRepository = {
     const updated = [...history, entry].slice(-HISTORY_LIMIT);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
 
-    const profile = readJson<AthleteProfile>(PROFILE_KEY, DEFAULT_PROFILE);
+    const profile = localAthleteRepository.getProfile();
     const trainingDatesLog = [...new Set([...(profile.trainingDatesLog ?? []), entry.date])]
       .sort()
       .slice(-TRAINING_DATES_LOG_LIMIT);
@@ -67,15 +97,6 @@ export const localAthleteRepository: AthleteRepository = {
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));
-  },
-  getGoal() {
-    return readJson<Goal | null>(GOAL_KEY, null);
-  },
-  saveGoal(goal) {
-    localStorage.setItem(GOAL_KEY, JSON.stringify(goal));
-  },
-  clearGoal() {
-    localStorage.removeItem(GOAL_KEY);
   },
   getCachedSession(dateIso) {
     const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
@@ -87,10 +108,10 @@ export const localAthleteRepository: AthleteRepository = {
     localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(pruneSessionCache(cache)));
   },
   getBodyweightLog() {
-    return readJson<AthleteProfile>(PROFILE_KEY, DEFAULT_PROFILE).bodyweightLog ?? [];
+    return localAthleteRepository.getProfile().bodyweightLog ?? [];
   },
   appendBodyweightEntry(entry) {
-    const profile = readJson<AthleteProfile>(PROFILE_KEY, DEFAULT_PROFILE);
+    const profile = localAthleteRepository.getProfile();
     const withoutSameDate = (profile.bodyweightLog ?? []).filter((e) => e.date !== entry.date);
     const bodyweightLog = [...withoutSameDate, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-BODYWEIGHT_LOG_LIMIT);
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, bodyweightLog }));

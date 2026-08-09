@@ -6,6 +6,7 @@ interface AthleteRow {
   user_id: string;
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
+  /** @deprecated los objetivos viven ahora en `profile.goals`. Se sigue enviando `null` para no tocar la columna. */
   goal: Goal | null;
 }
 
@@ -21,7 +22,7 @@ export async function pushRemote(): Promise<void> {
     user_id: user.id,
     profile: localAthleteRepository.getProfile(),
     history: localAthleteRepository.getHistory(),
-    goal: localAthleteRepository.getGoal(),
+    goal: null,
   };
 
   const { error } = await supabase.from('athlete_data').upsert(row);
@@ -48,10 +49,14 @@ export async function pullRemoteOrSeed(): Promise<void> {
   }
 
   if (data) {
-    localAthleteRepository.saveProfile(data.profile);
+    // Filas remotas guardadas antes de soportar varios objetivos tenian el unico objetivo en su
+    // propia columna — se pliega dentro del perfil para no perderlo al migrar.
+    const profile: AthleteProfile = { ...data.profile };
+    if (!profile.goals) {
+      profile.goals = data.goal ? [{ ...data.goal, id: data.goal.id ?? 'legacy' }] : [];
+    }
+    localAthleteRepository.saveProfile(profile);
     localAthleteRepository.replaceHistory(data.history ?? []);
-    if (data.goal) localAthleteRepository.saveGoal(data.goal);
-    else localAthleteRepository.clearGoal();
   } else {
     await pushRemote();
   }

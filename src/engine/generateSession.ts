@@ -18,10 +18,11 @@ import type {
   SessionHistoryEntry,
   WodResult,
 } from '../data/athlete/types';
-import { getDayPlan, getMesocycleWeek, getWeekdayIndex, isEmphasisDay, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
+import { getActiveMacrocycle, getDayPlan, getMesocycleWeek, getWeekdayIndex, isEmphasisDay, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress } from './goalProgress';
+import { pickPriorityGoal } from './goalPriority';
 import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
 import { computeAcwr, type AcwrZone } from './loadMetrics';
 import { getAutoregFactor, getAutoregNote } from './autoregulation';
@@ -134,21 +135,30 @@ interface GoalPreference {
   preferChance: number;
   /** Progreso (0-1) del objetivo hacia su fecha, usado para intensificar gradualmente el sesgo. */
   progress: number;
+  /** El objetivo concreto que gano la prioridad hoy, si alguno aplico. */
+  goal?: Goal;
 }
 
+/**
+ * Puede haber varios objetivos concurrentes que apliquen al mismo bloque (p.ej. dos objetivos de
+ * tipo oly). Un coach real prioriza el mas urgente: el que tiene la fecha limite mas cercana.
+ */
 function goalPreference(
-  goal: Goal | null,
+  goals: Goal[],
   appliesTo: (movement: Movement) => boolean,
   history: SessionHistoryEntry[],
 ): GoalPreference {
+  const goal = pickPriorityGoal(goals, (g) => {
+    if (!g.movementId) return false;
+    const movement = getMovementById(g.movementId);
+    return Boolean(movement && appliesTo(movement));
+  });
   if (!goal || !goal.movementId) return { preferChance: 0, progress: 0 };
-  const movement = getMovementById(goal.movementId);
-  if (!movement || !appliesTo(movement)) return { preferChance: 0, progress: 0 };
 
   const progress = getGoalProgress(goal, history);
   const base = goal.emphasis === 'intensivo' ? 0.9 : 0.6;
   const ramped = goal.emphasis === 'intensivo' ? 0.95 : 0.75;
-  return { movementId: goal.movementId, preferChance: base + (ramped - base) * progress, progress };
+  return { movementId: goal.movementId, preferChance: base + (ramped - base) * progress, progress, goal };
 }
 
 /** A partir del ultimo tercio antes de la fecha del objetivo, un enfasis "moderado" empieza a comportarse como "intensivo". */
@@ -161,7 +171,7 @@ function buildStrengthBlock(
   week: 1 | 2 | 3 | 4,
   prs: PersonalRecords,
   recentIds: Set<string>,
-  goal: Goal | null,
+  goals: Goal[],
   acwrZone: AcwrZone,
   acwrColdStart: boolean,
   isTestDay: boolean,
@@ -169,13 +179,13 @@ function buildStrengthBlock(
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
   const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
-  const isStrengthGoal = goal?.type === 'elevar-fuerza' || goal?.type === 'subir-pr';
+  const isStrengthGoal = goals.some((g) => g.type === 'elevar-fuerza' || g.type === 'subir-pr');
   const pref = isStrengthGoal
-    ? goalPreference(goal, (m) => strengthMovements.some((s) => s.id === m.id), history)
+    ? goalPreference(goals, (m) => strengthMovements.some((s) => s.id === m.id), history)
     : { preferChance: 0, progress: 0 };
 
   let pattern = dayPlan.strengthPattern;
-  if (pref.movementId && goal && actsIntensive(goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
+  if (pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
     pattern = getMovementById(pref.movementId)!.pattern;
   }
   // Se aplica siempre, no solo cuando el objetivo fuerza el patron: el ciclo natural de la semana
@@ -261,7 +271,7 @@ function buildOlyBlock(
   week: 1 | 2 | 3 | 4,
   prs: PersonalRecords,
   recentIds: Set<string>,
-  goal: Goal | null,
+  goals: Goal[],
   acwrZone: AcwrZone,
   acwrColdStart: boolean,
   isTestDay: boolean,
@@ -269,13 +279,13 @@ function buildOlyBlock(
 ): SessionBlockResult[] {
   const autoregFactor = getAutoregFactor(acwrZone);
   const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
-  const isOlyGoal = goal?.type === 'mejorar-potencia' || goal?.type === 'subir-pr';
+  const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
   const pref = isOlyGoal
-    ? goalPreference(goal, (m) => olyMovements.some((o) => o.id === m.id), history)
+    ? goalPreference(goals, (m) => olyMovements.some((o) => o.id === m.id), history)
     : { preferChance: 0, progress: 0 };
 
   let family = dayPlan.olyFamily;
-  if (pref.movementId && goal && actsIntensive(goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
+  if (pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
     family = pref.movementId.includes('snatch') ? 'snatch' : 'clean';
   }
   // Se aplica siempre, no solo cuando el objetivo fuerza la familia: el ciclo natural tambien
@@ -442,7 +452,7 @@ function buildWodBlock(
   trainingDaysPerWeek: 3 | 4 | 5 | 6,
   recentIds: Set<string>,
   excludePatterns: Set<MovementPattern>,
-  goal: Goal | null,
+  goals: Goal[],
   isTaper: boolean,
   history: SessionHistoryEntry[],
 ): SessionBlockResult[] {
@@ -450,14 +460,14 @@ function buildWodBlock(
     [...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', '')),
   );
 
-  const isCompeticionGoal = goal?.type === 'preparar-competicion';
-  const competicionProgress = isCompeticionGoal ? getGoalProgress(goal!, history) : 0;
+  const competicionGoal = pickPriorityGoal(goals, (g) => g.type === 'preparar-competicion');
+  const competicionProgress = competicionGoal ? getGoalProgress(competicionGoal, history) : 0;
   // En taper no se fuerza testeo extra: un coach real no busca fatiga nueva a dias de competir.
   const forceBenchmarkByGoal =
     !isTaper &&
-    isCompeticionGoal &&
+    Boolean(competicionGoal) &&
     (competicionProgress > 0.8 ||
-      ((goal!.emphasis === 'intensivo' || competicionProgress > 0.4) && isEmphasisDay(dayPlan.trainingDayIndex)));
+      ((competicionGoal!.emphasis === 'intensivo' || competicionProgress > 0.4) && isEmphasisDay(dayPlan.trainingDayIndex)));
 
   // En semana pico se testea mas: un segundo dia de benchmark a mitad de la semana de entreno.
   const isPeakWeekExtraBenchmark = week === 3 && dayPlan.trainingDayIndex === Math.floor(trainingDaysPerWeek / 2);
@@ -538,11 +548,11 @@ function buildWodBlock(
 
   const movementCount = chosenFormat.kind === 'chipper' ? 5 : 3;
 
-  const isResistenciaGoal = goal?.type === 'elevar-resistencia';
-  const resistenciaProgress = isResistenciaGoal ? getGoalProgress(goal!, history) : 0;
+  const resistenciaGoal = pickPriorityGoal(goals, (g) => g.type === 'elevar-resistencia');
+  const resistenciaProgress = resistenciaGoal ? getGoalProgress(resistenciaGoal, history) : 0;
   let monoTarget = 1;
-  if (isResistenciaGoal) {
-    const emphasisTarget = goal!.emphasis === 'intensivo' ? 2 : 1;
+  if (resistenciaGoal) {
+    const emphasisTarget = resistenciaGoal.emphasis === 'intensivo' ? 2 : 1;
     const progressTarget = resistenciaProgress > 0.5 ? 2 : 1;
     monoTarget = Math.max(emphasisTarget, progressTarget);
   }
@@ -609,11 +619,11 @@ function buildAccessoryBlock(strengthPattern: MovementPattern, recentIds: Set<st
   return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: 3, reps, format, notes }));
 }
 
-function buildSkillBlock(history: SessionHistoryEntry[], goal: Goal | null): SessionBlockResult[] {
+function buildSkillBlock(history: SessionHistoryEntry[], goals: Goal[]): SessionBlockResult[] {
   const candidates = getMovementsByBlock('skill');
-  const isSkillGoal = goal?.type === 'mejorar-gimnasticos' || goal?.type === 'subir-pr';
+  const isSkillGoal = goals.some((g) => g.type === 'mejorar-gimnasticos' || g.type === 'subir-pr');
   const pref = isSkillGoal
-    ? goalPreference(goal, (m) => skillMovements.some((s) => s.id === m.id), history)
+    ? goalPreference(goals, (m) => skillMovements.some((s) => s.id === m.id), history)
     : { preferChance: 0, progress: 0 };
 
   const movement = pref.movementId
@@ -761,10 +771,11 @@ function buildCooldownBlock(strengthPattern: MovementPattern): SessionBlockResul
 export function generateDailySession(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
+  macrocycleStartDate: string,
   date: Date = new Date(),
-  goal: Goal | null = null,
+  goals: Goal[] = [],
 ): DailySession {
-  const calendarWeek = getMesocycleWeek(profile.mesocycleStartDate, date);
+  const calendarWeek = getMesocycleWeek(macrocycleStartDate, date);
   const weekdayIndex = getWeekdayIndex(date);
   const dayPlan = getDayPlan(weekdayIndex, profile.trainingDaysPerWeek);
   const dateIso = toLocalIsoDate(date);
@@ -791,33 +802,33 @@ export function generateDailySession(
 
   const acwrResult = computeAcwr(history, date);
   const acwrZone = acwrResult.zone;
-  const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goal, date);
-  const isTaper = isTaperActive(goal, date);
+  const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goals, date);
+  const isTaper = isTaperActive(goals, date);
   const testDayFocus = resolveTestDayFocus(week);
   const strengthBlock = buildStrengthBlock(
     dayPlan,
     week,
     profile.prs,
     recentIds,
-    goal,
+    goals,
     acwrZone,
     acwrResult.coldStart,
     testDayFocus === 'strength',
     history,
   );
-  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goal, acwrZone, acwrResult.coldStart, testDayFocus === 'oly', history);
+  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goals, acwrZone, acwrResult.coldStart, testDayFocus === 'oly', history);
   const wodBlock = buildWodBlock(
     dayPlan,
     week,
     profile.trainingDaysPerWeek,
     recentIds,
     new Set([dayPlan.strengthPattern]),
-    goal,
+    goals,
     isTaper,
     history,
   );
   const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds);
-  const skillBlock = buildSkillBlock(history, goal);
+  const skillBlock = buildSkillBlock(history, goals);
   const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern);
   const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
 
@@ -840,13 +851,13 @@ function buildMaintenanceStyleBlocks(
 ): SessionBlockResult[] {
   const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, false);
   const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
-  const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds) : buildSkillBlock(history, null);
+  const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds) : buildSkillBlock(history, []);
   const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
   return [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock];
 }
 
 /**
- * Sesion de mantenimiento para dias fuera de un macrociclo activo (antes de mesocycleStartDate):
+ * Sesion de mantenimiento para dias fuera de cualquier macrociclo activo (ver `getActiveMacrocycle`):
  * sin cargas basadas en PRs ni periodizacion, pero con variedad real — la mayoria de los dias
  * llevan un WOD de mantenimiento (trifecta gimnastico/con carga/monoestructural) y solo 1 de cada
  * 4 aprox. es recuperacion activa pura, en vez de recuperacion todos los dias. Sirve para seguir
@@ -912,11 +923,12 @@ export function generateSessionForDate(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
   date: Date,
-  goal: Goal | null,
+  goals: Goal[],
 ): DailySession {
-  return toLocalIsoDate(date) < profile.mesocycleStartDate
-    ? generateOffSeasonSession(profile, history, date)
-    : generateDailySession(profile, history, date, goal);
+  const activeMacro = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(date));
+  return activeMacro
+    ? generateDailySession(profile, history, activeMacro.startDate, date, goals)
+    : generateOffSeasonSession(profile, history, date);
 }
 
 export function toHistoryEntry(

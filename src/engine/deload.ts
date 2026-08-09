@@ -1,5 +1,6 @@
 import type { Goal } from '../data/athlete/types';
 import type { AcwrZone } from './loadMetrics';
+import { pickPriorityGoal } from './goalPriority';
 
 export type DeloadReason = 'fatiga' | 'taper';
 
@@ -17,9 +18,10 @@ function daysUntil(targetDateIso: string, today: Date): number {
   return Math.round((target - now) / (1000 * 60 * 60 * 24));
 }
 
-export function isTaperActive(goal: Goal | null, today: Date): boolean {
-  if (goal?.type !== 'preparar-competicion') return false;
-  const daysToGoal = daysUntil(goal.targetDate, today);
+export function isTaperActive(goals: Goal[], today: Date): boolean {
+  const competicionGoal = pickPriorityGoal(goals, (g) => g.type === 'preparar-competicion');
+  if (!competicionGoal) return false;
+  const daysToGoal = daysUntil(competicionGoal.targetDate, today);
   return daysToGoal >= 0 && daysToGoal <= TAPER_WINDOW_DAYS;
 }
 
@@ -32,10 +34,10 @@ export function isTaperActive(goal: Goal | null, today: Date): boolean {
 export function resolveTrainingWeek(
   calendarWeek: 1 | 2 | 3 | 4,
   acwrZone: AcwrZone,
-  goal: Goal | null,
+  goals: Goal[],
   today: Date,
 ): { week: 1 | 2 | 3 | 4; reason?: DeloadReason } {
-  if (isTaperActive(goal, today)) return { week: 4, reason: 'taper' };
+  if (isTaperActive(goals, today)) return { week: 4, reason: 'taper' };
   if (acwrZone === 'alta') return { week: 4, reason: 'fatiga' };
   return { week: calendarWeek };
 }

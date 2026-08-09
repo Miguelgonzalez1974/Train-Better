@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
-import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
-import type { SessionHistoryEntry } from '../../data/athlete/types';
+import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import type { Macrocycle, SessionHistoryEntry } from '../../data/athlete/types';
 
 const WEEKS = 12;
 /** RPE por debajo de este umbral se trata como recuperacion activa, no como entreno "duro". */
@@ -40,10 +40,10 @@ const KIND_TITLE: Record<CellKind, string> = {
 interface TrainingHeatmapProps {
   history: SessionHistoryEntry[];
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
-  mesocycleStartDate: string;
+  macrocycles: Macrocycle[];
 }
 
-export function TrainingHeatmap({ history, trainingDaysPerWeek, mesocycleStartDate }: TrainingHeatmapProps) {
+export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: TrainingHeatmapProps) {
   const [pinnedIso, setPinnedIso] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -81,7 +81,7 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, mesocycleStartDa
         return { iso, rpe: entry.rpe, kind };
       }
 
-      if (iso < mesocycleStartDate) return { iso, rpe: null, kind: 'offSeason' as CellKind };
+      if (!getActiveMacrocycle(macrocycles, iso)) return { iso, rpe: null, kind: 'offSeason' as CellKind };
 
       const isTrainingDay = getDayPlan(d, trainingDaysPerWeek).isTrainingDay;
       return { iso, rpe: null, kind: isTrainingDay ? ('missed' as CellKind) : ('rest' as CellKind) };

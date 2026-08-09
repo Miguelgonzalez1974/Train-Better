@@ -17,11 +17,24 @@ export interface BodyweightEntry {
   kg: number;
 }
 
+export interface Macrocycle {
+  id: string;
+  /** Nombre libre del atleta, ej. "Prep competición otoño" */
+  label: string;
+  /** Fecha ISO de inicio (semana 1 del ciclo de 4 semanas) */
+  startDate: string;
+  /** Fecha ISO de fin — a partir de este dia, si no hay otro macrociclo activo, se cae a modo mantenimiento */
+  endDate: string;
+}
+
 export interface AthleteProfile {
   prs: PersonalRecords;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
-  /** Fecha ISO en la que arranco el mesociclo actual (semana 1) */
-  mesocycleStartDate: string;
+  /**
+   * Macrociclos planificados (pasados, activo, futuros). Solo puede haber uno "activo" a la vez
+   * (el que contiene la fecha de hoy) — fuera de todos ellos se entrena en modo mantenimiento.
+   */
+  macrocycles: Macrocycle[];
   /** Historial de peso corporal, opcional para no romper perfiles guardados antes de esta funcion */
   bodyweightLog?: BodyweightEntry[];
   /**
@@ -31,6 +44,8 @@ export interface AthleteProfile {
    * sin que el contador se quede clavado al llegar al limite del historial detallado.
    */
   trainingDatesLog?: string[];
+  /** Objetivos activos concurrentes — ver [[Goal]]. Varios pueden convivir (p.ej. competicion + un PR puntual). */
+  goals: Goal[];
 }
 
 export interface SessionBlockResult {
@@ -101,10 +116,8 @@ export const DEFAULT_PROFILE: AthleteProfile = {
     cleanAndJerk: 75,
   },
   trainingDaysPerWeek: 4,
-  mesocycleStartDate: (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  })(),
+  macrocycles: [],
+  goals: [],
 };
 
 export type GoalType =
@@ -118,6 +131,7 @@ export type GoalType =
 export type GoalEmphasis = 'moderado' | 'intensivo';
 
 export interface Goal {
+  id: string;
   type: GoalType;
   /** Requerido para subir-pr, elevar-fuerza, mejorar-potencia, mejorar-gimnasticos */
   movementId?: string;

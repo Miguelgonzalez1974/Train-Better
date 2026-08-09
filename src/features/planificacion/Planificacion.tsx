@@ -11,7 +11,7 @@ import {
   toHistoryEntry,
   type SessionOverrideType,
 } from '../../engine/generateSession';
-import { toLocalIsoDate } from '../../engine/periodization';
+import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
@@ -27,12 +27,12 @@ const numberInputClass = 'w-16 rounded-lg border border-brand-border bg-brand-bg
 export function Planificacion() {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
-  const [goal] = useState(() => athleteRepository.getGoal());
+  const goals = profile.goals;
   const todayIso = toLocalIsoDate(new Date());
   const [session, setSession] = useState<DailySession>(() => {
     const cached = athleteRepository.getCachedSession(todayIso);
     if (cached) return cached;
-    const fresh = generateSessionForDate(profile, history, new Date(), goal);
+    const fresh = generateSessionForDate(profile, history, new Date(), goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;
   });
@@ -57,16 +57,15 @@ export function Planificacion() {
   const [customNoteDraft, setCustomNoteDraft] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
 
-  const isMacroAvailable = todayIso >= profile.mesocycleStartDate;
+  const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const alreadyCompletedToday = useMemo(() => history.some((h) => h.date === session.date), [history, session.date]);
-  const goalMovement = goal?.movementId ? getMovementById(goal.movementId) : undefined;
   const wodScoreType = useMemo(() => getWodScoreType(session), [session]);
   const testDayBlock = useMemo(() => getTestDayBlock(session), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
   function generateAndCache(nextProfile: AthleteProfile): DailySession {
-    const next = generateSessionForDate(nextProfile, history, new Date(), goal);
+    const next = generateSessionForDate(nextProfile, history, new Date(), nextProfile.goals);
     athleteRepository.saveCachedSession(next);
     return next;
   }
@@ -116,7 +115,7 @@ export function Planificacion() {
   }
 
   function handlePickType(type: SessionOverrideType | 'macro') {
-    const next = type === 'macro' ? generateSessionForDate(profile, history, new Date(), goal) : generateOverrideSession(profile, history, new Date(), type);
+    const next = type === 'macro' ? generateSessionForDate(profile, history, new Date(), goals) : generateOverrideSession(profile, history, new Date(), type);
     athleteRepository.saveCachedSession(next);
     setSession(next);
     setShowTypePicker(false);
@@ -164,20 +163,29 @@ export function Planificacion() {
     <div className="flex flex-col gap-4">
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
 
-      {goal && (
-        <div className="flex items-center gap-2.5 rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-sm text-brand-gold">
-          {(() => {
-            const Icon = GOAL_TYPE_META[goal.type].Icon;
-            return <Icon size={16} strokeWidth={2.25} />;
-          })()}
-          <span>
-            Objetivo activo: {GOAL_TYPE_META[goal.type].label}
-            {goalMovement && ` — ${goalMovement.name}`} ({goal.emphasis})
-          </span>
+      {goals.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {goals.map((g) => {
+            const meta = GOAL_TYPE_META[g.type];
+            const Icon = meta.Icon;
+            const movement = g.movementId ? getMovementById(g.movementId) : undefined;
+            return (
+              <div
+                key={g.id}
+                className="flex items-center gap-2 rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-1.5 text-sm text-brand-gold"
+              >
+                <Icon size={16} strokeWidth={2.25} />
+                <span>
+                  {meta.label}
+                  {movement && ` — ${movement.name}`} ({g.emphasis})
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <WeekStrip profile={profile} history={history} goal={goal} />
+      <WeekStrip profile={profile} history={history} goals={goals} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>

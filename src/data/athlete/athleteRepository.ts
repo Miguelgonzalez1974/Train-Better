@@ -13,14 +13,6 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.appendHistoryEntry(entry);
     void pushRemote();
   },
-  saveGoal(goal) {
-    localAthleteRepository.saveGoal(goal);
-    void pushRemote();
-  },
-  clearGoal() {
-    localAthleteRepository.clearGoal();
-    void pushRemote();
-  },
   appendBodyweightEntry(entry) {
     localAthleteRepository.appendBodyweightEntry(entry);
     void pushRemote();

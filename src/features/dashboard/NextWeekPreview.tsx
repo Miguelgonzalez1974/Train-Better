@@ -23,7 +23,7 @@ export function NextWeekPreview({ onClose }: NextWeekPreviewProps) {
   const [week] = useState<DailySession[]>(() => {
     const profile = athleteRepository.getProfile();
     const history = athleteRepository.getHistory();
-    const goal = athleteRepository.getGoal();
+    const goals = profile.goals;
     const today = new Date();
     const nextMonday = new Date(today);
     nextMonday.setDate(nextMonday.getDate() - getWeekdayIndex(today) + 7);
@@ -33,7 +33,7 @@ export function NextWeekPreview({ onClose }: NextWeekPreviewProps) {
       date.setDate(date.getDate() + i);
       const cached = athleteRepository.getCachedSession(toLocalIsoDate(date));
       if (cached) return cached;
-      const fresh = generateSessionForDate(profile, history, date, goal);
+      const fresh = generateSessionForDate(profile, history, date, goals);
       athleteRepository.saveCachedSession(fresh);
       return fresh;
     });

@@ -1,4 +1,5 @@
 import type { MovementPattern } from '../data/movements/types';
+import type { Macrocycle } from '../data/athlete/types';
 
 export type OlyFamily = 'snatch' | 'clean';
 
@@ -36,6 +37,15 @@ export function toLocalIsoDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Macrociclo cuya ventana [startDate, endDate] contiene la fecha dada, o undefined si ninguno la
+ * cubre (entonces se entrena en modo mantenimiento). Si dos se solapan por error del atleta, gana
+ * el primero de la lista — no hay una regla de prioridad mas alla de eso, se asume que no debería pasar.
+ */
+export function getActiveMacrocycle(macrocycles: Macrocycle[], todayIso: string): Macrocycle | undefined {
+  return macrocycles.find((m) => m.startDate <= todayIso && todayIso <= m.endDate);
 }
 
 export function getMesocycleWeek(mesocycleStartDateIso: string, today: Date = new Date()): 1 | 2 | 3 | 4 {

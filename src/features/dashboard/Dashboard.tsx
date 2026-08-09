@@ -128,7 +128,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
       <TrainingHeatmap
         history={history}
         trainingDaysPerWeek={profile.trainingDaysPerWeek}
-        mesocycleStartDate={profile.mesocycleStartDate}
+        macrocycles={profile.macrocycles}
       />
 
       <AcwrGauge result={acwr} />

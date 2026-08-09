@@ -32,11 +32,11 @@ function formatShort(date: Date): string {
 interface WeekStripProps {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
-  goal: Goal | null;
+  goals: Goal[];
   today?: Date;
 }
 
-export function WeekStrip({ profile, history, goal, today = new Date() }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date() }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -59,10 +59,10 @@ export function WeekStrip({ profile, history, goal, today = new Date() }: WeekSt
 
     const cached = athleteRepository.getCachedSession(dateIso);
     if (cached) return cached;
-    const fresh = generateSessionForDate(profile, history, date, goal);
+    const fresh = generateSessionForDate(profile, history, date, goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;
-  }, [expanded, weekOffset, profile, history, goal]);
+  }, [expanded, weekOffset, profile, history, goals]);
 
   return (
     <div className="card p-3">
