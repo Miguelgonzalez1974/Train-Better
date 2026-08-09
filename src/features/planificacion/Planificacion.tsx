@@ -29,9 +29,12 @@ export function Planificacion() {
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const goals = profile.goals;
   const todayIso = toLocalIsoDate(new Date());
-  const [session, setSession] = useState<DailySession>(() => {
+  const [session, setSession] = useState<DailySession | null>(() => {
     const cached = athleteRepository.getCachedSession(todayIso);
     if (cached) return cached;
+    // Sin macrociclo activo y nada elegido todavía para hoy: no se auto-genera ni se muestra
+    // "Mantenimiento" — se espera a que el atleta elija qué quiere hacer.
+    if (!getActiveMacrocycle(profile.macrocycles, todayIso)) return null;
     const fresh = generateSessionForDate(profile, history, new Date(), goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;
@@ -58,9 +61,9 @@ export function Planificacion() {
   const [showTypePicker, setShowTypePicker] = useState(false);
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
-  const alreadyCompletedToday = useMemo(() => history.some((h) => h.date === session.date), [history, session.date]);
-  const wodScoreType = useMemo(() => getWodScoreType(session), [session]);
-  const testDayBlock = useMemo(() => getTestDayBlock(session), [session]);
+  const alreadyCompletedToday = useMemo(() => (session ? history.some((h) => h.date === session.date) : false), [history, session]);
+  const wodScoreType = useMemo(() => (session ? getWodScoreType(session) : null), [session]);
+  const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
@@ -72,6 +75,7 @@ export function Planificacion() {
 
   function handleUpdateEntry(index: number, patch: Partial<SessionBlockResult>) {
     setSession((prev) => {
+      if (!prev) return prev;
       const next = { ...prev, blocks: prev.blocks.map((b, i) => (i === index ? { ...b, ...patch } : b)) };
       athleteRepository.saveCachedSession(next);
       return next;
@@ -91,8 +95,8 @@ export function Planificacion() {
   }
 
   function openCustomEditor() {
-    setCustomTitleDraft(session.source === 'custom' ? (session.customTitle ?? '') : '');
-    setCustomNoteDraft(session.source === 'custom' ? (session.customNote ?? '') : '');
+    setCustomTitleDraft(session?.source === 'custom' ? (session.customTitle ?? '') : '');
+    setCustomNoteDraft(session?.source === 'custom' ? (session.customNote ?? '') : '');
     setShowCustomEditor(true);
   }
 
@@ -100,7 +104,7 @@ export function Planificacion() {
     const note = customNoteDraft.trim();
     if (!note) return;
     const next: DailySession = {
-      date: session.date,
+      date: session?.date ?? todayIso,
       mesocycleWeek: 0,
       isRestDay: false,
       blocks: [],
@@ -132,6 +136,7 @@ export function Planificacion() {
   }
 
   function handleConfirmComplete() {
+    if (!session) return;
     let nextMessage: string | null = null;
 
     if (testDayBlock && testDayMovement && testedLoadKg > 0) {
@@ -187,6 +192,23 @@ export function Planificacion() {
 
       <WeekStrip profile={profile} history={history} goals={goals} />
 
+      {!session && (
+        <div className="card flex flex-col gap-3 p-4">
+          <p className="text-neutral-400">
+            Todavía no hay macrociclo activo — hasta que empiece, decides tú qué haces cada día.
+          </p>
+          <button
+            onClick={() => setShowTypePicker(true)}
+            className="flex items-center gap-2 self-start rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <Brain size={15} strokeWidth={2.25} className="text-brand-neon" />
+            Elegir sesión de hoy
+          </button>
+        </div>
+      )}
+
+      {session && (
+      <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           {session.mesocycleWeek > 0 && (
@@ -435,6 +457,8 @@ export function Planificacion() {
         </div>
       ) : (
         <DaySessionBlocks session={session} editable={editMode} onUpdateEntry={handleUpdateEntry} />
+      )}
+      </>
       )}
 
       <Modal open={showCustomEditor} onClose={() => setShowCustomEditor(false)} title="Tu sesión de hoy">

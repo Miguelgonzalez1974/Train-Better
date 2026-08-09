@@ -21,6 +21,13 @@ export interface AthleteRepository {
   saveCachedSession(session: DailySession): void;
   getBodyweightLog(): BodyweightEntry[];
   appendBodyweightEntry(entry: BodyweightEntry): void;
+  /**
+   * Borra historial de sesiones, cache de sesiones generadas, contador de dias entrenados y
+   * pone los PRs a 0 — para arrancar un macrociclo nuevo sin datos previos influyendo en el
+   * calculo de carga (ACWR), la rotacion de patrones o los reintentos de benchmarks. No toca
+   * `macrocycles`, `goals` ni `bodyweightLog`.
+   */
+  resetTrainingData(): void;
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -115,5 +122,21 @@ export const localAthleteRepository: AthleteRepository = {
     const withoutSameDate = (profile.bodyweightLog ?? []).filter((e) => e.date !== entry.date);
     const bodyweightLog = [...withoutSameDate, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-BODYWEIGHT_LOG_LIMIT);
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, bodyweightLog }));
+  },
+  resetTrainingData() {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify([]));
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({}));
+    const profile = localAthleteRepository.getProfile();
+    const prs: AthleteProfile['prs'] = {
+      backSquat: 0,
+      frontSquat: 0,
+      benchPress: 0,
+      deadlift: 0,
+      strictPress: 0,
+      clean: 0,
+      snatch: 0,
+      cleanAndJerk: 0,
+    };
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prs, trainingDatesLog: [] }));
   },
 };

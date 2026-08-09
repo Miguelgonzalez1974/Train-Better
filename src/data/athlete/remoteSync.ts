@@ -10,13 +10,18 @@ interface AthleteRow {
   goal: Goal | null;
 }
 
-/** Sube el estado local completo a la fila del usuario en Supabase (upsert). Silencioso: si falla, se reintenta en el proximo write. */
-export async function pushRemote(): Promise<void> {
-  if (!supabase) return;
+/**
+ * Sube el estado local completo a la fila del usuario en Supabase (upsert). Los llamadores que
+ * usan `void pushRemote()` como fire-and-forget ignoran el resultado (si falla, se reintenta en
+ * el proximo write); `ok: false` existe para los que necesitan saber si de verdad se guardo antes
+ * de hacer algo irreversible en base a ello (ej. recargar la pagina tras un reset de datos).
+ */
+export async function pushRemote(): Promise<{ ok: boolean }> {
+  if (!supabase) return { ok: true };
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { ok: true };
 
   const row: AthleteRow = {
     user_id: user.id,
@@ -26,7 +31,11 @@ export async function pushRemote(): Promise<void> {
   };
 
   const { error } = await supabase.from('athlete_data').upsert(row);
-  if (error) console.error('No se pudo sincronizar con Supabase:', error.message);
+  if (error) {
+    console.error('No se pudo sincronizar con Supabase:', error.message);
+    return { ok: false };
+  }
+  return { ok: true };
 }
 
 /**

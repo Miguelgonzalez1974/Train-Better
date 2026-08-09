@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { AthleteProfile, PersonalRecords } from '../../data/athlete/types';
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
+import { athleteRepository } from '../../data/athlete/athleteRepository';
+import { pushRemote } from '../../data/athlete/remoteSync';
 
 const PR_FIELDS: { key: keyof PersonalRecords; label: string }[] = [
   { key: 'backSquat', label: 'Back Squat' },
@@ -23,6 +25,7 @@ interface PerfilRapidoProps {
 
 export function PerfilRapido({ profile, onSave }: PerfilRapidoProps) {
   const [draft, setDraft] = useState<AthleteProfile>(profile);
+  const [resetting, setResetting] = useState(false);
 
   function handlePrChange(key: keyof PersonalRecords, value: string) {
     const parsed = Number(value);
@@ -32,6 +35,28 @@ export function PerfilRapido({ profile, onSave }: PerfilRapidoProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     onSave(draft);
+  }
+
+  async function handleResetTrainingData() {
+    const confirmed = window.confirm(
+      'Esto borra tu historial de sesiones, la caché de sesiones generadas y el contador de días entrenados, y pone tus PRs a 0. Tus macrociclos, objetivos y peso corporal no se tocan. Es irreversible. ¿Seguro?'
+    );
+    if (!confirmed) return;
+    setResetting(true);
+    try {
+      athleteRepository.resetTrainingData();
+      const { ok } = await pushRemote();
+      if (!ok) {
+        window.alert(
+          'Se reinició localmente, pero no se pudo sincronizar con el servidor. No recargues todavía o los datos antiguos podrían volver — inténtalo de nuevo cuando tengas conexión.'
+        );
+        setResetting(false);
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setResetting(false);
+    }
   }
 
   return (
@@ -90,6 +115,21 @@ export function PerfilRapido({ profile, onSave }: PerfilRapidoProps) {
             Cerrar sesión
           </button>
         )}
+      </div>
+
+      <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+        <p className="text-xs text-neutral-400">
+          Empezar en blanco: borra historial de sesiones, sesiones ya registradas y PRs, para elegir libremente el tipo de sesión
+          sin datos previos condicionando al Coach IA.
+        </p>
+        <button
+          type="button"
+          onClick={handleResetTrainingData}
+          disabled={resetting}
+          className="mt-2 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {resetting ? 'Borrando…' : 'Reiniciar datos de entrenamiento'}
+        </button>
       </div>
     </form>
   );
