@@ -61,6 +61,11 @@ export function Planificacion() {
   const [showTypePicker, setShowTypePicker] = useState(false);
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
+  const nextMacroStart = useMemo(() => {
+    const upcoming = profile.macrocycles.filter((m) => m.startDate > todayIso).sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+    if (!upcoming) return null;
+    return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long' }).format(new Date(upcoming.startDate));
+  }, [profile.macrocycles, todayIso]);
   const alreadyCompletedToday = useMemo(() => (session ? history.some((h) => h.date === session.date) : false), [history, session]);
   const wodScoreType = useMemo(() => (session ? getWodScoreType(session) : null), [session]);
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
@@ -196,17 +201,40 @@ export function Planificacion() {
       <WeekStrip profile={profile} history={history} goals={goals} />
 
       {!session && (
-        <div className="card flex flex-col gap-3 p-4">
-          <p className="text-neutral-400">
-            Todavía no hay macrociclo activo — hasta que empiece, decides tú qué haces cada día.
-          </p>
-          <button
-            onClick={() => setShowTypePicker(true)}
-            className="flex items-center gap-2 self-start rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
-          >
-            <Brain size={15} strokeWidth={2.25} className="text-brand-neon" />
-            Elegir sesión de hoy
-          </button>
+        <div className="card flex flex-col items-center gap-3 p-6 text-center">
+          <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-surface">
+            <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
+            <Brain size={26} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-white">Todavía no hay macrociclo activo</p>
+            <p className="mt-1 text-xs text-neutral-400">
+              {nextMacroStart ? `Hasta que empiece el ${nextMacroStart}, decides tú qué haces cada día.` : 'Decides tú qué haces cada día.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <button
+              onClick={() => handlePickType('random')}
+              className="flex items-center gap-1.5 rounded-full border border-brand-border bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            >
+              <Shuffle size={13} strokeWidth={2.25} className="text-brand-gold" />
+              Aleatoria
+            </button>
+            <button
+              onClick={openCustomEditor}
+              className="flex items-center gap-1.5 rounded-full border border-brand-border bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            >
+              <NotebookPen size={13} strokeWidth={2.25} className="text-brand-gold" />
+              Propia
+            </button>
+            <button
+              onClick={() => handlePickType('recovery')}
+              className="flex items-center gap-1.5 rounded-full border border-brand-border bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            >
+              <HeartPulse size={13} strokeWidth={2.25} className="text-brand-gold" />
+              Recuperación
+            </button>
+          </div>
         </div>
       )}
 
@@ -512,11 +540,26 @@ export function Planificacion() {
           <p className="mb-1 text-xs text-neutral-500">
             No tienes por qué seguir siempre lo mismo — elige qué te viene mejor hoy, sin desmontar tu programación.
           </p>
+          {isMacroAvailable && (
+            <button
+              onClick={() => handlePickType('macro')}
+              className="flex items-start gap-3 rounded-lg border-2 border-brand-gold bg-brand-gold/10 px-3 py-2.5 text-left"
+            >
+              <CalendarCheck2 size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+              <span>
+                <span className="flex items-center gap-2">
+                  <span className="block text-sm font-semibold text-white">Programación del coach</span>
+                  <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">Recomendado</span>
+                </span>
+                <span className="block text-xs text-neutral-400">Vuelve a lo que toca hoy según tu macrociclo.</span>
+              </span>
+            </button>
+          )}
           <button
             onClick={() => handlePickType('random')}
-            className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+            className="flex items-start gap-3 rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
           >
-            <Shuffle size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+            <Shuffle size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-neutral-400" />
             <span>
               <span className="block text-sm font-semibold text-white">Aleatoria</span>
               <span className="block text-xs text-neutral-500">WOD variado sorpresa — sin cargas basadas en tu PR.</span>
@@ -527,9 +570,9 @@ export function Planificacion() {
               setShowTypePicker(false);
               openCustomEditor();
             }}
-            className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+            className="flex items-start gap-3 rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
           >
-            <NotebookPen size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+            <NotebookPen size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-neutral-400" />
             <span>
               <span className="block text-sm font-semibold text-white">Propia</span>
               <span className="block text-xs text-neutral-500">Ya tienes tu sesión pensada — escríbela tal cual.</span>
@@ -537,26 +580,14 @@ export function Planificacion() {
           </button>
           <button
             onClick={() => handlePickType('recovery')}
-            className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+            className="flex items-start gap-3 rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
           >
-            <HeartPulse size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+            <HeartPulse size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-neutral-400" />
             <span>
               <span className="block text-sm font-semibold text-white">Recuperación</span>
               <span className="block text-xs text-neutral-500">Ritmo suave, sin buscar fatiga — para cuando no tienes el día para más.</span>
             </span>
           </button>
-          {isMacroAvailable && (
-            <button
-              onClick={() => handlePickType('macro')}
-              className="flex items-start gap-3 rounded-lg border border-brand-border bg-brand-surfaceMuted/60 px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
-            >
-              <CalendarCheck2 size={17} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
-              <span>
-                <span className="block text-sm font-semibold text-white">Programación del coach</span>
-                <span className="block text-xs text-neutral-500">Vuelve a lo que toca hoy según tu macrociclo.</span>
-              </span>
-            </button>
-          )}
         </div>
       </Modal>
     </div>
