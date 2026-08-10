@@ -267,13 +267,18 @@ export function Objetivos() {
         </div>
 
         {sortedMacros.length === 0 && !macroDraft && (
-          <div className="card flex flex-col items-center gap-2 p-6 text-center">
-            <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-surface">
-              <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
-              <CalendarRange size={22} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.6)]" />
-            </span>
-            <p className="text-sm font-semibold text-white">Aún no tienes ningún macrociclo</p>
-            <p className="text-xs text-neutral-400">Mientras no haya uno activo entrenas en modo mantenimiento.</p>
+          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
+            <CalendarRange size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+            <div className="relative flex items-center gap-3.5">
+              <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
+                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
+                <CalendarRange size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white">Macrociclos</p>
+                <p className="text-xs text-neutral-400">Tu programación por fases, activa o futura.</p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -521,16 +526,18 @@ export function Objetivos() {
         </div>
 
         {sortedPrograms.length === 0 && !programDraft && (
-          <div className="card flex flex-col items-center gap-2 p-6 text-center">
-            <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-surface">
-              <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
-              <Dumbbell size={20} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.6)]" />
-            </span>
-            <p className="text-sm font-semibold text-white">Aún no tienes ningún programa de fuerza</p>
-            <p className="text-xs text-neutral-400">
-              Sustituye tu día entero por un único método durante el rango que quieras — pausa el macrociclo
-              mientras dure, sin wod ni oly salvo que lo añadas tú ese día.
-            </p>
+          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
+            <Dumbbell size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+            <div className="relative flex items-center gap-3.5">
+              <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
+                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
+                <Dumbbell size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white">Programa de fuerza</p>
+                <p className="text-xs text-neutral-400">Un único método, sin wod, cuando te apetezca.</p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -756,13 +763,18 @@ export function Objetivos() {
         </div>
 
         {profile.goals.length === 0 && !goalDraft && (
-          <div className="card flex flex-col items-center gap-2 p-6 text-center">
-            <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-surface">
-              <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
-              <Target size={22} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.6)]" />
-            </span>
-            <p className="text-sm font-semibold text-white">Aún no tienes objetivos activos</p>
-            <p className="text-xs text-neutral-400">Puedes tener varios a la vez — el más urgente gana cuando coinciden.</p>
+          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
+            <Target size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+            <div className="relative flex items-center gap-3.5">
+              <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
+                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
+                <Target size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white">Objetivos</p>
+                <p className="text-xs text-neutral-400">Varios a la vez — el más urgente manda.</p>
+              </div>
+            </div>
           </div>
         )}
 
