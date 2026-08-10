@@ -7,6 +7,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Sin esto, un service worker ya instalado puede seguir sirviendo el bundle viejo
+        // (con pantallas/funciones desactualizadas) hasta que el usuario cierre y reabra la
+        // app varias veces — clientsClaim + skipWaiting hacen que la version nueva tome el
+        // control de las pestañas ya abiertas en cuanto termina de instalarse.
+        clientsClaim: true,
+        skipWaiting: true,
+      },
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon.svg'],
       manifest: {
         name: 'Train Better',
