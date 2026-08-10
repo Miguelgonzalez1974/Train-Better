@@ -85,7 +85,10 @@ export function Planificacion() {
   function handleSaveProfile(newProfile: AthleteProfile) {
     athleteRepository.saveProfile(newProfile);
     setProfile(newProfile);
-    setSession(generateAndCache(newProfile));
+    // Solo se recalcula la sesion de hoy (p.ej. tras cambiar un PR) si ya habia una elegida —
+    // guardar el perfil no debe materializar una sesion cuando se esta esperando a que el
+    // atleta elija que hacer hoy (sin macrociclo activo).
+    if (session) setSession(generateAndCache(newProfile));
   }
 
   function handleRegenerate() {
