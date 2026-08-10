@@ -160,9 +160,9 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                         onDeleteHistoryEntry(dateIso);
                         setExpanded(null);
                       }}
-                      className="mt-1 flex items-center gap-1.5 self-start text-xs text-neutral-500 transition-colors duration-200 hover:text-red-400"
+                      className="mt-2 flex items-center gap-1.5 self-start rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors duration-200 hover:border-red-500/60 hover:bg-red-500/20"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                       Borrar esta sesión
                     </button>
                   )}
