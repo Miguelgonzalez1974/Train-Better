@@ -3,7 +3,7 @@ import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRig
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
-import { computeWeakPoints } from './weakPoints';
+import { computeWeakPoints } from '../../engine/weakPoints';
 import { AcwrGauge } from './AcwrGauge';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';

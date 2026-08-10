@@ -1,5 +1,5 @@
 import { Crosshair } from 'lucide-react';
-import type { PatternStrain, WeakPointStatus } from './weakPoints';
+import type { PatternStrain, WeakPointStatus } from '../../engine/weakPoints';
 
 const STATUS_META: Record<WeakPointStatus, { label: string; badgeClass: string }> = {
   'a-trabajar': { label: 'A trabajar', badgeClass: 'bg-red-500/15 text-red-400' },

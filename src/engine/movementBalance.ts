@@ -2,6 +2,7 @@ import type { MovementPattern } from '../data/movements/types';
 import type { SessionHistoryEntry } from '../data/athlete/types';
 import { getMovementById, olyMovements, strengthMovements } from '../data/movements';
 import type { OlyFamily } from './periodization';
+import type { PatternStrain } from './weakPoints';
 
 const STRENGTH_MOVEMENT_IDS = new Set(strengthMovements.map((m) => m.id));
 const OLY_MOVEMENT_IDS = new Set(olyMovements.map((m) => m.id));
@@ -61,4 +62,32 @@ export function avoidOlyFamilyRepeat(candidate: OlyFamily, history: SessionHisto
   if (!wasOlyFamilyRecentlyDominant(candidate, history)) return candidate;
   const alternative: OlyFamily = candidate === 'snatch' ? 'clean' : 'snatch';
   return wasOlyFamilyRecentlyDominant(alternative, history) ? candidate : alternative;
+}
+
+/** Patrones de fuerza que `computeWeakPoints` puede marcar directamente como MovementPattern validos. */
+const WEAK_POINT_STRENGTH_KEYS: MovementPattern[] = ['squat', 'hinge', 'horizontalPush', 'verticalPush'];
+/** Mas margen que `wasPatternRecentlyDominant` (2 dias): el objetivo es dar mas frecuencia al patron debil, no repetirlo el dia siguiente. */
+const WEAK_POINT_LOOKBACK_DAYS = 4;
+/** Probabilidad de aplicar el sesgo cuando hay un patron debil disponible — un coach real no reconstruye la semana entera alrededor de un solo punto flaco, solo le da mas frecuencia de la que tocaria por ciclo puro. */
+export const WEAK_POINT_BIAS_CHANCE = 0.45;
+
+/**
+ * De los patrones de fuerza marcados "a trabajar" por `computeWeakPoints` (los 2 con peor
+ * strainScore), devuelve el de mayor prioridad que no haya sido el patron principal en los
+ * ultimos `WEAK_POINT_LOOKBACK_DAYS` dias — o null si no hay ninguno disponible (todos en
+ * progreso, o los debiles ya se entrenaron hace poco).
+ */
+export function weakestUntrainedStrengthPattern(weakPoints: PatternStrain[], history: SessionHistoryEntry[]): MovementPattern | null {
+  const candidates = weakPoints
+    .filter((p) => p.status === 'a-trabajar' && (WEAK_POINT_STRENGTH_KEYS as string[]).includes(p.key))
+    .map((p) => p.key as MovementPattern);
+  return candidates.find((pattern) => !wasPatternRecentlyDominant(pattern, history, WEAK_POINT_LOOKBACK_DAYS)) ?? null;
+}
+
+/** Mismo criterio que `weakestUntrainedStrengthPattern`, para las dos familias de oly (snatch / clean & jerk). */
+export function weakestUntrainedOlyFamily(weakPoints: PatternStrain[], history: SessionHistoryEntry[]): OlyFamily | null {
+  const candidates = weakPoints
+    .filter((p) => p.status === 'a-trabajar' && (p.key === 'snatch' || p.key === 'clean'))
+    .map((p) => p.key as OlyFamily);
+  return candidates.find((family) => !wasOlyFamilyRecentlyDominant(family, history, WEAK_POINT_LOOKBACK_DAYS)) ?? null;
 }

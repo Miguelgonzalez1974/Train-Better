@@ -26,10 +26,17 @@ import { getGoalProgress } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
 import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
 import { computeAcwr, type AcwrZone } from './loadMetrics';
-import { getAutoregFactor, getAutoregNote } from './autoregulation';
+import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor } from './autoregulation';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
 import { resolveStrengthPRKey } from './prResolution';
-import { avoidOlyFamilyRepeat, avoidPatternRepeat } from './movementBalance';
+import {
+  avoidOlyFamilyRepeat,
+  avoidPatternRepeat,
+  WEAK_POINT_BIAS_CHANCE,
+  weakestUntrainedOlyFamily,
+  weakestUntrainedStrengthPattern,
+} from './movementBalance';
+import { computeWeakPoints } from './weakPoints';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
@@ -178,16 +185,30 @@ function buildStrengthBlock(
   isTestDay: boolean,
   history: SessionHistoryEntry[],
 ): SessionBlockResult[] {
-  const autoregFactor = getAutoregFactor(acwrZone);
-  const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
+  const rpeAutoreg = getRpeAutoregFactor(history);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor);
+  const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note].filter(Boolean).join(' ') || undefined;
   const isStrengthGoal = goals.some((g) => g.type === 'elevar-fuerza' || g.type === 'subir-pr');
   const pref = isStrengthGoal
     ? goalPreference(goals, (m) => strengthMovements.some((s) => s.id === m.id), history)
     : { preferChance: 0, progress: 0 };
 
   let pattern = dayPlan.strengthPattern;
-  if (pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
-    pattern = getMovementById(pref.movementId)!.pattern;
+  let weakPointTag = '';
+  const goalForcedPattern = Boolean(
+    pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex),
+  );
+  if (goalForcedPattern) {
+    pattern = getMovementById(pref.movementId!)!.pattern;
+  } else {
+    // Sin un objetivo forzando el patron, se le da mas frecuencia (no un 100% de las veces) al
+    // patron de fuerza peor valorado en `computeWeakPoints` si no se ha entrenado hace poco — un
+    // coach real prioriza el punto flaco cuando el dia esta libre, no lo deja solo al azar del ciclo.
+    const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history);
+    if (weakPattern && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+      pattern = weakPattern;
+      weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
+    }
   }
   // Se aplica siempre, no solo cuando el objetivo fuerza el patron: el ciclo natural de la semana
   // tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas).
@@ -209,7 +230,7 @@ function buildStrengthBlock(
         format: 'Test 1RM',
         reps: '1',
         loadKg: testLoadKg,
-        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}`,
+        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}`,
       },
     ];
   }
@@ -217,7 +238,7 @@ function buildStrengthBlock(
   const scheme = STRENGTH_WEEK_SCHEMES[week];
   const style = pickStrengthSchemeStyle(week);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${autoregNote ? ` ${autoregNote}` : ''}`;
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${autoregNote ? ` ${autoregNote}` : ''}`;
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -278,16 +299,29 @@ function buildOlyBlock(
   isTestDay: boolean,
   history: SessionHistoryEntry[],
 ): SessionBlockResult[] {
-  const autoregFactor = getAutoregFactor(acwrZone);
-  const autoregNote = getAutoregNote(acwrZone, acwrColdStart);
+  const rpeAutoreg = getRpeAutoregFactor(history);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor);
+  const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note].filter(Boolean).join(' ') || undefined;
   const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
   const pref = isOlyGoal
     ? goalPreference(goals, (m) => olyMovements.some((o) => o.id === m.id), history)
     : { preferChance: 0, progress: 0 };
 
   let family = dayPlan.olyFamily;
-  if (pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex)) {
-    family = pref.movementId.includes('snatch') ? 'snatch' : 'clean';
+  let weakPointTag = '';
+  const goalForcedFamily = Boolean(
+    pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex),
+  );
+  if (goalForcedFamily) {
+    family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
+  } else {
+    // Mismo sesgo que en fuerza: sin un objetivo forzando la familia, se le da mas frecuencia (no
+    // siempre) a la peor valorada en `computeWeakPoints` si no se ha entrenado hace poco.
+    const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history);
+    if (weakFamily && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+      family = weakFamily;
+      weakPointTag = ' Prioridad extra hoy: esta familia lleva estancada, le damos más frecuencia.';
+    }
   }
   // Se aplica siempre, no solo cuando el objetivo fuerza la familia: el ciclo natural tambien
   // puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas en calendarios de 3 dias).
@@ -324,7 +358,7 @@ function buildOlyBlock(
         format: 'Test 1RM',
         reps: '1',
         loadKg: testLoadKg,
-        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}`,
+        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}`,
       },
     ];
   }
@@ -334,7 +368,9 @@ function buildOlyBlock(
   const baseNote =
     (pref.movementId && movement.id === pref.movementId
       ? `${scheme.coachNote} Prioridad por tu objetivo activo.`
-      : scheme.coachNote) + (autoregNote ? ` ${autoregNote}` : '');
+      : scheme.coachNote) +
+    weakPointTag +
+    (autoregNote ? ` ${autoregNote}` : '');
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).

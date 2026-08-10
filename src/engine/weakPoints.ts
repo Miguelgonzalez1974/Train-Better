@@ -1,6 +1,6 @@
-import { getMovementById } from '../../data/movements';
-import type { Movement } from '../../data/movements/types';
-import type { SessionHistoryEntry } from '../../data/athlete/types';
+import { getMovementById } from '../data/movements';
+import type { Movement } from '../data/movements/types';
+import type { SessionHistoryEntry } from '../data/athlete/types';
 
 export type WeakPointStatus = 'a-trabajar' | 'vigilar' | 'en-progreso' | 'sin-datos';
 
@@ -57,6 +57,10 @@ const MIN_SESSIONS = 2;
  * debilidad real que el RPE por si solo no detecta; uno que sigue subiendo peso pese a sentirlo
  * duro esta progresando de verdad, no estancado. Las peores 2 se marcan "a trabajar", las 2
  * siguientes "vigilar", el resto "en progreso".
+ *
+ * Ademas de alimentar `WeakPointsCard` (Dashboard), `generateSession.ts` usa este mismo resultado
+ * para dar mas frecuencia a los patrones "a trabajar" — ver `weakestUntrainedStrengthPattern`/
+ * `weakestUntrainedOlyFamily` en ese archivo.
  */
 export function computeWeakPoints(history: SessionHistoryEntry[]): PatternStrain[] {
   const results: PatternStrain[] = CATEGORIES.map((category) => {
