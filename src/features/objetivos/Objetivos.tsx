@@ -1,10 +1,26 @@
 import { useState } from 'react';
-import { Pencil, Trash2, Plus, CalendarRange, Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, type LucideIcon } from 'lucide-react';
+import {
+  Pencil,
+  Trash2,
+  Plus,
+  CalendarRange,
+  CalendarPlus,
+  Repeat,
+  Repeat2,
+  TrendingUp,
+  Waves,
+  Split,
+  ListOrdered,
+  Dumbbell,
+  Target,
+  Check,
+  type LucideIcon,
+} from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import type { AthleteProfile, Goal, GoalEmphasis, GoalType, Macrocycle, PersonalRecords, StrengthMethod, StrengthProgram } from '../../data/athlete/types';
-import { toLocalIsoDate } from '../../engine/periodization';
-import { DEFAULT_STRENGTH_PROGRAM_LIFTS } from '../../engine/strengthPrograms';
+import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay } from '../../engine/strengthPrograms';
 import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 
 const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
@@ -13,18 +29,6 @@ const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
 };
 
 type MacroStatus = 'activo' | 'proximo' | 'finalizado';
-
-const MACRO_STATUS_LABEL: Record<MacroStatus, string> = {
-  activo: 'Activo ahora',
-  proximo: 'Próximo',
-  finalizado: 'Finalizado',
-};
-
-const MACRO_STATUS_CLASS: Record<MacroStatus, string> = {
-  activo: 'bg-brand-neon/15 text-brand-neon',
-  proximo: 'bg-sky-500/15 text-sky-400',
-  finalizado: 'bg-white/5 text-neutral-500',
-};
 
 function todayIso(): string {
   return toLocalIsoDate(new Date());
@@ -62,14 +66,33 @@ function remainingDeloadWeeks(macro: Macrocycle): number {
   return totalMacroWeeks(macro) - acc - int - peak;
 }
 
+/** Semana actual dentro del macrociclo (1-indexada, acotada al total) — solo tiene sentido si esta activo. */
+function currentMacroWeek(macro: Macrocycle, today: string): number {
+  const diffMs = new Date(today).getTime() - new Date(macro.startDate).getTime();
+  const elapsed = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
+  return Math.min(Math.max(elapsed, 1), totalMacroWeeks(macro));
+}
+
 type ProgramStatus = MacroStatus;
-const PROGRAM_STATUS_LABEL = MACRO_STATUS_LABEL;
-const PROGRAM_STATUS_CLASS = MACRO_STATUS_CLASS;
 
 function programStatus(program: StrengthProgram, today: string): ProgramStatus {
   if (today < program.startDate) return 'proximo';
   if (today > program.endDate) return 'finalizado';
   return 'activo';
+}
+
+/**
+ * Formato del dia de hoy para un programa activo (ej. "Conjugado · esfuerzo máximo (Back Squat)"),
+ * solo para mostrar de un vistazo que toca — autoregFactor=1 porque aqui solo interesa saber que
+ * levantamiento/rol toca, no la carga exacta (esa si depende del historial real, y se calcula en
+ * Planificacion cuando genera la sesion de verdad).
+ */
+function todayProgramFormat(program: StrengthProgram, profile: AthleteProfile): string | null {
+  const now = new Date();
+  const dayPlan = getDayPlan(getWeekdayIndex(now), profile.trainingDaysPerWeek);
+  if (!dayPlan.isTrainingDay) return 'Hoy descansas';
+  const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek);
+  return day?.format ?? null;
 }
 
 const STRENGTH_METHOD_META: Record<StrengthMethod, { label: string; blurb: string; Icon: LucideIcon }> = {
@@ -106,6 +129,16 @@ const STRENGTH_METHOD_META: Record<StrengthMethod, { label: string; blurb: strin
 };
 
 const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas'];
+
+/** Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto. */
+const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
+  '531': '#d4af37',
+  lineal: '#38bdf8',
+  ondulante: '#22d3ee',
+  conjugado: '#f87171',
+  ruso: '#a78bfa',
+  texas: '#fbbf24',
+};
 
 const LIFT_OPTIONS: { key: keyof PersonalRecords; label: string }[] = [
   { key: 'backSquat', label: 'Back Squat' },
@@ -234,49 +267,119 @@ export function Objetivos() {
         </div>
 
         {sortedMacros.length === 0 && !macroDraft && (
-          <p className="card p-4 text-sm text-neutral-500">
-            No tienes ningún macrociclo — mientras no haya uno activo entrenas en modo mantenimiento.
-          </p>
+          <div className="card flex flex-col items-center gap-2 p-6 text-center">
+            <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-surface">
+              <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
+              <CalendarRange size={22} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.6)]" />
+            </span>
+            <p className="text-sm font-semibold text-white">Aún no tienes ningún macrociclo</p>
+            <p className="text-xs text-neutral-400">Mientras no haya uno activo entrenas en modo mantenimiento.</p>
+          </div>
         )}
 
         <div className="flex flex-col gap-2">
           {sortedMacros.map((m) => {
             const status = macroStatus(m, today);
-            return (
-              <div key={m.id} className="card flex items-center justify-between gap-3 p-3.5">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-gold/15 text-brand-gold">
-                    <CalendarRange size={17} strokeWidth={2.25} />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{m.label}</p>
-                    <p className="text-xs text-neutral-500">
-                      {m.startDate} → {m.endDate}
-                    </p>
+
+            if (status === 'activo') {
+              const totalWeeks = totalMacroWeeks(m);
+              const weekNow = currentMacroWeek(m, today);
+              const pct = Math.round((weekNow / totalWeeks) * 100);
+              return (
+                <div
+                  key={m.id}
+                  className="relative overflow-hidden rounded-xl border p-3.5"
+                  style={{ borderColor: 'rgba(212,175,55,0.4)', background: 'linear-gradient(135deg, rgba(212,175,55,0.12), #171310 55%)' }}
+                >
+                  <div className="absolute inset-y-0 left-0 w-[3px] bg-brand-gold" />
+                  <div className="ml-1.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
+                        <span className="absolute inset-0 rounded-[11px] bg-brand-gold/30 blur-md" />
+                        <CalendarRange size={17} strokeWidth={2.25} className="relative text-brand-gold" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-white">{m.label}</p>
+                          <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">Activo ahora</span>
+                        </div>
+                        <p className="text-xs text-neutral-400">
+                          {m.startDate} → {m.endDate}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setMacroDraft(m)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => deleteMacro(m.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="ml-1.5 mt-2.5">
                     {m.phaseWeeks && (
-                      <p className="mt-0.5 text-[11px] text-neutral-600">
+                      <p className="mb-1.5 text-[11px] text-neutral-500">
                         {m.phaseWeeks[0]}s acum. · {m.phaseWeeks[1]}s intens. · {m.phaseWeeks[2]}s pico · {m.phaseWeeks[3]}s descarga
                       </p>
                     )}
+                    <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                      <span>
+                        Semana {weekNow} de {totalWeeks}
+                      </span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
+                      <div className="h-full rounded-full bg-brand-gold" style={{ width: `${pct}%` }} />
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${MACRO_STATUS_CLASS[status]}`}>
-                    {MACRO_STATUS_LABEL[status]}
+              );
+            }
+
+            if (status === 'proximo') {
+              return (
+                <div key={m.id} className="flex items-center gap-3 rounded-xl border border-dashed border-white/15 p-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-neutral-500">
+                    <CalendarPlus size={16} strokeWidth={2.25} />
                   </span>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-200">{m.label}</p>
+                    <p className="text-xs text-neutral-500">Empieza en {daysRemaining(m.startDate)} días</p>
+                  </div>
+                  <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-400">Próximo</span>
                   <button
                     onClick={() => setMacroDraft(m)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5"
                   >
                     <Pencil size={13} />
                   </button>
                   <button
                     onClick={() => deleteMacro(m.id)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5"
                   >
                     <Trash2 size={13} />
                   </button>
                 </div>
+              );
+            }
+
+            return (
+              <div key={m.id} className="flex items-center gap-3 rounded-xl px-3 py-1.5 opacity-50">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600">
+                  <Check size={12} strokeWidth={2.5} />
+                </span>
+                <p className="flex-1 text-xs text-neutral-500">{m.label}</p>
+                <span className="text-[10px] text-neutral-600">Finalizado</span>
+                <button onClick={() => deleteMacro(m.id)} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400">
+                  <Trash2 size={12} />
+                </button>
               </div>
             );
           })}
@@ -418,50 +521,120 @@ export function Objetivos() {
         </div>
 
         {sortedPrograms.length === 0 && !programDraft && (
-          <p className="card p-4 text-sm text-neutral-500">
-            Sustituye tu día entero por un único método de fuerza durante el rango que quieras — pausa el
-            macrociclo mientras dure, sin wod ni oly salvo que lo añadas tú ese día.
-          </p>
+          <div className="card flex flex-col items-center gap-2 p-6 text-center">
+            <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-surface">
+              <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
+              <Dumbbell size={20} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.6)]" />
+            </span>
+            <p className="text-sm font-semibold text-white">Aún no tienes ningún programa de fuerza</p>
+            <p className="text-xs text-neutral-400">
+              Sustituye tu día entero por un único método durante el rango que quieras — pausa el macrociclo
+              mientras dure, sin wod ni oly salvo que lo añadas tú ese día.
+            </p>
+          </div>
         )}
 
         <div className="flex flex-col gap-2">
           {sortedPrograms.map((p) => {
             const status = programStatus(p, today);
             const meta = STRENGTH_METHOD_META[p.method];
+            const color = STRENGTH_METHOD_COLOR[p.method];
             const lifts = p.lifts.length > 0 ? p.lifts : DEFAULT_STRENGTH_PROGRAM_LIFTS;
-            return (
-              <div key={p.id} className="card flex items-center justify-between gap-3 p-3.5">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-gold/15 text-brand-gold">
-                    <meta.Icon size={17} strokeWidth={2.25} />
+            const liftsLabel = lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ');
+
+            if (status === 'activo') {
+              const todayFormat = todayProgramFormat(p, profile);
+              return (
+                <div
+                  key={p.id}
+                  className="relative overflow-hidden rounded-xl border p-3.5"
+                  style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, #171310 55%)` }}
+                >
+                  <div className="absolute inset-y-0 left-0 w-[3px]" style={{ background: color }} />
+                  <div className="ml-1.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
+                        <span className="absolute inset-0 rounded-[11px] blur-md" style={{ background: `${color}4d` }} />
+                        <meta.Icon size={17} strokeWidth={2.25} className="relative" style={{ color }} />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-white">{meta.label}</p>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: color, color: '#171310' }}>
+                            Activo ahora
+                          </span>
+                        </div>
+                        <p className="text-xs text-neutral-400">{liftsLabel}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setProgramDraft(p)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => deleteStrengthProgram(p.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                  {todayFormat && (
+                    <div className="ml-1.5 mt-2.5 flex items-center gap-1.5">
+                      <span className="text-[10px] text-neutral-500">Hoy:</span>
+                      <span className="rounded-md px-2 py-0.5 text-[10px] font-semibold" style={{ background: `${color}26`, color }}>
+                        {todayFormat}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (status === 'proximo') {
+              return (
+                <div key={p.id} className="flex items-center gap-3 rounded-xl border border-dashed border-white/15 p-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-neutral-500">
+                    <meta.Icon size={16} strokeWidth={2.25} />
                   </span>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{meta.label}</p>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-neutral-200">{meta.label}</p>
                     <p className="text-xs text-neutral-500">
-                      {p.startDate} → {p.endDate}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-neutral-600">
-                      {lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ')}
+                      {liftsLabel} · empieza en {daysRemaining(p.startDate)} días
                     </p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${PROGRAM_STATUS_CLASS[status]}`}>
-                    {PROGRAM_STATUS_LABEL[status]}
-                  </span>
+                  <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-400">Próximo</span>
                   <button
                     onClick={() => setProgramDraft(p)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5"
                   >
                     <Pencil size={13} />
                   </button>
                   <button
                     onClick={() => deleteStrengthProgram(p.id)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5"
                   >
                     <Trash2 size={13} />
                   </button>
                 </div>
+              );
+            }
+
+            return (
+              <div key={p.id} className="flex items-center gap-3 rounded-xl px-3 py-1.5 opacity-50">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600">
+                  <Check size={12} strokeWidth={2.5} />
+                </span>
+                <p className="flex-1 text-xs text-neutral-500">
+                  {meta.label} — {liftsLabel}
+                </p>
+                <span className="text-[10px] text-neutral-600">Finalizado</span>
+                <button onClick={() => deleteStrengthProgram(p.id)} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400">
+                  <Trash2 size={12} />
+                </button>
               </div>
             );
           })}
@@ -583,9 +756,14 @@ export function Objetivos() {
         </div>
 
         {profile.goals.length === 0 && !goalDraft && (
-          <p className="card p-4 text-sm text-neutral-500">
-            No tienes objetivos activos — puedes tener varios a la vez, el más urgente (fecha límite más cercana) gana prioridad cuando coinciden en un mismo bloque.
-          </p>
+          <div className="card flex flex-col items-center gap-2 p-6 text-center">
+            <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-surface">
+              <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
+              <Target size={22} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.6)]" />
+            </span>
+            <p className="text-sm font-semibold text-white">Aún no tienes objetivos activos</p>
+            <p className="text-xs text-neutral-400">Puedes tener varios a la vez — el más urgente gana cuando coinciden.</p>
+          </div>
         )}
 
         <div className="flex flex-col gap-2">
