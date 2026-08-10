@@ -220,6 +220,14 @@ export function Planificacion() {
     setPrUpdateMessage(nextMessage);
   }
 
+  function handleUndoComplete() {
+    if (!session) return;
+    if (!window.confirm('¿Deshacer el registro de hoy? Esto no se puede deshacer.')) return;
+    athleteRepository.deleteHistoryEntry(session.date);
+    setHistory(athleteRepository.getHistory());
+    setPrUpdateMessage(null);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
@@ -246,7 +254,15 @@ export function Planificacion() {
         </div>
       )}
 
-      <WeekStrip profile={profile} history={history} goals={goals} />
+      <WeekStrip
+        profile={profile}
+        history={history}
+        goals={goals}
+        onDeleteHistoryEntry={(date) => {
+          athleteRepository.deleteHistoryEntry(date);
+          setHistory(athleteRepository.getHistory());
+        }}
+      />
 
       {!session && (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
@@ -349,6 +365,15 @@ export function Planificacion() {
             >
               {alreadyCompletedToday ? 'Completado ✓' : 'Marcar como completado'}
             </button>
+            {alreadyCompletedToday && (
+              <button
+                onClick={handleUndoComplete}
+                title="Deshacer el registro de hoy"
+                className="text-xs text-neutral-500 underline decoration-dotted transition-colors duration-200 hover:text-red-400"
+              >
+                Deshacer
+              </button>
+            )}
           </div>
         )}
       </div>

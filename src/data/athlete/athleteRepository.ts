@@ -13,6 +13,10 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.appendHistoryEntry(entry);
     void pushRemote();
   },
+  deleteHistoryEntry(date) {
+    localAthleteRepository.deleteHistoryEntry(date);
+    void pushRemote();
+  },
   appendBodyweightEntry(entry) {
     localAthleteRepository.appendBodyweightEntry(entry);
     void pushRemote();

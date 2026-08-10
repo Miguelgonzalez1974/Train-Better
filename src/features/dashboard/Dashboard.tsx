@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight } from 'lucide-react';
+import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight, Trash2 } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
@@ -70,7 +70,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
-  const [history] = useState(() => athleteRepository.getHistory());
+  const [history, setHistory] = useState(() => athleteRepository.getHistory());
   const [profile] = useState(() => athleteRepository.getProfile());
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showNextWeek, setShowNextWeek] = useState(false);
@@ -78,6 +78,12 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
   const recent = useMemo(() => [...history].reverse().slice(0, 5), [history]);
+
+  function handleDeleteEntry(date: string) {
+    if (!window.confirm(`¿Borrar la sesión registrada el ${date}? Esto no se puede deshacer.`)) return;
+    athleteRepository.deleteHistoryEntry(date);
+    setHistory(athleteRepository.getHistory());
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -161,6 +167,13 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
                       WOD: {entry.wodResult.value}
                     </span>
                   )}
+                  <button
+                    onClick={() => handleDeleteEntry(entry.date)}
+                    title="Borrar esta sesión"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-400"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
             ))}

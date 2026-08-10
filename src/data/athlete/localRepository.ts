@@ -17,6 +17,12 @@ export interface AthleteRepository {
   getHistory(): SessionHistoryEntry[];
   appendHistoryEntry(entry: SessionHistoryEntry): void;
   replaceHistory(history: SessionHistoryEntry[]): void;
+  /**
+   * Borra un unico dia del historial (por si se registro por error) — no toca la sesion
+   * cacheada para esa fecha, asi el atleta puede volver a marcarla como completada si quiere.
+   * Tambien saca esa fecha de `trainingDatesLog` para que no siga contando en "dias entrenados".
+   */
+  deleteHistoryEntry(date: string): void;
   getCachedSession(dateIso: string): DailySession | null;
   saveCachedSession(session: DailySession): void;
   getBodyweightLog(): BodyweightEntry[];
@@ -104,6 +110,14 @@ export const localAthleteRepository: AthleteRepository = {
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));
+  },
+  deleteHistoryEntry(date) {
+    const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.filter((entry) => entry.date !== date)));
+
+    const profile = localAthleteRepository.getProfile();
+    const trainingDatesLog = (profile.trainingDatesLog ?? []).filter((d) => d !== date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog }));
   },
   getCachedSession(dateIso) {
     const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});

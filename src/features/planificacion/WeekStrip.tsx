@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { generateSessionForDate, hasActiveTrainingStructure } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
@@ -34,9 +34,11 @@ interface WeekStripProps {
   history: SessionHistoryEntry[];
   goals: Goal[];
   today?: Date;
+  /** Borra el registro de un dia pasado (por si se anoto por error) — el padre es quien posee `history`, asi que refresca su propio estado. */
+  onDeleteHistoryEntry?: (date: string) => void;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date() }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -151,6 +153,19 @@ export function WeekStrip({ profile, history, goals, today = new Date() }: WeekS
                     )}
                   </div>
                   <p className="text-neutral-300">{entry.movementIds.map(resolveMovementName).join(' · ')}</p>
+                  {onDeleteHistoryEntry && (
+                    <button
+                      onClick={() => {
+                        if (!window.confirm(`¿Borrar la sesión registrada el ${dateIso}? Esto no se puede deshacer.`)) return;
+                        onDeleteHistoryEntry(dateIso);
+                        setExpanded(null);
+                      }}
+                      className="mt-1 flex items-center gap-1.5 self-start text-xs text-neutral-500 transition-colors duration-200 hover:text-red-400"
+                    >
+                      <Trash2 size={13} />
+                      Borrar esta sesión
+                    </button>
+                  )}
                 </div>
               ) : isPast ? (
                 <p className="text-sm text-neutral-500">No registrado</p>
