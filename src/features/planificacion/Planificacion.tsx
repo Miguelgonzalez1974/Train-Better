@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2 } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus } from 'lucide-react';
 import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import {
+  buildStrengthProgramWodAddition,
+  generateDailySession,
   generateOverrideSession,
   generateSessionForDate,
   resolveOlyPRKey,
@@ -56,9 +58,12 @@ export function Planificacion() {
   const [testedLoadKg, setTestedLoadKg] = useState(0);
   const [prUpdateMessage, setPrUpdateMessage] = useState<string | null>(null);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
+  const [customEditorMode, setCustomEditorMode] = useState<'replace' | 'append'>('replace');
   const [customTitleDraft, setCustomTitleDraft] = useState('');
   const [customNoteDraft, setCustomNoteDraft] = useState('');
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [showAddWodPicker, setShowAddWodPicker] = useState(false);
+  const [macroWodPreview, setMacroWodPreview] = useState<SessionBlockResult[] | null>(null);
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const nextMacroStart = useMemo(() => {
@@ -67,6 +72,7 @@ export function Planificacion() {
     return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long' }).format(new Date(upcoming.startDate));
   }, [profile.macrocycles, todayIso]);
   const alreadyCompletedToday = useMemo(() => (session ? history.some((h) => h.date === session.date) : false), [history, session]);
+  const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
   const wodScoreType = useMemo(() => (session ? getWodScoreType(session) : null), [session]);
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
@@ -102,15 +108,33 @@ export function Planificacion() {
     setTimeout(() => setSpinning(false), 500);
   }
 
-  function openCustomEditor() {
-    setCustomTitleDraft(session?.source === 'custom' ? (session.customTitle ?? '') : '');
-    setCustomNoteDraft(session?.source === 'custom' ? (session.customNote ?? '') : '');
+  function openCustomEditor(mode: 'replace' | 'append' = 'replace') {
+    setCustomEditorMode(mode);
+    setCustomTitleDraft(mode === 'replace' && session?.source === 'custom' ? (session.customTitle ?? '') : '');
+    setCustomNoteDraft(mode === 'replace' && session?.source === 'custom' ? (session.customNote ?? '') : '');
     setShowCustomEditor(true);
   }
 
   function handleSaveCustomSession() {
     const note = customNoteDraft.trim();
     if (!note) return;
+
+    if (customEditorMode === 'append' && session) {
+      const wodEntry: SessionBlockResult = {
+        block: 'wod',
+        movementId: 'custom-wod-note',
+        title: customTitleDraft.trim() || undefined,
+        format: 'Tu WOD',
+        notes: note,
+      };
+      const next: DailySession = { ...session, blocks: [...session.blocks, wodEntry] };
+      athleteRepository.saveCachedSession(next);
+      setSession(next);
+      setShowCustomEditor(false);
+      setShowAddWodPicker(false);
+      return;
+    }
+
     const next: DailySession = {
       date: session?.date ?? todayIso,
       mesocycleWeek: 0,
@@ -131,6 +155,29 @@ export function Planificacion() {
     athleteRepository.saveCachedSession(next);
     setSession(next);
     setShowTypePicker(false);
+  }
+
+  function openAddWodPicker() {
+    const macro = getActiveMacrocycle(profile.macrocycles, todayIso);
+    // Se genera una unica vez aqui y se reutiliza tal cual al confirmar — el motor usa
+    // aleatoriedad interna, asi que volver a generar en el momento de confirmar podria dar un WOD
+    // distinto al que se vio en la vista previa.
+    setMacroWodPreview(macro ? generateDailySession(profile, history, macro, new Date(), goals).blocks.filter((b) => b.block === 'wod') : null);
+    setShowAddWodPicker(true);
+  }
+
+  function handleAddWod(type: SessionOverrideType | 'macro') {
+    if (!session) return;
+    const wodBlocks = type === 'macro' ? (macroWodPreview ?? []) : buildStrengthProgramWodAddition(history, type).blocks;
+    if (wodBlocks.length === 0) return;
+    const next: DailySession = {
+      ...session,
+      blocks: [...session.blocks, ...wodBlocks],
+      wodTag: type === 'macro' ? 'de tu macrociclo' : undefined,
+    };
+    athleteRepository.saveCachedSession(next);
+    setSession(next);
+    setShowAddWodPicker(false);
   }
 
   function buildWodResult(): WodResult | undefined {
@@ -221,7 +268,7 @@ export function Planificacion() {
               Aleatoria
             </button>
             <button
-              onClick={openCustomEditor}
+              onClick={() => openCustomEditor()}
               className="flex items-center gap-1.5 rounded-full border border-brand-border bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
             >
               <NotebookPen size={13} strokeWidth={2.25} className="text-brand-gold" />
@@ -252,8 +299,12 @@ export function Planificacion() {
           <div className="flex items-center gap-2">
             <p className="text-lg font-semibold text-white">{session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}</p>
             {!session.isRestDay && session.mesocycleWeek === 0 && (
-              <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
-                {session.swapLabel ?? 'Mantenimiento'}
+              <span
+                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                  session.strengthProgramLabel ? 'bg-brand-gold/15 text-brand-gold' : 'bg-white/10 text-neutral-300'
+                }`}
+              >
+                {session.strengthProgramLabel ?? session.swapLabel ?? 'Mantenimiento'}
               </span>
             )}
             {!session.isRestDay && (
@@ -479,7 +530,7 @@ export function Planificacion() {
         <div className="card flex flex-col gap-3 p-4">
           <p className="text-neutral-400">Hoy toca descansar. Aprovecha para movilidad ligera o recuperación activa.</p>
           <button
-            onClick={openCustomEditor}
+            onClick={() => openCustomEditor()}
             className="flex items-center gap-2 self-start rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
           >
             <NotebookPen size={15} strokeWidth={2.25} />
@@ -488,6 +539,20 @@ export function Planificacion() {
         </div>
       ) : (
         <DaySessionBlocks session={session} editable={editMode} onUpdateEntry={handleUpdateEntry} />
+      )}
+
+      {session.strengthProgramLabel && !session.isRestDay && (
+        hasWodBlock ? (
+          session.wodTag && <p className="text-xs text-neutral-500">WOD añadido — {session.wodTag}.</p>
+        ) : (
+          <button
+            onClick={openAddWodPicker}
+            className="flex items-center gap-2 self-start rounded-lg border border-dashed border-brand-border px-3 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <Plus size={15} strokeWidth={2.25} className="text-brand-gold" />
+            Añadir WOD (opcional)
+          </button>
+        )
       )}
       </>
       )}
@@ -587,6 +652,47 @@ export function Planificacion() {
               <span className="block text-sm font-semibold text-white">Recuperación</span>
               <span className="block text-xs text-neutral-500">Ritmo suave, sin buscar fatiga — para cuando no tienes el día para más.</span>
             </span>
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={showAddWodPicker} onClose={() => setShowAddWodPicker(false)} title="Añade un WOD a hoy">
+        <div className="flex flex-col gap-2">
+          {macroWodPreview && macroWodPreview.length > 0 && (
+            <button
+              onClick={() => handleAddWod('macro')}
+              className="flex flex-col items-start gap-2 rounded-lg border-2 border-brand-gold bg-brand-gold/10 px-3 py-2.5 text-left"
+            >
+              <span className="flex items-center gap-2">
+                <CalendarCheck2 size={16} strokeWidth={2.25} className="shrink-0 text-brand-gold" />
+                <span className="text-sm font-semibold text-white">Lo que tocaría hoy</span>
+                <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">De tu macrociclo</span>
+              </span>
+              <span className="w-full rounded-lg bg-black/25 px-2.5 py-2 text-xs text-neutral-300">
+                {macroWodPreview[0].format ?? 'WOD del ciclo (en pausa)'}
+              </span>
+            </button>
+          )}
+          <button
+            onClick={() => handleAddWod('random')}
+            className="flex items-center gap-3 rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+          >
+            <Shuffle size={16} strokeWidth={2.25} className="shrink-0 text-neutral-400" />
+            <span className="text-sm font-semibold text-white">Aleatoria</span>
+          </button>
+          <button
+            onClick={() => openCustomEditor('append')}
+            className="flex items-center gap-3 rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+          >
+            <NotebookPen size={16} strokeWidth={2.25} className="shrink-0 text-neutral-400" />
+            <span className="text-sm font-semibold text-white">Propia</span>
+          </button>
+          <button
+            onClick={() => handleAddWod('recovery')}
+            className="flex items-center gap-3 rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left transition-colors duration-200 hover:border-brand-gold"
+          >
+            <HeartPulse size={16} strokeWidth={2.25} className="shrink-0 text-neutral-400" />
+            <span className="text-sm font-semibold text-white">Recuperación</span>
           </button>
         </div>
       </Modal>

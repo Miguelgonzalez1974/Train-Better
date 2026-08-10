@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Pencil, Trash2, Plus, CalendarRange } from 'lucide-react';
+import { Pencil, Trash2, Plus, CalendarRange, Repeat, TrendingUp, Waves, type LucideIcon } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
-import type { AthleteProfile, Goal, GoalEmphasis, GoalType, Macrocycle } from '../../data/athlete/types';
+import type { AthleteProfile, Goal, GoalEmphasis, GoalType, Macrocycle, PersonalRecords, StrengthMethod, StrengthProgram } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
+import { DEFAULT_STRENGTH_PROGRAM_LIFTS } from '../../engine/strengthPrograms';
 import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 
 const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
@@ -61,6 +62,53 @@ function remainingDeloadWeeks(macro: Macrocycle): number {
   return totalMacroWeeks(macro) - acc - int - peak;
 }
 
+type ProgramStatus = MacroStatus;
+const PROGRAM_STATUS_LABEL = MACRO_STATUS_LABEL;
+const PROGRAM_STATUS_CLASS = MACRO_STATUS_CLASS;
+
+function programStatus(program: StrengthProgram, today: string): ProgramStatus {
+  if (today < program.startDate) return 'proximo';
+  if (today > program.endDate) return 'finalizado';
+  return 'activo';
+}
+
+const STRENGTH_METHOD_META: Record<StrengthMethod, { label: string; blurb: string; Icon: LucideIcon }> = {
+  '531': {
+    label: '5/3/1',
+    blurb: 'Ondas de 4 semanas sobre tu training max — progresión lenta y sostenible.',
+    Icon: Repeat,
+  },
+  lineal: {
+    label: 'Lineal',
+    blurb: 'Sube intensidad y baja volumen semana a semana — ideal si vuelves de un parón.',
+    Icon: TrendingUp,
+  },
+  ondulante: {
+    label: 'Ondulante',
+    blurb: 'El mismo levantamiento varias veces por semana, cambiando el estímulo cada vez.',
+    Icon: Waves,
+  },
+};
+
+const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante'];
+
+const LIFT_OPTIONS: { key: keyof PersonalRecords; label: string }[] = [
+  { key: 'backSquat', label: 'Back Squat' },
+  { key: 'frontSquat', label: 'Front Squat' },
+  { key: 'benchPress', label: 'Bench Press' },
+  { key: 'deadlift', label: 'Deadlift' },
+  { key: 'strictPress', label: 'Strict Press' },
+  { key: 'clean', label: 'Clean' },
+  { key: 'snatch', label: 'Snatch' },
+  { key: 'cleanAndJerk', label: 'Clean & Jerk' },
+];
+
+function newStrengthProgramDraft(): StrengthProgram {
+  const end = new Date();
+  end.setMonth(end.getMonth() + 2);
+  return { id: crypto.randomUUID(), startDate: todayIso(), endDate: toLocalIsoDate(end), method: '531', lifts: [...DEFAULT_STRENGTH_PROGRAM_LIFTS] };
+}
+
 function firstMovementId(type: GoalType): string | undefined {
   return GOAL_TYPE_META[type].movementGroups[0]?.movements[0]?.id;
 }
@@ -83,10 +131,34 @@ export function Objetivos() {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
+  const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
 
   function persist(next: AthleteProfile) {
     athleteRepository.saveProfile(next);
     setProfile(next);
+  }
+
+  function saveStrengthProgram(e: React.FormEvent) {
+    e.preventDefault();
+    if (!programDraft || programDraft.lifts.length === 0) return;
+    const existing = profile.strengthPrograms ?? [];
+    const exists = existing.some((p) => p.id === programDraft.id);
+    const strengthPrograms = exists ? existing.map((p) => (p.id === programDraft.id ? programDraft : p)) : [...existing, programDraft];
+    persist({ ...profile, strengthPrograms });
+    setProgramDraft(null);
+  }
+
+  function deleteStrengthProgram(id: string) {
+    persist({ ...profile, strengthPrograms: (profile.strengthPrograms ?? []).filter((p) => p.id !== id) });
+  }
+
+  function toggleProgramLift(key: keyof PersonalRecords) {
+    setProgramDraft((prev) => {
+      if (!prev) return prev;
+      const has = prev.lifts.includes(key);
+      const lifts = has ? prev.lifts.filter((l) => l !== key) : [...prev.lifts, key];
+      return { ...prev, lifts };
+    });
   }
 
   function saveMacro(e: React.FormEvent) {
@@ -124,6 +196,7 @@ export function Objetivos() {
 
   const today = todayIso();
   const sortedMacros = [...profile.macrocycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const sortedPrograms = [...(profile.strengthPrograms ?? [])].sort((a, b) => a.startDate.localeCompare(b.startDate));
   const goalMeta = goalDraft ? GOAL_TYPE_META[goalDraft.type] : null;
 
   return (
@@ -303,6 +376,171 @@ export function Objetivos() {
               <button
                 type="button"
                 onClick={() => setMacroDraft(null)}
+                className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-neutral-400">Solo fuerza, sin wod</p>
+            <p className="text-lg font-semibold text-white">Programa de fuerza</p>
+          </div>
+          {!programDraft && (
+            <button
+              onClick={() => setProgramDraft(newStrengthProgramDraft())}
+              className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            >
+              <Plus size={15} strokeWidth={2.25} />
+              Nuevo
+            </button>
+          )}
+        </div>
+
+        {sortedPrograms.length === 0 && !programDraft && (
+          <p className="card p-4 text-sm text-neutral-500">
+            Sustituye tu día entero por un único método de fuerza durante el rango que quieras — pausa el
+            macrociclo mientras dure, sin wod ni oly salvo que lo añadas tú ese día.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {sortedPrograms.map((p) => {
+            const status = programStatus(p, today);
+            const meta = STRENGTH_METHOD_META[p.method];
+            const lifts = p.lifts.length > 0 ? p.lifts : DEFAULT_STRENGTH_PROGRAM_LIFTS;
+            return (
+              <div key={p.id} className="card flex items-center justify-between gap-3 p-3.5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-gold/15 text-brand-gold">
+                    <meta.Icon size={17} strokeWidth={2.25} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{meta.label}</p>
+                    <p className="text-xs text-neutral-500">
+                      {p.startDate} → {p.endDate}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-neutral-600">
+                      {lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${PROGRAM_STATUS_CLASS[status]}`}>
+                    {PROGRAM_STATUS_LABEL[status]}
+                  </span>
+                  <button
+                    onClick={() => setProgramDraft(p)}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    onClick={() => deleteStrengthProgram(p.id)}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {programDraft && (
+          <form onSubmit={saveStrengthProgram} className="card flex flex-col gap-3 p-4">
+            <div className="flex gap-3">
+              <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-400">
+                Inicio
+                <input
+                  type="date"
+                  value={programDraft.startDate}
+                  onChange={(e) => setProgramDraft((prev) => (prev ? { ...prev, startDate: e.target.value } : prev))}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-400">
+                Fin
+                <input
+                  type="date"
+                  value={programDraft.endDate}
+                  onChange={(e) => setProgramDraft((prev) => (prev ? { ...prev, endDate: e.target.value } : prev))}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-neutral-300">Método</p>
+              <div className="flex flex-col gap-2">
+                {STRENGTH_METHODS.map((method) => {
+                  const meta = STRENGTH_METHOD_META[method];
+                  const isSelected = programDraft.method === method;
+                  return (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => setProgramDraft((prev) => (prev ? { ...prev, method } : prev))}
+                      className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors duration-200 ${
+                        isSelected ? 'border-2 border-brand-gold bg-brand-gold/10' : 'border-brand-border bg-white/[0.03] hover:border-brand-gold/50'
+                      }`}
+                    >
+                      <meta.Icon size={17} strokeWidth={2.25} className={`mt-0.5 shrink-0 ${isSelected ? 'text-brand-gold' : 'text-neutral-400'}`} />
+                      <span>
+                        <span className="block text-sm font-semibold text-white">{meta.label}</span>
+                        <span className="block text-xs text-neutral-500">{meta.blurb}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-neutral-300">Levantamientos</p>
+              <div className="flex flex-wrap gap-2">
+                {LIFT_OPTIONS.map((lift) => {
+                  const isChecked = programDraft.lifts.includes(lift.key);
+                  return (
+                    <button
+                      key={lift.key}
+                      type="button"
+                      onClick={() => toggleProgramLift(lift.key)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                        isChecked
+                          ? 'border-brand-gold bg-brand-gold/10 text-brand-gold'
+                          : 'border-brand-border text-neutral-400 hover:border-brand-gold/50'
+                      }`}
+                    >
+                      {lift.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {programDraft.lifts.length === 0 && <p className="mt-1.5 text-xs text-brand-orange">Elige al menos un levantamiento.</p>}
+            </div>
+
+            <p className="text-xs text-neutral-600">
+              Mientras esté activo, tu día se reduce a calentamiento + este levantamiento + enfriamiento. Puedes
+              añadir un WOD aparte cualquier día desde Planificación, incluido el que tocaría según tu macrociclo.
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={programDraft.lifts.length === 0}
+                className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Guardar programa
+              </button>
+              <button
+                type="button"
+                onClick={() => setProgramDraft(null)}
                 className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
               >
                 Cancelar

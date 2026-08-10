@@ -34,6 +34,22 @@ export interface Macrocycle {
   phaseWeeks?: [number, number, number, number];
 }
 
+export type StrengthMethod = '531' | 'lineal' | 'ondulante';
+
+export interface StrengthProgram {
+  id: string;
+  /** Fecha ISO de inicio. */
+  startDate: string;
+  /** Fecha ISO de fin — al pasar esta fecha, vuelve automaticamente al macrociclo (si sigue activo) o a mantenimiento. */
+  endDate: string;
+  method: StrengthMethod;
+  /**
+   * Levantamientos incluidos, en el orden en que rotan por dia de entreno. Vacio o ausente = los 4
+   * clasicos (sentadilla trasera, press banca, peso muerto, press militar).
+   */
+  lifts: (keyof PersonalRecords)[];
+}
+
 export interface AthleteProfile {
   prs: PersonalRecords;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
@@ -53,6 +69,13 @@ export interface AthleteProfile {
   trainingDatesLog?: string[];
   /** Objetivos activos concurrentes — ver [[Goal]]. Varios pueden convivir (p.ej. competicion + un PR puntual). */
   goals: Goal[];
+  /**
+   * Periodos de fuerza pura (ver [[StrengthProgram]]) — mientras uno esta activo, sustituye entera
+   * la sesion del dia (sin wod/oly/skill salvo que el atleta lo añada) y pausa el macrociclo hasta
+   * su fecha de fin. Como mucho uno activo a la vez; si el atleta solapa dos por error gana el
+   * primero de la lista, igual que macrocycles.
+   */
+  strengthPrograms?: StrengthProgram[];
 }
 
 export interface SessionBlockResult {
@@ -88,6 +111,10 @@ export interface DailySession {
   phaseWeekInPhase?: number;
   /** Duracion total en semanas de la fase actual — junto a `phaseWeekInPhase` da "semana 3 de 6". */
   phaseLengthWeeks?: number;
+  /** Presente cuando hoy cae dentro de un StrengthProgram activo — etiqueta tipo "5/3/1 · Semana 3" a mostrar en vez de la fase del macrociclo. */
+  strengthProgramLabel?: string;
+  /** Etiqueta junto al bloque wod cuando se añadio opcionalmente sobre un dia de programa de fuerza (ej. "de tu macrociclo"). */
+  wodTag?: string;
 }
 
 export type RxOrScaled = 'rx' | 'scaled';
@@ -129,6 +156,7 @@ export const DEFAULT_PROFILE: AthleteProfile = {
   trainingDaysPerWeek: 4,
   macrocycles: [],
   goals: [],
+  strengthPrograms: [],
 };
 
 export type GoalType =

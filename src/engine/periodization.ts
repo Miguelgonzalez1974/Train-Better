@@ -48,7 +48,7 @@ export function getActiveMacrocycle(macrocycles: Macrocycle[], todayIso: string)
   return macrocycles.find((m) => m.startDate <= todayIso && todayIso <= m.endDate);
 }
 
-function weeksSinceStart(startDateIso: string, today: Date): number {
+export function weeksSinceStart(startDateIso: string, today: Date): number {
   const start = new Date(startDateIso);
   const todayMidnight = new Date(today).setHours(0, 0, 0, 0);
   const startMidnight = new Date(start).setHours(0, 0, 0, 0);

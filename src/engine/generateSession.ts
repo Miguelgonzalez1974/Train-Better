@@ -17,6 +17,7 @@ import type {
   RxOrScaled,
   SessionBlockResult,
   SessionHistoryEntry,
+  StrengthProgram,
   WodResult,
 } from '../data/athlete/types';
 import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, isEmphasisDay, resolveMacrocyclePhase, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
@@ -37,6 +38,7 @@ import {
   weakestUntrainedStrengthPattern,
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
+import { buildStrengthProgramPrescription, getActiveStrengthProgram, resolveProgramLift } from './strengthPrograms';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
@@ -967,14 +969,104 @@ export function generateOverrideSession(
   };
 }
 
-/** Punto unico de decision: mantenimiento antes del inicio del macrociclo, programacion completa despues. */
+const PROGRAM_LIFT_MOVEMENT_ID: Record<keyof PersonalRecords, string> = {
+  backSquat: 'back-squat',
+  frontSquat: 'front-squat',
+  benchPress: 'bench-press',
+  deadlift: 'deadlift',
+  strictPress: 'strict-press',
+  clean: 'clean',
+  snatch: 'snatch',
+  cleanAndJerk: 'clean-and-jerk',
+};
+
+/**
+ * Sesion de un dia bajo un StrengthProgram activo (ver [[getActiveStrengthProgram]]): un unico
+ * levantamiento fijo por dia de entreno (no varia por variedad, varia por metodologia — ver
+ * `resolveProgramLift`), sin wod/oly/skill/accessory salvo que el atleta los añada aparte con
+ * `buildStrengthProgramWodAddition`. La autorregulacion (ACWR + RPE reciente) se sigue aplicando
+ * igual que en el resto del motor — un programa de fuerza pura no es excusa para dejar de escuchar
+ * al atleta.
+ */
+export function generateStrengthProgramSession(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  program: StrengthProgram,
+  date: Date = new Date(),
+): DailySession {
+  const dateIso = toLocalIsoDate(date);
+  const dayPlan = getDayPlan(getWeekdayIndex(date), profile.trainingDaysPerWeek);
+
+  if (!dayPlan.isTrainingDay) {
+    return { date: dateIso, mesocycleWeek: 0, isRestDay: true, blocks: [] };
+  }
+
+  const liftKey = resolveProgramLift(program, dayPlan.trainingDayIndex);
+  const movementId = PROGRAM_LIFT_MOVEMENT_ID[liftKey];
+  const movement = getMovementById(movementId);
+  if (!movement) {
+    // Catalogo incompleto para este lift (no deberia pasar con los ids fijos de arriba) — cae a mantenimiento.
+    return generateOffSeasonSession(profile, history, date);
+  }
+
+  const acwrResult = computeAcwr(history, date);
+  const rpeAutoreg = getRpeAutoregFactor(history, date);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor);
+  const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note].filter(Boolean).join(' ');
+
+  const prescription = buildStrengthProgramPrescription(program, dayPlan, profile.prs[liftKey], autoregFactor, date);
+
+  const strengthBlock: SessionBlockResult = {
+    block: 'strength',
+    movementId: movement.id,
+    sets: prescription.sets,
+    reps: prescription.reps,
+    loadKg: prescription.loadKg,
+    format: prescription.format,
+    notes: autoregNote ? `${prescription.notes} ${autoregNote}` : prescription.notes,
+  };
+
+  const warmupBlock = buildWarmupBlock(movement.pattern, false);
+  const cooldownBlock = buildCooldownBlock(movement.pattern);
+
+  return {
+    date: dateIso,
+    mesocycleWeek: 0,
+    isRestDay: false,
+    blocks: [...warmupBlock, strengthBlock, ...cooldownBlock],
+    strengthProgramLabel: prescription.format,
+  };
+}
+
+/**
+ * Bloque(s) wod opcional para añadir sobre un dia de programa de fuerza ya generado — no sustituye
+ * la sesion, se anade encima (ver `Planificacion.tsx`). El caso "trae el WOD real de tu
+ * macrociclo pausado" no vive aqui: la UI ya tiene que generarlo para poder mostrar una vista
+ * previa antes de confirmar, y llamar dos veces a `generateDailySession` (una para la vista previa,
+ * otra al confirmar) podria dar resultados distintos por la aleatoriedad interna del motor — asi
+ * que la UI genera una vez y reutiliza ese mismo resultado al confirmar, sin pasar por aqui.
+ */
+export function buildStrengthProgramWodAddition(
+  history: SessionHistoryEntry[],
+  type: SessionOverrideType,
+): { blocks: SessionBlockResult[] } {
+  const recentIds = getRecentMovementIds(history);
+  const wodBlocks = type === 'recovery' ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
+  return { blocks: wodBlocks };
+}
+
+/** Punto unico de decision: programa de fuerza pura (si hay uno activo) > macrociclo > mantenimiento. */
 export function generateSessionForDate(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
   date: Date,
   goals: Goal[],
 ): DailySession {
-  const activeMacro = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(date));
+  const dateIso = toLocalIsoDate(date);
+  const activeProgram = getActiveStrengthProgram(profile.strengthPrograms ?? [], dateIso);
+  if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
+
+  const activeMacro = getActiveMacrocycle(profile.macrocycles, dateIso);
   return activeMacro
     ? generateDailySession(profile, history, activeMacro, date, goals)
     : generateOffSeasonSession(profile, history, date);
