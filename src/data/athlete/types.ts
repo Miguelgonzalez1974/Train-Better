@@ -34,7 +34,7 @@ export interface Macrocycle {
   phaseWeeks?: [number, number, number, number];
 }
 
-export type StrengthMethod = '531' | 'lineal' | 'ondulante';
+export type StrengthMethod = '531' | 'lineal' | 'ondulante' | 'conjugado' | 'ruso' | 'texas';
 
 export interface StrengthProgram {
   id: string;

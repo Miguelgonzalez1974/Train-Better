@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2, Plus, CalendarRange, Repeat, TrendingUp, Waves, type LucideIcon } from 'lucide-react';
+import { Pencil, Trash2, Plus, CalendarRange, Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, type LucideIcon } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import type { AthleteProfile, Goal, GoalEmphasis, GoalType, Macrocycle, PersonalRecords, StrengthMethod, StrengthProgram } from '../../data/athlete/types';
@@ -88,9 +88,24 @@ const STRENGTH_METHOD_META: Record<StrengthMethod, { label: string; blurb: strin
     blurb: 'El mismo levantamiento varias veces por semana, cambiando el estímulo cada vez.',
     Icon: Waves,
   },
+  conjugado: {
+    label: 'Conjugado',
+    blurb: 'Esfuerzo máximo con variante rotativa + esfuerzo dinámico a velocidad, alternando tren superior e inferior.',
+    Icon: Split,
+  },
+  ruso: {
+    label: 'Ruso / Sheiko',
+    blurb: 'Frecuencia alta, volumen alto, intensidad moderada — nunca al fallo, prioriza la técnica repetida.',
+    Icon: Repeat2,
+  },
+  texas: {
+    label: 'Texas Method',
+    blurb: 'Un día de volumen, uno de recuperación y uno de intensidad — busca un número nuevo cada semana.',
+    Icon: ListOrdered,
+  },
 };
 
-const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante'];
+const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas'];
 
 const LIFT_OPTIONS: { key: keyof PersonalRecords; label: string }[] = [
   { key: 'backSquat', label: 'Back Squat' },

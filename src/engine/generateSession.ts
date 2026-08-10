@@ -38,7 +38,7 @@ import {
   weakestUntrainedStrengthPattern,
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
-import { buildStrengthProgramPrescription, getActiveStrengthProgram, resolveProgramLift } from './strengthPrograms';
+import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
@@ -969,22 +969,11 @@ export function generateOverrideSession(
   };
 }
 
-const PROGRAM_LIFT_MOVEMENT_ID: Record<keyof PersonalRecords, string> = {
-  backSquat: 'back-squat',
-  frontSquat: 'front-squat',
-  benchPress: 'bench-press',
-  deadlift: 'deadlift',
-  strictPress: 'strict-press',
-  clean: 'clean',
-  snatch: 'snatch',
-  cleanAndJerk: 'clean-and-jerk',
-};
-
 /**
  * Sesion de un dia bajo un StrengthProgram activo (ver [[getActiveStrengthProgram]]): un unico
- * levantamiento fijo por dia de entreno (no varia por variedad, varia por metodologia — ver
- * `resolveProgramLift`), sin wod/oly/skill/accessory salvo que el atleta los añada aparte con
- * `buildStrengthProgramWodAddition`. La autorregulacion (ACWR + RPE reciente) se sigue aplicando
+ * levantamiento por dia de entreno (que levantamiento y con que esquema depende de la metodologia —
+ * ver `resolveStrengthProgramDay`), sin wod/oly/skill/accessory salvo que el atleta los añada aparte
+ * con `buildStrengthProgramWodAddition`. La autorregulacion (ACWR + RPE reciente) se sigue aplicando
  * igual que en el resto del motor — un programa de fuerza pura no es excusa para dejar de escuchar
  * al atleta.
  */
@@ -1001,29 +990,27 @@ export function generateStrengthProgramSession(
     return { date: dateIso, mesocycleWeek: 0, isRestDay: true, blocks: [] };
   }
 
-  const liftKey = resolveProgramLift(program, dayPlan.trainingDayIndex);
-  const movementId = PROGRAM_LIFT_MOVEMENT_ID[liftKey];
-  const movement = getMovementById(movementId);
-  if (!movement) {
-    // Catalogo incompleto para este lift (no deberia pasar con los ids fijos de arriba) — cae a mantenimiento.
-    return generateOffSeasonSession(profile, history, date);
-  }
-
   const acwrResult = computeAcwr(history, date);
   const rpeAutoreg = getRpeAutoregFactor(history, date);
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor);
   const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note].filter(Boolean).join(' ');
 
-  const prescription = buildStrengthProgramPrescription(program, dayPlan, profile.prs[liftKey], autoregFactor, date);
+  const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, autoregFactor, date, profile.trainingDaysPerWeek);
+  if (!day) {
+    // No hay levantamiento disponible para el rol de hoy (p.ej. Conjugado sin ningun lift de tren
+    // superior o inferior elegido) o el catalogo no tiene el id esperado — cae a mantenimiento.
+    return generateOffSeasonSession(profile, history, date);
+  }
 
+  const movement = getMovementById(day.movementId)!;
   const strengthBlock: SessionBlockResult = {
     block: 'strength',
-    movementId: movement.id,
-    sets: prescription.sets,
-    reps: prescription.reps,
-    loadKg: prescription.loadKg,
-    format: prescription.format,
-    notes: autoregNote ? `${prescription.notes} ${autoregNote}` : prescription.notes,
+    movementId: day.movementId,
+    sets: day.sets,
+    reps: day.reps,
+    loadKg: day.loadKg,
+    format: day.format,
+    notes: autoregNote ? `${day.notes} ${autoregNote}` : day.notes,
   };
 
   const warmupBlock = buildWarmupBlock(movement.pattern, false);
@@ -1034,7 +1021,7 @@ export function generateStrengthProgramSession(
     mesocycleWeek: 0,
     isRestDay: false,
     blocks: [...warmupBlock, strengthBlock, ...cooldownBlock],
-    strengthProgramLabel: prescription.format,
+    strengthProgramLabel: day.format,
   };
 }
 
