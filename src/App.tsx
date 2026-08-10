@@ -15,11 +15,18 @@ export default function App() {
   const { session, loading } = useSession();
   const [syncing, setSyncing] = useState(isSupabaseConfigured);
 
+  const userId = session?.user?.id ?? null;
   useEffect(() => {
-    if (!session) return;
+    // Depende solo del id de usuario, no del objeto `session` completo: Supabase dispara
+    // onAuthStateChange (y por tanto un `session` con nueva identidad) en cada refresco de
+    // token o cambio de foco de la pestaña, no solo al iniciar sesión. Si volviéramos a tirar
+    // de remoto en cada uno de esos eventos, una sincronización a mitad de un push local (p.ej.
+    // justo tras borrar un día) podría sobreescribir el cambio local con la copia remota
+    // todavía desactualizada, haciendo que lo borrado "reaparezca".
+    if (!userId) return;
     setSyncing(true);
     pullRemoteOrSeed().finally(() => setSyncing(false));
-  }, [session]);
+  }, [userId]);
 
   if (isSupabaseConfigured && (loading || (session && syncing))) {
     return (
