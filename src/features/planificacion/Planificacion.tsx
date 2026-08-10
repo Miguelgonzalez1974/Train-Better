@@ -8,6 +8,7 @@ import {
   generateDailySession,
   generateOverrideSession,
   generateSessionForDate,
+  hasActiveTrainingStructure,
   resolveOlyPRKey,
   resolveStrengthPRKey,
   toHistoryEntry,
@@ -34,9 +35,9 @@ export function Planificacion() {
   const [session, setSession] = useState<DailySession | null>(() => {
     const cached = athleteRepository.getCachedSession(todayIso);
     if (cached) return cached;
-    // Sin macrociclo activo y nada elegido todavía para hoy: no se auto-genera ni se muestra
-    // "Mantenimiento" — se espera a que el atleta elija qué quiere hacer.
-    if (!getActiveMacrocycle(profile.macrocycles, todayIso)) return null;
+    // Sin macrociclo NI programa de fuerza activo, y nada elegido todavía para hoy: no se
+    // auto-genera ni se muestra "Mantenimiento" — se espera a que el atleta elija qué quiere hacer.
+    if (!hasActiveTrainingStructure(profile, todayIso)) return null;
     const fresh = generateSessionForDate(profile, history, new Date(), goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;

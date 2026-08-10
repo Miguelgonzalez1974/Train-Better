@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from '../planificacion/DaySessionBlocks';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import { generateSessionForDate } from '../../engine/generateSession';
-import { getActiveMacrocycle, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import { generateSessionForDate, hasActiveTrainingStructure } from '../../engine/generateSession';
+import { getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import type { DailySession } from '../../data/athlete/types';
 
 const DAY_LABELS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -14,15 +14,16 @@ interface NextWeekPreviewProps {
 
 interface NextWeekDay {
   date: string;
-  /** null cuando ese dia no tiene macrociclo activo y todavia no se ha elegido nada — no se auto-genera "Mantenimiento". */
+  /** null cuando ese dia no tiene macrociclo ni programa de fuerza activo y todavia no se ha elegido nada — no se auto-genera "Mantenimiento". */
   session: DailySession | null;
 }
 
 /**
  * Vista previa de los 7 dias de la semana siguiente. Cada dia se lee de la misma cache
  * persistente que usa Planificacion/WeekStrip (o se genera y se guarda ahi si es la primera
- * vez, y solo si ese dia cae dentro de un macrociclo activo) — asi el contenido no cambia entre
- * visitas, y cuando ese dia llegue a ser "hoy" se reutiliza exactamente lo mismo que ya se vio aqui.
+ * vez, y solo si ese dia cae dentro de un macrociclo o programa de fuerza activo) — asi el
+ * contenido no cambia entre visitas, y cuando ese dia llegue a ser "hoy" se reutiliza exactamente
+ * lo mismo que ya se vio aqui.
  */
 export function NextWeekPreview({ onClose }: NextWeekPreviewProps) {
   const [expanded, setExpanded] = useState<number | null>(0);
@@ -40,7 +41,7 @@ export function NextWeekPreview({ onClose }: NextWeekPreviewProps) {
       const dateIso = toLocalIsoDate(date);
       const cached = athleteRepository.getCachedSession(dateIso);
       if (cached) return { date: dateIso, session: cached };
-      if (!getActiveMacrocycle(profile.macrocycles, dateIso)) return { date: dateIso, session: null };
+      if (!hasActiveTrainingStructure(profile, dateIso)) return { date: dateIso, session: null };
       const fresh = generateSessionForDate(profile, history, date, goals);
       athleteRepository.saveCachedSession(fresh);
       return { date: dateIso, session: fresh };

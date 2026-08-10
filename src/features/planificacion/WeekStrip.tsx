@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
-import { generateSessionForDate } from '../../engine/generateSession';
+import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import { generateSessionForDate, hasActiveTrainingStructure } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../../data/athlete/types';
@@ -59,9 +59,9 @@ export function WeekStrip({ profile, history, goals, today = new Date() }: WeekS
 
     const cached = athleteRepository.getCachedSession(dateIso);
     if (cached) return cached;
-    // Sin macrociclo activo ese dia y nada elegido todavia: no se auto-genera ni se muestra
-    // "Mantenimiento" — mismo criterio que la vista de "Sesion de hoy".
-    if (!getActiveMacrocycle(profile.macrocycles, dateIso)) return null;
+    // Sin macrociclo NI programa de fuerza activo ese dia y nada elegido todavia: no se
+    // auto-genera ni se muestra "Mantenimiento" — mismo criterio que la vista de "Sesion de hoy".
+    if (!hasActiveTrainingStructure(profile, dateIso)) return null;
     const fresh = generateSessionForDate(profile, history, date, goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;

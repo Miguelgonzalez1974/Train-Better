@@ -1072,6 +1072,17 @@ export function generateSessionForDate(
     : generateOffSeasonSession(profile, history, date);
 }
 
+/**
+ * True si hay un macrociclo o un programa de fuerza activo esa fecha — la UI lo usa para decidir
+ * si auto-generar algo (`generateSessionForDate` siempre devuelve contenido) o esperar a que el
+ * atleta elija que hacer (ver el estado "sin macrociclo activo" de Planificacion/WeekStrip/
+ * NextWeekPreview). Antes solo miraba el macrociclo, lo que dejaba un programa de fuerza activo
+ * sin mostrarse hasta que el atleta lo eligiera manualmente — ahora cualquiera de los dos cuenta.
+ */
+export function hasActiveTrainingStructure(profile: AthleteProfile, dateIso: string): boolean {
+  return Boolean(getActiveStrengthProgram(profile.strengthPrograms ?? [], dateIso) || getActiveMacrocycle(profile.macrocycles, dateIso));
+}
+
 export function toHistoryEntry(
   session: DailySession,
   rxOrScaled: RxOrScaled,
