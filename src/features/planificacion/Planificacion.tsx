@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2 } from 'lucide-react';
 import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
@@ -228,6 +228,16 @@ export function Planificacion() {
     setPrUpdateMessage(null);
   }
 
+  function handleDeleteTodaySession() {
+    if (!session) return;
+    if (!window.confirm('¿Borrar la sesión de hoy? Volverás a elegir qué hacer.')) return;
+    athleteRepository.deleteCachedSession(session.date);
+    setSession(hasActiveTrainingStructure(profile, session.date) ? generateAndCache(profile) : null);
+    setEditMode(false);
+    setShowCompletePanel(false);
+    setPrUpdateMessage(null);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
@@ -354,6 +364,15 @@ export function Planificacion() {
             >
               <RefreshCw size={17} className={spinning ? 'animate-spin' : ''} />
             </button>
+            {!alreadyCompletedToday && (
+              <button
+                onClick={handleDeleteTodaySession}
+                title="Borrar sesión de hoy"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-all duration-200 hover:bg-red-500/15 hover:text-red-400"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
             <button
               onClick={() => {
                 setTestedLoadKg(testDayBlock?.loadKg ?? 0);

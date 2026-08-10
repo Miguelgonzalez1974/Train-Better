@@ -25,6 +25,8 @@ export interface AthleteRepository {
   deleteHistoryEntry(date: string): void;
   getCachedSession(dateIso: string): DailySession | null;
   saveCachedSession(session: DailySession): void;
+  /** Descarta la sesion planificada de un dia (sin tocar el historial) para volver a elegir de cero. */
+  deleteCachedSession(dateIso: string): void;
   getBodyweightLog(): BodyweightEntry[];
   appendBodyweightEntry(entry: BodyweightEntry): void;
   /**
@@ -127,6 +129,11 @@ export const localAthleteRepository: AthleteRepository = {
     const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
     cache[session.date] = session;
     localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(pruneSessionCache(cache)));
+  },
+  deleteCachedSession(dateIso) {
+    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
+    delete cache[dateIso];
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(cache));
   },
   getBodyweightLog() {
     return localAthleteRepository.getProfile().bodyweightLog ?? [];
