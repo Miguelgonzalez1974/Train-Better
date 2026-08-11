@@ -50,6 +50,17 @@ export interface StrengthProgram {
   lifts: (keyof PersonalRecords)[];
 }
 
+export type PainArea = 'hombro' | 'cadera-lumbar' | 'rodilla' | 'codo-muneca';
+
+export interface PainFlag {
+  id: string;
+  area: PainArea;
+  /** Fecha ISO en la que se marco el aviso. */
+  createdDate: string;
+  /** Fecha ISO a partir de la cual el aviso deja de aplicarse; null = hasta que el atleta lo quite a mano. */
+  until: string | null;
+}
+
 export interface AthleteProfile {
   prs: PersonalRecords;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
@@ -76,6 +87,8 @@ export interface AthleteProfile {
    * primero de la lista, igual que macrocycles.
    */
   strengthPrograms?: StrengthProgram[];
+  /** Avisos activos de molestia/dolor (ver [[PainFlag]]) — el motor evita el patron de movimiento asociado mientras esten vigentes. */
+  painFlags?: PainFlag[];
 }
 
 export interface SessionBlockResult {
@@ -157,6 +170,7 @@ export const DEFAULT_PROFILE: AthleteProfile = {
   macrocycles: [],
   goals: [],
   strengthPrograms: [],
+  painFlags: [],
 };
 
 export type GoalType =

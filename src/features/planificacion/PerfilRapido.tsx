@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import type { AthleteProfile, PersonalRecords } from '../../data/athlete/types';
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { pushRemote } from '../../data/athlete/remoteSync';
+import { getActivePainFlags, PAIN_AREA_LABEL } from '../../engine/painFlags';
+import { toLocalIsoDate } from '../../engine/periodization';
 
 const PR_FIELDS: { key: keyof PersonalRecords; label: string }[] = [
   { key: 'backSquat', label: 'Back Squat' },
@@ -21,11 +24,13 @@ const inputClass =
 interface PerfilRapidoProps {
   profile: AthleteProfile;
   onSave: (profile: AthleteProfile) => void;
+  onRemovePainFlag: (id: string) => void;
 }
 
-export function PerfilRapido({ profile, onSave }: PerfilRapidoProps) {
+export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapidoProps) {
   const [draft, setDraft] = useState<AthleteProfile>(profile);
   const [resetting, setResetting] = useState(false);
+  const activePainFlags = getActivePainFlags(profile.painFlags, toLocalIsoDate(new Date()));
 
   function handlePrChange(key: keyof PersonalRecords, value: string) {
     const parsed = Number(value);
@@ -94,6 +99,32 @@ export function PerfilRapido({ profile, onSave }: PerfilRapidoProps) {
           ))}
         </select>
       </label>
+
+      {activePainFlags.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Avisos de molestia activos</p>
+          {activePainFlags.map((flag) => (
+            <div
+              key={flag.id}
+              className="flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-400/5 px-3 py-2 text-sm text-red-300"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+              <span className="flex-1">
+                {PAIN_AREA_LABEL[flag.area]} — {flag.until ? `hasta el ${flag.until}` : 'hasta que lo quites'}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemovePainFlag(flag.id)}
+                title="Quitar aviso"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-500 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-400"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+          <p className="text-xs text-neutral-600">Los avisos nuevos se crean desde Planificación, junto a la sesión de hoy.</p>
+        </div>
+      )}
 
       <p className="text-xs text-neutral-600">
         Tus macrociclos y objetivos se gestionan ahora en la pestaña "Objetivos".

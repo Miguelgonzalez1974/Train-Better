@@ -22,6 +22,7 @@ import { getMovementById } from '../../data/movements';
 import type { AthleteProfile, Goal, GoalEmphasis, GoalType, Macrocycle, PersonalRecords, StrengthMethod, StrengthProgram } from '../../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay } from '../../engine/strengthPrograms';
+import { getAvoidedPatterns } from '../../engine/painFlags';
 import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 
 const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
@@ -92,7 +93,8 @@ function todayProgramFormat(program: StrengthProgram, profile: AthleteProfile): 
   const now = new Date();
   const dayPlan = getDayPlan(getWeekdayIndex(now), profile.trainingDaysPerWeek);
   if (!dayPlan.isTrainingDay) return 'Hoy descansas';
-  const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek);
+  const avoidedPatterns = getAvoidedPatterns(profile.painFlags, toLocalIsoDate(now));
+  const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek, avoidedPatterns);
   return day?.format ?? null;
 }
 

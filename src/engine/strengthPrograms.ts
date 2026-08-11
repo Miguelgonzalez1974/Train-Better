@@ -1,3 +1,4 @@
+import type { MovementPattern } from '../data/movements/types';
 import type { PersonalRecords, StrengthProgram } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
 import type { DayPlan } from './periodization';
@@ -465,6 +466,34 @@ function pickConjugateLift(candidates: (keyof PersonalRecords)[], cycleIndex: nu
 // ---------------------------------------------------------------------------
 
 /**
+ * Si el levantamiento que tocaria hoy tiene un patron marcado como molesto (ver painFlags.ts), lo
+ * sustituye por el primer otro levantamiento de la lista del atleta cuyo patron no este avisado —
+ * si todos lo estan (o no hay avisos), devuelve el original sin tocar. `substitutedFrom` solo va
+ * relleno cuando de verdad hubo un cambio, para poder avisarlo en las notas del dia.
+ */
+function resolveLiftAvoidingPain(
+  lifts: (keyof PersonalRecords)[],
+  liftKey: keyof PersonalRecords,
+  avoidedPatterns: Set<MovementPattern>,
+): { liftKey: keyof PersonalRecords; substitutedFrom?: keyof PersonalRecords } {
+  if (avoidedPatterns.size === 0) return { liftKey };
+  const pattern = getMovementById(PROGRAM_LIFT_MOVEMENT_ID[liftKey])?.pattern;
+  if (!pattern || !avoidedPatterns.has(pattern)) return { liftKey };
+
+  const alternative = lifts.find((l) => {
+    const p = getMovementById(PROGRAM_LIFT_MOVEMENT_ID[l])?.pattern;
+    return p && !avoidedPatterns.has(p);
+  });
+  return alternative ? { liftKey: alternative, substitutedFrom: liftKey } : { liftKey };
+}
+
+function painSubstitutionNote(substitutedFrom: keyof PersonalRecords | undefined): string {
+  if (!substitutedFrom) return '';
+  const name = getMovementById(PROGRAM_LIFT_MOVEMENT_ID[substitutedFrom])?.name ?? substitutedFrom;
+  return ` Cambiado desde ${name} — tienes un aviso de molestia activo que lo evita.`;
+}
+
+/**
  * Resuelve el dia completo (que movimiento, cuantas series/reps, a que peso) para cualquiera de
  * las 7 metodologias soportadas. Devuelve null solo si el catalogo de movimientos no tiene el id
  * esperado (no deberia pasar con los ids fijos de este archivo) o si Conjugado no tiene ningun
@@ -477,6 +506,7 @@ export function resolveStrengthProgramDay(
   autoregFactor: number,
   today: Date,
   trainingDaysPerWeek: number,
+  avoidedPatterns: Set<MovementPattern> = new Set(),
 ): StrengthProgramDay | null {
   const lifts = resolveProgramLifts(program);
 
@@ -486,10 +516,12 @@ export function resolveStrengthProgramDay(
     const wantsLower = role === 'me-lower' || role === 'de-lower';
     const lowerLifts = lifts.filter(isLowerBodyLift);
     const upperLifts = lifts.filter((l) => !isLowerBodyLift(l));
-    const liftKey = wantsLower
+    const rawLiftKey = wantsLower
       ? pickConjugateLift(lowerLifts, Math.floor(cycleIndex / CONJUGATE_ROLE_CYCLE.length), lifts)
       : pickConjugateLift(upperLifts, Math.floor(cycleIndex / CONJUGATE_ROLE_CYCLE.length), lifts);
-    if (!liftKey) return null;
+    if (!rawLiftKey) return null;
+    const { liftKey, substitutedFrom } = resolveLiftAvoidingPain(lifts, rawLiftKey, avoidedPatterns);
+    const painNote = painSubstitutionNote(substitutedFrom);
 
     const isMaxEffort = role === 'me-lower' || role === 'me-upper';
     const currentPR = prs[liftKey];
@@ -507,7 +539,7 @@ export function resolveStrengthProgramDay(
         reps: '1-3',
         loadKg: referenceLoad,
         format: `Conjugado · esfuerzo máximo (${movement.name})`,
-        notes: `Sube en series hasta un máximo real de 1 a 3 repeticiones en esta variante, parando 1-2 reps antes del fallo técnico — ${referenceLoad} kg es solo tu referencia de partida, no el objetivo final. La variante rota cada 2 semanas para no acomodarte.`,
+        notes: `Sube en series hasta un máximo real de 1 a 3 repeticiones en esta variante, parando 1-2 reps antes del fallo técnico — ${referenceLoad} kg es solo tu referencia de partida, no el objetivo final. La variante rota cada 2 semanas para no acomodarte.${painNote}`,
       };
     }
 
@@ -522,14 +554,15 @@ export function resolveStrengthProgramDay(
       reps: '2-3',
       loadKg,
       format: `Conjugado · esfuerzo dinámico (${movement.name})`,
-      notes: `8 series de 2-3 repeticiones a máxima velocidad de barra, descanso corto (45-60 seg) — el objetivo es potencia, no fatiga. Mantén siempre la misma técnica que en tu variante de esfuerzo máximo.`,
+      notes: `8 series de 2-3 repeticiones a máxima velocidad de barra, descanso corto (45-60 seg) — el objetivo es potencia, no fatiga. Mantén siempre la misma técnica que en tu variante de esfuerzo máximo.${painNote}`,
     };
   }
 
   if (program.method === 'texas') {
     const cycleIndex = continuousTrainingDayIndex(program, dayPlan, today, trainingDaysPerWeek);
     const role = TEXAS_ROLE_CYCLE[cycleIndex % TEXAS_ROLE_CYCLE.length];
-    const liftKey = lifts[Math.floor(cycleIndex / TEXAS_ROLE_CYCLE.length) % lifts.length];
+    const rawLiftKey = lifts[Math.floor(cycleIndex / TEXAS_ROLE_CYCLE.length) % lifts.length];
+    const { liftKey, substitutedFrom } = resolveLiftAvoidingPain(lifts, rawLiftKey, avoidedPatterns);
     const movementId = PROGRAM_LIFT_MOVEMENT_ID[liftKey];
     const movement = getMovementById(movementId);
     if (!movement) return null;
@@ -542,12 +575,13 @@ export function resolveStrengthProgramDay(
       reps: String(scheme.reps),
       loadKg,
       format: scheme.label,
-      notes: scheme.coachNote,
+      notes: `${scheme.coachNote}${painSubstitutionNote(substitutedFrom)}`,
     };
   }
 
   if (program.method === 'juggernaut') {
-    const liftKey = resolveProgramLift(program, dayPlan.trainingDayIndex);
+    const rawLiftKey = resolveProgramLift(program, dayPlan.trainingDayIndex);
+    const { liftKey, substitutedFrom } = resolveLiftAvoidingPain(lifts, rawLiftKey, avoidedPatterns);
     const movementId = PROGRAM_LIFT_MOVEMENT_ID[liftKey];
     const movement = getMovementById(movementId);
     if (!movement) return null;
@@ -568,12 +602,14 @@ export function resolveStrengthProgramDay(
       reps: scheme.steps[scheme.steps.length - 1].reps,
       loadKg: loads[loads.length - 1],
       format: scheme.label,
-      notes: `${scheme.coachNote} Series: ${loads.map((load, i) => `${scheme.steps[i].reps} @ ${load} kg`).join(', ')}.`,
+      notes: `${scheme.coachNote} Series: ${loads.map((load, i) => `${scheme.steps[i].reps} @ ${load} kg`).join(', ')}.${painSubstitutionNote(substitutedFrom)}`,
     };
   }
 
   // 5/3/1, lineal, ondulante, ruso: un levantamiento fijo por dia de entreno (sin rotar por rol).
-  const liftKey = resolveProgramLift(program, dayPlan.trainingDayIndex);
+  const rawSharedLiftKey = resolveProgramLift(program, dayPlan.trainingDayIndex);
+  const { liftKey, substitutedFrom: sharedSubstitutedFrom } = resolveLiftAvoidingPain(lifts, rawSharedLiftKey, avoidedPatterns);
+  const sharedPainNote = painSubstitutionNote(sharedSubstitutedFrom);
   const movementId = PROGRAM_LIFT_MOVEMENT_ID[liftKey];
   const movement = getMovementById(movementId);
   if (!movement) return null;
@@ -591,7 +627,7 @@ export function resolveStrengthProgramDay(
       reps: scheme.reps.join('-'),
       loadKg: loads[loads.length - 1],
       format: scheme.label,
-      notes: `${scheme.coachNote} Series: ${loads.map((load, i) => `${scheme.reps[i]} @ ${load} kg`).join(', ')}.`,
+      notes: `${scheme.coachNote} Series: ${loads.map((load, i) => `${scheme.reps[i]} @ ${load} kg`).join(', ')}.${sharedPainNote}`,
     };
   }
 
@@ -599,18 +635,42 @@ export function resolveStrengthProgramDay(
     const week = resolveStrengthProgramWeek(program, today);
     const scheme = LINEAL_SCHEMES[week];
     const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor);
-    return { movementId, prKey: liftKey, sets: scheme.sets, reps: String(scheme.reps), loadKg, format: scheme.label, notes: scheme.coachNote };
+    return {
+      movementId,
+      prKey: liftKey,
+      sets: scheme.sets,
+      reps: String(scheme.reps),
+      loadKg,
+      format: scheme.label,
+      notes: `${scheme.coachNote}${sharedPainNote}`,
+    };
   }
 
   if (program.method === 'ruso') {
     const week = resolveStrengthProgramWeek(program, today);
     const scheme = RUSO_SCHEMES[week];
     const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor);
-    return { movementId, prKey: liftKey, sets: scheme.sets, reps: String(scheme.reps), loadKg, format: scheme.label, notes: scheme.coachNote };
+    return {
+      movementId,
+      prKey: liftKey,
+      sets: scheme.sets,
+      reps: String(scheme.reps),
+      loadKg,
+      format: scheme.label,
+      notes: `${scheme.coachNote}${sharedPainNote}`,
+    };
   }
 
   // ondulante
   const style = UNDULATING_STYLES[Math.max(dayPlan.trainingDayIndex, 0) % UNDULATING_STYLES.length];
   const loadKg = roundToNearestPlate(currentPR * style.percent * autoregFactor);
-  return { movementId, prKey: liftKey, sets: style.sets, reps: String(style.reps), loadKg, format: style.label, notes: style.coachNote };
+  return {
+    movementId,
+    prKey: liftKey,
+    sets: style.sets,
+    reps: String(style.reps),
+    loadKg,
+    format: style.label,
+    notes: `${style.coachNote}${sharedPainNote}`,
+  };
 }

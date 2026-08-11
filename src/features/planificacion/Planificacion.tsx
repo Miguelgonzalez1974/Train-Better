@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2 } from 'lucide-react';
-import type { AthleteProfile, DailySession, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage } from 'lucide-react';
+import type { AthleteProfile, DailySession, PainArea, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import {
@@ -17,6 +17,7 @@ import {
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
+import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -26,6 +27,18 @@ import { Modal } from '../shell/Modal';
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 const DURATION_PRESETS = [30, 45, 60, 75, 90];
 const numberInputClass = 'w-16 rounded-lg border border-brand-border bg-brand-bg px-2 py-1.5 text-center text-sm text-white';
+
+const PAIN_AREAS: PainArea[] = ['hombro', 'cadera-lumbar', 'rodilla', 'codo-muneca'];
+const PAIN_DURATION_OPTIONS: { value: PainDuration; label: string }[] = [
+  { value: 'dias', label: 'Unos días' },
+  { value: 'semanas', label: '1-2 semanas' },
+  { value: 'indefinido', label: 'Hasta quitarlo' },
+];
+
+function formatPainUntil(until: string | null): string {
+  if (!until) return 'hasta que lo quites';
+  return `hasta el ${new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${until}T00:00:00`))}`;
+}
 
 export function Planificacion() {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
@@ -65,6 +78,11 @@ export function Planificacion() {
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [showAddWodPicker, setShowAddWodPicker] = useState(false);
   const [macroWodPreview, setMacroWodPreview] = useState<SessionBlockResult[] | null>(null);
+  const [showPainPicker, setShowPainPicker] = useState(false);
+  const [painAreaDraft, setPainAreaDraft] = useState<PainArea>('hombro');
+  const [painDurationDraft, setPainDurationDraft] = useState<PainDuration>('semanas');
+
+  const activePainFlags = useMemo(() => getActivePainFlags(profile.painFlags, todayIso), [profile.painFlags, todayIso]);
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const nextMacroStart = useMemo(() => {
@@ -169,7 +187,8 @@ export function Planificacion() {
 
   function handleAddWod(type: SessionOverrideType | 'macro') {
     if (!session) return;
-    const wodBlocks = type === 'macro' ? (macroWodPreview ?? []) : buildStrengthProgramWodAddition(history, type).blocks;
+    const wodBlocks =
+      type === 'macro' ? (macroWodPreview ?? []) : buildStrengthProgramWodAddition(history, type, profile.painFlags, todayIso).blocks;
     if (wodBlocks.length === 0) return;
     const next: DailySession = {
       ...session,
@@ -238,6 +257,23 @@ export function Planificacion() {
     setPrUpdateMessage(null);
   }
 
+  function handleSavePainFlag() {
+    const flag = {
+      id: crypto.randomUUID(),
+      area: painAreaDraft,
+      createdDate: todayIso,
+      until: resolvePainFlagUntil(todayIso, painDurationDraft),
+    };
+    const nextProfile = { ...profile, painFlags: [...(profile.painFlags ?? []), flag] };
+    handleSaveProfile(nextProfile);
+    setShowPainPicker(false);
+  }
+
+  function handleRemovePainFlag(id: string) {
+    const nextProfile = { ...profile, painFlags: (profile.painFlags ?? []).filter((f) => f.id !== id) };
+    handleSaveProfile(nextProfile);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
@@ -273,6 +309,28 @@ export function Planificacion() {
           setHistory(athleteRepository.getHistory());
         }}
       />
+
+      {activePainFlags.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {activePainFlags.map((flag) => (
+            <div
+              key={flag.id}
+              className="flex items-center gap-2 rounded-xl border border-red-400/25 bg-red-400/10 px-3 py-2 text-sm"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+              <span className="flex-1 text-red-300">
+                Evitando {PAIN_AREA_LABEL[flag.area].toLowerCase()} — {formatPainUntil(flag.until)}
+              </span>
+              <button
+                onClick={() => handleRemovePainFlag(flag.id)}
+                className="text-xs text-neutral-400 underline decoration-dotted transition-colors duration-200 hover:text-red-300"
+              >
+                Quitar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {!session && (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
@@ -373,6 +431,17 @@ export function Planificacion() {
                 <Trash2 size={16} />
               </button>
             )}
+            <button
+              onClick={() => setShowPainPicker(true)}
+              title="¿Algo te molesta hoy?"
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 ${
+                activePainFlags.length > 0
+                  ? 'bg-red-500/15 text-red-400'
+                  : 'bg-white/5 text-neutral-300 hover:bg-red-500/15 hover:text-red-400'
+              }`}
+            >
+              <Bandage size={16} />
+            </button>
             <button
               onClick={() => {
                 setTestedLoadKg(testDayBlock?.loadKg ?? 0);
@@ -738,6 +807,56 @@ export function Planificacion() {
           >
             <HeartPulse size={16} strokeWidth={2.25} className="shrink-0 text-neutral-400" />
             <span className="text-sm font-semibold text-white">Recuperación</span>
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={showPainPicker} onClose={() => setShowPainPicker(false)} title="¿Algo te molesta hoy?">
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-neutral-500">
+            Mientras el aviso esté activo, el coach evita ese patrón de movimiento y sustituye lo que toque por una alternativa —
+            avisándote cuando lo haga.
+          </p>
+
+          <div className="flex flex-col gap-2">
+            {PAIN_AREAS.map((area) => (
+              <button
+                key={area}
+                onClick={() => setPainAreaDraft(area)}
+                className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors duration-200 ${
+                  painAreaDraft === area
+                    ? 'border-[1.5px] border-red-400 bg-red-400/10 text-white'
+                    : 'border border-brand-border bg-white/[0.03] text-neutral-300 hover:border-red-400/50'
+                }`}
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
+                {PAIN_AREA_LABEL[area]}
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">¿Durante cuánto?</p>
+            <div className="flex gap-2">
+              {PAIN_DURATION_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setPainDurationDraft(opt.value)}
+                  className={`flex-1 rounded-lg px-2 py-2 text-center text-xs font-semibold transition-colors duration-200 ${
+                    painDurationDraft === opt.value ? 'bg-red-400 text-red-950' : 'border border-brand-border bg-white/[0.03] text-neutral-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={handleSavePainFlag}
+            className="rounded-xl bg-red-400 px-4 py-2.5 text-sm font-semibold text-red-950 transition-all duration-200 hover:bg-red-300"
+          >
+            Guardar aviso
           </button>
         </div>
       </Modal>

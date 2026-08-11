@@ -12,6 +12,7 @@ import type {
   DailySession,
   Goal,
   Macrocycle,
+  PainFlag,
   PersonalRecords,
   RxOrScaled,
   SessionBlockResult,
@@ -38,6 +39,7 @@ import {
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
+import { filterAvoidingPain, getAvoidedPatterns } from './painFlags';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
@@ -178,6 +180,9 @@ function actsIntensive(goal: Goal, progress: number): boolean {
   return goal.emphasis === 'intensivo' || progress > 0.66;
 }
 
+/** Mismos 4 patrones que rotan por dia de entreno (ver periodization.ts) — se reutiliza aqui como pool de sustitucion cuando el patron del dia esta marcado como molesto. */
+const STRENGTH_SUBSTITUTE_PATTERNS: MovementPattern[] = ['squat', 'hinge', 'verticalPush', 'horizontalPush'];
+
 function buildStrengthBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -188,6 +193,7 @@ function buildStrengthBlock(
   acwrColdStart: boolean,
   isTestDay: boolean,
   history: SessionHistoryEntry[],
+  avoidedPatterns: Set<MovementPattern>,
 ): SessionBlockResult[] {
   const rpeAutoreg = getRpeAutoregFactor(history);
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor);
@@ -218,6 +224,18 @@ function buildStrengthBlock(
   // tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas).
   pattern = avoidPatternRepeat(pattern, history);
 
+  // Si el patron de hoy coincide con un aviso de molestia activo, se sustituye por otro de los 4
+  // patrones habituales que no este marcado — un coach real no ignora un aviso de dolor solo
+  // porque "hoy tocaba" ese movimiento.
+  let painTag = '';
+  if (avoidedPatterns.has(pattern)) {
+    const substitute = STRENGTH_SUBSTITUTE_PATTERNS.find((p) => p !== pattern && !avoidedPatterns.has(p));
+    if (substitute) {
+      painTag = ` Cambiado de ${pattern === 'squat' ? 'sentadilla' : pattern === 'hinge' ? 'bisagra de cadera' : pattern === 'verticalPush' ? 'press vertical' : 'press horizontal'} — tienes un aviso de molestia activo que lo evita.`;
+      pattern = substitute;
+    }
+  }
+
   const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
   const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
   if (!movement) return [];
@@ -234,7 +252,7 @@ function buildStrengthBlock(
         format: 'Test 1RM',
         reps: '1',
         loadKg: testLoadKg,
-        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}`,
+        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}`,
       },
     ];
   }
@@ -242,7 +260,7 @@ function buildStrengthBlock(
   const scheme = STRENGTH_WEEK_SCHEMES[week];
   const style = pickStrengthSchemeStyle(week);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${autoregNote ? ` ${autoregNote}` : ''}`;
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${painTag}${autoregNote ? ` ${autoregNote}` : ''}`;
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -302,7 +320,13 @@ function buildOlyBlock(
   acwrColdStart: boolean,
   isTestDay: boolean,
   history: SessionHistoryEntry[],
+  avoidedPatterns: Set<MovementPattern>,
 ): SessionBlockResult[] {
+  // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
+  // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
+  // ese dia se salta el bloque entero en vez de forzar una sustitucion que no evita el patron real.
+  if (avoidedPatterns.has('olyLift')) return [];
+
   const rpeAutoreg = getRpeAutoregFactor(history);
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor);
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note].filter(Boolean).join(' ') || undefined;
@@ -633,10 +657,14 @@ function buildWodBlock(
   }));
 }
 
-function buildAccessoryBlock(strengthPattern: MovementPattern, recentIds: Set<string>): SessionBlockResult[] {
+function buildAccessoryBlock(
+  strengthPattern: MovementPattern,
+  recentIds: Set<string>,
+  avoidedPatterns: Set<MovementPattern>,
+): SessionBlockResult[] {
   const complementPatterns = ACCESSORY_COMPLEMENT[strengthPattern] ?? [];
   const filtered = getMovementsByBlock('accessory').filter((m) => complementPatterns.includes(m.pattern));
-  const pool = filtered.length > 0 ? filtered : getMovementsByBlock('accessory');
+  const pool = filterAvoidingPain(filtered.length > 0 ? filtered : getMovementsByBlock('accessory'), avoidedPatterns);
   const baseRationale = ACCESSORY_RATIONALE[strengthPattern] ?? 'Hipertrofia / accesorio complementario a la sesión de hoy.';
 
   // Un coach no repite siempre la misma metodologia: la mayoria de dias son series independientes,
@@ -660,8 +688,8 @@ function buildAccessoryBlock(strengthPattern: MovementPattern, recentIds: Set<st
   return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: 3, reps, format, notes }));
 }
 
-function buildSkillBlock(history: SessionHistoryEntry[], goals: Goal[]): SessionBlockResult[] {
-  const candidates = getMovementsByBlock('skill');
+function buildSkillBlock(history: SessionHistoryEntry[], goals: Goal[], avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+  const candidates = filterAvoidingPain(getMovementsByBlock('skill'), avoidedPatterns);
   const isSkillGoal = goals.some((g) => g.type === 'mejorar-gimnasticos' || g.type === 'subir-pr');
   const pref = isSkillGoal
     ? goalPreference(goals, (m) => skillMovements.some((s) => s.id === m.id), history)
@@ -717,8 +745,11 @@ const RECOVERY_SKILL_IDS = [
   'rope-climb-technique',
 ];
 
-function buildRecoveryWodBlock(recentIds: Set<string>): SessionBlockResult[] {
-  const pool = RECOVERY_CARDIO_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m));
+function buildRecoveryWodBlock(recentIds: Set<string>, avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+  const pool = filterAvoidingPain(
+    RECOVERY_CARDIO_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+    avoidedPatterns,
+  );
   const picks = pickManyVaried(pool, 2, recentIds);
   if (picks.length === 0) return [];
 
@@ -739,8 +770,11 @@ function buildRecoveryWodBlock(recentIds: Set<string>): SessionBlockResult[] {
   }));
 }
 
-function buildRecoverySkillBlock(recentIds: Set<string>): SessionBlockResult[] {
-  const pool = RECOVERY_SKILL_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m));
+function buildRecoverySkillBlock(recentIds: Set<string>, avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+  const pool = filterAvoidingPain(
+    RECOVERY_SKILL_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+    avoidedPatterns,
+  );
   const movement = pickVaried(pool, recentIds) ?? pool[0];
   if (!movement) return [];
 
@@ -765,8 +799,8 @@ function isMaintenanceRecoveryDay(): boolean {
   return Math.random() < 0.25;
 }
 
-function buildMaintenanceWodBlock(recentIds: Set<string>): SessionBlockResult[] {
-  const pool = getMovementsByBlock('wod');
+function buildMaintenanceWodBlock(recentIds: Set<string>, avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+  const pool = filterAvoidingPain(getMovementsByBlock('wod'), avoidedPatterns);
   const timeDomain = WOD_TIME_DOMAIN[2];
 
   const regularFormats: { label: string; kind: WodFormatKind }[] = [
@@ -847,11 +881,12 @@ export function generateDailySession(
   }
 
   const recentIds = getRecentMovementIds(history);
+  const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
 
   if (dayPlan.isRecoveryDay) {
     const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
-    const recoveryWodBlock = buildRecoveryWodBlock(recentIds);
-    const recoverySkillBlock = buildRecoverySkillBlock(recentIds);
+    const recoveryWodBlock = buildRecoveryWodBlock(recentIds, avoidedPatterns);
+    const recoverySkillBlock = buildRecoverySkillBlock(recentIds, avoidedPatterns);
     const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
 
     return {
@@ -879,20 +914,32 @@ export function generateDailySession(
     acwrResult.coldStart,
     testDayFocus === 'strength',
     history,
+    avoidedPatterns,
   );
-  const olyBlock = buildOlyBlock(dayPlan, week, profile.prs, recentIds, goals, acwrZone, acwrResult.coldStart, testDayFocus === 'oly', history);
+  const olyBlock = buildOlyBlock(
+    dayPlan,
+    week,
+    profile.prs,
+    recentIds,
+    goals,
+    acwrZone,
+    acwrResult.coldStart,
+    testDayFocus === 'oly',
+    history,
+    avoidedPatterns,
+  );
   const wodBlock = buildWodBlock(
     dayPlan,
     week,
     profile.trainingDaysPerWeek,
     recentIds,
-    new Set([dayPlan.strengthPattern]),
+    new Set([dayPlan.strengthPattern, ...avoidedPatterns]),
     goals,
     isTaper,
     history,
   );
-  const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds);
-  const skillBlock = buildSkillBlock(history, goals);
+  const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds, avoidedPatterns);
+  const skillBlock = buildSkillBlock(history, goals, avoidedPatterns);
   const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
   const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
 
@@ -914,10 +961,11 @@ function buildMaintenanceStyleBlocks(
   history: SessionHistoryEntry[],
   recentIds: Set<string>,
   isRecovery: boolean,
+  avoidedPatterns: Set<MovementPattern>,
 ): SessionBlockResult[] {
   const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
-  const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
-  const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds) : buildSkillBlock(history, []);
+  const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds, avoidedPatterns) : buildMaintenanceWodBlock(recentIds, avoidedPatterns);
+  const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds, avoidedPatterns) : buildSkillBlock(history, [], avoidedPatterns);
   const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
   return [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock];
 }
@@ -942,7 +990,8 @@ export function generateOffSeasonSession(
   }
 
   const recentIds = getRecentMovementIds(history);
-  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, isMaintenanceRecoveryDay());
+  const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
+  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, isMaintenanceRecoveryDay(), avoidedPatterns);
 
   return { date: dateIso, mesocycleWeek: 0, isRestDay: false, blocks };
 }
@@ -973,7 +1022,8 @@ export function generateOverrideSession(
   }
 
   const recentIds = getRecentMovementIds(history);
-  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, type === 'recovery');
+  const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
+  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, type === 'recovery', avoidedPatterns);
 
   return {
     date: dateIso,
@@ -1010,7 +1060,15 @@ export function generateStrengthProgramSession(
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor);
   const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note].filter(Boolean).join(' ');
 
-  const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, autoregFactor, date, profile.trainingDaysPerWeek);
+  const day = resolveStrengthProgramDay(
+    program,
+    dayPlan,
+    profile.prs,
+    autoregFactor,
+    date,
+    profile.trainingDaysPerWeek,
+    getAvoidedPatterns(profile.painFlags, dateIso),
+  );
   if (!day) {
     // No hay levantamiento disponible para el rol de hoy (p.ej. Conjugado sin ningun lift de tren
     // superior o inferior elegido) o el catalogo no tiene el id esperado — cae a mantenimiento.
@@ -1052,9 +1110,13 @@ export function generateStrengthProgramSession(
 export function buildStrengthProgramWodAddition(
   history: SessionHistoryEntry[],
   type: SessionOverrideType,
+  painFlags: PainFlag[] | undefined,
+  dateIso: string,
 ): { blocks: SessionBlockResult[] } {
   const recentIds = getRecentMovementIds(history);
-  const wodBlocks = type === 'recovery' ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
+  const avoidedPatterns = getAvoidedPatterns(painFlags, dateIso);
+  const wodBlocks =
+    type === 'recovery' ? buildRecoveryWodBlock(recentIds, avoidedPatterns) : buildMaintenanceWodBlock(recentIds, avoidedPatterns);
   return { blocks: wodBlocks };
 }
 

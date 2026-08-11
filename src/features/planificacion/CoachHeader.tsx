@@ -42,6 +42,7 @@ export function CoachHeader({ profile, onSaveProfile }: CoachHeaderProps) {
             onSaveProfile(updated);
             setOpen(false);
           }}
+          onRemovePainFlag={(id) => onSaveProfile({ ...profile, painFlags: (profile.painFlags ?? []).filter((f) => f.id !== id) })}
         />
         <AdminInviteUser />
       </Modal>
