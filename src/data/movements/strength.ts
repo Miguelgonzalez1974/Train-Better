@@ -174,7 +174,7 @@ export const strengthMovements: Movement[] = [
   {
     id: 'romanian-deadlift',
     name: 'Romanian Deadlift (RDL)',
-    blocks: ['strength', 'accessory'],
+    blocks: ['strength', 'accessory', 'warmup'],
     pattern: 'hinge',
     equipment: ['barbell'],
     primaryMuscles: ['isquiotibiales', 'gluteos'],

@@ -312,7 +312,7 @@ export const wodMovements: Movement[] = [
   {
     id: 'double-under',
     name: 'Double Under',
-    blocks: ['wod', 'skill'],
+    blocks: ['wod', 'skill', 'warmup'],
     pattern: 'monostructural',
     equipment: ['comba'],
     primaryMuscles: ['pantorrillas', 'coordinacion'],
@@ -359,7 +359,7 @@ export const wodMovements: Movement[] = [
   {
     id: 'kettlebell-swing-russian',
     name: 'Kettlebell Swing (Russian)',
-    blocks: ['wod'],
+    blocks: ['wod', 'warmup'],
     pattern: 'hinge',
     equipment: ['kettlebell'],
     primaryMuscles: ['gluteos', 'isquiotibiales', 'core'],
@@ -370,7 +370,7 @@ export const wodMovements: Movement[] = [
   {
     id: 'kettlebell-swing-american',
     name: 'Kettlebell Swing (American)',
-    blocks: ['wod'],
+    blocks: ['wod', 'warmup'],
     pattern: 'hinge',
     equipment: ['kettlebell'],
     primaryMuscles: ['gluteos', 'isquiotibiales', 'hombros'],
@@ -608,7 +608,7 @@ export const wodMovements: Movement[] = [
   {
     id: 'kettlebell-goblet-squat',
     name: 'Kettlebell Goblet Squat',
-    blocks: ['wod', 'accessory'],
+    blocks: ['wod', 'accessory', 'warmup'],
     pattern: 'squat',
     equipment: ['kettlebell'],
     primaryMuscles: ['cuadriceps', 'gluteos', 'core'],

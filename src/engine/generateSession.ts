@@ -2,7 +2,6 @@ import type { BenchmarkWorkout, Movement, MovementPattern } from '../data/moveme
 import {
   getMovementById,
   getMovementsByBlock,
-  getMovementsByTag,
   benchmarkWorkouts,
   strengthMovements,
   olyMovements,
@@ -81,11 +80,14 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   chipper: 'Una sola ronda larga — reparte el esfuerzo, no ataques los primeros movimientos como un sprint.',
 };
 
-const COOLDOWN_BY_PATTERN: Partial<Record<MovementPattern, string[]>> = {
-  squat: ['hamstring-stretch', 'hip-flexor-stretch', 'breathing-recovery'],
-  hinge: ['hamstring-stretch', 'hip-flexor-stretch', 'breathing-recovery'],
-  verticalPush: ['shoulder-stretch', 'static-stretch-upper-body', 'breathing-recovery'],
-  horizontalPush: ['shoulder-stretch', 'static-stretch-upper-body', 'breathing-recovery'],
+/** Que tag de cooldown.ts encaja mejor con cada patron de fuerza del dia (ver buildCooldownBlock). */
+const COOLDOWN_TAG_BY_PATTERN: Partial<Record<MovementPattern, string>> = {
+  squat: 'especifico-squat',
+  lunge: 'especifico-squat',
+  hinge: 'especifico-hinge',
+  verticalPush: 'especifico-strength',
+  horizontalPush: 'especifico-strength',
+  olyLift: 'especifico-oly',
 };
 
 type StrengthSchemeStyle = 'straightSets' | 'ascendingLadder' | 'tempoWork' | 'volumeSets';
@@ -676,24 +678,30 @@ function buildSkillBlock(history: SessionHistoryEntry[], goals: Goal[]): Session
   return [{ block: 'skill', movementId: movement.id, sets: 4, reps: 'tecnica / tiempo', notes }];
 }
 
-function buildWarmupBlock(strengthPattern: MovementPattern, includeOly = true): SessionBlockResult[] {
-  const wodIds = ['general-aerobic-warmup', 'joint-mobility-flow'];
-  const specific = getMovementsByTag(`especifico-${strengthPattern}`)[0];
-  if (specific) wodIds.push(specific.id);
+/**
+ * Varia el calentamiento dia a dia en vez de repetir siempre las mismas 2-3 piezas: 2 generales
+ * + 1 especifica del patron de hoy para "Para el WOD", y 2 especificas de oly para "Para Oly",
+ * eligiendas con `pickManyVaried` (evita lo usado en sesiones recientes) sobre el pool ampliado
+ * con rutinas reales de programacion de box.
+ */
+function buildWarmupBlock(strengthPattern: MovementPattern, recentIds: Set<string>, includeOly = true): SessionBlockResult[] {
+  const generalPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes('general'));
+  const specificPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes(`especifico-${strengthPattern}`));
 
-  const olyIds = ['barbell-warmup-complex', 'pvc-pass-through'];
+  const generalPicks = pickManyVaried(generalPool, 2, recentIds);
+  const usedIds = new Set([...recentIds, ...generalPicks.map((m) => m.id)]);
+  const specificPick = pickVaried(specificPool, usedIds);
+  const wodEntries = specificPick ? [...generalPicks, specificPick] : generalPicks;
 
-  const toEntries = (ids: string[], subgroup: string, notes: string): SessionBlockResult[] =>
-    [...new Set(ids)]
-      .map((id) => getMovementById(id))
-      .filter((m): m is Movement => Boolean(m))
-      .map((m) => ({ block: 'warmup', movementId: m.id, subgroup, notes }));
+  const olyPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes('especifico-oly'));
+  const olyPicks = includeOly ? pickManyVaried(olyPool, 2, recentIds) : [];
+
+  const toEntries = (movs: Movement[], subgroup: string, notes: string): SessionBlockResult[] =>
+    movs.map((m) => ({ block: 'warmup', movementId: m.id, subgroup, notes }));
 
   return [
-    ...toEntries(wodIds, 'Para el WOD', 'Activa el patrón de movimiento de hoy antes de cargar peso.'),
-    ...(includeOly
-      ? toEntries(olyIds, 'Para Oly', 'Prepara posición y movilidad de hombro antes de tocar la barra de trabajo.')
-      : []),
+    ...toEntries(wodEntries, 'Para el WOD', 'Activa el patrón de movimiento de hoy antes de cargar peso.'),
+    ...toEntries(olyPicks, 'Para Oly', 'Prepara posición y movilidad de hombro antes de tocar la barra de trabajo.'),
   ];
 }
 
@@ -799,12 +807,19 @@ function buildMaintenanceWodBlock(recentIds: Set<string>): SessionBlockResult[] 
   }));
 }
 
-function buildCooldownBlock(strengthPattern: MovementPattern): SessionBlockResult[] {
-  const ids = COOLDOWN_BY_PATTERN[strengthPattern] ?? ['static-stretch-lower-body', 'static-stretch-upper-body', 'breathing-recovery'];
-  return ids
-    .map((id) => getMovementById(id))
-    .filter((m): m is Movement => Boolean(m))
-    .map((m) => ({ block: 'cooldown', movementId: m.id }));
+/** Como buildWarmupBlock: 1 estiramiento especifico del patron de hoy + 2 mas variados del pool general/recuperacion. */
+function buildCooldownBlock(strengthPattern: MovementPattern, recentIds: Set<string>): SessionBlockResult[] {
+  const tag = COOLDOWN_TAG_BY_PATTERN[strengthPattern];
+  const specificPool = tag ? getMovementsByBlock('cooldown').filter((m) => m.tags.includes(tag)) : [];
+  const generalPool = getMovementsByBlock('cooldown').filter((m) => m.tags.includes('general') || m.tags.includes('recuperacion'));
+
+  const specificPick = pickVaried(specificPool, recentIds);
+  const usedIds = specificPick ? new Set([...recentIds, specificPick.id]) : recentIds;
+  const fillerPool = [...generalPool, ...specificPool].filter((m) => m.id !== specificPick?.id);
+  const fillerPicks = pickManyVaried(fillerPool, specificPick ? 2 : 3, usedIds);
+
+  const picks = specificPick ? [specificPick, ...fillerPicks] : fillerPicks;
+  return picks.map((m) => ({ block: 'cooldown', movementId: m.id }));
 }
 
 export function generateDailySession(
@@ -834,10 +849,10 @@ export function generateDailySession(
   const recentIds = getRecentMovementIds(history);
 
   if (dayPlan.isRecoveryDay) {
-    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, false);
+    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
     const recoveryWodBlock = buildRecoveryWodBlock(recentIds);
     const recoverySkillBlock = buildRecoverySkillBlock(recentIds);
-    const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
+    const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
 
     return {
       date: dateIso,
@@ -878,8 +893,8 @@ export function generateDailySession(
   );
   const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds);
   const skillBlock = buildSkillBlock(history, goals);
-  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern);
-  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
+  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
+  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
 
   return {
     date: dateIso,
@@ -900,10 +915,10 @@ function buildMaintenanceStyleBlocks(
   recentIds: Set<string>,
   isRecovery: boolean,
 ): SessionBlockResult[] {
-  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, false);
+  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
   const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds) : buildMaintenanceWodBlock(recentIds);
   const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds) : buildSkillBlock(history, []);
-  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern);
+  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
   return [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock];
 }
 
@@ -1013,8 +1028,9 @@ export function generateStrengthProgramSession(
     notes: autoregNote ? `${day.notes} ${autoregNote}` : day.notes,
   };
 
-  const warmupBlock = buildWarmupBlock(movement.pattern, false);
-  const cooldownBlock = buildCooldownBlock(movement.pattern);
+  const recentIds = getRecentMovementIds(history);
+  const warmupBlock = buildWarmupBlock(movement.pattern, recentIds, false);
+  const cooldownBlock = buildCooldownBlock(movement.pattern, recentIds);
 
   return {
     date: dateIso,
