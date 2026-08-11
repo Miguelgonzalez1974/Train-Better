@@ -13,6 +13,7 @@ export const STRENGTH_METHOD_LABEL: Record<StrengthProgram['method'], string> = 
   conjugado: 'Conjugado',
   ruso: 'Ruso / Sheiko',
   texas: 'Texas Method',
+  juggernaut: 'Juggernaut Invertido',
 };
 
 /** Programa cuya ventana [startDate, endDate] contiene la fecha dada, o undefined — mismo criterio que getActiveMacrocycle. */
@@ -176,6 +177,224 @@ const RUSO_SCHEMES: Record<1 | 2 | 3 | 4, RusoScheme> = {
 };
 
 // ---------------------------------------------------------------------------
+// Juggernaut Invertido — ondas de 4 semanas (acumulacion / intensificacion / realizacion+AMRAP /
+// descarga) que se repiten 4 veces con intensidad creciente y volumen decreciente por onda, tal
+// y como documenta el metodo real (Inverted Juggernaut Method). Fuente: ciclo de 16 semanas de
+// programacion real de box (PushJerk) importado en esta sesion — los porcentajes de cada rol en
+// cada onda son los literales del ciclo real, salvo el rol de acumulacion de la onda 2 (semana 5),
+// que no estaba presente en el material fuente y se interpola entre la onda 1 y la onda 3.
+//
+// El metodo original recalcula el "training max" cada onda a partir de las repeticiones reales
+// conseguidas en la serie AMRAP del rol de realizacion (formula: (reps-referencia) x 2.5 + TM
+// anterior). Esta app no pide todavia ese numero de reps AMRAP como dato aparte, asi que en su
+// lugar recalcula el training max siempre al 90% del PR actual del atleta (igual que el 5/3/1) —
+// que ya se autorregula solo en cuanto el atleta registra un PR nuevo en cualquier parte de la
+// app, en vez de depender de una formula que solo se actualiza cada 4 semanas.
+// ---------------------------------------------------------------------------
+
+interface JuggernautStep {
+  reps: string;
+  percent: number;
+}
+
+interface JuggernautRole {
+  steps: JuggernautStep[];
+  label: string;
+  coachNote: string;
+}
+
+interface JuggernautWave {
+  accumulation: JuggernautRole;
+  intensification: JuggernautRole;
+  realization: JuggernautRole;
+  deload: JuggernautRole;
+}
+
+const JUGGERNAUT_DELOAD: JuggernautRole = {
+  steps: [
+    { reps: '5', percent: 0.4 },
+    { reps: '5', percent: 0.5 },
+    { reps: '5', percent: 0.6 },
+  ],
+  label: 'Juggernaut · descarga',
+  coachNote: 'Descarga programada de la onda — baja la intensidad a propósito para asimilar antes de recalcular el training max.',
+};
+
+const JUGGERNAUT_WAVES: JuggernautWave[] = [
+  {
+    accumulation: {
+      steps: [
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5', percent: 0.6 },
+        { reps: '5+', percent: 0.6 },
+      ],
+      label: 'Juggernaut · onda 1, acumulación',
+      coachNote: '9 series de 5 sobre el training max (90% de tu PR) — volumen alto a intensidad moderada, última serie con reps de más si quedan.',
+    },
+    intensification: {
+      steps: [
+        { reps: '5', percent: 0.55 },
+        { reps: '5', percent: 0.625 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3+', percent: 0.675 },
+      ],
+      label: 'Juggernaut · onda 1, intensificación',
+      coachNote: 'Sube la intensidad y baja el volumen respecto a la semana anterior — última serie con reps de más si quedan.',
+    },
+    realization: {
+      steps: [
+        { reps: '5', percent: 0.5 },
+        { reps: '3', percent: 0.6 },
+        { reps: '1', percent: 0.7 },
+        { reps: 'AMRAP', percent: 0.75 },
+      ],
+      label: 'Juggernaut · onda 1, realización (AMRAP)',
+      coachNote: 'Semana de test: la última serie es AMRAP real a fallo técnico — anota cuántas reps haces, es la referencia para la siguiente onda.',
+    },
+    deload: JUGGERNAUT_DELOAD,
+  },
+  {
+    accumulation: {
+      steps: [
+        { reps: '5', percent: 0.65 },
+        { reps: '5', percent: 0.65 },
+        { reps: '5', percent: 0.65 },
+        { reps: '5', percent: 0.65 },
+        { reps: '5', percent: 0.65 },
+        { reps: '5', percent: 0.65 },
+        { reps: '5+', percent: 0.65 },
+      ],
+      label: 'Juggernaut · onda 2, acumulación',
+      coachNote: '6 series de 5 sobre el training max recalculado — un poco menos de volumen que la onda 1, algo más de intensidad. (Interpolado entre onda 1 y onda 3: no estaba en el material fuente.)',
+    },
+    intensification: {
+      steps: [
+        { reps: '3', percent: 0.6 },
+        { reps: '3', percent: 0.675 },
+        { reps: '3', percent: 0.725 },
+        { reps: '3', percent: 0.725 },
+        { reps: '3', percent: 0.725 },
+        { reps: '3', percent: 0.725 },
+        { reps: '3+', percent: 0.725 },
+      ],
+      label: 'Juggernaut · onda 2, intensificación',
+      coachNote: 'Todo en triples esta vez — sigue subiendo la intensidad respecto a la onda 1.',
+    },
+    realization: {
+      steps: [
+        { reps: '5', percent: 0.5 },
+        { reps: '3', percent: 0.6 },
+        { reps: '2', percent: 0.7 },
+        { reps: '1', percent: 0.75 },
+        { reps: 'AMRAP', percent: 0.8 },
+      ],
+      label: 'Juggernaut · onda 2, realización (AMRAP)',
+      coachNote: 'Un escalón más de intensidad que la onda 1 antes del AMRAP — anota las reps para la siguiente onda.',
+    },
+    deload: JUGGERNAUT_DELOAD,
+  },
+  {
+    accumulation: {
+      steps: [
+        { reps: '5', percent: 0.7 },
+        { reps: '5', percent: 0.7 },
+        { reps: '5', percent: 0.7 },
+        { reps: '5', percent: 0.7 },
+        { reps: '5', percent: 0.7 },
+        { reps: '5+', percent: 0.7 },
+      ],
+      label: 'Juggernaut · onda 3, acumulación',
+      coachNote: '5 series de 5 sobre el training max recalculado — menos volumen que las ondas anteriores, más peso en la barra.',
+    },
+    intensification: {
+      steps: [
+        { reps: '2', percent: 0.65 },
+        { reps: '2', percent: 0.725 },
+        { reps: '5', percent: 0.775 },
+        { reps: '5+', percent: 0.775 },
+      ],
+      label: 'Juggernaut · onda 3, intensificación',
+      coachNote: 'Vuelve a series de 5 pero a intensidad mucho mayor que la onda 1 — el training max ya debería haber subido dos veces.',
+    },
+    realization: {
+      steps: [
+        { reps: '5', percent: 0.5 },
+        { reps: '3', percent: 0.6 },
+        { reps: '2', percent: 0.7 },
+        { reps: '1', percent: 0.75 },
+        { reps: '1', percent: 0.8 },
+        { reps: 'AMRAP', percent: 0.85 },
+      ],
+      label: 'Juggernaut · onda 3, realización (AMRAP)',
+      coachNote: 'La rampa más larga hasta ahora antes del AMRAP — llega con margen a las primeras series.',
+    },
+    deload: JUGGERNAUT_DELOAD,
+  },
+  {
+    accumulation: {
+      steps: [
+        { reps: '3', percent: 0.75 },
+        { reps: '3', percent: 0.75 },
+        { reps: '3', percent: 0.75 },
+        { reps: '3', percent: 0.75 },
+        { reps: '3', percent: 0.75 },
+        { reps: '3', percent: 0.75 },
+        { reps: '3+', percent: 0.75 },
+      ],
+      label: 'Juggernaut · onda 4, acumulación',
+      coachNote: '6 series de 3 sobre el training max recalculado — la onda de mayor intensidad del ciclo completo.',
+    },
+    intensification: {
+      steps: [
+        { reps: '1', percent: 0.7 },
+        { reps: '1', percent: 0.775 },
+        { reps: '3', percent: 0.825 },
+        { reps: '3', percent: 0.825 },
+        { reps: '3', percent: 0.825 },
+        { reps: '3+', percent: 0.825 },
+      ],
+      label: 'Juggernaut · onda 4, intensificación',
+      coachNote: 'Cargas cercanas al máximo del ciclo — técnica por delante de la velocidad esta semana.',
+    },
+    realization: {
+      steps: [
+        { reps: '5', percent: 0.5 },
+        { reps: '3', percent: 0.6 },
+        { reps: '2', percent: 0.7 },
+        { reps: '1', percent: 0.75 },
+        { reps: '1', percent: 0.8 },
+        { reps: '1', percent: 0.85 },
+        { reps: 'AMRAP', percent: 0.9 },
+      ],
+      label: 'Juggernaut · onda 4, realización (AMRAP)',
+      coachNote: 'Cierre del ciclo de 16 semanas — la serie AMRAP más pesada de todas. Después de esta onda, el ciclo vuelve a subir de intensidad desde aquí.',
+    },
+    deload: JUGGERNAUT_DELOAD,
+  },
+];
+
+/** Onda 0-3 (16 semanas totales); a partir de ahi se mantiene en la onda 4 (la mas exigente) en vez de reiniciar o extrapolar sin fin. */
+function resolveJuggernautWaveIndex(startDateIso: string, today: Date): number {
+  const wavesSinceStart = Math.floor(weeksSinceStart(startDateIso, today) / 4);
+  return Math.min(Math.max(wavesSinceStart, 0), JUGGERNAUT_WAVES.length - 1);
+}
+
+const JUGGERNAUT_ROLE_CYCLE: (keyof JuggernautWave)[] = ['accumulation', 'intensification', 'realization', 'deload'];
+
+// ---------------------------------------------------------------------------
 // Texas Method — 3 roles fijos por ciclo: volumen, recuperación, intensidad.
 // ---------------------------------------------------------------------------
 
@@ -247,7 +466,7 @@ function pickConjugateLift(candidates: (keyof PersonalRecords)[], cycleIndex: nu
 
 /**
  * Resuelve el dia completo (que movimiento, cuantas series/reps, a que peso) para cualquiera de
- * las 6 metodologias soportadas. Devuelve null solo si el catalogo de movimientos no tiene el id
+ * las 7 metodologias soportadas. Devuelve null solo si el catalogo de movimientos no tiene el id
  * esperado (no deberia pasar con los ids fijos de este archivo) o si Conjugado no tiene ningun
  * levantamiento disponible para el rol del dia (el atleta eligio, por ejemplo, solo tren superior).
  */
@@ -324,6 +543,32 @@ export function resolveStrengthProgramDay(
       loadKg,
       format: scheme.label,
       notes: scheme.coachNote,
+    };
+  }
+
+  if (program.method === 'juggernaut') {
+    const liftKey = resolveProgramLift(program, dayPlan.trainingDayIndex);
+    const movementId = PROGRAM_LIFT_MOVEMENT_ID[liftKey];
+    const movement = getMovementById(movementId);
+    if (!movement) return null;
+    const currentPR = prs[liftKey];
+
+    const waveIndex = resolveJuggernautWaveIndex(program.startDate, today);
+    const wave = JUGGERNAUT_WAVES[waveIndex];
+    const week = resolveStrengthProgramWeek(program, today);
+    const role = JUGGERNAUT_ROLE_CYCLE[week - 1];
+    const scheme = wave[role];
+
+    const trainingMax = currentPR * 0.9;
+    const loads = scheme.steps.map((step) => roundToNearestPlate(trainingMax * step.percent * autoregFactor));
+    return {
+      movementId,
+      prKey: liftKey,
+      sets: scheme.steps.length,
+      reps: scheme.steps[scheme.steps.length - 1].reps,
+      loadKg: loads[loads.length - 1],
+      format: scheme.label,
+      notes: `${scheme.coachNote} Series: ${loads.map((load, i) => `${scheme.steps[i].reps} @ ${load} kg`).join(', ')}.`,
     };
   }
 

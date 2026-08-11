@@ -48,12 +48,18 @@ export function getActiveMacrocycle(macrocycles: Macrocycle[], todayIso: string)
   return macrocycles.find((m) => m.startDate <= todayIso && todayIso <= m.endDate);
 }
 
+/**
+ * Dias/semanas transcurridas usando fechas UTC "sinteticas" (construidas a partir de los
+ * componentes de calendario locales, no del instante real) en vez de restar milisegundos de
+ * reloj local — un cambio de hora (DST) de por medio le resta o suma una hora real al intervalo,
+ * lo que con la resta de milisegundos puede tirar el conteo de dias una semana entera para atras
+ * justo esa semana. UTC no tiene DST, así que la resta siempre da un multiplo exacto de un dia.
+ */
 export function weeksSinceStart(startDateIso: string, today: Date): number {
   const start = new Date(startDateIso);
-  const todayMidnight = new Date(today).setHours(0, 0, 0, 0);
-  const startMidnight = new Date(start).setHours(0, 0, 0, 0);
-  const diffMs = todayMidnight - startMidnight;
-  const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const startUtcMs = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  const todayUtcMs = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffDays = Math.max(0, Math.floor((todayUtcMs - startUtcMs) / (1000 * 60 * 60 * 24)));
   return Math.floor(diffDays / 7);
 }
 

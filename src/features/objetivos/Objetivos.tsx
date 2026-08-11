@@ -11,6 +11,7 @@ import {
   Waves,
   Split,
   ListOrdered,
+  Activity,
   Dumbbell,
   Target,
   Check,
@@ -126,9 +127,14 @@ const STRENGTH_METHOD_META: Record<StrengthMethod, { label: string; blurb: strin
     blurb: 'Un día de volumen, uno de recuperación y uno de intensidad — busca un número nuevo cada semana.',
     Icon: ListOrdered,
   },
+  juggernaut: {
+    label: 'Juggernaut Invertido',
+    blurb: 'Ondas de 4 semanas que suben de intensidad y bajan de volumen — 4 ondas seguidas, cada una más dura que la anterior.',
+    Icon: Activity,
+  },
 };
 
-const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas'];
+const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut'];
 
 /** Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto. */
 const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
@@ -138,6 +144,7 @@ const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   conjugado: '#f87171',
   ruso: '#a78bfa',
   texas: '#fbbf24',
+  juggernaut: '#34d399',
 };
 
 const LIFT_OPTIONS: { key: keyof PersonalRecords; label: string }[] = [
