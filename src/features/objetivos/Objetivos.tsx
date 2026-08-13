@@ -201,8 +201,18 @@ function newGoalDraft(): Goal {
 const inputClass =
   'rounded-lg border border-brand-border bg-brand-bg px-2.5 py-1.5 text-sm text-white transition-colors focus:border-brand-gold focus:outline-none';
 
+type ObjetivosSection = 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
+
+const SECTION_TABS: { key: ObjetivosSection; label: string }[] = [
+  { key: 'macrociclos', label: 'Macrociclos' },
+  { key: 'programa', label: 'Programa de fuerza' },
+  { key: 'rampa', label: 'Rampa de vuelta' },
+  { key: 'objetivos', label: 'Objetivos' },
+];
+
 export function Objetivos() {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
+  const [activeSection, setActiveSection] = useState<ObjetivosSection>('macrociclos');
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
@@ -288,6 +298,23 @@ export function Objetivos() {
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-1.5">
+        {SECTION_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveSection(tab.key)}
+            className={`rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors duration-200 ${
+              activeSection === tab.key
+                ? 'bg-brand-neon text-brand-bg'
+                : 'border border-brand-border text-neutral-400 hover:border-brand-neon/50 hover:text-neutral-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === 'macrociclos' && (
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
@@ -546,7 +573,9 @@ export function Objetivos() {
           </form>
         )}
       </section>
+      )}
 
+      {activeSection === 'programa' && (
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
@@ -783,7 +812,9 @@ export function Objetivos() {
           </form>
         )}
       </section>
+      )}
 
+      {activeSection === 'rampa' && (
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
@@ -910,7 +941,9 @@ export function Objetivos() {
           </form>
         )}
       </section>
+      )}
 
+      {activeSection === 'objetivos' && (
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
@@ -1093,6 +1126,7 @@ export function Objetivos() {
           </form>
         )}
       </section>
+      )}
     </div>
   );
 }
