@@ -104,12 +104,19 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
       <div className="flex justify-between gap-1">
         {DAY_LABELS.map((label, index) => {
           const plan = getDayPlan(index, trainingDaysPerWeek);
-          const isToday = toLocalIsoDate(weekDates[index]) === todayIso;
+          const dateIso = toLocalIsoDate(weekDates[index]);
+          const isToday = dateIso === todayIso;
           const isSelected = expanded === index;
+          // El punto ya no es solo "¿tocaba entrenar?" — refleja lo que de verdad pasó ese día:
+          // completado (hay registro), no registrado (tocaba y ya paso sin marcar), pendiente
+          // (tocaba pero es hoy o futuro) o descanso (no era día de entreno).
+          const isCompleted = history.some((h) => h.date === dateIso);
+          const isMissed = !isCompleted && plan.isTrainingDay && dateIso < todayIso;
           return (
             <button
               key={label}
               onClick={() => setExpanded((prev) => (prev === index ? null : index))}
+              title={isCompleted ? 'Completado' : isMissed ? 'No registrado' : undefined}
               className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-xs transition-all duration-200 ${
                 isSelected
                   ? 'bg-brand-gold/15 ring-1 ring-brand-gold'
@@ -119,7 +126,17 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               }`}
             >
               <span className="font-medium text-neutral-300">{label}</span>
-              <span className={`h-2 w-2 rounded-full ${plan.isTrainingDay ? 'bg-brand-gold' : 'bg-neutral-700'}`} />
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isCompleted
+                    ? 'bg-brand-neon shadow-[0_0_4px_rgba(57,255,20,0.8)]'
+                    : isMissed
+                      ? 'border border-red-500/50 bg-transparent'
+                      : plan.isTrainingDay
+                        ? 'bg-brand-gold'
+                        : 'bg-neutral-700'
+                }`}
+              />
             </button>
           );
         })}
