@@ -19,6 +19,7 @@ import type {
   SessionBlockResult,
   SessionHistoryEntry,
   StrengthProgram,
+  VariantPersonalRecords,
   WodResult,
 } from '../data/athlete/types';
 import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, isEmphasisDay, resolveMacrocyclePhase, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
@@ -30,7 +31,7 @@ import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, W
 import { computeAcwr, type AcwrZone } from './loadMetrics';
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor } from './autoregulation';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
-import { resolveStrengthPRKey } from './prResolution';
+import { resolveStrengthPRKey, resolveVariantPR } from './prResolution';
 import {
   avoidOlyFamilyRepeat,
   avoidPatternRepeat,
@@ -136,12 +137,16 @@ function resolveTestDayFocus(week: 1 | 2 | 3 | 4): TestDayFocus {
   return null;
 }
 
-function resolveStrengthPR(movement: Movement, prs: PersonalRecords): number {
+function resolveStrengthPR(movement: Movement, prs: PersonalRecords, variantPrs?: VariantPersonalRecords): number {
+  const variant = resolveVariantPR(movement, variantPrs);
+  if (variant !== undefined) return variant;
   const key = resolveStrengthPRKey(movement);
   return key ? prs[key] : prs.backSquat;
 }
 
-function resolveOlyPR(movement: Movement, prs: PersonalRecords, family: OlyFamily): number {
+function resolveOlyPR(movement: Movement, prs: PersonalRecords, family: OlyFamily, variantPrs?: VariantPersonalRecords): number {
+  const variant = resolveVariantPR(movement, variantPrs);
+  if (variant !== undefined) return variant;
   if (movement.id === 'clean-and-jerk' || movement.id.includes('jerk')) return prs.cleanAndJerk;
   return family === 'snatch' ? prs.snatch : prs.clean;
 }
@@ -203,6 +208,7 @@ function buildStrengthBlock(
   history: SessionHistoryEntry[],
   avoidedPatterns: Set<MovementPattern>,
   rampFactor: number,
+  variantPrs: VariantPersonalRecords | undefined,
 ): SessionBlockResult[] {
   const rpeAutoreg = getRpeAutoregFactor(history);
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor) * rampFactor;
@@ -260,7 +266,7 @@ function buildStrengthBlock(
   const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
   if (!movement) return [];
 
-  const currentPR = resolveStrengthPR(movement, prs);
+  const currentPR = resolveStrengthPR(movement, prs, variantPrs);
   const goalTag =
     pref.movementId && movement.id === pref.movementId
       ? pref.behindSchedule
@@ -347,6 +353,7 @@ function buildOlyBlock(
   history: SessionHistoryEntry[],
   avoidedPatterns: Set<MovementPattern>,
   rampFactor: number,
+  variantPrs: VariantPersonalRecords | undefined,
 ): SessionBlockResult[] {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -409,7 +416,7 @@ function buildOlyBlock(
   if (!movement) return [];
 
   if (isTestDay && fullLiftIds.includes(movement.id)) {
-    const testLoadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family));
+    const testLoadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family, variantPrs));
     const goalTag =
       pref.movementId && movement.id === pref.movementId
         ? pref.behindSchedule
@@ -430,7 +437,7 @@ function buildOlyBlock(
   }
 
   const scheme = OLY_WEEK_SCHEMES[week];
-  const loadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family) * scheme.percent * autoregFactor);
+  const loadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor);
   const baseNote =
     (pref.movementId && movement.id === pref.movementId
       ? `${scheme.coachNote}${
@@ -481,7 +488,7 @@ function buildOlyBlock(
   const primerMovement = pickVaried(primerCandidates, recentIds);
   if (!primerMovement) return [mainEntry];
 
-  const primerLoadKg = roundToNearestPlate(resolveOlyPR(primerMovement, prs, family) * scheme.percent * 0.75 * autoregFactor);
+  const primerLoadKg = roundToNearestPlate(resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * 0.75 * autoregFactor);
   const primerEntry: SessionBlockResult = {
     block: 'oly',
     movementId: primerMovement.id,
@@ -974,6 +981,7 @@ export function generateDailySession(
     history,
     avoidedPatterns,
     strengthRampFactor,
+    profile.variantPrs,
   );
   const olyBlock = buildOlyBlock(
     dayPlan,
@@ -987,6 +995,7 @@ export function generateDailySession(
     history,
     avoidedPatterns,
     olyRampFactor,
+    profile.variantPrs,
   );
   const wodBlock = buildWodBlock(
     dayPlan,
@@ -1136,6 +1145,7 @@ export function generateStrengthProgramSession(
     date,
     profile.trainingDaysPerWeek,
     getAvoidedPatterns(profile.painFlags, dateIso),
+    profile.variantPrs,
   );
   if (!day) {
     // No hay levantamiento disponible para el rol de hoy (p.ej. Conjugado sin ningun lift de tren

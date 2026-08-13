@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import type { AthleteProfile, PersonalRecords } from '../../data/athlete/types';
+import type { AthleteProfile, PersonalRecords, VariantPersonalRecords } from '../../data/athlete/types';
 import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { pushRemote } from '../../data/athlete/remoteSync';
@@ -16,6 +16,12 @@ const PR_FIELDS: { key: keyof PersonalRecords; label: string }[] = [
   { key: 'clean', label: 'Clean' },
   { key: 'snatch', label: 'Snatch' },
   { key: 'cleanAndJerk', label: 'Clean & Jerk' },
+];
+
+const VARIANT_PR_FIELDS: { key: keyof VariantPersonalRecords; label: string }[] = [
+  { key: 'sumoDeadlift', label: 'Sumo Deadlift' },
+  { key: 'pushPress', label: 'Push Press' },
+  { key: 'splitJerk', label: 'Split Jerk' },
 ];
 
 const inputClass =
@@ -35,6 +41,11 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
   function handlePrChange(key: keyof PersonalRecords, value: string) {
     const parsed = Number(value);
     setDraft((prev) => ({ ...prev, prs: { ...prev.prs, [key]: Number.isFinite(parsed) ? parsed : 0 } }));
+  }
+
+  function handleVariantPrChange(key: keyof VariantPersonalRecords, value: string) {
+    const parsed = Number(value);
+    setDraft((prev) => ({ ...prev, variantPrs: { ...prev.variantPrs, [key]: Number.isFinite(parsed) && parsed > 0 ? parsed : undefined } }));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -81,6 +92,29 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
             />
           </label>
         ))}
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs text-neutral-500">
+          Opcional — solo si tu marca en esta variante es claramente distinta a la del levantamiento base. Se usa sobre todo
+          en Conjugado, para no calcular el peso de la variante a partir de un PR que no le corresponde.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {VARIANT_PR_FIELDS.map((field) => (
+            <label key={field.key} className="flex flex-col gap-1 text-xs text-neutral-400">
+              {field.label} (kg)
+              <input
+                type="number"
+                min={0}
+                step={2.5}
+                placeholder="—"
+                value={draft.variantPrs?.[field.key] ?? ''}
+                onChange={(e) => handleVariantPrChange(field.key, e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
       <label className="flex flex-col gap-1 text-xs text-neutral-400">

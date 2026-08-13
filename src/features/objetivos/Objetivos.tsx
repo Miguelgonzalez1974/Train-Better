@@ -106,7 +106,7 @@ function todayProgramFormat(program: StrengthProgram, profile: AthleteProfile): 
   const dayPlan = getDayPlan(getWeekdayIndex(now), profile.trainingDaysPerWeek);
   if (!dayPlan.isTrainingDay) return 'Hoy descansas';
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, toLocalIsoDate(now));
-  const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek, avoidedPatterns);
+  const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek, avoidedPatterns, profile.variantPrs);
   return day?.format ?? null;
 }
 

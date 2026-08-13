@@ -11,6 +11,18 @@ export interface PersonalRecords {
   cleanAndJerk: number;
 }
 
+/**
+ * PRs de variantes concretas, aparte de los 8 levantamientos raiz — opcionales: si el atleta no
+ * rellena una, esa variante sigue heredando el PR del movimiento raiz (comportamiento previo).
+ * Solo cubre variantes que de verdad se entrenan como levantamiento propio con numero distinto al
+ * raiz (ver CONJUGATE_ME_VARIANTS en strengthPrograms.ts, que es donde mas se nota la diferencia).
+ */
+export interface VariantPersonalRecords {
+  sumoDeadlift?: number;
+  pushPress?: number;
+  splitJerk?: number;
+}
+
 export interface BodyweightEntry {
   /** Fecha ISO (yyyy-mm-dd) del pesaje — un registro por dia, el mas reciente sustituye al anterior de ese mismo dia */
   date: string;
@@ -104,6 +116,8 @@ export interface AthleteProfile {
   painFlags?: PainFlag[];
   /** Rampa de vuelta activa (ver [[IntensityRamp]]), si el atleta configuro una. */
   intensityRamp?: IntensityRamp;
+  /** PRs de variantes concretas (ver [[VariantPersonalRecords]]) — sumo deadlift, push press, split jerk. */
+  variantPrs?: VariantPersonalRecords;
 }
 
 export interface SessionBlockResult {

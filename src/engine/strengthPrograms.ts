@@ -1,9 +1,10 @@
 import type { MovementPattern } from '../data/movements/types';
-import type { PersonalRecords, StrengthProgram } from '../data/athlete/types';
+import type { PersonalRecords, StrengthProgram, VariantPersonalRecords } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
 import type { DayPlan } from './periodization';
 import { weeksSinceStart } from './periodization';
 import { roundToNearestPlate } from './oneRepMaxTables';
+import { resolveVariantPR } from './prResolution';
 
 export const DEFAULT_STRENGTH_PROGRAM_LIFTS: (keyof PersonalRecords)[] = ['backSquat', 'benchPress', 'deadlift', 'strictPress'];
 
@@ -442,12 +443,21 @@ function isLowerBodyLift(key: keyof PersonalRecords): boolean {
 }
 
 /** Variantes reales del catalogo para rotar en el dia de esfuerzo maximo — todas encadenan via progressionOf al PR raiz. */
+/**
+ * Solo rota a una variante cuando el atleta tiene un PR propio para ella (ver
+ * VariantPersonalRecords / VARIANT_PR_MOVEMENT_ID en prResolution.ts) — de lo contrario el peso de
+ * referencia saldria del PR del levantamiento raiz aplicado a un movimiento distinto, lo cual para
+ * variantes como sumo deadlift o push press puede desviarse bastante del numero real. El resto de
+ * variantes que existian antes en esta rotacion (box squat, deficit deadlift, block pull, banca con
+ * variantes de agarre/rango, z-press...) se han quitado: mientras no tengan PR dedicado, Conjugado
+ * se queda en el movimiento base.
+ */
 const CONJUGATE_ME_VARIANTS: Partial<Record<keyof PersonalRecords, string[]>> = {
-  backSquat: ['back-squat', 'box-squat', 'pause-back-squat', 'tempo-back-squat'],
+  backSquat: ['back-squat'],
   frontSquat: ['front-squat'],
-  deadlift: ['deadlift', 'sumo-deadlift', 'deficit-deadlift', 'block-pull'],
-  benchPress: ['bench-press', 'close-grip-bench-press', 'incline-bench-press', 'floor-press', 'spoto-press'],
-  strictPress: ['strict-press', 'seated-strict-press', 'z-press'],
+  deadlift: ['deadlift', 'sumo-deadlift'],
+  benchPress: ['bench-press'],
+  strictPress: ['strict-press', 'push-press'],
 };
 
 function conjugateVariantMovementId(liftKey: keyof PersonalRecords, variantIndex: number): string {
@@ -507,6 +517,7 @@ export function resolveStrengthProgramDay(
   today: Date,
   trainingDaysPerWeek: number,
   avoidedPatterns: Set<MovementPattern> = new Set(),
+  variantPrs?: VariantPersonalRecords,
 ): StrengthProgramDay | null {
   const lifts = resolveProgramLifts(program);
 
@@ -531,7 +542,11 @@ export function resolveStrengthProgramDay(
       const movementId = conjugateVariantMovementId(liftKey, variantIndex);
       const movement = getMovementById(movementId);
       if (!movement) return null;
-      const referenceLoad = roundToNearestPlate(currentPR * 0.9 * autoregFactor);
+      // Si la variante elegida tiene PR propio (sumo deadlift, push press), se parte de ese numero
+      // en vez del PR del levantamiento raiz — para esas variantes concretas suele ser bastante
+      // distinto y usar el raiz da una referencia poco fiable.
+      const variantPR = resolveVariantPR(movement, variantPrs);
+      const referenceLoad = roundToNearestPlate((variantPR ?? currentPR) * 0.9 * autoregFactor);
       return {
         movementId,
         prKey: liftKey,
