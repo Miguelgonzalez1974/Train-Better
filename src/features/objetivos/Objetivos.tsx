@@ -203,11 +203,11 @@ const inputClass =
 
 type ObjetivosSection = 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
 
-const SECTION_TABS: { key: ObjetivosSection; label: string }[] = [
-  { key: 'macrociclos', label: 'Macrociclos' },
-  { key: 'programa', label: 'Programa de fuerza' },
-  { key: 'rampa', label: 'Rampa de vuelta' },
-  { key: 'objetivos', label: 'Objetivos' },
+const SECTION_TABS: { key: ObjetivosSection; label: string; Icon: LucideIcon }[] = [
+  { key: 'macrociclos', label: 'Macrociclos', Icon: CalendarRange },
+  { key: 'programa', label: 'Programa', Icon: Dumbbell },
+  { key: 'rampa', label: 'Rampa', Icon: Gauge },
+  { key: 'objetivos', label: 'Objetivos', Icon: Target },
 ];
 
 export function Objetivos() {
@@ -298,20 +298,29 @@ export function Objetivos() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-1.5">
-        {SECTION_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveSection(tab.key)}
-            className={`rounded-lg px-3 py-2 text-center text-xs font-semibold transition-colors duration-200 ${
-              activeSection === tab.key
-                ? 'bg-brand-neon text-brand-bg'
-                : 'border border-brand-border text-neutral-400 hover:border-brand-neon/50 hover:text-neutral-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-2.5">
+        {SECTION_TABS.map((tab) => {
+          const isActive = activeSection === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveSection(tab.key)}
+              className={`relative flex items-center justify-center gap-2 overflow-hidden rounded-full px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                isActive
+                  ? 'bg-brand-bg text-white'
+                  : 'border border-brand-border text-neutral-400 hover:border-brand-neon/40 hover:text-neutral-200'
+              }`}
+            >
+              {isActive && <span className="absolute inset-0 rounded-full bg-brand-neon/20 blur-md" />}
+              <tab.Icon
+                size={16}
+                strokeWidth={2.25}
+                className={`relative shrink-0 ${isActive ? 'text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.7)]' : 'text-neutral-500'}`}
+              />
+              <span className="relative">{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {activeSection === 'macrociclos' && (
