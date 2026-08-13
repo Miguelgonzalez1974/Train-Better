@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge } from 'lucide-react';
 import type { AthleteProfile, DailySession, PainArea, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
@@ -18,6 +18,7 @@ import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization'
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
+import { describeRampStatus } from '../../engine/intensityRamp';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -83,6 +84,7 @@ export function Planificacion() {
   const [painDurationDraft, setPainDurationDraft] = useState<PainDuration>('semanas');
 
   const activePainFlags = useMemo(() => getActivePainFlags(profile.painFlags, todayIso), [profile.painFlags, todayIso]);
+  const rampStatus = useMemo(() => describeRampStatus(profile.intensityRamp, new Date()), [profile.intensityRamp, todayIso]);
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const nextMacroStart = useMemo(() => {
@@ -188,7 +190,9 @@ export function Planificacion() {
   function handleAddWod(type: SessionOverrideType | 'macro') {
     if (!session) return;
     const wodBlocks =
-      type === 'macro' ? (macroWodPreview ?? []) : buildStrengthProgramWodAddition(history, type, profile.painFlags, todayIso).blocks;
+      type === 'macro'
+        ? (macroWodPreview ?? [])
+        : buildStrengthProgramWodAddition(history, type, profile.painFlags, todayIso, profile.intensityRamp).blocks;
     if (wodBlocks.length === 0) return;
     const next: DailySession = {
       ...session,
@@ -329,6 +333,13 @@ export function Planificacion() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {rampStatus && (
+        <div className="flex items-center gap-2 rounded-xl border border-brand-neon/25 bg-brand-neon/10 px-3 py-2 text-sm text-brand-neon">
+          <Gauge size={15} strokeWidth={2.25} className="shrink-0" />
+          <span className="flex-1">{rampStatus}</span>
         </div>
       )}
 

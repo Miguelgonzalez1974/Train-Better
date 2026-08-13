@@ -15,14 +15,26 @@ import {
   Dumbbell,
   Target,
   Check,
+  Gauge,
   type LucideIcon,
 } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
-import type { AthleteProfile, Goal, GoalEmphasis, GoalType, Macrocycle, PersonalRecords, StrengthMethod, StrengthProgram } from '../../data/athlete/types';
+import type {
+  AthleteProfile,
+  Goal,
+  GoalEmphasis,
+  GoalType,
+  IntensityRamp,
+  Macrocycle,
+  PersonalRecords,
+  StrengthMethod,
+  StrengthProgram,
+} from '../../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay } from '../../engine/strengthPrograms';
 import { getAvoidedPatterns } from '../../engine/painFlags';
+import { describeRampStatus } from '../../engine/intensityRamp';
 import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 
 const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
@@ -166,6 +178,11 @@ function newStrengthProgramDraft(): StrengthProgram {
   return { id: crypto.randomUUID(), startDate: todayIso(), endDate: toLocalIsoDate(end), method: '531', lifts: [...DEFAULT_STRENGTH_PROGRAM_LIFTS] };
 }
 
+/** Si ya hay una rampa activa, se edita conservando su fecha de inicio real — solo se resetea a "empieza hoy" cuando es la primera vez que se configura. */
+function newRampDraft(existing: IntensityRamp | undefined): IntensityRamp {
+  return existing ?? { startDate: todayIso(), strengthWeeks: 4, olyWeeks: 4, wodWeeks: 3 };
+}
+
 function firstMovementId(type: GoalType): string | undefined {
   return GOAL_TYPE_META[type].movementGroups[0]?.movements[0]?.id;
 }
@@ -189,10 +206,23 @@ export function Objetivos() {
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
+  const [rampDraft, setRampDraft] = useState<IntensityRamp | null>(null);
 
   function persist(next: AthleteProfile) {
     athleteRepository.saveProfile(next);
     setProfile(next);
+  }
+
+  function saveRamp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!rampDraft) return;
+    persist({ ...profile, intensityRamp: rampDraft });
+    setRampDraft(null);
+  }
+
+  function deleteRamp() {
+    persist({ ...profile, intensityRamp: undefined });
+    setRampDraft(null);
   }
 
   function saveStrengthProgram(e: React.FormEvent) {
@@ -745,6 +775,133 @@ export function Objetivos() {
               <button
                 type="button"
                 onClick={() => setProgramDraft(null)}
+                className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-neutral-400">Vuelta gradual sin macro ni programa</p>
+            <p className="text-lg font-semibold text-white">Rampa de vuelta</p>
+          </div>
+          {!rampDraft && (
+            <button
+              onClick={() => setRampDraft(newRampDraft(profile.intensityRamp))}
+              className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            >
+              {profile.intensityRamp ? <Pencil size={13} strokeWidth={2.25} /> : <Plus size={15} strokeWidth={2.25} />}
+              {profile.intensityRamp ? 'Editar' : 'Nueva'}
+            </button>
+          )}
+        </div>
+
+        {!profile.intensityRamp && !rampDraft && (
+          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
+            <Gauge size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+            <div className="relative flex items-center gap-3.5">
+              <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
+                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
+                <Gauge size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white">Rampa de vuelta</p>
+                <p className="text-xs text-neutral-400">Si vuelves de un parón, sube de intensidad poco a poco en vez de ir al 100% el primer día.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {profile.intensityRamp && !rampDraft && (
+          <div className="relative overflow-hidden rounded-xl border border-brand-neon/25 p-3.5" style={{ background: 'linear-gradient(135deg, rgba(57,255,20,0.12), #171310 55%)' }}>
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-brand-neon" />
+            <div className="ml-1.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
+                  <span className="absolute inset-0 rounded-[11px] bg-brand-neon/30 blur-md" />
+                  <Gauge size={17} strokeWidth={2.25} className="relative text-brand-neon" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-white">
+                    {describeRampStatus(profile.intensityRamp, new Date()) ?? 'Rampa completada'}
+                  </p>
+                  <p className="text-xs text-neutral-400">Empezó el {profile.intensityRamp.startDate}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setRampDraft(profile.intensityRamp!)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  onClick={deleteRamp}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {rampDraft && (
+          <form onSubmit={saveRamp} className="card flex flex-col gap-3 p-4">
+            <p className="text-xs text-neutral-500">
+              Cada dominio sube en línea recta desde el 60% hasta el 100% a lo largo de las semanas que elijas — pon 0 si no
+              quieres rampa en ese dominio.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                Fuerza (semanas)
+                <input
+                  type="number"
+                  min={0}
+                  max={12}
+                  value={rampDraft.strengthWeeks}
+                  onChange={(e) => setRampDraft((prev) => (prev ? { ...prev, strengthWeeks: Number(e.target.value) } : prev))}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                Oly (semanas)
+                <input
+                  type="number"
+                  min={0}
+                  max={12}
+                  value={rampDraft.olyWeeks}
+                  onChange={(e) => setRampDraft((prev) => (prev ? { ...prev, olyWeeks: Number(e.target.value) } : prev))}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                WOD (semanas)
+                <input
+                  type="number"
+                  min={0}
+                  max={12}
+                  value={rampDraft.wodWeeks}
+                  onChange={(e) => setRampDraft((prev) => (prev ? { ...prev, wodWeeks: Number(e.target.value) } : prev))}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
+              >
+                Guardar rampa
+              </button>
+              <button
+                type="button"
+                onClick={() => setRampDraft(null)}
                 className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
               >
                 Cancelar

@@ -50,6 +50,19 @@ export interface StrengthProgram {
   lifts: (keyof PersonalRecords)[];
 }
 
+/**
+ * Rampa de vuelta al entrenar sin macrociclo ni programa de fuerza activo: en vez de arrancar al
+ * 100% desde el primer dia, la carga de fuerza/oly y la exigencia de los WOD suben gradualmente a
+ * lo largo del numero de semanas que elija el atleta en cada dominio (0 = sin rampa en ese dominio).
+ */
+export interface IntensityRamp {
+  /** Fecha ISO en la que empezo la rampa. */
+  startDate: string;
+  strengthWeeks: number;
+  olyWeeks: number;
+  wodWeeks: number;
+}
+
 export type PainArea = 'hombro' | 'cadera-lumbar' | 'rodilla' | 'codo-muneca';
 
 export interface PainFlag {
@@ -89,6 +102,8 @@ export interface AthleteProfile {
   strengthPrograms?: StrengthProgram[];
   /** Avisos activos de molestia/dolor (ver [[PainFlag]]) — el motor evita el patron de movimiento asociado mientras esten vigentes. */
   painFlags?: PainFlag[];
+  /** Rampa de vuelta activa (ver [[IntensityRamp]]), si el atleta configuro una. */
+  intensityRamp?: IntensityRamp;
 }
 
 export interface SessionBlockResult {

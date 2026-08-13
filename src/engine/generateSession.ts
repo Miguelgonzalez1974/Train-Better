@@ -11,6 +11,7 @@ import type {
   AthleteProfile,
   DailySession,
   Goal,
+  IntensityRamp,
   Macrocycle,
   PainFlag,
   PersonalRecords,
@@ -40,6 +41,7 @@ import {
 import { computeWeakPoints } from './weakPoints';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { filterAvoidingPain, getAvoidedPatterns } from './painFlags';
+import { getRampFactor, isWodRampActive } from './intensityRamp';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
@@ -200,9 +202,11 @@ function buildStrengthBlock(
   isTestDay: boolean,
   history: SessionHistoryEntry[],
   avoidedPatterns: Set<MovementPattern>,
+  rampFactor: number,
 ): SessionBlockResult[] {
   const rpeAutoreg = getRpeAutoregFactor(history);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor) * rampFactor;
+  const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note].filter(Boolean).join(' ') || undefined;
   const isStrengthGoal = goals.some((g) => g.type === 'elevar-fuerza' || g.type === 'subir-pr');
   const pref = isStrengthGoal
@@ -273,7 +277,7 @@ function buildStrengthBlock(
         format: 'Test 1RM',
         reps: '1',
         loadKg: testLoadKg,
-        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}`,
+        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}${rampNote}`,
       },
     ];
   }
@@ -281,7 +285,7 @@ function buildStrengthBlock(
   const scheme = STRENGTH_WEEK_SCHEMES[week];
   const style = pickStrengthSchemeStyle(week);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${painTag}${autoregNote ? ` ${autoregNote}` : ''}`;
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${painTag}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`;
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -342,6 +346,7 @@ function buildOlyBlock(
   isTestDay: boolean,
   history: SessionHistoryEntry[],
   avoidedPatterns: Set<MovementPattern>,
+  rampFactor: number,
 ): SessionBlockResult[] {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -349,7 +354,8 @@ function buildOlyBlock(
   if (avoidedPatterns.has('olyLift')) return [];
 
   const rpeAutoreg = getRpeAutoregFactor(history);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor) * rampFactor;
+  const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note].filter(Boolean).join(' ') || undefined;
   const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
   const pref = isOlyGoal
@@ -418,7 +424,7 @@ function buildOlyBlock(
         format: 'Test 1RM',
         reps: '1',
         loadKg: testLoadKg,
-        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}`,
+        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${rampNote}`,
       },
     ];
   }
@@ -432,6 +438,7 @@ function buildOlyBlock(
         }`
       : scheme.coachNote) +
     weakPointTag +
+    rampNote +
     (autoregNote ? ` ${autoregNote}` : '');
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
@@ -554,6 +561,7 @@ function buildWodBlock(
   goals: Goal[],
   isTaper: boolean,
   history: SessionHistoryEntry[],
+  wodRampActive: boolean,
 ): SessionBlockResult[] {
   const recentBenchmarkIds = new Set(
     [...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', '')),
@@ -562,16 +570,19 @@ function buildWodBlock(
   const competicionGoal = pickPriorityGoal(goals, (g) => g.type === 'preparar-competicion');
   const competicionProgress = competicionGoal ? getGoalProgress(competicionGoal, history) : 0;
   // En taper no se fuerza testeo extra: un coach real no busca fatiga nueva a dias de competir.
+  // Tampoco durante la rampa de vuelta: un test/retest a maximo esfuerzo es justo lo que se quiere
+  // evitar mientras el atleta esta cogiendo ritmo de nuevo.
   const forceBenchmarkByGoal =
     !isTaper &&
+    !wodRampActive &&
     Boolean(competicionGoal) &&
     (competicionProgress > 0.8 ||
       ((competicionGoal!.emphasis === 'intensivo' || competicionProgress > 0.4) && isEmphasisDay(dayPlan.trainingDayIndex)));
 
   // En semana pico se testea mas: un segundo dia de benchmark a mitad de la semana de entreno.
-  const isPeakWeekExtraBenchmark = week === 3 && dayPlan.trainingDayIndex === Math.floor(trainingDaysPerWeek / 2);
+  const isPeakWeekExtraBenchmark = !wodRampActive && week === 3 && dayPlan.trainingDayIndex === Math.floor(trainingDaysPerWeek / 2);
 
-  if (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal) {
+  if (!wodRampActive && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal)) {
     // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
     // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
     const retestCandidate = !isTaper ? findRetestCandidate(history) : null;
@@ -633,13 +644,17 @@ function buildWodBlock(
   const isPeakWeek = week === 3;
 
   // Semana pico: formatos cortos e intensos, sin chipper largo ni escalera de acumulacion de volumen.
-  const isChipperDay = !isPeakWeek && Math.random() < 0.15;
+  // Rampa de vuelta: mismo criterio que la semana pico, por la razon contraria — nada de formatos
+  // largos de alto volumen mientras el atleta esta cogiendo ritmo de nuevo.
+  const isChipperDay = !isPeakWeek && !wodRampActive && Math.random() < 0.15;
   const regularFormats: { label: string; kind: WodFormatKind }[] = [
     { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' },
     { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
     { label: `EMOM ${timeDomain.emomMin} min (movimientos alternos)`, kind: 'emom' },
     { label: `Cada 3:00 x ${timeDomain.rounds} rondas`, kind: 'interval' },
-    ...(isPeakWeek ? [] : [{ label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind }]),
+    ...(isPeakWeek || wodRampActive
+      ? []
+      : [{ label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind }]),
   ];
   const chosenFormat = isChipperDay
     ? { label: 'Chipper — 1 ronda completa', kind: 'chipper' as WodFormatKind }
@@ -680,6 +695,7 @@ function buildWodBlock(
   while (picks.length < movementCount) pickFrom(domainCycle[picks.length % domainCycle.length]);
 
   const title = generateWodName();
+  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
 
   return picks.map((m) => ({
     block: 'wod',
@@ -687,7 +703,7 @@ function buildWodBlock(
     reps: WOD_PRESCRIPTION[m.id] ?? '12-15',
     format: chosenFormat.label,
     title,
-    notes: WOD_FORMAT_RATIONALE[chosenFormat.kind],
+    notes: `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`,
   }));
 }
 
@@ -833,7 +849,11 @@ function isMaintenanceRecoveryDay(): boolean {
   return Math.random() < 0.25;
 }
 
-function buildMaintenanceWodBlock(recentIds: Set<string>, avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+function buildMaintenanceWodBlock(
+  recentIds: Set<string>,
+  avoidedPatterns: Set<MovementPattern>,
+  wodRampActive: boolean,
+): SessionBlockResult[] {
   const pool = filterAvoidingPain(getMovementsByBlock('wod'), avoidedPatterns);
   const timeDomain = WOD_TIME_DOMAIN[2];
 
@@ -865,13 +885,14 @@ function buildMaintenanceWodBlock(recentIds: Set<string>, avoidedPatterns: Set<M
   domainOrder.forEach(pickFrom);
 
   const title = generateWodName();
+  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
   return picks.map((m) => ({
     block: 'wod',
     movementId: m.id,
     reps: WOD_PRESCRIPTION[m.id] ?? '12-15',
     format: chosenFormat.label,
     title,
-    notes: WOD_FORMAT_RATIONALE[chosenFormat.kind],
+    notes: `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`,
   }));
 }
 
@@ -938,6 +959,9 @@ export function generateDailySession(
   const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goals, date);
   const isTaper = isTaperActive(goals, date);
   const testDayFocus = resolveTestDayFocus(week);
+  const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
+  const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
+  const wodRampActive = isWodRampActive(profile.intensityRamp, date);
   const strengthBlock = buildStrengthBlock(
     dayPlan,
     week,
@@ -949,6 +973,7 @@ export function generateDailySession(
     testDayFocus === 'strength',
     history,
     avoidedPatterns,
+    strengthRampFactor,
   );
   const olyBlock = buildOlyBlock(
     dayPlan,
@@ -961,6 +986,7 @@ export function generateDailySession(
     testDayFocus === 'oly',
     history,
     avoidedPatterns,
+    olyRampFactor,
   );
   const wodBlock = buildWodBlock(
     dayPlan,
@@ -971,6 +997,7 @@ export function generateDailySession(
     goals,
     isTaper,
     history,
+    wodRampActive,
   );
   const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds, avoidedPatterns);
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns);
@@ -996,9 +1023,12 @@ function buildMaintenanceStyleBlocks(
   recentIds: Set<string>,
   isRecovery: boolean,
   avoidedPatterns: Set<MovementPattern>,
+  wodRampActive: boolean,
 ): SessionBlockResult[] {
   const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
-  const wodBlock = isRecovery ? buildRecoveryWodBlock(recentIds, avoidedPatterns) : buildMaintenanceWodBlock(recentIds, avoidedPatterns);
+  const wodBlock = isRecovery
+    ? buildRecoveryWodBlock(recentIds, avoidedPatterns)
+    : buildMaintenanceWodBlock(recentIds, avoidedPatterns, wodRampActive);
   const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds, avoidedPatterns) : buildSkillBlock(history, [], avoidedPatterns);
   const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
   return [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock];
@@ -1025,7 +1055,8 @@ export function generateOffSeasonSession(
 
   const recentIds = getRecentMovementIds(history);
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
-  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, isMaintenanceRecoveryDay(), avoidedPatterns);
+  const wodRampActive = isWodRampActive(profile.intensityRamp, date);
+  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, isMaintenanceRecoveryDay(), avoidedPatterns, wodRampActive);
 
   return { date: dateIso, mesocycleWeek: 0, isRestDay: false, blocks };
 }
@@ -1057,7 +1088,8 @@ export function generateOverrideSession(
 
   const recentIds = getRecentMovementIds(history);
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
-  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, type === 'recovery', avoidedPatterns);
+  const wodRampActive = isWodRampActive(profile.intensityRamp, date);
+  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, type === 'recovery', avoidedPatterns, wodRampActive);
 
   return {
     date: dateIso,
@@ -1091,7 +1123,9 @@ export function generateStrengthProgramSession(
 
   const acwrResult = computeAcwr(history, date);
   const rpeAutoreg = getRpeAutoregFactor(history, date);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor);
+  const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor) * strengthRampFactor;
+  const rampNote = strengthRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
   const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note].filter(Boolean).join(' ');
 
   const day = resolveStrengthProgramDay(
@@ -1117,7 +1151,7 @@ export function generateStrengthProgramSession(
     reps: day.reps,
     loadKg: day.loadKg,
     format: day.format,
-    notes: autoregNote ? `${day.notes} ${autoregNote}` : day.notes,
+    notes: `${day.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`,
   };
 
   const recentIds = getRecentMovementIds(history);
@@ -1146,11 +1180,13 @@ export function buildStrengthProgramWodAddition(
   type: SessionOverrideType,
   painFlags: PainFlag[] | undefined,
   dateIso: string,
+  intensityRamp?: IntensityRamp,
 ): { blocks: SessionBlockResult[] } {
   const recentIds = getRecentMovementIds(history);
   const avoidedPatterns = getAvoidedPatterns(painFlags, dateIso);
+  const wodRampActive = isWodRampActive(intensityRamp, new Date(`${dateIso}T00:00:00`));
   const wodBlocks =
-    type === 'recovery' ? buildRecoveryWodBlock(recentIds, avoidedPatterns) : buildMaintenanceWodBlock(recentIds, avoidedPatterns);
+    type === 'recovery' ? buildRecoveryWodBlock(recentIds, avoidedPatterns) : buildMaintenanceWodBlock(recentIds, avoidedPatterns, wodRampActive);
   return { blocks: wodBlocks };
 }
 
