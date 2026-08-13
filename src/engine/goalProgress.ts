@@ -62,3 +62,22 @@ export function getGoalProgress(goal: Goal, history: SessionHistoryEntry[] = [],
   const performanceProgress = getPerformanceProgress(goal, history);
   return performanceProgress === null ? timeProgress : Math.max(timeProgress, performanceProgress);
 }
+
+/** Cuanto puede ir por detras el rendimiento real del tiempo transcurrido antes de considerarse "atrasado" de verdad, no solo ruido de una medicion suelta. */
+const BEHIND_SCHEDULE_MARGIN = 0.15;
+/** Con mas de la mitad del plazo consumido y ningun test registrado todavia, un coach real ya preguntaria donde estas — no hace falta esperar a un dato que quiza no llegue nunca. */
+const NO_DATA_BEHIND_THRESHOLD = 0.5;
+
+/**
+ * true cuando hay evidencia real (no solo paso del calendario) de que el objetivo va por detras:
+ * o bien el rendimiento medido esta claramente por debajo de lo que tocaria a estas alturas, o
+ * bien ha pasado mas de la mitad del plazo sin ni un solo test registrado. `getGoalProgress` nunca
+ * baja del suelo temporal, asi que por si solo no distingue "vas justo a tiempo" de "vas realmente
+ * mal" — esta funcion es la que sí lo hace, para no aplicar siempre el mismo sesgo fijo.
+ */
+export function isGoalBehindSchedule(goal: Goal, history: SessionHistoryEntry[] = [], today: Date = new Date()): boolean {
+  const timeProgress = getTimeProgress(goal, today);
+  const performanceProgress = getPerformanceProgress(goal, history);
+  if (performanceProgress === null) return timeProgress > NO_DATA_BEHIND_THRESHOLD;
+  return performanceProgress < timeProgress - BEHIND_SCHEDULE_MARGIN;
+}

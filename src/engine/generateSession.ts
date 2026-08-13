@@ -23,7 +23,7 @@ import type {
 import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, isEmphasisDay, resolveMacrocyclePhase, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
-import { getGoalProgress } from './goalProgress';
+import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
 import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
 import { computeAcwr, type AcwrZone } from './loadMetrics';
@@ -151,6 +151,8 @@ interface GoalPreference {
   progress: number;
   /** El objetivo concreto que gano la prioridad hoy, si alguno aplico. */
   goal?: Goal;
+  /** true cuando hay evidencia real (no solo paso del calendario) de que el objetivo va por detras — ver isGoalBehindSchedule. */
+  behindSchedule: boolean;
 }
 
 /**
@@ -167,17 +169,21 @@ function goalPreference(
     const movement = getMovementById(g.movementId);
     return Boolean(movement && appliesTo(movement));
   });
-  if (!goal || !goal.movementId) return { preferChance: 0, progress: 0 };
+  if (!goal || !goal.movementId) return { preferChance: 0, progress: 0, behindSchedule: false };
 
   const progress = getGoalProgress(goal, history);
+  const behindSchedule = isGoalBehindSchedule(goal, history);
   const base = goal.emphasis === 'intensivo' ? 0.9 : 0.6;
   const ramped = goal.emphasis === 'intensivo' ? 0.95 : 0.75;
-  return { movementId: goal.movementId, preferChance: base + (ramped - base) * progress, progress, goal };
+  // Ir por detras de verdad pesa mas que el enfasis elegido: un objetivo "moderado" que se esta
+  // quedando atras se prioriza como si fuera intensivo, no se espera a que el calendario lo fuerce solo.
+  const preferChance = behindSchedule ? Math.max(base + (ramped - base) * progress, 0.9) : base + (ramped - base) * progress;
+  return { movementId: goal.movementId, preferChance, progress, goal, behindSchedule };
 }
 
-/** A partir del ultimo tercio antes de la fecha del objetivo, un enfasis "moderado" empieza a comportarse como "intensivo". */
-function actsIntensive(goal: Goal, progress: number): boolean {
-  return goal.emphasis === 'intensivo' || progress > 0.66;
+/** A partir del ultimo tercio antes de la fecha del objetivo, un enfasis "moderado" empieza a comportarse como "intensivo" — o en cuanto hay evidencia real de que el objetivo va por detras, sea cual sea el enfasis elegido. */
+function actsIntensive(goal: Goal, progress: number, behindSchedule: boolean): boolean {
+  return goal.emphasis === 'intensivo' || progress > 0.66 || behindSchedule;
 }
 
 /** Mismos 4 patrones que rotan por dia de entreno (ver periodization.ts) — se reutiliza aqui como pool de sustitucion cuando el patron del dia esta marcado como molesto. */
@@ -201,12 +207,18 @@ function buildStrengthBlock(
   const isStrengthGoal = goals.some((g) => g.type === 'elevar-fuerza' || g.type === 'subir-pr');
   const pref = isStrengthGoal
     ? goalPreference(goals, (m) => strengthMovements.some((s) => s.id === m.id), history)
-    : { preferChance: 0, progress: 0 };
+    : { preferChance: 0, progress: 0, behindSchedule: false };
 
   let pattern = dayPlan.strengthPattern;
   let weakPointTag = '';
+  // Si el objetivo va claramente por detras de su calendario (no solo "se acerca la fecha"), se
+  // fuerza todos los dias que apliquen, no solo en los dias de enfasis alternos — un atleta que se
+  // esta quedando atras de verdad no puede esperar a que le toque el turno.
   const goalForcedPattern = Boolean(
-    pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex),
+    pref.movementId &&
+      pref.goal &&
+      actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
+      (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
   );
   if (goalForcedPattern) {
     pattern = getMovementById(pref.movementId!)!.pattern;
@@ -220,9 +232,13 @@ function buildStrengthBlock(
       weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
     }
   }
-  // Se aplica siempre, no solo cuando el objetivo fuerza el patron: el ciclo natural de la semana
-  // tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas).
-  pattern = avoidPatternRepeat(pattern, history);
+  // Se aplica siempre que el objetivo no este forzando el patron por ir atrasado: el ciclo natural
+  // de la semana tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas). Si
+  // el atleta va detras de un objetivo de verdad, evitar la repeticion iria en contra de lo que se
+  // acaba de decidir — mas frecuencia es exactamente el punto.
+  if (!(goalForcedPattern && pref.behindSchedule)) {
+    pattern = avoidPatternRepeat(pattern, history);
+  }
 
   // Si el patron de hoy coincide con un aviso de molestia activo, se sustituye por otro de los 4
   // patrones habituales que no este marcado — un coach real no ignora un aviso de dolor solo
@@ -241,7 +257,12 @@ function buildStrengthBlock(
   if (!movement) return [];
 
   const currentPR = resolveStrengthPR(movement, prs);
-  const goalTag = pref.movementId && movement.id === pref.movementId ? ' Prioridad por tu objetivo activo.' : '';
+  const goalTag =
+    pref.movementId && movement.id === pref.movementId
+      ? pref.behindSchedule
+        ? ' Vas por detrás de tu objetivo — le damos más peso hasta que te pongas al día.'
+        : ' Prioridad por tu objetivo activo.'
+      : '';
 
   if (isTestDay) {
     const testLoadKg = roundToNearestPlate(currentPR);
@@ -333,12 +354,15 @@ function buildOlyBlock(
   const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
   const pref = isOlyGoal
     ? goalPreference(goals, (m) => olyMovements.some((o) => o.id === m.id), history)
-    : { preferChance: 0, progress: 0 };
+    : { preferChance: 0, progress: 0, behindSchedule: false };
 
   let family = dayPlan.olyFamily;
   let weakPointTag = '';
   const goalForcedFamily = Boolean(
-    pref.movementId && pref.goal && actsIntensive(pref.goal, pref.progress) && isEmphasisDay(dayPlan.trainingDayIndex),
+    pref.movementId &&
+      pref.goal &&
+      actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
+      (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
   );
   if (goalForcedFamily) {
     family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
@@ -351,9 +375,12 @@ function buildOlyBlock(
       weakPointTag = ' Prioridad extra hoy: esta familia lleva estancada, le damos más frecuencia.';
     }
   }
-  // Se aplica siempre, no solo cuando el objetivo fuerza la familia: el ciclo natural tambien
-  // puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas en calendarios de 3 dias).
-  family = avoidOlyFamilyRepeat(family, history);
+  // Se aplica siempre que el objetivo no este forzando la familia por ir atrasado (ver buildStrengthBlock):
+  // el ciclo natural tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas
+  // en calendarios de 3 dias).
+  if (!(goalForcedFamily && pref.behindSchedule)) {
+    family = avoidOlyFamilyRepeat(family, history);
+  }
 
   const fullLiftIds = family === 'snatch' ? ['snatch'] : ['clean-and-jerk', 'clean'];
   let candidates = getMovementsByBlock('oly').filter((m) =>
@@ -377,7 +404,12 @@ function buildOlyBlock(
 
   if (isTestDay && fullLiftIds.includes(movement.id)) {
     const testLoadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family));
-    const goalTag = pref.movementId && movement.id === pref.movementId ? ' Prioridad por tu objetivo activo.' : '';
+    const goalTag =
+      pref.movementId && movement.id === pref.movementId
+        ? pref.behindSchedule
+          ? ' Vas por detrás de tu objetivo — le damos más peso hasta que te pongas al día.'
+          : ' Prioridad por tu objetivo activo.'
+        : '';
     const liftLabel = family === 'snatch' ? 'snatch' : 'clean & jerk';
     return [
       {
@@ -395,7 +427,9 @@ function buildOlyBlock(
   const loadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family) * scheme.percent * autoregFactor);
   const baseNote =
     (pref.movementId && movement.id === pref.movementId
-      ? `${scheme.coachNote} Prioridad por tu objetivo activo.`
+      ? `${scheme.coachNote}${
+          pref.behindSchedule ? ' Vas por detrás de tu objetivo — le damos más peso hasta que te pongas al día.' : ' Prioridad por tu objetivo activo.'
+        }`
       : scheme.coachNote) +
     weakPointTag +
     (autoregNote ? ` ${autoregNote}` : '');
@@ -693,7 +727,7 @@ function buildSkillBlock(history: SessionHistoryEntry[], goals: Goal[], avoidedP
   const isSkillGoal = goals.some((g) => g.type === 'mejorar-gimnasticos' || g.type === 'subir-pr');
   const pref = isSkillGoal
     ? goalPreference(goals, (m) => skillMovements.some((s) => s.id === m.id), history)
-    : { preferChance: 0, progress: 0 };
+    : { preferChance: 0, progress: 0, behindSchedule: false };
 
   const movement = pref.movementId
     ? pickVariedWithPreference(candidates, new Set(), pref.movementId, pref.preferChance)
