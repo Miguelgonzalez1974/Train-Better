@@ -21,4 +21,8 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.appendBodyweightEntry(entry);
     void pushRemote();
   },
+  saveReadinessCheck(entry) {
+    localAthleteRepository.saveReadinessCheck(entry);
+    void pushRemote();
+  },
 };

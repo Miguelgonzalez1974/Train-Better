@@ -86,6 +86,25 @@ export interface PainFlag {
   until: string | null;
 }
 
+export type SleepLevel = 'mal' | 'regular' | 'bien';
+export type SorenessLevel = 'alto' | 'leve' | 'ninguno';
+export type StressLevel = 'alto' | 'medio' | 'bajo';
+export type MotivationLevel = 'baja' | 'normal' | 'alta';
+
+/**
+ * Check-in diario de energia (sueno, agujetas, estres, motivacion) — un coach real pregunta esto
+ * antes de decidir cuanto exigir hoy, en vez de esperar a que el volumen acumulado (ACWR) lo note
+ * dias despues. Ver `src/engine/readiness.ts` para como se convierte en un factor de carga.
+ */
+export interface ReadinessCheck {
+  /** Fecha ISO (yyyy-mm-dd) — un check-in por dia, el mas reciente sustituye al anterior de ese mismo dia. */
+  date: string;
+  sleep: SleepLevel;
+  soreness: SorenessLevel;
+  stress: StressLevel;
+  motivation: MotivationLevel;
+}
+
 export interface AthleteProfile {
   prs: PersonalRecords;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
@@ -118,6 +137,8 @@ export interface AthleteProfile {
   intensityRamp?: IntensityRamp;
   /** PRs de variantes concretas (ver [[VariantPersonalRecords]]) — sumo deadlift, push press, split jerk. */
   variantPrs?: VariantPersonalRecords;
+  /** Check-ins diarios de energia (ver [[ReadinessCheck]]) — el motor los lee por fecha para ajustar la carga de hoy. */
+  readinessLog?: ReadinessCheck[];
 }
 
 export interface SessionBlockResult {

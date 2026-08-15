@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react';
 import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge } from 'lucide-react';
-import type { AthleteProfile, DailySession, PainArea, RxOrScaled, SessionBlockResult, SessionHistoryEntry, WodResult } from '../../data/athlete/types';
+import type {
+  AthleteProfile,
+  DailySession,
+  PainArea,
+  ReadinessCheck,
+  RxOrScaled,
+  SessionBlockResult,
+  SessionHistoryEntry,
+  WodResult,
+} from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import {
@@ -19,10 +28,12 @@ import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
+import { getReadinessCheckForDate } from '../../engine/readiness';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { DaySessionBlocks } from './DaySessionBlocks';
+import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -93,6 +104,10 @@ export function Planificacion() {
     return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long' }).format(new Date(upcoming.startDate));
   }, [profile.macrocycles, todayIso]);
   const alreadyCompletedToday = useMemo(() => (session ? history.some((h) => h.date === session.date) : false), [history, session]);
+  const [readinessLog, setReadinessLog] = useState<ReadinessCheck[]>(() => athleteRepository.getReadinessLog());
+  const [readinessDismissed, setReadinessDismissed] = useState(false);
+  const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
+  const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && !todayReadiness && !readinessDismissed);
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
   const wodScoreType = useMemo(() => (session ? getWodScoreType(session) : null), [session]);
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
@@ -121,6 +136,15 @@ export function Planificacion() {
     // guardar el perfil no debe materializar una sesion cuando se esta esperando a que el
     // atleta elija que hacer hoy (sin macrociclo activo).
     if (session) setSession(generateAndCache(newProfile));
+  }
+
+  function handleSaveReadinessCheck(check: ReadinessCheck) {
+    athleteRepository.saveReadinessCheck(check);
+    setReadinessLog(athleteRepository.getReadinessLog());
+    // Recalcula la sesion de hoy con el nuevo factor de energia — mismo compromiso que ya acepta
+    // handleSaveProfile al cambiar un PR o un aviso de dolor: el motor tiene aleatoriedad interna,
+    // asi que confirmar el check-in puede volver a barajar el WOD de hoy, no solo el peso.
+    setSession(generateAndCache(profile));
   }
 
   function handleRegenerate() {
@@ -870,6 +894,10 @@ export function Planificacion() {
             Guardar aviso
           </button>
         </div>
+      </Modal>
+
+      <Modal open={showReadinessCheck} onClose={() => setReadinessDismissed(true)} title="¿Cómo llegas hoy?">
+        <ReadinessCheckIn dateIso={todayIso} onConfirm={handleSaveReadinessCheck} onSkip={() => setReadinessDismissed(true)} />
       </Modal>
     </div>
   );

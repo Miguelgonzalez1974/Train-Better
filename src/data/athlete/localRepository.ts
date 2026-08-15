@@ -1,4 +1,4 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, SessionHistoryEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, ReadinessCheck, SessionHistoryEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
@@ -8,6 +8,7 @@ const SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
 const SESSION_CACHE_LIMIT = 60;
 const BODYWEIGHT_LOG_LIMIT = 120;
+const READINESS_LOG_LIMIT = 120;
 /** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
 const TRAINING_DATES_LOG_LIMIT = 400;
 
@@ -29,6 +30,8 @@ export interface AthleteRepository {
   deleteCachedSession(dateIso: string): void;
   getBodyweightLog(): BodyweightEntry[];
   appendBodyweightEntry(entry: BodyweightEntry): void;
+  getReadinessLog(): ReadinessCheck[];
+  saveReadinessCheck(entry: ReadinessCheck): void;
   /**
    * Borra historial de sesiones, cache de sesiones generadas, contador de dias entrenados y
    * pone los PRs a 0 — para arrancar un macrociclo nuevo sin datos previos influyendo en el
@@ -143,6 +146,15 @@ export const localAthleteRepository: AthleteRepository = {
     const withoutSameDate = (profile.bodyweightLog ?? []).filter((e) => e.date !== entry.date);
     const bodyweightLog = [...withoutSameDate, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-BODYWEIGHT_LOG_LIMIT);
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, bodyweightLog }));
+  },
+  getReadinessLog() {
+    return localAthleteRepository.getProfile().readinessLog ?? [];
+  },
+  saveReadinessCheck(entry) {
+    const profile = localAthleteRepository.getProfile();
+    const withoutSameDate = (profile.readinessLog ?? []).filter((e) => e.date !== entry.date);
+    const readinessLog = [...withoutSameDate, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-READINESS_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, readinessLog }));
   },
   resetTrainingData() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify([]));

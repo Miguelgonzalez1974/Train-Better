@@ -85,7 +85,7 @@ export function getRpeAutoregFactor(history: SessionHistoryEntry[], referenceDat
   return { factor: 1 };
 }
 
-/** Combina ACWR + RPE reciente en un solo multiplicador, sin dejar que se disparen entre si. */
-export function combineAutoregFactors(acwrFactor: number, rpeFactor: number): number {
-  return Math.max(AUTOREG_FLOOR, Math.min(AUTOREG_CEILING, acwrFactor * rpeFactor));
+/** Combina ACWR + RPE reciente (+ opcionalmente el check-in de energia del dia) en un solo multiplicador, sin dejar que se disparen entre si. */
+export function combineAutoregFactors(acwrFactor: number, rpeFactor: number, readinessFactor = 1): number {
+  return Math.max(AUTOREG_FLOOR, Math.min(AUTOREG_CEILING, acwrFactor * rpeFactor * readinessFactor));
 }

@@ -15,6 +15,7 @@ import type {
   Macrocycle,
   PainFlag,
   PersonalRecords,
+  ReadinessCheck,
   RxOrScaled,
   SessionBlockResult,
   SessionHistoryEntry,
@@ -30,6 +31,7 @@ import { pickPriorityGoal } from './goalPriority';
 import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
 import { computeAcwr, type AcwrZone } from './loadMetrics';
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor } from './autoregulation';
+import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
 import { resolveStrengthPRKey, resolveVariantPR } from './prResolution';
 import {
@@ -209,11 +211,13 @@ function buildStrengthBlock(
   avoidedPatterns: Set<MovementPattern>,
   rampFactor: number,
   variantPrs: VariantPersonalRecords | undefined,
+  readinessCheck: ReadinessCheck | undefined,
 ): SessionBlockResult[] {
   const rpeAutoreg = getRpeAutoregFactor(history);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor) * rampFactor;
+  const readiness = getReadinessFactor(readinessCheck);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor;
   const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
-  const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note].filter(Boolean).join(' ') || undefined;
+  const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ') || undefined;
   const isStrengthGoal = goals.some((g) => g.type === 'elevar-fuerza' || g.type === 'subir-pr');
   const pref = isStrengthGoal
     ? goalPreference(goals, (m) => strengthMovements.some((s) => s.id === m.id), history)
@@ -283,7 +287,7 @@ function buildStrengthBlock(
         format: 'Test 1RM',
         reps: '1',
         loadKg: testLoadKg,
-        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}${rampNote}`,
+        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
       },
     ];
   }
@@ -354,6 +358,7 @@ function buildOlyBlock(
   avoidedPatterns: Set<MovementPattern>,
   rampFactor: number,
   variantPrs: VariantPersonalRecords | undefined,
+  readinessCheck: ReadinessCheck | undefined,
 ): SessionBlockResult[] {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -361,9 +366,10 @@ function buildOlyBlock(
   if (avoidedPatterns.has('olyLift')) return [];
 
   const rpeAutoreg = getRpeAutoregFactor(history);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor) * rampFactor;
+  const readiness = getReadinessFactor(readinessCheck);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor;
   const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
-  const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note].filter(Boolean).join(' ') || undefined;
+  const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ') || undefined;
   const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
   const pref = isOlyGoal
     ? goalPreference(goals, (m) => olyMovements.some((o) => o.id === m.id), history)
@@ -431,7 +437,7 @@ function buildOlyBlock(
         format: 'Test 1RM',
         reps: '1',
         loadKg: testLoadKg,
-        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${rampNote}`,
+        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
       },
     ];
   }
@@ -969,6 +975,7 @@ export function generateDailySession(
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
+  const readinessCheck = getReadinessCheckForDate(profile.readinessLog, dateIso);
   const strengthBlock = buildStrengthBlock(
     dayPlan,
     week,
@@ -982,6 +989,7 @@ export function generateDailySession(
     avoidedPatterns,
     strengthRampFactor,
     profile.variantPrs,
+    readinessCheck,
   );
   const olyBlock = buildOlyBlock(
     dayPlan,
@@ -996,6 +1004,7 @@ export function generateDailySession(
     avoidedPatterns,
     olyRampFactor,
     profile.variantPrs,
+    readinessCheck,
   );
   const wodBlock = buildWodBlock(
     dayPlan,
@@ -1132,10 +1141,11 @@ export function generateStrengthProgramSession(
 
   const acwrResult = computeAcwr(history, date);
   const rpeAutoreg = getRpeAutoregFactor(history, date);
+  const readiness = getReadinessFactor(getReadinessCheckForDate(profile.readinessLog, dateIso));
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor) * strengthRampFactor;
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor;
   const rampNote = strengthRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
-  const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note].filter(Boolean).join(' ');
+  const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
 
   const day = resolveStrengthProgramDay(
     program,
