@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge, TrendingUp } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
   PainArea,
+  PersonalRecords,
   ReadinessCheck,
   RxOrScaled,
   SessionBlockResult,
@@ -24,11 +25,12 @@ import {
   type SessionOverrideType,
 } from '../../engine/generateSession';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
-import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
+import { MESOCYCLE_PHASE, roundToNearestPlate } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
 import { getReadinessCheckForDate } from '../../engine/readiness';
+import { estimateE1RM, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -50,6 +52,13 @@ const PAIN_DURATION_OPTIONS: { value: PainDuration; label: string }[] = [
 function formatPainUntil(until: string | null): string {
   if (!until) return 'hasta que lo quites';
   return `hasta el ${new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${until}T00:00:00`))}`;
+}
+
+interface E1rmSuggestion {
+  prKey: keyof PersonalRecords;
+  movementName: string;
+  estimatedKg: number;
+  currentKg: number;
 }
 
 export function Planificacion() {
@@ -83,6 +92,7 @@ export function Planificacion() {
   const [wodLoad, setWodLoad] = useState(0);
   const [testedLoadKg, setTestedLoadKg] = useState(0);
   const [prUpdateMessage, setPrUpdateMessage] = useState<string | null>(null);
+  const [e1rmSuggestions, setE1rmSuggestions] = useState<E1rmSuggestion[]>([]);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [customEditorMode, setCustomEditorMode] = useState<'replace' | 'append'>('replace');
   const [customTitleDraft, setCustomTitleDraft] = useState('');
@@ -238,6 +248,35 @@ export function Planificacion() {
     return { scoreType: 'load', value: `${wodLoad} kg` };
   }
 
+  /**
+   * Busca series principales de fuerza/oly que hoy podrian actualizar un PR sin haber sido un
+   * dia de test formal — ver src/engine/e1rm.ts. Solo se llama cuando ya se sabe que la sesion
+   * califica (Rx + RPE alto), nunca en un dia de test real (ese ya tiene su propio flujo exacto).
+   */
+  function findE1rmSuggestions(): E1rmSuggestion[] {
+    if (!session || testDayBlock) return [];
+    if (!qualifiesForE1RMEstimate(rxOrScaled, rpe)) return [];
+
+    const suggestions: E1rmSuggestion[] = [];
+    for (const block of session.blocks) {
+      if (block.block !== 'strength' && block.block !== 'oly') continue;
+      if (!block.loadKg || !block.reps) continue;
+      const reps = parseCleanReps(block.reps);
+      if (reps === null) continue;
+      const movement = getMovementById(block.movementId);
+      if (!movement) continue;
+      const prKey = (block.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
+      if (!prKey) continue;
+
+      const estimatedKg = roundToNearestPlate(estimateE1RM(block.loadKg, reps));
+      const currentKg = profile.prs[prKey];
+      if (estimatedKg > currentKg) {
+        suggestions.push({ prKey, movementName: movement.name, estimatedKg, currentKg });
+      }
+    }
+    return suggestions;
+  }
+
   function handleConfirmComplete() {
     if (!session) return;
     let nextMessage: string | null = null;
@@ -265,6 +304,18 @@ export function Planificacion() {
     setHistory(athleteRepository.getHistory());
     setShowCompletePanel(false);
     setPrUpdateMessage(nextMessage);
+    setE1rmSuggestions(findE1rmSuggestions());
+  }
+
+  function handleConfirmE1rmSuggestion(suggestion: E1rmSuggestion) {
+    const nextProfile = { ...profile, prs: { ...profile.prs, [suggestion.prKey]: suggestion.estimatedKg } };
+    athleteRepository.saveProfile(nextProfile);
+    setProfile(nextProfile);
+    setE1rmSuggestions((prev) => prev.filter((s) => s !== suggestion));
+  }
+
+  function handleDismissE1rmSuggestion(suggestion: E1rmSuggestion) {
+    setE1rmSuggestions((prev) => prev.filter((s) => s !== suggestion));
   }
 
   function handleUndoComplete() {
@@ -273,6 +324,7 @@ export function Planificacion() {
     athleteRepository.deleteHistoryEntry(session.date);
     setHistory(athleteRepository.getHistory());
     setPrUpdateMessage(null);
+    setE1rmSuggestions([]);
   }
 
   function handleDeleteTodaySession() {
@@ -283,6 +335,7 @@ export function Planificacion() {
     setEditMode(false);
     setShowCompletePanel(false);
     setPrUpdateMessage(null);
+    setE1rmSuggestions([]);
   }
 
   function handleSavePainFlag() {
@@ -503,6 +556,42 @@ export function Planificacion() {
 
       {prUpdateMessage && (
         <div className="rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-sm text-brand-gold">{prUpdateMessage}</div>
+      )}
+
+      {e1rmSuggestions.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {e1rmSuggestions.map((s) => (
+            <div
+              key={s.prKey}
+              className="flex items-start gap-2.5 rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2.5 text-sm"
+            >
+              <TrendingUp size={15} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+              <div className="flex-1">
+                <p className="text-neutral-200">
+                  Estimación de nuevo máximo en <span className="font-semibold text-brand-gold">{s.movementName}</span>: ~
+                  {s.estimatedKg} kg (tu PR actual es {s.currentKg} kg)
+                </p>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  A partir de tu serie de hoy — es una estimación, no un test. Puedes confirmarla o esperar a probarla de verdad.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => handleConfirmE1rmSuggestion(s)}
+                    className="rounded-md bg-brand-gold px-2.5 py-1 text-xs font-semibold text-black transition-colors duration-200 hover:bg-brand-gold-soft"
+                  >
+                    Actualizar PR a {s.estimatedKg} kg
+                  </button>
+                  <button
+                    onClick={() => handleDismissE1rmSuggestion(s)}
+                    className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
+                  >
+                    Ahora no
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {showCompletePanel && !alreadyCompletedToday && (
