@@ -1,5 +1,6 @@
 import type { IntensityRamp } from '../data/athlete/types';
 import { weeksSinceStart } from './periodization';
+import { daysBetween } from './loadMetrics';
 
 /** Intensidad de partida en la primera semana de rampa (60% de la carga objetivo) — sube linealmente hasta el 100% en la ultima semana configurada. */
 export const RAMP_FLOOR = 0.6;
@@ -44,4 +45,49 @@ export function describeRampStatus(ramp: IntensityRamp | undefined, today: Date)
   if (ramp.wodWeeks > 0 && elapsed < ramp.wodWeeks) parts.push(`wod semana ${elapsed + 1}/${ramp.wodWeeks}`);
   if (parts.length === 0) return null;
   return `Rampa de vuelta: ${parts.join(' · ')}`;
+}
+
+/** A partir de este hueco sin entrenar se sugiere una rampa — menos y es solo un descanso normal. */
+export const RETURN_GAP_MIN_DAYS = 10;
+
+export interface ReturnRampSuggestion {
+  gapDays: number;
+  ramp: IntensityRamp;
+}
+
+/** Ultima fecha de entreno antes de hoy, a partir de `trainingDatesLog` — no de `history`, que se recorta a 30 sesiones y podria perder el rastro en una pausa larga. */
+function lastTrainingDateBefore(trainingDatesLog: string[] | undefined, todayIso: string): string | undefined {
+  return (trainingDatesLog ?? []).filter((d) => d < todayIso).sort().pop();
+}
+
+/** Un coach real no da la misma vuelta a alguien que ha faltado 10 dias que a alguien que vuelve tras dos meses — a mas hueco, rampa mas larga y mas conservadora. */
+function rampWeeksForGap(gapDays: number): Pick<IntensityRamp, 'strengthWeeks' | 'olyWeeks' | 'wodWeeks'> {
+  if (gapDays >= 42) return { strengthWeeks: 6, olyWeeks: 6, wodWeeks: 4 };
+  if (gapDays >= 21) return { strengthWeeks: 4, olyWeeks: 4, wodWeeks: 3 };
+  return { strengthWeeks: 2, olyWeeks: 2, wodWeeks: 1 };
+}
+
+/**
+ * Si el atleta entrena hoy tras un hueco de `RETURN_GAP_MIN_DAYS` dias o mas sin ninguna sesion
+ * registrada, y no hay ya una rampa vigente, propone una nueva con duracion segun la severidad del
+ * hueco. Nunca se activa sola — solo se calcula la sugerencia, activarla de verdad es cosa del
+ * atleta (ver el banner en `Planificacion.tsx`). Si el atleta entrena de nuevo sin aceptarla, el
+ * hueco se cierra solo al dia siguiente y la sugerencia deja de aparecer — no hace falta guardar
+ * un "ya lo pregunte" en ningun sitio.
+ */
+export function suggestReturnRamp(
+  trainingDatesLog: string[] | undefined,
+  currentRamp: IntensityRamp | undefined,
+  todayIso: string,
+): ReturnRampSuggestion | null {
+  const today = new Date(`${todayIso}T00:00:00`);
+  if (describeRampStatus(currentRamp, today)) return null;
+
+  const lastDate = lastTrainingDateBefore(trainingDatesLog, todayIso);
+  if (!lastDate) return null;
+
+  const gapDays = daysBetween(lastDate, today);
+  if (gapDays < RETURN_GAP_MIN_DAYS) return null;
+
+  return { gapDays, ramp: { startDate: todayIso, ...rampWeeksForGap(gapDays) } };
 }

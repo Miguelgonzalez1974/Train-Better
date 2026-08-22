@@ -28,7 +28,7 @@ import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization'
 import { MESOCYCLE_PHASE, roundToNearestPlate } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
-import { describeRampStatus } from '../../engine/intensityRamp';
+import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { getReadinessCheckForDate } from '../../engine/readiness';
 import { estimateE1RM, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
@@ -106,6 +106,12 @@ export function Planificacion() {
 
   const activePainFlags = useMemo(() => getActivePainFlags(profile.painFlags, todayIso), [profile.painFlags, todayIso]);
   const rampStatus = useMemo(() => describeRampStatus(profile.intensityRamp, new Date()), [profile.intensityRamp, todayIso]);
+  const returnRampSuggestion = useMemo(
+    () => suggestReturnRamp(profile.trainingDatesLog, profile.intensityRamp, todayIso),
+    [profile.trainingDatesLog, profile.intensityRamp, todayIso],
+  );
+  const [returnRampDismissed, setReturnRampDismissed] = useState(false);
+  const showReturnRampSuggestion = Boolean(returnRampSuggestion && !returnRampDismissed);
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const nextMacroStart = useMemo(() => {
@@ -146,6 +152,12 @@ export function Planificacion() {
     // guardar el perfil no debe materializar una sesion cuando se esta esperando a que el
     // atleta elija que hacer hoy (sin macrociclo activo).
     if (session) setSession(generateAndCache(newProfile));
+  }
+
+  function handleActivateReturnRamp() {
+    if (!returnRampSuggestion) return;
+    handleSaveProfile({ ...profile, intensityRamp: returnRampSuggestion.ramp });
+    setReturnRampDismissed(true);
   }
 
   function handleSaveReadinessCheck(check: ReadinessCheck) {
@@ -417,6 +429,36 @@ export function Planificacion() {
         <div className="flex items-center gap-2 rounded-xl border border-brand-neon/25 bg-brand-neon/10 px-3 py-2 text-sm text-brand-neon">
           <Gauge size={15} strokeWidth={2.25} className="shrink-0" />
           <span className="flex-1">{rampStatus}</span>
+        </div>
+      )}
+
+      {showReturnRampSuggestion && returnRampSuggestion && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2.5 text-sm">
+          <Gauge size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
+          <div className="flex-1">
+            <p className="text-neutral-200">
+              Llevas <span className="font-semibold text-brand-gold">{returnRampSuggestion.gapDays} días</span> sin entrenar — ¿activamos
+              una rampa de vuelta para no arrancar al 100%?
+            </p>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              Fuerza/oly {returnRampSuggestion.ramp.strengthWeeks} semanas, WOD {returnRampSuggestion.ramp.wodWeeks} — la carga sube
+              gradual hasta el 100% en vez de empezar de golpe donde lo dejaste.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={handleActivateReturnRamp}
+                className="rounded-md bg-brand-gold px-2.5 py-1 text-xs font-semibold text-black transition-colors duration-200 hover:bg-brand-gold-soft"
+              >
+                Activar rampa
+              </button>
+              <button
+                onClick={() => setReturnRampDismissed(true)}
+                className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
+              >
+                No, gracias
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
