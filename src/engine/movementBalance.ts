@@ -3,6 +3,7 @@ import type { SessionHistoryEntry } from '../data/athlete/types';
 import { getMovementById, olyMovements, strengthMovements } from '../data/movements';
 import type { OlyFamily } from './periodization';
 import type { PatternStrain } from './weakPoints';
+import { daysBetween } from './loadMetrics';
 
 const STRENGTH_MOVEMENT_IDS = new Set(strengthMovements.map((m) => m.id));
 const OLY_MOVEMENT_IDS = new Set(olyMovements.map((m) => m.id));
@@ -90,4 +91,48 @@ export function weakestUntrainedOlyFamily(weakPoints: PatternStrain[], history: 
     .filter((p) => p.status === 'a-trabajar' && (p.key === 'snatch' || p.key === 'clean'))
     .map((p) => p.key as OlyFamily);
   return candidates.find((family) => !wasOlyFamilyRecentlyDominant(family, history, WEAK_POINT_LOOKBACK_DAYS)) ?? null;
+}
+
+/**
+ * Ventana rodante para "esta semana" — 8 dias, no 7, a proposito: un atleta con cadencia semanal
+ * fija (p.ej. Lunes/Miercoles/Viernes) tiene su sesion mas antigua exactamente a 7 dias de la
+ * siguiente del mismo dia, así que una ventana de exactamente 7 la deja fuera justo cuando hace
+ * falta contarla — con 8 sobra margen sin dejar de ser "la semana en curso".
+ */
+const WEEKLY_BALANCE_WINDOW_DAYS = 8;
+
+/** Cuantas veces fue cada patron de fuerza el principal del dia dentro de la ventana semanal rodante. */
+export function weeklyPatternCounts(history: SessionHistoryEntry[], referenceDate: Date = new Date()): Record<MovementPattern, number> {
+  const counts = Object.fromEntries(STRENGTH_PATTERN_CYCLE.map((p) => [p, 0])) as Record<MovementPattern, number>;
+  for (const entry of history) {
+    const age = daysBetween(entry.date, referenceDate);
+    if (age < 0 || age >= WEEKLY_BALANCE_WINDOW_DAYS) continue;
+    const pattern = dominantStrengthPattern(entry);
+    if (pattern && pattern in counts) counts[pattern]++;
+  }
+  return counts;
+}
+
+/**
+ * Patron de fuerza ausente por completo en la ventana semanal rodante, una vez que ya se ha visto
+ * una semana completa de sesiones de ESTE atleta (`totalSessions >= trainingDaysPerWeek`, no un
+ * numero fijo) — comparar contra el propio ritmo del atleta es lo que evita falsos positivos: un
+ * atleta de 4-6 dias/semana cubre los 4 patrones solo con completar su semana normal, asi que el
+ * aviso nunca deberia saltarle. Pero para 3 dias/semana el ciclo natural de `trainingDayIndex % 4`
+ * solo tiene sitio para 3 patrones por semana — `horizontalPush` nunca le toca por puro diseño del
+ * ciclo, semana tras semana, para siempre. Y para 6 dias/semana el dia de recuperacion de mitad de
+ * semana (jueves) se come el turno de un patron cada semana sin que nadie lo note. A diferencia de
+ * `weakestUntrainedStrengthPattern` (rendimiento/estancamiento a largo plazo con datos de RPE y
+ * carga), esto es reparto puro de la semana en curso — un coach real corrige el hueco de reparto
+ * antes de que se convierta en un desequilibrio real de fuerza, no solo cuando ya duele.
+ */
+export function weeklyUnderTrainedPattern(
+  history: SessionHistoryEntry[],
+  referenceDate: Date,
+  expectedWeeklySessions: number,
+): MovementPattern | null {
+  const counts = weeklyPatternCounts(history, referenceDate);
+  const totalSessions = Object.values(counts).reduce((sum, c) => sum + c, 0);
+  if (totalSessions < expectedWeeklySessions) return null;
+  return STRENGTH_PATTERN_CYCLE.find((p) => counts[p] === 0) ?? null;
 }

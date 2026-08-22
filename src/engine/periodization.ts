@@ -109,6 +109,17 @@ export function isEmphasisDay(trainingDayIndex: number): boolean {
   return trainingDayIndex % 2 === 0;
 }
 
+/**
+ * Cuantos dias de la semana producen de verdad un bloque de fuerza — no `trainingDaysPerWeek`
+ * en crudo, porque en el calendario de 6 dias uno de esos dias es el de recuperacion activa de
+ * mitad de semana (jueves), que nunca genera bloque de fuerza. Cualquier logica que necesite saber
+ * "cuantas sesiones de fuerza son una semana completa para este atleta" (p.ej. el balance semanal
+ * de patrones) debe usar esto, no el numero de dias de entreno a secas.
+ */
+export function expectedStrengthSessionsPerWeek(trainingDaysPerWeek: 3 | 4 | 5 | 6): number {
+  return trainingDaysPerWeek === 6 ? 5 : trainingDaysPerWeek;
+}
+
 export function getDayPlan(weekdayIndex: number, trainingDaysPerWeek: 3 | 4 | 5 | 6): DayPlan {
   const template = TRAINING_DAY_TEMPLATES[trainingDaysPerWeek];
   const trainingDayIndex = template.indexOf(weekdayIndex);

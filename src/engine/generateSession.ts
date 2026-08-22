@@ -23,7 +23,17 @@ import type {
   VariantPersonalRecords,
   WodResult,
 } from '../data/athlete/types';
-import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, isEmphasisDay, resolveMacrocyclePhase, toLocalIsoDate, type DayPlan, type OlyFamily } from './periodization';
+import {
+  expectedStrengthSessionsPerWeek,
+  getActiveMacrocycle,
+  getDayPlan,
+  getWeekdayIndex,
+  isEmphasisDay,
+  resolveMacrocyclePhase,
+  toLocalIsoDate,
+  type DayPlan,
+  type OlyFamily,
+} from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
@@ -40,6 +50,7 @@ import {
   WEAK_POINT_BIAS_CHANCE,
   weakestUntrainedOlyFamily,
   weakestUntrainedStrengthPattern,
+  weeklyUnderTrainedPattern,
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
@@ -212,6 +223,8 @@ function buildStrengthBlock(
   rampFactor: number,
   variantPrs: VariantPersonalRecords | undefined,
   readinessCheck: ReadinessCheck | undefined,
+  date: Date,
+  trainingDaysPerWeek: 3 | 4 | 5 | 6,
 ): SessionBlockResult[] {
   const rpeAutoreg = getRpeAutoregFactor(history);
   const readiness = getReadinessFactor(readinessCheck);
@@ -237,13 +250,24 @@ function buildStrengthBlock(
   if (goalForcedPattern) {
     pattern = getMovementById(pref.movementId!)!.pattern;
   } else {
-    // Sin un objetivo forzando el patron, se le da mas frecuencia (no un 100% de las veces) al
-    // patron de fuerza peor valorado en `computeWeakPoints` si no se ha entrenado hace poco — un
-    // coach real prioriza el punto flaco cuando el dia esta libre, no lo deja solo al azar del ciclo.
-    const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history);
-    if (weakPattern && Math.random() < WEAK_POINT_BIAS_CHANCE) {
-      pattern = weakPattern;
-      weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
+    // Antes de mirar puntos debiles a largo plazo, se corrige un desequilibrio real de la semana en
+    // curso (p.ej. horizontalPush lleva 7 dias a cero mientras otro patron ya va por 2+) — el ciclo
+    // natural de 4 patrones deja huecos estructurales para atletas de 3 o 6 dias/semana, y esto pesa
+    // mas que el sesgo probabilistico de un punto flaco: no es una posibilidad, es un hueco real ya
+    // confirmado en el historial de esta semana.
+    const weeklyGapPattern = weeklyUnderTrainedPattern(history, date, expectedStrengthSessionsPerWeek(trainingDaysPerWeek));
+    if (weeklyGapPattern) {
+      pattern = weeklyGapPattern;
+      weakPointTag = ' Esta semana no había tocado este patrón todavía — se corrige antes de que se acumule el hueco.';
+    } else {
+      // Sin desequilibrio semanal que corregir, se le da mas frecuencia (no un 100% de las veces) al
+      // patron de fuerza peor valorado en `computeWeakPoints` si no se ha entrenado hace poco — un
+      // coach real prioriza el punto flaco cuando el dia esta libre, no lo deja solo al azar del ciclo.
+      const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history);
+      if (weakPattern && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+        pattern = weakPattern;
+        weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
+      }
     }
   }
   // Se aplica siempre que el objetivo no este forzando el patron por ir atrasado: el ciclo natural
@@ -990,6 +1014,8 @@ export function generateDailySession(
     strengthRampFactor,
     profile.variantPrs,
     readinessCheck,
+    date,
+    profile.trainingDaysPerWeek,
   );
   const olyBlock = buildOlyBlock(
     dayPlan,
