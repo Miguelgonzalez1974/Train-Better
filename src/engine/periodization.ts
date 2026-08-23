@@ -56,11 +56,23 @@ export function getActiveMacrocycle(macrocycles: Macrocycle[], todayIso: string)
  * justo esa semana. UTC no tiene DST, así que la resta siempre da un multiplo exacto de un dia.
  */
 export function weeksSinceStart(startDateIso: string, today: Date): number {
-  const start = new Date(startDateIso);
+  // `T00:00:00` fuerza el parseo en hora LOCAL — `new Date(startDateIso)` a secas interpreta un
+  // ISO de solo fecha como medianoche UTC, y leer sus componentes locales despues desplaza un dia
+  // hacia atras en cualquier huso horario negativo (America, p.ej.). Mismo bug/mismo arreglo que
+  // `daysBetween` en loadMetrics.ts.
+  const start = new Date(`${startDateIso}T00:00:00`);
   const startUtcMs = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
   const todayUtcMs = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   const diffDays = Math.max(0, Math.floor((todayUtcMs - startUtcMs) / (1000 * 60 * 60 * 24)));
   return Math.floor(diffDays / 7);
+}
+
+/** Duracion total en semanas de un macrociclo (fin - inicio, redondeado a la semana mas cercana). */
+export function totalMacrocycleWeeks(macro: Macrocycle): number {
+  const start = new Date(`${macro.startDate}T00:00:00`);
+  const end = new Date(`${macro.endDate}T00:00:00`);
+  const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  return Math.max(1, Math.round(diffDays / 7));
 }
 
 export interface PhaseProgress {
@@ -73,14 +85,11 @@ export interface PhaseProgress {
 }
 
 /**
- * Resuelve en que fase del macrociclo cae `today`. Si el macrociclo no define `phaseWeeks`, usa
- * el ciclo clasico de 4 semanas iguales en bucle indefinido (comportamiento historico). Si lo
- * define, recorre esos bloques de duracion variable — un atleta puede pedir 6 semanas de
- * acumulacion, 6 de intensificacion, 4 de pico y el resto de descarga, y esto lo respeta.
+ * Igual que `resolveMacrocyclePhase` pero operando directamente sobre "semanas transcurridas desde
+ * el inicio" en vez de una fecha — extraido para poder recorrer semana a semana todo el macrociclo
+ * (ver `src/engine/macroPlan.ts`) sin tener que fabricar una fecha por cada semana.
  */
-export function resolveMacrocyclePhase(macro: Macrocycle, today: Date = new Date()): PhaseProgress {
-  const weeksSince = weeksSinceStart(macro.startDate, today);
-
+export function resolvePhaseAtWeek(macro: Macrocycle, weeksSince: number): PhaseProgress {
   if (!macro.phaseWeeks) {
     // Ciclo clasico: cada fase dura exactamente 1 semana antes de rotar a la siguiente — el "4"
     // es la duracion del ciclo completo, no de una fase individual, asi que weekInPhase/
@@ -102,6 +111,16 @@ export function resolveMacrocyclePhase(macro: Macrocycle, today: Date = new Date
   const lastIndex = macro.phaseWeeks.length as 1 | 2 | 3 | 4;
   const lastLength = Math.max(1, macro.phaseWeeks[macro.phaseWeeks.length - 1]);
   return { phaseIndex: lastIndex, weekInPhase: lastLength, phaseLengthWeeks: lastLength };
+}
+
+/**
+ * Resuelve en que fase del macrociclo cae `today`. Si el macrociclo no define `phaseWeeks`, usa
+ * el ciclo clasico de 4 semanas iguales en bucle indefinido (comportamiento historico). Si lo
+ * define, recorre esos bloques de duracion variable — un atleta puede pedir 6 semanas de
+ * acumulacion, 6 de intensificacion, 4 de pico y el resto de descarga, y esto lo respeta.
+ */
+export function resolveMacrocyclePhase(macro: Macrocycle, today: Date = new Date()): PhaseProgress {
+  return resolvePhaseAtWeek(macro, weeksSinceStart(macro.startDate, today));
 }
 
 /** Para sesgo "intensivo" de objetivos: aprox. la mitad de los dias de entreno son "de enfasis". */

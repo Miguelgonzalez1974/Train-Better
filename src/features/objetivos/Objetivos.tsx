@@ -16,6 +16,7 @@ import {
   Target,
   Check,
   Gauge,
+  Map,
   type LucideIcon,
 } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -31,11 +32,12 @@ import type {
   StrengthMethod,
   StrengthProgram,
 } from '../../data/athlete/types';
-import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay } from '../../engine/strengthPrograms';
 import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
 import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
+import { MacroPlanModal } from './MacroPlanModal';
 
 const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
   moderado: 'Se adapta a las sesiones ya programadas: cuando un bloque coincide con tu objetivo, se prioriza tu movimiento.',
@@ -67,24 +69,17 @@ function newMacroDraft(): Macrocycle {
 
 const PHASE_LABELS = ['Acumulación', 'Intensificación', 'Pico'] as const;
 
-function totalMacroWeeks(macro: Macrocycle): number {
-  const start = new Date(macro.startDate);
-  const end = new Date(macro.endDate);
-  return Math.max(1, Math.round((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)));
-}
-
 /** Semanas de descarga restantes tras restar acumulacion/intensificacion/pico del total del macro. */
 function remainingDeloadWeeks(macro: Macrocycle): number {
   if (!macro.phaseWeeks) return 0;
   const [acc, int, peak] = macro.phaseWeeks;
-  return totalMacroWeeks(macro) - acc - int - peak;
+  return totalMacrocycleWeeks(macro) - acc - int - peak;
 }
 
 /** Semana actual dentro del macrociclo (1-indexada, acotada al total) — solo tiene sentido si esta activo. */
 function currentMacroWeek(macro: Macrocycle, today: string): number {
-  const diffMs = new Date(today).getTime() - new Date(macro.startDate).getTime();
-  const elapsed = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
-  return Math.min(Math.max(elapsed, 1), totalMacroWeeks(macro));
+  const elapsed = weeksSinceStart(macro.startDate, new Date(`${today}T00:00:00`)) + 1;
+  return Math.min(Math.max(elapsed, 1), totalMacrocycleWeeks(macro));
 }
 
 type ProgramStatus = MacroStatus;
@@ -217,6 +212,7 @@ export function Objetivos() {
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
   const [rampDraft, setRampDraft] = useState<IntensityRamp | null>(null);
+  const [planMacro, setPlanMacro] = useState<Macrocycle | null>(null);
 
   function persist(next: AthleteProfile) {
     athleteRepository.saveProfile(next);
@@ -362,7 +358,7 @@ export function Objetivos() {
             const status = macroStatus(m, today);
 
             if (status === 'activo') {
-              const totalWeeks = totalMacroWeeks(m);
+              const totalWeeks = totalMacrocycleWeeks(m);
               const weekNow = currentMacroWeek(m, today);
               const pct = Math.round((weekNow / totalWeeks) * 100);
               return (
@@ -389,6 +385,12 @@ export function Objetivos() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setPlanMacro(m)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-gold/40 text-brand-gold transition-colors duration-200 hover:bg-brand-gold/10"
+                      >
+                        <Map size={13} />
+                      </button>
                       <button
                         onClick={() => setMacroDraft(m)}
                         className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
@@ -435,6 +437,12 @@ export function Objetivos() {
                   </div>
                   <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-400">Próximo</span>
                   <button
+                    onClick={() => setPlanMacro(m)}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-gold/40 text-brand-gold transition-colors duration-200 hover:bg-brand-gold/10"
+                  >
+                    <Map size={13} />
+                  </button>
+                  <button
                     onClick={() => setMacroDraft(m)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5"
                   >
@@ -464,6 +472,8 @@ export function Objetivos() {
             );
           })}
         </div>
+
+        <MacroPlanModal macro={planMacro} prs={profile.prs} onClose={() => setPlanMacro(null)} />
 
         {macroDraft && (
           <form onSubmit={saveMacro} className="card flex flex-col gap-3 p-4">
@@ -505,7 +515,7 @@ export function Objetivos() {
                   checked={Boolean(macroDraft.phaseWeeks)}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      const total = totalMacroWeeks(macroDraft);
+                      const total = totalMacrocycleWeeks(macroDraft);
                       const chunk = Math.max(1, Math.floor(total / 4));
                       setMacroDraft((prev) => (prev ? { ...prev, phaseWeeks: [chunk, chunk, chunk, Math.max(1, total - chunk * 3)] } : prev));
                     } else {
