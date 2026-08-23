@@ -24,6 +24,8 @@ export interface AthleteRepository {
    * Tambien saca esa fecha de `trainingDatesLog` para que no siga contando en "dias entrenados".
    */
   deleteHistoryEntry(date: string): void;
+  /** Rellena a posteriori el testLoadKg de un dia ya registrado — para cuando una estimacion de e1RM (ver src/engine/e1rm.ts) se confirma despues de guardar la sesion, y el punto debil/progreso de objetivo (que leen testLoadKg) tambien deben verlo. */
+  updateHistoryTestLoad(date: string, testLoadKg: number): void;
   getCachedSession(dateIso: string): DailySession | null;
   saveCachedSession(session: DailySession): void;
   /** Descarta la sesion planificada de un dia (sin tocar el historial) para volver a elegir de cero. */
@@ -123,6 +125,11 @@ export const localAthleteRepository: AthleteRepository = {
     const profile = localAthleteRepository.getProfile();
     const trainingDatesLog = (profile.trainingDatesLog ?? []).filter((d) => d !== date);
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog }));
+  },
+  updateHistoryTestLoad(date, testLoadKg) {
+    const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
+    const updated = history.map((entry) => (entry.date === date ? { ...entry, testLoadKg } : entry));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
   },
   getCachedSession(dateIso) {
     const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});

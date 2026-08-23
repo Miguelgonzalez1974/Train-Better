@@ -345,6 +345,14 @@ export function Planificacion() {
         : { ...profile, prs: { ...profile.prs, [suggestion.target.key]: suggestion.estimatedKg } };
     athleteRepository.saveProfile(nextProfile);
     setProfile(nextProfile);
+
+    // El PR ya se actualiza arriba, pero sin esto el punto debil y el progreso de objetivo (que
+    // leen testLoadKg del historial, no profile.prs) seguirian ciegos a esta subida real.
+    if (session) {
+      athleteRepository.updateHistoryTestLoad(session.date, suggestion.estimatedKg);
+      setHistory(athleteRepository.getHistory());
+    }
+
     setE1rmSuggestions((prev) => prev.filter((s) => s !== suggestion));
   }
 

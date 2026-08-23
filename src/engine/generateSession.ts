@@ -225,8 +225,8 @@ function buildStrengthBlock(
   readinessCheck: ReadinessCheck | undefined,
   date: Date,
   trainingDaysPerWeek: 3 | 4 | 5 | 6,
-): SessionBlockResult[] {
-  const rpeAutoreg = getRpeAutoregFactor(history);
+): { blocks: SessionBlockResult[]; pattern: MovementPattern } {
+  const rpeAutoreg = getRpeAutoregFactor(history, date);
   const readiness = getReadinessFactor(readinessCheck);
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor;
   const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
@@ -292,7 +292,7 @@ function buildStrengthBlock(
 
   const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
   const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
-  if (!movement) return [];
+  if (!movement) return { blocks: [], pattern };
 
   const currentPR = resolveStrengthPR(movement, prs, variantPrs);
   const goalTag =
@@ -304,16 +304,19 @@ function buildStrengthBlock(
 
   if (isTestDay) {
     const testLoadKg = roundToNearestPlate(currentPR);
-    return [
-      {
-        block: 'strength',
-        movementId: movement.id,
-        format: 'Test 1RM',
-        reps: '1',
-        loadKg: testLoadKg,
-        notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
-      },
-    ];
+    return {
+      blocks: [
+        {
+          block: 'strength',
+          movementId: movement.id,
+          format: 'Test 1RM',
+          reps: '1',
+          loadKg: testLoadKg,
+          notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
+        },
+      ],
+      pattern,
+    };
   }
 
   const scheme = STRENGTH_WEEK_SCHEMES[week];
@@ -323,50 +326,59 @@ function buildStrengthBlock(
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
-    return [
-      {
-        block: 'strength',
-        movementId: movement.id,
-        format: STRENGTH_SCHEME_LABEL.ascendingLadder,
-        sets: 3,
-        reps: '5-3-1',
-        loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor),
-        notes,
-      },
-    ];
+    return {
+      blocks: [
+        {
+          block: 'strength',
+          movementId: movement.id,
+          format: STRENGTH_SCHEME_LABEL.ascendingLadder,
+          sets: 3,
+          reps: '5-3-1',
+          loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor),
+          notes,
+        },
+      ],
+      pattern,
+    };
   }
 
   if (style === 'tempoWork') {
-    return [
-      {
-        block: 'strength',
-        movementId: movement.id,
-        format: STRENGTH_SCHEME_LABEL.tempoWork,
-        sets: scheme.sets,
-        reps: `${scheme.reps} (tempo 3-1-1)`,
-        loadKg: roundToNearestPlate(currentPR * scheme.percent * autoregFactor),
-        notes,
-      },
-    ];
+    return {
+      blocks: [
+        {
+          block: 'strength',
+          movementId: movement.id,
+          format: STRENGTH_SCHEME_LABEL.tempoWork,
+          sets: scheme.sets,
+          reps: `${scheme.reps} (tempo 3-1-1)`,
+          loadKg: roundToNearestPlate(currentPR * scheme.percent * autoregFactor),
+          notes,
+        },
+      ],
+      pattern,
+    };
   }
 
   if (style === 'volumeSets') {
     const volumePercent = Math.max(scheme.percent - 0.12, 0.45);
-    return [
-      {
-        block: 'strength',
-        movementId: movement.id,
-        format: STRENGTH_SCHEME_LABEL.volumeSets,
-        sets: scheme.sets + 1,
-        reps: String(scheme.reps + 4),
-        loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor),
-        notes,
-      },
-    ];
+    return {
+      blocks: [
+        {
+          block: 'strength',
+          movementId: movement.id,
+          format: STRENGTH_SCHEME_LABEL.volumeSets,
+          sets: scheme.sets + 1,
+          reps: String(scheme.reps + 4),
+          loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor),
+          notes,
+        },
+      ],
+      pattern,
+    };
   }
 
   const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor);
-  return [{ block: 'strength', movementId: movement.id, sets: scheme.sets, reps: String(scheme.reps), loadKg, notes }];
+  return { blocks: [{ block: 'strength', movementId: movement.id, sets: scheme.sets, reps: String(scheme.reps), loadKg, notes }], pattern };
 }
 
 function buildOlyBlock(
@@ -383,13 +395,14 @@ function buildOlyBlock(
   rampFactor: number,
   variantPrs: VariantPersonalRecords | undefined,
   readinessCheck: ReadinessCheck | undefined,
+  date: Date,
 ): SessionBlockResult[] {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
   // ese dia se salta el bloque entero en vez de forzar una sustitucion que no evita el patron real.
   if (avoidedPatterns.has('olyLift')) return [];
 
-  const rpeAutoreg = getRpeAutoregFactor(history);
+  const rpeAutoreg = getRpeAutoregFactor(history, date);
   const readiness = getReadinessFactor(readinessCheck);
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor;
   const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
@@ -1000,7 +1013,7 @@ export function generateDailySession(
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
   const readinessCheck = getReadinessCheckForDate(profile.readinessLog, dateIso);
-  const strengthBlock = buildStrengthBlock(
+  const { blocks: strengthBlock, pattern: trainedStrengthPattern } = buildStrengthBlock(
     dayPlan,
     week,
     profile.prs,
@@ -1031,22 +1044,23 @@ export function generateDailySession(
     olyRampFactor,
     profile.variantPrs,
     readinessCheck,
+    date,
   );
   const wodBlock = buildWodBlock(
     dayPlan,
     week,
     profile.trainingDaysPerWeek,
     recentIds,
-    new Set([dayPlan.strengthPattern, ...avoidedPatterns]),
+    new Set([trainedStrengthPattern, ...avoidedPatterns]),
     goals,
     isTaper,
     history,
     wodRampActive,
   );
-  const accessoryBlock = buildAccessoryBlock(dayPlan.strengthPattern, recentIds, avoidedPatterns);
+  const accessoryBlock = buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns);
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns);
-  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
-  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
+  const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
+  const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
 
   return {
     date: dateIso,
