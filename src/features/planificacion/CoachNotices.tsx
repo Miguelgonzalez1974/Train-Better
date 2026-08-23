@@ -170,19 +170,21 @@ export function CoachNotices({
           )}
 
           {nextMacroSuggestion && (
-            <div className={`${rowClass} border-brand-neon items-center`}>
-              <Map size={14} strokeWidth={2.25} className="shrink-0 text-brand-neon" />
-              <span className="flex-1 text-neutral-200">
-                <span className="font-semibold text-brand-neon">{nextMacroSuggestion.endingMacro.label}</span> termina en{' '}
-                {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`} — hay un borrador
-                del siguiente bloque esperando en Objetivos.
-              </span>
-              <button
-                onClick={onNavigateToObjetivos}
-                className="shrink-0 rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
-              >
-                Planificar
-              </button>
+            <div className={`${rowClass} border-brand-neon`}>
+              <Map size={14} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-neon" />
+              <div className="flex-1">
+                <p className="text-neutral-200">
+                  <span className="font-semibold text-brand-neon">{nextMacroSuggestion.endingMacro.label}</span> termina en{' '}
+                  {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`} — hay un borrador
+                  del siguiente bloque esperando en Objetivos.
+                </p>
+                <button
+                  onClick={onNavigateToObjetivos}
+                  className="mt-1.5 rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
+                >
+                  Planificar
+                </button>
+              </div>
             </div>
           )}
 

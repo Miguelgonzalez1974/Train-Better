@@ -375,9 +375,12 @@ export function Objetivos() {
                     <li>Sin un objetivo concreto que lo marque, se propone la misma duración que el bloque actual.</li>
                   )}
                   {nextMacroSuggestion.weakPointLabel && (
-                    <li className="flex items-center gap-1.5">
-                      <AlertTriangle size={11} strokeWidth={2.5} className="shrink-0 text-brand-orange" />
-                      Tu punto más flojo ahora mismo: <span className="text-neutral-300">{nextMacroSuggestion.weakPointLabel}</span> — tenlo en cuenta al repartir las fases.
+                    <li className="flex items-start gap-1.5">
+                      <AlertTriangle size={11} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-orange" />
+                      <span>
+                        Tu punto más flojo ahora mismo: <span className="text-neutral-300">{nextMacroSuggestion.weakPointLabel}</span> — tenlo
+                        en cuenta al repartir las fases.
+                      </span>
                     </li>
                   )}
                 </ul>
