@@ -45,7 +45,7 @@ export default function App() {
       <Sidebar active={activeTab} onChange={setActiveTab} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-6">
         {activeTab === 'dashboard' && <Dashboard onNavigateToPlanificacion={() => setActiveTab('planificacion')} />}
-        {activeTab === 'planificacion' && <Planificacion />}
+        {activeTab === 'planificacion' && <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} />}
         {activeTab === 'objetivos' && <Objetivos />}
       </main>
       <BottomNav active={activeTab} onChange={setActiveTab} />

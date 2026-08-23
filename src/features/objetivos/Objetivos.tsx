@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Pencil,
   Trash2,
@@ -17,6 +17,8 @@ import {
   Check,
   Gauge,
   Map,
+  Sparkles,
+  AlertTriangle,
   type LucideIcon,
 } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -29,6 +31,7 @@ import type {
   IntensityRamp,
   Macrocycle,
   PersonalRecords,
+  SessionHistoryEntry,
   StrengthMethod,
   StrengthProgram,
 } from '../../data/athlete/types';
@@ -38,6 +41,7 @@ import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
 import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 import { MacroPlanModal } from './MacroPlanModal';
+import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 
 const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
   moderado: 'Se adapta a las sesiones ya programadas: cuando un bloque coincide con tu objetivo, se prioriza tu movimiento.',
@@ -207,12 +211,15 @@ const SECTION_TABS: { key: ObjetivosSection; label: string; Icon: LucideIcon }[]
 
 export function Objetivos() {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
+  const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const [activeSection, setActiveSection] = useState<ObjetivosSection>('macrociclos');
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
   const [rampDraft, setRampDraft] = useState<IntensityRamp | null>(null);
   const [planMacro, setPlanMacro] = useState<Macrocycle | null>(null);
+  const [nextMacroDismissed, setNextMacroDismissed] = useState(false);
+  const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
 
   function persist(next: AthleteProfile) {
     athleteRepository.saveProfile(next);
@@ -336,6 +343,64 @@ export function Objetivos() {
             </button>
           )}
         </div>
+
+        {nextMacroSuggestion && !nextMacroDismissed && !macroDraft && (
+          <div className="relative overflow-hidden rounded-xl border border-brand-neon/30 bg-gradient-to-br from-brand-neon/[0.08] to-brand-surface p-3.5">
+            <div className="flex items-start gap-3">
+              <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
+                <span className="absolute inset-0 rounded-[11px] bg-brand-neon/25 blur-md" />
+                <Sparkles size={16} strokeWidth={2.25} className="relative text-brand-neon" />
+              </span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-white">
+                  {nextMacroSuggestion.endingMacro.label} termina en {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`}
+                  {' '}— ¿planeamos el siguiente bloque?
+                </p>
+                <ul className="mt-1.5 flex flex-col gap-0.5 text-xs text-neutral-400">
+                  {nextMacroSuggestion.drivingGoal && (
+                    <li>
+                      Sigue abierto tu objetivo de{' '}
+                      <span className="text-neutral-300">
+                        {GOAL_TYPE_META[nextMacroSuggestion.drivingGoal.type].label}
+                        {nextMacroSuggestion.drivingGoal.movementName ? ` — ${nextMacroSuggestion.drivingGoal.movementName}` : ''}
+                      </span>{' '}
+                      ({nextMacroSuggestion.drivingGoal.targetDate}) — la fecha de fin se propone en función de eso.
+                    </li>
+                  )}
+                  {!nextMacroSuggestion.drivingGoal && (
+                    <li>Sin un objetivo concreto que lo marque, se propone la misma duración que el bloque actual.</li>
+                  )}
+                  {nextMacroSuggestion.weakPointLabel && (
+                    <li className="flex items-center gap-1.5">
+                      <AlertTriangle size={11} strokeWidth={2.5} className="shrink-0 text-brand-orange" />
+                      Tu punto más flojo ahora mismo: <span className="text-neutral-300">{nextMacroSuggestion.weakPointLabel}</span> — tenlo en cuenta al repartir las fases.
+                    </li>
+                  )}
+                </ul>
+                <p className="mt-1.5 text-[11px] text-neutral-600">
+                  Solo es un punto de partida — se abre el formulario ya relleno para que revises fechas y fases antes de guardar nada.
+                </p>
+                <div className="mt-2.5 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setMacroDraft(nextMacroSuggestion.draft);
+                      setNextMacroDismissed(true);
+                    }}
+                    className="rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
+                  >
+                    Revisar borrador
+                  </button>
+                  <button
+                    onClick={() => setNextMacroDismissed(true)}
+                    className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
+                  >
+                    Ahora no
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {sortedMacros.length === 0 && !macroDraft && (
           <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">

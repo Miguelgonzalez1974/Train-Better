@@ -33,6 +33,7 @@ import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDur
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { getReadinessCheckForDate } from '../../engine/readiness';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
+import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
@@ -67,7 +68,11 @@ interface E1rmSuggestion {
   currentKg: number;
 }
 
-export function Planificacion() {
+interface PlanificacionProps {
+  onNavigateToObjetivos: () => void;
+}
+
+export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const goals = profile.goals;
@@ -124,6 +129,7 @@ export function Planificacion() {
     () => buildWeeklyMacroReview(profile, history, activeMacro, new Date()),
     [profile, history, activeMacro],
   );
+  const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const nextMacroStart = useMemo(() => {
@@ -579,6 +585,23 @@ export function Planificacion() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {nextMacroSuggestion && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-brand-neon/25 bg-brand-neon/10 px-3 py-2 text-sm">
+          <Map size={15} strokeWidth={2.25} className="shrink-0 text-brand-neon" />
+          <span className="flex-1 text-neutral-200">
+            <span className="font-semibold text-brand-neon">{nextMacroSuggestion.endingMacro.label}</span> termina en{' '}
+            {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`} — hay un borrador del
+            siguiente bloque esperando en Objetivos.
+          </span>
+          <button
+            onClick={onNavigateToObjetivos}
+            className="shrink-0 rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
+          >
+            Planificar
+          </button>
         </div>
       )}
 
