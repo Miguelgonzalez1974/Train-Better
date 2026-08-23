@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge, TrendingUp, Map } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, TrendingUp } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
@@ -40,6 +40,7 @@ import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
+import { CoachNotices } from './CoachNotices';
 import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -52,11 +53,6 @@ const PAIN_DURATION_OPTIONS: { value: PainDuration; label: string }[] = [
   { value: 'semanas', label: '1-2 semanas' },
   { value: 'indefinido', label: 'Hasta quitarlo' },
 ];
-
-function formatPainUntil(until: string | null): string {
-  if (!until) return 'hasta que lo quites';
-  return `hasta el ${new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${until}T00:00:00`))}`;
-}
 
 /** A que PR se escribiria la estimacion — raiz (prs) o de variante (variantPrs), segun de cual se calculo la carga de hoy. */
 type E1rmTarget = { kind: 'root'; key: keyof PersonalRecords } | { kind: 'variant'; key: keyof VariantPersonalRecords };
@@ -493,117 +489,20 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         }}
       />
 
-      {activePainFlags.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          {activePainFlags.map((flag) => (
-            <div
-              key={flag.id}
-              className="flex items-center gap-2 rounded-xl border border-red-400/25 bg-red-400/10 px-3 py-2 text-sm"
-            >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
-              <span className="flex-1 text-red-300">
-                Evitando {PAIN_AREA_LABEL[flag.area].toLowerCase()} — {formatPainUntil(flag.until)}
-              </span>
-              <button
-                onClick={() => handleRemovePainFlag(flag.id)}
-                className="text-xs text-neutral-400 underline decoration-dotted transition-colors duration-200 hover:text-red-300"
-              >
-                Quitar
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {rampStatus && (
-        <div className="flex items-center gap-2 rounded-xl border border-brand-neon/25 bg-brand-neon/10 px-3 py-2 text-sm text-brand-neon">
-          <Gauge size={15} strokeWidth={2.25} className="shrink-0" />
-          <span className="flex-1">{rampStatus}</span>
-        </div>
-      )}
-
-      {showReturnRampSuggestion && returnRampSuggestion && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2.5 text-sm">
-          <Gauge size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
-          <div className="flex-1">
-            <p className="text-neutral-200">
-              Llevas <span className="font-semibold text-brand-gold">{returnRampSuggestion.gapDays} días</span> sin entrenar — ¿activamos
-              una rampa de vuelta para no arrancar al 100%?
-            </p>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              Fuerza/oly {returnRampSuggestion.ramp.strengthWeeks} semanas, WOD {returnRampSuggestion.ramp.wodWeeks} — la carga sube
-              gradual hasta el 100% en vez de empezar de golpe donde lo dejaste.
-            </p>
-            <div className="mt-2 flex gap-2">
-              <button
-                onClick={handleActivateReturnRamp}
-                className="rounded-md bg-brand-gold px-2.5 py-1 text-xs font-semibold text-black transition-colors duration-200 hover:bg-brand-gold-soft"
-              >
-                Activar rampa
-              </button>
-              <button
-                onClick={() => setReturnRampDismissed(true)}
-                className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
-              >
-                No, gracias
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {macroReviewSuggestion && (
-        <div
-          className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm ${
-            macroReviewSuggestion.kind === 'extend-phase'
-              ? 'border-brand-orange/30 bg-brand-orange/10'
-              : 'border-brand-gold/30 bg-brand-gold/10'
-          }`}
-        >
-          <Map
-            size={16}
-            strokeWidth={2.25}
-            className={`mt-0.5 shrink-0 ${macroReviewSuggestion.kind === 'extend-phase' ? 'text-brand-orange' : 'text-brand-gold'}`}
-          />
-          <div className="flex-1">
-            <p className="text-neutral-200">{macroReviewSuggestion.headline}</p>
-            <p className="mt-0.5 text-xs text-neutral-500">{macroReviewSuggestion.detail}</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                onClick={handleConfirmMacroReview}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold text-black transition-colors duration-200 ${
-                  macroReviewSuggestion.kind === 'extend-phase' ? 'bg-brand-orange hover:bg-brand-orange-dark' : 'bg-brand-gold hover:bg-brand-gold-soft'
-                }`}
-              >
-                {macroReviewSuggestion.kind === 'extend-phase' ? 'Alargar fase' : 'Subir a intensivo'}
-              </button>
-              <button
-                onClick={handleDismissMacroReview}
-                className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
-              >
-                Ahora no
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {nextMacroSuggestion && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-brand-neon/25 bg-brand-neon/10 px-3 py-2 text-sm">
-          <Map size={15} strokeWidth={2.25} className="shrink-0 text-brand-neon" />
-          <span className="flex-1 text-neutral-200">
-            <span className="font-semibold text-brand-neon">{nextMacroSuggestion.endingMacro.label}</span> termina en{' '}
-            {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`} — hay un borrador del
-            siguiente bloque esperando en Objetivos.
-          </span>
-          <button
-            onClick={onNavigateToObjetivos}
-            className="shrink-0 rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
-          >
-            Planificar
-          </button>
-        </div>
-      )}
+      <CoachNotices
+        activePainFlags={activePainFlags}
+        onRemovePainFlag={handleRemovePainFlag}
+        rampStatus={rampStatus}
+        returnRampSuggestion={returnRampSuggestion}
+        showReturnRampSuggestion={showReturnRampSuggestion}
+        onActivateReturnRamp={handleActivateReturnRamp}
+        onDismissReturnRamp={() => setReturnRampDismissed(true)}
+        macroReviewSuggestion={macroReviewSuggestion}
+        onConfirmMacroReview={handleConfirmMacroReview}
+        onDismissMacroReview={handleDismissMacroReview}
+        nextMacroSuggestion={nextMacroSuggestion}
+        onNavigateToObjetivos={onNavigateToObjetivos}
+      />
 
       {!session && (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
