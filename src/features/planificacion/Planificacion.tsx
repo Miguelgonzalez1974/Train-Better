@@ -9,6 +9,7 @@ import type {
   RxOrScaled,
   SessionBlockResult,
   SessionHistoryEntry,
+  VariantPersonalRecords,
   WodResult,
 } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -21,6 +22,7 @@ import {
   hasActiveTrainingStructure,
   resolveOlyPRKey,
   resolveStrengthPRKey,
+  resolveVariantPRKey,
   toHistoryEntry,
   type SessionOverrideType,
 } from '../../engine/generateSession';
@@ -54,8 +56,11 @@ function formatPainUntil(until: string | null): string {
   return `hasta el ${new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${until}T00:00:00`))}`;
 }
 
+/** A que PR se escribiria la estimacion — raiz (prs) o de variante (variantPrs), segun de cual se calculo la carga de hoy. */
+type E1rmTarget = { kind: 'root'; key: keyof PersonalRecords } | { kind: 'variant'; key: keyof VariantPersonalRecords };
+
 interface E1rmSuggestion {
-  prKey: keyof PersonalRecords;
+  target: E1rmTarget;
   movementName: string;
   estimatedKg: number;
   currentKg: number;
@@ -277,13 +282,20 @@ export function Planificacion() {
       if (reps === null) continue;
       const movement = getMovementById(block.movementId);
       if (!movement) continue;
-      const prKey = (block.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
-      if (!prKey) continue;
 
+      // La carga de hoy pudo calcularse sobre un PR de variante (p.ej. sumo deadlift), no sobre el
+      // lift raiz — comparar y escribir contra el raiz corromperia un PR que no tiene nada que ver
+      // con lo que de verdad se entreno hoy.
+      const variantKey = resolveVariantPRKey(movement);
+      const rootKey = (block.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
+      const target: E1rmTarget | null =
+        variantKey && profile.variantPrs?.[variantKey] ? { kind: 'variant', key: variantKey } : rootKey ? { kind: 'root', key: rootKey } : null;
+      if (!target) continue;
+
+      const currentKg = target.kind === 'variant' ? (profile.variantPrs?.[target.key] ?? 0) : profile.prs[target.key];
       const estimatedKg = roundToNearestPlate(estimateE1RM(block.loadKg, reps));
-      const currentKg = profile.prs[prKey];
       if (estimatedKg > currentKg) {
-        suggestions.push({ prKey, movementName: movement.name, estimatedKg, currentKg });
+        suggestions.push({ target, movementName: movement.name, estimatedKg, currentKg });
       }
     }
     return suggestions;
@@ -296,10 +308,17 @@ export function Planificacion() {
     if (testDayBlock && testDayMovement && testedLoadKg > 0) {
       const prKey = resolveTestDayPRKey(testDayMovement);
       if (prKey && testedLoadKg > profile.prs[prKey]) {
-        const nextProfile = { ...profile, prs: { ...profile.prs, [prKey]: testedLoadKg } };
-        athleteRepository.saveProfile(nextProfile);
-        setProfile(nextProfile);
-        nextMessage = `Nuevo PR registrado: ${testDayMovement.name} a ${testedLoadKg} kg. A partir de hoy tus sesiones se calculan sobre esta marca.`;
+        // Un test de verdad exige la misma evidencia que ya le pedimos a una simple estimacion de
+        // e1RM en un dia normal (Rx + RPE alto) — si no, un intento escalado o a medio gas podria
+        // sobreescribir el PR con menos garantia que una serie de trabajo cualquiera.
+        if (qualifiesForE1RMEstimate(rxOrScaled, rpe)) {
+          const nextProfile = { ...profile, prs: { ...profile.prs, [prKey]: testedLoadKg } };
+          athleteRepository.saveProfile(nextProfile);
+          setProfile(nextProfile);
+          nextMessage = `Nuevo PR registrado: ${testDayMovement.name} a ${testedLoadKg} kg. A partir de hoy tus sesiones se calculan sobre esta marca.`;
+        } else {
+          nextMessage = `Anotado ${testedLoadKg} kg en ${testDayMovement.name}, pero no se ha actualizado tu PR — un test real solo cuenta si vas a Rx y con RPE alto (cerca del límite).`;
+        }
       }
     }
 
@@ -320,7 +339,10 @@ export function Planificacion() {
   }
 
   function handleConfirmE1rmSuggestion(suggestion: E1rmSuggestion) {
-    const nextProfile = { ...profile, prs: { ...profile.prs, [suggestion.prKey]: suggestion.estimatedKg } };
+    const nextProfile =
+      suggestion.target.kind === 'variant'
+        ? { ...profile, variantPrs: { ...profile.variantPrs, [suggestion.target.key]: suggestion.estimatedKg } }
+        : { ...profile, prs: { ...profile.prs, [suggestion.target.key]: suggestion.estimatedKg } };
     athleteRepository.saveProfile(nextProfile);
     setProfile(nextProfile);
     setE1rmSuggestions((prev) => prev.filter((s) => s !== suggestion));
@@ -604,7 +626,7 @@ export function Planificacion() {
         <div className="flex flex-col gap-2">
           {e1rmSuggestions.map((s) => (
             <div
-              key={s.prKey}
+              key={`${s.target.kind}-${s.target.key}`}
               className="flex items-start gap-2.5 rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2.5 text-sm"
             >
               <TrendingUp size={15} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />

@@ -57,7 +57,7 @@ import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthP
 import { filterAvoidingPain, getAvoidedPatterns } from './painFlags';
 import { getRampFactor, isWodRampActive } from './intensityRamp';
 
-export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
+export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
 const ACCESSORY_COMPLEMENT: Partial<Record<MovementPattern, MovementPattern[]>> = {
   squat: ['hinge', 'lunge'],

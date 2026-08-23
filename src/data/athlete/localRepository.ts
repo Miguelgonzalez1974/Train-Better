@@ -170,6 +170,6 @@ export const localAthleteRepository: AthleteRepository = {
       snatch: 0,
       cleanAndJerk: 0,
     };
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prs, trainingDatesLog: [] }));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [] }));
   },
 };
