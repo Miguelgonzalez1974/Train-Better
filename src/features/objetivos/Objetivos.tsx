@@ -149,12 +149,16 @@ const STRENGTH_METHOD_META: Record<StrengthMethod, { label: string; blurb: strin
 
 const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut'];
 
-/** Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto. */
+/**
+ * Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto.
+ * Deliberadamente sin ningun tono rojo/rosa: ese color esta reservado en toda la app para dolor y
+ * avisos de peligro (ver PerfilRapido/WeekStrip/AcwrGauge), y aqui no hay ningun metodo "de riesgo".
+ */
 const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   '531': '#d4af37',
   lineal: '#38bdf8',
   ondulante: '#22d3ee',
-  conjugado: '#f87171',
+  conjugado: '#f472b6',
   ruso: '#a78bfa',
   texas: '#fbbf24',
   juggernaut: '#34d399',

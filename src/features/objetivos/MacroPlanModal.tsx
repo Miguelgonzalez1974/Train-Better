@@ -3,10 +3,17 @@ import type { Macrocycle, PersonalRecords } from '../../data/athlete/types';
 import { buildMacroPlan, type MacroPlanPhase } from '../../engine/macroPlan';
 import { Modal } from '../shell/Modal';
 
+/**
+ * Gradiente de intensidad de la fase, no colores arbitrarios: sky (calma, misma asociacion que la
+ * zona ACWR "baja" en el dashboard) -> dorado -> naranja (maxima intensidad, mismo tono que el
+ * boton de accion principal de la app) -> neon (descarga/recuperacion, el verde "positivo" de la
+ * marca). Deliberadamente sin rojo/rosa — ese color esta reservado en toda la app para dolor/aviso
+ * de peligro (ver PerfilRapido/WeekStrip/AcwrGauge), y "Pico" no es un aviso de riesgo.
+ */
 const PHASE_COLOR: Record<1 | 2 | 3 | 4, string> = {
   1: '#38bdf8',
-  2: '#f97316',
-  3: '#f87171',
+  2: '#d4af37',
+  3: '#f97316',
   4: '#39ff14',
 };
 
