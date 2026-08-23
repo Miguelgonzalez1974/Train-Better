@@ -502,6 +502,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         onDismissMacroReview={handleDismissMacroReview}
         nextMacroSuggestion={nextMacroSuggestion}
         onNavigateToObjetivos={onNavigateToObjetivos}
+        coachReasons={session?.coachReasons ?? []}
       />
 
       {!session && (
@@ -839,12 +840,6 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
               Cancelar
             </button>
           </div>
-        </div>
-      )}
-
-      {session.deloadNote && (
-        <div className="rounded-lg border border-brand-orange/30 bg-brand-orange/10 px-3 py-2 text-sm text-brand-orange">
-          {session.deloadNote}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Brain, ChevronDown, ChevronUp, Gauge, Map } from 'lucide-react';
+import { Brain, ChevronDown, ChevronUp, Gauge, Lightbulb, Map } from 'lucide-react';
 import type { PainFlag } from '../../data/athlete/types';
 import type { ReturnRampSuggestion } from '../../engine/intensityRamp';
 import type { MacroReviewSuggestion } from '../../engine/macroReview';
@@ -24,6 +24,8 @@ interface CoachNoticesProps {
   onDismissMacroReview: () => void;
   nextMacroSuggestion: NextMacroSuggestion | null;
   onNavigateToObjetivos: () => void;
+  /** Resumen "por que tu sesion es asi hoy" (DailySession.coachReasons) — mismos textos ya visibles dentro de cada bloque, aqui solo para verlos de un vistazo. */
+  coachReasons: string[];
 }
 
 const rowClass = 'flex items-start gap-2.5 border-l-2 py-1.5 pl-3 text-sm';
@@ -49,6 +51,7 @@ export function CoachNotices({
   onDismissMacroReview,
   nextMacroSuggestion,
   onNavigateToObjetivos,
+  coachReasons,
 }: CoachNoticesProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -59,7 +62,7 @@ export function CoachNotices({
     (macroReviewSuggestion ? 1 : 0) +
     (nextMacroSuggestion ? 1 : 0);
 
-  if (count === 0) return null;
+  if (count === 0 && coachReasons.length === 0) return null;
 
   return (
     <div className="card overflow-hidden p-0">
@@ -70,7 +73,9 @@ export function CoachNotices({
         </span>
         <span className="flex flex-1 items-center gap-2 text-sm font-semibold text-white">
           Avisos del coach
-          <span className="rounded-full bg-brand-neon/20 px-1.5 py-0.5 text-[10px] font-bold text-brand-neon">{count}</span>
+          <span className="rounded-full bg-brand-neon/20 px-1.5 py-0.5 text-[10px] font-bold text-brand-neon">
+            {count + (coachReasons.length > 0 ? 1 : 0)}
+          </span>
         </span>
         {collapsed ? (
           <ChevronDown size={16} strokeWidth={2.25} className="shrink-0 text-neutral-500" />
@@ -178,6 +183,23 @@ export function CoachNotices({
               >
                 Planificar
               </button>
+            </div>
+          )}
+
+          {coachReasons.length > 0 && (
+            <div className={count > 0 ? 'mt-1 border-t border-brand-border pt-2.5' : undefined}>
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                <Lightbulb size={12} strokeWidth={2.5} />
+                Por qué tu sesión es así hoy
+              </p>
+              <ul className="flex flex-col gap-1">
+                {coachReasons.map((reason, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-neutral-400">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-neutral-600" />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

@@ -59,6 +59,17 @@ import { getRampFactor, isWodRampActive } from './intensityRamp';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 
+/**
+ * Los mismos fragmentos que ya se concatenan en `notes` de un bloque (aviso de dolor, sesgo de
+ * punto debil/balance semanal, rampa de vuelta, autorregulacion) tambien se recogen aparte, limpios
+ * de espacios, para el resumen "por que tu sesion es asi hoy" (`DailySession.coachReasons`) — misma
+ * fuente de verdad que el texto ya visible en el bloque, nunca una segunda logica que pueda
+ * desincronizarse de el.
+ */
+function collectReasons(...fragments: (string | undefined)[]): string[] {
+  return fragments.map((f) => f?.trim()).filter((f): f is string => Boolean(f));
+}
+
 const ACCESSORY_COMPLEMENT: Partial<Record<MovementPattern, MovementPattern[]>> = {
   squat: ['hinge', 'lunge'],
   hinge: ['squat', 'core'],
@@ -225,7 +236,7 @@ function buildStrengthBlock(
   readinessCheck: ReadinessCheck | undefined,
   date: Date,
   trainingDaysPerWeek: 3 | 4 | 5 | 6,
-): { blocks: SessionBlockResult[]; pattern: MovementPattern } {
+): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
   const rpeAutoreg = getRpeAutoregFactor(history, date);
   const readiness = getReadinessFactor(readinessCheck);
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor;
@@ -292,7 +303,7 @@ function buildStrengthBlock(
 
   const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
   const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
-  if (!movement) return { blocks: [], pattern };
+  if (!movement) return { blocks: [], pattern, reasons: [] };
 
   const currentPR = resolveStrengthPR(movement, prs, variantPrs);
   const goalTag =
@@ -304,6 +315,7 @@ function buildStrengthBlock(
 
   if (isTestDay) {
     const testLoadKg = roundToNearestPlate(currentPR);
+    const testReasons = collectReasons(weakPointTag, painTag, rampNote, readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : undefined);
     return {
       blocks: [
         {
@@ -316,6 +328,7 @@ function buildStrengthBlock(
         },
       ],
       pattern,
+      reasons: testReasons,
     };
   }
 
@@ -323,6 +336,7 @@ function buildStrengthBlock(
   const style = pickStrengthSchemeStyle(week);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
   const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${painTag}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`;
+  const reasons = collectReasons(weakPointTag, painTag, rampNote, autoregNote);
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -339,6 +353,7 @@ function buildStrengthBlock(
         },
       ],
       pattern,
+      reasons,
     };
   }
 
@@ -356,6 +371,7 @@ function buildStrengthBlock(
         },
       ],
       pattern,
+      reasons,
     };
   }
 
@@ -374,11 +390,16 @@ function buildStrengthBlock(
         },
       ],
       pattern,
+      reasons,
     };
   }
 
   const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor);
-  return { blocks: [{ block: 'strength', movementId: movement.id, sets: scheme.sets, reps: String(scheme.reps), loadKg, notes }], pattern };
+  return {
+    blocks: [{ block: 'strength', movementId: movement.id, sets: scheme.sets, reps: String(scheme.reps), loadKg, notes }],
+    pattern,
+    reasons,
+  };
 }
 
 function buildOlyBlock(
@@ -396,11 +417,13 @@ function buildOlyBlock(
   variantPrs: VariantPersonalRecords | undefined,
   readinessCheck: ReadinessCheck | undefined,
   date: Date,
-): SessionBlockResult[] {
+): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
   // ese dia se salta el bloque entero en vez de forzar una sustitucion que no evita el patron real.
-  if (avoidedPatterns.has('olyLift')) return [];
+  if (avoidedPatterns.has('olyLift')) {
+    return { blocks: [], reasons: ['Oly saltado hoy — tienes un aviso de molestia activo que afecta a hombro o cadera.'] };
+  }
 
   const rpeAutoreg = getRpeAutoregFactor(history, date);
   const readiness = getReadinessFactor(readinessCheck);
@@ -456,7 +479,7 @@ function buildOlyBlock(
   }
 
   const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
-  if (!movement) return [];
+  if (!movement) return { blocks: [], reasons: [] };
 
   if (isTestDay && fullLiftIds.includes(movement.id)) {
     const testLoadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family, variantPrs));
@@ -467,16 +490,20 @@ function buildOlyBlock(
           : ' Prioridad por tu objetivo activo.'
         : '';
     const liftLabel = family === 'snatch' ? 'snatch' : 'clean & jerk';
-    return [
-      {
-        block: 'oly',
-        movementId: movement.id,
-        format: 'Test 1RM',
-        reps: '1',
-        loadKg: testLoadKg,
-        notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
-      },
-    ];
+    const testReasons = collectReasons(weakPointTag, rampNote, readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : undefined);
+    return {
+      blocks: [
+        {
+          block: 'oly',
+          movementId: movement.id,
+          format: 'Test 1RM',
+          reps: '1',
+          loadKg: testLoadKg,
+          notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
+        },
+      ],
+      reasons: testReasons,
+    };
   }
 
   const scheme = OLY_WEEK_SCHEMES[week];
@@ -490,6 +517,7 @@ function buildOlyBlock(
     weakPointTag +
     rampNote +
     (autoregNote ? ` ${autoregNote}` : '');
+  const reasons = collectReasons(weakPointTag, rampNote, autoregNote);
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).
@@ -529,7 +557,7 @@ function buildOlyBlock(
   );
   const primerCandidates = familyPool.filter((m) => m.id !== movement.id && m.progressionOf);
   const primerMovement = pickVaried(primerCandidates, recentIds);
-  if (!primerMovement) return [mainEntry];
+  if (!primerMovement) return { blocks: [mainEntry], reasons };
 
   const primerLoadKg = roundToNearestPlate(resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * 0.75 * autoregFactor);
   const primerEntry: SessionBlockResult = {
@@ -541,7 +569,7 @@ function buildOlyBlock(
     notes: `Primer técnico antes del levantamiento principal — prioriza posición, no peso.${autoregNote ? ` ${autoregNote}` : ''}`,
   };
 
-  return [primerEntry, mainEntry];
+  return { blocks: [primerEntry, mainEntry], reasons };
 }
 
 /**
@@ -1013,7 +1041,11 @@ export function generateDailySession(
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
   const readinessCheck = getReadinessCheckForDate(profile.readinessLog, dateIso);
-  const { blocks: strengthBlock, pattern: trainedStrengthPattern } = buildStrengthBlock(
+  const {
+    blocks: strengthBlock,
+    pattern: trainedStrengthPattern,
+    reasons: strengthReasons,
+  } = buildStrengthBlock(
     dayPlan,
     week,
     profile.prs,
@@ -1030,7 +1062,7 @@ export function generateDailySession(
     date,
     profile.trainingDaysPerWeek,
   );
-  const olyBlock = buildOlyBlock(
+  const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
     dayPlan,
     week,
     profile.prs,
@@ -1062,13 +1094,21 @@ export function generateDailySession(
   const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
 
+  // Mismos fragmentos ya visibles en cada bloque, deduplicados (fuerza y oly casi siempre comparten
+  // el mismo texto de autorregulacion/rampa, ya que salen de la misma senal) — resumen "por que hoy
+  // es asi" para no tener que leer bloque a bloque para enterarte. El deload va primero por ser el
+  // motivo de mayor peso cuando aplica. Ver DailySession.coachReasons.
+  const deloadNote = deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined;
+  const coachReasons = Array.from(new Set(collectReasons(deloadNote, ...strengthReasons, ...olyReasons)));
+
   return {
     date: dateIso,
     mesocycleWeek: week,
     isRestDay: false,
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
     deloadReason,
-    deloadNote: deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined,
+    deloadNote,
+    coachReasons: coachReasons.length > 0 ? coachReasons : undefined,
     phaseWeekInPhase: phaseProgress.weekInPhase,
     phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
   };

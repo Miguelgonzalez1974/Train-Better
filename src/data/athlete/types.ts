@@ -170,6 +170,14 @@ export interface DailySession {
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */
   deloadReason?: 'fatiga' | 'taper';
   deloadNote?: string;
+  /**
+   * Resumen "por que tu sesion es asi hoy" — mismos fragmentos ya visibles dentro de cada bloque
+   * (autorregulacion, rampa de vuelta, balance semanal/punto debil, sustitucion por dolor),
+   * recogidos aparte y deduplicados para poder verlos de un vistazo sin leer bloque a bloque. Ver
+   * `collectReasons` en generateSession.ts — nunca es una segunda fuente de verdad, siempre los
+   * mismos textos que ya se concatenan en `SessionBlockResult.notes`.
+   */
+  coachReasons?: string[];
   /** 'custom' cuando el atleta escribio su propia sesion en vez de usar la generada — `blocks` va vacio y el contenido vive en customTitle/customNote. */
   source?: 'generated' | 'custom';
   customTitle?: string;
