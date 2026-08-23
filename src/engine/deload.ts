@@ -1,5 +1,6 @@
 import type { Goal } from '../data/athlete/types';
 import type { AcwrZone } from './loadMetrics';
+import { daysBetween } from './loadMetrics';
 import { pickPriorityGoal } from './goalPriority';
 
 export type DeloadReason = 'fatiga' | 'taper';
@@ -12,10 +13,9 @@ export const DELOAD_REASON_NOTE: Record<DeloadReason, string> = {
 /** Ventana de taper: los ultimos 7 dias antes de la fecha de una competicion se entrenan en descarga. */
 const TAPER_WINDOW_DAYS = 7;
 
+/** Dias que faltan hasta la fecha objetivo — `daysBetween` da el sentido contrario (referencia menos fecha), asi que se invierte. */
 function daysUntil(targetDateIso: string, today: Date): number {
-  const target = new Date(targetDateIso).setHours(0, 0, 0, 0);
-  const now = new Date(today).setHours(0, 0, 0, 0);
-  return Math.round((target - now) / (1000 * 60 * 60 * 24));
+  return -daysBetween(targetDateIso, today);
 }
 
 export function isTaperActive(goals: Goal[], today: Date): boolean {

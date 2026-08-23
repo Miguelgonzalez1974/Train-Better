@@ -27,8 +27,14 @@ export const ACWR_ZONE_LABEL: Record<AcwrZone, string> = {
 /** Orden de cautela de cada zona (a mayor numero, mas restrictiva) — usado solo para no relajar nunca una zona ya cautelosa. */
 const ZONE_CAUTION_RANK: Record<AcwrZone, number> = { baja: 0, optima: 0, moderada: 1, alta: 2 };
 
+/**
+ * `new Date(dateIso)` sobre una fecha suelta ("2026-08-31", sin hora) la interpreta como
+ * medianoche UTC — en una zona horaria detras de UTC eso cae en el dia local anterior, y
+ * `.setHours(0,0,0,0)` (que opera en hora local) lo fija ahi en vez de corregirlo. Anadir la hora
+ * explicita fuerza el parseo en hora local desde el principio, evitando el desfase de un dia.
+ */
 export function daysBetween(dateIso: string, reference: Date): number {
-  const diffMs = new Date(reference).setHours(0, 0, 0, 0) - new Date(dateIso).setHours(0, 0, 0, 0);
+  const diffMs = new Date(reference).setHours(0, 0, 0, 0) - new Date(`${dateIso}T00:00:00`).setHours(0, 0, 0, 0);
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 

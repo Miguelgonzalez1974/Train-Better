@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge, TrendingUp } from 'lucide-react';
 import type {
   AthleteProfile,
@@ -140,6 +140,22 @@ export function Planificacion() {
     athleteRepository.saveCachedSession(next);
     return next;
   }
+
+  // `todayIso` se recalcula en cada render, pero `session` solo se cargaba una vez al montar — si
+  // el atleta deja la pestaña abierta pasada la medianoche, esto resincroniza la sesion (y los
+  // estados de "hoy" que dependen de ella) con el dia real la proxima vez que algo dispare un
+  // render, en vez de quedarse mostrando el dia de ayer hasta recargar la pagina a mano.
+  useEffect(() => {
+    const cached = athleteRepository.getCachedSession(todayIso);
+    setSession(cached ?? (hasActiveTrainingStructure(profile, todayIso) ? generateAndCache(profile) : null));
+    setShowCompletePanel(false);
+    setEditMode(false);
+    setPrUpdateMessage(null);
+    setE1rmSuggestions([]);
+    setReadinessDismissed(false);
+    setReturnRampDismissed(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayIso]);
 
   function handleUpdateEntry(index: number, patch: Partial<SessionBlockResult>) {
     setSession((prev) => {
@@ -333,6 +349,10 @@ export function Planificacion() {
       ),
     );
     setHistory(athleteRepository.getHistory());
+    // appendHistoryEntry tambien actualiza trainingDatesLog en el perfil persistido — sin esto,
+    // returnRampSuggestion (que lee profile.trainingDatesLog del estado) no veria la sesion de hoy
+    // hasta el proximo guardado de perfil o recarga.
+    setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
     setPrUpdateMessage(nextMessage);
     setE1rmSuggestions(findE1rmSuggestions());

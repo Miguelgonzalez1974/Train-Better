@@ -9,8 +9,9 @@ export interface MonthlyStats {
   diasEsteAnio: number;
 }
 
+/** `new Date(dateIso)` sobre una fecha suelta se interpreta como medianoche UTC, que cae en el dia local anterior en zonas detras de UTC — anadir la hora fuerza el parseo en hora local. */
 function isSameMonth(dateIso: string, reference: Date): boolean {
-  const d = new Date(dateIso);
+  const d = new Date(`${dateIso}T00:00:00`);
   return d.getFullYear() === reference.getFullYear() && d.getMonth() === reference.getMonth();
 }
 
@@ -24,7 +25,7 @@ export function getMonthlyStats(
   const diasRx = entriesThisMonth.filter((h) => h.rxOrScaled === 'rx').length;
   const withRpe = entriesThisMonth.filter((h) => typeof h.rpe === 'number');
   const rpeMedio = withRpe.length > 0 ? withRpe.reduce((sum, h) => sum + h.rpe, 0) / withRpe.length : null;
-  const diasEsteAnio = trainingDatesLog.filter((d) => new Date(d).getFullYear() === referenceDate.getFullYear()).length;
+  const diasEsteAnio = trainingDatesLog.filter((d) => new Date(`${d}T00:00:00`).getFullYear() === referenceDate.getFullYear()).length;
 
   return { diasEntrenados, diasRx, rpeMedio, totalSesiones: history.length, diasEsteAnio };
 }
