@@ -139,6 +139,12 @@ export interface AthleteProfile {
   variantPrs?: VariantPersonalRecords;
   /** Check-ins diarios de energia (ver [[ReadinessCheck]]) — el motor los lee por fecha para ajustar la carga de hoy. */
   readinessLog?: ReadinessCheck[];
+  /**
+   * Claves `macroId:semana` de revisiones semanales del macrociclo ya mostradas (confirmadas o
+   * descartadas) — ver `src/engine/macroReview.ts`. Evita repetir el mismo aviso cada dia dentro de
+   * la misma semana del macrociclo.
+   */
+  reviewedMacroWeeks?: string[];
 }
 
 export interface SessionBlockResult {

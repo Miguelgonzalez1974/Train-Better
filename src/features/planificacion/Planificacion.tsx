@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge, TrendingUp } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Gauge, TrendingUp, Map } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
@@ -32,6 +32,7 @@ import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { getReadinessCheckForDate } from '../../engine/readiness';
+import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
 import { estimateE1RM, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
@@ -118,6 +119,12 @@ export function Planificacion() {
   const [returnRampDismissed, setReturnRampDismissed] = useState(false);
   const showReturnRampSuggestion = Boolean(returnRampSuggestion && !returnRampDismissed);
 
+  const activeMacro = useMemo(() => getActiveMacrocycle(profile.macrocycles, todayIso), [profile.macrocycles, todayIso]);
+  const macroReviewSuggestion = useMemo(
+    () => buildWeeklyMacroReview(profile, history, activeMacro, new Date()),
+    [profile, history, activeMacro],
+  );
+
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const nextMacroStart = useMemo(() => {
     const upcoming = profile.macrocycles.filter((m) => m.startDate > todayIso).sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
@@ -179,6 +186,33 @@ export function Planificacion() {
     if (!returnRampSuggestion) return;
     handleSaveProfile({ ...profile, intensityRamp: returnRampSuggestion.ramp });
     setReturnRampDismissed(true);
+  }
+
+  /** Marca la semana de revision como ya mostrada (confirmada o descartada) para que no vuelva a salir hasta la semana siguiente del macrociclo. */
+  function markMacroWeekReviewed(reviewKey: string, extra: Partial<AthleteProfile> = {}) {
+    const reviewedMacroWeeks = [...(profile.reviewedMacroWeeks ?? []), reviewKey].slice(-REVIEWED_MACRO_WEEKS_LIMIT);
+    handleSaveProfile({ ...profile, ...extra, reviewedMacroWeeks });
+  }
+
+  function handleConfirmMacroReview() {
+    if (!macroReviewSuggestion) return;
+    if (macroReviewSuggestion.kind === 'extend-phase') {
+      const macrocycles = profile.macrocycles.map((m) => {
+        if (m.id !== activeMacro?.id || !m.phaseWeeks) return m;
+        const phaseWeeks = [...m.phaseWeeks] as [number, number, number, number];
+        phaseWeeks[macroReviewSuggestion.phaseIndex - 1] += 1;
+        return { ...m, phaseWeeks };
+      });
+      markMacroWeekReviewed(macroReviewSuggestion.reviewKey, { macrocycles });
+    } else {
+      const goals = profile.goals.map((g) => (g.id === macroReviewSuggestion.goalId ? { ...g, emphasis: 'intensivo' as const } : g));
+      markMacroWeekReviewed(macroReviewSuggestion.reviewKey, { goals });
+    }
+  }
+
+  function handleDismissMacroReview() {
+    if (!macroReviewSuggestion) return;
+    markMacroWeekReviewed(macroReviewSuggestion.reviewKey);
   }
 
   function handleSaveReadinessCheck(check: ReadinessCheck) {
@@ -506,6 +540,42 @@ export function Planificacion() {
                 className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
               >
                 No, gracias
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {macroReviewSuggestion && (
+        <div
+          className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm ${
+            macroReviewSuggestion.kind === 'extend-phase'
+              ? 'border-brand-orange/30 bg-brand-orange/10'
+              : 'border-brand-gold/30 bg-brand-gold/10'
+          }`}
+        >
+          <Map
+            size={16}
+            strokeWidth={2.25}
+            className={`mt-0.5 shrink-0 ${macroReviewSuggestion.kind === 'extend-phase' ? 'text-brand-orange' : 'text-brand-gold'}`}
+          />
+          <div className="flex-1">
+            <p className="text-neutral-200">{macroReviewSuggestion.headline}</p>
+            <p className="mt-0.5 text-xs text-neutral-500">{macroReviewSuggestion.detail}</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={handleConfirmMacroReview}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold text-black transition-colors duration-200 ${
+                  macroReviewSuggestion.kind === 'extend-phase' ? 'bg-brand-orange hover:bg-brand-orange-dark' : 'bg-brand-gold hover:bg-brand-gold-soft'
+                }`}
+              >
+                {macroReviewSuggestion.kind === 'extend-phase' ? 'Alargar fase' : 'Subir a intensivo'}
+              </button>
+              <button
+                onClick={handleDismissMacroReview}
+                className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
+              >
+                Ahora no
               </button>
             </div>
           </div>
