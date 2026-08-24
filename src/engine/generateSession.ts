@@ -54,6 +54,7 @@ import {
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
+import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import { filterAvoidingPain, getAvoidedPatterns } from './painFlags';
 import { getRampFactor, isWodRampActive } from './intensityRamp';
 
@@ -1226,6 +1227,36 @@ export function generateStrengthProgramSession(
   const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor;
   const rampNote = strengthRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
   const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
+
+  // El ciclo de halterofilia prescribe varios levantamientos por dia (familia snatch, familia
+  // clean/jerk, tiron, sentadilla), no uno solo — vive en su propio resolver en vez de forzarlo
+  // dentro de `resolveStrengthProgramDay`, pensado para un unico levantamiento por dia.
+  if (program.method === 'haltero') {
+    const halteroDay = resolveHalteroDay(program, dayPlan, profile.prs, autoregFactor, date);
+    if (!halteroDay) return generateOffSeasonSession(profile, history, date);
+
+    const halteroBlocks: SessionBlockResult[] = halteroDay.lifts.map((lift) => ({
+      block: lift.block,
+      movementId: lift.movementId,
+      sets: lift.sets,
+      reps: lift.reps,
+      loadKg: lift.loadKg,
+      format: lift.format,
+      notes: `${lift.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`,
+    }));
+    const primaryPattern = getMovementById(halteroDay.lifts[0].movementId)!.pattern;
+    const recentIdsHaltero = getRecentMovementIds(history);
+    const warmupHaltero = buildWarmupBlock(primaryPattern, recentIdsHaltero, false);
+    const cooldownHaltero = buildCooldownBlock(primaryPattern, recentIdsHaltero);
+
+    return {
+      date: dateIso,
+      mesocycleWeek: 0,
+      isRestDay: false,
+      blocks: [...warmupHaltero, ...halteroBlocks, ...cooldownHaltero],
+      strengthProgramLabel: `Ciclo Halterofilia · Semana ${halteroDay.weekNumber}/${HALTERO_TOTAL_WEEKS}`,
+    };
+  }
 
   const day = resolveStrengthProgramDay(
     program,

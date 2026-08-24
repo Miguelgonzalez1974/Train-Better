@@ -16,6 +16,7 @@ export const STRENGTH_METHOD_LABEL: Record<StrengthProgram['method'], string> = 
   ruso: 'Ruso / Sheiko',
   texas: 'Texas Method',
   juggernaut: 'Juggernaut Invertido',
+  haltero: 'Ciclo Halterofilia (14 semanas)',
 };
 
 /** Programa cuya ventana [startDate, endDate] contiene la fecha dada, o undefined — mismo criterio que getActiveMacrocycle. */

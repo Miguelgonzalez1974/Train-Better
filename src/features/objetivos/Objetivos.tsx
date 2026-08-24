@@ -19,6 +19,7 @@ import {
   Map,
   Sparkles,
   AlertTriangle,
+  Medal,
   type LucideIcon,
 } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -37,6 +38,7 @@ import type {
 } from '../../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay } from '../../engine/strengthPrograms';
+import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
 import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
 import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
@@ -104,6 +106,11 @@ function todayProgramFormat(program: StrengthProgram, profile: AthleteProfile): 
   const now = new Date();
   const dayPlan = getDayPlan(getWeekdayIndex(now), profile.trainingDaysPerWeek);
   if (!dayPlan.isTrainingDay) return 'Hoy descansas';
+  if (program.method === 'haltero') {
+    const halteroDay = resolveHalteroDay(program, dayPlan, profile.prs, 1, now);
+    if (!halteroDay) return null;
+    return `Semana ${halteroDay.weekNumber}/${HALTERO_TOTAL_WEEKS} · ${halteroDay.lifts.map((l) => l.format.split('· ').pop()).join(', ')}`;
+  }
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, toLocalIsoDate(now));
   const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek, avoidedPatterns, profile.variantPrs);
   return day?.format ?? null;
@@ -145,9 +152,14 @@ const STRENGTH_METHOD_META: Record<StrengthMethod, { label: string; blurb: strin
     blurb: 'Ondas de 4 semanas que suben de intensidad y bajan de volumen — 4 ondas seguidas, cada una más dura que la anterior.',
     Icon: Activity,
   },
+  haltero: {
+    label: 'Ciclo Halterofilia (14 semanas)',
+    blurb: 'Snatch, clean & jerk, tirones y sentadilla con escalera ascendente cada día — ciclo real de competición, termina en 3 intentos de 1RM.',
+    Icon: Medal,
+  },
 };
 
-const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut'];
+const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero'];
 
 /**
  * Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto.
@@ -162,6 +174,7 @@ const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   ruso: '#a78bfa',
   texas: '#fbbf24',
   juggernaut: '#34d399',
+  haltero: '#6366f1',
 };
 
 const LIFT_OPTIONS: { key: keyof PersonalRecords; label: string }[] = [
@@ -706,7 +719,13 @@ export function Objetivos() {
             const meta = STRENGTH_METHOD_META[p.method];
             const color = STRENGTH_METHOD_COLOR[p.method];
             const lifts = p.lifts.length > 0 ? p.lifts : DEFAULT_STRENGTH_PROGRAM_LIFTS;
-            const liftsLabel = lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ');
+            // El ciclo de halterofilia ignora `lifts` (trae fijos snatch/clean&jerk/tirones/sentadilla
+            // cada semana) — mostrar ese array por defecto aqui confundiria con levantamientos que el
+            // ciclo en realidad no usa.
+            const liftsLabel =
+              p.method === 'haltero'
+                ? 'Snatch · Clean & Jerk · Tirones · Sentadilla'
+                : lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ');
 
             if (status === 'activo') {
               const todayFormat = todayProgramFormat(p, profile);
@@ -839,7 +858,20 @@ export function Objetivos() {
                     <button
                       key={method}
                       type="button"
-                      onClick={() => setProgramDraft((prev) => (prev ? { ...prev, method } : prev))}
+                      onClick={() =>
+                        setProgramDraft((prev) => {
+                          if (!prev) return prev;
+                          // El ciclo de halterofilia tiene una duracion real de 14 semanas — al elegirlo se
+                          // propone esa fecha de fin en vez de dejar el default generico de 2 meses, para
+                          // que el ciclo pueda llegar hasta sus 3 intentos de 1RM finales.
+                          if (method === 'haltero' && prev.method !== 'haltero') {
+                            const end = new Date(`${prev.startDate}T00:00:00`);
+                            end.setDate(end.getDate() + 14 * 7 - 1);
+                            return { ...prev, method, endDate: toLocalIsoDate(end) };
+                          }
+                          return { ...prev, method };
+                        })
+                      }
                       className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors duration-200 ${
                         isSelected ? 'border-2 border-brand-gold bg-brand-gold/10' : 'border-brand-border bg-white/[0.03] hover:border-brand-gold/50'
                       }`}
@@ -855,39 +887,42 @@ export function Objetivos() {
               </div>
             </div>
 
-            <div>
-              <p className="mb-2 text-sm font-medium text-neutral-300">Levantamientos</p>
-              <div className="flex flex-wrap gap-2">
-                {LIFT_OPTIONS.map((lift) => {
-                  const isChecked = programDraft.lifts.includes(lift.key);
-                  return (
-                    <button
-                      key={lift.key}
-                      type="button"
-                      onClick={() => toggleProgramLift(lift.key)}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
-                        isChecked
-                          ? 'border-brand-gold bg-brand-gold/10 text-brand-gold'
-                          : 'border-brand-border text-neutral-400 hover:border-brand-gold/50'
-                      }`}
-                    >
-                      {lift.label}
-                    </button>
-                  );
-                })}
+            {programDraft.method !== 'haltero' && (
+              <div>
+                <p className="mb-2 text-sm font-medium text-neutral-300">Levantamientos</p>
+                <div className="flex flex-wrap gap-2">
+                  {LIFT_OPTIONS.map((lift) => {
+                    const isChecked = programDraft.lifts.includes(lift.key);
+                    return (
+                      <button
+                        key={lift.key}
+                        type="button"
+                        onClick={() => toggleProgramLift(lift.key)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                          isChecked
+                            ? 'border-brand-gold bg-brand-gold/10 text-brand-gold'
+                            : 'border-brand-border text-neutral-400 hover:border-brand-gold/50'
+                        }`}
+                      >
+                        {lift.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {programDraft.lifts.length === 0 && <p className="mt-1.5 text-xs text-brand-orange">Elige al menos un levantamiento.</p>}
               </div>
-              {programDraft.lifts.length === 0 && <p className="mt-1.5 text-xs text-brand-orange">Elige al menos un levantamiento.</p>}
-            </div>
+            )}
 
             <p className="text-xs text-neutral-600">
-              Mientras esté activo, tu día se reduce a calentamiento + este levantamiento + enfriamiento. Puedes
-              añadir un WOD aparte cualquier día desde Planificación, incluido el que tocaría según tu macrociclo.
+              {programDraft.method === 'haltero'
+                ? 'Mientras esté activo, tu día se reduce a calentamiento + los levantamientos de olimpico/sentadilla que toquen esa semana + enfriamiento — el ciclo ya trae fijos snatch, clean & jerk, tirones, jerks y sentadilla, no hace falta elegir. Puedes añadir un WOD aparte cualquier día desde Planificación.'
+                : 'Mientras esté activo, tu día se reduce a calentamiento + este levantamiento + enfriamiento. Puedes añadir un WOD aparte cualquier día desde Planificación, incluido el que tocaría según tu macrociclo.'}
             </p>
 
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={programDraft.lifts.length === 0}
+                disabled={programDraft.method !== 'haltero' && programDraft.lifts.length === 0}
                 className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Guardar programa
