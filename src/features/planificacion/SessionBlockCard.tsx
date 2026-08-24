@@ -83,7 +83,7 @@ function ScalingPicker({
   onUpdateEntry: (index: number, patch: Partial<SessionBlockResult>) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const options = getScalingOptions(entry.movementId);
+  const options = getScalingOptions(entry.movementId, entry.reps);
   if (options.length === 0) return null;
   const movement = getMovementById(entry.movementId);
 
@@ -99,21 +99,25 @@ function ScalingPicker({
       <Modal open={open} onClose={() => setOpen(false)} title={`Escalar ${movement?.name ?? entry.movementId}`}>
         <div className="flex flex-col gap-2">
           <p className="mb-1 text-xs text-neutral-500">
-            Alternativas recomendadas si hoy no te sale {movement?.name ?? 'este movimiento'} tal cual — mismo estímulo, ajustado a
-            lo que tienes.
+            Alternativas si hoy no puedes hacer {movement?.name ?? 'este movimiento'} tal cual — mismo estímulo, ajustado a lo que
+            tienes.
           </p>
-          {options.map((option, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                onUpdateEntry(index, buildScalingPatch(entry, option));
-                setOpen(false);
-              }}
-              className="rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left text-sm font-medium text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
-            >
-              {option.label}
-            </button>
-          ))}
+          {options.map((option, i) => {
+            const optionMovement = getMovementById(option.movementId);
+            const label = option.label ?? `${option.reps ?? ''} ${optionMovement?.name ?? option.movementId}`.trim();
+            return (
+              <button
+                key={i}
+                onClick={() => {
+                  onUpdateEntry(index, buildScalingPatch(entry, option));
+                  setOpen(false);
+                }}
+                className="rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left text-sm font-medium text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </Modal>
     </>

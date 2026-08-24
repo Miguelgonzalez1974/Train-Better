@@ -5,14 +5,21 @@
  * sentido ofrecer escalado para un movimiento que el atleta nunca va a ver programado. Los WOD de
  * referencia (benchmark) quedan fuera a proposito: se muestran como una sola tarjeta de texto, sin
  * entradas individuales por movimiento a las que enganchar un selector.
+ *
+ * Dos fuentes distintas conviven aqui: una lista curada por movimiento (esta misma tabla, para "no
+ * puedo hacer este movimiento gimnastico/con carga") y una conversion calculada para cardio (ver
+ * cardioConversion.ts, para "no puedo correr, ¿cuanto es en bici o remo?") — `getScalingOptions` es
+ * el unico punto de entrada para la UI, decide cual de las dos aplica segun el movimiento.
  */
 
+import { getCardioConversions } from './cardioConversion';
+
 export interface ScalingOption {
-  /** Texto a mostrar, fiel a como lo escribe la fuente. */
-  label: string;
+  /** Texto a mostrar. Ausente en las opciones de cardio calculadas — la UI compone "reps + nombre del movimiento" en su lugar, ya que el numero cambia cada dia. */
+  label?: string;
   /** Id de catalogo del movimiento sustituto — se usa para arrastrar el mismo mecanismo de historial/seguimiento que cualquier otro movimiento. */
   movementId: string;
-  /** Reps/formato fijo a prescribir en vez de las reps originales (ej. "150" para 150 Single-Unders). Si no se indica, se mantienen las reps ya prescritas ese dia. */
+  /** Reps/formato fijo a prescribir en vez de las reps originales (ej. "150" para 150 Single-Unders, o el resultado ya calculado de una conversion de cardio). Si no se indica, se mantienen las reps ya prescritas ese dia. */
   reps?: string;
   /** Cuando la fuente da una proporcion en vez de un numero fijo (ej. "2 Pull-Ups por cada Muscle-Up") — las reps escaladas se calculan a partir de las reps originales. */
   perRepRatio?: number;
@@ -71,6 +78,13 @@ export const SCALING_GUIDE: Record<string, ScalingOption[]> = {
   ],
 };
 
-export function getScalingOptions(movementId: string): ScalingOption[] {
+/**
+ * Punto de entrada unico para la UI. Prueba primero la conversion de cardio (necesita las reps de
+ * hoy para calcular el numero real); si el movimiento no es de cardio o esas reps no traen un
+ * numero reconocible, cae a la lista curada de sustituciones.
+ */
+export function getScalingOptions(movementId: string, currentReps?: string): ScalingOption[] {
+  const cardioOptions = getCardioConversions(movementId, currentReps);
+  if (cardioOptions.length > 0) return cardioOptions;
   return SCALING_GUIDE[movementId] ?? [];
 }
