@@ -1,7 +1,16 @@
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, type LucideIcon } from 'lucide-react';
+import { useState } from 'react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import { getMovementById, getMovementsByBlock, benchmarkWorkouts } from '../../data/movements';
+import {
+  getMovementById,
+  getMovementsByBlock,
+  benchmarkWorkouts,
+  getScalingOptions,
+  parseLeadingRepCount,
+  type ScalingOption,
+} from '../../data/movements';
 import type { SessionBlockResult } from '../../data/athlete/types';
+import { Modal } from '../shell/Modal';
 
 type Accent = 'orange' | 'gold' | 'neutral';
 
@@ -47,6 +56,70 @@ function CoachNote({ text }: { text: string }) {
   );
 }
 
+/** Convierte una opcion de escalado elegida en el patch a aplicar sobre el bloque — misma logica tanto si viene con reps fijas, con proporcion, o sin ninguna (se mantienen las reps de hoy). */
+function buildScalingPatch(entry: SessionBlockResult, option: ScalingOption): Partial<SessionBlockResult> {
+  const originalMovement = getMovementById(entry.movementId);
+  const patch: Partial<SessionBlockResult> = {
+    movementId: option.movementId,
+    scaledFrom: originalMovement?.name ?? entry.movementId,
+  };
+  if (option.reps) {
+    patch.reps = option.reps;
+  } else if (option.perRepRatio) {
+    const originalReps = parseLeadingRepCount(entry.reps);
+    if (originalReps) patch.reps = String(Math.round(originalReps * option.perRepRatio));
+  }
+  return patch;
+}
+
+/** Boton + selector para cambiar un movimiento del WOD por una alternativa conocida (Mayhem Athlete Scaling Doc) cuando el atleta no puede hacer el prescrito tal cual. */
+function ScalingPicker({
+  entry,
+  index,
+  onUpdateEntry,
+}: {
+  entry: SessionBlockResult;
+  index: number;
+  onUpdateEntry: (index: number, patch: Partial<SessionBlockResult>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const options = getScalingOptions(entry.movementId);
+  if (options.length === 0) return null;
+  const movement = getMovementById(entry.movementId);
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex shrink-0 items-center gap-1 rounded-md border border-brand-border px-1.5 py-0.5 text-[10px] font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+      >
+        <ArrowLeftRight size={10} strokeWidth={2.5} />
+        Escalar
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title={`Escalar ${movement?.name ?? entry.movementId}`}>
+        <div className="flex flex-col gap-2">
+          <p className="mb-1 text-xs text-neutral-500">
+            Alternativas recomendadas si hoy no te sale {movement?.name ?? 'este movimiento'} tal cual — mismo estímulo, ajustado a
+            lo que tienes.
+          </p>
+          {options.map((option, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                onUpdateEntry(index, buildScalingPatch(entry, option));
+                setOpen(false);
+              }}
+              className="rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left text-sm font-medium text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </Modal>
+    </>
+  );
+}
+
 /** Bloque wod cuando el dia toca un WOD de referencia (Fran, Grace...): una tarjeta unica con su formato oficial. */
 function BenchmarkWodCard({ entry }: { entry: SessionBlockResult }) {
   const benchmarkId = entry.movementId.replace('benchmark:', '');
@@ -65,7 +138,15 @@ function BenchmarkWodCard({ entry }: { entry: SessionBlockResult }) {
 }
 
 /** Bloque wod generado a medida: una unica tarjeta con el formato y los movimientos numerados en orden. */
-function CustomWodCard({ entries }: { entries: SessionBlockResult[] }) {
+function CustomWodCard({
+  entries,
+  entryIndices,
+  onUpdateEntry,
+}: {
+  entries: SessionBlockResult[];
+  entryIndices?: number[];
+  onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
+}) {
   const title = entries[0]?.title;
   const format = entries[0]?.format;
   const notes = entries[0]?.notes;
@@ -79,14 +160,20 @@ function CustomWodCard({ entries }: { entries: SessionBlockResult[] }) {
           const movement = getMovementById(entry.movementId);
           if (!movement) return null;
           return (
-            <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                {idx + 1}
-              </span>
-              <div>
-                <p className="font-semibold leading-tight text-white">{movement.name}</p>
-                {entry.reps && <p className="text-xs text-neutral-500">{entry.reps} reps</p>}
+            <div key={`${entry.movementId}-${idx}`} className="flex items-start justify-between gap-2.5">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                  {idx + 1}
+                </span>
+                <div>
+                  <p className="font-semibold leading-tight text-white">{movement.name}</p>
+                  {entry.reps && <p className="text-xs text-neutral-500">{entry.reps} reps</p>}
+                  {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
+                </div>
               </div>
+              {onUpdateEntry && entryIndices && (
+                <ScalingPicker entry={entry} index={entryIndices[idx]} onUpdateEntry={onUpdateEntry} />
+              )}
             </div>
           );
         })}
@@ -400,7 +487,7 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
           isBenchmarkWod ? (
             <BenchmarkWodCard entry={results[0]} />
           ) : (
-            <CustomWodCard entries={results} />
+            <CustomWodCard entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
           )
         ) : block === 'cooldown' ? (
           <CooldownRoutineCard entries={results} />

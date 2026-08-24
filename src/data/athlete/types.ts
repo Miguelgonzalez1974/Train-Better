@@ -160,6 +160,8 @@ export interface SessionBlockResult {
   subgroup?: string;
   /** Nombre propio del WOD custom del dia (ej. "Tormenta Salvaje"), usado solo por el bloque wod */
   title?: string;
+  /** Nombre del movimiento original cuando este bloque se escalo a una alternativa (ver src/data/movements/scalingGuide.ts) — deja constancia de que hoy no fue el prescrito. */
+  scaledFrom?: string;
 }
 
 export interface DailySession {

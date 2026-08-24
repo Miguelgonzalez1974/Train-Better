@@ -9,6 +9,7 @@ import { cooldownMovements } from './cooldown';
 
 export * from './types';
 export { benchmarkWorkouts } from './benchmarkWods';
+export { getScalingOptions, parseLeadingRepCount, SCALING_GUIDE, type ScalingOption } from './scalingGuide';
 
 export const allMovements: Movement[] = [
   ...strengthMovements,
