@@ -67,12 +67,27 @@ export function weeksSinceStart(startDateIso: string, today: Date): number {
   return Math.floor(diffDays / 7);
 }
 
-/** Duracion total en semanas de un macrociclo (fin - inicio, redondeado a la semana mas cercana). */
-export function totalMacrocycleWeeks(macro: Macrocycle): number {
-  const start = new Date(`${macro.startDate}T00:00:00`);
-  const end = new Date(`${macro.endDate}T00:00:00`);
+/**
+ * Duracion total en semanas de un rango start/end (fin - inicio, redondeado a la semana mas
+ * cercana). Generico a proposito — no solo Macrocycle, tambien StrengthProgram, ambos con el
+ * mismo par de campos y la misma nocion de "cuanto dura esto".
+ */
+export function totalMacrocycleWeeks(range: { startDate: string; endDate: string }): number {
+  const start = new Date(`${range.startDate}T00:00:00`);
+  const end = new Date(`${range.endDate}T00:00:00`);
   const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
   return Math.max(1, Math.round(diffDays / 7));
+}
+
+/**
+ * Semana actual (1-indexada, acotada a [1, semanas totales]) dentro de cualquier rango
+ * start/end — mismo calculo que Objetivos.tsx ya usaba solo para macrociclos, generalizado para
+ * que un StrengthProgram (misma forma start/end) pueda mostrar su propio progreso sin duplicar
+ * la cuenta.
+ */
+export function currentWeekInRange(range: { startDate: string; endDate: string }, today: Date): number {
+  const elapsed = weeksSinceStart(range.startDate, today) + 1;
+  return Math.min(Math.max(elapsed, 1), totalMacrocycleWeeks(range));
 }
 
 export interface PhaseProgress {

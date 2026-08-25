@@ -4,16 +4,15 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
 import { computeWeakPoints, computePrTrends, type PrTrendDirection } from '../../engine/weakPoints';
-import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
-import { buildMacroPlan } from '../../engine/macroPlan';
-import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
+import { toLocalIsoDate } from '../../engine/periodization';
+import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { AcwrGauge } from './AcwrGauge';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { NextWeekPreview } from './NextWeekPreview';
 import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
-import { GoalsProgressCard } from './GoalsProgressCard';
+import { ProgressOverviewCard } from './ProgressOverviewCard';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -107,22 +106,16 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
     const direction: PrTrendDirection = week > month ? 'subida' : week < month ? 'bajada' : 'estable';
     return { direction, label: `Semana: ${week.toFixed(1)}` };
   }, [stats.rpeMedio, stats.rpeMedioSemana]);
-  const macroPlan = useMemo(() => {
-    const active = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(new Date()));
-    return active ? buildMacroPlan(active, profile.prs) : null;
-  }, [profile.macrocycles, profile.prs]);
+  const todayIso = toLocalIsoDate(new Date());
+  const structureRow = useMemo(() => buildStructureRow(profile, todayIso), [profile, todayIso]);
+  const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-neutral-400 capitalize">{MONTH_LABEL}</p>
-          <p className="text-lg font-semibold text-white">Tu progreso</p>
-          {macroPlan && (
-            <p className="mt-0.5 text-xs font-medium text-brand-gold">
-              Semana {macroPlan.currentWeek} de {macroPlan.totalWeeks} · {MESOCYCLE_PHASE[macroPlan.currentPhaseIndex]}
-            </p>
-          )}
+          <p className="text-lg font-semibold text-white">Resumen</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -167,7 +160,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         </div>
       </div>
 
-      <GoalsProgressCard goals={profile.goals} history={history} />
+      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
 
       <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
 
