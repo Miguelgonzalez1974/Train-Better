@@ -353,7 +353,7 @@ export function Objetivos() {
           {!macroDraft && (
             <button
               onClick={() => setMacroDraft(newMacroDraft())}
-              className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
             >
               <Plus size={15} strokeWidth={2.25} />
               Nuevo
@@ -689,7 +689,7 @@ export function Objetivos() {
           {!programDraft && (
             <button
               onClick={() => setProgramDraft(newStrengthProgramDraft())}
-              className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
             >
               <Plus size={15} strokeWidth={2.25} />
               Nuevo
@@ -950,7 +950,7 @@ export function Objetivos() {
           {!rampDraft && (
             <button
               onClick={() => setRampDraft(newRampDraft(profile.intensityRamp))}
-              className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
             >
               {profile.intensityRamp ? <Pencil size={13} strokeWidth={2.25} /> : <Plus size={15} strokeWidth={2.25} />}
               {profile.intensityRamp ? 'Editar' : 'Nueva'}
@@ -1079,7 +1079,7 @@ export function Objetivos() {
           {!goalDraft && (
             <button
               onClick={() => setGoalDraft(newGoalDraft())}
-              className="flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-1.5 text-sm text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
             >
               <Plus size={15} strokeWidth={2.25} />
               Nuevo
