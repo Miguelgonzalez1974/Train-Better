@@ -4,11 +4,16 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
 import { computeWeakPoints } from '../../engine/weakPoints';
+import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
+import { buildMacroPlan } from '../../engine/macroPlan';
+import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { AcwrGauge } from './AcwrGauge';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { NextWeekPreview } from './NextWeekPreview';
 import { BodyweightCard } from './BodyweightCard';
+import { PersonalRecordsCard } from './PersonalRecordsCard';
+import { GoalsProgressCard } from './GoalsProgressCard';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -78,6 +83,10 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
   const recent = useMemo(() => [...history].reverse().slice(0, 5), [history]);
+  const macroPlan = useMemo(() => {
+    const active = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(new Date()));
+    return active ? buildMacroPlan(active, profile.prs) : null;
+  }, [profile.macrocycles, profile.prs]);
 
   function handleDeleteEntry(date: string) {
     if (!window.confirm(`¿Borrar la sesión registrada el ${date}? Esto no se puede deshacer.`)) return;
@@ -91,6 +100,11 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         <div>
           <p className="text-sm text-neutral-400 capitalize">{MONTH_LABEL}</p>
           <p className="text-lg font-semibold text-white">Tu progreso</p>
+          {macroPlan && (
+            <p className="mt-0.5 text-xs font-medium text-brand-gold">
+              Semana {macroPlan.currentWeek} de {macroPlan.totalWeeks} · {MESOCYCLE_PHASE[macroPlan.currentPhaseIndex]}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -128,6 +142,10 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
           <CompactMetricCard icon={Gauge} label="RPE medio" value={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'} />
         </div>
       </div>
+
+      <GoalsProgressCard goals={profile.goals} history={history} />
+
+      <PersonalRecordsCard prs={profile.prs} />
 
       <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
 
