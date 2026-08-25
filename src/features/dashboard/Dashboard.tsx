@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight, Trash2 } from 'lucide-react';
+import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
@@ -75,7 +75,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
-  const [history, setHistory] = useState(() => athleteRepository.getHistory());
+  const [history] = useState(() => athleteRepository.getHistory());
   const [profile] = useState(() => athleteRepository.getProfile());
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showNextWeek, setShowNextWeek] = useState(false);
@@ -83,17 +83,10 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
   const prTrends = useMemo(() => computePrTrends(history), [history]);
-  const recent = useMemo(() => [...history].reverse().slice(0, 5), [history]);
   const macroPlan = useMemo(() => {
     const active = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(new Date()));
     return active ? buildMacroPlan(active, profile.prs) : null;
   }, [profile.macrocycles, profile.prs]);
-
-  function handleDeleteEntry(date: string) {
-    if (!window.confirm(`¿Borrar la sesión registrada el ${date}? Esto no se puede deshacer.`)) return;
-    athleteRepository.deleteHistoryEntry(date);
-    setHistory(athleteRepository.getHistory());
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -159,46 +152,6 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
       <AcwrGauge result={acwr} />
 
       <WeakPointsCard points={weakPoints} />
-
-      <section className="card p-4">
-        <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-white">Últimas sesiones</p>
-        {recent.length === 0 ? (
-          <p className="text-sm text-neutral-500">Todavía no has completado ninguna sesión.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {recent.map((entry) => (
-              <div
-                key={entry.date}
-                className="flex items-center justify-between rounded-xl bg-brand-surfaceMuted/80 px-3 py-2 text-sm transition-colors duration-200 hover:bg-brand-surfaceMuted"
-              >
-                <span className="text-neutral-300">{entry.date}</span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-                      entry.rxOrScaled === 'rx' ? 'bg-brand-gold/20 text-brand-gold' : 'bg-white/10 text-neutral-300'
-                    }`}
-                  >
-                    {entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado'}
-                  </span>
-                  <span className="text-neutral-500">RPE {entry.rpe}</span>
-                  {entry.wodResult && (
-                    <span className="rounded-md bg-brand-orange/15 px-2 py-0.5 text-xs font-semibold text-brand-orange">
-                      WOD: {entry.wodResult.value}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => handleDeleteEntry(entry.date)}
-                    title="Borrar esta sesión"
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-400"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
