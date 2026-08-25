@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight } from 'lucide-react';
+import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
-import { computeWeakPoints, computePrTrends } from '../../engine/weakPoints';
+import { computeWeakPoints, computePrTrends, type PrTrendDirection } from '../../engine/weakPoints';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildMacroPlan } from '../../engine/macroPlan';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
@@ -47,16 +47,27 @@ function HeroMetricCard({
   );
 }
 
-/** Tarjeta compacta secundaria: icono + numero en linea, sin competir con la protagonista. */
+const RPE_TREND_ICON: Record<PrTrendDirection, typeof TrendingUp> = {
+  subida: TrendingUp,
+  bajada: TrendingDown,
+  estable: Minus,
+};
+
+/** Tarjeta compacta secundaria: icono + numero en linea, sin competir con la protagonista. Admite una linea de comparacion opcional (p.ej. RPE del mes frente al de la semana). */
 function CompactMetricCard({
   icon: Icon,
   label,
   value,
+  comparisonLabel,
+  comparisonTrend,
 }: {
   icon: typeof CalendarCheck;
   label: string;
   value: string;
+  comparisonLabel?: string;
+  comparisonTrend?: PrTrendDirection;
 }) {
+  const TrendIcon = comparisonTrend ? RPE_TREND_ICON[comparisonTrend] : null;
   return (
     <div className="card flex flex-1 items-center gap-2.5 p-2.5 transition-transform duration-200 hover:-translate-y-0.5">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 text-brand-orange">
@@ -65,6 +76,12 @@ function CompactMetricCard({
       <div className="flex-1">
         <p className="text-[10px] text-neutral-400">{label}</p>
         <p className="text-base font-bold leading-tight text-white">{value}</p>
+        {comparisonLabel && (
+          <div className="mt-0.5 flex items-center gap-1">
+            {TrendIcon && <TrendIcon size={10} strokeWidth={2.75} className="text-neutral-500" />}
+            <p className="text-[10px] text-neutral-500">{comparisonLabel}</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -83,6 +100,13 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
   const prTrends = useMemo(() => computePrTrends(history), [history]);
+  const rpeTrend = useMemo(() => {
+    if (stats.rpeMedio === null || stats.rpeMedioSemana === null) return null;
+    const month = Math.round(stats.rpeMedio * 10) / 10;
+    const week = Math.round(stats.rpeMedioSemana * 10) / 10;
+    const direction: PrTrendDirection = week > month ? 'subida' : week < month ? 'bajada' : 'estable';
+    return { direction, label: `Semana: ${week.toFixed(1)}` };
+  }, [stats.rpeMedio, stats.rpeMedioSemana]);
   const macroPlan = useMemo(() => {
     const active = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(new Date()));
     return active ? buildMacroPlan(active, profile.prs) : null;
@@ -133,7 +157,13 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
             label="Días Rx"
             value={stats.diasEntrenados > 0 ? `${stats.diasRx} / ${stats.diasEntrenados}` : '—'}
           />
-          <CompactMetricCard icon={Gauge} label="RPE medio" value={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'} />
+          <CompactMetricCard
+            icon={Gauge}
+            label="RPE medio"
+            value={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'}
+            comparisonLabel={rpeTrend?.label}
+            comparisonTrend={rpeTrend?.direction}
+          />
         </div>
       </div>
 
