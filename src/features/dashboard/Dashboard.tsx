@@ -3,7 +3,7 @@ import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRig
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
-import { computeWeakPoints } from '../../engine/weakPoints';
+import { computeWeakPoints, computePrTrends } from '../../engine/weakPoints';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildMacroPlan } from '../../engine/macroPlan';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
@@ -82,6 +82,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const stats = useMemo(() => getMonthlyStats(history, profile.trainingDatesLog ?? []), [history, profile.trainingDatesLog]);
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
+  const prTrends = useMemo(() => computePrTrends(history), [history]);
   const recent = useMemo(() => [...history].reverse().slice(0, 5), [history]);
   const macroPlan = useMemo(() => {
     const active = getActiveMacrocycle(profile.macrocycles, toLocalIsoDate(new Date()));
@@ -145,7 +146,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
 
       <GoalsProgressCard goals={profile.goals} history={history} />
 
-      <PersonalRecordsCard prs={profile.prs} />
+      <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
 
       <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
 

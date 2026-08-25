@@ -1,6 +1,7 @@
 import { getMovementById } from '../data/movements';
 import type { Movement } from '../data/movements/types';
-import type { SessionHistoryEntry } from '../data/athlete/types';
+import type { PersonalRecords, SessionHistoryEntry } from '../data/athlete/types';
+import { resolveOlyPRKey, resolveStrengthPRKey } from './prResolution';
 
 export type WeakPointStatus = 'a-trabajar' | 'vigilar' | 'en-progreso' | 'sin-datos';
 
@@ -118,4 +119,41 @@ export function computeWeakPoints(history: SessionHistoryEntry[]): PatternStrain
   });
 
   return results;
+}
+
+export type PrTrendDirection = 'subida' | 'bajada' | 'estable';
+
+/**
+ * Compara los dos tests (testLoadKg) mas recientes que tocan cada PR raiz — un lift sin al menos 2
+ * tests registrados no tiene entrada (no hay "estable" por defecto, solo se afirma tendencia con
+ * datos reales). Misma logica de coincidencia por dia que ya usa `computeWeakPoints` arriba (un dia
+ * cuenta como test de un PR si alguno de sus movimientos resuelve a ese PR raiz via
+ * resolveStrengthPRKey/resolveOlyPRKey, sin distinguir de que bloque exacto vino — mismo nivel de
+ * precision ya aceptado en esa funcion, no una nueva regla mas estricta).
+ */
+export function computePrTrends(history: SessionHistoryEntry[]): Partial<Record<keyof PersonalRecords, PrTrendDirection>> {
+  const testsByKey: Partial<Record<keyof PersonalRecords, { date: string; load: number }[]>> = {};
+
+  for (const entry of history) {
+    if (entry.testLoadKg == null) continue;
+    const keysToday = new Set<keyof PersonalRecords>();
+    for (const id of entry.movementIds) {
+      if (id.startsWith('benchmark:')) continue;
+      const movement = getMovementById(id);
+      const key = movement && (resolveStrengthPRKey(movement) ?? resolveOlyPRKey(movement));
+      if (key) keysToday.add(key);
+    }
+    for (const key of keysToday) {
+      (testsByKey[key] ??= []).push({ date: entry.date, load: entry.testLoadKg });
+    }
+  }
+
+  const trends: Partial<Record<keyof PersonalRecords, PrTrendDirection>> = {};
+  for (const key of Object.keys(testsByKey) as (keyof PersonalRecords)[]) {
+    const tests = testsByKey[key]!.sort((a, b) => a.date.localeCompare(b.date));
+    if (tests.length < 2) continue;
+    const [prev, last] = tests.slice(-2);
+    trends[key] = last.load > prev.load ? 'subida' : last.load < prev.load ? 'bajada' : 'estable';
+  }
+  return trends;
 }

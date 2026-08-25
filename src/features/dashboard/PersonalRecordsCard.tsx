@@ -1,5 +1,6 @@
-import { Trophy } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { PersonalRecords } from '../../data/athlete/types';
+import type { PrTrendDirection } from '../../engine/weakPoints';
 
 /** Orden deliberado: fila 1 los grandes basicos, fila 2 press estricto + los 3 de halterofilia — no alfabetico, se lee como un atleta agruparia sus propios numeros. */
 const PR_ROWS: { key: keyof PersonalRecords; label: string }[] = [
@@ -13,8 +14,20 @@ const PR_ROWS: { key: keyof PersonalRecords; label: string }[] = [
   { key: 'cleanAndJerk', label: 'C&J' },
 ];
 
-/** Tarjeta compacta de los 8 PRs raiz del atleta — antes no habia ni una cifra de 1RM visible en el Dashboard pese a ser el dato mas central para el resto del motor. */
-export function PersonalRecordsCard({ prs }: { prs: PersonalRecords }) {
+const TREND_META: Record<PrTrendDirection, { Icon: typeof TrendingUp; className: string }> = {
+  subida: { Icon: TrendingUp, className: 'text-brand-neon' },
+  bajada: { Icon: TrendingDown, className: 'text-brand-orange' },
+  estable: { Icon: Minus, className: 'text-neutral-500' },
+};
+
+/**
+ * Tarjeta compacta de los 8 PRs raiz del atleta — antes no habia ni una cifra de 1RM visible en el
+ * Dashboard pese a ser el dato mas central para el resto del motor. La flechita de tendencia (no
+ * solo el numero, que ya se ve editable en el perfil) es lo que la diferencia de un simple
+ * duplicado: compara los dos ultimos tests reales de cada lift, como haria un coach de verdad —
+ * ver `computePrTrends`.
+ */
+export function PersonalRecordsCard({ prs, trends }: { prs: PersonalRecords; trends: Partial<Record<keyof PersonalRecords, PrTrendDirection>> }) {
   return (
     <section className="card p-4">
       <div className="mb-3 flex items-center gap-2">
@@ -24,13 +37,22 @@ export function PersonalRecordsCard({ prs }: { prs: PersonalRecords }) {
         <p className="text-sm font-semibold uppercase tracking-wide text-white">Tus PRs</p>
       </div>
       <div className="grid grid-cols-4 gap-2">
-        {PR_ROWS.map(({ key, label }) => (
-          <div key={key} className="flex flex-col items-center gap-0.5 rounded-lg bg-brand-surfaceMuted/80 px-1 py-2 text-center">
-            <span className="text-[15px] font-bold leading-none text-white">{prs[key]}</span>
-            <span className="text-[9px] text-neutral-500">kg</span>
-            <span className="mt-0.5 text-[9px] leading-tight text-neutral-400">{label}</span>
-          </div>
-        ))}
+        {PR_ROWS.map(({ key, label }) => {
+          const trend = trends[key];
+          const TrendIcon = trend ? TREND_META[trend].Icon : null;
+          return (
+            <div key={key} className="relative flex flex-col items-center gap-0.5 rounded-lg bg-brand-surfaceMuted/80 px-1 py-2 text-center">
+              {TrendIcon && (
+                <span className={`absolute right-1 top-1 ${TREND_META[trend!].className}`} title={`Tendencia: ${trend}`}>
+                  <TrendIcon size={11} strokeWidth={2.75} />
+                </span>
+              )}
+              <span className="text-[15px] font-bold leading-none text-white">{prs[key]}</span>
+              <span className="text-[9px] text-neutral-500">kg</span>
+              <span className="mt-0.5 text-[9px] leading-tight text-neutral-400">{label}</span>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
