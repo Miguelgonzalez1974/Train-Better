@@ -498,12 +498,15 @@ interface TemporadaTier {
   reps: number;
   basePercent: number;
   label: string;
+  /** Si true, se puntua por tiempo (reps totales fijas, la barra se puede soltar) en vez de series x reps normales — ver MFT Cycle 4 ("40 Front Squats for time @ 62.5%"). */
+  scoreAsWod?: boolean;
 }
 
 const TEMPORADA_TIERS: TemporadaTier[] = [
   { sets: 5, reps: 5, basePercent: 0.7, label: '5x5' },
   { sets: 4, reps: 4, basePercent: 0.8, label: '4x4' },
   { sets: 3, reps: 3, basePercent: 0.85, label: '3x3' },
+  { sets: 1, reps: 40, basePercent: 0.625, label: 'reps por tiempo', scoreAsWod: true },
 ];
 
 const TEMPORADA_BUILD_WEEKS = 5;
@@ -774,6 +777,27 @@ export function resolveStrengthProgramDay(
     const percent = kind === 'deload' ? tier.basePercent - 0.1 : tier.basePercent + 0.025 * buildOffset;
     const loadKg = roundToNearestPlate(currentPR * percent * autoregFactor);
     const formatSuffix = kind === 'deload' ? 'descarga' : tier.label;
+
+    if (tier.scoreAsWod) {
+      // Reps totales fijas a un % fijo, puntuadas por tiempo (la barra se puede soltar cuantas
+      // veces haga falta) — a diferencia de las 3 series normales, esto se puntua como un WOD, no
+      // como una serie de fuerza clasica (mismo mecanismo `scoreAsWod` que el test de max reps).
+      const repsForTimeNote =
+        kind === 'deload'
+          ? 'Descarga antes del retest — mismo esquema de reps, menos carga.'
+          : `${tier.reps} repeticiones del mismo levantamiento — suelta la barra las veces que necesites, lo que cuenta es el tiempo total.`;
+      return {
+        movementId,
+        prKey: liftKey,
+        sets: tier.sets,
+        reps: String(tier.reps),
+        loadKg,
+        format: `For Time · Bloque de Temporada · Semana ${weekNumber} de ${TEMPORADA_TOTAL_WEEKS} (${formatSuffix}) — ${tier.reps} reps @ ${Math.round(percent * 100)}%`,
+        notes: `${repsForTimeNote}${sharedPainNote}`,
+        scoreAsWod: true,
+      };
+    }
+
     const note =
       kind === 'deload'
         ? 'Descarga antes del retest — baja la intensidad a propósito para llegar fresco a la semana de cierre.'
