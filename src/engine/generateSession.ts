@@ -765,19 +765,31 @@ function buildWodBlock(
     monoTarget = Math.max(emphasisTarget, progressTarget);
   }
 
+  // Mismo mecanismo de sesgo que ya usan fuerza y skill (goalPreference + pickVariedWithPreference):
+  // si el atleta tiene un objetivo de fuerza/potencia sobre un lift que ademas es de los habilitados
+  // para WOD (ver WOD_BARBELL_LOAD_PERCENT), ese lift aparece con mas frecuencia como el movimiento
+  // "con carga" del WOD, no solo en su bloque de fuerza dedicado. Si el objetivo no aplica a ningun
+  // lift de WOD (p.ej. un objetivo de gimnasticos), preferChance queda a 0 y no cambia nada.
+  const wodLiftPref = goalPreference(goals, (m) => m.id in WOD_BARBELL_LOAD_PERCENT, history);
+
   // Trifecta clasica de CrossFit: 1 gimnastico + 1 con carga + 1 monoestructural cuando es posible.
   const gymnasticsPool = pool.filter((m) => getWodDomain(m.id) === 'gymnastics');
   const weightedPool = pool.filter((m) => getWodDomain(m.id) === 'weighted');
   const monoPool = pool.filter((m) => getWodDomain(m.id) === 'monostructural');
-  const domainCycle = [weightedPool, gymnasticsPool, monoPool];
+  // Orden de relleno segun fase del macrociclo: en acumulacion/intensificacion (semana 1-2) hay mas
+  // margen para tolerar volumen de barra, asi que "con carga" se prueba primero; en pico/descarga
+  // (semana 3-4) se prueba al final — mismo criterio conservador que ya usa el resto del motor esas
+  // semanas (nada de chipper ni escalera), aqui aplicado a que domina el WOD en vez de a su formato.
+  const domainCycle = week <= 2 ? [weightedPool, gymnasticsPool, monoPool] : [gymnasticsPool, monoPool, weightedPool];
 
   const picks: Movement[] = [];
   const usedIds = new Set(recentIds);
 
-  function pickFrom(domainPool: Movement[]): void {
+  function pickFrom(domainPool: Movement[], preferredId?: string, preferChance = 0): void {
     const remaining = domainPool.filter((m) => !picks.some((p) => p.id === m.id));
     const fallback = pool.filter((m) => !picks.some((p) => p.id === m.id));
-    const pick = pickVaried(remaining.length > 0 ? remaining : fallback, usedIds);
+    const candidates = remaining.length > 0 ? remaining : fallback;
+    const pick = preferredId ? pickVariedWithPreference(candidates, usedIds, preferredId, preferChance) : pickVaried(candidates, usedIds);
     if (pick) {
       picks.push(pick);
       usedIds.add(pick.id);
@@ -787,7 +799,7 @@ function buildWodBlock(
   if (isDescendingLadder) {
     // Pareja clasica barra + gimnastico (Fran = thruster+pull-up, Diane = deadlift+HSPU, Elizabeth =
     // clean+dip) — nunca dos movimientos con carga ni dos gimnasticos en este formato en concreto.
-    pickFrom(weightedPool);
+    pickFrom(weightedPool, wodLiftPref.movementId, wodLiftPref.preferChance);
     pickFrom(gymnasticsPool);
   } else {
     pickFrom(gymnasticsPool);
@@ -800,7 +812,9 @@ function buildWodBlock(
     // sí cicla de verdad por los 3 dominios.
     let fillIndex = 0;
     while (picks.length < movementCount) {
-      pickFrom(domainCycle[fillIndex % domainCycle.length]);
+      const domain = domainCycle[fillIndex % domainCycle.length];
+      if (domain === weightedPool) pickFrom(domain, wodLiftPref.movementId, wodLiftPref.preferChance);
+      else pickFrom(domain);
       fillIndex++;
     }
   }
