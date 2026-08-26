@@ -17,6 +17,7 @@ export const STRENGTH_METHOD_LABEL: Record<StrengthProgram['method'], string> = 
   texas: 'Texas Method',
   juggernaut: 'Juggernaut Invertido',
   haltero: 'Ciclo Halterofilia (14 semanas)',
+  temporada: 'Bloque de Temporada (8 semanas)',
 };
 
 /** Programa cuya ventana [startDate, endDate] contiene la fecha dada, o undefined — mismo criterio que getActiveMacrocycle. */
@@ -473,6 +474,60 @@ function pickConjugateLift(candidates: (keyof PersonalRecords)[], cycleIndex: nu
 }
 
 // ---------------------------------------------------------------------------
+// Bloque de Temporada — pensado para abrir una temporada de competicion (no
+// para repetirse en bucle como el resto de metodos, igual que el ciclo de
+// halterofilia): semana 1 es un test 1RM real de cada levantamiento elegido,
+// semanas 2-6 suben en olas 5x5/4x4/3x3 (+2.5% cada semana sobre la base de
+// cada tier), semana 7 descarga (misma tabla de tiers, -10 puntos), y semana
+// 8 repite el mismo test 1RM sobre los mismos levantamientos que la semana 1
+// — asi el atleta cierra el bloque con una comparacion real de antes/despues,
+// no solo una sensacion. Inspirado en un patron real de temporada completa
+// (test -> progresion -> retest) de un documento de programacion competitiva
+// que el usuario aporto. Adaptacion deliberada respecto a la fuente: alli un
+// unico levantamiento subia los 3 tiers dentro de la misma semana calendario;
+// aqui el tier lo decide el dia de entreno (igual que Ondulante decide su
+// estilo), asi que cualquier levantamiento de la lista del atleta pasa por
+// alguno de los 3 tiers cada semana sin necesitar un motor de sub-ciclos por
+// levantamiento que el resto de la app no tiene.
+// ---------------------------------------------------------------------------
+
+interface TemporadaTier {
+  sets: number;
+  reps: number;
+  basePercent: number;
+  label: string;
+}
+
+const TEMPORADA_TIERS: TemporadaTier[] = [
+  { sets: 5, reps: 5, basePercent: 0.7, label: '5x5' },
+  { sets: 4, reps: 4, basePercent: 0.8, label: '4x4' },
+  { sets: 3, reps: 3, basePercent: 0.85, label: '3x3' },
+];
+
+const TEMPORADA_BUILD_WEEKS = 5;
+/** test (1) + olas ascendentes (5) + descarga (1) + retest (1) */
+export const TEMPORADA_TOTAL_WEEKS = TEMPORADA_BUILD_WEEKS + 3;
+
+type TemporadaWeekKind = 'test' | 'build' | 'deload' | 'retest';
+
+interface TemporadaWeek {
+  kind: TemporadaWeekKind;
+  /** 0-4, solo relevante en semanas de construccion — cuanto suma cada tier sobre su base. */
+  buildOffset: number;
+  weekNumber: number;
+}
+
+/** Nunca pasa de la semana 8 (retest) aunque el programa siga activo mas tiempo — un bloque de una sola pasada, no un ciclo que se repite. */
+function resolveTemporadaWeek(startDateIso: string, today: Date): TemporadaWeek {
+  const elapsed = Math.min(weeksSinceStart(startDateIso, today), TEMPORADA_TOTAL_WEEKS - 1);
+  const weekNumber = elapsed + 1;
+  if (elapsed === 0) return { kind: 'test', buildOffset: 0, weekNumber };
+  if (elapsed <= TEMPORADA_BUILD_WEEKS) return { kind: 'build', buildOffset: elapsed - 1, weekNumber };
+  if (elapsed === TEMPORADA_BUILD_WEEKS + 1) return { kind: 'deload', buildOffset: 0, weekNumber };
+  return { kind: 'retest', buildOffset: 0, weekNumber };
+}
+
+// ---------------------------------------------------------------------------
 // Resolucion unificada
 // ---------------------------------------------------------------------------
 
@@ -659,6 +714,47 @@ export function resolveStrengthProgramDay(
       loadKg,
       format: scheme.label,
       notes: `${scheme.coachNote}${sharedPainNote}`,
+    };
+  }
+
+  if (program.method === 'temporada') {
+    const { kind, buildOffset, weekNumber } = resolveTemporadaWeek(program.startDate, today);
+
+    if (kind === 'test' || kind === 'retest') {
+      // Igual que en el resto de la app, un test real nunca se descuenta por autorregulacion — un
+      // maximo a intencion reducida no es un dato valido para comparar contra el cierre del bloque.
+      const testLoadKg = roundToNearestPlate(currentPR);
+      const closingNote =
+        kind === 'retest'
+          ? ' Es el mismo test que hiciste en la semana 1 de este bloque — compara el número directamente.'
+          : ' Referencia de partida para todo el bloque: en la semana 8 repites este mismo test para medir tu progreso real.';
+      return {
+        movementId,
+        prKey: liftKey,
+        sets: 1,
+        reps: '1',
+        loadKg: testLoadKg,
+        format: 'Test 1RM',
+        notes: `Semana ${weekNumber} de ${TEMPORADA_TOTAL_WEEKS} · ${kind === 'test' ? 'test de apertura' : 'retest de cierre'} — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${closingNote}${sharedPainNote}`,
+      };
+    }
+
+    const tier = TEMPORADA_TIERS[Math.max(dayPlan.trainingDayIndex, 0) % TEMPORADA_TIERS.length];
+    const percent = kind === 'deload' ? tier.basePercent - 0.1 : tier.basePercent + 0.025 * buildOffset;
+    const loadKg = roundToNearestPlate(currentPR * percent * autoregFactor);
+    const formatSuffix = kind === 'deload' ? 'descarga' : tier.label;
+    const note =
+      kind === 'deload'
+        ? 'Descarga antes del retest — baja la intensidad a propósito para llegar fresco a la semana de cierre.'
+        : `Ola ascendente ${tier.label} al ${Math.round(percent * 100)}% — cada semana sube 2.5% hasta la descarga antes del retest.`;
+    return {
+      movementId,
+      prKey: liftKey,
+      sets: tier.sets,
+      reps: String(tier.reps),
+      loadKg,
+      format: `Bloque de Temporada · Semana ${weekNumber} de ${TEMPORADA_TOTAL_WEEKS} (${formatSuffix})`,
+      notes: `${note}${sharedPainNote}`,
     };
   }
 

@@ -1,4 +1,4 @@
-import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, type LucideIcon } from 'lucide-react';
+import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, type LucideIcon } from 'lucide-react';
 import type { StrengthMethod } from '../../data/athlete/types';
 
 export interface StrengthMethodMeta {
@@ -48,9 +48,14 @@ export const STRENGTH_METHOD_META: Record<StrengthMethod, StrengthMethodMeta> = 
     blurb: 'Snatch, clean & jerk, tirones y sentadilla con escalera ascendente cada día — ciclo real de competición, termina en 3 intentos de 1RM.',
     Icon: Medal,
   },
+  temporada: {
+    label: 'Bloque de Temporada (8 semanas)',
+    blurb: 'Test real de tus levantamientos, 5 semanas de olas ascendentes, descarga y un retest idéntico al de apertura — ideal para arrancar una temporada con una comparación real de antes/después.',
+    Icon: Rocket,
+  },
 };
 
-export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero'];
+export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada'];
 
 /**
  * Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto.
@@ -66,4 +71,5 @@ export const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   texas: '#fbbf24',
   juggernaut: '#34d399',
   haltero: '#6366f1',
+  temporada: '#84cc16',
 };

@@ -29,7 +29,7 @@ import type {
   StrengthProgram,
 } from '../../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
-import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay } from '../../engine/strengthPrograms';
+import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
 import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
@@ -792,12 +792,14 @@ export function Objetivos() {
                       onClick={() =>
                         setProgramDraft((prev) => {
                           if (!prev) return prev;
-                          // El ciclo de halterofilia tiene una duracion real de 14 semanas — al elegirlo se
-                          // propone esa fecha de fin en vez de dejar el default generico de 2 meses, para
-                          // que el ciclo pueda llegar hasta sus 3 intentos de 1RM finales.
-                          if (method === 'haltero' && prev.method !== 'haltero') {
+                          // El ciclo de halterofilia y el bloque de temporada tienen una duracion real
+                          // fija (14 y 8 semanas respectivamente) — al elegirlos se propone esa fecha de
+                          // fin en vez de dejar el default generico de 2 meses, para que el ciclo pueda
+                          // llegar hasta su cierre real (3 intentos de 1RM / semana de retest).
+                          const fixedWeeks = method === 'haltero' ? 14 : method === 'temporada' ? TEMPORADA_TOTAL_WEEKS : null;
+                          if (fixedWeeks !== null && prev.method !== method) {
                             const end = new Date(`${prev.startDate}T00:00:00`);
-                            end.setDate(end.getDate() + 14 * 7 - 1);
+                            end.setDate(end.getDate() + fixedWeeks * 7 - 1);
                             return { ...prev, method, endDate: toLocalIsoDate(end) };
                           }
                           return { ...prev, method };
