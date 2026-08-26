@@ -5,6 +5,9 @@ function inferScoreTypeFromFormat(format: string): WodScoreType {
   if (format.startsWith('For Time')) return 'time';
   if (format.startsWith('AMRAP')) return 'rounds+reps';
   if (format.startsWith('EMOM')) return 'reps';
+  // Test de maximo de reps a carga submaxima (ver "temporada" en strengthPrograms.ts) — se puntua
+  // en repeticiones conseguidas, igual que un EMOM, no en tiempo.
+  if (format.startsWith('Test —')) return 'reps';
   return 'time';
 }
 

@@ -46,6 +46,8 @@ import {
   generateWodName,
   getWodDomain,
   pickSmartBenchmark,
+  RISING_LOAD_INTERVAL_INCREMENT_PERCENT,
+  RISING_LOAD_INTERVAL_STEPS,
   WOD_BARBELL_LOAD_PERCENT,
   WOD_PRESCRIPTION,
   WOD_TIME_DOMAIN,
@@ -119,6 +121,7 @@ type WodFormatKind =
   | 'chipper'
   | 'descendingLadder'
   | 'risingInterval'
+  | 'risingLoadInterval'
   | 'descendingLadderFiller'
   | 'ascendingLadderFiller'
   | 'barbellComplex';
@@ -132,6 +135,7 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   chipper: 'Una sola ronda larga — reparte el esfuerzo, no ataques los primeros movimientos como un sprint.',
   descendingLadder: 'Reps que bajan cada ronda — sal fuerte, el volumen real está en la primera ronda, no en la última.',
   risingInterval: 'Sube la exigencia cada ronda hasta que de verdad no puedas completarla en el tiempo — para ahí, no antes.',
+  risingLoadInterval: 'Aquí sube el peso, no las reps — mantén la técnica intacta y para en la primera ronda que de verdad no completes.',
   descendingLadderFiller: 'El peaje de cardio entre cada tramo es fijo — el ritmo real se ajusta en el movimiento principal, no en el peaje.',
   ascendingLadderFiller: 'Sigue subiendo la escalera mientras quede reloj — anota en qué escalón te pilla el final.',
   barbellComplex: 'Tres movimientos de barra seguidos — reparte el esfuerzo entre los tres, no vacíes el depósito en el primero.',
@@ -683,6 +687,31 @@ function buildLadderFillerEntries(
 }
 
 /**
+ * Intervalo hasta el fallo donde el peso sube cada ronda en vez de las reps — un movimiento de
+ * barra/olimpico a reps fijas subiendo de carga, emparejado con un movimiento gimnastico a reps
+ * fijas que no cambia. Solo tiene sentido para un levantamiento con PR real (WOD_BARBELL_LOAD_PERCENT),
+ * por eso este formato nunca se ofrece en mantenimiento (ver buildMaintenanceWodBlock).
+ */
+function buildRisingLoadIntervalEntries(
+  barbell: Movement,
+  fixed: Movement,
+  basePercent: number,
+  pr: number,
+  format: string,
+  title: string,
+  notes: string,
+): SessionBlockResult[] {
+  const entries: SessionBlockResult[] = [];
+  for (let step = 0; step < RISING_LOAD_INTERVAL_STEPS; step++) {
+    const percent = basePercent + RISING_LOAD_INTERVAL_INCREMENT_PERCENT * step;
+    const loadKg = roundToNearestPlate(pr * percent);
+    entries.push({ block: 'wod', movementId: barbell.id, reps: WOD_PRESCRIPTION[barbell.id] ?? '5-8', loadKg, format, title, notes });
+    entries.push({ block: 'wod', movementId: fixed.id, reps: WOD_PRESCRIPTION[fixed.id] ?? '8-12', format, title, notes });
+  }
+  return entries;
+}
+
+/**
  * Triada de barra + peaje de monoestructural entre cada movimiento (ej. Deadlift/Power Clean/Push
  * Jerk con dobles entre cada uno) — mismo principio que `buildLadderFillerEntries` pero con 3
  * movimientos principales a reps fijas en vez de una escalera. El numero de rondas se comunica en
@@ -815,6 +844,7 @@ function buildWodBlock(
           { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
           { label: 'For Time', kind: 'descendingLadder' as WodFormatKind },
           { label: 'Cada 3:00 hasta el fallo (+3 reps/ronda)', kind: 'risingInterval' as WodFormatKind },
+          { label: 'Cada 1:30 hasta el fallo (+peso cada ronda)', kind: 'risingLoadInterval' as WodFormatKind },
           { label: `${DESCENDING_LADDER_FILLER_STEPS.join('-')} + peaje`, kind: 'descendingLadderFiller' as WodFormatKind },
           { label: `AMRAP ${timeDomain.amrapMin} min — escalera + peaje`, kind: 'ascendingLadderFiller' as WodFormatKind },
           { label: `${timeDomain.rounds} Rondas — Tríada de barra`, kind: 'barbellComplex' as WodFormatKind },
@@ -867,6 +897,23 @@ function buildWodBlock(
     }
     // No hay suficiente variedad de movimientos con carga distintos hoy (pool filtrado muy corto) —
     // cae al reparto normal de abajo en vez de forzar una triada incompleta.
+  }
+
+  if (chosenFormat.kind === 'risingLoadInterval') {
+    // Solo movimientos con PR real detras (WOD_BARBELL_LOAD_PERCENT) — subir peso cada ronda no
+    // tiene sentido sobre un movimiento sin una referencia de carga propia.
+    const barbellCandidates = weightedPool.filter((m) => m.id in WOD_BARBELL_LOAD_PERCENT);
+    const usedForRisingLoad = new Set(recentIds);
+    const barbell = pickVariedWithPreference(barbellCandidates, usedForRisingLoad, wodLiftPref.movementId, wodLiftPref.preferChance);
+    if (barbell) {
+      usedForRisingLoad.add(barbell.id);
+      const fixed = pickVaried(gymnasticsPool, usedForRisingLoad);
+      const prKey = resolveStrengthPRKey(barbell) ?? resolveOlyPRKey(barbell);
+      if (fixed && prKey) {
+        return buildRisingLoadIntervalEntries(barbell, fixed, WOD_BARBELL_LOAD_PERCENT[barbell.id], prs[prKey], chosenFormat.label, title, notes);
+      }
+    }
+    // Sin candidatos con PR hoy (patron excluido, etc.) — cae al reparto normal de abajo.
   }
 
   if (chosenFormat.kind === 'descendingLadderFiller' || chosenFormat.kind === 'ascendingLadderFiller') {
@@ -1467,7 +1514,9 @@ export function generateStrengthProgramSession(
 
   const movement = getMovementById(day.movementId)!;
   const strengthBlock: SessionBlockResult = {
-    block: 'strength',
+    // "temporada"'s max-reps-a-carga-submaxima test se puntua en reps, no en kg — necesita el
+    // bloque 'wod' para que el panel de completar pida repeticiones en vez de un peso nuevo de PR.
+    block: day.scoreAsWod ? 'wod' : 'strength',
     movementId: day.movementId,
     sets: day.sets,
     reps: day.reps,

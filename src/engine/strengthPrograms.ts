@@ -71,6 +71,8 @@ export interface StrengthProgramDay {
   loadKg: number;
   format: string;
   notes: string;
+  /** Si es true, el dia se envuelve como bloque 'wod' (puntuacion por reps) en vez de 'strength' — ver el test de maximo de reps de "temporada". */
+  scoreAsWod?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -721,6 +723,35 @@ export function resolveStrengthProgramDay(
     const { kind, buildOffset, weekNumber } = resolveTemporadaWeek(program.startDate, today);
 
     if (kind === 'test' || kind === 'retest') {
+      // Alternar 1RM real y maximo de reps a carga submaxima (dias de indice impar) da variedad
+      // real de estimulo en la semana de test/retest — fuerza maxima un dia, resistencia de fuerza
+      // al siguiente — en vez de repetir "busca tu 1RM" en cada levantamiento. Usar la misma
+      // paridad de dia en test y en retest asegura que se compara el mismo tipo de esfuerzo.
+      const isRepMaxTest = dayPlan.trainingDayIndex % 2 === 1;
+
+      if (isRepMaxTest) {
+        const repMaxPercent = 0.65;
+        // Tampoco se autorregula: la carga ya es submaxima a proposito, y hace falta la MISMA carga
+        // en el retest para que las reps conseguidas sean comparables de verdad.
+        const repMaxLoadKg = roundToNearestPlate(currentPR * repMaxPercent);
+        const repMaxClosingNote =
+          kind === 'retest'
+            ? ' Es la misma carga y el mismo levantamiento de la semana 1 — compara las reps directamente.'
+            : ' Referencia de partida: en la semana 8 repites esta misma carga para medir tu progreso real.';
+        return {
+          movementId,
+          prKey: liftKey,
+          sets: 1,
+          // "Máximo" a secas — la tarjeta de WOD siempre añade la palabra "reps" detrás del valor,
+          // asi que "Máximo de reps" duplicaria la palabra ("Máximo de reps reps").
+          reps: 'Máximo',
+          loadKg: repMaxLoadKg,
+          format: `Test — Máximo de reps @ ${Math.round(repMaxPercent * 100)}%`,
+          notes: `Semana ${weekNumber} de ${TEMPORADA_TOTAL_WEEKS} · con ${repMaxLoadKg} kg, consigue tantas repeticiones como puedas en una sola serie sin perder la técnica.${repMaxClosingNote}${sharedPainNote}`,
+          scoreAsWod: true,
+        };
+      }
+
       // Igual que en el resto de la app, un test real nunca se descuenta por autorregulacion — un
       // maximo a intencion reducida no es un dato valido para comparar contra el cierre del bloque.
       const testLoadKg = roundToNearestPlate(currentPR);

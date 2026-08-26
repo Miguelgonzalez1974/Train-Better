@@ -402,6 +402,17 @@ export const wodMovements: Movement[] = [
     tags: ['funcional', 'benchmark'],
   },
   {
+    id: 'sandbag-clean',
+    name: 'Sandbag Clean',
+    blocks: ['wod'],
+    pattern: 'olyLift',
+    equipment: ['sandbag'],
+    primaryMuscles: ['cadena posterior', 'trapecio', 'cuadriceps'],
+    standard: 'El sandbag pasa del suelo al hombro (o al pecho) en un solo movimiento explosivo de cadera, sin usarlo como remo previo.',
+    scaling: { easier: [], harder: [] },
+    tags: ['funcional'],
+  },
+  {
     id: 'devils-press',
     name: "Devil's Press",
     blocks: ['wod'],

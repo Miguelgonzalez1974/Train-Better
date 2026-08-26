@@ -48,6 +48,7 @@ export const WEIGHTED_IDS = [
   'kettlebell-swing-american',
   'dumbbell-snatch',
   'dumbbell-clean-and-jerk',
+  'sandbag-clean',
   'devils-press',
   'man-maker',
   'farmers-carry',
@@ -152,6 +153,7 @@ export const WOD_PRESCRIPTION: Record<string, string> = {
   'kettlebell-swing-american': '12-15',
   'dumbbell-snatch': '8-12',
   'dumbbell-clean-and-jerk': '8-12',
+  'sandbag-clean': '8-10',
   'devils-press': '6-10',
   'man-maker': '6-10',
   'farmers-carry': '40m',
@@ -222,6 +224,15 @@ export const DESCENDING_LADDER_SCHEMES = ['21-15-9', '15-12-9', '10-8-6'];
  */
 export const DESCENDING_LADDER_FILLER_STEPS = [15, 12, 9, 6, 3];
 export const ASCENDING_LADDER_FILLER_STEPS = [2, 4, 6, 8, 10];
+
+/**
+ * Intervalo hasta el fallo donde lo que sube cada ronda es el PESO, no las reps — variante real
+ * tomada de MFT Cycle 3 (ej. "Every :90 Until Failure: 5 Shoulder to Overhead, +10/5lbs cada
+ * ronda"). Igual que en la escalera ascendente con peaje, se muestran los primeros escalones y una
+ * nota explica que sigue subiendo hasta que de verdad no completes una ronda en el tiempo.
+ */
+export const RISING_LOAD_INTERVAL_STEPS = 5;
+export const RISING_LOAD_INTERVAL_INCREMENT_PERCENT = 0.05;
 
 export interface WodTimeDomain {
   rounds: number;
