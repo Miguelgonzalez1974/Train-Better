@@ -40,6 +40,8 @@ import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
 import {
   dominantWodDomain,
+  ASCENDING_LADDER_FILLER_STEPS,
+  DESCENDING_LADDER_FILLER_STEPS,
   DESCENDING_LADDER_SCHEMES,
   generateWodName,
   getWodDomain,
@@ -108,7 +110,18 @@ const ACCESSORY_METHOD_NOTE: Record<AccessoryMethod, string> = {
   superset: 'Alterna ambos movimientos con el mínimo descanso entre ellos — descansa al completar la pareja.',
 };
 
-type WodFormatKind = 'forTime' | 'amrap' | 'emom' | 'interval' | 'ladder' | 'chipper' | 'descendingLadder';
+type WodFormatKind =
+  | 'forTime'
+  | 'amrap'
+  | 'emom'
+  | 'interval'
+  | 'ladder'
+  | 'chipper'
+  | 'descendingLadder'
+  | 'risingInterval'
+  | 'descendingLadderFiller'
+  | 'ascendingLadderFiller'
+  | 'barbellComplex';
 
 const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   forTime: 'Estímulo de intensidad — controla el ritmo en las primeras rondas para no colapsar al final.',
@@ -118,6 +131,10 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   ladder: 'Empieza ligero y controlado: la exigencia real llega en las últimas rondas, no en la primera.',
   chipper: 'Una sola ronda larga — reparte el esfuerzo, no ataques los primeros movimientos como un sprint.',
   descendingLadder: 'Reps que bajan cada ronda — sal fuerte, el volumen real está en la primera ronda, no en la última.',
+  risingInterval: 'Sube la exigencia cada ronda hasta que de verdad no puedas completarla en el tiempo — para ahí, no antes.',
+  descendingLadderFiller: 'El peaje de cardio entre cada tramo es fijo — el ritmo real se ajusta en el movimiento principal, no en el peaje.',
+  ascendingLadderFiller: 'Sigue subiendo la escalera mientras quede reloj — anota en qué escalón te pilla el final.',
+  barbellComplex: 'Tres movimientos de barra seguidos — reparte el esfuerzo entre los tres, no vacíes el depósito en el primero.',
 };
 
 /** Que tag de cooldown.ts encaja mejor con cada patron de fuerza del dia (ver buildCooldownBlock). */
@@ -641,6 +658,56 @@ function findRetestCandidate(
   return { wod, prevDate: info.date, prevResult: info.result };
 }
 
+/**
+ * Escalera (ascendente o descendente) con un "peaje" de monoestructural fijo entre cada escalon —
+ * cada escalon y cada peaje son su propia entrada en el bloque, en el orden real en que se hacen
+ * (main, peaje, main, peaje...). No hace falta ningun campo nuevo en SessionBlockResult: la tarjeta
+ * ya numera las entradas del WOD en orden, asi que una secuencia intercalada se representa tal cual
+ * es, sin inventar una sub-estructura de "pasos" separada.
+ */
+function buildLadderFillerEntries(
+  main: Movement,
+  filler: Movement,
+  steps: number[],
+  loadKg: number | undefined,
+  format: string,
+  title: string,
+  notes: string,
+): SessionBlockResult[] {
+  const entries: SessionBlockResult[] = [];
+  for (const reps of steps) {
+    entries.push({ block: 'wod', movementId: main.id, reps: String(reps), loadKg, format, title, notes });
+    entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '10 cal', format, title, notes });
+  }
+  return entries;
+}
+
+/**
+ * Triada de barra + peaje de monoestructural entre cada movimiento (ej. Deadlift/Power Clean/Push
+ * Jerk con dobles entre cada uno) — mismo principio que `buildLadderFillerEntries` pero con 3
+ * movimientos principales a reps fijas en vez de una escalera. El numero de rondas se comunica en
+ * `format` (igual que ya hace el resto de formatos con `timeDomain.rounds`), no se repiten las 6
+ * entradas por cada ronda real.
+ */
+function buildBarbellComplexEntries(
+  mains: Movement[],
+  filler: Movement,
+  prs: PersonalRecords,
+  format: string,
+  title: string,
+  notes: string,
+): SessionBlockResult[] {
+  const entries: SessionBlockResult[] = [];
+  for (const m of mains) {
+    const barbellPercent = WOD_BARBELL_LOAD_PERCENT[m.id];
+    const prKey = barbellPercent ? (resolveStrengthPRKey(m) ?? resolveOlyPRKey(m)) : undefined;
+    const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
+    entries.push({ block: 'wod', movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '8-10', loadKg, format, title, notes });
+    entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '20-25', format, title, notes });
+  }
+  return entries;
+}
+
 function buildWodBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -747,6 +814,10 @@ function buildWodBlock(
       : [
           { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
           { label: 'For Time', kind: 'descendingLadder' as WodFormatKind },
+          { label: 'Cada 3:00 hasta el fallo (+3 reps/ronda)', kind: 'risingInterval' as WodFormatKind },
+          { label: `${DESCENDING_LADDER_FILLER_STEPS.join('-')} + peaje`, kind: 'descendingLadderFiller' as WodFormatKind },
+          { label: `AMRAP ${timeDomain.amrapMin} min — escalera + peaje`, kind: 'ascendingLadderFiller' as WodFormatKind },
+          { label: `${timeDomain.rounds} Rondas — Tríada de barra`, kind: 'barbellComplex' as WodFormatKind },
         ]),
   ];
   const chosenFormat = isChipperDay
@@ -781,6 +852,42 @@ function buildWodBlock(
   // (semana 3-4) se prueba al final — mismo criterio conservador que ya usa el resto del motor esas
   // semanas (nada de chipper ni escalera), aqui aplicado a que domina el WOD en vez de a su formato.
   const domainCycle = week <= 2 ? [weightedPool, gymnasticsPool, monoPool] : [gymnasticsPool, monoPool, weightedPool];
+
+  const title = generateWodName();
+  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
+  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`;
+
+  if (chosenFormat.kind === 'barbellComplex') {
+    const usedForComplex = new Set(recentIds);
+    const mains = pickManyVaried(weightedPool, 3, usedForComplex);
+    mains.forEach((m) => usedForComplex.add(m.id));
+    const filler = pickVaried(monoPool, usedForComplex);
+    if (mains.length === 3 && filler) {
+      return buildBarbellComplexEntries(mains, filler, prs, chosenFormat.label, title, notes);
+    }
+    // No hay suficiente variedad de movimientos con carga distintos hoy (pool filtrado muy corto) —
+    // cae al reparto normal de abajo en vez de forzar una triada incompleta.
+  }
+
+  if (chosenFormat.kind === 'descendingLadderFiller' || chosenFormat.kind === 'ascendingLadderFiller') {
+    const isAscending = chosenFormat.kind === 'ascendingLadderFiller';
+    const mainPool = Math.random() < 0.5 ? weightedPool : gymnasticsPool;
+    const usedForLadder = new Set(recentIds);
+    const main = pickVariedWithPreference(mainPool, usedForLadder, wodLiftPref.movementId, wodLiftPref.preferChance);
+    if (main) {
+      usedForLadder.add(main.id);
+      const filler = pickVaried(monoPool, usedForLadder);
+      if (filler) {
+        const steps = isAscending ? ASCENDING_LADDER_FILLER_STEPS : DESCENDING_LADDER_FILLER_STEPS;
+        const barbellPercent = WOD_BARBELL_LOAD_PERCENT[main.id];
+        const prKey = barbellPercent ? (resolveStrengthPRKey(main) ?? resolveOlyPRKey(main)) : undefined;
+        const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
+        const laddedNotes = isAscending ? `${notes} Sigue +2 reps cada escalón hasta que se acabe el reloj.` : notes;
+        return buildLadderFillerEntries(main, filler, steps, loadKg, chosenFormat.label, title, laddedNotes);
+      }
+    }
+    // Sin candidatos suficientes hoy (pool corto tras excluir patrones) — cae al reparto normal.
+  }
 
   const picks: Movement[] = [];
   const usedIds = new Set(recentIds);
@@ -819,8 +926,6 @@ function buildWodBlock(
     }
   }
 
-  const title = generateWodName();
-  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
   const ladderReps = isDescendingLadder ? DESCENDING_LADDER_SCHEMES[Math.floor(Math.random() * DESCENDING_LADDER_SCHEMES.length)] : null;
   const format = ladderReps ? `${ladderReps} — ${chosenFormat.label}` : chosenFormat.label;
 
@@ -838,7 +943,7 @@ function buildWodBlock(
       loadKg,
       format,
       title,
-      notes: `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`,
+      notes,
     };
   });
 }
@@ -1002,6 +1107,11 @@ function buildMaintenanceWodBlock(
     { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
     { label: `EMOM ${timeDomain.emomMin} min (movimientos alternos)`, kind: 'emom' },
     { label: `Cada 3:00 x ${timeDomain.rounds} rondas`, kind: 'interval' },
+    { label: 'Cada 3:00 hasta el fallo (+3 reps/ronda)', kind: 'risingInterval' },
+    { label: `${DESCENDING_LADDER_FILLER_STEPS.join('-')} + peaje`, kind: 'descendingLadderFiller' },
+    { label: `AMRAP ${timeDomain.amrapMin} min — escalera + peaje`, kind: 'ascendingLadderFiller' },
+    // La triada de barra (WOD_BARBELL_LOAD_PERCENT) queda fuera a proposito: necesita un PR para
+    // calcular su carga, y mantenimiento no hace cargas basadas en PR (ver arriba).
   ];
   const chosenFormat = regularFormats[Math.floor(Math.random() * regularFormats.length)];
 
@@ -1010,6 +1120,27 @@ function buildMaintenanceWodBlock(
   const weightedPool = pool.filter((m) => getWodDomain(m.id) === 'weighted');
   const monoPool = pool.filter((m) => getWodDomain(m.id) === 'monostructural');
   const domainOrder = [gymnasticsPool, weightedPool, monoPool];
+
+  const title = generateWodName();
+  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
+  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`;
+
+  if (chosenFormat.kind === 'descendingLadderFiller' || chosenFormat.kind === 'ascendingLadderFiller') {
+    const isAscending = chosenFormat.kind === 'ascendingLadderFiller';
+    const mainPool = Math.random() < 0.5 ? weightedPool : gymnasticsPool;
+    const usedForLadder = new Set(recentIds);
+    const main = pickVaried(mainPool, usedForLadder);
+    if (main) {
+      usedForLadder.add(main.id);
+      const filler = pickVaried(monoPool, usedForLadder);
+      if (filler) {
+        const steps = isAscending ? ASCENDING_LADDER_FILLER_STEPS : DESCENDING_LADDER_FILLER_STEPS;
+        const laddedNotes = isAscending ? `${notes} Sigue +2 reps cada escalón hasta que se acabe el reloj.` : notes;
+        return buildLadderFillerEntries(main, filler, steps, undefined, chosenFormat.label, title, laddedNotes);
+      }
+    }
+    // Sin candidatos suficientes hoy — cae al reparto normal de abajo.
+  }
 
   const picks: Movement[] = [];
   const usedIds = new Set(recentIds);
@@ -1024,15 +1155,13 @@ function buildMaintenanceWodBlock(
   }
   domainOrder.forEach(pickFrom);
 
-  const title = generateWodName();
-  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
   return picks.map((m) => ({
     block: 'wod',
     movementId: m.id,
     reps: WOD_PRESCRIPTION[m.id] ?? '12-15',
     format: chosenFormat.label,
     title,
-    notes: `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`,
+    notes,
   }));
 }
 

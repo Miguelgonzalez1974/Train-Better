@@ -52,6 +52,7 @@ export const WEIGHTED_IDS = [
   'man-maker',
   'farmers-carry',
   'sandbag-carry',
+  'yoke-walk',
   'sled-push',
   'wall-walk-alt',
   'shoulder-to-overhead',
@@ -155,6 +156,7 @@ export const WOD_PRESCRIPTION: Record<string, string> = {
   'man-maker': '6-10',
   'farmers-carry': '40m',
   'sandbag-carry': '40m',
+  'yoke-walk': '25m',
   'sled-push': '20m',
   'wall-walk-alt': '10-16 pasos',
   'burpee-pull-up': '8-12',
@@ -211,6 +213,15 @@ export const WOD_BARBELL_LOAD_PERCENT: Record<string, number> = {
 
 /** Escaleras descendentes clasicas (Fran/Diane/Elizabeth siguen este patron) — se elige una al azar cuando toca este formato. */
 export const DESCENDING_LADDER_SCHEMES = ['21-15-9', '15-12-9', '10-8-6'];
+
+/**
+ * Escalera con "peaje" de monoestructural entre cada escalon — patron real tomado de MFT Cycle 2
+ * (ej. "15-12-9-6-3 Back Squats, con calorias de bici entre cada tramo"). Descendente = numero fijo
+ * de escalones, For Time; ascendente = sigue subiendo hasta que se acaba el reloj (AMRAP), aqui
+ * limitado a los primeros 5 escalones mostrados — el ultimo lleva nota explicita de que sigue.
+ */
+export const DESCENDING_LADDER_FILLER_STEPS = [15, 12, 9, 6, 3];
+export const ASCENDING_LADDER_FILLER_STEPS = [2, 4, 6, 8, 10];
 
 export interface WodTimeDomain {
   rounds: number;

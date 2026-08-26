@@ -446,6 +446,17 @@ export const wodMovements: Movement[] = [
     tags: ['funcional'],
   },
   {
+    id: 'yoke-walk',
+    name: 'Yoke Walk',
+    blocks: ['wod', 'accessory'],
+    pattern: 'carry',
+    equipment: ['yugo (yoke)'],
+    primaryMuscles: ['core', 'espalda', 'piernas'],
+    standard: 'Distancia especificada cargando el yugo sobre los trapecios/hombros, pasos cortos y rápidos manteniendo el torso erguido.',
+    scaling: { easier: ['farmers-carry'], harder: [] },
+    tags: ['funcional', 'strongman'],
+  },
+  {
     id: 'sled-push',
     name: 'Sled Push',
     blocks: ['wod', 'accessory'],
