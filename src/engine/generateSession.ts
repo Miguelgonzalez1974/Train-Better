@@ -1513,17 +1513,33 @@ export function generateStrengthProgramSession(
   }
 
   const movement = getMovementById(day.movementId)!;
-  const strengthBlock: SessionBlockResult = {
-    // "temporada"'s max-reps-a-carga-submaxima test se puntua en reps, no en kg — necesita el
-    // bloque 'wod' para que el panel de completar pida repeticiones en vez de un peso nuevo de PR.
-    block: day.scoreAsWod ? 'wod' : 'strength',
-    movementId: day.movementId,
-    sets: day.sets,
-    reps: day.reps,
-    loadKg: day.loadKg,
-    format: day.format,
-    notes: `${day.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`,
-  };
+  const finalNotes = `${day.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`;
+  // "temporada"'s test de max-reps y test de complex se puntuan como WOD (reps o carga), no como
+  // fuerza clasica — necesitan el bloque 'wod' para que el panel de completar pida el numero
+  // correcto en vez de intentar actualizar un PR. Un complex ademas encadena varios movimientos
+  // reales a la MISMA carga en vez de uno solo — cada uno es su propia entrada, en el orden real en
+  // que se hacen, igual que ya hace cualquier WOD con una secuencia (ver buildLadderFillerEntries).
+  const strengthBlocks: SessionBlockResult[] = day.complexMovementIds
+    ? day.complexMovementIds.map((id) => ({
+        block: 'wod',
+        movementId: id,
+        sets: day.sets,
+        reps: day.reps,
+        loadKg: day.loadKg,
+        format: day.format,
+        notes: finalNotes,
+      }))
+    : [
+        {
+          block: day.scoreAsWod ? 'wod' : 'strength',
+          movementId: day.movementId,
+          sets: day.sets,
+          reps: day.reps,
+          loadKg: day.loadKg,
+          format: day.format,
+          notes: finalNotes,
+        },
+      ];
 
   const recentIds = getRecentMovementIds(history);
   const warmupBlock = buildWarmupBlock(movement.pattern, recentIds, false);
@@ -1533,7 +1549,7 @@ export function generateStrengthProgramSession(
     date: dateIso,
     mesocycleWeek: 0,
     isRestDay: false,
-    blocks: [...warmupBlock, strengthBlock, ...cooldownBlock],
+    blocks: [...warmupBlock, ...strengthBlocks, ...cooldownBlock],
     strengthProgramLabel: day.format,
   };
 }

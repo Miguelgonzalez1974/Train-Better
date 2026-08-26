@@ -18,6 +18,7 @@ export const STRENGTH_METHOD_LABEL: Record<StrengthProgram['method'], string> = 
   juggernaut: 'Juggernaut Invertido',
   haltero: 'Ciclo Halterofilia (14 semanas)',
   temporada: 'Bloque de Temporada (8 semanas)',
+  dieSet: 'Die Set (autorregulado)',
 };
 
 /** Programa cuya ventana [startDate, endDate] contiene la fecha dada, o undefined — mismo criterio que getActiveMacrocycle. */
@@ -71,8 +72,10 @@ export interface StrengthProgramDay {
   loadKg: number;
   format: string;
   notes: string;
-  /** Si es true, el dia se envuelve como bloque 'wod' (puntuacion por reps) en vez de 'strength' — ver el test de maximo de reps de "temporada". */
+  /** Si es true, el dia se envuelve como bloque 'wod' (puntuacion por reps o por carga) en vez de 'strength' — ver el test de maximo de reps y el test de complex de "temporada". */
   scoreAsWod?: boolean;
+  /** Presente solo en un dia de test de "complex" — la secuencia completa de movimientos a la misma carga (`loadKg`), en el orden en que se hacen. `movementId` sigue apuntando al primero, para cualquier codigo que solo mire ese campo. */
+  complexMovementIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -522,6 +525,37 @@ interface TemporadaWeek {
   weekNumber: number;
 }
 
+/**
+ * "Complex": varios levantamientos distintos encadenados sin soltar la barra, todos a la MISMA
+ * carga — la marca es el peso mas pesado con el que se completa la secuencia entera, no el 1RM de
+ * ningun movimiento suelto (por eso siempre es mas ligero que el 1RM del eslabon mas fuerte de la
+ * cadena). No existe un PR dedicado para esto en `PersonalRecords` ni tiene sentido inventarlo — el
+ * "ancla" de referencia usa el PR mas bajo entre los movimientos clave de la secuencia, a un
+ * porcentaje conservador, solo como punto de partida sugerido (editable), nunca como el objetivo.
+ */
+interface StrengthComplex {
+  id: string;
+  label: string;
+  movementIds: string[];
+  /** PR raiz a usar como ancla de referencia — el eslabon que mas limita la carga real de la secuencia. */
+  anchorPrKey: keyof PersonalRecords;
+}
+
+const STRENGTH_COMPLEXES: StrengthComplex[] = [
+  {
+    id: 'misfit-clean-complex',
+    label: 'Misfit Clean Complex',
+    movementIds: ['power-clean', 'push-jerk', 'front-squat', 'hang-clean', 'split-jerk'],
+    anchorPrKey: 'clean',
+  },
+  {
+    id: 'misfit-snatch-complex',
+    label: 'Misfit Snatch Complex',
+    movementIds: ['snatch', 'overhead-squat', 'hang-snatch', 'overhead-squat'],
+    anchorPrKey: 'snatch',
+  },
+];
+
 /** Nunca pasa de la semana 8 (retest) aunque el programa siga activo mas tiempo — un bloque de una sola pasada, no un ciclo que se repite. */
 function resolveTemporadaWeek(startDateIso: string, today: Date): TemporadaWeek {
   const elapsed = Math.min(weeksSinceStart(startDateIso, today), TEMPORADA_TOTAL_WEEKS - 1);
@@ -726,13 +760,36 @@ export function resolveStrengthProgramDay(
     const { kind, buildOffset, weekNumber } = resolveTemporadaWeek(program.startDate, today);
 
     if (kind === 'test' || kind === 'retest') {
-      // Alternar 1RM real y maximo de reps a carga submaxima (dias de indice impar) da variedad
-      // real de estimulo en la semana de test/retest — fuerza maxima un dia, resistencia de fuerza
-      // al siguiente — en vez de repetir "busca tu 1RM" en cada levantamiento. Usar la misma
-      // paridad de dia en test y en retest asegura que se compara el mismo tipo de esfuerzo.
-      const isRepMaxTest = dayPlan.trainingDayIndex % 2 === 1;
+      // Alternar 1RM real, maximo de reps a carga submaxima, y un complex de varios movimientos da
+      // variedad real de estimulo en la semana de test/retest — fuerza maxima, resistencia de
+      // fuerza, y coordinacion/tecnica bajo fatiga, en vez de repetir "busca tu 1RM" en cada
+      // levantamiento. La MISMA posicion de dia en test y en retest usa siempre el mismo tipo de
+      // prueba, para que la comparacion sea justa.
+      const testVariant = dayPlan.trainingDayIndex % 3;
 
-      if (isRepMaxTest) {
+      if (testVariant === 2) {
+        // El complex se elige por posicion de dia (no por semana), asi que test y retest en la
+        // misma posicion siempre caen en el mismo complex — indispensable para poder comparar.
+        const complex = STRENGTH_COMPLEXES[Math.floor(dayPlan.trainingDayIndex / 3) % STRENGTH_COMPLEXES.length];
+        const anchorLoadKg = roundToNearestPlate(prs[complex.anchorPrKey] * 0.5);
+        const complexClosingNote =
+          kind === 'retest'
+            ? ' Es el mismo complex de la semana 1 — compara el peso mas pesado que completes entero.'
+            : ' Referencia de partida: en la semana 8 repites este mismo complex para medir tu progreso real.';
+        return {
+          movementId: complex.movementIds[0],
+          complexMovementIds: complex.movementIds,
+          prKey: complex.anchorPrKey,
+          sets: 1,
+          reps: '1',
+          loadKg: anchorLoadKg,
+          format: `Test — Complex (${complex.label})`,
+          notes: `Semana ${weekNumber} de ${TEMPORADA_TOTAL_WEEKS} · encadena los ${complex.movementIds.length} movimientos sin soltar la barra, todos a la misma carga. Empieza sobre ${anchorLoadKg} kg y sube hasta encontrar el peso mas pesado con el que completes la secuencia entera sin fallar ningun movimiento — sin límite de tiempo, es técnica y control, no velocidad.${complexClosingNote}${sharedPainNote}`,
+          scoreAsWod: true,
+        };
+      }
+
+      if (testVariant === 1) {
         const repMaxPercent = 0.65;
         // Tampoco se autorregula: la carga ya es submaxima a proposito, y hace falta la MISMA carga
         // en el retest para que las reps conseguidas sean comparables de verdad.
@@ -825,6 +882,26 @@ export function resolveStrengthProgramDay(
       loadKg,
       format: scheme.label,
       notes: `${scheme.coachNote}${sharedPainNote}`,
+    };
+  }
+
+  if (program.method === 'dieSet') {
+    // A diferencia de todos los demas metodos, aqui el peso lo elige el atleta, no el motor — la
+    // carga sugerida es solo un punto de partida editable (60% del PR), nunca la prescripcion real.
+    // Tampoco hay progresion por semana: cada semana es estructuralmente la misma, el propio atleta
+    // se autorregula con la regla de la nota segun lo que hizo la vez anterior (el motor no
+    // persiste el peso elegido en ningun sitio para leerlo de vuelta — es deliberadamente el
+    // atleta quien lleva la cuenta, igual que en el metodo real).
+    const suggestedLoadKg = roundToNearestPlate(currentPR * 0.6 * autoregFactor);
+    return {
+      movementId,
+      prKey: liftKey,
+      sets: 1,
+      reps: '8-15',
+      loadKg: suggestedLoadKg,
+      format: 'Die Set — Máximo de reps',
+      notes: `Elige tú el peso (edita la carga si quieres empezar en otro número) buscando una serie de 8-15 repeticiones a máximo esfuerzo, con calentamiento previo progresivo. La próxima vez que te toque este levantamiento: si hoy haces menos de 8 reps, baja el peso; si haces entre 8 y 15, repite este mismo peso y busca superar tu marca; si superas las 15, sube el peso. ${suggestedLoadKg} kg es solo un punto de partida sugerido.${sharedPainNote}`,
+      scoreAsWod: true,
     };
   }
 

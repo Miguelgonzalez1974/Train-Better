@@ -54,6 +54,26 @@ export function PersonalRecordsCard({ prs, trends }: { prs: PersonalRecords; tre
           );
         })}
       </div>
+
+      {/*
+        Totales reales de competicion — no son un PR nuevo que trackear, son la suma de PRs que ya
+        existen (igual que un Total olimpico o powerlifting de verdad). No hacia falta ningun campo
+        nuevo en el perfil: es un dato derivado, se calcula aqui mismo.
+      */}
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/5 pt-3">
+        <div className="flex items-center justify-between rounded-lg bg-brand-surfaceMuted/80 px-3 py-2">
+          <span className="text-[10px] text-neutral-400">Total Olímpico</span>
+          <span className="text-sm font-bold text-white">
+            {prs.snatch + prs.cleanAndJerk} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+          </span>
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-brand-surfaceMuted/80 px-3 py-2">
+          <span className="text-[10px] text-neutral-400">Total de Fuerza</span>
+          <span className="text-sm font-bold text-white">
+            {prs.backSquat + prs.benchPress + prs.deadlift} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+          </span>
+        </div>
+      </div>
     </section>
   );
 }

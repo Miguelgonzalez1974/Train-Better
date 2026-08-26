@@ -5,9 +5,15 @@ function inferScoreTypeFromFormat(format: string): WodScoreType {
   if (format.startsWith('For Time')) return 'time';
   if (format.startsWith('AMRAP')) return 'rounds+reps';
   if (format.startsWith('EMOM')) return 'reps';
-  // Test de maximo de reps a carga submaxima (ver "temporada" en strengthPrograms.ts) — se puntua
-  // en repeticiones conseguidas, igual que un EMOM, no en tiempo.
+  // Test de complex (varios movimientos a la misma carga, ver "temporada" en strengthPrograms.ts)
+  // — se puntua por el peso mas pesado completado, no por reps ni tiempo. Se comprueba antes que la
+  // regla generica de "Test —" de abajo, que es para el test de maximo de reps.
+  if (format.startsWith('Test — Complex')) return 'load';
+  // Test de maximo de reps a carga submaxima — se puntua en repeticiones conseguidas, igual que un
+  // EMOM, no en tiempo.
   if (format.startsWith('Test —')) return 'reps';
+  // Die Set (peso auto-seleccionado por el atleta, ver "dieSet" en strengthPrograms.ts) — tambien se puntua en reps.
+  if (format.startsWith('Die Set')) return 'reps';
   return 'time';
 }
 

@@ -1,4 +1,4 @@
-import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, type LucideIcon } from 'lucide-react';
+import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, Dumbbell, type LucideIcon } from 'lucide-react';
 import type { StrengthMethod } from '../../data/athlete/types';
 
 export interface StrengthMethodMeta {
@@ -53,9 +53,14 @@ export const STRENGTH_METHOD_META: Record<StrengthMethod, StrengthMethodMeta> = 
     blurb: 'Test real de tus levantamientos, 5 semanas de olas ascendentes, descarga y un retest idéntico al de apertura — ideal para arrancar una temporada con una comparación real de antes/después.',
     Icon: Rocket,
   },
+  dieSet: {
+    label: 'Die Set (autorregulado)',
+    blurb: 'Eliges tú el peso cada vez, buscando 8-15 repeticiones a máximo esfuerzo — subes, repites o bajas según lo que hagas la vez anterior. Ninguna semana es igual a otra por diseño.',
+    Icon: Dumbbell,
+  },
 };
 
-export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada'];
+export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada', 'dieSet'];
 
 /**
  * Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto.
@@ -72,4 +77,5 @@ export const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   juggernaut: '#34d399',
   haltero: '#6366f1',
   temporada: '#84cc16',
+  dieSet: '#2dd4bf',
 };
