@@ -170,7 +170,47 @@ export const WOD_PRESCRIPTION: Record<string, string> = {
   'kettlebell-front-squat': '8-12',
   'kettlebell-goblet-squat': '12-15',
   'suitcase-carry': '40m por lado',
+
+  // --- Barra pesada / olimpico como movimiento de WOD (no solo de fuerza/oly dedicado) ---
+  'back-squat': '8-10',
+  'front-squat': '8-10',
+  deadlift: '10-15',
+  snatch: '5-8',
+  'power-snatch': '6-9',
+  'hang-snatch': '6-9',
+  clean: '5-8',
+  'power-clean': '6-9',
+  'hang-clean': '6-9',
+  'clean-and-jerk': '5-8',
 };
+
+/**
+ * Carga de WOD para un levantamiento de barra/olimpico — un porcentaje submaximo fijo del PR del
+ * atleta, pensado para poder ciclar la barra durante varias rondas sin acercarse al fallo tecnico.
+ * Deliberadamente NO se autorregula (a diferencia de fuerza/oly): igual que los benchmarks con
+ * nombre ya usan un peso fijo sea cual sea el estado del atleta ese dia, esta carga ya es
+ * suficientemente conservadora por diseño. Solo cubre los levantamientos que de verdad aparecen en
+ * WODs reales (ver `~/Desktop/MFT Cycle 1.docx`, analizado 2026-08-27) — variantes puramente
+ * tecnicas (snatch/clean pulls, muscle snatch/clean, snatch balance...) nunca son contenido de WOD,
+ * por eso no estan aqui aunque sean movimientos validos en el bloque de oly dedicado. Overhead
+ * Squat tambien queda fuera a proposito: no existe un PR de Overhead Squat en `PersonalRecords`, y
+ * derivar su carga del PR de Snatch (por su `progressionOf`) daria un numero incorrecto.
+ */
+export const WOD_BARBELL_LOAD_PERCENT: Record<string, number> = {
+  'back-squat': 0.5,
+  'front-squat': 0.5,
+  deadlift: 0.55,
+  snatch: 0.55,
+  'power-snatch': 0.6,
+  'hang-snatch': 0.6,
+  clean: 0.55,
+  'power-clean': 0.6,
+  'hang-clean': 0.6,
+  'clean-and-jerk': 0.5,
+};
+
+/** Escaleras descendentes clasicas (Fran/Diane/Elizabeth siguen este patron) — se elige una al azar cuando toca este formato. */
+export const DESCENDING_LADDER_SCHEMES = ['21-15-9', '15-12-9', '10-8-6'];
 
 export interface WodTimeDomain {
   rounds: number;

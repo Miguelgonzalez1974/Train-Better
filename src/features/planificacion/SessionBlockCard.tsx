@@ -171,7 +171,11 @@ function CustomWodCard({
                 </span>
                 <div>
                   <p className="font-semibold leading-tight text-white">{movement.name}</p>
-                  {entry.reps && <p className="text-xs text-neutral-500">{entry.reps} reps</p>}
+                  {entry.reps && (
+                    <p className="text-xs text-neutral-500">
+                      {entry.reps} reps{entry.loadKg ? ` @ ${entry.loadKg} kg` : ''}
+                    </p>
+                  )}
                   {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
                 </div>
               </div>

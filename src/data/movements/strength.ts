@@ -78,7 +78,7 @@ export const strengthMovements: Movement[] = [
   {
     id: 'back-squat',
     name: 'Back Squat',
-    blocks: ['strength'],
+    blocks: ['strength', 'wod'],
     pattern: 'squat',
     equipment: ['barbell', 'rack'],
     primaryMuscles: ['cuadriceps', 'gluteos', 'core'],
@@ -89,7 +89,7 @@ export const strengthMovements: Movement[] = [
   {
     id: 'front-squat',
     name: 'Front Squat',
-    blocks: ['strength', 'oly'],
+    blocks: ['strength', 'oly', 'wod'],
     pattern: 'squat',
     equipment: ['barbell', 'rack'],
     primaryMuscles: ['cuadriceps', 'core', 'gluteos'],
@@ -139,7 +139,7 @@ export const strengthMovements: Movement[] = [
   {
     id: 'deadlift',
     name: 'Deadlift (convencional)',
-    blocks: ['strength'],
+    blocks: ['strength', 'wod'],
     pattern: 'hinge',
     equipment: ['barbell'],
     primaryMuscles: ['isquiotibiales', 'gluteos', 'espalda baja', 'trapecio'],

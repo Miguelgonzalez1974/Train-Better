@@ -38,12 +38,21 @@ import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
-import { dominantWodDomain, generateWodName, getWodDomain, pickSmartBenchmark, WOD_PRESCRIPTION, WOD_TIME_DOMAIN } from './wodDomains';
+import {
+  dominantWodDomain,
+  DESCENDING_LADDER_SCHEMES,
+  generateWodName,
+  getWodDomain,
+  pickSmartBenchmark,
+  WOD_BARBELL_LOAD_PERCENT,
+  WOD_PRESCRIPTION,
+  WOD_TIME_DOMAIN,
+} from './wodDomains';
 import { computeAcwr, type AcwrZone } from './loadMetrics';
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor } from './autoregulation';
 import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
-import { resolveStrengthPRKey, resolveVariantPR } from './prResolution';
+import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR } from './prResolution';
 import {
   avoidOlyFamilyRepeat,
   avoidPatternRepeat,
@@ -99,7 +108,7 @@ const ACCESSORY_METHOD_NOTE: Record<AccessoryMethod, string> = {
   superset: 'Alterna ambos movimientos con el mínimo descanso entre ellos — descansa al completar la pareja.',
 };
 
-type WodFormatKind = 'forTime' | 'amrap' | 'emom' | 'interval' | 'ladder' | 'chipper';
+type WodFormatKind = 'forTime' | 'amrap' | 'emom' | 'interval' | 'ladder' | 'chipper' | 'descendingLadder';
 
 const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   forTime: 'Estímulo de intensidad — controla el ritmo en las primeras rondas para no colapsar al final.',
@@ -108,6 +117,7 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   interval: 'Cada intervalo debe sobrarte descanso — si llegas justo, baja el ritmo en el siguiente.',
   ladder: 'Empieza ligero y controlado: la exigencia real llega en las últimas rondas, no en la primera.',
   chipper: 'Una sola ronda larga — reparte el esfuerzo, no ataques los primeros movimientos como un sprint.',
+  descendingLadder: 'Reps que bajan cada ronda — sal fuerte, el volumen real está en la primera ronda, no en la última.',
 };
 
 /** Que tag de cooldown.ts encaja mejor con cada patron de fuerza del dia (ver buildCooldownBlock). */
@@ -641,6 +651,7 @@ function buildWodBlock(
   isTaper: boolean,
   history: SessionHistoryEntry[],
   wodRampActive: boolean,
+  prs: PersonalRecords,
 ): SessionBlockResult[] {
   const recentBenchmarkIds = new Set(
     [...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', '')),
@@ -733,13 +744,17 @@ function buildWodBlock(
     { label: `Cada 3:00 x ${timeDomain.rounds} rondas`, kind: 'interval' },
     ...(isPeakWeek || wodRampActive
       ? []
-      : [{ label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind }]),
+      : [
+          { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
+          { label: 'For Time', kind: 'descendingLadder' as WodFormatKind },
+        ]),
   ];
   const chosenFormat = isChipperDay
     ? { label: 'Chipper — 1 ronda completa', kind: 'chipper' as WodFormatKind }
     : regularFormats[Math.floor(Math.random() * regularFormats.length)];
-
-  const movementCount = chosenFormat.kind === 'chipper' ? 5 : 3;
+  const isDescendingLadder = chosenFormat.kind === 'descendingLadder';
+  // La escalera descendente clasica (Fran/Diane/Elizabeth) es siempre una pareja, nunca un triplete.
+  const movementCount = chosenFormat.kind === 'chipper' ? 5 : isDescendingLadder ? 2 : 3;
 
   const resistenciaGoal = pickPriorityGoal(goals, (g) => g.type === 'elevar-resistencia');
   const resistenciaProgress = resistenciaGoal ? getGoalProgress(resistenciaGoal, history) : 0;
@@ -769,21 +784,49 @@ function buildWodBlock(
     }
   }
 
-  pickFrom(gymnasticsPool);
-  for (let i = 0; i < monoTarget && picks.length < movementCount; i++) pickFrom(monoPool);
-  while (picks.length < movementCount) pickFrom(domainCycle[picks.length % domainCycle.length]);
+  if (isDescendingLadder) {
+    // Pareja clasica barra + gimnastico (Fran = thruster+pull-up, Diane = deadlift+HSPU, Elizabeth =
+    // clean+dip) — nunca dos movimientos con carga ni dos gimnasticos en este formato en concreto.
+    pickFrom(weightedPool);
+    pickFrom(gymnasticsPool);
+  } else {
+    pickFrom(gymnasticsPool);
+    for (let i = 0; i < monoTarget && picks.length < movementCount; i++) pickFrom(monoPool);
+    // Indice de relleno propio en vez de reusar `picks.length` contra `domainCycle`: con
+    // monoTarget=1 (el caso normal) picks.length ya vale 2 al llegar aqui, asi que
+    // `domainCycle[picks.length % 3]` caia siempre en monoPool (indice 2) y el dominio "con carga"
+    // (indice 0) nunca se alcanzaba en un WOD de 3 movimientos — la trifecta de verdad nunca se
+    // completaba pese a que el comentario de arriba diga que si. Un contador que arranca en 0 aqui
+    // sí cicla de verdad por los 3 dominios.
+    let fillIndex = 0;
+    while (picks.length < movementCount) {
+      pickFrom(domainCycle[fillIndex % domainCycle.length]);
+      fillIndex++;
+    }
+  }
 
   const title = generateWodName();
   const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
+  const ladderReps = isDescendingLadder ? DESCENDING_LADDER_SCHEMES[Math.floor(Math.random() * DESCENDING_LADDER_SCHEMES.length)] : null;
+  const format = ladderReps ? `${ladderReps} — ${chosenFormat.label}` : chosenFormat.label;
 
-  return picks.map((m) => ({
-    block: 'wod',
-    movementId: m.id,
-    reps: WOD_PRESCRIPTION[m.id] ?? '12-15',
-    format: chosenFormat.label,
-    title,
-    notes: `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`,
-  }));
+  return picks.map((m) => {
+    // Carga de barra/olimpico solo para los levantamientos que de verdad aparecen en WODs reales
+    // (ver WOD_BARBELL_LOAD_PERCENT) — el resto de movimientos de este pool son bodyweight/funcional
+    // y nunca necesitaron loadKg.
+    const barbellPercent = WOD_BARBELL_LOAD_PERCENT[m.id];
+    const prKey = barbellPercent ? (resolveStrengthPRKey(m) ?? resolveOlyPRKey(m)) : undefined;
+    const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
+    return {
+      block: 'wod',
+      movementId: m.id,
+      reps: ladderReps ?? WOD_PRESCRIPTION[m.id] ?? '12-15',
+      loadKg,
+      format,
+      title,
+      notes: `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`,
+    };
+  });
 }
 
 function buildAccessoryBlock(
@@ -933,7 +976,11 @@ function buildMaintenanceWodBlock(
   avoidedPatterns: Set<MovementPattern>,
   wodRampActive: boolean,
 ): SessionBlockResult[] {
-  const pool = filterAvoidingPain(getMovementsByBlock('wod'), avoidedPatterns);
+  // Los levantamientos de barra/olimpico (ver WOD_BARBELL_LOAD_PERCENT) necesitan un PR para
+  // calcular su carga — mantenimiento es deliberadamente "sin cargas basadas en PR ni
+  // periodizacion" (ver comentario de buildMaintenanceStyleBlocks), asi que se excluyen aqui en vez
+  // de mostrarlos sin ningun peso prescrito.
+  const pool = filterAvoidingPain(getMovementsByBlock('wod'), avoidedPatterns).filter((m) => !(m.id in WOD_BARBELL_LOAD_PERCENT));
   const timeDomain = WOD_TIME_DOMAIN[2];
 
   const regularFormats: { label: string; kind: WodFormatKind }[] = [
@@ -1089,6 +1136,7 @@ export function generateDailySession(
     isTaper,
     history,
     wodRampActive,
+    profile.prs,
   );
   const accessoryBlock = buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns);
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns);

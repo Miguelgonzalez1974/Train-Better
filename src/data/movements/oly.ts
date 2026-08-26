@@ -5,7 +5,7 @@ export const olyMovements: Movement[] = [
   {
     id: 'snatch',
     name: 'Snatch (Squat Snatch)',
-    blocks: ['oly'],
+    blocks: ['oly', 'wod'],
     pattern: 'olyLift',
     equipment: ['barbell', 'rack o suelo'],
     primaryMuscles: ['cadena posterior completa', 'hombros', 'core'],
@@ -16,7 +16,7 @@ export const olyMovements: Movement[] = [
   {
     id: 'power-snatch',
     name: 'Power Snatch',
-    blocks: ['oly'],
+    blocks: ['oly', 'wod'],
     pattern: 'olyLift',
     equipment: ['barbell'],
     primaryMuscles: ['cadena posterior', 'hombros'],
@@ -28,7 +28,7 @@ export const olyMovements: Movement[] = [
   {
     id: 'hang-snatch',
     name: 'Hang Snatch (desde rodilla)',
-    blocks: ['oly'],
+    blocks: ['oly', 'wod'],
     pattern: 'olyLift',
     equipment: ['barbell'],
     primaryMuscles: ['cadena posterior', 'hombros'],
@@ -138,7 +138,7 @@ export const olyMovements: Movement[] = [
   {
     id: 'clean',
     name: 'Clean (Squat Clean)',
-    blocks: ['oly'],
+    blocks: ['oly', 'wod'],
     pattern: 'olyLift',
     equipment: ['barbell', 'rack o suelo'],
     primaryMuscles: ['cadena posterior completa', 'cuadriceps', 'core'],
@@ -149,7 +149,7 @@ export const olyMovements: Movement[] = [
   {
     id: 'power-clean',
     name: 'Power Clean',
-    blocks: ['oly'],
+    blocks: ['oly', 'wod'],
     pattern: 'olyLift',
     equipment: ['barbell'],
     primaryMuscles: ['cadena posterior', 'cuadriceps'],
@@ -161,7 +161,7 @@ export const olyMovements: Movement[] = [
   {
     id: 'hang-clean',
     name: 'Hang Clean (desde rodilla)',
-    blocks: ['oly'],
+    blocks: ['oly', 'wod'],
     pattern: 'olyLift',
     equipment: ['barbell'],
     primaryMuscles: ['cadena posterior', 'cuadriceps'],
@@ -233,7 +233,7 @@ export const olyMovements: Movement[] = [
   {
     id: 'clean-and-jerk',
     name: 'Clean and Jerk',
-    blocks: ['oly'],
+    blocks: ['oly', 'wod'],
     pattern: 'olyLift',
     equipment: ['barbell', 'rack o suelo'],
     primaryMuscles: ['cadena posterior completa', 'hombros', 'cuadriceps'],
