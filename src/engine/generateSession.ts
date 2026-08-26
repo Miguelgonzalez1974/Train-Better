@@ -41,6 +41,7 @@ import { pickPriorityGoal } from './goalPriority';
 import {
   dominantWodDomain,
   ASCENDING_LADDER_FILLER_STEPS,
+  ASCENDING_LADDER_SCHEMES,
   DESCENDING_LADDER_FILLER_STEPS,
   DESCENDING_LADDER_SCHEMES,
   generateWodName,
@@ -120,6 +121,7 @@ type WodFormatKind =
   | 'ladder'
   | 'chipper'
   | 'descendingLadder'
+  | 'ascendingLadder'
   | 'risingInterval'
   | 'risingLoadInterval'
   | 'descendingLadderFiller'
@@ -134,6 +136,7 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   ladder: 'Empieza ligero y controlado: la exigencia real llega en las últimas rondas, no en la primera.',
   chipper: 'Una sola ronda larga — reparte el esfuerzo, no ataques los primeros movimientos como un sprint.',
   descendingLadder: 'Reps que bajan cada ronda — sal fuerte, el volumen real está en la primera ronda, no en la última.',
+  ascendingLadder: 'Reps que suben cada ronda — dosifica desde el principio, el peligro real está en los últimos peldaños, no en los primeros.',
   risingInterval: 'Sube la exigencia cada ronda hasta que de verdad no puedas completarla en el tiempo — para ahí, no antes.',
   risingLoadInterval: 'Aquí sube el peso, no las reps — mantén la técnica intacta y para en la primera ronda que de verdad no completes.',
   descendingLadderFiller: 'El peaje de cardio entre cada tramo es fijo — el ritmo real se ajusta en el movimiento principal, no en el peaje.',
@@ -843,6 +846,7 @@ function buildWodBlock(
       : [
           { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
           { label: 'For Time', kind: 'descendingLadder' as WodFormatKind },
+          { label: 'For Time', kind: 'ascendingLadder' as WodFormatKind },
           { label: 'Cada 3:00 hasta el fallo (+3 reps/ronda)', kind: 'risingInterval' as WodFormatKind },
           { label: 'Cada 1:30 hasta el fallo (+peso cada ronda)', kind: 'risingLoadInterval' as WodFormatKind },
           { label: `${DESCENDING_LADDER_FILLER_STEPS.join('-')} + peaje`, kind: 'descendingLadderFiller' as WodFormatKind },
@@ -853,9 +857,12 @@ function buildWodBlock(
   const chosenFormat = isChipperDay
     ? { label: 'Chipper — 1 ronda completa', kind: 'chipper' as WodFormatKind }
     : regularFormats[Math.floor(Math.random() * regularFormats.length)];
-  const isDescendingLadder = chosenFormat.kind === 'descendingLadder';
-  // La escalera descendente clasica (Fran/Diane/Elizabeth) es siempre una pareja, nunca un triplete.
-  const movementCount = chosenFormat.kind === 'chipper' ? 5 : isDescendingLadder ? 2 : 3;
+  // Escalera compartida, ascendente o descendente — misma pareja de movimientos, misma cifra de
+  // reps para los dos, solo cambia si cuenta hacia arriba o hacia abajo (Fran/Diane/Elizabeth son
+  // descendentes; "Climb the Ladder" es la version ascendente del mismo patron).
+  const isSharedLadder = chosenFormat.kind === 'descendingLadder' || chosenFormat.kind === 'ascendingLadder';
+  // Esta pareja es siempre eso, una pareja, nunca un triplete.
+  const movementCount = chosenFormat.kind === 'chipper' ? 5 : isSharedLadder ? 2 : 3;
 
   const resistenciaGoal = pickPriorityGoal(goals, (g) => g.type === 'elevar-resistencia');
   const resistenciaProgress = resistenciaGoal ? getGoalProgress(resistenciaGoal, history) : 0;
@@ -950,9 +957,10 @@ function buildWodBlock(
     }
   }
 
-  if (isDescendingLadder) {
+  if (isSharedLadder) {
     // Pareja clasica barra + gimnastico (Fran = thruster+pull-up, Diane = deadlift+HSPU, Elizabeth =
-    // clean+dip) — nunca dos movimientos con carga ni dos gimnasticos en este formato en concreto.
+    // clean+dip; "Climb the Ladder" sigue el mismo patron en su version ascendente) — nunca dos
+    // movimientos con carga ni dos gimnasticos en este formato en concreto.
     pickFrom(weightedPool, wodLiftPref.movementId, wodLiftPref.preferChance);
     pickFrom(gymnasticsPool);
   } else {
@@ -973,7 +981,8 @@ function buildWodBlock(
     }
   }
 
-  const ladderReps = isDescendingLadder ? DESCENDING_LADDER_SCHEMES[Math.floor(Math.random() * DESCENDING_LADDER_SCHEMES.length)] : null;
+  const ladderSchemes = chosenFormat.kind === 'ascendingLadder' ? ASCENDING_LADDER_SCHEMES : DESCENDING_LADDER_SCHEMES;
+  const ladderReps = isSharedLadder ? ladderSchemes[Math.floor(Math.random() * ladderSchemes.length)] : null;
   const format = ladderReps ? `${ladderReps} — ${chosenFormat.label}` : chosenFormat.label;
 
   return picks.map((m) => {

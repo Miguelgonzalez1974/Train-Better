@@ -214,7 +214,10 @@ export const WOD_BARBELL_LOAD_PERCENT: Record<string, number> = {
 };
 
 /** Escaleras descendentes clasicas (Fran/Diane/Elizabeth siguen este patron) — se elige una al azar cuando toca este formato. */
-export const DESCENDING_LADDER_SCHEMES = ['21-15-9', '15-12-9', '10-8-6'];
+export const DESCENDING_LADDER_SCHEMES = ['21-15-9', '15-12-9', '10-8-6', '21-18-15-12-9-6-3'];
+
+/** Escalera ascendente compartida — misma idea que la descendente pero contando hacia arriba (ej. "Climb the Ladder": 5-10-15-20 Wallballs + Box Jump Overs). */
+export const ASCENDING_LADDER_SCHEMES = ['5-10-15-20', '6-12-18', '4-8-12-16'];
 
 /**
  * Escalera con "peaje" de monoestructural entre cada escalon — patron real tomado de MFT Cycle 2

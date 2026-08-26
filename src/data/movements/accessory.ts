@@ -113,6 +113,17 @@ export const accessoryMovements: Movement[] = [
     tags: ['unilateral'],
   },
   {
+    id: 'pendlay-row',
+    name: 'Pendlay Row',
+    blocks: ['accessory'],
+    pattern: 'horizontalPull',
+    equipment: ['barbell'],
+    primaryMuscles: ['dorsales', 'romboides', 'trapecio'],
+    standard: 'La barra parte del suelo en cada repeticion (sin rebote ni impulso de cadera) y termina tocando el abdomen, torso paralelo al suelo durante todo el movimiento.',
+    scaling: { easier: ['single-arm-dumbbell-row'], harder: [] },
+    tags: ['barbell', 'bilateral'],
+  },
+  {
     id: 'chest-supported-row',
     name: 'Chest Supported Row',
     blocks: ['accessory'],

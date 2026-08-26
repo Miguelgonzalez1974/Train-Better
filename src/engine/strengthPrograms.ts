@@ -541,6 +541,16 @@ interface StrengthComplex {
   anchorPrKey: keyof PersonalRecords;
 }
 
+/**
+ * Hash estable y simple (no criptografico, no hace falta) de un string a un entero positivo — solo
+ * para variar de forma deterministica que complex le toca a cada programa, ver mas abajo.
+ */
+function stableStringHash(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) % 1_000_000_007;
+  return hash;
+}
+
 const STRENGTH_COMPLEXES: StrengthComplex[] = [
   {
     id: 'misfit-clean-complex',
@@ -552,6 +562,20 @@ const STRENGTH_COMPLEXES: StrengthComplex[] = [
     id: 'misfit-snatch-complex',
     label: 'Misfit Snatch Complex',
     movementIds: ['snatch', 'overhead-squat', 'hang-snatch', 'overhead-squat'],
+    anchorPrKey: 'snatch',
+  },
+  {
+    // Mas corto que el Misfit Clean Complex (3 movimientos en vez de 5) — misma familia (clean),
+    // variedad real de longitud entre los complex disponibles, no solo de movimientos.
+    id: 'clean-complex',
+    label: 'Clean Complex',
+    movementIds: ['clean', 'front-squat', 'split-jerk'],
+    anchorPrKey: 'clean',
+  },
+  {
+    id: 'snatch-complex',
+    label: 'Snatch Complex',
+    movementIds: ['power-snatch', 'snatch', 'hang-snatch'],
     anchorPrKey: 'snatch',
   },
 ];
@@ -768,9 +792,16 @@ export function resolveStrengthProgramDay(
       const testVariant = dayPlan.trainingDayIndex % 3;
 
       if (testVariant === 2) {
-        // El complex se elige por posicion de dia (no por semana), asi que test y retest en la
-        // misma posicion siempre caen en el mismo complex — indispensable para poder comparar.
-        const complex = STRENGTH_COMPLEXES[Math.floor(dayPlan.trainingDayIndex / 3) % STRENGTH_COMPLEXES.length];
+        // El complex se elige por posicion de dia + el propio programa (nunca por semana), asi que
+        // test y retest en la misma posicion siempre caen en el mismo complex — indispensable para
+        // poder comparar. Solo sumar `trainingDayIndex` no bastaba: como mucho hay 2 posiciones de
+        // dia posibles con testVariant===2 (indice 2, y el 5 solo con 6 dias/semana), asi que
+        // `floor(trainingDayIndex/3) % length` nunca llegaba a alcanzar mas de 2 de los complex
+        // disponibles por mucho que hubiera mas en la lista. Sumar el hash del id del programa da
+        // variedad real entre programas distintos del mismo atleta sin romper la estabilidad
+        // dentro de un mismo programa (su id no cambia entre semana 1 y semana 8).
+        const complexIndex = (dayPlan.trainingDayIndex + stableStringHash(program.id)) % STRENGTH_COMPLEXES.length;
+        const complex = STRENGTH_COMPLEXES[complexIndex];
         const anchorLoadKg = roundToNearestPlate(prs[complex.anchorPrKey] * 0.5);
         const complexClosingNote =
           kind === 'retest'
