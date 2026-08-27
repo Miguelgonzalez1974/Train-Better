@@ -171,42 +171,43 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
       </div>
 
       {/*
-        Progreso + Desequilibrios emparejados: ninguna de las dos es una tarjeta de referencia
-        estatica, ambas resumen "como vas" desde un angulo distinto (tiempo/objetivos vs equilibrio
-        entre levantamientos) — emparejarlas evita que Desequilibrios (colapsada por defecto) anada
-        una fila propia a ancho completo.
+        Progreso vive en su propia fila a ancho completo, no emparejada — a diferencia de todas las
+        demas tarjetas, puede devolver null (sin macro ni objetivos activos) y no siempre crece
+        igual segun cuantos objetivos haya. Emparejarla obligaba a la pareja a reaccionar a algo que
+        no controla (un hueco vacio al lado cuando es null, o un estiron raro cuando es muy alta) —
+        sola, cuando no hay nada que mostrar simplemente no ocupa espacio, sin dejar ningun rastro.
       */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
-        <ImbalancesCard groups={imbalanceGroups} />
-      </div>
+      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
 
       {/*
-        Grid de 2 columnas en pantallas medianas+ (1 sola en movil): PRs y Peso corporal emparejados
-        a la misma anchura (ambos son cifras que el atleta sigue dia a dia), y Constancia emparejada
-        con el bloque ACWR+Puntos debiles apilado en una sola columna — ambas son senales de
-        fatiga/riesgo que se leen mejor una debajo de la otra que una al lado de la otra. Sin
-        items-start: cada pareja tiene alturas de contenido distintas (PRs lleva una fila extra de
-        Totales que Peso corporal no tiene; el bloque ACWR+Puntos debiles a veces supera a
-        Constancia) y con align-items por defecto (stretch) la tarjeta mas corta de cada fila
-        estira su propio fondo/borde hasta igualar a la mas alta, en vez de dejar un hueco vacio
-        debajo que se lee como un fallo de alineacion.
+        A partir de aqui, cada fila junta tarjetas de altura natural parecida en vez de forzar un
+        estiramiento (items-start en las 3): estirar la mas corta para igualar a la mas alta cambia
+        "alturas distintas" por "hueco muerto dentro de la tarjeta corta", que se ve peor, no mejor
+        (confirmado en vivo con Peso corporal estirada junto a PRs). PRs+Constancia son las dos
+        tarjetas consistentemente mas altas (8 PRs+Totales; la cuadricula de 12 semanas). Peso
+        corporal (corta sin grafico) y Desequilibrios (corta colapsada) son las dos mas compactas.
+        ACWR+Puntos debiles ya eran del mismo tamaño y ya funcionaban bien juntas.
       */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
         <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
-
-        <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
 
         <TrainingHeatmap
           history={history}
           trainingDaysPerWeek={profile.trainingDaysPerWeek}
           macrocycles={profile.macrocycles}
         />
+      </div>
 
-        <div className="flex flex-col gap-3">
-          <AcwrGauge result={acwr} trend={acwrTrend} />
-          <WeakPointsCard points={weakPoints} />
-        </div>
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+        <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
+
+        <ImbalancesCard groups={imbalanceGroups} />
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+        <AcwrGauge result={acwr} trend={acwrTrend} />
+
+        <WeakPointsCard points={weakPoints} />
       </div>
     </div>
   );
