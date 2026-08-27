@@ -7,6 +7,7 @@ export const VARIANT_PR_MOVEMENT_ID: Record<keyof VariantPersonalRecords, string
   sumoDeadlift: 'sumo-deadlift',
   pushPress: 'push-press',
   splitJerk: 'split-jerk',
+  overheadSquat: 'overhead-squat',
 };
 
 /**

@@ -21,6 +21,8 @@ export interface VariantPersonalRecords {
   sumoDeadlift?: number;
   pushPress?: number;
   splitJerk?: number;
+  /** Movimiento independiente en CrossFit (tecnica + fuerza de tren superior en posicion de sentadilla), no una simple variante del back/front squat. */
+  overheadSquat?: number;
 }
 
 export interface BodyweightEntry {
