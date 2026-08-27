@@ -173,9 +173,14 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         Grid de 2 columnas en pantallas medianas+ (1 sola en movil): PRs y Peso corporal emparejados
         a la misma anchura (ambos son cifras que el atleta sigue dia a dia), y Constancia emparejada
         con el bloque ACWR+Puntos debiles apilado en una sola columna — ambas son senales de
-        fatiga/riesgo que se leen mejor una debajo de la otra que una al lado de la otra.
+        fatiga/riesgo que se leen mejor una debajo de la otra que una al lado de la otra. Sin
+        items-start: cada pareja tiene alturas de contenido distintas (PRs lleva una fila extra de
+        Totales que Peso corporal no tiene; el bloque ACWR+Puntos debiles a veces supera a
+        Constancia) y con align-items por defecto (stretch) la tarjeta mas corta de cada fila
+        estira su propio fondo/borde hasta igualar a la mas alta, en vez de dejar un hueco vacio
+        debajo que se lee como un fallo de alineacion.
       */}
-      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
 
         <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
