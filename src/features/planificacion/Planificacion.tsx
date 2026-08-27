@@ -578,43 +578,45 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           </div>
         </div>
         {!session.isRestDay && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setEditMode((prev) => !prev)}
-              title={editMode ? 'Terminar edición' : 'Editar sesión'}
-              className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 ${
-                editMode ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-brand-gold'
-              }`}
-            >
-              {editMode ? <Check size={17} /> : <Pencil size={16} />}
-            </button>
-            <button
-              onClick={handleRegenerate}
-              title="Regenerar sesión"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-all duration-200 hover:bg-white/10 hover:text-brand-gold"
-            >
-              <RefreshCw size={17} className={spinning ? 'animate-spin' : ''} />
-            </button>
-            {!alreadyCompletedToday && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleDeleteTodaySession}
-                title="Borrar sesión de hoy"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-all duration-200 hover:bg-red-500/15 hover:text-red-400"
+                onClick={() => setEditMode((prev) => !prev)}
+                title={editMode ? 'Terminar edición' : 'Editar sesión'}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                  editMode ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-brand-gold'
+                }`}
               >
-                <Trash2 size={16} />
+                {editMode ? <Check size={17} /> : <Pencil size={16} />}
               </button>
-            )}
-            <button
-              onClick={() => setShowPainPicker(true)}
-              title="¿Algo te molesta hoy?"
-              className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 ${
-                activePainFlags.length > 0
-                  ? 'bg-red-500/15 text-red-400'
-                  : 'bg-white/5 text-neutral-300 hover:bg-red-500/15 hover:text-red-400'
-              }`}
-            >
-              <Bandage size={16} />
-            </button>
+              <button
+                onClick={handleRegenerate}
+                title="Regenerar sesión"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-all duration-200 hover:bg-white/10 hover:text-brand-gold"
+              >
+                <RefreshCw size={17} className={spinning ? 'animate-spin' : ''} />
+              </button>
+              {!alreadyCompletedToday && (
+                <button
+                  onClick={handleDeleteTodaySession}
+                  title="Borrar sesión de hoy"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-all duration-200 hover:bg-red-500/15 hover:text-red-400"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+              <button
+                onClick={() => setShowPainPicker(true)}
+                title="¿Algo te molesta hoy?"
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                  activePainFlags.length > 0
+                    ? 'bg-red-500/15 text-red-400'
+                    : 'bg-white/5 text-neutral-300 hover:bg-red-500/15 hover:text-red-400'
+                }`}
+              >
+                <Bandage size={16} />
+              </button>
+            </div>
             <button
               onClick={() => {
                 setTestedLoadKg(testDayBlock?.loadKg ?? 0);
@@ -622,7 +624,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
                 setShowCompletePanel(true);
               }}
               disabled={alreadyCompletedToday}
-              className="rounded-lg bg-brand-orange px-3 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              className="w-full rounded-lg bg-brand-orange px-3 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:w-auto"
             >
               {alreadyCompletedToday ? 'Completado ✓' : 'Marcar como completado'}
             </button>
@@ -630,7 +632,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
               <button
                 onClick={handleUndoComplete}
                 title="Deshacer el registro de hoy"
-                className="text-xs text-neutral-500 underline decoration-dotted transition-colors duration-200 hover:text-red-400"
+                className="self-center text-xs text-neutral-500 underline decoration-dotted transition-colors duration-200 hover:text-red-400"
               >
                 Deshacer
               </button>
