@@ -154,19 +154,17 @@ const COOLDOWN_TAG_BY_PATTERN: Partial<Record<MovementPattern, string>> = {
   olyLift: 'especifico-oly',
 };
 
-type StrengthSchemeStyle = 'straightSets' | 'ascendingLadder' | 'tempoWork' | 'volumeSets';
+type StrengthSchemeStyle = 'straightSets' | 'ascendingLadder' | 'volumeSets';
 
 const STRENGTH_SCHEME_LABEL: Record<StrengthSchemeStyle, string> = {
   straightSets: 'Series rectas',
   ascendingLadder: 'Rampa ascendente',
-  tempoWork: 'Tempo controlado',
   volumeSets: 'Volumen de acumulación',
 };
 
 const STRENGTH_SCHEME_NOTE: Record<StrengthSchemeStyle, string> = {
   straightSets: '',
   ascendingLadder: 'Las primeras series son de aproximación — sube la carga en cada una hasta la serie final, la que de verdad cuenta.',
-  tempoWork: 'Controla 3 segundos en la fase excéntrica y pausa 1 segundo abajo en cada repetición — hoy manda el control, no la velocidad.',
   volumeSets: 'Serie de volumen a intensidad moderada para construir base de trabajo — prioriza completar todas las repeticiones sin fallar.',
 };
 
@@ -174,10 +172,61 @@ const STRENGTH_SCHEME_NOTE: Record<StrengthSchemeStyle, string> = {
 function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4): StrengthSchemeStyle {
   if (week === 4) return Math.random() < 0.5 ? 'straightSets' : 'volumeSets';
   const roll = Math.random();
-  if (roll < 0.4) return 'straightSets';
-  if (roll < 0.65) return 'ascendingLadder';
-  if (roll < 0.85) return 'tempoWork';
+  if (roll < 0.55) return 'straightSets';
+  if (roll < 0.8) return 'ascendingLadder';
   return 'volumeSets';
+}
+
+/**
+ * Notacion de tempo real (ej. "3011", "10X0"): excentrica-pausa abajo-concentrica-pausa arriba,
+ * "X"/"x" en cualquier posicion significa maxima velocidad. Un solo formateador en vez de una frase
+ * escrita a mano por valor (como hacia el antiguo STRENGTH_SCHEME_NOTE.tempoWork) para que cualquier
+ * notacion nueva se explique sola.
+ */
+const TEMPO_PHASE_LABELS = ['bajando', 'pausa abajo', 'subiendo', 'pausa arriba'] as const;
+
+function describeTempoNotation(tempo: string): string {
+  return tempo
+    .split('')
+    .map((char, i) => {
+      const label = TEMPO_PHASE_LABELS[i];
+      const isPause = i === 1 || i === 3;
+      if (char.toUpperCase() === 'X') return isPause ? `${label} explosiva` : `máxima velocidad ${label}`;
+      const seconds = Number(char);
+      return isPause && seconds === 0 ? `sin ${label}` : `${seconds}s ${label}`;
+    })
+    .join(', ');
+}
+
+/**
+ * El pool de tempos disponibles lo decide la fase (semana 1-2 acumulacion/intensificacion pide
+ * control excentrico; semana 3 pico pide velocidad concentrica); semana 4 (descarga) no usa tempo,
+ * anadir exigencia tecnica justo cuando toca bajar la demanda iria contra el proposito de esa semana.
+ */
+const TEMPO_POOL_BY_WEEK: Record<1 | 2 | 3, string[]> = {
+  1: ['3011', '4010', '2020'],
+  2: ['3011', '4010', '2020'],
+  3: ['10X0', '20X0'],
+};
+
+const TEMPO_BASE_CHANCE_BY_WEEK: Record<1 | 2 | 3, number> = { 1: 0.35, 2: 0.25, 3: 0.12 };
+/** Cuando el dia ya prioriza un patron (punto debil u objetivo activo), el coach recurre al tempo con mas frecuencia — reforzar control justo en el movimiento que ya le importa hoy, no un porcentaje desconectado del resto de decisiones del dia. */
+const TEMPO_FOCUS_CHANCE = 0.6;
+
+function pickTempoForDay(params: {
+  week: 1 | 2 | 3 | 4;
+  hasWeakPointFocus: boolean;
+  hasGoalFocus: boolean;
+  readinessIsLow: boolean;
+}): string | undefined {
+  const { week, hasWeakPointFocus, hasGoalFocus, readinessIsLow } = params;
+  // Un test necesita un maximo real (sin cadencia impuesta) y una descarga busca bajar la demanda,
+  // no anadir exigencia tecnica — en ambos casos el tempo no aplica, sea cual sea el resto de senales.
+  if (week === 4 || readinessIsLow) return undefined;
+  const chance = hasWeakPointFocus || hasGoalFocus ? Math.max(TEMPO_BASE_CHANCE_BY_WEEK[week], TEMPO_FOCUS_CHANCE) : TEMPO_BASE_CHANCE_BY_WEEK[week];
+  if (Math.random() >= chance) return undefined;
+  const pool = TEMPO_POOL_BY_WEEK[week];
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 export type TestDayFocus = 'strength' | 'oly' | null;
@@ -370,8 +419,20 @@ function buildStrengthBlock(
   const scheme = STRENGTH_WEEK_SCHEMES[week];
   const style = pickStrengthSchemeStyle(week);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${painTag}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`;
-  const reasons = collectReasons(weakPointTag, painTag, rampNote, autoregNote);
+  // La rampa ascendente ya construye hacia una serie casi maxima — ningun documento real prescribe
+  // tempo lento justo ahi, asi que solo straightSets/volumeSets son candidatas.
+  const tempo =
+    style === 'ascendingLadder'
+      ? undefined
+      : pickTempoForDay({
+          week,
+          hasWeakPointFocus: Boolean(weakPointTag),
+          hasGoalFocus: Boolean(goalTag),
+          readinessIsLow: readiness.isLow,
+        });
+  const tempoNote = tempo ? ` Tempo ${tempo} — ${describeTempoNotation(tempo)}.` : '';
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${painTag}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
+  const reasons = collectReasons(weakPointTag, painTag, rampNote, autoregNote, tempoNote);
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -392,24 +453,6 @@ function buildStrengthBlock(
     };
   }
 
-  if (style === 'tempoWork') {
-    return {
-      blocks: [
-        {
-          block: 'strength',
-          movementId: movement.id,
-          format: STRENGTH_SCHEME_LABEL.tempoWork,
-          sets: scheme.sets,
-          reps: `${scheme.reps} (tempo 3-1-1)`,
-          loadKg: roundToNearestPlate(currentPR * scheme.percent * autoregFactor),
-          notes,
-        },
-      ],
-      pattern,
-      reasons,
-    };
-  }
-
   if (style === 'volumeSets') {
     const volumePercent = Math.max(scheme.percent - 0.12, 0.45);
     return {
@@ -422,6 +465,7 @@ function buildStrengthBlock(
           reps: String(scheme.reps + 4),
           loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor),
           notes,
+          ...(tempo ? { tempo } : {}),
         },
       ],
       pattern,
@@ -431,7 +475,17 @@ function buildStrengthBlock(
 
   const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor);
   return {
-    blocks: [{ block: 'strength', movementId: movement.id, sets: scheme.sets, reps: String(scheme.reps), loadKg, notes }],
+    blocks: [
+      {
+        block: 'strength',
+        movementId: movement.id,
+        sets: scheme.sets,
+        reps: String(scheme.reps),
+        loadKg,
+        notes,
+        ...(tempo ? { tempo } : {}),
+      },
+    ],
     pattern,
     reasons,
   };

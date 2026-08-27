@@ -332,11 +332,12 @@ function EntryRow({ entry }: { entry: SessionBlockResult }) {
       {entry.format && <FormatBadge format={entry.format} />}
       <p className="text-lg font-bold leading-tight text-white">{movement.name}</p>
 
-      {(entry.sets || entry.reps || entry.loadKg) && (
+      {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {entry.sets && <StatBox value={entry.sets} label="series" />}
           {entry.reps && <StatBox value={entry.reps} label="reps" />}
           {entry.loadKg && <StatBox value={`${entry.loadKg}`} label="kg" />}
+          {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
         </div>
       )}
 
@@ -450,6 +451,7 @@ function EditableBlockEntries({
                   />
                 </label>
               )}
+              {entry.tempo && <span className="text-xs text-neutral-500">Tempo {entry.tempo}</span>}
             </div>
           </div>
         );

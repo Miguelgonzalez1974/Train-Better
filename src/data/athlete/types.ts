@@ -162,6 +162,8 @@ export interface SessionBlockResult {
   title?: string;
   /** Nombre del movimiento original cuando este bloque se escalo a una alternativa (ver src/data/movements/scalingGuide.ts) — deja constancia de que hoy no fue el prescrito. */
   scaledFrom?: string;
+  /** Notacion de tempo real (ej. "3011", "10X0"): excentrica-pausa abajo-concentrica-pausa arriba, "X" = maxima velocidad. Solo bloque strength. */
+  tempo?: string;
 }
 
 export interface DailySession {
