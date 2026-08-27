@@ -184,9 +184,11 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         estiramiento (items-start en las 3): estirar la mas corta para igualar a la mas alta cambia
         "alturas distintas" por "hueco muerto dentro de la tarjeta corta", que se ve peor, no mejor
         (confirmado en vivo con Peso corporal estirada junto a PRs). PRs+Constancia son las dos
-        tarjetas consistentemente mas altas (8 PRs+Totales; la cuadricula de 12 semanas). Peso
-        corporal (corta sin grafico) y Desequilibrios (corta colapsada) son las dos mas compactas.
-        ACWR+Puntos debiles ya eran del mismo tamaño y ya funcionaban bien juntas.
+        tarjetas consistentemente mas altas (8 PRs+Totales; la cuadricula de 12 semanas, ya topada
+        en TrainingHeatmap para no crecer de mas). Peso corporal+ACWR son las dos mas parecidas en
+        alto (144px vs 126px sin datos). Puntos debiles+Desequilibrios ademas de ser parecidas en
+        alto, son las dos tarjetas de "diagnostico del coach" (mismo acento neon) — tiene mas
+        sentido juntarlas por contenido que Puntos debiles con ACWR solo porque coincidian en altura.
       */}
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
         <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
@@ -201,13 +203,13 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
         <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
 
-        <ImbalancesCard groups={imbalanceGroups} />
+        <AcwrGauge result={acwr} trend={acwrTrend} />
       </div>
 
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
-        <AcwrGauge result={acwr} trend={acwrTrend} />
-
         <WeakPointsCard points={weakPoints} />
+
+        <ImbalancesCard groups={imbalanceGroups} />
       </div>
     </div>
   );
