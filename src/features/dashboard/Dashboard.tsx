@@ -13,6 +13,7 @@ import { NextWeekPreview } from './NextWeekPreview';
 import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
 import { ProgressOverviewCard } from './ProgressOverviewCard';
+import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -27,18 +28,20 @@ function HeroMetricCard({
   annualValue: string | null;
 }) {
   return (
-    <div className="flex flex-col rounded-xl border border-brand-orange/25 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4 transition-transform duration-200 hover:-translate-y-0.5">
-      <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-brand-orange/20 text-brand-orange">
-          <Icon size={18} strokeWidth={2.25} />
+    <div className="flex flex-col rounded-xl border border-brand-orange/25 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-3.5 transition-transform duration-200 hover:-translate-y-0.5">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-brand-orange/20 text-brand-orange">
+          <Icon size={16} strokeWidth={2.25} />
         </span>
         <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-gold">Este mes</p>
       </div>
-      <p className="text-[34px] font-bold leading-none tracking-tight text-white">{value}</p>
-      <p className="mt-1.5 text-xs text-neutral-400">días entrenados</p>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-[26px] font-bold leading-none tracking-tight text-white">{value}</span>
+        <span className="text-xs text-neutral-400">días entrenados</span>
+      </div>
       {annualValue && (
-        <div className="mt-2.5 flex items-baseline gap-1.5 border-t border-white/5 pt-2.5">
-          <span className="text-[15px] font-bold text-brand-gold">{annualValue}</span>
+        <div className="mt-2 flex items-baseline gap-1.5 border-t border-white/5 pt-2">
+          <span className="text-[13px] font-bold text-brand-gold">{annualValue}</span>
           <span className="text-[11px] text-neutral-500">días este año</span>
         </div>
       )}
@@ -110,6 +113,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const todayIso = toLocalIsoDate(new Date());
   const structureRow = useMemo(() => buildStructureRow(profile, todayIso), [profile, todayIso]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
+  const attentionItems = useMemo(() => buildAttentionItems(acwr, weakPoints), [acwr, weakPoints]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,6 +143,8 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
 
       {showNextWeek && <NextWeekPreview onClose={() => setShowNextWeek(false)} />}
 
+      <AttentionBanner items={attentionItems} />
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.3fr_1fr]">
         <HeroMetricCard
           icon={CalendarCheck}
@@ -161,15 +167,15 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         </div>
       </div>
 
+      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
+
       {/*
-        Grid de 2 columnas en pantallas medianas+ (1 sola en movil), agrupando por la misma
-        categoria que ya distinguen los colores de icono: rendimiento/objetivos (dorado),
-        referencia de seguimiento (peso corporal + constancia), y "cosas a vigilar" (fatiga +
-        puntos debiles). En movil el orden de lectura se mantiene identico al de antes.
+        Grid de 2 columnas en pantallas medianas+ (1 sola en movil): PRs y Peso corporal emparejados
+        a la misma anchura (ambos son cifras que el atleta sigue dia a dia), y Constancia emparejada
+        con el bloque ACWR+Puntos debiles apilado en una sola columna — ambas son senales de
+        fatiga/riesgo que se leen mejor una debajo de la otra que una al lado de la otra.
       */}
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
-        <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
-
         <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
 
         <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
@@ -180,9 +186,10 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
           macrocycles={profile.macrocycles}
         />
 
-        <AcwrGauge result={acwr} trend={acwrTrend} />
-
-        <WeakPointsCard points={weakPoints} />
+        <div className="flex flex-col gap-3">
+          <AcwrGauge result={acwr} trend={acwrTrend} />
+          <WeakPointsCard points={weakPoints} />
+        </div>
       </div>
     </div>
   );
