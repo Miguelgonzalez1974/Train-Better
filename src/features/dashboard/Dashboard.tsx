@@ -14,6 +14,8 @@ import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
 import { ProgressOverviewCard } from './ProgressOverviewCard';
 import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
+import { ImbalancesCard } from './ImbalancesCard';
+import { computeImbalances } from '../../engine/imbalances';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -114,6 +116,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const structureRow = useMemo(() => buildStructureRow(profile, todayIso), [profile, todayIso]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
   const attentionItems = useMemo(() => buildAttentionItems(acwr, weakPoints), [acwr, weakPoints]);
+  const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -167,7 +170,16 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         </div>
       </div>
 
-      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
+      {/*
+        Progreso + Desequilibrios emparejados: ninguna de las dos es una tarjeta de referencia
+        estatica, ambas resumen "como vas" desde un angulo distinto (tiempo/objetivos vs equilibrio
+        entre levantamientos) — emparejarlas evita que Desequilibrios (colapsada por defecto) anada
+        una fila propia a ancho completo.
+      */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
+        <ImbalancesCard groups={imbalanceGroups} />
+      </div>
 
       {/*
         Grid de 2 columnas en pantallas medianas+ (1 sola en movil): PRs y Peso corporal emparejados
