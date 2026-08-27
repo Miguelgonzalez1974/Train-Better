@@ -89,6 +89,26 @@ export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (numbe
         </div>
       )}
 
+      {/*
+        Sin datos todavia no hay marcador que dibujar, pero la escala en si (las 4 zonas) no depende
+        de ningun dato del atleta — es la misma siempre. Mostrarla ya, atenuada y sin numero, es
+        contenido real (el atleta aprende de un vistazo donde caera su zona) en vez de relleno
+        vacio, y de paso cierra el hueco de altura frente a Peso corporal en vez de dejarlo en blanco.
+      */}
+      {result.acwr === null && (
+        <div className="mx-1 mt-1.5">
+          <div className="h-1.5 overflow-hidden rounded-full opacity-50">
+            <div className="flex h-full">
+              <div className="h-full bg-sky-500/55" style={{ width: '40%' }} />
+              <div className="h-full bg-emerald-500/55" style={{ width: '25%' }} />
+              <div className="h-full bg-brand-orange/70" style={{ width: '10%' }} />
+              <div className="h-full bg-red-500/75" style={{ width: '25%' }} />
+            </div>
+          </div>
+          <p className="mt-1 whitespace-nowrap text-[10px] text-neutral-600">Vista previa de tu escala de zonas.</p>
+        </div>
+      )}
+
       {result.acwr !== null && (
         <div className="mx-1 mt-8">
           <div className="relative h-4">

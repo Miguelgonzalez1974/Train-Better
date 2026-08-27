@@ -71,6 +71,12 @@ export function ImbalancesCard({ groups }: { groups: ImbalanceGroup[] }) {
   const desbalanceCount = groups.filter((g) => g.status === 'desbalance').length;
   const equilibradoCount = groups.filter((g) => g.status === 'equilibrado').length;
   const faltanCount = groups.filter((g) => g.status === 'faltan-datos').length;
+  // El grupo mas relevante para adelantar colapsada — un desbalance real primero (es lo mas
+  // accionable), si no hay ninguno el primer equilibrado (el refuerzo positivo), y solo si no hay
+  // ni uno ni otro cae al primero de la lista.
+  const previewGroup =
+    groups.find((g) => g.status === 'desbalance') ?? groups.find((g) => g.status === 'equilibrado') ?? groups[0];
+  const previewMeta = STATUS_META[previewGroup.status];
 
   return (
     <section className="card overflow-hidden p-0">
@@ -97,6 +103,24 @@ export function ImbalancesCard({ groups }: { groups: ImbalanceGroup[] }) {
           <ChevronUp size={16} className="shrink-0 text-neutral-500" />
         )}
       </button>
+
+      {/*
+        Adelanto del grupo mas relevante, visible solo colapsada — mismo espiritu que un titular:
+        no hace falta desplegar para saber si hay algo que mirar. Con el mismo formato de fila
+        compacta que ya usa WeakPointsCard, para que las dos tarjetas emparejadas se lean como una
+        misma familia visual en vez de dos formatos distintos.
+      */}
+      {collapsed && (
+        <div className="border-t border-white/5 px-3.5 pb-3.5 pt-3">
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-white">{previewGroup.label}</p>
+              <p className="truncate text-xs text-neutral-500">{previewGroup.note}</p>
+            </div>
+            <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${previewMeta.badgeClass}`}>{previewMeta.label}</span>
+          </div>
+        </div>
+      )}
 
       {!collapsed && (
         <div className="flex flex-col gap-3 border-t border-white/5 px-3.5 pb-3.5 pt-3">
