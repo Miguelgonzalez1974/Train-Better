@@ -35,6 +35,7 @@ import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
 import { GOAL_TYPE_COLOR, GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 import { MacroPlanModal } from './MacroPlanModal';
+import { SeasonPlannerModal } from './SeasonPlannerModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { buildGoalRows } from '../dashboard/progressOverview';
 
@@ -170,6 +171,7 @@ export function Objetivos() {
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
   const [rampDraft, setRampDraft] = useState<IntensityRamp | null>(null);
   const [planMacro, setPlanMacro] = useState<Macrocycle | null>(null);
+  const [seasonPlanner, setSeasonPlanner] = useState<{ targetDate?: string } | null>(null);
   const [nextMacroDismissed, setNextMacroDismissed] = useState(false);
   const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
@@ -287,13 +289,22 @@ export function Objetivos() {
             <p className="text-lg font-semibold text-white">Macrociclos</p>
           </div>
           {!macroDraft && (
-            <button
-              onClick={() => setMacroDraft(newMacroDraft())}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
-            >
-              <Plus size={15} strokeWidth={2.25} />
-              Nuevo
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSeasonPlanner({})}
+                className="flex items-center gap-1.5 rounded-lg border border-brand-neon/40 px-3 py-1.5 text-sm font-semibold text-brand-neon transition-all duration-200 hover:bg-brand-neon/10"
+              >
+                <Sparkles size={15} strokeWidth={2.25} />
+                Planificar temporada
+              </button>
+              <button
+                onClick={() => setMacroDraft(newMacroDraft())}
+                className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
+              >
+                <Plus size={15} strokeWidth={2.25} />
+                Nuevo
+              </button>
+            </div>
           )}
         </div>
 
@@ -306,8 +317,8 @@ export function Objetivos() {
               </span>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-white">
-                  {nextMacroSuggestion.endingMacro.label} termina en {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`}
-                  {' '}— ¿planeamos el siguiente bloque?
+                  {nextMacroSuggestion.endingStructure.label} termina en {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`}
+                  {' '}— ¿planeamos {nextMacroSuggestion.suggestsSeason ? 'la temporada' : 'el siguiente bloque'}?
                 </p>
                 <ul className="mt-1.5 flex flex-col gap-0.5 text-xs text-neutral-400">
                   {nextMacroSuggestion.drivingGoal && (
@@ -334,18 +345,30 @@ export function Objetivos() {
                   )}
                 </ul>
                 <p className="mt-1.5 text-[11px] text-neutral-600">
-                  Solo es un punto de partida — se abre el formulario ya relleno para que revises fechas y fases antes de guardar nada.
+                  Solo es un punto de partida — {nextMacroSuggestion.suggestsSeason ? 'se abre el planificador ya relleno' : 'se abre el formulario ya relleno'} para que revises fechas y fases antes de guardar nada.
                 </p>
                 <div className="mt-2.5 flex gap-2">
-                  <button
-                    onClick={() => {
-                      setMacroDraft(nextMacroSuggestion.draft);
-                      setNextMacroDismissed(true);
-                    }}
-                    className="rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
-                  >
-                    Revisar borrador
-                  </button>
+                  {nextMacroSuggestion.suggestsSeason ? (
+                    <button
+                      onClick={() => {
+                        setSeasonPlanner({ targetDate: nextMacroSuggestion.drivingGoal?.targetDate });
+                        setNextMacroDismissed(true);
+                      }}
+                      className="rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
+                    >
+                      Planificar temporada
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setMacroDraft(nextMacroSuggestion.draft);
+                        setNextMacroDismissed(true);
+                      }}
+                      className="rounded-md bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-bg transition-colors duration-200 hover:bg-brand-neon-soft"
+                    >
+                      Revisar borrador
+                    </button>
+                  )}
                   <button
                     onClick={() => setNextMacroDismissed(true)}
                     className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
@@ -495,6 +518,19 @@ export function Objetivos() {
         </div>
 
         <MacroPlanModal macro={planMacro} prs={profile.prs} onClose={() => setPlanMacro(null)} />
+
+        {seasonPlanner !== null && (
+          <SeasonPlannerModal
+            open
+            profile={profile}
+            initialTargetDate={seasonPlanner.targetDate}
+            onClose={() => setSeasonPlanner(null)}
+            onSave={(macrocycles) => {
+              persist({ ...profile, macrocycles });
+              setSeasonPlanner(null);
+            }}
+          />
+        )}
 
         {macroDraft && (
           <form onSubmit={saveMacro} className="card flex flex-col gap-3 p-4">

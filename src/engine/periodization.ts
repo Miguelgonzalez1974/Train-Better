@@ -90,6 +90,30 @@ export function currentWeekInRange(range: { startDate: string; endDate: string }
   return Math.min(Math.max(elapsed, 1), totalMacrocycleWeeks(range));
 }
 
+/**
+ * Aritmetica de fechas ISO (solo yyyy-mm-dd) compartida — `nextMacroSuggestion.ts` y
+ * `seasonPlan.ts` planifican encadenando rangos y necesitan lo mismo. Siempre con el parseo
+ * seguro `T00:00:00` (hora local), nunca `new Date(iso)` a secas (medianoche UTC -> desplaza
+ * un dia en husos negativos, mismo bug ya arreglado en `daysBetween`/`weeksSinceStart`).
+ */
+export function addDaysIso(dateIso: string, days: number): string {
+  const d = new Date(`${dateIso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return toLocalIsoDate(d);
+}
+
+/** Dias enteros de `fromIso` a `toIso` (positivo si `toIso` es posterior). */
+export function isoDiffDays(fromIso: string, toIso: string): number {
+  return Math.round(
+    (new Date(`${toIso}T00:00:00`).getTime() - new Date(`${fromIso}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24),
+  );
+}
+
+/** Semanas de un rango ISO inclusivo (min. 1), redondeado a la semana mas cercana. */
+export function weeksBetweenIso(startIso: string, endIso: string): number {
+  return Math.max(1, Math.round((isoDiffDays(startIso, endIso) + 1) / 7));
+}
+
 export interface PhaseProgress {
   /** 1=acumulacion, 2=intensificacion, 3=pico, 4=descarga — mismo indice que usan las tablas de % de carga. */
   phaseIndex: 1 | 2 | 3 | 4;

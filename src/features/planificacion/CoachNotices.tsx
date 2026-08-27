@@ -174,9 +174,11 @@ export function CoachNotices({
               <Map size={14} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-neon" />
               <div className="flex-1">
                 <p className="text-neutral-200">
-                  <span className="font-semibold text-brand-neon">{nextMacroSuggestion.endingMacro.label}</span> termina en{' '}
-                  {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`} — hay un borrador
-                  del siguiente bloque esperando en Objetivos.
+                  <span className="font-semibold text-brand-neon">{nextMacroSuggestion.endingStructure.label}</span> termina en{' '}
+                  {nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `${nextMacroSuggestion.daysRemaining} días`} —{' '}
+                  {nextMacroSuggestion.suggestsSeason
+                    ? 'planifica la temporada completa en Objetivos.'
+                    : 'hay un borrador del siguiente bloque esperando en Objetivos.'}
                 </p>
                 <button
                   onClick={onNavigateToObjetivos}

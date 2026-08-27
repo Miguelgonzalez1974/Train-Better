@@ -1,52 +1,63 @@
 import type { AthleteProfile, GoalType, Macrocycle, SessionHistoryEntry } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
 import { daysBetween } from './loadMetrics';
-import { getActiveMacrocycle, toLocalIsoDate, totalMacrocycleWeeks } from './periodization';
+import {
+  addDaysIso,
+  getActiveMacrocycle,
+  isoDiffDays,
+  toLocalIsoDate,
+  totalMacrocycleWeeks,
+  weeksBetweenIso,
+} from './periodization';
+import { getActiveStrengthProgram } from './strengthPrograms';
 import { pickPriorityGoal } from './goalPriority';
 import { computeWeakPoints } from './weakPoints';
 
-/** Ventana antes del fin del macro activo en la que tiene sentido empezar a hablar del siguiente. */
+/** Ventana antes del fin de la estructura activa en la que tiene sentido empezar a hablar de lo siguiente. */
 const NEXT_MACRO_WINDOW_DAYS = 14;
 /** Si ya hay otro macro que empieza en este margen tras el que termina, el atleta ya lo planeo — no hace falta sugerir nada. */
 const ALREADY_PLANNED_GAP_DAYS = 14;
 /** Duracion minima (en dias) que debe tener el siguiente bloque para que la fecha del objetivo se use tal cual como fin — si el objetivo cae demasiado pronto, un bloque tan corto no tendria sentido y se usa la duracion del macro que termina como referencia. */
 const MIN_NEXT_MACRO_DAYS = 14;
+/**
+ * A partir de este hueco hasta el objetivo, un solo macrociclo se queda corto: son varios
+ * bloques encadenados (una temporada). La UI usa esto para enrutar al planificador de temporada
+ * en vez de al formulario de un macro suelto.
+ */
+export const SEASON_SUGGESTION_MIN_DAYS = 16 * 7;
 
-function addDaysIso(dateIso: string, days: number): string {
-  const d = new Date(`${dateIso}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return toLocalIsoDate(d);
-}
-
-function isoDiffDays(fromIso: string, toIso: string): number {
-  return Math.round((new Date(`${toIso}T00:00:00`).getTime() - new Date(`${fromIso}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function weeksBetweenIso(startIso: string, endIso: string): number {
-  return Math.max(1, Math.round((isoDiffDays(startIso, endIso) + 1) / 7));
+/** Estructura que gobierna el entrenamiento ahora y esta a punto de acabar — un macrociclo o un bloque de temporada (StrengthProgram). Solo se usa `label`/`endDate` aguas abajo. */
+export interface EndingStructure {
+  id: string;
+  label: string;
+  endDate: string;
+  kind: 'macrocycle' | 'temporada';
 }
 
 export interface NextMacroSuggestion {
-  endingMacro: Macrocycle;
-  /** Dias que quedan para que termine el macro activo (siempre 0-NEXT_MACRO_WINDOW_DAYS aqui). */
+  endingStructure: EndingStructure;
+  /** Dias que quedan para que termine la estructura activa (siempre 0-NEXT_MACRO_WINDOW_DAYS aqui). */
   daysRemaining: number;
   /** Borrador listo para cargar tal cual en el formulario de "Nuevo macrociclo" — el atleta lo revisa/edita antes de guardar, nunca se crea solo. */
   draft: Macrocycle;
   /** Objetivo que marco la fecha de fin sugerida, si lo hubo — se resuelve a texto en la UI (que ya conoce GOAL_TYPE_META), no aqui. */
-  drivingGoal?: { type: GoalType; movementName?: string; targetDate: string };
-  /** Patron de movimiento peor situado ahora mismo (computeWeakPoints), para que el atleta lo tenga en cuenta al revisar las fases. */
+  drivingGoal?: { type: GoalType; movementId?: string; movementName?: string; targetDate: string };
+  /** true cuando el hueco hasta el objetivo da para varios bloques — la UI ofrece "Planificar temporada" en vez del borrador de un macro. */
+  suggestsSeason: boolean;
+  /** Patron de movimiento peor situado ahora mismo (computeWeakPoints), para que el atleta lo tenga en cuenta al repartir las fases. */
   weakPointLabel?: string;
-  /** Cuantos objetivos activos siguen abiertos mas alla del fin de este macro (informativo). */
+  /** Cuantos objetivos activos siguen abiertos mas alla del fin de esta estructura (informativo). */
   openGoalsBeyond: number;
 }
 
 /**
- * Tercera capa del coach "que planifica mas alla de hoy": cuando el macrociclo activo esta cerca
- * de terminar, prepara un borrador razonado del siguiente en vez de dejar que el atleta caiga en
- * modo mantenimiento sin darse cuenta. Deliberadamente NO crea nada — devuelve un `draft` para que
- * el atleta lo revise, edite y guarde con el mismo formulario y el mismo boton que ya usa para
- * crear un macrociclo a mano (ver Objetivos.tsx). Las decisiones clave (duracion, fases, si seguir
- * un objetivo concreto) las toma el atleta al confirmar, no esta funcion.
+ * Tercera capa del coach "que planifica mas alla de hoy": cuando la estructura activa (macrociclo
+ * o bloque de temporada) esta cerca de terminar, prepara un borrador razonado de lo siguiente en
+ * vez de dejar que el atleta caiga en modo mantenimiento sin darse cuenta. Deliberadamente NO crea
+ * nada — devuelve un `draft` para que el atleta lo revise, edite y guarde con el mismo formulario
+ * y el mismo boton que ya usa para crear un macrociclo a mano (ver Objetivos.tsx). Si el hueco
+ * hasta el objetivo da para varios bloques, `suggestsSeason` avisa a la UI para que ofrezca el
+ * planificador de temporada. Las decisiones clave las toma el atleta al confirmar, no esta funcion.
  */
 export function buildNextMacroSuggestion(
   profile: AthleteProfile,
@@ -54,29 +65,43 @@ export function buildNextMacroSuggestion(
   today: Date = new Date(),
 ): NextMacroSuggestion | null {
   const todayIso = toLocalIsoDate(today);
-  const active = getActiveMacrocycle(profile.macrocycles, todayIso);
-  if (!active) return null;
 
-  const daysRemaining = -daysBetween(active.endDate, today);
+  const activeMacro = getActiveMacrocycle(profile.macrocycles, todayIso);
+  const activeProgram = getActiveStrengthProgram(profile.strengthPrograms ?? [], todayIso);
+  // Un bloque de temporada (test -> build -> retest) cuenta como estructura que termina: su semana
+  // de retest es justo el momento de decidir que viene despues. Otros metodos de fuerza (5/3/1,
+  // etc.) no — no cierran un ciclo con la misma logica de "y ahora que".
+  const endingTemporada = activeProgram && activeProgram.method === 'temporada' ? activeProgram : undefined;
+
+  const ending: EndingStructure | null = activeMacro
+    ? { id: activeMacro.id, label: activeMacro.label, endDate: activeMacro.endDate, kind: 'macrocycle' }
+    : endingTemporada
+      ? { id: endingTemporada.id, label: 'Bloque de Temporada', endDate: endingTemporada.endDate, kind: 'temporada' }
+      : null;
+  if (!ending) return null;
+
+  const daysRemaining = -daysBetween(ending.endDate, today);
   if (daysRemaining < 0 || daysRemaining > NEXT_MACRO_WINDOW_DAYS) return null;
 
   const alreadyPlanned = profile.macrocycles.some(
-    (m) => m.id !== active.id && m.startDate > active.endDate && m.startDate <= addDaysIso(active.endDate, ALREADY_PLANNED_GAP_DAYS),
+    (m) => m.id !== ending.id && m.startDate > ending.endDate && m.startDate <= addDaysIso(ending.endDate, ALREADY_PLANNED_GAP_DAYS),
   );
   if (alreadyPlanned) return null;
 
-  const suggestedStart = addDaysIso(active.endDate, 1);
-  const mirroredWeeks = totalMacrocycleWeeks(active);
+  const suggestedStart = addDaysIso(ending.endDate, 1);
+  // Sin macrociclo de referencia (viene de un bloque de temporada) se asume un macro estandar de 8 semanas.
+  const mirroredWeeks = activeMacro ? totalMacrocycleWeeks(activeMacro) : 8;
   const mirroredEnd = addDaysIso(suggestedStart, mirroredWeeks * 7 - 1);
 
-  const drivingGoal = pickPriorityGoal(profile.goals, (g) => g.targetDate > active.endDate);
+  const drivingGoal = pickPriorityGoal(profile.goals, (g) => g.targetDate > ending.endDate);
   const goalReachable = drivingGoal ? isoDiffDays(suggestedStart, drivingGoal.targetDate) >= MIN_NEXT_MACRO_DAYS : false;
   const suggestedEnd = goalReachable ? drivingGoal!.targetDate : mirroredEnd;
+  const suggestsSeason = goalReachable && isoDiffDays(suggestedStart, drivingGoal!.targetDate) >= SEASON_SUGGESTION_MIN_DAYS;
 
   const drivingMovement = drivingGoal?.movementId ? getMovementById(drivingGoal.movementId) : undefined;
   const suggestedLabel = goalReachable
     ? `Rumbo a ${drivingMovement ? drivingMovement.name : 'tu objetivo'}`
-    : `${active.label} (continuación)`;
+    : `${ending.label} (continuación)`;
 
   const topWeak = computeWeakPoints(history).find((w) => w.status === 'a-trabajar');
 
@@ -85,8 +110,8 @@ export function buildNextMacroSuggestion(
   // anterior, arrastrar los mismos numeros dejaria un formulario ya invalido. Mejor no proponer
   // fases (vuelve al ciclo clasico, siempre valido) que entregar un borrador roto.
   let suggestedPhaseWeeks: [number, number, number, number] | undefined;
-  if (active.phaseWeeks) {
-    const [acc, int, peak] = active.phaseWeeks;
+  if (activeMacro?.phaseWeeks) {
+    const [acc, int, peak] = activeMacro.phaseWeeks;
     const newTotalWeeks = weeksBetweenIso(suggestedStart, suggestedEnd);
     if (acc + int + peak + 1 <= newTotalWeeks) {
       suggestedPhaseWeeks = [acc, int, peak, newTotalWeeks - acc - int - peak];
@@ -94,7 +119,7 @@ export function buildNextMacroSuggestion(
   }
 
   return {
-    endingMacro: active,
+    endingStructure: ending,
     daysRemaining,
     draft: {
       id: crypto.randomUUID(),
@@ -104,9 +129,15 @@ export function buildNextMacroSuggestion(
       phaseWeeks: suggestedPhaseWeeks,
     },
     drivingGoal: goalReachable
-      ? { type: drivingGoal!.type, movementName: drivingMovement?.name, targetDate: drivingGoal!.targetDate }
+      ? {
+          type: drivingGoal!.type,
+          movementId: drivingGoal!.movementId,
+          movementName: drivingMovement?.name,
+          targetDate: drivingGoal!.targetDate,
+        }
       : undefined,
+    suggestsSeason,
     weakPointLabel: topWeak?.label,
-    openGoalsBeyond: profile.goals.filter((g) => g.targetDate > active.endDate).length,
+    openGoalsBeyond: profile.goals.filter((g) => g.targetDate > ending.endDate).length,
   };
 }
