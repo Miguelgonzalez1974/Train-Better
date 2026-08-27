@@ -23,6 +23,8 @@ const VARIANT_PR_FIELDS: { key: keyof VariantPersonalRecords; label: string }[] 
   { key: 'pushPress', label: 'Push Press' },
   { key: 'splitJerk', label: 'Split Jerk' },
   { key: 'overheadSquat', label: 'Overhead Squat' },
+  { key: 'powerSnatch', label: 'Power Snatch' },
+  { key: 'powerClean', label: 'Power Clean' },
 ];
 
 const inputClass =
@@ -98,8 +100,9 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
       <div>
         <p className="mb-2 text-xs text-neutral-500">
           Opcional — rellena solo si tienes una marca propia y distinta a la del levantamiento base (Sumo Deadlift/Push
-          Press/Split Jerk en Conjugado; Overhead Squat como movimiento independiente). Mientras no pongas un número aquí,
-          el coach no calcula ningún peso a partir de un PR que no le corresponde a ese movimiento.
+          Press/Split Jerk en Conjugado; Overhead Squat, Power Snatch y Power Clean como movimientos independientes).
+          Mientras no pongas un número aquí, el coach no calcula ningún peso a partir de un PR que no le corresponde a ese
+          movimiento.
         </p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {VARIANT_PR_FIELDS.map((field) => (

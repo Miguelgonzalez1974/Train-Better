@@ -8,6 +8,8 @@ export const VARIANT_PR_MOVEMENT_ID: Record<keyof VariantPersonalRecords, string
   pushPress: 'push-press',
   splitJerk: 'split-jerk',
   overheadSquat: 'overhead-squat',
+  powerSnatch: 'power-snatch',
+  powerClean: 'power-clean',
 };
 
 /**

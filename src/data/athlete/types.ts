@@ -23,6 +23,9 @@ export interface VariantPersonalRecords {
   splitJerk?: number;
   /** Movimiento independiente en CrossFit (tecnica + fuerza de tren superior en posicion de sentadilla), no una simple variante del back/front squat. */
   overheadSquat?: number;
+  /** Version "power" (recepcion parcial) del snatch/clean — PR propio para comparar potencia vs tecnica de recepcion completa. */
+  powerSnatch?: number;
+  powerClean?: number;
 }
 
 export interface BodyweightEntry {
