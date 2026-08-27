@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CalendarCheck, BadgeCheck, Gauge, CalendarRange, CalendarPlus, ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import { computeAcwr } from '../../engine/loadMetrics';
+import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
 import { computeWeakPoints, computePrTrends, type PrTrendDirection } from '../../engine/weakPoints';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -97,6 +97,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const [showNextWeek, setShowNextWeek] = useState(false);
   const stats = useMemo(() => getMonthlyStats(history, profile.trainingDatesLog ?? []), [history, profile.trainingDatesLog]);
   const acwr = useMemo(() => computeAcwr(history), [history]);
+  const acwrTrend = useMemo(() => getAcwrTrend(history), [history]);
   const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
   const prTrends = useMemo(() => computePrTrends(history), [history]);
   const rpeTrend = useMemo(() => {
@@ -172,7 +173,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         macrocycles={profile.macrocycles}
       />
 
-      <AcwrGauge result={acwr} />
+      <AcwrGauge result={acwr} trend={acwrTrend} />
 
       <WeakPointsCard points={weakPoints} />
     </div>

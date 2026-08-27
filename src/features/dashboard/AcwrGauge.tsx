@@ -1,5 +1,6 @@
 import { Activity } from 'lucide-react';
 import { ACWR_ZONE_LABEL, type AcwrResult } from '../../engine/loadMetrics';
+import { Sparkline } from './Sparkline';
 
 const SCALE_MAX = 2;
 /** Mismos umbrales que classifyAcwr en loadMetrics.ts, expresados como marcas de referencia en la barra. */
@@ -35,10 +36,20 @@ const ZONE_ICON_CLASS: Record<AcwrResult['zone'], string> = {
   alta: 'bg-red-400/15 text-red-400',
 };
 
-export function AcwrGauge({ result }: { result: AcwrResult }) {
+/** Mismo color que el icono/marcador de la zona actual, aplicado a la linea de tendencia. */
+const ZONE_SPARKLINE_CLASS: Record<AcwrResult['zone'], { stroke: string; area: string; dot: string }> = {
+  baja: { stroke: 'stroke-sky-400', area: 'fill-sky-400/10', dot: 'fill-sky-400' },
+  optima: { stroke: 'stroke-emerald-400', area: 'fill-emerald-400/10', dot: 'fill-emerald-400' },
+  moderada: { stroke: 'stroke-brand-orange', area: 'fill-brand-orange/10', dot: 'fill-brand-orange' },
+  alta: { stroke: 'stroke-red-400', area: 'fill-red-400/10', dot: 'fill-red-400' },
+};
+
+export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (number | null)[] }) {
   const markerPercent = Math.min(100, Math.max(0, (Math.min(result.acwr ?? 0, SCALE_MAX) / SCALE_MAX) * 100));
   // Sin suficientes datos todavia no hay una zona real que representar — icono neutro en vez de un color de zona que insinuaria una lectura que aun no existe.
   const iconClass = result.acwr !== null ? ZONE_ICON_CLASS[result.zone] : 'bg-white/5 text-neutral-500';
+  // Los primeros dias de un historial corto no tienen suficiente ventana cronica — se descartan en vez de dibujar un hueco o un cero enganoso.
+  const trendValues = trend.filter((v): v is number => v !== null);
 
   return (
     <section className="card p-4">
@@ -64,6 +75,19 @@ export function AcwrGauge({ result }: { result: AcwrResult }) {
           </div>
         </div>
       </div>
+
+      {result.acwr !== null && trendValues.length >= 2 && (
+        <div className="mt-3">
+          <Sparkline
+            values={trendValues}
+            strokeClassName={ZONE_SPARKLINE_CLASS[result.zone].stroke}
+            areaClassName={ZONE_SPARKLINE_CLASS[result.zone].area}
+            dotClassName={ZONE_SPARKLINE_CLASS[result.zone].dot}
+            className="h-10 w-full"
+          />
+          <p className="mt-1 text-[10px] text-neutral-500">Tendencia — últimos {trendValues.length} días con datos</p>
+        </div>
+      )}
 
       {result.acwr !== null && (
         <div className="mx-1 mt-8">

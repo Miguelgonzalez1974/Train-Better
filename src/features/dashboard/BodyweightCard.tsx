@@ -3,31 +3,10 @@ import { Scale, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import type { BodyweightEntry } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { toLocalIsoDate } from '../../engine/periodization';
+import { Sparkline } from './Sparkline';
 
-const CHART_WIDTH = 280;
-const CHART_HEIGHT = 56;
-const CHART_PADDING = 6;
 /** Ventana visible del grafico — no hace falta guardar mas para una tendencia legible. */
 const MAX_POINTS = 20;
-
-function buildLinePath(entries: BodyweightEntry[]): { line: string; area: string; lastPoint: { x: number; y: number } } {
-  const values = entries.map((e) => e.kg);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const stepX = entries.length > 1 ? (CHART_WIDTH - CHART_PADDING * 2) / (entries.length - 1) : 0;
-
-  const points = entries.map((e, i) => {
-    const x = CHART_PADDING + i * stepX;
-    const y = CHART_HEIGHT - CHART_PADDING - ((e.kg - min) / range) * (CHART_HEIGHT - CHART_PADDING * 2);
-    return { x, y };
-  });
-
-  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  const area = `${line} L ${points[points.length - 1].x.toFixed(1)} ${CHART_HEIGHT} L ${points[0].x.toFixed(1)} ${CHART_HEIGHT} Z`;
-
-  return { line, area, lastPoint: points[points.length - 1] };
-}
 
 interface BodyweightCardProps {
   log: BodyweightEntry[];
@@ -41,7 +20,6 @@ export function BodyweightCard({ log, onChange }: BodyweightCardProps) {
   const latest = recent[recent.length - 1];
   const first = recent[0];
   const delta = latest && first && recent.length > 1 ? latest.kg - first.kg : null;
-  const chart = recent.length >= 2 ? buildLinePath(recent) : null;
 
   function handleAdd() {
     const kg = Number(draft.replace(',', '.'));
@@ -81,12 +59,14 @@ export function BodyweightCard({ log, onChange }: BodyweightCardProps) {
         )}
       </div>
 
-      {chart ? (
-        <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none" className="mt-3 h-14 w-full">
-          <path d={chart.area} className="fill-brand-orange/10" />
-          <path d={chart.line} fill="none" className="stroke-brand-orange" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx={chart.lastPoint.x} cy={chart.lastPoint.y} r={3} className="fill-brand-orange" />
-        </svg>
+      {recent.length >= 2 ? (
+        <Sparkline
+          values={recent.map((e) => e.kg)}
+          strokeClassName="stroke-brand-orange"
+          areaClassName="fill-brand-orange/10"
+          dotClassName="fill-brand-orange"
+          className="mt-3 h-14 w-full"
+        />
       ) : (
         <p className="mt-3 text-xs text-neutral-500">Registra al menos 2 pesajes para ver la tendencia.</p>
       )}

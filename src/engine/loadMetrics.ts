@@ -84,3 +84,21 @@ export function computeAcwr(history: SessionHistoryEntry[], referenceDate: Date 
 
   return { acute, chronic, acwr, zone, coldStart };
 }
+
+const ACWR_TREND_DAYS = 21;
+
+/**
+ * Serie diaria del ratio ACWR de los ultimos `days` dias — mismo `computeAcwr` de siempre, llamado
+ * una vez por dia con una fecha de referencia distinta cada vez, en vez de un calculo nuevo. Da
+ * contexto de tendencia a la cifra puntual del gauge (¿llevamos 3 semanas subiendo hacia zona alta,
+ * o es un pico aislado de hoy?), no solo el snapshot de hoy.
+ */
+export function getAcwrTrend(history: SessionHistoryEntry[], days: number = ACWR_TREND_DAYS, referenceDate: Date = new Date()): (number | null)[] {
+  const series: (number | null)[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(referenceDate);
+    date.setDate(date.getDate() - i);
+    series.push(computeAcwr(history, date).acwr);
+  }
+  return series;
+}
