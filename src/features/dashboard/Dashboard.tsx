@@ -161,21 +161,29 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         </div>
       </div>
 
-      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
+      {/*
+        Grid de 2 columnas en pantallas medianas+ (1 sola en movil), agrupando por la misma
+        categoria que ya distinguen los colores de icono: rendimiento/objetivos (dorado),
+        referencia de seguimiento (peso corporal + constancia), y "cosas a vigilar" (fatiga +
+        puntos debiles). En movil el orden de lectura se mantiene identico al de antes.
+      */}
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+        <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
 
-      <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
+        <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
 
-      <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
+        <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
 
-      <TrainingHeatmap
-        history={history}
-        trainingDaysPerWeek={profile.trainingDaysPerWeek}
-        macrocycles={profile.macrocycles}
-      />
+        <TrainingHeatmap
+          history={history}
+          trainingDaysPerWeek={profile.trainingDaysPerWeek}
+          macrocycles={profile.macrocycles}
+        />
 
-      <AcwrGauge result={acwr} trend={acwrTrend} />
+        <AcwrGauge result={acwr} trend={acwrTrend} />
 
-      <WeakPointsCard points={weakPoints} />
+        <WeakPointsCard points={weakPoints} />
+      </div>
     </div>
   );
 }
