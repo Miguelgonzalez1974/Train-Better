@@ -100,39 +100,46 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: T
         </div>
       </div>
 
-      <div ref={containerRef} className="mt-4 flex gap-[3px] overflow-x-auto pb-1">
-        {columns.map((col, wi) => (
-          <div key={wi} className="flex flex-col gap-[3px]">
-            {col.map((cell) => {
-              if (cell.kind === 'future') {
-                return <div key={cell.iso} className="h-3 w-3 rounded-sm bg-transparent" />;
-              }
-              const label = `${cell.iso} · ${KIND_TITLE[cell.kind]}${cell.rpe !== null ? ` (RPE ${cell.rpe})` : ''}`;
-              const isPinned = pinnedIso === cell.iso;
-              return (
-                <div key={cell.iso} className="group relative">
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPinnedIso(isPinned ? null : cell.iso);
-                    }}
-                    className={`h-3 w-3 cursor-pointer rounded-sm transition-transform duration-150 hover:scale-125 ${
-                      cell.kind === 'trained' ? trainedBucketClass(cell.rpe!) : CELL_CLASS[cell.kind]
-                    }`}
-                  />
-                  <div
-                    role="tooltip"
-                    className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-lg border border-brand-border bg-brand-surface px-2 py-1 text-[11px] text-neutral-200 shadow-lg transition-opacity duration-100 ${
-                      isPinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                    }`}
-                  >
-                    {label}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+      {/*
+        Grid fluido (columnas/filas en fr, no px fijos) en vez del flex+overflow-x-auto anterior —
+        ese scroll lateral quedaba mal dentro de una tarjeta (ningun otro componente de la app
+        desplaza su propio contenido) y en pantallas estrechas se veia roto. grid-auto-flow:column
+        rellena cada columna (semana) de arriba a abajo antes de pasar a la siguiente, igual que el
+        orden en que ya viene `columns` (semana por semana, 7 dias cada una) — sin reordenar nada.
+      */}
+      <div
+        ref={containerRef}
+        className="mt-4 grid gap-[3px]"
+        style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`, gridTemplateRows: 'repeat(7, minmax(0, 1fr))', gridAutoFlow: 'column' }}
+      >
+        {columns.flat().map((cell) => {
+          if (cell.kind === 'future') {
+            return <div key={cell.iso} className="aspect-square rounded-sm bg-transparent" />;
+          }
+          const label = `${cell.iso} · ${KIND_TITLE[cell.kind]}${cell.rpe !== null ? ` (RPE ${cell.rpe})` : ''}`;
+          const isPinned = pinnedIso === cell.iso;
+          return (
+            <div key={cell.iso} className="group relative">
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinnedIso(isPinned ? null : cell.iso);
+                }}
+                className={`aspect-square w-full cursor-pointer rounded-sm transition-transform duration-150 hover:scale-125 ${
+                  cell.kind === 'trained' ? trainedBucketClass(cell.rpe!) : CELL_CLASS[cell.kind]
+                }`}
+              />
+              <div
+                role="tooltip"
+                className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-lg border border-brand-border bg-brand-surface px-2 py-1 text-[11px] text-neutral-200 shadow-lg transition-opacity duration-100 ${
+                  isPinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              >
+                {label}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-neutral-500">
