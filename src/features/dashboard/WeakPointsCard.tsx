@@ -14,7 +14,8 @@ export function WeakPointsCard({ points }: { points: PatternStrain[] }) {
   return (
     <section className="card p-4">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange">
+        {/* Neon: categoria "analisis del coach" — mismo acento que el icono de CoachNote, distingue un diagnostico computado de una simple cifra registrada. */}
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-neon/15 text-brand-neon">
           <Crosshair size={18} strokeWidth={2.25} />
         </span>
         <p className="text-sm font-semibold uppercase tracking-wide text-white">Puntos débiles</p>

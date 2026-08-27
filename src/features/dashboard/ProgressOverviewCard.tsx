@@ -43,7 +43,8 @@ export function ProgressOverviewCard({ structureRow, goalRows }: { structureRow:
   return (
     <section className="card p-4">
       <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange">
+        {/* Gold: categoria "rendimiento/objetivos" — mismo acento que Tus PRs, agrupa lo que mide como de cerca estas de una meta. */}
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gold/15 text-brand-gold">
           <Compass size={18} strokeWidth={2.25} />
         </span>
         <p className="text-sm font-semibold uppercase tracking-wide text-white">Tu progreso</p>

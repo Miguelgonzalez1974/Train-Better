@@ -27,14 +27,24 @@ const ZONE_LABEL_CLASS: Record<AcwrResult['zone'], string> = {
   alta: 'bg-red-400 text-red-950',
 };
 
+/** Icono de cabecera a juego con la zona actual — categoria "riesgo/fatiga", la unica tarjeta cuyo estado real cambia de significado (verde no es igual de bueno que rojo), asi que el acento fijo naranja de las demas no le pega. */
+const ZONE_ICON_CLASS: Record<AcwrResult['zone'], string> = {
+  baja: 'bg-sky-400/15 text-sky-400',
+  optima: 'bg-emerald-400/15 text-emerald-400',
+  moderada: 'bg-brand-orange/15 text-brand-orange',
+  alta: 'bg-red-400/15 text-red-400',
+};
+
 export function AcwrGauge({ result }: { result: AcwrResult }) {
   const markerPercent = Math.min(100, Math.max(0, (Math.min(result.acwr ?? 0, SCALE_MAX) / SCALE_MAX) * 100));
+  // Sin suficientes datos todavia no hay una zona real que representar — icono neutro en vez de un color de zona que insinuaria una lectura que aun no existe.
+  const iconClass = result.acwr !== null ? ZONE_ICON_CLASS[result.zone] : 'bg-white/5 text-neutral-500';
 
   return (
     <section className="card p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-orange/15 text-brand-orange">
+          <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconClass}`}>
             <Activity size={18} strokeWidth={2.25} />
           </span>
           <div>
