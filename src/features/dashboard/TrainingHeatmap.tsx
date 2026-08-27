@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import type { Macrocycle, SessionHistoryEntry } from '../../data/athlete/types';
@@ -6,6 +6,10 @@ import type { Macrocycle, SessionHistoryEntry } from '../../data/athlete/types';
 const WEEKS = 12;
 /** RPE por debajo de este umbral se trata como recuperacion activa, no como entreno "duro". */
 const RECOVERY_RPE_THRESHOLD = 3;
+/** Tamano maximo de celda (px) — evita que la cuadricula crezca de mas en una tarjeta ancha (ver MAX_GRID_WIDTH). */
+const MAX_CELL_PX = 18;
+const GRID_GAP_PX = 3;
+const MAX_GRID_WIDTH = WEEKS * (MAX_CELL_PX + GRID_GAP_PX) - GRID_GAP_PX;
 
 type CellKind = 'future' | 'rest' | 'trained' | 'recovery' | 'missed' | 'offSeason';
 
@@ -106,12 +110,28 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: T
         desplaza su propio contenido) y en pantallas estrechas se veia roto. grid-auto-flow:column
         rellena cada columna (semana) de arriba a abajo antes de pasar a la siguiente, igual que el
         orden en que ya viene `columns` (semana por semana, 7 dias cada una) — sin reordenar nada.
+        El envoltorio con max-width limita el tamano maximo de celda: sin tope, en una tarjeta ancha
+        (la mitad del dashboard en 2 columnas, a partir de `sm:`) las celdas crecian mas de lo
+        necesario y la card salia mucho mas alta que su pareja (Tus PRs). `minmax(0, min(1fr, Npx))`
+        directamente en grid-template-columns NO es CSS valido (fr no se puede mezclar dentro de
+        min()) — el navegador lo descarta en silencio y la regla entera se pierde. Limitar el ANCHO
+        DEL CONTENEDOR en su lugar consigue el mismo resultado con CSS valido: el grid interior
+        sigue siendo 100% fluido (1fr, sin tope propio). El tope solo se aplica a partir de `sm:`
+        (mismo breakpoint que activa el grid de 2 columnas en Dashboard.tsx) — en movil, con la
+        tarjeta a ancho completo y en su propia columna, no hace falta ningun tope: la cuadricula ya
+        llega borde a borde de forma natural, y limitarla ahi tambien dejaria un hueco vacio a la
+        derecha sin ganar nada a cambio.
       */}
-      <div
-        ref={containerRef}
-        className="mt-4 grid gap-[3px]"
-        style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`, gridTemplateRows: 'repeat(7, minmax(0, 1fr))', gridAutoFlow: 'column' }}
-      >
+      <div className="mt-4 sm:[max-width:var(--heatmap-max-w)]" style={{ '--heatmap-max-w': `${MAX_GRID_WIDTH}px` } as CSSProperties}>
+        <div
+          ref={containerRef}
+          className="grid gap-[3px]"
+          style={{
+            gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))`,
+            gridTemplateRows: 'repeat(7, minmax(0, 1fr))',
+            gridAutoFlow: 'column',
+          }}
+        >
         {columns.flat().map((cell) => {
           if (cell.kind === 'future') {
             return <div key={cell.iso} className="aspect-square rounded-sm bg-transparent" />;
@@ -140,6 +160,7 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: T
             </div>
           );
         })}
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-neutral-500">
