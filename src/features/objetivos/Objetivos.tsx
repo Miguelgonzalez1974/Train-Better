@@ -33,9 +33,13 @@ import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay, TEMPORADA_TO
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
 import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
-import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
+import { GOAL_TYPE_COLOR, GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 import { MacroPlanModal } from './MacroPlanModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
+import { buildGoalRows } from '../dashboard/progressOverview';
+
+/** A partir de aqui, un objetivo se trata como urgente — mismo umbral usado para destacarlo con el badge pulsante. */
+const URGENT_THRESHOLD_DAYS = 14;
 
 const EMPHASIS_HELP: Record<GoalEmphasis, string> = {
   moderado: 'Se adapta a las sesiones ya programadas: cuando un bloque coincide con tu objetivo, se prioriza tu movimiento.',
@@ -168,6 +172,7 @@ export function Objetivos() {
   const [planMacro, setPlanMacro] = useState<Macrocycle | null>(null);
   const [nextMacroDismissed, setNextMacroDismissed] = useState(false);
   const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
+  const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
 
   function persist(next: AthleteProfile) {
     athleteRepository.saveProfile(next);
@@ -249,7 +254,7 @@ export function Objetivos() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {SECTION_TABS.map((tab) => {
           const isActive = activeSection === tab.key;
           return (
@@ -1039,21 +1044,67 @@ export function Objetivos() {
         <div className="flex flex-col gap-2">
           {profile.goals.map((g) => {
             const meta = GOAL_TYPE_META[g.type];
+            const color = GOAL_TYPE_COLOR[g.type];
             const movement = g.movementId ? getMovementById(g.movementId) : undefined;
             const remaining = daysRemaining(g.targetDate);
+            const row = goalRows.find((r) => r.id === g.id);
+            const isExpired = remaining < 0;
+            const isUrgent = !isExpired && remaining <= URGENT_THRESHOLD_DAYS;
+
+            if (isExpired) {
+              return (
+                <div key={g.id} className="flex items-center gap-3 rounded-xl px-3 py-1.5 opacity-50">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600">
+                    <meta.Icon size={12} strokeWidth={2.5} />
+                  </span>
+                  <p className="flex-1 text-xs text-neutral-500">
+                    {meta.label}
+                    {movement ? ` — ${movement.name}` : ''}
+                  </p>
+                  <span className="text-[10px] text-neutral-600">Vencido</span>
+                  <button
+                    onClick={() => setGoalDraft(g)}
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button onClick={() => deleteGoal(g.id)} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              );
+            }
+
             return (
-              <div key={g.id} className="card p-4">
-                <div className="flex items-start justify-between">
+              <div
+                key={g.id}
+                className="relative overflow-hidden rounded-xl border p-3.5"
+                style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, #171310 55%)` }}
+              >
+                <div className="absolute inset-y-0 left-0 w-[3px]" style={{ background: color }} />
+                <div className="ml-1.5 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-gold/15 text-brand-gold">
-                      <meta.Icon size={20} strokeWidth={2.25} />
+                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
+                      <span className="absolute inset-0 rounded-[11px] blur-md" style={{ background: `${color}4d` }} />
+                      <meta.Icon size={17} strokeWidth={2.25} className="relative" style={{ color }} />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-white">{meta.label}</p>
-                      {movement && <p className="text-xs text-neutral-400">{movement.name}</p>}
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-white">{meta.label}</p>
+                        {isUrgent && (
+                          <span className="flex items-center gap-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+                            {remaining === 0 ? 'Hoy' : remaining === 1 ? '1 día' : `${remaining} días`}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-neutral-400">
+                        {movement ? `${movement.name} · ` : ''}
+                        {g.targetDate}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => setGoalDraft(g)}
                       className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5"
@@ -1068,11 +1119,16 @@ export function Objetivos() {
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="rounded-lg bg-white/5 px-3 py-1 text-xs text-neutral-300">
-                    {g.targetDate} ({remaining >= 0 ? `${remaining} días` : 'vencido'})
-                  </span>
-                  <span className="rounded-lg bg-brand-orange/15 px-3 py-1 text-xs font-medium capitalize text-brand-orange">{g.emphasis}</span>
+                <div className="ml-1.5 mt-2.5">
+                  <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                    <span>
+                      {row?.sublabel} · <span className="capitalize">{g.emphasis}</span>
+                    </span>
+                    <span>{row?.pct ?? 0}%</span>
+                  </div>
+                  <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
+                    <div className="h-full rounded-full" style={{ width: `${row?.pct ?? 0}%`, background: color }} />
+                  </div>
                 </div>
               </div>
             );

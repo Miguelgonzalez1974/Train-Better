@@ -6,7 +6,7 @@ import { daysBetween } from '../../engine/loadMetrics';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { currentWeekInRange, getActiveMacrocycle, resolveMacrocyclePhase, totalMacrocycleWeeks } from '../../engine/periodization';
 import { getActiveStrengthProgram } from '../../engine/strengthPrograms';
-import { GOAL_TYPE_META } from '../objetivos/goalMeta';
+import { GOAL_TYPE_COLOR, GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { STRENGTH_METHOD_COLOR, STRENGTH_METHOD_META } from '../objetivos/strengthMethodMeta';
 
 export interface ProgressRow {
@@ -73,7 +73,7 @@ export function buildGoalRows(goals: Goal[], history: SessionHistoryEntry[]): Pr
       label: movement ? `${meta.label} — ${movement.name}` : meta.label,
       sublabel: remaining >= 0 ? `Vence en ${remaining}d` : 'Objetivo vencido',
       pct: Math.round(getGoalProgress(goal, history, today) * 100),
-      color: MACRO_COLOR,
+      color: GOAL_TYPE_COLOR[goal.type],
       Icon: meta.Icon,
     };
   });

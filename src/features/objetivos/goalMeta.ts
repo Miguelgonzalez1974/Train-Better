@@ -53,3 +53,18 @@ export const GOAL_TYPE_META: Record<GoalType, GoalTypeMeta> = {
 };
 
 export const GOAL_TYPES = Object.keys(GOAL_TYPE_META) as GoalType[];
+
+/**
+ * Un color propio por tipo de objetivo — mismo criterio que `STRENGTH_METHOD_COLOR`: de un vistazo
+ * se distingue cada objetivo en la lista sin leer el texto, y sin ningun tono rojo/rosa (reservado
+ * en toda la app para dolor y avisos de peligro). "Preparar competición" comparte indigo con el
+ * ciclo de halterofilia a proposito — ambos son, literalmente, preparacion de competicion.
+ */
+export const GOAL_TYPE_COLOR: Record<GoalType, string> = {
+  'subir-pr': '#d4af37',
+  'elevar-fuerza': '#38bdf8',
+  'mejorar-gimnasticos': '#a78bfa',
+  'mejorar-potencia': '#fbbf24',
+  'preparar-competicion': '#6366f1',
+  'elevar-resistencia': '#2dd4bf',
+};
