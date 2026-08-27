@@ -180,15 +180,11 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
       <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
 
       {/*
-        A partir de aqui, cada fila junta tarjetas de altura natural parecida en vez de forzar un
-        estiramiento (items-start en las 3): estirar la mas corta para igualar a la mas alta cambia
-        "alturas distintas" por "hueco muerto dentro de la tarjeta corta", que se ve peor, no mejor
-        (confirmado en vivo con Peso corporal estirada junto a PRs). PRs+Constancia son las dos
-        tarjetas consistentemente mas altas (8 PRs+Totales; la cuadricula de 12 semanas, ya topada
-        en TrainingHeatmap para no crecer de mas). Peso corporal+ACWR son las dos mas parecidas en
-        alto (144px vs 126px sin datos). Puntos debiles+Desequilibrios ademas de ser parecidas en
-        alto, son las dos tarjetas de "diagnostico del coach" (mismo acento neon) — tiene mas
-        sentido juntarlas por contenido que Puntos debiles con ACWR solo porque coincidian en altura.
+        Emparejadas por altura natural, no por tipo de contenido: PRs+Constancia (268px/280px, las
+        dos mas altas) y Peso corporal+ACWR (144px/126px) — probado en vivo que emparejar por
+        contenido (p.ej. Constancia+ACWR, las dos "graficas en el tiempo") deja huecos de 124-154px
+        sin datos, mucho peor que estos 12-18px. Ver items-start: nunca se estira para igualar,
+        siempre altura real.
       */}
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
         <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
