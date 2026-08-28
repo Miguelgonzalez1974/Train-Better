@@ -20,6 +20,7 @@ import {
   generateOverrideSession,
   generateSessionForDate,
   hasActiveTrainingStructure,
+  peekRetestHeadsUp,
   resolveOlyPRKey,
   resolveStrengthPRKey,
   resolveVariantPRKey,
@@ -126,6 +127,10 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     [profile, history, activeMacro],
   );
   const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
+  const retestHeadsUp = useMemo(
+    () => peekRetestHeadsUp(history, new Date(), profile.trainingDaysPerWeek),
+    [history, profile.trainingDaysPerWeek],
+  );
 
   const isMacroAvailable = Boolean(getActiveMacrocycle(profile.macrocycles, todayIso));
   const nextMacroStart = useMemo(() => {
@@ -502,6 +507,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         onDismissMacroReview={handleDismissMacroReview}
         nextMacroSuggestion={nextMacroSuggestion}
         onNavigateToObjetivos={onNavigateToObjetivos}
+        retestHeadsUp={retestHeadsUp}
         coachReasons={session?.coachReasons ?? []}
       />
 

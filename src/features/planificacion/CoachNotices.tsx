@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { Brain, ChevronDown, ChevronUp, Gauge, Lightbulb, Map } from 'lucide-react';
+import { Brain, ChevronDown, ChevronUp, Gauge, Lightbulb, Map, Target } from 'lucide-react';
 import type { PainFlag } from '../../data/athlete/types';
+import type { RetestHeadsUp } from '../../engine/generateSession';
 import type { ReturnRampSuggestion } from '../../engine/intensityRamp';
 import type { MacroReviewSuggestion } from '../../engine/macroReview';
 import type { NextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { PAIN_AREA_LABEL } from '../../engine/painFlags';
+
+function formatShortDate(iso: string): string {
+  return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00:00`));
+}
 
 function formatPainUntil(until: string | null): string {
   if (!until) return 'hasta que lo quites';
@@ -24,6 +29,8 @@ interface CoachNoticesProps {
   onDismissMacroReview: () => void;
   nextMacroSuggestion: NextMacroSuggestion | null;
   onNavigateToObjetivos: () => void;
+  /** Aviso anticipado de que el proximo dia de benchmark toca retest (ver peekRetestHeadsUp). */
+  retestHeadsUp: RetestHeadsUp | null;
   /** Resumen "por que tu sesion es asi hoy" (DailySession.coachReasons) — mismos textos ya visibles dentro de cada bloque, aqui solo para verlos de un vistazo. */
   coachReasons: string[];
 }
@@ -51,6 +58,7 @@ export function CoachNotices({
   onDismissMacroReview,
   nextMacroSuggestion,
   onNavigateToObjetivos,
+  retestHeadsUp,
   coachReasons,
 }: CoachNoticesProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -60,7 +68,8 @@ export function CoachNotices({
     (rampStatus ? 1 : 0) +
     (showReturnRampSuggestion && returnRampSuggestion ? 1 : 0) +
     (macroReviewSuggestion ? 1 : 0) +
-    (nextMacroSuggestion ? 1 : 0);
+    (nextMacroSuggestion ? 1 : 0) +
+    (retestHeadsUp ? 1 : 0);
 
   if (count === 0 && coachReasons.length === 0) return null;
 
@@ -187,6 +196,17 @@ export function CoachNotices({
                   Planificar
                 </button>
               </div>
+            </div>
+          )}
+
+          {retestHeadsUp && (
+            <div className={`${rowClass} border-sky-400`}>
+              <Target size={14} strokeWidth={2.25} className="mt-0.5 shrink-0 text-sky-400" />
+              <p className="flex-1 text-neutral-200">
+                Tu próximo día de benchmark toca <span className="font-semibold text-sky-300">retest de {retestHeadsUp.name}</span> — tu
+                marca del {formatShortDate(retestHeadsUp.prevDate)} fue {retestHeadsUp.prevValue}.{' '}
+                {retestHeadsUp.lowerIsBetter ? 'A bajar ese tiempo.' : 'A superar esa marca.'}
+              </p>
             </div>
           )}
 

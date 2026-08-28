@@ -1,5 +1,6 @@
 import type { PersonalRecords, SessionHistoryEntry, VariantPersonalRecords } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
+import type { OlyFamily } from './periodization';
 import { resolveOlyPRKey, resolveStrengthPRKey } from './prResolution';
 
 export type ImbalanceStatus = 'desbalance' | 'equilibrado' | 'faltan-datos';
@@ -204,6 +205,29 @@ function hasRealData(liftKey: LiftKey, variantPrs: VariantPersonalRecords | unde
 }
 
 /**
+ * Evalua una regla de ratio: si hay datos reales en ambos lados y, en tal caso, si esta marcada.
+ * Extraido para que `computeImbalances` (dashboard) y `getImbalanceBias` (motor de sesion)
+ * compartan exactamente el mismo criterio, sin que uno derive del otro.
+ */
+function evaluateRule(
+  rule: RatioRule,
+  prs: PersonalRecords,
+  variantPrs: VariantPersonalRecords | undefined,
+  testedRootKeys: Set<keyof PersonalRecords>,
+): { targetHasData: boolean; referenceHasData: boolean; evaluated: boolean; flagged: boolean } {
+  const targetHasData = hasRealData(rule.targetKey, variantPrs, testedRootKeys);
+  const referenceHasData = hasRealData(rule.referenceKey, variantPrs, testedRootKeys);
+  if (!targetHasData || !referenceHasData) return { targetHasData, referenceHasData, evaluated: false, flagged: false };
+
+  const referenceValue = LIFTS[rule.referenceKey].value(prs, variantPrs);
+  if (referenceValue <= 0) return { targetHasData, referenceHasData, evaluated: false, flagged: false };
+
+  const ratio = LIFTS[rule.targetKey].value(prs, variantPrs) / referenceValue;
+  const flagged = rule.direction === 'low' ? ratio < rule.minRatio : ratio > rule.maxRatio;
+  return { targetHasData, referenceHasData, evaluated: true, flagged };
+}
+
+/**
  * Compara levantamientos relacionados entre si usando ratios de coaching conocidos (halterofilia/
  * powerlifting) — complementario a `computeWeakPoints`, que mira RPE/escalado/tendencia dentro de
  * un mismo patron, no entre levantamientos distintos. Los 4 grupos se devuelven siempre (nunca una
@@ -224,20 +248,12 @@ export function computeImbalances(
     let evaluatedAny = false;
 
     for (const rule of group.rules) {
-      const targetHasData = hasRealData(rule.targetKey, variantPrs, testedRootKeys);
-      const referenceHasData = hasRealData(rule.referenceKey, variantPrs, testedRootKeys);
+      const { targetHasData, referenceHasData, evaluated, flagged } = evaluateRule(rule, prs, variantPrs, testedRootKeys);
       if (!targetHasData) missingLabels.add(LIFTS[rule.targetKey].label);
       if (!referenceHasData) missingLabels.add(LIFTS[rule.referenceKey].label);
-      if (!targetHasData || !referenceHasData) continue;
-
-      const referenceValue = LIFTS[rule.referenceKey].value(prs, variantPrs);
-      if (referenceValue <= 0) continue;
+      if (!evaluated) continue;
       evaluatedAny = true;
-
-      const targetValue = LIFTS[rule.targetKey].value(prs, variantPrs);
-      const ratio = targetValue / referenceValue;
-      const isFlagged = rule.direction === 'low' ? ratio < rule.minRatio : ratio > rule.maxRatio;
-      if (isFlagged) {
+      if (flagged) {
         flaggedNotes.push(rule.note);
         flaggedBarKeys.add(rule.targetKey);
       }
@@ -258,4 +274,52 @@ export function computeImbalances(
 
     return { key: group.key, label: group.label, status, bars, note, missingLabels: Array.from(missingLabels) };
   });
+}
+
+export interface ImbalanceBias {
+  /** movementIds de levantamientos de fuerza infra-desarrollados: el lado 'low' de una regla en
+   *  desbalance, con datos reales en ambos lados. El motor los prioriza dentro del patron que ya toca. */
+  strengthLiftIds: string[];
+  /** familias oly (snatch/clean) infra-desarrolladas, por la misma logica. */
+  olyFamilies: OlyFamily[];
+}
+
+const EMPTY_IMBALANCE_BIAS: ImbalanceBias = { strengthLiftIds: [], olyFamilies: [] };
+
+/** targetKey de una regla oly -> familia que se debe reforzar. */
+function olyFamilyForLiftKey(key: LiftKey): OlyFamily | null {
+  if (key === 'snatch' || key === 'powerSnatch') return 'snatch';
+  if (key === 'clean' || key === 'cleanAndJerk' || key === 'powerClean') return 'clean';
+  return null;
+}
+
+/**
+ * Traduce los desbalances detectados a un sesgo de seleccion para el motor de sesion: hacia que
+ * levantamiento concreto (fuerza) o familia (oly) inclinarse dentro de lo que ya toca hoy. Solo
+ * mira reglas `direction: 'low'` (el target va genuinamente flojo respecto al reference) — las
+ * `'high'` (p.ej. Power Clean demasiado cerca del Clean) son tecnica de recepcion, no falta de
+ * fuerza, y darles mas frecuencia no las arregla. Nunca fabrica una senal desde un PR por defecto:
+ * `evaluateRule` ya exige un test real en ambos lados.
+ */
+export function getImbalanceBias(
+  prs: PersonalRecords,
+  variantPrs: VariantPersonalRecords | undefined,
+  history: SessionHistoryEntry[],
+): ImbalanceBias {
+  const testedRootKeys = getTestedRootKeys(history);
+  const strengthLiftIds = new Set<string>();
+  const olyFamilies = new Set<OlyFamily>();
+
+  for (const group of GROUPS) {
+    for (const rule of group.rules) {
+      if (rule.direction !== 'low') continue;
+      if (!evaluateRule(rule, prs, variantPrs, testedRootKeys).flagged) continue;
+      const family = olyFamilyForLiftKey(rule.targetKey);
+      if (family) olyFamilies.add(family);
+      else strengthLiftIds.add(LIFTS[rule.targetKey].id);
+    }
+  }
+
+  if (strengthLiftIds.size === 0 && olyFamilies.size === 0) return EMPTY_IMBALANCE_BIAS;
+  return { strengthLiftIds: [...strengthLiftIds], olyFamilies: [...olyFamilies] };
 }

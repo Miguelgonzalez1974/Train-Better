@@ -67,6 +67,7 @@ import {
   weeklyUnderTrainedPattern,
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
+import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import { filterAvoidingPain, getAvoidedPatterns } from './painFlags';
@@ -84,6 +85,13 @@ export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, resolveVariantP
 function collectReasons(...fragments: (string | undefined)[]): string[] {
   return fragments.map((f) => f?.trim()).filter((f): f is string => Boolean(f));
 }
+
+/**
+ * Con que probabilidad el motor prioriza el levantamiento/familia infra-desarrollado de un par en
+ * desbalance (ver `getImbalanceBias`). Mas bajo que un objetivo activo — es un ajuste fino, no una
+ * orden — y solo entra cuando nada mas alto (objetivo, hueco semanal, punto debil de patron) actua.
+ */
+const IMBALANCE_BIAS_CHANCE = 0.45;
 
 const ACCESSORY_COMPLEMENT: Partial<Record<MovementPattern, MovementPattern[]>> = {
   squat: ['hinge', 'lunge'],
@@ -320,6 +328,7 @@ function buildStrengthBlock(
   readinessCheck: ReadinessCheck | undefined,
   date: Date,
   trainingDaysPerWeek: 3 | 4 | 5 | 6,
+  imbalanceBias: ImbalanceBias,
 ): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
   const rpeAutoreg = getRpeAutoregFactor(history, date);
   const readiness = getReadinessFactor(readinessCheck);
@@ -386,7 +395,23 @@ function buildStrengthBlock(
   }
 
   const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
-  const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
+
+  // Sesgo de desbalance: dentro del patron que ya toca hoy, inclina hacia el levantamiento
+  // infra-desarrollado de un par en desbalance. Solo si ningun objetivo reclama movimiento y
+  // ninguna correccion de patron (hueco semanal / punto debil) ha actuado — es el ajuste mas fino,
+  // cede ante todo lo demas y no genera una segunda nota de "prioridad".
+  let imbalanceTag = '';
+  let preferId = pref.movementId;
+  let preferChance = pref.preferChance;
+  if (!pref.movementId && weakPointTag === '') {
+    const imbId = imbalanceBias.strengthLiftIds.find((id) => candidates.some((c) => c.id === id));
+    if (imbId) {
+      preferId = imbId;
+      preferChance = IMBALANCE_BIAS_CHANCE;
+      imbalanceTag = ' Hoy priorizamos este levantamiento: va flojo respecto a otro de su grupo y lo equilibramos.';
+    }
+  }
+  const movement = pickVariedWithPreference(candidates, recentIds, preferId, preferChance);
   if (!movement) return { blocks: [], pattern, reasons: [] };
 
   const currentPR = resolveStrengthPR(movement, prs, variantPrs);
@@ -399,7 +424,7 @@ function buildStrengthBlock(
 
   if (isTestDay) {
     const testLoadKg = roundToNearestPlate(currentPR);
-    const testReasons = collectReasons(weakPointTag, painTag, rampNote, readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : undefined);
+    const testReasons = collectReasons(weakPointTag, imbalanceTag, painTag, rampNote, readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : undefined);
     return {
       blocks: [
         {
@@ -408,7 +433,7 @@ function buildStrengthBlock(
           format: 'Test 1RM',
           reps: '1',
           loadKg: testLoadKg,
-          notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${painTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
+          notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${imbalanceTag}${painTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
         },
       ],
       pattern,
@@ -431,8 +456,8 @@ function buildStrengthBlock(
           readinessIsLow: readiness.isLow,
         });
   const tempoNote = tempo ? ` Tempo ${tempo} — ${describeTempoNotation(tempo)}.` : '';
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${painTag}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
-  const reasons = collectReasons(weakPointTag, painTag, rampNote, autoregNote, tempoNote);
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${imbalanceTag}${painTag}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
+  const reasons = collectReasons(weakPointTag, imbalanceTag, painTag, rampNote, autoregNote, tempoNote);
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -506,6 +531,7 @@ function buildOlyBlock(
   variantPrs: VariantPersonalRecords | undefined,
   readinessCheck: ReadinessCheck | undefined,
   date: Date,
+  imbalanceBias: ImbalanceBias,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -541,6 +567,11 @@ function buildOlyBlock(
     if (weakFamily && Math.random() < WEAK_POINT_BIAS_CHANCE) {
       family = weakFamily;
       weakPointTag = ' Prioridad extra hoy: esta familia lleva estancada, le damos más frecuencia.';
+    } else if (weakPointTag === '' && imbalanceBias.olyFamilies.length > 0 && Math.random() < IMBALANCE_BIAS_CHANCE) {
+      // Sin punto debil de familia que corregir, inclina hacia la familia infra-desarrollada de un
+      // par en desbalance (p.ej. snatch bajo respecto al clean). Mismo mecanismo, prioridad menor.
+      family = imbalanceBias.olyFamilies[0];
+      weakPointTag = ' Prioridad hoy: esta familia va floja respecto a la otra — la equilibramos.';
     }
   }
   // Se aplica siempre que el objetivo no este forzando la familia por ir atrasado (ver buildStrengthBlock):
@@ -717,6 +748,46 @@ function findRetestCandidate(
   const [oldestId, info] = [...lastAttempt.entries()].sort((a, b) => a[1].date.localeCompare(b[1].date))[0];
   const wod = benchmarkWorkouts.find((w) => w.id === oldestId)!;
   return { wod, prevDate: info.date, prevResult: info.result };
+}
+
+export interface RetestHeadsUp {
+  name: string;
+  /** Marca anterior formateada (ej. "4:32", "8+12"). */
+  prevValue: string;
+  /** Fecha ISO del intento anterior. */
+  prevDate: string;
+  /** true si la puntuacion es tiempo (bajar es mejorar). */
+  lowerIsBetter: boolean;
+}
+
+/**
+ * Aviso anticipado de retest: el motor ya decide "hoy toca retest de X" el propio dia (dentro de
+ * `buildWodBlock`), pero el atleta se entera sin margen para prepararse. Esto mira si el benchmark
+ * real mas atrasado esta a punto de tocar (this o el proximo dia de benchmark) para poder avisar
+ * antes. No cambia nada del motor — es una lectura pura para un banner en Planificacion.
+ */
+export function peekRetestHeadsUp(
+  history: SessionHistoryEntry[],
+  today: Date,
+  trainingDaysPerWeek: 3 | 4 | 5 | 6,
+): RetestHeadsUp | null {
+  const candidate = findRetestCandidate(history);
+  if (!candidate) return null;
+
+  // Se avisa cuando ya toca o falta un solo dia de benchmark para que toque.
+  const since = benchmarkDaysSince(history, candidate.prevDate);
+  if (since < RETEST_INTERVAL - 1) return null;
+
+  // El dia-de ya lo cubre la nota del bloque WOD (lunes / dia de benchmark). Aqui solo interesa
+  // el aviso previo, en un dia que no sea el propio dia de benchmark.
+  if (getDayPlan(getWeekdayIndex(today), trainingDaysPerWeek).trainingDayIndex === 0) return null;
+
+  return {
+    name: candidate.wod.name,
+    prevValue: candidate.prevResult.value,
+    prevDate: candidate.prevDate,
+    lowerIsBetter: candidate.wod.scoreType === 'time',
+  };
 }
 
 /**
@@ -1342,6 +1413,10 @@ export function generateDailySession(
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
   const readinessCheck = getReadinessCheckForDate(profile.readinessLog, dateIso);
+  // Sesgo de desbalance entre levantamientos relacionados (Front Squat flojo vs Back Squat, etc.) —
+  // se calcula una vez y lo comparten fuerza y oly. Solo el motor periodizado lo usa (no mantenimiento
+  // ni programas con nombre), igual que el resto de senales del macrociclo.
+  const imbalanceBias = getImbalanceBias(profile.prs, profile.variantPrs, history);
   const {
     blocks: strengthBlock,
     pattern: trainedStrengthPattern,
@@ -1362,6 +1437,7 @@ export function generateDailySession(
     readinessCheck,
     date,
     profile.trainingDaysPerWeek,
+    imbalanceBias,
   );
   const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
     dayPlan,
@@ -1378,6 +1454,7 @@ export function generateDailySession(
     profile.variantPrs,
     readinessCheck,
     date,
+    imbalanceBias,
   );
   const wodBlock = buildWodBlock(
     dayPlan,
