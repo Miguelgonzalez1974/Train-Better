@@ -29,4 +29,12 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.saveReadinessCheck(entry);
     void pushRemote();
   },
+  appendSetFeedbackEntry(entry) {
+    localAthleteRepository.appendSetFeedbackEntry(entry);
+    void pushRemote();
+  },
+  deleteSetFeedbackEntry(date, movementId) {
+    localAthleteRepository.deleteSetFeedbackEntry(date, movementId);
+    void pushRemote();
+  },
 };

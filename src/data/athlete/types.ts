@@ -48,6 +48,37 @@ export interface PrLogEntry {
   kg: number;
 }
 
+/** Sensacion de la primera serie de trabajo de un levantamiento, reportada en el momento (ver [[SetFeedbackEntry]]). */
+export type SetFeel = 'sobro' | 'justo' | 'duro' | 'muy-duro';
+
+/**
+ * Feedback en caliente tras la primera serie de trabajo de un levantamiento de fuerza u oly: el
+ * atleta toca como fue y el coach recalcula el peso (y a veces el numero) de las series que
+ * quedan del MISMO ejercicio, sin parar la sesion ni tocar el resto de bloques. Aparte del ajuste
+ * inmediato, cada punto es un dato de calibracion "carga prescrita vs. realidad, por
+ * levantamiento" que el perfil de respuesta podra leer para afinar futuras prescripciones
+ * (`src/engine/responseProfile.ts`). Un registro por dia y movimiento — volver a tocar lo
+ * sustituye.
+ */
+export interface SetFeedbackEntry {
+  /** Fecha ISO (yyyy-mm-dd) de la sesion. */
+  date: string;
+  /** Movimiento de la serie valorada. */
+  movementId: string;
+  /** De que bloque salio — fuerza u oly (nunca WOD: ahi no se puede parar). */
+  block: 'strength' | 'oly';
+  /** Carga prescrita de la primera serie, kg — se guarda para poder recalcular ajustes desde el original aunque el bloque ya se haya modificado. */
+  prescribedKg: number;
+  /** Reps por serie prescritas ese dia (ya parseadas a numero). */
+  prescribedReps: number;
+  /** Series totales prescritas ese dia. */
+  prescribedSets: number;
+  /** Sensacion reportada tras la primera serie de trabajo. */
+  feel: SetFeel;
+  /** Fraccion del PR de referencia que representaba `prescribedKg` (0-1), si se pudo resolver — para calibrar sensacion vs. intensidad real. */
+  pctOf1rm?: number;
+}
+
 export interface Macrocycle {
   id: string;
   /** Nombre libre del atleta, ej. "Prep competición otoño" */
@@ -176,6 +207,12 @@ export interface AthleteProfile {
    * de progreso por levantamiento.
    */
   prLog?: PrLogEntry[];
+  /**
+   * Feedback en caliente de la primera serie de trabajo (ver [[SetFeedbackEntry]]) — alimenta el
+   * ajuste inmediato de las series restantes y, mas adelante, la calibracion de carga por
+   * levantamiento del perfil de respuesta.
+   */
+  setFeedbackLog?: SetFeedbackEntry[];
 }
 
 export interface SessionBlockResult {
@@ -195,6 +232,13 @@ export interface SessionBlockResult {
   scaledFrom?: string;
   /** Notacion de tempo real (ej. "3011", "10X0"): excentrica-pausa abajo-concentrica-pausa arriba, "X" = maxima velocidad. Solo bloque strength. */
   tempo?: string;
+  /**
+   * Presente cuando el atleta valoro su primera serie de trabajo (ver [[SetFeedbackEntry]]) y el
+   * coach ajusto las series restantes: `sets`/`loadKg` de este bloque YA reflejan el ajuste. Marca
+   * el estado para no volver a pedir el feedback al recargar y para senalar en la tarjeta que los
+   * numeros incluyen la correccion. Solo bloque strength/oly.
+   */
+  firstSetFeel?: SetFeel;
 }
 
 export interface DailySession {

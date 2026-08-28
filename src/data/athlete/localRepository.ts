@@ -1,4 +1,4 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SessionHistoryEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SessionHistoryEntry, SetFeedbackEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
@@ -10,6 +10,8 @@ const SESSION_CACHE_LIMIT = 60;
 const BODYWEIGHT_LOG_LIMIT = 120;
 const READINESS_LOG_LIMIT = 120;
 const PR_LOG_LIMIT = 150;
+/** Mismo orden de magnitud que los demas logs del perfil: ~4-5 meses de series principales valoradas a 4-5 dias/semana. */
+const SET_FEEDBACK_LOG_LIMIT = 120;
 /** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
 const TRAINING_DATES_LOG_LIMIT = 400;
 
@@ -35,6 +37,11 @@ export interface AthleteRepository {
   appendBodyweightEntry(entry: BodyweightEntry): void;
   getReadinessLog(): ReadinessCheck[];
   saveReadinessCheck(entry: ReadinessCheck): void;
+  getSetFeedbackLog(): SetFeedbackEntry[];
+  /** Registra (o sustituye, por dia+movimiento) el feedback en caliente de una primera serie de trabajo. */
+  appendSetFeedbackEntry(entry: SetFeedbackEntry): void;
+  /** Deshace el feedback de una serie (el atleta pulsa "cambiar" y no vuelve a elegir). */
+  deleteSetFeedbackEntry(date: string, movementId: string): void;
   /**
    * Borra historial de sesiones, cache de sesiones generadas, contador de dias entrenados y
    * pone los PRs a 0 — para arrancar un macrociclo nuevo sin datos previos influyendo en el
@@ -205,6 +212,22 @@ export const localAthleteRepository: AthleteRepository = {
     const readinessLog = [...withoutSameDate, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-READINESS_LOG_LIMIT);
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, readinessLog }));
   },
+  getSetFeedbackLog() {
+    return localAthleteRepository.getProfile().setFeedbackLog ?? [];
+  },
+  appendSetFeedbackEntry(entry) {
+    const profile = localAthleteRepository.getProfile();
+    const withoutSame = (profile.setFeedbackLog ?? []).filter((e) => !(e.date === entry.date && e.movementId === entry.movementId));
+    const setFeedbackLog = [...withoutSame, entry]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-SET_FEEDBACK_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, setFeedbackLog }));
+  },
+  deleteSetFeedbackEntry(date, movementId) {
+    const profile = localAthleteRepository.getProfile();
+    const setFeedbackLog = (profile.setFeedbackLog ?? []).filter((e) => !(e.date === date && e.movementId === movementId));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, setFeedbackLog }));
+  },
   resetTrainingData() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify([]));
     localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({}));
@@ -219,6 +242,9 @@ export const localAthleteRepository: AthleteRepository = {
       snatch: 0,
       cleanAndJerk: 0,
     };
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [], prLog: [] }));
+    localStorage.setItem(
+      PROFILE_KEY,
+      JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [], prLog: [], setFeedbackLog: [] }),
+    );
   },
 };

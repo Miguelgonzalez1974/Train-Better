@@ -9,6 +9,8 @@ import type {
   RxOrScaled,
   SessionBlockResult,
   SessionHistoryEntry,
+  SetFeedbackEntry,
+  SetFeel,
   VariantPersonalRecords,
   WodResult,
 } from '../../data/athlete/types';
@@ -36,12 +38,14 @@ import { getReadinessCheckForDate } from '../../engine/readiness';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
+import { adjustRemainingSets, parseWorkingReps } from '../../engine/setFeedback';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
+import { SetFeedbackPanel } from './SetFeedbackPanel';
 import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -63,6 +67,20 @@ interface E1rmSuggestion {
   movementName: string;
   estimatedKg: number;
   currentKg: number;
+}
+
+/**
+ * Un bloque admite feedback en caliente de la primera serie si es fuerza u oly con carga y con
+ * series rectas de reps limpias — deja fuera los días de test 1RM (sin `sets`), las escaleras de
+ * carga ("5-3-1"), el primer técnico de oly ("2-3") y los WOD de referencia. En esos casos no hay
+ * "resto de series al mismo peso" que reajustar.
+ */
+function isAdjustableSetBlock(b: SessionBlockResult): boolean {
+  if (b.block !== 'strength' && b.block !== 'oly') return false;
+  if (b.movementId.startsWith('benchmark:')) return false;
+  if (b.sets === undefined || b.sets < 2) return false;
+  if (!b.loadKg || b.loadKg <= 0) return false;
+  return parseWorkingReps(b.reps ?? '') !== null;
 }
 
 interface PlanificacionProps {
@@ -141,6 +159,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const alreadyCompletedToday = useMemo(() => (session ? history.some((h) => h.date === session.date) : false), [history, session]);
   const [readinessLog, setReadinessLog] = useState<ReadinessCheck[]>(() => athleteRepository.getReadinessLog());
   const [readinessDismissed, setReadinessDismissed] = useState(false);
+  const [setFeedbackLog, setSetFeedbackLog] = useState<SetFeedbackEntry[]>(() => athleteRepository.getSetFeedbackLog());
   const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
   const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && !todayReadiness && !readinessDismissed);
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
@@ -148,6 +167,88 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
+
+  /**
+   * Bloques de fuerza/oly de hoy que admiten feedback en caliente de la primera serie, ya resueltos
+   * con lo prescrito y la sensación elegida (si la hay). `firstSetFeel` vive en el bloque cacheado
+   * y manda: si el atleta regenera la sesión, se resetea solo; el registro persistente
+   * (`setFeedbackLog`) solo se usa para recuperar la prescripción original una vez que el bloque ya
+   * se ajustó.
+   */
+  const adjustableSetBlocks = useMemo(() => {
+    if (!session || session.isRestDay || session.source === 'custom') return [];
+    return session.blocks
+      .map((block, index) => ({ block, index }))
+      .filter(({ block }) => isAdjustableSetBlock(block))
+      .map(({ block, index }) => {
+        const logEntry = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
+        const prescribed =
+          block.firstSetFeel && logEntry
+            ? { kg: logEntry.prescribedKg, sets: logEntry.prescribedSets, reps: logEntry.prescribedReps }
+            : { kg: block.loadKg ?? 0, sets: block.sets ?? 0, reps: parseWorkingReps(block.reps ?? '') ?? 0 };
+        return {
+          index,
+          movementName: getMovementById(block.movementId)?.name ?? block.movementId,
+          prescribed,
+          currentFeel: block.firstSetFeel ?? null,
+        };
+      });
+  }, [session, setFeedbackLog]);
+
+  /** Fracción del PR de referencia (raíz o variante) que representaba la carga prescrita, para calibrar sensación vs. intensidad. */
+  function resolveSetFeedbackPct(block: SessionBlockResult, prescribedKg: number): number | undefined {
+    const movement = getMovementById(block.movementId);
+    if (!movement) return undefined;
+    const variantKey = resolveVariantPRKey(movement);
+    const rootKey = (block.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
+    const pr =
+      variantKey && profile.variantPrs?.[variantKey] ? profile.variantPrs[variantKey]! : rootKey ? profile.prs[rootKey] : 0;
+    return pr > 0 ? Math.round((prescribedKg / pr) * 100) / 100 : undefined;
+  }
+
+  function handleSetFeedback(index: number, feel: SetFeel) {
+    if (!session) return;
+    const block = session.blocks[index];
+    if (!block) return;
+    const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
+    const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
+    const prescribedSets = existing?.prescribedSets ?? block.sets ?? 0;
+    const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
+    if (prescribedKg <= 0 || prescribedSets < 2) return;
+
+    athleteRepository.appendSetFeedbackEntry({
+      date: session.date,
+      movementId: block.movementId,
+      block: block.block as 'strength' | 'oly',
+      prescribedKg,
+      prescribedReps,
+      prescribedSets,
+      feel,
+      pctOf1rm: resolveSetFeedbackPct(block, prescribedKg),
+    });
+    setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
+
+    const adj = adjustRemainingSets({ prescribedKg, prescribedSets, completedSets: 1, feel });
+    handleUpdateEntry(index, {
+      loadKg: adj.changed ? adj.adjustedKg : prescribedKg,
+      sets: adj.changed ? adj.adjustedSets : prescribedSets,
+      firstSetFeel: feel,
+    });
+  }
+
+  function handleResetSetFeedback(index: number) {
+    if (!session) return;
+    const block = session.blocks[index];
+    if (!block) return;
+    const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
+    athleteRepository.deleteSetFeedbackEntry(session.date, block.movementId);
+    setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
+    handleUpdateEntry(index, {
+      loadKg: existing?.prescribedKg ?? block.loadKg,
+      sets: existing?.prescribedSets ?? block.sets,
+      firstSetFeel: undefined,
+    });
+  }
 
   function generateAndCache(nextProfile: AthleteProfile): DailySession {
     const next = generateSessionForDate(nextProfile, history, new Date(), nextProfile.goals);
@@ -878,6 +979,21 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         </div>
       ) : (
         <DaySessionBlocks session={session} editable={editMode} onUpdateEntry={handleUpdateEntry} />
+      )}
+
+      {!editMode && !showCompletePanel && !alreadyCompletedToday && adjustableSetBlocks.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {adjustableSetBlocks.map((b) => (
+            <SetFeedbackPanel
+              key={b.index}
+              movementName={b.movementName}
+              prescribed={b.prescribed}
+              currentFeel={b.currentFeel}
+              onPick={(feel) => handleSetFeedback(b.index, feel)}
+              onReset={() => handleResetSetFeedback(b.index)}
+            />
+          ))}
+        </div>
       )}
 
       {session.strengthProgramLabel && !session.isRestDay && (
