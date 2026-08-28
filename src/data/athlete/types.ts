@@ -34,6 +34,20 @@ export interface BodyweightEntry {
   kg: number;
 }
 
+/**
+ * Un punto en el historial de un PR — se añade automaticamente cada vez que el valor de un
+ * levantamiento cambia (test real, e1RM confirmado o edicion manual). Sin este log, "cuanto
+ * progresa este atleta" no es medible: `prs` solo guarda el valor actual, sobrescrito. Ver
+ * `src/engine/responseProfile.ts`.
+ */
+export interface PrLogEntry {
+  /** Fecha ISO (yyyy-mm-dd) del cambio. */
+  date: string;
+  /** Clave del levantamiento — `keyof PersonalRecords` o `keyof VariantPersonalRecords`. */
+  key: string;
+  kg: number;
+}
+
 export interface Macrocycle {
   id: string;
   /** Nombre libre del atleta, ej. "Prep competición otoño" */
@@ -156,6 +170,12 @@ export interface AthleteProfile {
    * la misma semana del macrociclo.
    */
   reviewedMacroWeeks?: string[];
+  /**
+   * Historial de cambios de PR (ver [[PrLogEntry]]) — se añade solo cuando un valor de `prs` o
+   * `variantPrs` cambia de verdad. Lo consume `src/engine/responseProfile.ts` para medir el ritmo
+   * de progreso por levantamiento.
+   */
+  prLog?: PrLogEntry[];
 }
 
 export interface SessionBlockResult {

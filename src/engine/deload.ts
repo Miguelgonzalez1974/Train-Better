@@ -2,6 +2,7 @@ import type { Goal } from '../data/athlete/types';
 import type { AcwrZone } from './loadMetrics';
 import { daysBetween } from './loadMetrics';
 import { pickPriorityGoal } from './goalPriority';
+import type { RecoveryTier } from './responseProfile';
 
 export type DeloadReason = 'fatiga' | 'taper';
 
@@ -36,8 +37,12 @@ export function resolveTrainingWeek(
   acwrZone: AcwrZone,
   goals: Goal[],
   today: Date,
+  recoveryTier: RecoveryTier | null = null,
 ): { week: 1 | 2 | 3 | 4; reason?: DeloadReason } {
   if (isTaperActive(goals, today)) return { week: 4, reason: 'taper' };
   if (acwrZone === 'alta') return { week: 4, reason: 'fatiga' };
+  // Un atleta que el perfil de respuesta marca como de recuperacion lenta frena antes: se descarga
+  // ya en riesgo moderado, sin esperar a que el ACWR llegue a alto.
+  if (recoveryTier === 'lento' && acwrZone === 'moderada') return { week: 4, reason: 'fatiga' };
   return { week: calendarWeek };
 }

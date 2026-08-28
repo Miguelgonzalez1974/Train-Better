@@ -70,7 +70,7 @@ import {
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor } from './autoregulation';
 import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
-import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR } from './prResolution';
+import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR, resolveVariantPRKey } from './prResolution';
 import {
   avoidOlyFamilyRepeat,
   avoidPatternRepeat,
@@ -81,6 +81,7 @@ import {
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
+import { computeResponseProfile, engineResponseProfile, liftTierFor, type ResponseProfile } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import { filterAvoidingPain, getAvoidedPatterns, getPainReintroFactor, getPainReintroPatterns } from './painFlags';
@@ -105,6 +106,13 @@ function collectReasons(...fragments: (string | undefined)[]): string[] {
  * orden — y solo entra cuando nada mas alto (objetivo, hueco semanal, punto debil de patron) actua.
  */
 const IMBALANCE_BIAS_CHANCE = 0.45;
+
+/** Perfil de respuesta: frecuencia extra que gana el lift de un objetivo que progresa despacio/retrocede. */
+const STALLED_LIFT_FREQ_BONUS = 0.15;
+/** Perfil de respuesta: el sesgo de reporte de RPE (±2 pts) se traduce en un factor de carga acotado a ±3%. */
+function clampResponseBias(rpeBias: number): number {
+  return Math.min(1.03, Math.max(0.97, 1 + rpeBias * 0.015));
+}
 
 const ACCESSORY_COMPLEMENT: Partial<Record<MovementPattern, MovementPattern[]>> = {
   squat: ['hinge', 'lunge'],
@@ -329,16 +337,36 @@ function buildStrengthBlock(
   imbalanceBias: ImbalanceBias,
   painReintro: Map<MovementPattern, number>,
   patternFatigue: Map<MovementPattern, PatternFatigue>,
+  responseProfile: ResponseProfile,
 ): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
-  const rpeAutoreg = getRpeAutoregFactor(history, date);
+  const responseBias = clampResponseBias(responseProfile.rpe.bias);
+  const rpeAutoreg = getRpeAutoregFactor(history, date, responseProfile.rpe.reliability);
   const readiness = getReadinessFactor(readinessCheck);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor;
+  const autoregFactor =
+    combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor, responseBias) * rampFactor;
   const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ') || undefined;
   const isStrengthGoal = goals.some((g) => g.type === 'elevar-fuerza' || g.type === 'subir-pr');
   const pref = isStrengthGoal
     ? goalPreference(goals, (m) => strengthMovements.some((s) => s.id === m.id), history)
     : { preferChance: 0, progress: 0, behindSchedule: false };
+  // Perfil de respuesta: un lift del objetivo que viene progresando despacio (o retrocediendo)
+  // recibe algo mas de frecuencia para desbloquearlo — solo si el motor ya se fia del perfil.
+  let responseTag = '';
+  if (pref.movementId) {
+    const prKey = (() => {
+      const mv = getMovementById(pref.movementId!);
+      return mv ? (resolveStrengthPRKey(mv) ?? resolveVariantPRKey(mv)) : undefined;
+    })();
+    const tier = prKey ? liftTierFor(responseProfile, prKey) : null;
+    if (tier === 'lento' || tier === 'regresion') {
+      pref.preferChance = Math.min(0.95, pref.preferChance + STALLED_LIFT_FREQ_BONUS);
+      responseTag =
+        tier === 'regresion'
+          ? ' Este levantamiento ha retrocedido últimamente — le damos más frecuencia para recuperar terreno.'
+          : ' Este levantamiento progresa despacio en tu historial — más frecuencia para desbloquearlo.';
+    }
+  }
 
   let pattern = dayPlan.strengthPattern;
   let weakPointTag = '';
@@ -475,8 +503,8 @@ function buildStrengthBlock(
           readinessIsLow: readiness.isLow,
         });
   const tempoNote = tempo ? ` Tempo ${tempo} — ${describeTempoNotation(tempo)}.` : '';
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${imbalanceTag}${painTag}${reintroNote}${fatigueNote}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
-  const reasons = collectReasons(weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${responseTag}${weakPointTag}${imbalanceTag}${painTag}${reintroNote}${fatigueNote}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
+  const reasons = collectReasons(responseTag, weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -553,6 +581,7 @@ function buildOlyBlock(
   imbalanceBias: ImbalanceBias,
   painReintro: Map<MovementPattern, number>,
   patternFatigue: Map<MovementPattern, PatternFatigue>,
+  responseProfile: ResponseProfile,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -561,7 +590,8 @@ function buildOlyBlock(
     return { blocks: [], reasons: ['Oly saltado hoy — tienes un aviso de molestia activo que afecta a hombro o cadera.'] };
   }
 
-  const rpeAutoreg = getRpeAutoregFactor(history, date);
+  const responseBias = clampResponseBias(responseProfile.rpe.bias);
+  const rpeAutoreg = getRpeAutoregFactor(history, date, responseProfile.rpe.reliability);
   const readiness = getReadinessFactor(readinessCheck);
   // Reintroduccion progresiva: si un aviso de hombro/cadera se retiro hace poco, el oly (que carga
   // ambas zonas) vuelve en rampa de carga, no de golpe.
@@ -573,13 +603,25 @@ function buildOlyBlock(
   const fatigueFactor = getPatternFatigueFactor(patternFatigue, ['olyLift']);
   const fatigueNote =
     fatigueFactor < 1 ? ' El trabajo olímpico lleva bastante carga esta semana — carga algo más baja para que hombro y cadera asimilen.' : '';
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor * reintroFactor * fatigueFactor;
+  const autoregFactor =
+    combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor, responseBias) * rampFactor * reintroFactor * fatigueFactor;
   const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ') || undefined;
   const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
   const pref = isOlyGoal
     ? goalPreference(goals, (m) => olyMovements.some((o) => o.id === m.id), history)
     : { preferChance: 0, progress: 0, behindSchedule: false };
+  // Perfil de respuesta: un levantamiento olimpico del objetivo que progresa despacio gana algo de frecuencia.
+  let responseTag = '';
+  if (pref.movementId) {
+    const mv = getMovementById(pref.movementId);
+    const prKey = mv ? (resolveOlyPRKey(mv) ?? resolveVariantPRKey(mv)) : undefined;
+    const tier = prKey ? liftTierFor(responseProfile, prKey) : null;
+    if (tier === 'lento' || tier === 'regresion') {
+      pref.preferChance = Math.min(0.95, pref.preferChance + STALLED_LIFT_FREQ_BONUS);
+      responseTag = ' Este levantamiento progresa despacio en tu historial — más frecuencia para desbloquearlo.';
+    }
+  }
 
   let family = dayPlan.olyFamily;
   let weakPointTag = '';
@@ -665,12 +707,13 @@ function buildOlyBlock(
           pref.behindSchedule ? ' Vas por detrás de tu objetivo — le damos más peso hasta que te pongas al día.' : ' Prioridad por tu objetivo activo.'
         }`
       : scheme.coachNote) +
+    responseTag +
     weakPointTag +
     reintroNote +
     fatigueNote +
     rampNote +
     (autoregNote ? ` ${autoregNote}` : '');
-  const reasons = collectReasons(weakPointTag, reintroNote, fatigueNote, rampNote, autoregNote);
+  const reasons = collectReasons(responseTag, weakPointTag, reintroNote, fatigueNote, rampNote, autoregNote);
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).
@@ -1489,7 +1532,11 @@ export function generateDailySession(
 
   const acwrResult = computeAcwr(history, date);
   const acwrZone = acwrResult.zone;
-  const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goals, date);
+  // Perfil de respuesta del atleta (ver responseProfile.ts) — el motor solo lo aplica cuando hay
+  // datos suficientes (`engineResponseProfile` devuelve el neutro si no). Individualiza: cuanto se
+  // fia del RPE, sesgo de reporte, ritmo de progreso por lift, y velocidad de recuperacion.
+  const responseProfile = engineResponseProfile(computeResponseProfile(history, profile.prLog, date));
+  const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goals, date, responseProfile.recovery.tier);
   const isTaper = isTaperActive(goals, date);
   const testDayFocus = resolveTestDayFocus(week);
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
@@ -1535,6 +1582,7 @@ export function generateDailySession(
         imbalanceBias,
         painReintro,
         patternFatigue,
+        responseProfile,
       )
     : { blocks: [] as SessionBlockResult[], pattern: dayPlan.strengthPattern, reasons: [] as string[] };
   const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
@@ -1558,6 +1606,7 @@ export function generateDailySession(
         imbalanceBias,
         painReintro,
         patternFatigue,
+        responseProfile,
       )
     : { blocks: [] as SessionBlockResult[], reasons: [] as string[] };
 

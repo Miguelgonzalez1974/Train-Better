@@ -58,7 +58,22 @@ export interface RpeAutoregResult {
  * consistentemente ligeras, se sube un poco para no quedarse corto en vez de seguir aplicando la
  * progresion de la semana a ciegas.
  */
-export function getRpeAutoregFactor(history: SessionHistoryEntry[], referenceDate: Date = new Date()): RpeAutoregResult {
+/**
+ * `rpeReliability` (0.4-1, del perfil de respuesta): cuando el RPE del atleta no discrimina bien
+ * entre semanas duras y suaves, su valor da menos informacion — se acerca el factor a 1 en
+ * proporcion, para que el motor se apoye mas en el ACWR (que es objetivo) y menos en su RPE.
+ */
+export function getRpeAutoregFactor(
+  history: SessionHistoryEntry[],
+  referenceDate: Date = new Date(),
+  rpeReliability = 1,
+): RpeAutoregResult {
+  const raw = rawRpeAutoregFactor(history, referenceDate);
+  if (raw.factor === 1 || rpeReliability >= 1) return raw;
+  return { factor: 1 + (raw.factor - 1) * rpeReliability, note: raw.note };
+}
+
+function rawRpeAutoregFactor(history: SessionHistoryEntry[], referenceDate: Date): RpeAutoregResult {
   if (history.length === 0) return { factor: 1 };
 
   const last = history[history.length - 1];
@@ -85,7 +100,11 @@ export function getRpeAutoregFactor(history: SessionHistoryEntry[], referenceDat
   return { factor: 1 };
 }
 
-/** Combina ACWR + RPE reciente (+ opcionalmente el check-in de energia del dia) en un solo multiplicador, sin dejar que se disparen entre si. */
-export function combineAutoregFactors(acwrFactor: number, rpeFactor: number, readinessFactor = 1): number {
-  return Math.max(AUTOREG_FLOOR, Math.min(AUTOREG_CEILING, acwrFactor * rpeFactor * readinessFactor));
+/**
+ * Combina ACWR + RPE reciente (+ check-in de energia + sesgo del perfil de respuesta) en un solo
+ * multiplicador, sin dejar que se disparen entre si. `responseBias` (~0.97-1.03): un atleta que
+ * reporta sus RPE sistematicamente bajos recibe algo mas de cautela; uno que los infla, algo mas de permiso.
+ */
+export function combineAutoregFactors(acwrFactor: number, rpeFactor: number, readinessFactor = 1, responseBias = 1): number {
+  return Math.max(AUTOREG_FLOOR, Math.min(AUTOREG_CEILING, acwrFactor * rpeFactor * readinessFactor * responseBias));
 }

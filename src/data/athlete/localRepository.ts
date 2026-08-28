@@ -1,4 +1,4 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, ReadinessCheck, SessionHistoryEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SessionHistoryEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
@@ -9,6 +9,7 @@ const HISTORY_LIMIT = 30;
 const SESSION_CACHE_LIMIT = 60;
 const BODYWEIGHT_LOG_LIMIT = 120;
 const READINESS_LOG_LIMIT = 120;
+const PR_LOG_LIMIT = 150;
 /** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
 const TRAINING_DATES_LOG_LIMIT = 400;
 
@@ -84,6 +85,45 @@ function migrateProfile(raw: AthleteProfile & { mesocycleStartDate?: string }): 
   return profile;
 }
 
+/**
+ * Mantiene `prLog` al dia: cada vez que un valor de `prs`/`variantPrs` cambia (test real, e1RM
+ * confirmado o edicion manual — todos pasan por `saveProfile`), añade un punto. La PRIMERA vez que
+ * hay PRs y no hay log (alta, o tras `resetTrainingData`) siembra un punto base por cada
+ * levantamiento con peso, para tener desde donde medir el progreso. No registra ceros ni un cambio
+ * que deje el valor igual que el ultimo punto ya registrado.
+ */
+function appendPrChanges(prev: AthleteProfile, next: AthleteProfile): PrLogEntry[] {
+  const log = [...(next.prLog ?? prev.prLog ?? [])];
+  const today = formatIsoDate(new Date());
+  const lastKgByKey = new Map<string, number>();
+  for (const entry of log) lastKgByKey.set(entry.key, entry.kg);
+
+  const pairs: [string, number | undefined, number | undefined][] = [];
+  for (const key of Object.keys(next.prs) as (keyof AthleteProfile['prs'])[]) {
+    pairs.push([key, prev.prs?.[key], next.prs[key]]);
+  }
+  for (const key of Object.keys(next.variantPrs ?? {})) {
+    const k = key as keyof NonNullable<AthleteProfile['variantPrs']>;
+    pairs.push([key, prev.variantPrs?.[k], next.variantPrs?.[k]]);
+  }
+
+  const seedingBaseline = log.length === 0;
+  for (const [key, before, after] of pairs) {
+    if (typeof after !== 'number' || after <= 0) continue;
+    if (seedingBaseline) {
+      log.push({ date: today, key, kg: after });
+      lastKgByKey.set(key, after);
+      continue;
+    }
+    if (after === before) continue;
+    if (lastKgByKey.get(key) === after) continue;
+    log.push({ date: today, key, kg: after });
+    lastKgByKey.set(key, after);
+  }
+
+  return log.slice(-PR_LOG_LIMIT);
+}
+
 /** Igual que HISTORY_LIMIT: evita que la cache de sesiones generadas crezca sin limite con el tiempo. */
 function pruneSessionCache(cache: Record<string, DailySession>): Record<string, DailySession> {
   const dates = Object.keys(cache).sort();
@@ -99,7 +139,9 @@ export const localAthleteRepository: AthleteRepository = {
     return migrateProfile(raw);
   },
   saveProfile(profile) {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    const prev = migrateProfile(readJson<AthleteProfile & { mesocycleStartDate?: string }>(PROFILE_KEY, DEFAULT_PROFILE));
+    const prLog = appendPrChanges(prev, profile);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prLog }));
   },
   getHistory() {
     return readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
@@ -177,6 +219,6 @@ export const localAthleteRepository: AthleteRepository = {
       snatch: 0,
       cleanAndJerk: 0,
     };
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [] }));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [], prLog: [] }));
   },
 };

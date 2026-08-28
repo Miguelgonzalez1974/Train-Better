@@ -16,6 +16,7 @@ import { ProgressOverviewCard } from './ProgressOverviewCard';
 import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
 import { ImbalancesCard } from './ImbalancesCard';
 import { computeImbalances } from '../../engine/imbalances';
+import { ResponseProfileCard } from './ResponseProfileCard';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -178,6 +179,13 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         sola, cuando no hay nada que mostrar simplemente no ocupa espacio, sin dejar ningun rastro.
       */}
       <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
+
+      {/*
+        "Como te ve el coach": el perfil de respuesta individual (RPE fiable o no, ritmo de
+        progreso por lift, recuperacion). Fila propia — es meta-informacion distinta a las demas
+        tarjetas y colapsable, asi que no alarga el scroll estando plegada.
+      */}
+      <ResponseProfileCard history={history} prLog={profile.prLog ?? []} />
 
       {/*
         Emparejadas por altura natural, no por tipo de contenido: PRs+Constancia (268px/280px, las
