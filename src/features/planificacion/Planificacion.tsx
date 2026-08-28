@@ -30,7 +30,7 @@ import {
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { MESOCYCLE_PHASE, roundToNearestPlate } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
-import { getActivePainFlags, PAIN_AREA_LABEL, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
+import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { getReadinessCheckForDate } from '../../engine/readiness';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
@@ -448,14 +448,19 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       createdDate: todayIso,
       until: resolvePainFlagUntil(todayIso, painDurationDraft),
     };
-    const nextProfile = { ...profile, painFlags: [...(profile.painFlags ?? []), flag] };
+    const nextProfile = { ...profile, painFlags: [...prunePainFlags(profile.painFlags, todayIso), flag] };
     handleSaveProfile(nextProfile);
     setShowPainPicker(false);
   }
 
   function handleRemovePainFlag(id: string) {
-    const nextProfile = { ...profile, painFlags: (profile.painFlags ?? []).filter((f) => f.id !== id) };
-    handleSaveProfile(nextProfile);
+    // No se borra: se marca como retirado hoy. Deja de evitar sus patrones al instante, pero la
+    // carga de esos patrones vuelve en rampa las siguientes semanas (getPainReintroPatterns). Los
+    // avisos cuya ventana de reintroduccion ya paso se limpian aqui.
+    const painFlags = prunePainFlags(profile.painFlags, todayIso).map((f) =>
+      f.id === id ? { ...f, clearedDate: todayIso } : f,
+    );
+    handleSaveProfile({ ...profile, painFlags });
   }
 
   return (

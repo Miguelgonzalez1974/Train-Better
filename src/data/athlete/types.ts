@@ -89,6 +89,12 @@ export interface PainFlag {
   createdDate: string;
   /** Fecha ISO a partir de la cual el aviso deja de aplicarse; null = hasta que el atleta lo quite a mano. */
   until: string | null;
+  /**
+   * Fecha ISO en la que el atleta lo quito a mano ("ya estoy bien"). El aviso deja de evitar sus
+   * patrones al instante, pero durante las siguientes semanas la carga de esos patrones vuelve de
+   * forma progresiva en vez de saltar al 100% de golpe (ver `getPainReintroPatterns`).
+   */
+  clearedDate?: string;
 }
 
 export type SleepLevel = 'mal' | 'regular' | 'bien';

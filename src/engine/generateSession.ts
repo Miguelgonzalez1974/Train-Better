@@ -70,7 +70,7 @@ import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
-import { filterAvoidingPain, getAvoidedPatterns } from './painFlags';
+import { filterAvoidingPain, getAvoidedPatterns, getPainReintroFactor, getPainReintroPatterns } from './painFlags';
 import { getRampFactor, isWodRampActive } from './intensityRamp';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
@@ -329,6 +329,7 @@ function buildStrengthBlock(
   date: Date,
   trainingDaysPerWeek: 3 | 4 | 5 | 6,
   imbalanceBias: ImbalanceBias,
+  painReintro: Map<MovementPattern, number>,
 ): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
   const rpeAutoreg = getRpeAutoregFactor(history, date);
   const readiness = getReadinessFactor(readinessCheck);
@@ -359,8 +360,12 @@ function buildStrengthBlock(
     // natural de 4 patrones deja huecos estructurales para atletas de 3 o 6 dias/semana, y esto pesa
     // mas que el sesgo probabilistico de un punto flaco: no es una posibilidad, es un hueco real ya
     // confirmado en el historial de esta semana.
+    // Un patron en reintroduccion progresiva (aviso de molestia recien retirado) no se usa para
+    // forzar frecuencia extra: tras semanas evitandolo saldra como "hueco" y como punto flaco, pero
+    // lo que toca es volver poco a poco, no meterle un dia de mas. El ciclo natural si puede caer en
+    // el — a carga reducida (ver reintroFactor mas abajo).
     const weeklyGapPattern = weeklyUnderTrainedPattern(history, date, expectedStrengthSessionsPerWeek(trainingDaysPerWeek));
-    if (weeklyGapPattern) {
+    if (weeklyGapPattern && !painReintro.has(weeklyGapPattern)) {
       pattern = weeklyGapPattern;
       weakPointTag = ' Esta semana no había tocado este patrón todavía — se corrige antes de que se acumule el hueco.';
     } else {
@@ -368,7 +373,7 @@ function buildStrengthBlock(
       // patron de fuerza peor valorado en `computeWeakPoints` si no se ha entrenado hace poco — un
       // coach real prioriza el punto flaco cuando el dia esta libre, no lo deja solo al azar del ciclo.
       const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history);
-      if (weakPattern && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+      if (weakPattern && !painReintro.has(weakPattern) && Math.random() < WEAK_POINT_BIAS_CHANCE) {
         pattern = weakPattern;
         weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
       }
@@ -394,6 +399,12 @@ function buildStrengthBlock(
     }
   }
 
+  // Reintroduccion progresiva: si el patron final de hoy sale de un aviso de molestia retirado hace
+  // poco, la carga vuelve en rampa (0.6 -> 1.0 en PAIN_REINTRO_WEEKS) en vez de saltar al 100%.
+  const reintroFactor = getPainReintroFactor(painReintro, [pattern]);
+  const reintroNote =
+    reintroFactor < 1 ? ' Reintroducción progresiva tras tu aviso de molestia — la carga de este patrón vuelve poco a poco, no de golpe.' : '';
+
   const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
 
   // Sesgo de desbalance: dentro del patron que ya toca hoy, inclina hacia el levantamiento
@@ -403,7 +414,7 @@ function buildStrengthBlock(
   let imbalanceTag = '';
   let preferId = pref.movementId;
   let preferChance = pref.preferChance;
-  if (!pref.movementId && weakPointTag === '') {
+  if (!pref.movementId && weakPointTag === '' && !painReintro.has(pattern)) {
     const imbId = imbalanceBias.strengthLiftIds.find((id) => candidates.some((c) => c.id === id));
     if (imbId) {
       preferId = imbId;
@@ -424,7 +435,8 @@ function buildStrengthBlock(
 
   if (isTestDay) {
     const testLoadKg = roundToNearestPlate(currentPR);
-    const testReasons = collectReasons(weakPointTag, imbalanceTag, painTag, rampNote, readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : undefined);
+    const testReintroNote = reintroFactor < 1 ? ' Vienes de una molestia en este patrón — si no lo notas al 100%, plantéate posponer el test unos días.' : '';
+    const testReasons = collectReasons(weakPointTag, imbalanceTag, painTag, testReintroNote, rampNote, readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : undefined);
     return {
       blocks: [
         {
@@ -433,7 +445,7 @@ function buildStrengthBlock(
           format: 'Test 1RM',
           reps: '1',
           loadKg: testLoadKg,
-          notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${imbalanceTag}${painTag}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
+          notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${imbalanceTag}${painTag}${testReintroNote}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
         },
       ],
       pattern,
@@ -456,8 +468,8 @@ function buildStrengthBlock(
           readinessIsLow: readiness.isLow,
         });
   const tempoNote = tempo ? ` Tempo ${tempo} — ${describeTempoNotation(tempo)}.` : '';
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${imbalanceTag}${painTag}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
-  const reasons = collectReasons(weakPointTag, imbalanceTag, painTag, rampNote, autoregNote, tempoNote);
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${weakPointTag}${imbalanceTag}${painTag}${reintroNote}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
+  const reasons = collectReasons(weakPointTag, imbalanceTag, painTag, reintroNote, rampNote, autoregNote, tempoNote);
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -469,7 +481,7 @@ function buildStrengthBlock(
           format: STRENGTH_SCHEME_LABEL.ascendingLadder,
           sets: 3,
           reps: '5-3-1',
-          loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor),
+          loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor),
           notes,
         },
       ],
@@ -488,7 +500,7 @@ function buildStrengthBlock(
           format: STRENGTH_SCHEME_LABEL.volumeSets,
           sets: scheme.sets + 1,
           reps: String(scheme.reps + 4),
-          loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor),
+          loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor),
           notes,
           ...(tempo ? { tempo } : {}),
         },
@@ -498,7 +510,7 @@ function buildStrengthBlock(
     };
   }
 
-  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor);
+  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor);
   return {
     blocks: [
       {
@@ -532,6 +544,7 @@ function buildOlyBlock(
   readinessCheck: ReadinessCheck | undefined,
   date: Date,
   imbalanceBias: ImbalanceBias,
+  painReintro: Map<MovementPattern, number>,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -542,7 +555,12 @@ function buildOlyBlock(
 
   const rpeAutoreg = getRpeAutoregFactor(history, date);
   const readiness = getReadinessFactor(readinessCheck);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor;
+  // Reintroduccion progresiva: si un aviso de hombro/cadera se retiro hace poco, el oly (que carga
+  // ambas zonas) vuelve en rampa de carga, no de golpe.
+  const reintroFactor = getPainReintroFactor(painReintro, ['olyLift']);
+  const reintroNote =
+    reintroFactor < 1 ? ' Reintroducción progresiva tras tu aviso de molestia — la carga olímpica vuelve poco a poco.' : '';
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrZone), rpeAutoreg.factor, readiness.factor) * rampFactor * reintroFactor;
   const rampNote = rampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ') || undefined;
   const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
@@ -635,9 +653,10 @@ function buildOlyBlock(
         }`
       : scheme.coachNote) +
     weakPointTag +
+    reintroNote +
     rampNote +
     (autoregNote ? ` ${autoregNote}` : '');
-  const reasons = collectReasons(weakPointTag, rampNote, autoregNote);
+  const reasons = collectReasons(weakPointTag, reintroNote, rampNote, autoregNote);
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).
@@ -1387,6 +1406,7 @@ export function generateDailySession(
 
   const recentIds = getRecentMovementIds(history);
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
+  const painReintro = getPainReintroPatterns(profile.painFlags, dateIso);
 
   if (dayPlan.isRecoveryDay) {
     const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
@@ -1438,6 +1458,7 @@ export function generateDailySession(
     date,
     profile.trainingDaysPerWeek,
     imbalanceBias,
+    painReintro,
   );
   const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
     dayPlan,
@@ -1455,6 +1476,7 @@ export function generateDailySession(
     readinessCheck,
     date,
     imbalanceBias,
+    painReintro,
   );
   const wodBlock = buildWodBlock(
     dayPlan,
