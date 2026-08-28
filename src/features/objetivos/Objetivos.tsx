@@ -343,6 +343,12 @@ export function Objetivos() {
                       </span>
                     </li>
                   )}
+                  {nextMacroSuggestion.recoveryNote && (
+                    <li className="flex items-start gap-1.5">
+                      <AlertTriangle size={11} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-neon" />
+                      <span className="text-neutral-300">{nextMacroSuggestion.recoveryNote}</span>
+                    </li>
+                  )}
                 </ul>
                 <p className="mt-1.5 text-[11px] text-neutral-600">
                   Solo es un punto de partida — {nextMacroSuggestion.suggestsSeason ? 'se abre el planificador ya relleno' : 'se abre el formulario ya relleno'} para que revises fechas y fases antes de guardar nada.

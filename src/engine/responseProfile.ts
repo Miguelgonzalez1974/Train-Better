@@ -1,4 +1,5 @@
 import type { PrLogEntry, SessionHistoryEntry } from '../data/athlete/types';
+import type { MovementPattern } from '../data/movements/types';
 import { computeAcwr, daysBetween } from './loadMetrics';
 
 /**
@@ -27,9 +28,13 @@ const PRLOG_MIN_POINTS = 2;
 const PRLOG_MIN_SPAN_DAYS = 21;
 const WEEKS_PER_MONTH = 4.345;
 
-/** Recuperacion: dias tras un pico de ACWR "alto" para volver a zona buena. */
-const RECOVERY_SLOW_DAYS = 12;
-const RECOVERY_FAST_DAYS = 6;
+/**
+ * Recuperacion: dias tras un pico de ACWR "alto" para volver a zona buena. El ACWR es una media
+ * movil 7/28, asi que incluso un pico "normal" tarda ~10-15 dias en decaer solo por el suavizado —
+ * por eso el umbral de "lento" esta en 18 y el de "rapido" en 9, no mas bajos.
+ */
+const RECOVERY_SLOW_DAYS = 18;
+const RECOVERY_FAST_DAYS = 9;
 
 const RX_MIN_SESSIONS = 8;
 const RX_TREND_DELTA = 0.15;
@@ -241,4 +246,39 @@ export function engineResponseProfile(profile: ResponseProfile): ResponseProfile
 /** tier de progreso de una clave de PR concreta, o null si no hay dato suficiente. */
 export function liftTierFor(profile: ResponseProfile, key: string): LiftTier | null {
   return profile.perLift.find((l) => l.key === key)?.tier ?? null;
+}
+
+const STALLED_TIERS = new Set<LiftTier>(['lento', 'regresion']);
+
+/** Clave de PR de fuerza -> patron de movimiento (los 4 que el motor cicla). */
+const PR_KEY_STRENGTH_PATTERN: Record<string, MovementPattern> = {
+  backSquat: 'squat',
+  frontSquat: 'squat',
+  deadlift: 'hinge',
+  benchPress: 'horizontalPush',
+  strictPress: 'verticalPush',
+};
+
+/**
+ * Patron de fuerza cuyo levantamiento raiz viene estancado/en caida en el historial de PRs — para
+ * darle mas frecuencia aunque no sea el objetivo del atleta. `perLift` ya viene ordenado
+ * problemas-primero, asi que el primero que casa es el peor. null si no hay ninguno.
+ */
+export function stalledStrengthPattern(profile: ResponseProfile): MovementPattern | null {
+  for (const lift of profile.perLift) {
+    if (!STALLED_TIERS.has(lift.tier)) continue;
+    const pattern = PR_KEY_STRENGTH_PATTERN[lift.key];
+    if (pattern) return pattern;
+  }
+  return null;
+}
+
+/** Familia de oly (snatch/clean) con un levantamiento estancado/en caida en el historial de PRs, o null. */
+export function stalledOlyFamily(profile: ResponseProfile): 'snatch' | 'clean' | null {
+  for (const lift of profile.perLift) {
+    if (!STALLED_TIERS.has(lift.tier)) continue;
+    if (lift.key === 'snatch' || lift.key === 'powerSnatch') return 'snatch';
+    if (lift.key === 'clean' || lift.key === 'cleanAndJerk' || lift.key === 'powerClean') return 'clean';
+  }
+  return null;
 }

@@ -81,7 +81,14 @@ import {
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
-import { computeResponseProfile, engineResponseProfile, liftTierFor, type ResponseProfile } from './responseProfile';
+import {
+  computeResponseProfile,
+  engineResponseProfile,
+  liftTierFor,
+  stalledOlyFamily,
+  stalledStrengthPattern,
+  type ResponseProfile,
+} from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import { filterAvoidingPain, getAvoidedPatterns, getPainReintroFactor, getPainReintroPatterns } from './painFlags';
@@ -183,9 +190,20 @@ const STRENGTH_SCHEME_NOTE: Record<StrengthSchemeStyle, string> = {
 };
 
 /** Un coach no entrena la fuerza siempre igual: rota el estilo de la sesion en vez de series rectas todos los dias. */
-function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4): StrengthSchemeStyle {
+/**
+ * `preferVolume` (perfil de respuesta): si el levantamiento de hoy viene estancado en el historial
+ * de PRs, se sube la probabilidad de un dia de volumen — mas tonelaje semanal es la primera
+ * respuesta razonable a una meseta. Sigue siendo probabilistico: el lift no queda condenado a
+ * volumen ligero perpetuo, sigue viendo dias de intensidad.
+ */
+function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4, preferVolume = false): StrengthSchemeStyle {
   if (week === 4) return Math.random() < 0.5 ? 'straightSets' : 'volumeSets';
   const roll = Math.random();
+  if (preferVolume) {
+    if (roll < 0.35) return 'straightSets';
+    if (roll < 0.55) return 'ascendingLadder';
+    return 'volumeSets';
+  }
   if (roll < 0.55) return 'straightSets';
   if (roll < 0.8) return 'ascendingLadder';
   return 'volumeSets';
@@ -398,11 +416,16 @@ function buildStrengthBlock(
       pattern = weeklyGapPattern;
       weakPointTag = ' Esta semana no había tocado este patrón todavía — se corrige antes de que se acumule el hueco.';
     } else {
-      // Sin desequilibrio semanal que corregir, se le da mas frecuencia (no un 100% de las veces) al
-      // patron de fuerza peor valorado en `computeWeakPoints` si no se ha entrenado hace poco — un
-      // coach real prioriza el punto flaco cuando el dia esta libre, no lo deja solo al azar del ciclo.
+      // Prioridad, en orden: un patron cuyo levantamiento raiz lleva estancado/en caida en el
+      // historial real de PRs (señal concreta, no probabilistica) y, si no, el peor valorado por
+      // `computeWeakPoints` (RPE/escalado/tendencia). Ninguno se aplica el 100% de las veces — un
+      // coach da mas frecuencia al punto flaco, no reconstruye la semana entera alrededor de el.
+      const stalledPattern = stalledStrengthPattern(responseProfile);
       const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history);
-      if (weakPattern && !blockedForBias(weakPattern) && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+      if (stalledPattern && !blockedForBias(stalledPattern) && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+        pattern = stalledPattern;
+        weakPointTag = ' Este patrón lleva estancado en tu historial de PRs — prioridad de frecuencia para desbloquearlo.';
+      } else if (weakPattern && !blockedForBias(weakPattern) && Math.random() < WEAK_POINT_BIAS_CHANCE) {
         pattern = weakPattern;
         weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
       }
@@ -460,6 +483,12 @@ function buildStrengthBlock(
   const movement = pickVariedWithPreference(candidates, recentIds, preferId, preferChance);
   if (!movement) return { blocks: [], pattern, reasons: [] };
 
+  // Perfil de respuesta: ¿el levantamiento concreto de hoy viene estancado? (puede diferir del del objetivo)
+  const todayLiftKey = resolveStrengthPRKey(movement) ?? resolveVariantPRKey(movement);
+  const todayLiftStalled = todayLiftKey
+    ? liftTierFor(responseProfile, todayLiftKey) === 'lento' || liftTierFor(responseProfile, todayLiftKey) === 'regresion'
+    : false;
+
   const currentPR = resolveStrengthPR(movement, prs, variantPrs);
   const goalTag =
     pref.movementId && movement.id === pref.movementId
@@ -489,7 +518,7 @@ function buildStrengthBlock(
   }
 
   const scheme = STRENGTH_WEEK_SCHEMES[week];
-  const style = pickStrengthSchemeStyle(week);
+  const style = pickStrengthSchemeStyle(week, todayLiftStalled);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
   // La rampa ascendente ya construye hacia una serie casi maxima — ningun documento real prescribe
   // tempo lento justo ahi, asi que solo straightSets/volumeSets son candidatas.
@@ -634,10 +663,14 @@ function buildOlyBlock(
   if (goalForcedFamily) {
     family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
   } else {
-    // Mismo sesgo que en fuerza: sin un objetivo forzando la familia, se le da mas frecuencia (no
-    // siempre) a la peor valorada en `computeWeakPoints` si no se ha entrenado hace poco.
+    // Mismo orden que en fuerza: primero una familia con un levantamiento estancado/en caida en el
+    // historial real de PRs, si no la peor valorada en `computeWeakPoints`, si no el sesgo de desbalance.
+    const stalledFam = stalledOlyFamily(responseProfile);
     const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history);
-    if (weakFamily && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+    if (stalledFam && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+      family = stalledFam;
+      weakPointTag = ' Esta familia lleva estancada en tu historial de PRs — más frecuencia para desbloquearla.';
+    } else if (weakFamily && Math.random() < WEAK_POINT_BIAS_CHANCE) {
       family = weakFamily;
       weakPointTag = ' Prioridad extra hoy: esta familia lleva estancada, le damos más frecuencia.';
     } else if (weakPointTag === '' && imbalanceBias.olyFamilies.length > 0 && Math.random() < IMBALANCE_BIAS_CHANCE) {
@@ -952,6 +985,7 @@ function buildWodBlock(
   history: SessionHistoryEntry[],
   wodRampActive: boolean,
   prs: PersonalRecords,
+  responseProfile: ResponseProfile,
 ): SessionBlockResult[] {
   const recentBenchmarkIds = new Set(
     [...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', '')),
@@ -959,6 +993,10 @@ function buildWodBlock(
 
   const competicionGoal = pickPriorityGoal(goals, (g) => g.type === 'preparar-competicion');
   const competicionProgress = competicionGoal ? getGoalProgress(competicionGoal, history) : 0;
+  // Perfil de respuesta: si el RPE del atleta da poca señal, el coach tiene menos feedback real de
+  // cuanto se esta exigiendo — asi que fuerza menos testeo extra a maximo esfuerzo (solo muy cerca
+  // de la competicion) y se apoya mas en el ACWR.
+  const rpeUnreliable = responseProfile.rpe.reliability < 0.7;
   // En taper no se fuerza testeo extra: un coach real no busca fatiga nueva a dias de competir.
   // Tampoco durante la rampa de vuelta: un test/retest a maximo esfuerzo es justo lo que se quiere
   // evitar mientras el atleta esta cogiendo ritmo de nuevo.
@@ -966,11 +1004,14 @@ function buildWodBlock(
     !isTaper &&
     !wodRampActive &&
     Boolean(competicionGoal) &&
-    (competicionProgress > 0.8 ||
-      ((competicionGoal!.emphasis === 'intensivo' || competicionProgress > 0.4) && isEmphasisDay(dayPlan.trainingDayIndex)));
+    (competicionProgress > (rpeUnreliable ? 0.9 : 0.8) ||
+      ((competicionGoal!.emphasis === 'intensivo' || competicionProgress > (rpeUnreliable ? 0.6 : 0.4)) &&
+        isEmphasisDay(dayPlan.trainingDayIndex)));
 
-  // En semana pico se testea mas: un segundo dia de benchmark a mitad de la semana de entreno.
-  const isPeakWeekExtraBenchmark = !wodRampActive && week === 3 && dayPlan.trainingDayIndex === Math.floor(trainingDaysPerWeek / 2);
+  // En semana pico se testea mas: un segundo dia de benchmark a mitad de la semana de entreno — pero
+  // no si no nos fiamos del RPE (ver arriba).
+  const isPeakWeekExtraBenchmark =
+    !wodRampActive && !rpeUnreliable && week === 3 && dayPlan.trainingDayIndex === Math.floor(trainingDaysPerWeek / 2);
 
   if (!wodRampActive && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal)) {
     // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
@@ -1622,6 +1663,7 @@ export function generateDailySession(
         history,
         wodRampActive,
         profile.prs,
+        responseProfile,
       )
     : [];
   const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns) : [];

@@ -12,6 +12,7 @@ import {
 import { getActiveStrengthProgram } from './strengthPrograms';
 import { pickPriorityGoal } from './goalPriority';
 import { computeWeakPoints } from './weakPoints';
+import { computeResponseProfile, engineResponseProfile } from './responseProfile';
 
 /** Ventana antes del fin de la estructura activa en la que tiene sentido empezar a hablar de lo siguiente. */
 const NEXT_MACRO_WINDOW_DAYS = 14;
@@ -46,6 +47,8 @@ export interface NextMacroSuggestion {
   suggestsSeason: boolean;
   /** Patron de movimiento peor situado ahora mismo (computeWeakPoints), para que el atleta lo tenga en cuenta al repartir las fases. */
   weakPointLabel?: string;
+  /** Nota si el perfil de respuesta ajusto el reparto de fases (p.ej. recuperacion lenta -> una semana mas de descarga). */
+  recoveryNote?: string;
   /** Cuantos objetivos activos siguen abiertos mas alla del fin de esta estructura (informativo). */
   openGoalsBeyond: number;
 }
@@ -109,12 +112,27 @@ export function buildNextMacroSuggestion(
   // menos una semana de descarga — si el objetivo obliga a un bloque mas corto que el reparto
   // anterior, arrastrar los mismos numeros dejaria un formulario ya invalido. Mejor no proponer
   // fases (vuelve al ciclo clasico, siempre valido) que entregar un borrador roto.
+  // Perfil de respuesta: a un atleta de recuperacion lenta se le deja una semana mas de descarga en
+  // el proximo bloque — quitandola de intensificacion (la fase mas prescindible para el), o de
+  // acumulacion si intensificacion ya esta en su minimo.
+  const slowRecovery = engineResponseProfile(computeResponseProfile(history, profile.prLog, today)).recovery.tier === 'lento';
+
   let suggestedPhaseWeeks: [number, number, number, number] | undefined;
+  let recoveryNote: string | undefined;
   if (activeMacro?.phaseWeeks) {
-    const [acc, int, peak] = activeMacro.phaseWeeks;
+    let acc = activeMacro.phaseWeeks[0];
+    let int = activeMacro.phaseWeeks[1];
+    const peak = activeMacro.phaseWeeks[2];
     const newTotalWeeks = weeksBetweenIso(suggestedStart, suggestedEnd);
+    if (slowRecovery && (int > 1 || acc > 1)) {
+      if (int > 1) int -= 1;
+      else acc -= 1;
+      recoveryNote = 'Tu perfil de respuesta indica recuperación lenta: este bloque lleva una semana más de descarga (a costa de intensificación).';
+    }
     if (acc + int + peak + 1 <= newTotalWeeks) {
       suggestedPhaseWeeks = [acc, int, peak, newTotalWeeks - acc - int - peak];
+    } else {
+      recoveryNote = undefined; // no cupo el reparto ajustado; se cae al ciclo clasico sin nota
     }
   }
 
@@ -138,6 +156,7 @@ export function buildNextMacroSuggestion(
       : undefined,
     suggestsSeason,
     weakPointLabel: topWeak?.label,
+    recoveryNote,
     openGoalsBeyond: profile.goals.filter((g) => g.targetDate > ending.endDate).length,
   };
 }
