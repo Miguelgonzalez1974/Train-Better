@@ -33,6 +33,7 @@ import {
   resolveDayEmphasis,
   resolveMacrocyclePhase,
   toLocalIsoDate,
+  weeksSinceStart,
   type DayPlan,
   type OlyFamily,
 } from './periodization';
@@ -1600,6 +1601,12 @@ export function generateDailySession(
   let dayEmphasis = resolveDayEmphasis(week, dayPlan.trainingDayIndex, profile.trainingDaysPerWeek);
   if (isTaper && dayPlan.trainingDayIndex >= profile.trainingDaysPerWeek - 1) dayEmphasis = 'metcon';
   if (testDayFocus) dayEmphasis = 'mixto';
+  // La PRIMERA semana del macrociclo va siempre completa (fuerza + WOD cada dia de entreno), aunque
+  // caiga en Acumulacion (donde `resolveDayEmphasis` normalmente deja dias de solo barra). Un coach
+  // real abre un bloque con una "forma de salida": una lectura base de fuerza Y de condicion fisica,
+  // para tener contra que medir el progreso. Recortar dominios por dia desde el dia 1 deja media
+  // semana sin metcon y sin referencia. A partir de la semana 2 la periodizacion actua normal.
+  if (weeksSinceStart(macro.startDate, date) === 0) dayEmphasis = 'mixto';
   const doStrength = dayEmphasis !== 'metcon';
   const doWod = dayEmphasis !== 'fuerza';
 
