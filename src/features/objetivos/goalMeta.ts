@@ -1,5 +1,6 @@
 import { TrendingUp, Dumbbell, PersonStanding, Zap, Trophy, HeartPulse, type LucideIcon } from 'lucide-react';
-import { strengthMovements, olyMovements, skillMovements } from '../../data/movements';
+import { strengthMovements, olyMovements } from '../../data/movements';
+import { SKILL_PROGRESSION_TARGETS } from '../../data/movements/skillProgressions';
 import type { Movement } from '../../data/movements/types';
 import type { GoalType } from '../../data/athlete/types';
 
@@ -30,7 +31,8 @@ export const GOAL_TYPE_META: Record<GoalType, GoalTypeMeta> = {
     label: 'Mejorar gimnásticos',
     Icon: PersonStanding,
     needsMovement: true,
-    movementGroups: [{ label: 'Skill', movements: skillMovements }],
+    // Habilidad objetivo — el motor programa el escalon de la progresion que toca (skillProgressions.ts).
+    movementGroups: [{ label: 'Habilidad objetivo', movements: SKILL_PROGRESSION_TARGETS }],
   },
   'mejorar-potencia': {
     label: 'Mejorar potencia',

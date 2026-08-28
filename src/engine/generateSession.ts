@@ -7,6 +7,7 @@ import {
   olyMovements,
   skillMovements,
 } from '../data/movements';
+import { getSkillProgressionFor, skillProgressionStepAt } from '../data/movements/skillProgressions';
 import type {
   AthleteProfile,
   DailySession,
@@ -1210,8 +1211,39 @@ function buildAccessoryBlock(
   return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: 3, reps, format, notes }));
 }
 
-function buildSkillBlock(history: SessionHistoryEntry[], goals: Goal[], avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+function buildSkillBlock(
+  history: SessionHistoryEntry[],
+  goals: Goal[],
+  avoidedPatterns: Set<MovementPattern>,
+  date: Date = new Date(),
+): SessionBlockResult[] {
   const candidates = filterAvoidingPain(getMovementsByBlock('skill'), avoidedPatterns);
+
+  // Objetivo de gimnasticos con arbol de progresion conocido: se programa el escalon que toca segun
+  // lo avanzado que va el objetivo (0% -> el mas facil; cerca de la fecha -> el movimiento
+  // objetivo). El atleta ajusta el ritmo cambiando la fecha del objetivo.
+  const progressionGoal = pickPriorityGoal(goals, (g) => g.type === 'mejorar-gimnasticos' && Boolean(g.movementId));
+  if (progressionGoal?.movementId) {
+    const progression = getSkillProgressionFor(progressionGoal.movementId);
+    if (progression) {
+      const { step, index, total } = skillProgressionStepAt(progression, getGoalProgress(progressionGoal, history, date));
+      const stepMovement = getMovementById(step.movementId);
+      if (stepMovement && !avoidedPatterns.has(stepMovement.pattern)) {
+        return [
+          {
+            block: 'skill',
+            movementId: step.movementId,
+            sets: 4,
+            reps: 'tecnica / tiempo',
+            notes: `Progresión hacia ${progression.targetName} — paso ${index + 1} de ${total}: ${step.cue}`,
+          },
+        ];
+      }
+      // El escalon de hoy toca un patron con aviso de molestia — se cae a la rotacion normal de abajo.
+    }
+  }
+
+  // Objetivo de gimnasticos con un drill suelto (sin arbol) o `subir-pr`: sesgo directo, como antes.
   const isSkillGoal = goals.some((g) => g.type === 'mejorar-gimnasticos' || g.type === 'subir-pr');
   const pref = isSkillGoal
     ? goalPreference(goals, (m) => skillMovements.some((s) => s.id === m.id), history)
@@ -1544,7 +1576,7 @@ export function generateDailySession(
       )
     : [];
   const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns) : [];
-  const skillBlock = buildSkillBlock(history, goals, avoidedPatterns);
+  const skillBlock = buildSkillBlock(history, goals, avoidedPatterns, date);
   const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
 
