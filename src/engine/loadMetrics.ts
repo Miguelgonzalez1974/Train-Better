@@ -1,4 +1,6 @@
 import type { SessionHistoryEntry } from '../data/athlete/types';
+import type { MovementPattern } from '../data/movements/types';
+import { getMovementById } from '../data/movements';
 
 export type AcwrZone = 'baja' | 'optima' | 'moderada' | 'alta';
 
@@ -83,6 +85,113 @@ export function computeAcwr(history: SessionHistoryEntry[], referenceDate: Date 
   const zone = applyColdStart(classifyAcwr(acwr), sessionsInWindow);
 
   return { acute, chronic, acwr, zone, coldStart };
+}
+
+// ---- Fatiga por zona (ACWR por patron de movimiento) ----
+
+export interface PatternFatigue {
+  /** sRPE atribuido a este patron en los ultimos 7 dias. */
+  acute: number;
+  /** Media semanal de sRPE de este patron en los ultimos 28 dias. */
+  chronicWeekly: number;
+  /** acute / chronicWeekly, o null si no hay carga cronica para este patron. */
+  ratio: number | null;
+  /** true cuando el patron esta claramente sobrecargado esta semana respecto a su propia norma. */
+  overcooked: boolean;
+}
+
+/** Ratio agudo:cronico por patron a partir del cual la zona se considera sobrecargada — mismo umbral que la zona "alta" del ACWR global. */
+const PATTERN_FATIGUE_RATIO_THRESHOLD = 1.5;
+/** Piso del factor de carga por fatiga de zona: nunca quita mas del 25% (encima ya actua el ACWR global). */
+const PATTERN_FATIGUE_FLOOR = 0.75;
+/** Cuanto baja el factor por cada 0.1 de ratio por encima del umbral. */
+const PATTERN_FATIGUE_SLOPE = 0.3;
+/** Sesiones minimas en la ventana cronica para fiarse del ratio por patron (mismo cold-start que el ACWR). */
+const PATTERN_FATIGUE_MIN_CHRONIC_SESSIONS = 4;
+/** Un ratio alto salido de una sola sesion aguda es ruido — hacen falta al menos 2 dias que toquen el patron. */
+const PATTERN_FATIGUE_MIN_ACUTE_HITS = 2;
+
+/** Patrones distintos que aparecen en los movimientos de una sesion (ignora ids no resueltos, p.ej. `benchmark:*`). */
+function sessionPatterns(entry: SessionHistoryEntry): Set<MovementPattern> {
+  const patterns = new Set<MovementPattern>();
+  for (const id of entry.movementIds) {
+    const movement = getMovementById(id);
+    if (movement) patterns.add(movement.pattern);
+  }
+  return patterns;
+}
+
+/**
+ * ACWR pero por zona: reparte el sRPE de cada sesion a partes iguales entre los patrones de
+ * movimiento que toco ese dia (fuerza, oly, accesorios y WOD por igual — una zona se carga con
+ * todo, no solo con el levantamiento principal), y compara la carga aguda (7 dias) de cada patron
+ * con su propia media semanal cronica (28 dias). El ACWR global ya frena cuando la carga TOTAL
+ * sube; esto capta lo que se le escapa: el atleta rebalancea y machaca una zona concreta mientras
+ * afloja en otras, con el total sin inmutarse.
+ */
+export function computePatternFatigue(
+  history: SessionHistoryEntry[],
+  referenceDate: Date = new Date(),
+): Map<MovementPattern, PatternFatigue> {
+  const acuteLoad = new Map<MovementPattern, number>();
+  const chronicLoad = new Map<MovementPattern, number>();
+  const acuteHits = new Map<MovementPattern, number>();
+  let chronicSessions = 0;
+
+  for (const entry of history) {
+    const age = daysBetween(entry.date, referenceDate);
+    if (age < 0 || age >= CHRONIC_WINDOW_DAYS) continue;
+    chronicSessions++;
+    const patterns = sessionPatterns(entry);
+    if (patterns.size === 0) continue;
+    const share = (entry.rpe * entry.durationMin) / patterns.size;
+    for (const pattern of patterns) {
+      chronicLoad.set(pattern, (chronicLoad.get(pattern) ?? 0) + share);
+      if (age < ACUTE_WINDOW_DAYS) {
+        acuteLoad.set(pattern, (acuteLoad.get(pattern) ?? 0) + share);
+        acuteHits.set(pattern, (acuteHits.get(pattern) ?? 0) + 1);
+      }
+    }
+  }
+
+  const result = new Map<MovementPattern, PatternFatigue>();
+  for (const [pattern, chronicSum] of chronicLoad) {
+    const chronicWeekly = chronicSum / (CHRONIC_WINDOW_DAYS / 7);
+    const acute = acuteLoad.get(pattern) ?? 0;
+    const ratio = chronicWeekly > 0 ? acute / chronicWeekly : null;
+    const overcooked =
+      ratio !== null &&
+      ratio > PATTERN_FATIGUE_RATIO_THRESHOLD &&
+      chronicSessions >= PATTERN_FATIGUE_MIN_CHRONIC_SESSIONS &&
+      (acuteHits.get(pattern) ?? 0) >= PATTERN_FATIGUE_MIN_ACUTE_HITS;
+    result.set(pattern, { acute, chronicWeekly, ratio, overcooked });
+  }
+  return result;
+}
+
+/** ¿Esta esa zona sobrecargada ahora mismo? — para no sesgar la seleccion hacia un patron ya machacado. */
+export function isPatternOvercooked(fatigue: Map<MovementPattern, PatternFatigue>, pattern: MovementPattern): boolean {
+  return fatigue.get(pattern)?.overcooked ?? false;
+}
+
+/**
+ * Factor de carga (<= 1) para hoy dado el/los patron(es) implicados: rampa acotada segun cuanto se
+ * pase el ratio del umbral, con piso en `PATTERN_FATIGUE_FLOOR`. 1 si ninguno esta sobrecargado.
+ */
+export function getPatternFatigueFactor(fatigue: Map<MovementPattern, PatternFatigue>, patterns: MovementPattern[]): number {
+  let factor = 1;
+  for (const pattern of patterns) {
+    const f = fatigue.get(pattern);
+    if (!f?.overcooked || f.ratio === null) continue;
+    const scaled = 1 - (f.ratio - PATTERN_FATIGUE_RATIO_THRESHOLD) * PATTERN_FATIGUE_SLOPE;
+    factor = Math.min(factor, Math.max(PATTERN_FATIGUE_FLOOR, scaled));
+  }
+  return factor;
+}
+
+/** Lista de patrones sobrecargados hoy — p.ej. para excluirlos del pool del WOD. */
+export function overcookedPatterns(fatigue: Map<MovementPattern, PatternFatigue>): MovementPattern[] {
+  return [...fatigue.entries()].filter(([, f]) => f.overcooked).map(([pattern]) => pattern);
 }
 
 const ACWR_TREND_DAYS = 21;
