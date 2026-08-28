@@ -567,6 +567,15 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           )}
           <div className="flex items-center gap-2">
             <p className="text-lg font-semibold text-white">{session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}</p>
+            {!session.isRestDay && session.dayEmphasis && (
+              <span
+                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                  session.dayEmphasis === 'fuerza' ? 'bg-brand-gold/15 text-brand-gold' : 'bg-brand-orange/15 text-brand-orange'
+                }`}
+              >
+                {session.dayEmphasis === 'fuerza' ? 'Día de fuerza' : 'Día de metcon'}
+              </span>
+            )}
             {!session.isRestDay && session.mesocycleWeek === 0 && (
               <span
                 className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${

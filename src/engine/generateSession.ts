@@ -29,6 +29,7 @@ import {
   getDayPlan,
   getWeekdayIndex,
   isEmphasisDay,
+  resolveDayEmphasis,
   resolveMacrocyclePhase,
   toLocalIsoDate,
   type DayPlan,
@@ -1437,60 +1438,76 @@ export function generateDailySession(
   // se calcula una vez y lo comparten fuerza y oly. Solo el motor periodizado lo usa (no mantenimiento
   // ni programas con nombre), igual que el resto de senales del macrociclo.
   const imbalanceBias = getImbalanceBias(profile.prs, profile.variantPrs, history);
-  const {
-    blocks: strengthBlock,
-    pattern: trainedStrengthPattern,
-    reasons: strengthReasons,
-  } = buildStrengthBlock(
-    dayPlan,
-    week,
-    profile.prs,
-    recentIds,
-    goals,
-    acwrZone,
-    acwrResult.coldStart,
-    testDayFocus === 'strength',
-    history,
-    avoidedPatterns,
-    strengthRampFactor,
-    profile.variantPrs,
-    readinessCheck,
-    date,
-    profile.trainingDaysPerWeek,
-    imbalanceBias,
-    painReintro,
-  );
-  const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
-    dayPlan,
-    week,
-    profile.prs,
-    recentIds,
-    goals,
-    acwrZone,
-    acwrResult.coldStart,
-    testDayFocus === 'oly',
-    history,
-    avoidedPatterns,
-    olyRampFactor,
-    profile.variantPrs,
-    readinessCheck,
-    date,
-    imbalanceBias,
-    painReintro,
-  );
-  const wodBlock = buildWodBlock(
-    dayPlan,
-    week,
-    profile.trainingDaysPerWeek,
-    recentIds,
-    new Set([trainedStrengthPattern, ...avoidedPatterns]),
-    goals,
-    isTaper,
-    history,
-    wodRampActive,
-    profile.prs,
-  );
-  const accessoryBlock = buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns);
+
+  // Enfasis del dia segun la fase (ver `resolveDayEmphasis`): 'fuerza' = solo barra, sin WOD;
+  // 'metcon' = solo condicion fisica, sin fuerza pesada; 'mixto' = ambos, como siempre. Dos
+  // anulaciones: en taper el ultimo dia de la semana es un metcon de simulacion, y un dia de test
+  // de maximo nunca se salta la fuerza/oly.
+  let dayEmphasis = resolveDayEmphasis(week, dayPlan.trainingDayIndex, profile.trainingDaysPerWeek);
+  if (isTaper && dayPlan.trainingDayIndex >= profile.trainingDaysPerWeek - 1) dayEmphasis = 'metcon';
+  if (testDayFocus) dayEmphasis = 'mixto';
+  const doStrength = dayEmphasis !== 'metcon';
+  const doWod = dayEmphasis !== 'fuerza';
+
+  const strengthResult = doStrength
+    ? buildStrengthBlock(
+        dayPlan,
+        week,
+        profile.prs,
+        recentIds,
+        goals,
+        acwrZone,
+        acwrResult.coldStart,
+        testDayFocus === 'strength',
+        history,
+        avoidedPatterns,
+        strengthRampFactor,
+        profile.variantPrs,
+        readinessCheck,
+        date,
+        profile.trainingDaysPerWeek,
+        imbalanceBias,
+        painReintro,
+      )
+    : { blocks: [] as SessionBlockResult[], pattern: dayPlan.strengthPattern, reasons: [] as string[] };
+  const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
+
+  const { blocks: olyBlock, reasons: olyReasons } = doStrength
+    ? buildOlyBlock(
+        dayPlan,
+        week,
+        profile.prs,
+        recentIds,
+        goals,
+        acwrZone,
+        acwrResult.coldStart,
+        testDayFocus === 'oly',
+        history,
+        avoidedPatterns,
+        olyRampFactor,
+        profile.variantPrs,
+        readinessCheck,
+        date,
+        imbalanceBias,
+        painReintro,
+      )
+    : { blocks: [] as SessionBlockResult[], reasons: [] as string[] };
+
+  const wodBlock = doWod
+    ? buildWodBlock(
+        dayPlan,
+        week,
+        profile.trainingDaysPerWeek,
+        recentIds,
+        new Set([trainedStrengthPattern, ...avoidedPatterns]),
+        goals,
+        isTaper,
+        history,
+        wodRampActive,
+        profile.prs,
+      )
+    : [];
+  const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns) : [];
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns);
   const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
@@ -1500,7 +1517,13 @@ export function generateDailySession(
   // es asi" para no tener que leer bloque a bloque para enterarte. El deload va primero por ser el
   // motivo de mayor peso cuando aplica. Ver DailySession.coachReasons.
   const deloadNote = deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined;
-  const coachReasons = Array.from(new Set(collectReasons(deloadNote, ...strengthReasons, ...olyReasons)));
+  const emphasisNote =
+    dayEmphasis === 'fuerza'
+      ? 'Hoy es día de fuerza — sin WOD, para cargar más trabajo de barra en esta fase.'
+      : dayEmphasis === 'metcon'
+        ? 'Hoy es día de metcon — sin fuerza pesada ni oly, para afilar tu condición física de cara al pico.'
+        : undefined;
+  const coachReasons = Array.from(new Set(collectReasons(deloadNote, emphasisNote, ...strengthReasons, ...olyReasons)));
 
   return {
     date: dateIso,
@@ -1509,6 +1532,7 @@ export function generateDailySession(
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
     deloadReason,
     deloadNote,
+    dayEmphasis: dayEmphasis === 'mixto' ? undefined : dayEmphasis,
     coachReasons: coachReasons.length > 0 ? coachReasons : undefined,
     phaseWeekInPhase: phaseProgress.weekInPhase,
     phaseLengthWeeks: phaseProgress.phaseLengthWeeks,

@@ -178,6 +178,38 @@ export function expectedStrengthSessionsPerWeek(trainingDaysPerWeek: 3 | 4 | 5 |
   return trainingDaysPerWeek === 6 ? 5 : trainingDaysPerWeek;
 }
 
+export type DayEmphasis = 'mixto' | 'fuerza' | 'metcon';
+
+/**
+ * Reparto fuerza / metcon / mixto de un dia de entreno segun la fase del macrociclo. Un coach real
+ * no mete fuerza pesada + WOD todos los dias: en acumulacion carga mas dias de solo barra (base de
+ * fuerza), cerca del pico mas dias de solo condicion fisica (afinar, estilo competicion). En medio,
+ * mixto. Deterministico por (fase, posicion en la semana) — la semana tiene una forma estable, no
+ * aleatoria. El dia 0 siempre es 'mixto' porque es el dia del benchmark de referencia.
+ *
+ *  - fase 1 (Acumulacion): los dias impares de la semana son solo fuerza
+ *  - fase 2 (Intensificacion): solo el ultimo dia es fuerza pura, el resto mixto
+ *  - fase 3 (Pico): la segunda mitad de la semana es solo metcon
+ *  - fase 4 (Descarga): todo mixto (la carga ya viene reducida por el esquema de deload)
+ *
+ * `generateDailySession` aplica ademas dos anulaciones: en taper el ultimo dia pasa a 'metcon'
+ * (simulacion), y un dia de test de maximo nunca se salta la fuerza (vuelve a 'mixto').
+ */
+export function resolveDayEmphasis(week: 1 | 2 | 3 | 4, trainingDayIndex: number, trainingDaysPerWeek: 3 | 4 | 5 | 6): DayEmphasis {
+  if (trainingDayIndex <= 0) return 'mixto';
+  const n = trainingDaysPerWeek;
+  switch (week) {
+    case 1:
+      return trainingDayIndex % 2 === 1 ? 'fuerza' : 'mixto';
+    case 2:
+      return trainingDayIndex >= n - 1 ? 'fuerza' : 'mixto';
+    case 3:
+      return trainingDayIndex >= Math.ceil(n / 2) ? 'metcon' : 'mixto';
+    default:
+      return 'mixto';
+  }
+}
+
 export function getDayPlan(weekdayIndex: number, trainingDaysPerWeek: 3 | 4 | 5 | 6): DayPlan {
   const template = TRAINING_DAY_TEMPLATES[trainingDaysPerWeek];
   const trainingDayIndex = template.indexOf(weekdayIndex);

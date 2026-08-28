@@ -199,6 +199,12 @@ export interface DailySession {
   customNote?: string;
   /** Etiqueta a mostrar en vez de "Mantenimiento" cuando el atleta cambio deliberadamente el tipo de sesion de hoy (propia/recuperacion/aleatoria) en vez de usar lo programado. */
   swapLabel?: string;
+  /**
+   * Enfasis del dia cuando el macrociclo lo desvia de "fuerza + WOD": 'fuerza' = solo barra, sin
+   * WOD; 'metcon' = solo condicion fisica, sin fuerza pesada ni oly. Ausente = dia mixto normal.
+   * Ver `resolveDayEmphasis` en periodization.ts.
+   */
+  dayEmphasis?: 'fuerza' | 'metcon';
   /** En que semana de la fase actual del macrociclo cae hoy (1-indexado) — solo con macrociclo activo. */
   phaseWeekInPhase?: number;
   /** Duracion total en semanas de la fase actual — junto a `phaseWeekInPhase` da "semana 3 de 6". */
