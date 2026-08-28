@@ -251,6 +251,92 @@ export const WOD_TIME_DOMAIN: Record<1 | 2 | 3 | 4, WodTimeDomain> = {
   4: { rounds: 3, amrapMin: 12, emomMin: 10 },
 };
 
+/** Familias de formato de WOD que genera el motor — compartido para poder sesgarlas por sistema energetico. */
+export type WodFormatKind =
+  | 'forTime'
+  | 'amrap'
+  | 'emom'
+  | 'interval'
+  | 'ladder'
+  | 'chipper'
+  | 'descendingLadder'
+  | 'ascendingLadder'
+  | 'risingInterval'
+  | 'risingLoadInterval'
+  | 'descendingLadderFiller'
+  | 'ascendingLadderFiller'
+  | 'barbellComplex';
+
+// ---- Periodizacion del acondicionamiento (sistema energetico por fase) ----
+
+export type EnergySystem = 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
+
+export interface EnergySystemPlan {
+  system: EnergySystem;
+  label: string;
+  /** Minimo de movimientos monoestructurales a empujar en el WOD (cardio ciclico). */
+  monoFloor: number;
+  /** Formatos que esta fase favorece — NO exclusivo, solo sube su probabilidad frente al resto. */
+  preferFormats: WodFormatKind[];
+  /** Factor sobre rondas/minutos del `WOD_TIME_DOMAIN` de la semana (base aerobica alarga, pico/descarga acortan). */
+  durationScale: number;
+  /** Pista de ritmo para la nota del WOD. */
+  paceCue: string;
+  /** Nota de coach del enfoque de acondicionamiento de la fase (va a `coachReasons`). */
+  note: string;
+}
+
+/**
+ * La fuerza ya esta periodizada (volumen -> intensidad -> pico). El acondicionamiento no lo estaba:
+ * el WOD solo variaba duracion por semana. Aqui se le da la misma progresion clasica de resistencia
+ * — base aerobica -> umbral -> potencia anaerobica -> recuperacion — atada a la fase del macrociclo,
+ * sesgando duracion, formato y cantidad de cardio ciclico del WOD sin cambiar la trifecta de fondo.
+ */
+const ENERGY_SYSTEM_BY_WEEK: Record<1 | 2 | 3 | 4, EnergySystemPlan> = {
+  1: {
+    system: 'base-aerobica',
+    label: 'Base aeróbica',
+    monoFloor: 2,
+    // amrap / interval / chipper respetan el suelo de monoestructurales y dan trabajo ciclico
+    // sostenido; las escaleras-con-peaje solo meten un monoestructural suelto, menos on-theme aqui.
+    preferFormats: ['amrap', 'interval', 'chipper'],
+    durationScale: 1.15,
+    paceCue: 'ritmo sostenible y conversacional, sin sprints',
+    note: 'Acondicionamiento de esta fase: base aeróbica — piezas más largas a ritmo sostenible y más cardio cíclico. Construyes motor, no buscas fallar.',
+  },
+  2: {
+    system: 'umbral',
+    label: 'Umbral',
+    monoFloor: 1,
+    preferFormats: ['forTime', 'interval', 'ladder', 'ascendingLadderFiller'],
+    durationScale: 1.0,
+    paceCue: 'cómodo-duro: rápido pero sin colapsar',
+    note: 'Acondicionamiento de esta fase: umbral — intervalos y For Time de duración media a ritmo "cómodo-duro", justo por debajo de acumular demasiado lactato.',
+  },
+  3: {
+    system: 'potencia',
+    label: 'Potencia anaeróbica',
+    monoFloor: 1,
+    preferFormats: ['forTime', 'emom', 'risingLoadInterval', 'risingInterval'],
+    durationScale: 0.9,
+    paceCue: 'máximo esfuerzo en piezas cortas',
+    note: 'Acondicionamiento de esta fase: potencia anaeróbica — piezas cortas y máximas, estilo competición. Menos volumen, más intensidad.',
+  },
+  4: {
+    system: 'recuperacion',
+    label: 'Recuperación aeróbica',
+    monoFloor: 2,
+    preferFormats: ['amrap', 'interval'],
+    durationScale: 0.9,
+    paceCue: 'suave, para recuperar — nunca al límite',
+    note: 'Acondicionamiento de esta fase: recuperación aeróbica — cardio suave y continuo para bajar fatiga, nunca cerca del fallo.',
+  },
+};
+
+export function resolveEnergySystem(week: 1 | 2 | 3 | 4): EnergySystemPlan {
+  return ENERGY_SYSTEM_BY_WEEK[week];
+}
+
 /**
  * Generador de nombres propios para WODs custom — vocabulario original, no tomado de
  * ningun programa de pago. Da al WOD del dia identidad, igual que un coach de verdad

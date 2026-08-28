@@ -48,11 +48,14 @@ import {
   generateWodName,
   getWodDomain,
   pickSmartBenchmark,
+  resolveEnergySystem,
   RISING_LOAD_INTERVAL_INCREMENT_PERCENT,
   RISING_LOAD_INTERVAL_STEPS,
   WOD_BARBELL_LOAD_PERCENT,
   WOD_PRESCRIPTION,
   WOD_TIME_DOMAIN,
+  type WodFormatKind,
+  type WodTimeDomain,
 } from './wodDomains';
 import {
   computeAcwr,
@@ -129,21 +132,6 @@ const ACCESSORY_METHOD_NOTE: Record<AccessoryMethod, string> = {
   giantSet: 'Encadena los movimientos sin descanso entre ellos; descansa solo al terminar la ronda completa.',
   superset: 'Alterna ambos movimientos con el mínimo descanso entre ellos — descansa al completar la pareja.',
 };
-
-type WodFormatKind =
-  | 'forTime'
-  | 'amrap'
-  | 'emom'
-  | 'interval'
-  | 'ladder'
-  | 'chipper'
-  | 'descendingLadder'
-  | 'ascendingLadder'
-  | 'risingInterval'
-  | 'risingLoadInterval'
-  | 'descendingLadderFiller'
-  | 'ascendingLadderFiller'
-  | 'barbellComplex';
 
 const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   forTime: 'Estímulo de intensidad — controla el ritmo en las primeras rondas para no colapsar al final.',
@@ -998,8 +986,18 @@ function buildWodBlock(
   const filtered = getMovementsByBlock('wod').filter((m) => !excludePatterns.has(m.pattern));
   const pool = filtered.length >= 3 ? filtered : getMovementsByBlock('wod');
 
-  const timeDomain = WOD_TIME_DOMAIN[week];
+  const baseDomain = WOD_TIME_DOMAIN[week];
   const isPeakWeek = week === 3;
+
+  // Periodizacion del acondicionamiento: la fase del macrociclo marca el sistema energetico
+  // (base aerobica -> umbral -> potencia -> recuperacion), que ajusta la duracion sobre el time
+  // domain de la semana, empuja mas o menos cardio ciclico y sesga que formatos salen.
+  const energy = resolveEnergySystem(week);
+  const timeDomain: WodTimeDomain = {
+    rounds: Math.max(2, Math.round(baseDomain.rounds * energy.durationScale)),
+    amrapMin: Math.max(6, Math.round(baseDomain.amrapMin * energy.durationScale)),
+    emomMin: Math.max(6, Math.round(baseDomain.emomMin * energy.durationScale)),
+  };
 
   // Semana pico: formatos cortos e intensos, sin chipper largo ni escalera de acumulacion de volumen.
   // Rampa de vuelta: mismo criterio que la semana pico, por la razon contraria — nada de formatos
@@ -1023,9 +1021,14 @@ function buildWodBlock(
           { label: `${timeDomain.rounds} Rondas — Tríada de barra`, kind: 'barbellComplex' as WodFormatKind },
         ]),
   ];
+  // Sesgo de formato por sistema energetico: los formatos que la fase favorece pesan ~3x, sin
+  // excluir el resto (misma filosofia que pickVariedWithPreference). Opera dentro de la lista ya
+  // filtrada por pico/rampa, asi que nunca reintroduce un formato descartado.
+  const preferredFormats = regularFormats.filter((f) => energy.preferFormats.includes(f.kind));
+  const formatPool = preferredFormats.length > 0 ? [...regularFormats, ...preferredFormats, ...preferredFormats] : regularFormats;
   const chosenFormat = isChipperDay
     ? { label: 'Chipper — 1 ronda completa', kind: 'chipper' as WodFormatKind }
-    : regularFormats[Math.floor(Math.random() * regularFormats.length)];
+    : formatPool[Math.floor(Math.random() * formatPool.length)];
   // Escalera compartida, ascendente o descendente — misma pareja de movimientos, misma cifra de
   // reps para los dos, solo cambia si cuenta hacia arriba o hacia abajo (Fran/Diane/Elizabeth son
   // descendentes; "Climb the Ladder" es la version ascendente del mismo patron).
@@ -1035,11 +1038,13 @@ function buildWodBlock(
 
   const resistenciaGoal = pickPriorityGoal(goals, (g) => g.type === 'elevar-resistencia');
   const resistenciaProgress = resistenciaGoal ? getGoalProgress(resistenciaGoal, history) : 0;
-  let monoTarget = 1;
+  // Suelo de cardio ciclico por fase (base aerobica y descarga empujan 2 monoestructurales); un
+  // objetivo de resistencia puede subirlo mas.
+  let monoTarget = energy.monoFloor;
   if (resistenciaGoal) {
     const emphasisTarget = resistenciaGoal.emphasis === 'intensivo' ? 2 : 1;
     const progressTarget = resistenciaProgress > 0.5 ? 2 : 1;
-    monoTarget = Math.max(emphasisTarget, progressTarget);
+    monoTarget = Math.max(monoTarget, emphasisTarget, progressTarget);
   }
 
   // Mismo mecanismo de sesgo que ya usan fuerza y skill (goalPreference + pickVariedWithPreference):
@@ -1061,7 +1066,8 @@ function buildWodBlock(
 
   const title = generateWodName();
   const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
-  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`;
+  const energyNote = ` Enfoque de hoy (${energy.label}): ${energy.paceCue}.`;
+  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}${energyNote}`;
 
   if (chosenFormat.kind === 'barbellComplex') {
     const usedForComplex = new Set(recentIds);
@@ -1553,7 +1559,9 @@ export function generateDailySession(
       : dayEmphasis === 'metcon'
         ? 'Hoy es día de metcon — sin fuerza pesada ni oly, para afilar tu condición física de cara al pico.'
         : undefined;
-  const coachReasons = Array.from(new Set(collectReasons(deloadNote, emphasisNote, ...strengthReasons, ...olyReasons)));
+  // Enfoque de acondicionamiento de la fase (sistema energetico) — solo si hoy hay WOD.
+  const energyReason = doWod ? resolveEnergySystem(week).note : undefined;
+  const coachReasons = Array.from(new Set(collectReasons(deloadNote, emphasisNote, energyReason, ...strengthReasons, ...olyReasons)));
 
   return {
     date: dateIso,
