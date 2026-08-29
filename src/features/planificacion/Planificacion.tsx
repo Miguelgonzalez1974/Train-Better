@@ -202,15 +202,21 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       });
   }, [session, setFeedbackLog]);
 
-  /** Fracción del PR de referencia (raíz o variante) que representaba la carga prescrita, para calibrar sensación vs. intensidad. */
-  function resolveSetFeedbackPct(block: SessionBlockResult, prescribedKg: number): number | undefined {
+  /**
+   * Clave de PR y % del 1RM del levantamiento valorado. La clave se resuelve igual que en el motor
+   * (`resolveStrengthPRKey/resolveOlyPRKey ?? resolveVariantPRKey`) para que `computeResponseProfile`
+   * agregue la sensación bajo la misma clave con la que el motor prescribe ese lift.
+   */
+  function resolveSetFeedbackTarget(block: SessionBlockResult, prescribedKg: number): { prKey?: string; pctOf1rm?: number } {
     const movement = getMovementById(block.movementId);
-    if (!movement) return undefined;
-    const variantKey = resolveVariantPRKey(movement);
+    if (!movement) return {};
     const rootKey = (block.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
-    const pr =
-      variantKey && profile.variantPrs?.[variantKey] ? profile.variantPrs[variantKey]! : rootKey ? profile.prs[rootKey] : 0;
-    return pr > 0 ? Math.round((prescribedKg / pr) * 100) / 100 : undefined;
+    const variantKey = resolveVariantPRKey(movement);
+    const prKey = rootKey ?? variantKey ?? undefined;
+    if (!prKey) return {};
+    const pr = rootKey ? profile.prs[rootKey] : profile.variantPrs?.[variantKey!];
+    const pctOf1rm = pr && pr > 0 ? Math.round((prescribedKg / pr) * 100) / 100 : undefined;
+    return { prKey, pctOf1rm };
   }
 
   function handleSetFeedback(index: number, feel: SetFeel) {
@@ -223,6 +229,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
     if (prescribedKg <= 0 || prescribedSets < 2) return;
 
+    const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
     athleteRepository.appendSetFeedbackEntry({
       date: session.date,
       movementId: block.movementId,
@@ -231,7 +238,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       prescribedReps,
       prescribedSets,
       feel,
-      pctOf1rm: resolveSetFeedbackPct(block, prescribedKg),
+      prKey,
+      pctOf1rm,
     });
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
 

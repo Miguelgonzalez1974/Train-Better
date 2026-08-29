@@ -86,6 +86,7 @@ import {
   computeResponseProfile,
   engineResponseProfile,
   liftTierFor,
+  setFeelLoadFactor,
   stalledOlyFamily,
   stalledStrengthPattern,
   type ResponseProfile,
@@ -490,6 +491,16 @@ function buildStrengthBlock(
     ? liftTierFor(responseProfile, todayLiftKey) === 'lento' || liftTierFor(responseProfile, todayLiftKey) === 'regresion'
     : false;
 
+  // Perfil de respuesta: calibracion de carga por el feedback en caliente de la 1ª serie de este
+  // mismo levantamiento (ver `setFeelLoadFactor`). Factor acotado [0.94, 1.04]; 1 = sin efecto.
+  const setFeelFactor = setFeelLoadFactor(responseProfile, todayLiftKey);
+  const setFeelNote =
+    setFeelFactor < 1
+      ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
+      : setFeelFactor > 1
+        ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
+        : '';
+
   const currentPR = resolveStrengthPR(movement, prs, variantPrs);
   const goalTag =
     pref.movementId && movement.id === pref.movementId
@@ -533,8 +544,8 @@ function buildStrengthBlock(
           readinessIsLow: readiness.isLow,
         });
   const tempoNote = tempo ? ` Tempo ${tempo} — ${describeTempoNotation(tempo)}.` : '';
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${responseTag}${weakPointTag}${imbalanceTag}${painTag}${reintroNote}${fatigueNote}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
-  const reasons = collectReasons(responseTag, weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${responseTag}${setFeelNote}${weakPointTag}${imbalanceTag}${painTag}${reintroNote}${fatigueNote}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
+  const reasons = collectReasons(responseTag, setFeelNote, weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
@@ -546,7 +557,7 @@ function buildStrengthBlock(
           format: STRENGTH_SCHEME_LABEL.ascendingLadder,
           sets: 3,
           reps: '5-3-1',
-          loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor),
+          loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor),
           notes,
         },
       ],
@@ -565,7 +576,7 @@ function buildStrengthBlock(
           format: STRENGTH_SCHEME_LABEL.volumeSets,
           sets: scheme.sets + 1,
           reps: String(scheme.reps + 4),
-          loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor),
+          loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor),
           notes,
           ...(tempo ? { tempo } : {}),
         },
@@ -575,7 +586,7 @@ function buildStrengthBlock(
     };
   }
 
-  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor * fatigueFactor);
+  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor);
   return {
     blocks: [
       {
@@ -734,7 +745,16 @@ function buildOlyBlock(
   }
 
   const scheme = OLY_WEEK_SCHEMES[week];
-  const loadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor);
+  // Perfil de respuesta: calibracion de carga por el feedback en caliente de la 1ª serie de este lift.
+  const olyLiftKey = resolveOlyPRKey(movement) ?? resolveVariantPRKey(movement);
+  const setFeelFactor = setFeelLoadFactor(responseProfile, olyLiftKey);
+  const setFeelNote =
+    setFeelFactor < 1
+      ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
+      : setFeelFactor > 1
+        ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
+        : '';
+  const loadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor);
   const baseNote =
     (pref.movementId && movement.id === pref.movementId
       ? `${scheme.coachNote}${
@@ -742,12 +762,13 @@ function buildOlyBlock(
         }`
       : scheme.coachNote) +
     responseTag +
+    setFeelNote +
     weakPointTag +
     reintroNote +
     fatigueNote +
     rampNote +
     (autoregNote ? ` ${autoregNote}` : '');
-  const reasons = collectReasons(responseTag, weakPointTag, reintroNote, fatigueNote, rampNote, autoregNote);
+  const reasons = collectReasons(responseTag, setFeelNote, weakPointTag, reintroNote, fatigueNote, rampNote, autoregNote);
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).
@@ -1606,7 +1627,7 @@ export function generateDailySession(
   // Perfil de respuesta del atleta (ver responseProfile.ts) — el motor solo lo aplica cuando hay
   // datos suficientes (`engineResponseProfile` devuelve el neutro si no). Individualiza: cuanto se
   // fia del RPE, sesgo de reporte, ritmo de progreso por lift, y velocidad de recuperacion.
-  const responseProfile = engineResponseProfile(computeResponseProfile(history, profile.prLog, date));
+  const responseProfile = engineResponseProfile(computeResponseProfile(history, profile.prLog, date, profile.setFeedbackLog));
   const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goals, date, responseProfile.recovery.tier);
   const isTaper = isTaperActive(goals, date);
   const testDayFocus = resolveTestDayFocus(week);

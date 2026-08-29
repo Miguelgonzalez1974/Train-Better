@@ -115,7 +115,8 @@ export function buildNextMacroSuggestion(
   // Perfil de respuesta: a un atleta de recuperacion lenta se le deja una semana mas de descarga en
   // el proximo bloque — quitandola de intensificacion (la fase mas prescindible para el), o de
   // acumulacion si intensificacion ya esta en su minimo.
-  const slowRecovery = engineResponseProfile(computeResponseProfile(history, profile.prLog, today)).recovery.tier === 'lento';
+  const slowRecovery =
+    engineResponseProfile(computeResponseProfile(history, profile.prLog, today, profile.setFeedbackLog)).recovery.tier === 'lento';
 
   let suggestedPhaseWeeks: [number, number, number, number] | undefined;
   let recoveryNote: string | undefined;

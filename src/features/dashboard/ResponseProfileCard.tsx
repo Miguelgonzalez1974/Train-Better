@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Fingerprint, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
-import type { PrLogEntry, SessionHistoryEntry } from '../../data/athlete/types';
-import { computeResponseProfile, RESPONSE_MIN_WEEKS, type LiftTier, type ResponseProfile } from '../../engine/responseProfile';
+import type { PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../../data/athlete/types';
+import {
+  computeResponseProfile,
+  RESPONSE_MIN_WEEKS,
+  type LiftTier,
+  type ResponseProfile,
+  type SetFeelCalibration,
+} from '../../engine/responseProfile';
 
 const TIER_META: Record<LiftTier, { label: string; className: string; Icon: typeof TrendingUp }> = {
   rapido: { label: 'progresa rápido', className: 'text-emerald-400', Icon: TrendingUp },
@@ -33,6 +39,18 @@ function recoveryLine(rec: ResponseProfile['recovery']): string | null {
   return `Recuperas ${word} tras un pico de carga (~${Math.round(rec.avgDays)} días, ${cyc}).${extra}`;
 }
 
+/** Descripción corta de la calibración por feedback de la 1ª serie de un levantamiento. */
+function setFeelDescriptor(c: SetFeelCalibration): { text: string; className: string } {
+  const pct = Math.round(Math.abs(c.loadFactor - 1) * 100);
+  if (c.feelBias >= 0.6) {
+    return { text: pct > 0 ? `suele costarte · −${pct}% de carga` : 'suele costarte', className: 'text-amber-400' };
+  }
+  if (c.feelBias <= -0.4) {
+    return { text: pct > 0 ? `te sobra margen · +${pct}% de carga` : 'te sobra margen', className: 'text-emerald-400' };
+  }
+  return { text: 'va al punto', className: 'text-neutral-300' };
+}
+
 function rxLine(rx: ResponseProfile['rx']): string | null {
   if (!rx.trend) return null;
   if (rx.trend === 'subiendo') return 'Escalas menos que hace un mes — aguantas mejor las cargas prescritas.';
@@ -44,15 +62,31 @@ function rxLine(rx: ResponseProfile['rx']): string | null {
 function headline(profile: ResponseProfile): string {
   const stalled = profile.perLift.find((l) => l.tier === 'regresion') ?? profile.perLift.find((l) => l.tier === 'lento');
   if (stalled) return `${stalled.label} ${TIER_META[stalled.tier].label} — el coach le da más frecuencia.`;
+  const feelAdj = profile.setFeel.find((c) => Math.abs(c.loadFactor - 1) >= 0.02);
+  if (feelAdj) {
+    const dir = feelAdj.loadFactor < 1 ? 'baja' : 'sube';
+    return `Por tus valoraciones de la 1ª serie, el coach ${dir} la carga de ${feelAdj.label}.`;
+  }
   if (profile.rpe.reliability < 0.85) return 'Tus RPE dan poca señal — el coach se apoya más en el ACWR.';
   const fast = profile.perLift.find((l) => l.tier === 'rapido');
   if (fast) return `${fast.label} ${fmtRate(fast.ratePerMonthPct)} — vas bien.`;
   return 'El coach ya conoce tu forma de responder y ajusta en consecuencia.';
 }
 
-export function ResponseProfileCard({ history, prLog }: { history: SessionHistoryEntry[]; prLog: PrLogEntry[] }) {
+export function ResponseProfileCard({
+  history,
+  prLog,
+  setFeedbackLog,
+}: {
+  history: SessionHistoryEntry[];
+  prLog: PrLogEntry[];
+  setFeedbackLog: SetFeedbackEntry[];
+}) {
   const [collapsed, setCollapsed] = useState(true);
-  const profile = useMemo(() => computeResponseProfile(history, prLog), [history, prLog]);
+  const profile = useMemo(
+    () => computeResponseProfile(history, prLog, new Date(), setFeedbackLog),
+    [history, prLog, setFeedbackLog],
+  );
 
   const weeks = Math.floor(profile.dataWeeks);
   const rec = recoveryLine(profile.recovery);
@@ -85,7 +119,9 @@ export function ResponseProfileCard({ history, prLog }: { history: SessionHistor
             <p className="text-xs leading-relaxed text-neutral-300">
               {profile.confident
                 ? headline(profile)
-                : `El coach lleva ${weeks} de ${RESPONSE_MIN_WEEKS} semanas conociéndote. Observa cómo respondes — todavía no ajusta nada.`}
+                : profile.setFeel.length > 0
+                  ? `El coach lleva ${weeks} de ${RESPONSE_MIN_WEEKS} semanas conociéndote — de momento solo ajusta la carga por tus valoraciones de la 1ª serie.`
+                  : `El coach lleva ${weeks} de ${RESPONSE_MIN_WEEKS} semanas conociéndote. Observa cómo respondes — todavía no ajusta nada.`}
             </p>
           </div>
         </div>
@@ -96,7 +132,8 @@ export function ResponseProfileCard({ history, prLog }: { history: SessionHistor
           {!profile.confident && (
             <div>
               <p className="mb-1.5 text-[11px] text-neutral-500">
-                El coach necesita ~{RESPONSE_MIN_WEEKS} semanas de historial para individualizar tu programación. Hasta entonces solo observa.
+                El coach necesita ~{RESPONSE_MIN_WEEKS} semanas de historial para individualizar el resto de tu programación
+                {profile.setFeel.length > 0 ? ' — la carga por feedback de la 1ª serie ya se ajusta.' : '. Hasta entonces solo observa.'}
               </p>
               <div className="h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
                 <div
@@ -135,6 +172,26 @@ export function ResponseProfileCard({ history, prLog }: { history: SessionHistor
               </ul>
             )}
           </div>
+
+          {profile.setFeel.length > 0 && (
+            <div className="border-l-2 border-brand-neon/40 py-1 pl-3">
+              <p className="text-[13px] font-semibold text-white">Primeras series</p>
+              <p className="mb-1 text-[11px] leading-relaxed text-neutral-500">
+                Cómo te vienen las cargas prescritas, según lo que marcas tras la 1ª serie.
+              </p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {profile.setFeel.map((c) => {
+                  const d = setFeelDescriptor(c);
+                  return (
+                    <li key={c.key} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-neutral-300">{c.label}</span>
+                      <span className={`font-semibold ${d.className}`}>{d.text}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           {rec && (
             <div className="border-l-2 border-brand-neon/40 py-1 pl-3">

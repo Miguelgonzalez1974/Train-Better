@@ -75,6 +75,13 @@ export interface SetFeedbackEntry {
   prescribedSets: number;
   /** Sensacion reportada tras la primera serie de trabajo. */
   feel: SetFeel;
+  /**
+   * Clave de PR a la que pertenece este levantamiento (`keyof PersonalRecords` o
+   * `keyof VariantPersonalRecords`), resuelta igual que la usa el motor — para que
+   * `computeResponseProfile` pueda agregar la sensacion por levantamiento y el motor ajustar su
+   * carga de trabajo. Ausente si el movimiento no mapea a ninguna clave de PR.
+   */
+  prKey?: string;
   /** Fraccion del PR de referencia que representaba `prescribedKg` (0-1), si se pudo resolver — para calibrar sensacion vs. intensidad real. */
   pctOf1rm?: number;
 }

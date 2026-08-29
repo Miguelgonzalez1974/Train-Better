@@ -1,6 +1,7 @@
-import type { PrLogEntry, SessionHistoryEntry } from '../data/athlete/types';
+import type { PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../data/athlete/types';
 import type { MovementPattern } from '../data/movements/types';
 import { computeAcwr, daysBetween } from './loadMetrics';
+import { SET_FEEL_SCORE } from './setFeedback';
 
 /**
  * Perfil de respuesta del atleta: lo que un coach de verdad aprende de alguien tras 2-3 meses —
@@ -14,6 +15,21 @@ import { computeAcwr, daysBetween } from './loadMetrics';
 /** Semanas de historial a partir de las cuales el motor empieza a fiarse del perfil. */
 export const RESPONSE_MIN_WEEKS = 8;
 export const RESPONSE_MIN_SESSIONS = 20;
+
+/**
+ * Via rapida a `confident`: un atleta que ademas valora sus primeras series en cada sesion le da
+ * al coach una senal mucho mas densa que un solo RPE al dia — con datos de sobra para individualizar
+ * antes de las 8 semanas. Sigue exigiendo varias semanas y muchas sesiones; solo adelanta el momento.
+ */
+const RESPONSE_FAST_WEEKS = 5;
+const RESPONSE_FAST_SESSIONS = 14;
+const RESPONSE_FAST_SETFEEL = 16;
+
+/** Feedback de la 1ª serie: valoraciones minimas por levantamiento y cuantas de las mas recientes se promedian. */
+const SETFEEL_MIN_OBS = 4;
+const SETFEEL_RECENT = 8;
+/** Cada punto de sensacion media (justo = 0, "muy duro" = +2) mueve la carga de trabajo ~3%, acotado a [-6%, +4%]. */
+const SETFEEL_KG_PER_POINT = 0.03;
 
 /** RPE: sesiones minimas en cada cubo (semanas duras / semanas suaves) para medir si el RPE discrimina. */
 const RPE_MIN_PER_BUCKET = 3;
@@ -51,6 +67,17 @@ export interface LiftResponse {
   tier: LiftTier;
 }
 
+export interface SetFeelCalibration {
+  /** Clave de PR (`keyof PersonalRecords` o `keyof VariantPersonalRecords`). */
+  key: string;
+  label: string;
+  /** Media de la sensacion de la 1ª serie: justo = 0, "me sobro" = -1, "duro" = +1, "muy duro" = +2 (ultimas ~8). */
+  feelBias: number;
+  observations: number;
+  /** Factor de carga acotado que el motor aplica a la serie de trabajo de este levantamiento (<1 baja, >1 sube). */
+  loadFactor: number;
+}
+
 export interface ResponseProfile {
   /** Semanas de historial disponibles. */
   dataWeeks: number;
@@ -65,6 +92,14 @@ export interface ResponseProfile {
   };
   /** Ritmo de progreso por levantamiento (solo los que tienen datos suficientes en `prLog`). */
   perLift: LiftResponse[];
+  /**
+   * Calibracion de carga por levantamiento a partir del feedback de la 1ª serie (`setFeedbackLog`) —
+   * si el atleta marca "me sobro" repetido en un lift, su peso de trabajo va corto y se sube un poco;
+   * si marca "duro/muy duro", se baja. Solo lifts con >= `SETFEEL_MIN_OBS` valoraciones recientes.
+   * A diferencia del resto del perfil, esto sigue vivo aunque `confident` sea false: es una senal
+   * directa que el atleta da a proposito y va acotada por lift.
+   */
+  setFeel: SetFeelCalibration[];
   recovery: {
     tier: RecoveryTier | null;
     avgDays: number | null;
@@ -196,6 +231,34 @@ function analyzeRecovery(history: SessionHistoryEntry[]): ResponseProfile['recov
   return { tier, avgDays, cycles: windows.length };
 }
 
+/**
+ * Calibracion de carga por levantamiento a partir del feedback en caliente de la 1ª serie. Agrupa
+ * por `prKey` (la clave de PR que el motor usara al prescribir ese lift), promedia la sensacion de
+ * las valoraciones mas recientes y la traduce a un factor de carga muy acotado. Un `feelBias`
+ * positivo (mas duro que "justo") baja la carga; negativo la sube.
+ */
+function analyzeSetFeel(log: SetFeedbackEntry[]): SetFeelCalibration[] {
+  const byKey = new Map<string, SetFeedbackEntry[]>();
+  for (const entry of log) {
+    if (!entry.prKey) continue;
+    const list = byKey.get(entry.prKey) ?? [];
+    list.push(entry);
+    byKey.set(entry.prKey, list);
+  }
+
+  const out: SetFeelCalibration[] = [];
+  for (const [key, raw] of byKey) {
+    const recent = [...raw].sort((a, b) => a.date.localeCompare(b.date)).slice(-SETFEEL_RECENT);
+    if (recent.length < SETFEEL_MIN_OBS) continue;
+    const feelBias = mean(recent.map((e) => SET_FEEL_SCORE[e.feel]));
+    const loadFactor = clamp(1 - feelBias * SETFEEL_KG_PER_POINT, 0.94, 1.04);
+    out.push({ key, label: PR_KEY_LABEL[key] ?? key, feelBias, observations: recent.length, loadFactor });
+  }
+  // El levantamiento que peor lo pasa primero (feelBias mas alto).
+  out.sort((a, b) => b.feelBias - a.feelBias);
+  return out;
+}
+
 /** Tendencia de la tasa de sesiones Rx (¿escala menos que antes?). */
 function analyzeRx(history: SessionHistoryEntry[]): ResponseProfile['rx'] {
   if (history.length < RX_MIN_SESSIONS) return { trend: null, recentRate: null };
@@ -213,16 +276,22 @@ export function computeResponseProfile(
   history: SessionHistoryEntry[],
   prLog: PrLogEntry[] | undefined,
   today: Date = new Date(),
+  setFeedbackLog: SetFeedbackEntry[] = [],
 ): ResponseProfile {
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
   const dataWeeks = sorted.length > 0 ? Math.max(0, daysBetween(sorted[0].date, today) / 7) : 0;
-  const confident = dataWeeks >= RESPONSE_MIN_WEEKS && sorted.length >= RESPONSE_MIN_SESSIONS;
+  const confident =
+    (dataWeeks >= RESPONSE_MIN_WEEKS && sorted.length >= RESPONSE_MIN_SESSIONS) ||
+    (dataWeeks >= RESPONSE_FAST_WEEKS &&
+      sorted.length >= RESPONSE_FAST_SESSIONS &&
+      setFeedbackLog.length >= RESPONSE_FAST_SETFEEL);
 
   return {
     dataWeeks,
     confident,
     rpe: analyzeRpe(sorted),
     perLift: analyzePerLift(prLog ?? []),
+    setFeel: analyzeSetFeel(setFeedbackLog),
     recovery: analyzeRecovery(sorted),
     rx: analyzeRx(sorted),
   };
@@ -234,18 +303,34 @@ export const NEUTRAL_RESPONSE_PROFILE: ResponseProfile = {
   confident: false,
   rpe: { reliability: 1, bias: 0, observations: 0 },
   perLift: [],
+  setFeel: [],
   recovery: { tier: null, avgDays: null, cycles: 0 },
   rx: { trend: null, recentRate: null },
 };
 
-/** El perfil que el motor debe aplicar: el real si `confident`, si no el neutro. */
+/**
+ * El perfil que el motor debe aplicar: el real si `confident`, si no el neutro — salvo `setFeel`,
+ * que se conserva siempre. La calibracion por feedback de la 1ª serie va acotada por lift y con su
+ * propio minimo de observaciones, y es una senal que el atleta da a proposito: no necesita esperar
+ * a las 8 semanas del resto del perfil.
+ */
 export function engineResponseProfile(profile: ResponseProfile): ResponseProfile {
-  return profile.confident ? profile : NEUTRAL_RESPONSE_PROFILE;
+  if (profile.confident) return profile;
+  return { ...NEUTRAL_RESPONSE_PROFILE, setFeel: profile.setFeel };
 }
 
 /** tier de progreso de una clave de PR concreta, o null si no hay dato suficiente. */
 export function liftTierFor(profile: ResponseProfile, key: string): LiftTier | null {
   return profile.perLift.find((l) => l.key === key)?.tier ?? null;
+}
+
+/**
+ * Factor de carga [0.94, 1.04] a aplicar a la serie de trabajo de un levantamiento segun como el
+ * atleta ha venido valorando su 1ª serie. 1 (sin efecto) si no hay clave o no hay datos suficientes.
+ */
+export function setFeelLoadFactor(profile: ResponseProfile, key: string | null | undefined): number {
+  if (!key) return 1;
+  return profile.setFeel.find((c) => c.key === key)?.loadFactor ?? 1;
 }
 
 const STALLED_TIERS = new Set<LiftTier>(['lento', 'regresion']);
