@@ -155,6 +155,33 @@ function allocateEnergySystems(wodSlotCount: number, phase: 1 | 2 | 3 | 4, rand:
   return spaceOutByCount(shuffle(bag, rand));
 }
 
+/**
+ * Sistema energetico del WOD por `trainingDayIndex` para una semana concreta del macrociclo. La fase
+ * fija el dominante (`PHASE_DOMINANT_ENERGY`) y los dias de WOD rotan a su alrededor (ver
+ * `PHASE_ENERGY_MENU`). Los slots sin WOD generado (dia de recuperacion de n=6) llevan el dominante
+ * como relleno inocuo.
+ *
+ * PRNG propio sembrado en `${macroId}:${weekNumber}:energy` — NO comparte el flujo con el reparto de
+ * fuerza/oly, asi que este resultado se puede reconstruir para cualquier semana pasada o futura solo
+ * con `(macroId, weekNumber, phase, trainingDaysPerWeek)`, sin conocer el estado del atleta ese dia.
+ * Eso lo usa el Dashboard (`conditioningBalance.ts`) para el reparto planificado del bloque.
+ */
+export function planEnergySystems(
+  macroId: string,
+  weekNumber: number,
+  phase: 1 | 2 | 3 | 4,
+  trainingDaysPerWeek: 3 | 4 | 5 | 6,
+): EnergySystem[] {
+  const rand = mulberry32(hashSeed(`${macroId}:${weekNumber}:energy`));
+  const wodSlots = wodDoingSlots(trainingDaysPerWeek);
+  const allocated = allocateEnergySystems(wodSlots.length, phase, rand);
+  const out: EnergySystem[] = Array.from({ length: trainingDaysPerWeek }, () => PHASE_DOMINANT_ENERGY[phase]);
+  wodSlots.forEach((slotIdx, i) => {
+    out[slotIdx] = allocated[i];
+  });
+  return out;
+}
+
 /** `trainingDayIndex` de los slots que de verdad haran bloque de fuerza esta semana. */
 function strengthDoingSlots(n: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4, weekNumber: number): number[] {
   const recoveryIdx = n === 6 ? 3 : -1;
@@ -263,16 +290,10 @@ export function buildMicrocyclePlan(input: {
     olyFamily[slotIdx] = i % 2 === 0 ? anchorFam : other(anchorFam);
   });
 
-  // Rotacion de dominios energeticos: la fase fija el sistema dominante (PHASE_DOMINANT_ENERGY) y
-  // dentro de la semana los dias rotan a su alrededor para no encadenar el mismo estimulo metabolico
-  // dos dias seguidos. Se asigna a cada dia que hara WOD; los demas (recuperacion de n=6) llevan el
-  // dominante como relleno inocuo. Consume `rand` DESPUES de fuerza/oly, asi que no altera su reparto.
-  const wodSlots = wodDoingSlots(n);
-  const allocatedEnergy = allocateEnergySystems(wodSlots.length, phase, rand);
-  const energySystem: EnergySystem[] = Array.from({ length: n }, () => PHASE_DOMINANT_ENERGY[phase]);
-  wodSlots.forEach((slotIdx, i) => {
-    energySystem[slotIdx] = allocatedEnergy[i];
-  });
+  // Rotacion de dominios energeticos: la fase fija el sistema dominante y los dias de WOD rotan a su
+  // alrededor para no encadenar el mismo estimulo metabolico dos dias seguidos. PRNG propio (ver
+  // `planEnergySystems`), independiente del flujo de fuerza/oly.
+  const energySystem = planEnergySystems(macroId, weekNumber, phase, n);
 
   return { weekNumber, phase, strengthPattern, olyFamily, energySystem };
 }

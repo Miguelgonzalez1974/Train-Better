@@ -17,6 +17,7 @@ import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
 import { ImbalancesCard } from './ImbalancesCard';
 import { computeImbalances } from '../../engine/imbalances';
 import { ResponseProfileCard } from './ResponseProfileCard';
+import { EnergyDomainsCard } from './EnergyDomainsCard';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -191,6 +192,14 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         setFeedbackLog={profile.setFeedbackLog ?? []}
         bodyweightLog={profile.bodyweightLog ?? []}
       />
+
+      {/*
+        "Cómo llevamos el acondicionamiento": reparto de los días de WOD del bloque por sistema
+        energético (rotación de fase planificada vs. hecho) + trifecta realizada. Fila propia como
+        ResponseProfileCard — es meta-info del macrociclo, colapsable, y devuelve null sin macro
+        activo (nada que emparejar entonces).
+      */}
+      <EnergyDomainsCard profile={profile} history={history} />
 
       {/*
         Emparejadas por altura natural, no por tipo de contenido: PRs+Constancia (268px/280px, las

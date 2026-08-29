@@ -1856,6 +1856,11 @@ export function generateDailySession(
   const energyReason = (plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week)).note;
   const coachReasons = Array.from(new Set(collectReasons(deloadNote, emphasisNote, energyReason, ...strengthReasons, ...olyReasons)));
 
+  // El sistema energetico del dia solo se atribuye cuando el WOD es de verdad el WOD rotativo — en
+  // un dia de benchmark (dia 0, o testeo extra de pico/objetivo) el estimulo lo manda el benchmark,
+  // no la rotacion de fase, asi que no cuenta para el reparto de dominios del Dashboard.
+  const wodIsBenchmark = wodBlock.some((b) => b.movementId.startsWith('benchmark:'));
+
   return {
     date: dateIso,
     mesocycleWeek: week,
@@ -1865,6 +1870,7 @@ export function generateDailySession(
     deloadNote,
     dayEmphasis: dayEmphasis === 'mixto' ? undefined : dayEmphasis,
     coachReasons: coachReasons.length > 0 ? coachReasons : undefined,
+    energySystem: wodIsBenchmark ? undefined : plannedEnergy ?? undefined,
     phaseWeekInPhase: phaseProgress.weekInPhase,
     phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
   };
@@ -2143,6 +2149,7 @@ export function toHistoryEntry(
   wodResult?: WodResult,
   testLoadKg?: number,
 ): SessionHistoryEntry {
+  const wodMovementIds = session.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
   return {
     date: session.date,
     mesocycleWeek: session.mesocycleWeek,
@@ -2152,5 +2159,7 @@ export function toHistoryEntry(
     durationMin,
     wodResult,
     testLoadKg,
+    wodMovementIds: wodMovementIds.length > 0 ? wodMovementIds : undefined,
+    energySystem: session.energySystem,
   };
 }

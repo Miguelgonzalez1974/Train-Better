@@ -276,6 +276,8 @@ export interface DailySession {
    * Ver `resolveDayEmphasis` en periodization.ts.
    */
   dayEmphasis?: 'fuerza' | 'metcon';
+  /** Sistema energetico del WOD de hoy (rotacion de dominios del microciclo) — solo con macrociclo activo y en dias no-benchmark. Ver `EnergySystem` en wodDomains.ts. */
+  energySystem?: 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
   /** En que semana de la fase actual del macrociclo cae hoy (1-indexado) — solo con macrociclo activo. */
   phaseWeekInPhase?: number;
   /** Duracion total en semanas de la fase actual — junto a `phaseWeekInPhase` da "semana 3 de 6". */
@@ -309,6 +311,18 @@ export interface SessionHistoryEntry {
   wodResult?: WodResult;
   /** Carga real levantada en un dia de test 1RM (fuerza u oly), si la sesion incluia uno */
   testLoadKg?: number;
+  /**
+   * movementIds solo del bloque WOD de esa sesion (no toda la sesion) — para el analisis de
+   * dominios de acondicionamiento sin tener que re-inferir que movimientos eran del metcon.
+   * Ausente en entradas anteriores a esta feature.
+   */
+  wodMovementIds?: string[];
+  /**
+   * Sistema energetico que el planificador asigno al WOD de ese dia — estructuralmente igual a
+   * `EnergySystem` de `src/engine/wodDomains.ts` (union inline aqui para no acoplar la capa de
+   * datos con el motor). Ausente en entradas anteriores a esta feature y en dias de benchmark.
+   */
+  energySystem?: 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
 }
 
 export const DEFAULT_PROFILE: AthleteProfile = {
