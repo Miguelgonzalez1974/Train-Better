@@ -1434,10 +1434,15 @@ function buildWarmupBlock(strengthPattern: MovementPattern, recentIds: Set<strin
   const olyPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes('especifico-oly'));
   const olyPicks = includeOly ? pickManyVaried(olyPool, 2, recentIds) : [];
 
-  const toEntries = (movs: Movement[], subgroup: string, notes: string): SessionBlockResult[] =>
-    movs.map((m) => ({ block: 'warmup', movementId: m.id, subgroup, notes }));
+  const toEntries = (movs: (Movement | undefined)[], subgroup: string, notes: string): SessionBlockResult[] =>
+    movs.filter((m): m is Movement => Boolean(m)).map((m) => ({ block: 'warmup', movementId: m.id, subgroup, notes }));
 
   return [
+    ...toEntries(
+      [getMovementById('crossover-symmetry'), getMovementById('hip-halo')],
+      'Activación',
+      'Ritual fijo antes de cada sesión: hombro/escápula (Crossover Symmetry) y glúteo/cadera (Hip Halo) activados, da igual lo que toque hoy.',
+    ),
     ...toEntries(wodEntries, 'Para el WOD', 'Activa el patrón de movimiento de hoy antes de cargar peso.'),
     ...toEntries(olyPicks, 'Para Oly', 'Prepara posición y movilidad de hombro antes de tocar la barra de trabajo.'),
   ];

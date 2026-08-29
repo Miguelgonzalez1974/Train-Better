@@ -2,6 +2,30 @@ import type { Movement } from './types';
 
 export const warmupMovements: Movement[] = [
   {
+    id: 'crossover-symmetry',
+    name: 'Crossover Symmetry (Activation)',
+    blocks: ['warmup'],
+    pattern: 'mobility',
+    equipment: ['sistema Crossover Symmetry o banda elastica anclada a la jaula'],
+    primaryMuscles: ['manguito rotador', 'estabilizadores de la escapula', 'deltoides posterior'],
+    standard:
+      'Protocolo "Activation": ~6-7 ejercicios de banda para hombro y escapula (pull-aparts, presses, remos, rotaciones externas, Y-T-W), 10-15 reps cada uno, tempo controlado. Prepara el hombro para el trabajo por encima de la cabeza y de empuje. Sin kit: band pull-aparts + face pulls + rotaciones externas con banda + dislocaciones.',
+    scaling: { easier: [], harder: [] },
+    tags: ['activacion'],
+  },
+  {
+    id: 'hip-halo',
+    name: 'Hip Halo Warm-up',
+    blocks: ['warmup'],
+    pattern: 'mobility',
+    equipment: ['mini-banda de resistencia'],
+    primaryMuscles: ['gluteo mayor', 'gluteo medio', 'rotadores externos de cadera'],
+    standard:
+      'Circuito de activacion de gluteo y cadera con mini-banda por encima de las rodillas o en los tobillos: paseos laterales, monster walks, puentes de gluteo, abducciones de pie y fire hydrants, 10-15 reps por lado. Enciende el gluteo y los rotadores de cadera antes de sentadilla, bisagra o carrera.',
+    scaling: { easier: [], harder: [] },
+    tags: ['activacion'],
+  },
+  {
     id: 'general-aerobic-warmup',
     name: 'Calentamiento Aerobico General',
     blocks: ['warmup'],
