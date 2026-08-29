@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Fingerprint, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
-import type { PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../../data/athlete/types';
+import type { BodyweightEntry, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../../data/athlete/types';
 import {
   computeResponseProfile,
   RESPONSE_MIN_WEEKS,
@@ -58,6 +58,21 @@ function rxLine(rx: ResponseProfile['rx']): string | null {
   return 'Tu tasa de Rx se mantiene estable.';
 }
 
+function bodyweightLine(bw: ResponseProfile['bodyweight']): { text: string; className: string } | null {
+  if (!bw.trend || bw.pctPerWeek === null) return null;
+  const pct = Math.abs(Math.round(bw.pctPerWeek * 10) / 10);
+  if (bw.trend === 'bajando') {
+    return {
+      text: `Estás perdiendo peso (~${pct}%/semana) durante un bloque de fuerza — el coach baja un poco la carga hasta que se estabilice.`,
+      className: 'text-amber-400',
+    };
+  }
+  if (bw.trend === 'subiendo') {
+    return { text: `Estás ganando peso (~${pct}%/semana) — buena base para ganar fuerza.`, className: 'text-emerald-400' };
+  }
+  return { text: 'Tu peso corporal se mantiene estable.', className: 'text-neutral-400' };
+}
+
 /** El titular de una linea, para la vista colapsada: lo mas accionable primero. */
 function headline(profile: ResponseProfile): string {
   const stalled = profile.perLift.find((l) => l.tier === 'regresion') ?? profile.perLift.find((l) => l.tier === 'lento');
@@ -67,6 +82,7 @@ function headline(profile: ResponseProfile): string {
     const dir = feelAdj.loadFactor < 1 ? 'baja' : 'sube';
     return `Por tus valoraciones de la 1ª serie, el coach ${dir} la carga de ${feelAdj.label}.`;
   }
+  if (profile.bodyweight.trend === 'bajando') return 'Estás perdiendo peso durante un bloque de fuerza — el coach baja un poco la carga.';
   if (profile.rpe.reliability < 0.85) return 'Tus RPE dan poca señal — el coach se apoya más en el ACWR.';
   const fast = profile.perLift.find((l) => l.tier === 'rapido');
   if (fast) return `${fast.label} ${fmtRate(fast.ratePerMonthPct)} — vas bien.`;
@@ -77,20 +93,23 @@ export function ResponseProfileCard({
   history,
   prLog,
   setFeedbackLog,
+  bodyweightLog,
 }: {
   history: SessionHistoryEntry[];
   prLog: PrLogEntry[];
   setFeedbackLog: SetFeedbackEntry[];
+  bodyweightLog: BodyweightEntry[];
 }) {
   const [collapsed, setCollapsed] = useState(true);
   const profile = useMemo(
-    () => computeResponseProfile(history, prLog, new Date(), setFeedbackLog),
-    [history, prLog, setFeedbackLog],
+    () => computeResponseProfile(history, prLog, new Date(), setFeedbackLog, bodyweightLog),
+    [history, prLog, setFeedbackLog, bodyweightLog],
   );
 
   const weeks = Math.floor(profile.dataWeeks);
   const rec = recoveryLine(profile.recovery);
   const rx = rxLine(profile.rx);
+  const bw = bodyweightLine(profile.bodyweight);
 
   return (
     <section className="card overflow-hidden p-0">
@@ -204,6 +223,13 @@ export function ResponseProfileCard({
             <div className="border-l-2 border-brand-neon/40 py-1 pl-3">
               <p className="text-[13px] font-semibold text-white">Escalado</p>
               <p className="text-[11px] leading-relaxed text-neutral-400">{rx}</p>
+            </div>
+          )}
+
+          {bw && (
+            <div className="border-l-2 border-brand-neon/40 py-1 pl-3">
+              <p className="text-[13px] font-semibold text-white">Peso corporal</p>
+              <p className={`text-[11px] leading-relaxed ${bw.className}`}>{bw.text}</p>
             </div>
           )}
         </div>

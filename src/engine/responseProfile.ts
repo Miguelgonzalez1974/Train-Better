@@ -1,4 +1,4 @@
-import type { PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../data/athlete/types';
+import type { BodyweightEntry, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../data/athlete/types';
 import type { MovementPattern } from '../data/movements/types';
 import { computeAcwr, daysBetween } from './loadMetrics';
 import { SET_FEEL_SCORE } from './setFeedback';
@@ -55,9 +55,19 @@ const RECOVERY_FAST_DAYS = 9;
 const RX_MIN_SESSIONS = 8;
 const RX_TREND_DELTA = 0.15;
 
+/** Peso corporal: puntos minimos y dias que deben abarcar para fiarse de una tendencia; ventana que se mira. */
+const BW_MIN_POINTS = 4;
+const BW_MIN_SPAN_DAYS = 21;
+const BW_WINDOW_DAYS = 42;
+/** Umbral de %/semana (sobre el peso medio) para considerar que sube o baja de verdad y no es ruido de bascula. */
+const BW_TREND_PCT_PER_WEEK = 0.5;
+/** Ajuste de carga cuando el atleta pierde peso durante un bloque de fuerza — menos margen de recuperacion. Solo baja. */
+const BW_LOAD_FACTOR_LOSING = 0.97;
+
 export type LiftTier = 'rapido' | 'normal' | 'lento' | 'regresion';
 export type RecoveryTier = 'rapido' | 'normal' | 'lento';
 export type RxTrend = 'subiendo' | 'estable' | 'bajando';
+export type BodyweightTrend = 'subiendo' | 'estable' | 'bajando';
 
 export interface LiftResponse {
   key: string;
@@ -110,6 +120,18 @@ export interface ResponseProfile {
     trend: RxTrend | null;
     /** Fraccion de sesiones Rx en la mitad reciente del historial. */
     recentRate: number | null;
+  };
+  /**
+   * Tendencia de peso corporal en las ultimas ~6 semanas. Un coach lo vigila: perder peso durante
+   * un bloque de fuerza es una senal de recuperacion/nutricion insuficiente y el motor baja algo la
+   * carga; ganar peso es buena base para ganar fuerza (no cambia nada, ya lo cubre la
+   * autorregulacion). null si no hay pesajes suficientes.
+   */
+  bodyweight: {
+    trend: BodyweightTrend | null;
+    /** Cambio con signo en % del peso medio por semana. */
+    pctPerWeek: number | null;
+    points: number;
   };
 }
 
@@ -259,6 +281,37 @@ function analyzeSetFeel(log: SetFeedbackEntry[]): SetFeelCalibration[] {
   return out;
 }
 
+/**
+ * Tendencia de peso corporal en la ventana reciente por regresion lineal simple sobre (dia, kg),
+ * expresada en % del peso medio por semana. Solo se clasifica como sube/baja si supera
+ * `BW_TREND_PCT_PER_WEEK` — por debajo es ruido de bascula.
+ */
+function analyzeBodyweight(log: BodyweightEntry[], today: Date): ResponseProfile['bodyweight'] {
+  const none = { trend: null, pctPerWeek: null, points: 0 } as const;
+  const recent = log
+    .filter((e) => e.kg > 0 && daysBetween(e.date, today) >= 0 && daysBetween(e.date, today) <= BW_WINDOW_DAYS)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (recent.length < BW_MIN_POINTS) return none;
+
+  const spanDays = daysBetween(recent[0].date, new Date(`${recent[recent.length - 1].date}T00:00:00`));
+  if (spanDays < BW_MIN_SPAN_DAYS) return none;
+
+  // Regresion lineal: x = dias desde el primer pesaje, y = kg.
+  const x0 = recent[0].date;
+  const xs = recent.map((e) => daysBetween(x0, new Date(`${e.date}T00:00:00`)));
+  const ys = recent.map((e) => e.kg);
+  const mx = mean(xs);
+  const my = mean(ys);
+  const denom = xs.reduce((s, x) => s + (x - mx) ** 2, 0);
+  if (denom === 0) return none;
+  const slopePerDay = xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0) / denom;
+  const pctPerWeek = ((slopePerDay * 7) / my) * 100;
+
+  const trend: BodyweightTrend =
+    pctPerWeek >= BW_TREND_PCT_PER_WEEK ? 'subiendo' : pctPerWeek <= -BW_TREND_PCT_PER_WEEK ? 'bajando' : 'estable';
+  return { trend, pctPerWeek, points: recent.length };
+}
+
 /** Tendencia de la tasa de sesiones Rx (¿escala menos que antes?). */
 function analyzeRx(history: SessionHistoryEntry[]): ResponseProfile['rx'] {
   if (history.length < RX_MIN_SESSIONS) return { trend: null, recentRate: null };
@@ -277,6 +330,7 @@ export function computeResponseProfile(
   prLog: PrLogEntry[] | undefined,
   today: Date = new Date(),
   setFeedbackLog: SetFeedbackEntry[] = [],
+  bodyweightLog: BodyweightEntry[] = [],
 ): ResponseProfile {
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
   const dataWeeks = sorted.length > 0 ? Math.max(0, daysBetween(sorted[0].date, today) / 7) : 0;
@@ -294,6 +348,7 @@ export function computeResponseProfile(
     setFeel: analyzeSetFeel(setFeedbackLog),
     recovery: analyzeRecovery(sorted),
     rx: analyzeRx(sorted),
+    bodyweight: analyzeBodyweight(bodyweightLog, today),
   };
 }
 
@@ -306,6 +361,7 @@ export const NEUTRAL_RESPONSE_PROFILE: ResponseProfile = {
   setFeel: [],
   recovery: { tier: null, avgDays: null, cycles: 0 },
   rx: { trend: null, recentRate: null },
+  bodyweight: { trend: null, pctPerWeek: null, points: 0 },
 };
 
 /**
@@ -322,6 +378,15 @@ export function engineResponseProfile(profile: ResponseProfile): ResponseProfile
 /** tier de progreso de una clave de PR concreta, o null si no hay dato suficiente. */
 export function liftTierFor(profile: ResponseProfile, key: string): LiftTier | null {
   return profile.perLift.find((l) => l.key === key)?.tier ?? null;
+}
+
+/**
+ * Factor de carga por tendencia de peso corporal: si el atleta viene perdiendo peso durante el
+ * bloque, el motor baja un poco la carga (menos recuperacion, menos palanca). Ganar o mantener peso
+ * no cambia nada — la autorregulacion ya cubre el dia a dia. Solo actua con perfil `confident`.
+ */
+export function bodyweightLoadFactor(profile: ResponseProfile): number {
+  return profile.bodyweight.trend === 'bajando' ? BW_LOAD_FACTOR_LOSING : 1;
 }
 
 /**

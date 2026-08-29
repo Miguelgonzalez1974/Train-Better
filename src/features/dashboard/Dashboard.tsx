@@ -185,7 +185,12 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         progreso por lift, recuperacion). Fila propia — es meta-informacion distinta a las demas
         tarjetas y colapsable, asi que no alarga el scroll estando plegada.
       */}
-      <ResponseProfileCard history={history} prLog={profile.prLog ?? []} setFeedbackLog={profile.setFeedbackLog ?? []} />
+      <ResponseProfileCard
+        history={history}
+        prLog={profile.prLog ?? []}
+        setFeedbackLog={profile.setFeedbackLog ?? []}
+        bodyweightLog={profile.bodyweightLog ?? []}
+      />
 
       {/*
         Emparejadas por altura natural, no por tipo de contenido: PRs+Constancia (268px/280px, las
