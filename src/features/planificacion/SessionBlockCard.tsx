@@ -252,8 +252,11 @@ function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
   );
 }
 
-/** Bloque oly con complejo (primer tecnico + levantamiento principal): una tarjeta con pasos A/B, no dos sueltas. */
-function OlyComplexCard({ entries }: { entries: SessionBlockResult[] }) {
+/**
+ * Bloque con pasos A/B en una sola tarjeta, no dos sueltas: el complejo de oly (primer técnico +
+ * levantamiento principal) y la superserie de fuerza (levantamiento principal + A2 antagonista).
+ */
+function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       <div className="flex flex-col gap-3">
@@ -269,11 +272,12 @@ function OlyComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                 <p className="font-bold leading-tight text-white">{movement.name}</p>
               </div>
 
-              {(entry.sets || entry.reps || entry.loadKg) && (
+              {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
                 <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
                   {entry.sets && <StatBox value={entry.sets} label="series" />}
                   {entry.reps && <StatBox value={entry.reps} label="reps" />}
                   {entry.loadKg && <StatBox value={`${entry.loadKg}`} label="kg" />}
+                  {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
                 </div>
               )}
 
@@ -503,8 +507,8 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
           <CooldownRoutineCard entries={results} />
         ) : block === 'warmup' ? (
           <WarmupRoutineCard entries={results} />
-        ) : block === 'oly' && results.length > 1 ? (
-          <OlyComplexCard entries={results} />
+        ) : (block === 'oly' || block === 'strength') && results.length > 1 ? (
+          <ComplexCard entries={results} />
         ) : block === 'accessory' && results[0]?.format ? (
           <AccessoryGroupCard entries={results} />
         ) : (

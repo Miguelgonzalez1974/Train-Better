@@ -128,7 +128,8 @@ function clampResponseBias(rpeBias: number): number {
 const ACCESSORY_COMPLEMENT: Partial<Record<MovementPattern, MovementPattern[]>> = {
   squat: ['hinge', 'lunge'],
   hinge: ['squat', 'core'],
-  horizontalPush: ['horizontalPull'],
+  // El A2 de la superserie ya cubre el tiron antagonista; el accesorio abre a core para no apilar 3 remos.
+  horizontalPush: ['horizontalPull', 'core'],
   verticalPush: ['horizontalPull', 'core'],
 };
 
@@ -138,6 +139,56 @@ const ACCESSORY_RATIONALE: Partial<Record<MovementPattern, string>> = {
   horizontalPush: 'Equilibrio empuje/tirón para proteger el hombro tras el press horizontal.',
   verticalPush: 'Equilibrio empuje/tirón y estabilidad de core tras el press vertical.',
 };
+
+/**
+ * Segundo movimiento (A2) que se empareja en superserie con el levantamiento principal de fuerza,
+ * por patron. Empuje -> su antagonista de tiron (equilibrio de hombro, estilo "bench + row" /
+ * "press + laterales"); tren inferior -> cadena posterior o unilateral. Ids del catalogo de
+ * accesorios.
+ */
+const STRENGTH_SUPERSET_POOL: Partial<Record<MovementPattern, string[]>> = {
+  horizontalPush: ['single-arm-dumbbell-row', 'pendlay-row', 'landmine-row', 'chest-supported-row'],
+  verticalPush: ['lateral-raise', 'face-pull', 'lat-pulldown', 'band-pull-apart'],
+  squat: ['good-morning', 'back-extension', 'hip-thrust', 'bulgarian-split-squat'],
+  hinge: ['ab-wheel-rollout', 'ghd-situp', 'weighted-plank', 'pallof-press'],
+};
+
+/**
+ * Cuanto de a menudo el bloque de fuerza lleva un A2 en superserie. El press y el bench se
+ * emparejan SIEMPRE con su tiron antagonista (salud de hombro); squat y peso muerto, con menos
+ * frecuencia. En pico y descarga (semanas 3-4) vuelve a un solo movimiento: se recorta volumen.
+ */
+function strengthSupersetChance(pattern: MovementPattern, week: 1 | 2 | 3 | 4): number {
+  if (week >= 3) return 0;
+  return pattern === 'horizontalPush' || pattern === 'verticalPush' ? 1 : 0.6;
+}
+
+/** El A2 del bloque de fuerza (superserie con el levantamiento principal), o null si hoy no toca. */
+function buildStrengthSuperset(
+  pattern: MovementPattern,
+  week: 1 | 2 | 3 | 4,
+  mainMovementId: string,
+  recentIds: Set<string>,
+  avoidedPatterns: Set<MovementPattern>,
+): SessionBlockResult | null {
+  if (Math.random() >= strengthSupersetChance(pattern, week)) return null;
+  const ids = STRENGTH_SUPERSET_POOL[pattern];
+  if (!ids) return null;
+  const pool = filterAvoidingPain(
+    ids.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+    avoidedPatterns,
+  );
+  const pick = pickVaried(pool, new Set([...recentIds, mainMovementId]));
+  if (!pick) return null;
+  return {
+    block: 'strength',
+    movementId: pick.id,
+    sets: 3,
+    reps: '10-12',
+    notes:
+      'Superserie con el levantamiento principal (A2): carga moderada, deja 2-3 repeticiones en reserva — equilibra el patrón y suma volumen sin restarle a la barra pesada.',
+  };
+}
 
 type AccessoryMethod = 'straightSets' | 'giantSet' | 'superset';
 
@@ -541,6 +592,11 @@ function buildStrengthBlock(
     };
   }
 
+  // Superserie: el A2 se empareja con el levantamiento principal (bench + remo, press + laterales…).
+  // Nunca en un dia de test. Los 3 estilos de esquema comparten el mismo A2.
+  const supersetEntry = buildStrengthSuperset(pattern, week, movement.id, recentIds, avoidedPatterns);
+  const withSuperset = (main: SessionBlockResult): SessionBlockResult[] => (supersetEntry ? [main, supersetEntry] : [main]);
+
   const scheme = STRENGTH_WEEK_SCHEMES[week];
   const style = pickStrengthSchemeStyle(week, todayLiftStalled);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
@@ -562,17 +618,15 @@ function buildStrengthBlock(
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
     return {
-      blocks: [
-        {
-          block: 'strength',
-          movementId: movement.id,
-          format: STRENGTH_SCHEME_LABEL.ascendingLadder,
-          sets: 3,
-          reps: '5-3-1',
-          loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor),
-          notes,
-        },
-      ],
+      blocks: withSuperset({
+        block: 'strength',
+        movementId: movement.id,
+        format: STRENGTH_SCHEME_LABEL.ascendingLadder,
+        sets: 3,
+        reps: '5-3-1',
+        loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor),
+        notes,
+      }),
       pattern,
       reasons,
     };
@@ -581,18 +635,16 @@ function buildStrengthBlock(
   if (style === 'volumeSets') {
     const volumePercent = Math.max(scheme.percent - 0.12, 0.45);
     return {
-      blocks: [
-        {
-          block: 'strength',
-          movementId: movement.id,
-          format: STRENGTH_SCHEME_LABEL.volumeSets,
-          sets: scheme.sets + 1,
-          reps: String(scheme.reps + 4),
-          loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor),
-          notes,
-          ...(tempo ? { tempo } : {}),
-        },
-      ],
+      blocks: withSuperset({
+        block: 'strength',
+        movementId: movement.id,
+        format: STRENGTH_SCHEME_LABEL.volumeSets,
+        sets: scheme.sets + 1,
+        reps: String(scheme.reps + 4),
+        loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor),
+        notes,
+        ...(tempo ? { tempo } : {}),
+      }),
       pattern,
       reasons,
     };
@@ -600,17 +652,15 @@ function buildStrengthBlock(
 
   const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor);
   return {
-    blocks: [
-      {
-        block: 'strength',
-        movementId: movement.id,
-        sets: scheme.sets,
-        reps: String(scheme.reps),
-        loadKg,
-        notes,
-        ...(tempo ? { tempo } : {}),
-      },
-    ],
+    blocks: withSuperset({
+      block: 'strength',
+      movementId: movement.id,
+      sets: scheme.sets,
+      reps: String(scheme.reps),
+      loadKg,
+      notes,
+      ...(tempo ? { tempo } : {}),
+    }),
     pattern,
     reasons,
   };
@@ -1343,7 +1393,11 @@ function buildAccessoryBlock(
 ): SessionBlockResult[] {
   const complementPatterns = ACCESSORY_COMPLEMENT[strengthPattern] ?? [];
   const filtered = getMovementsByBlock('accessory').filter((m) => complementPatterns.includes(m.pattern));
-  const pool = filterAvoidingPain(filtered.length > 0 ? filtered : getMovementsByBlock('accessory'), avoidedPatterns);
+  const painFiltered = filterAvoidingPain(filtered.length > 0 ? filtered : getMovementsByBlock('accessory'), avoidedPatterns);
+  // Excluye de raiz lo recien usado (incluido el A2 de la superserie de fuerza de hoy) mientras
+  // quede pool para elegir; si el pool ya es fino, se cae al normal — mejor repetir que quedarse corto.
+  const fresh = painFiltered.filter((m) => !recentIds.has(m.id));
+  const pool = fresh.length >= 3 ? fresh : painFiltered;
   const baseRationale = ACCESSORY_RATIONALE[strengthPattern] ?? 'Hipertrofia / accesorio complementario a la sesión de hoy.';
 
   // Un coach no repite siempre la misma metodologia: la mayoria de dias son series independientes,
@@ -1772,7 +1826,9 @@ export function generateDailySession(
     responseProfile,
     dayEmphasis,
   );
-  const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns) : [];
+  // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
+  const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
+  const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns) : [];
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns, date);
   const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
