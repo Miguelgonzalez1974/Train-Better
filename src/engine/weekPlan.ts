@@ -32,6 +32,32 @@ export interface MicrocyclePlan {
    *  que dos dias seguidos no repitan estimulo metabolico. Los slots sin WOD (recuperacion de n=6)
    *  llevan el dominante como relleno inocuo. */
   energySystem: EnergySystem[];
+  /** Intensidad relativa del dia por `trainingDayIndex` — onda dura/media/suave para que la semana
+   *  no sea plana y dos dias exigentes no caigan seguidos. El dia 0 (benchmark) siempre es 'alta'. */
+  dayIntensity: DayIntensity[];
+}
+
+export type DayIntensity = 'alta' | 'media' | 'baja';
+
+/**
+ * Onda de intensidad de la semana por `trainingDayIndex` (el dia 0 se fuerza a 'alta' — es el
+ * benchmark). Plantillas fijas por frecuencia, hechas a mano: ningun dia 'alta' pegado a otro, y
+ * siempre al menos un dia 'baja' que actue de valle. En Descarga nada sube de 'media'.
+ */
+const INTENSITY_TEMPLATE: Record<3 | 4 | 5 | 6, DayIntensity[]> = {
+  3: ['alta', 'baja', 'media'],
+  4: ['alta', 'media', 'baja', 'alta'],
+  5: ['alta', 'media', 'alta', 'baja', 'media'],
+  6: ['alta', 'media', 'alta', 'baja', 'media', 'baja'],
+};
+
+export function planDayIntensity(trainingDaysPerWeek: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4): DayIntensity[] {
+  const out = [...INTENSITY_TEMPLATE[trainingDaysPerWeek]];
+  // El dia de recuperacion activa de n=6 (jueves) es siempre valle.
+  if (trainingDaysPerWeek === 6) out[3] = 'baja';
+  // Semana de descarga: se recorta el techo, nada exigente.
+  if (phase === 4) return out.map((d) => (d === 'alta' ? 'media' : d));
+  return out;
 }
 
 /** Los 4 patrones que el bloque de fuerza cicla (STRENGTH_PATTERN_CYCLE). */
@@ -295,5 +321,8 @@ export function buildMicrocyclePlan(input: {
   // `planEnergySystems`), independiente del flujo de fuerza/oly.
   const energySystem = planEnergySystems(macroId, weekNumber, phase, n);
 
-  return { weekNumber, phase, strengthPattern, olyFamily, energySystem };
+  // Onda de intensidad dura/media/suave de la semana (ver `planDayIntensity`).
+  const dayIntensity = planDayIntensity(n, phase);
+
+  return { weekNumber, phase, strengthPattern, olyFamily, energySystem, dayIntensity };
 }

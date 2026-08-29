@@ -278,6 +278,8 @@ export interface DailySession {
   dayEmphasis?: 'fuerza' | 'metcon';
   /** Sistema energetico del WOD de hoy (rotacion de dominios del microciclo) — solo con macrociclo activo y en dias no-benchmark. Ver `EnergySystem` en wodDomains.ts. */
   energySystem?: 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
+  /** Intensidad relativa de hoy dentro de la onda dura/media/suave de la semana — ausente cuando es 'media' (el caso neutro). Ver `DayIntensity` en weekPlan.ts. */
+  dayIntensity?: 'alta' | 'baja';
   /** En que semana de la fase actual del macrociclo cae hoy (1-indexado) — solo con macrociclo activo. */
   phaseWeekInPhase?: number;
   /** Duracion total en semanas de la fase actual — junto a `phaseWeekInPhase` da "semana 3 de 6". */

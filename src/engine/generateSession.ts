@@ -32,6 +32,7 @@ import {
   isEmphasisDay,
   resolveDayEmphasis,
   resolveMacrocyclePhase,
+  resolveWeekProgression,
   toLocalIsoDate,
   weeksSinceStart,
   type DayPlan,
@@ -84,7 +85,7 @@ import {
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
-import { buildMicrocyclePlan } from './weekPlan';
+import { buildMicrocyclePlan, type DayIntensity } from './weekPlan';
 import {
   computeResponseProfile,
   engineResponseProfile,
@@ -415,6 +416,8 @@ function buildStrengthBlock(
   responseProfile: ResponseProfile,
   /** Patron que el planificador de microciclo reservo para hoy (ver weekPlan.ts); null si no hay macro/plan. */
   plannedPattern: MovementPattern | null,
+  /** Dosis del dia (progresion intra-fase x onda de intensidad) — ver `DayDose`. */
+  dose: DayDose,
 ): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
   const responseBias = clampResponseBias(responseProfile.rpe.bias);
   const rpeAutoreg = getRpeAutoregFactor(history, date, responseProfile.rpe.reliability);
@@ -600,6 +603,8 @@ function buildStrengthBlock(
   const withSuperset = (main: SessionBlockResult): SessionBlockResult[] => (supersetEntry ? [main, supersetEntry] : [main]);
 
   const scheme = STRENGTH_WEEK_SCHEMES[week];
+  // Dosis del dia sobre las series: nunca menos de 2 ni mas de 2 por encima del esquema base.
+  const setsFor = (base: number): number => Math.min(base + 2, Math.max(2, Math.round(base * dose.strengthSets)));
   const style = pickStrengthSchemeStyle(week, todayLiftStalled);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
   // La rampa ascendente ya construye hacia una serie casi maxima — ningun documento real prescribe
@@ -641,9 +646,9 @@ function buildStrengthBlock(
         block: 'strength',
         movementId: movement.id,
         format: STRENGTH_SCHEME_LABEL.volumeSets,
-        sets: scheme.sets + 1,
+        sets: setsFor(scheme.sets + 1),
         reps: String(scheme.reps + 4),
-        loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor),
+        loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * dose.strengthLoad),
         notes,
         ...(tempo ? { tempo } : {}),
       }),
@@ -652,12 +657,12 @@ function buildStrengthBlock(
     };
   }
 
-  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor);
+  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * dose.strengthLoad);
   return {
     blocks: withSuperset({
       block: 'strength',
       movementId: movement.id,
-      sets: scheme.sets,
+      sets: setsFor(scheme.sets),
       reps: String(scheme.reps),
       loadKg,
       notes,
@@ -1081,6 +1086,28 @@ const EMPHASIS_WOD_SCALE: Record<'mixto' | 'fuerza' | 'metcon', number> = {
   metcon: 1.15,
 };
 
+/**
+ * Dosis del dia: la progresion DENTRO del mesociclo (ver `resolveWeekProgression`) por la onda de
+ * intensidad dura/media/suave de la semana (ver `planDayIntensity`), ya combinadas y acotadas. Se
+ * calcula una vez en `generateDailySession` y se pasa a los bloques.
+ */
+interface DayDose {
+  /** Multiplicador sobre rondas/minutos del WOD. */
+  wodVolume: number;
+  /** Multiplicador sobre el numero de series de fuerza y accesorio. */
+  strengthSets: number;
+  /** Multiplicador (pequeño) sobre la carga de fuerza. */
+  strengthLoad: number;
+  /** Intensidad relativa del dia, para las notas. */
+  dayIntensity: DayIntensity;
+}
+
+/** Factores de la onda de intensidad del dia — un dia 'alta' empuja un pelin, un 'baja' recorta volumen (y algo de carga). */
+const INTENSITY_VOL: Record<DayIntensity, number> = { alta: 1.05, media: 1, baja: 0.9 };
+const INTENSITY_LOAD: Record<DayIntensity, number> = { alta: 1, media: 1, baja: 0.97 };
+
+const clampDose = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
 function buildWodBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -1097,6 +1124,8 @@ function buildWodBlock(
   /** Sistema energetico que el planificador de microciclo asigno a HOY (ver weekPlan.ts); null sin
    *  macro/plan -> cae al dominante de la fase. */
   plannedEnergy: EnergySystem | null,
+  /** Dosis del dia (progresion intra-fase x onda de intensidad) — ver `DayDose`. */
+  dose: DayDose,
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1197,10 +1226,14 @@ function buildWodBlock(
   // plan de dia (no deberia pasar en el motor periodizado) cae al dominante de la fase.
   const energy = plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week);
   const emphasisScale = EMPHASIS_WOD_SCALE[dayEmphasis];
+  // Escala total del WOD: fase (duracion del sistema energetico) x enfasis del dia x dosis del dia
+  // (progresion intra-fase + onda de intensidad), acotada de golpe para que los tres factores no se
+  // compongan hasta un extremo (un AMRAP de 30 min o de 4).
+  const wodScale = clampDose(energy.durationScale * emphasisScale * dose.wodVolume, 0.6, 1.35);
   const timeDomain: WodTimeDomain = {
-    rounds: Math.max(2, Math.round(baseDomain.rounds * energy.durationScale * emphasisScale)),
-    amrapMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.amrapMin * energy.durationScale * emphasisScale)),
-    emomMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.emomMin * energy.durationScale * emphasisScale)),
+    rounds: Math.max(2, Math.round(baseDomain.rounds * wodScale)),
+    amrapMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.amrapMin * wodScale)),
+    emomMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.emomMin * wodScale)),
   };
 
   // Semana pico: formatos cortos e intensos, sin chipper largo ni escalera de acumulacion de volumen.
@@ -1397,7 +1430,10 @@ function buildAccessoryBlock(
   strengthPattern: MovementPattern,
   recentIds: Set<string>,
   avoidedPatterns: Set<MovementPattern>,
+  dose: DayDose,
 ): SessionBlockResult[] {
+  // 3 series es el base; la dosis del dia lo mueve entre 2 y 4.
+  const accSets = Math.min(4, Math.max(2, Math.round(3 * dose.strengthSets)));
   const complementPatterns = ACCESSORY_COMPLEMENT[strengthPattern] ?? [];
   const filtered = getMovementsByBlock('accessory').filter((m) => complementPatterns.includes(m.pattern));
   const painFiltered = filterAvoidingPain(filtered.length > 0 ? filtered : getMovementsByBlock('accessory'), avoidedPatterns);
@@ -1419,13 +1455,13 @@ function buildAccessoryBlock(
     const restPool = pool.filter((m) => m.id !== unilateral?.id);
     const rest = pickManyVaried(restPool, 2, new Set([...recentIds, ...(unilateral ? [unilateral.id] : [])]));
     const picks = unilateral ? [unilateral, ...rest] : pickManyVaried(pool, 3, recentIds);
-    return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: 3, reps: '8-12', format: ACCESSORY_METHOD_LABEL.giantSet, notes }));
+    return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: accSets, reps: '8-12', format: ACCESSORY_METHOD_LABEL.giantSet, notes }));
   }
 
   const picks = pickManyVaried(pool, 2, recentIds);
   const reps = method === 'superset' ? '10-12' : '8-12';
   const format = method === 'superset' ? ACCESSORY_METHOD_LABEL.superset : undefined;
-  return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: 3, reps, format, notes }));
+  return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: accSets, reps, format, notes }));
 }
 
 function buildSkillBlock(
@@ -1753,6 +1789,19 @@ export function generateDailySession(
   const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
   const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
 
+  // Dosis del dia = progresion DENTRO del mesociclo (el volumen/intensidad ondula a lo largo de las
+  // semanas de la fase, no es plano) x onda de intensidad dura/media/suave de la semana. Se calcula
+  // aqui una vez y se pasa a WOD, fuerza y accesorio. `week` (semana de entreno ya resuelta) manda
+  // sobre la fase de calendario: en una descarga forzada -> fase 4 -> progresion plana, correcto.
+  const weekProg = resolveWeekProgression(week, phaseProgress.weekInPhase, phaseProgress.phaseLengthWeeks);
+  const dayIntensity: DayIntensity = microPlan.dayIntensity[dayPlan.trainingDayIndex] ?? 'media';
+  const dayDose: DayDose = {
+    wodVolume: clampDose(weekProg.wodVolume * INTENSITY_VOL[dayIntensity], 0.72, 1.2),
+    strengthSets: clampDose(weekProg.strengthVolume * INTENSITY_VOL[dayIntensity], 0.75, 1.18),
+    strengthLoad: clampDose(weekProg.strengthLoad * INTENSITY_LOAD[dayIntensity], 0.93, 1.04),
+    dayIntensity,
+  };
+
   // Enfasis del dia segun la fase (ver `resolveDayEmphasis`): 'fuerza' = solo barra, sin WOD;
   // 'metcon' = solo condicion fisica, sin fuerza pesada; 'mixto' = ambos, como siempre. Dos
   // anulaciones: en taper el ultimo dia de la semana es un metcon de simulacion, y un dia de test
@@ -1792,6 +1841,7 @@ export function generateDailySession(
         patternFatigue,
         responseProfile,
         plannedPattern,
+        dayDose,
       )
     : { blocks: [] as SessionBlockResult[], pattern: plannedPattern ?? dayPlan.strengthPattern, reasons: [] as string[] };
   const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
@@ -1834,10 +1884,11 @@ export function generateDailySession(
     responseProfile,
     dayEmphasis,
     plannedEnergy,
+    dayDose,
   );
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
-  const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns) : [];
+  const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns, dayDose) : [];
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns, date);
   const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
@@ -1854,7 +1905,17 @@ export function generateDailySession(
         ? 'Hoy es día de metcon — sin fuerza pesada ni oly y con un WOD algo más largo, para afilar tu condición física de cara al pico.'
         : undefined;
   const energyReason = (plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week)).note;
-  const coachReasons = Array.from(new Set(collectReasons(deloadNote, emphasisNote, energyReason, ...strengthReasons, ...olyReasons)));
+  // Progresion dentro del bloque + onda de intensidad del dia (ver `resolveWeekProgression` / `planDayIntensity`).
+  const progressionNote = weekProg.note || undefined;
+  const intensityNote =
+    dayIntensity === 'alta'
+      ? 'Día exigente de la semana — aquí es donde empujas.'
+      : dayIntensity === 'baja'
+        ? 'Día suave de la semana — menos volumen a propósito para que la semana ondule y asimiles.'
+        : undefined;
+  const coachReasons = Array.from(
+    new Set(collectReasons(deloadNote, emphasisNote, progressionNote, intensityNote, energyReason, ...strengthReasons, ...olyReasons)),
+  );
 
   // El sistema energetico del dia solo se atribuye cuando el WOD es de verdad el WOD rotativo — en
   // un dia de benchmark (dia 0, o testeo extra de pico/objetivo) el estimulo lo manda el benchmark,
@@ -1871,6 +1932,7 @@ export function generateDailySession(
     dayEmphasis: dayEmphasis === 'mixto' ? undefined : dayEmphasis,
     coachReasons: coachReasons.length > 0 ? coachReasons : undefined,
     energySystem: wodIsBenchmark ? undefined : plannedEnergy ?? undefined,
+    dayIntensity: dayIntensity === 'media' ? undefined : dayIntensity,
     phaseWeekInPhase: phaseProgress.weekInPhase,
     phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
   };

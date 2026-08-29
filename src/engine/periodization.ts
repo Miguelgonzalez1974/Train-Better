@@ -162,6 +162,75 @@ export function resolveMacrocyclePhase(macro: Macrocycle, today: Date = new Date
   return resolvePhaseAtWeek(macro, weeksSinceStart(macro.startDate, today));
 }
 
+export interface WeekProgression {
+  /** 0 en la primera semana de la fase, 1 en la ultima (0 si la fase dura <=1 semana). */
+  t: number;
+  /** Multiplicador de volumen del WOD (rondas / minutos). */
+  wodVolume: number;
+  /** Multiplicador de volumen de fuerza y accesorio (numero de series). */
+  strengthVolume: number;
+  /** Nudge de carga de fuerza — pequeño y solo la Intensificacion lo mueve de verdad. */
+  strengthLoad: number;
+  /** Nota de coach de la progresion dentro del bloque (vacia si no aplica). */
+  note: string;
+}
+
+const PHASE_NAME: Record<1 | 2 | 3 | 4, string> = {
+  1: 'Acumulación',
+  2: 'Intensificación',
+  3: 'Pico',
+  4: 'Descarga',
+};
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/**
+ * Progresion DENTRO de un mesociclo: sin esto, las N semanas de una misma fase se entrenan con el
+ * mismo volumen y la misma intensidad (un bloque de 4 semanas de Acumulacion era metabolicamente
+ * plano). Un coach de verdad ondula la dosis dentro del bloque — Acumulacion sube volumen semana a
+ * semana, Intensificacion sube carga y baja volumen, Pico afina bajando volumen, Descarga es plana
+ * (el esquema de deload ya recorta). `phaseLengthWeeks <= 1` (ciclo clasico sin `phaseWeeks`) -> t=0
+ * -> todos los factores a 1.0, comportamiento identico al anterior.
+ */
+export function resolveWeekProgression(
+  phaseIndex: 1 | 2 | 3 | 4,
+  weekInPhase: number,
+  phaseLengthWeeks: number,
+): WeekProgression {
+  // Ciclo clasico (fases de 1 semana en bucle) o descarga: sin progresion intra-fase — todo a 1.0,
+  // comportamiento identico al anterior.
+  if (phaseLengthWeeks <= 1 || phaseIndex === 4) {
+    return { t: 0, wodVolume: 1, strengthVolume: 1, strengthLoad: 1, note: '' };
+  }
+
+  const t = Math.min(1, Math.max(0, (weekInPhase - 1) / (phaseLengthWeeks - 1)));
+
+  let wodVolume = 1;
+  let strengthVolume = 1;
+  let strengthLoad = 1;
+  let what = '';
+  if (phaseIndex === 1) {
+    wodVolume = lerp(0.92, 1.1, t);
+    strengthVolume = lerp(0.92, 1.1, t);
+    strengthLoad = lerp(0.98, 1.0, t);
+    what = 'el volumen sube progresivamente dentro del bloque';
+  } else if (phaseIndex === 2) {
+    wodVolume = lerp(1.02, 0.9, t);
+    strengthVolume = lerp(1.0, 0.88, t);
+    strengthLoad = lerp(0.99, 1.03, t);
+    what = 'la intensidad sube y el volumen baja a medida que avanza el bloque';
+  } else {
+    wodVolume = lerp(0.98, 0.86, t);
+    strengthVolume = lerp(0.95, 0.85, t);
+    strengthLoad = lerp(1.0, 1.01, t);
+    what = 'afinando hacia el pico, el volumen baja semana a semana';
+  }
+
+  const note = `Semana ${weekInPhase} de ${phaseLengthWeeks} de ${PHASE_NAME[phaseIndex]} — ${what}.`;
+
+  return { t, wodVolume, strengthVolume, strengthLoad, note };
+}
+
 /** Para sesgo "intensivo" de objetivos: aprox. la mitad de los dias de entreno son "de enfasis". */
 export function isEmphasisDay(trainingDayIndex: number): boolean {
   return trainingDayIndex % 2 === 0;
