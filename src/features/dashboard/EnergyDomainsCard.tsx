@@ -48,6 +48,7 @@ export function EnergyDomainsCard({ profile, history }: { profile: AthleteProfil
 
   const maxPlanned = Math.max(...balance.energy.map((e) => e.planned), 1);
   const adherencePct = balance.totalPlanned > 0 ? Math.round((balance.totalDone / balance.totalPlanned) * 100) : 0;
+  const fresh = balance.totalDone === 0;
 
   return (
     <section className="card overflow-hidden p-0">
@@ -59,7 +60,7 @@ export function EnergyDomainsCard({ profile, history }: { profile: AthleteProfil
         <span className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-sm font-semibold text-white">Dominios energéticos</span>
           <span className="rounded-full bg-brand-neon/15 px-2 py-0.5 text-[10px] font-bold text-brand-neon">
-            {balance.totalDone}/{balance.totalPlanned} sesiones
+            {fresh ? `${balance.totalPlanned} WOD planificados` : `${balance.totalDone}/${balance.totalPlanned} sesiones`}
           </span>
           <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-neutral-400">{balance.phaseLabel}</span>
         </span>
@@ -82,13 +83,14 @@ export function EnergyDomainsCard({ profile, history }: { profile: AthleteProfil
       {!collapsed && (
         <div className="flex flex-col gap-4 border-t border-white/5 px-3.5 pb-3.5 pt-3">
           <p className="text-[11px] text-neutral-500">
-            Fase {balance.phaseLabel} · domina {balance.dominantLabel.toLowerCase()} · últimas {balance.windowWeeks} semanas
+            Fase {balance.phaseLabel} · domina {balance.dominantLabel.toLowerCase()} ·{' '}
+            {fresh ? 'reparto planificado del bloque' : `últimas ${balance.windowWeeks} semanas`}
           </p>
 
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Sistema energético</p>
-              <p className="text-[10px] text-neutral-600">hechas / planificadas</p>
+              <p className="text-[10px] text-neutral-600">{fresh ? 'planificadas' : 'hechas / planificadas'}</p>
             </div>
             <div className="flex flex-col gap-2">
               {balance.energy.map((e) => (
@@ -102,7 +104,9 @@ export function EnergyDomainsCard({ profile, history }: { profile: AthleteProfil
               ))}
             </div>
             <p className="mt-2 text-[10px] text-neutral-600">
-              Adherencia del bloque: {adherencePct}%. Los días de benchmark no cuentan aquí.
+              {fresh
+                ? 'Barras = días de WOD que el bloque prescribe por sistema. Se irán llenando según entrenes.'
+                : `Adherencia del bloque: ${adherencePct}%. Los días de benchmark no cuentan aquí.`}
             </p>
           </div>
 

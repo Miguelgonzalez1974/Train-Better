@@ -33,6 +33,8 @@ import { planEnergySystems } from './weekPlan';
  */
 
 const WINDOW_WEEKS = 6;
+/** Días hacia delante que se incluyen en el reparto planificado — asegura que un macro recién arrancado ya tenga días de WOD que mostrar. */
+const LOOKAHEAD_DAYS = 10;
 /** Orden canónico para pintar las barras (progresión clásica de resistencia). */
 const ENERGY_ORDER: EnergySystem[] = ['base-aerobica', 'umbral', 'potencia', 'recuperacion'];
 
@@ -94,10 +96,18 @@ export function computeConditioningBalance(
   const n = profile.trainingDaysPerWeek;
   const byDate = indexHistory(history);
 
+  // Ventana retrospectiva de `WINDOW_WEEKS`, recortada al inicio del macro...
   const windowStart = new Date(today);
   windowStart.setDate(windowStart.getDate() - (WINDOW_WEEKS * 7 - 1));
   const macroStart = new Date(`${macro.startDate}T00:00:00`);
   if (windowStart < macroStart) windowStart.setTime(macroStart.getTime());
+  // ...más una mirada hacia delante de `LOOKAHEAD_DAYS`: sin esto, un macro recién arrancado (o que
+  // empieza en fin de semana o a media semana) no tendría ningún día de entreno en la ventana y la
+  // tarjeta no se mostraría. El "hecho" solo cuenta hasta hoy; lo de después es solo "planificado".
+  const windowEnd = new Date(today);
+  windowEnd.setDate(windowEnd.getDate() + LOOKAHEAD_DAYS);
+  const macroEnd = new Date(`${macro.endDate}T00:00:00`);
+  if (windowEnd > macroEnd) windowEnd.setTime(macroEnd.getTime());
 
   const planned = new Map<EnergySystem, number>();
   const done = new Map<EnergySystem, number>();
@@ -106,7 +116,8 @@ export function computeConditioningBalance(
   let trifectaSessions = 0;
 
   const cursor = new Date(windowStart);
-  while (cursor <= today) {
+  while (cursor <= windowEnd) {
+    const isPastOrToday = cursor <= today;
     const dp = getDayPlan(getWeekdayIndex(cursor), n);
     // Solo días de WOD rotativo: se salta el no-entreno, la recuperación activa de n=6 (WOD suave
     // fijo) y el día 0 (benchmark de referencia — estímulo propio, no de la rotación de fase).
@@ -116,14 +127,14 @@ export function computeConditioningBalance(
       const sys = planEnergySystems(macro.id, weeksSince + 1, phase, n)[dp.trainingDayIndex];
       planned.set(sys, (planned.get(sys) ?? 0) + 1);
 
-      const entry = byDate.get(toLocalIsoDate(cursor));
+      const entry = isPastOrToday ? byDate.get(toLocalIsoDate(cursor)) : undefined;
       if (entry) {
         const effective = entry.energySystem ?? sys;
         done.set(effective, (done.get(effective) ?? 0) + 1);
       }
     }
 
-    const entry = byDate.get(toLocalIsoDate(cursor));
+    const entry = isPastOrToday ? byDate.get(toLocalIsoDate(cursor)) : undefined;
     if (entry?.wodMovementIds && entry.wodMovementIds.length > 0) {
       let any = false;
       for (const id of entry.wodMovementIds) {
@@ -191,6 +202,10 @@ function buildInsight(input: {
   dominantLabel: string;
 }): string {
   const { energy, totalPlanned, totalDone, trifectaSlices, trifectaSessions, phaseLabel, dominantLabel } = input;
+
+  if (totalDone === 0) {
+    return `Bloque recién arrancado — fase ${phaseLabel}, domina ${dominantLabel.toLowerCase()}. Aquí verás cómo repartes el acondicionamiento según entrenes.`;
+  }
 
   if (totalPlanned >= 4 && totalDone / totalPlanned < 0.6) {
     return `Llevas ${totalDone} de ${totalPlanned} sesiones de acondicionamiento del bloque — se te están escapando días.`;
