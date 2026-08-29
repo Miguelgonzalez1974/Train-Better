@@ -33,6 +33,13 @@ export interface AthleteRepository {
   saveCachedSession(session: DailySession): void;
   /** Descarta la sesion planificada de un dia (sin tocar el historial) para volver a elegir de cero. */
   deleteCachedSession(dateIso: string): void;
+  /**
+   * Borra las sesiones cacheadas cuya fecha cae en [startDateIso, endDateIso] (ambos inclusive) —
+   * para cuando se elimina el macrociclo o programa que las genero, y sus entrenos periodizados no
+   * deben seguir mostrandose. Respeta las sesiones propias (`source: 'custom'`) y las elegidas a
+   * mano (`swapLabel`): esas no dependen de ninguna estructura.
+   */
+  deleteCachedSessionsInRange(startDateIso: string, endDateIso: string): void;
   getBodyweightLog(): BodyweightEntry[];
   appendBodyweightEntry(entry: BodyweightEntry): void;
   getReadinessLog(): ReadinessCheck[];
@@ -193,6 +200,17 @@ export const localAthleteRepository: AthleteRepository = {
     const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
     delete cache[dateIso];
     localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(cache));
+  },
+  deleteCachedSessionsInRange(startDateIso, endDateIso) {
+    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
+    let changed = false;
+    for (const [date, session] of Object.entries(cache)) {
+      if (date < startDateIso || date > endDateIso) continue;
+      if (session.source === 'custom' || session.swapLabel) continue;
+      delete cache[date];
+      changed = true;
+    }
+    if (changed) localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(cache));
   },
   getBodyweightLog() {
     return localAthleteRepository.getProfile().bodyweightLog ?? [];

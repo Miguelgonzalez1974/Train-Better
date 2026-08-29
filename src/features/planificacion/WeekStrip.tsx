@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
-import { generateSessionForDate, hasActiveTrainingStructure } from '../../engine/generateSession';
+import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../../data/athlete/types';
@@ -60,7 +60,9 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     if (dateIso < todayIso) return null;
 
     const cached = athleteRepository.getCachedSession(dateIso);
-    if (cached) return cached;
+    // Ignora una sesión periodizada huérfana (su macro/programa se borró) — se limpia de verdad al
+    // borrar la estructura; aquí solo se evita mostrarla.
+    if (cached && !isCachedSessionOrphaned(cached, profile, dateIso)) return cached;
     // Sin macrociclo NI programa de fuerza activo ese dia y nada elegido todavia: no se
     // auto-genera ni se muestra "Mantenimiento" — mismo criterio que la vista de "Sesion de hoy".
     if (!hasActiveTrainingStructure(profile, dateIso)) return null;

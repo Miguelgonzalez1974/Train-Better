@@ -1987,6 +1987,19 @@ export function hasActiveTrainingStructure(profile: AthleteProfile, dateIso: str
   return Boolean(getActiveStrengthProgram(profile.strengthPrograms ?? [], dateIso) || getActiveMacrocycle(profile.macrocycles, dateIso));
 }
 
+/**
+ * True si una sesion cacheada quedo huerfana: la genero un plan periodizado (macrociclo -> `mesocycleWeek`
+ * 1-4, o programa de fuerza -> `strengthProgramLabel`) pero ya no hay ninguna estructura activa que la
+ * gobierne esa fecha — el atleta borro el macro/programa. Seguir sirviendola mostraria un entreno de un
+ * plan que ya no existe. Las sesiones propias (`source: 'custom'`), las elegidas a mano (`swapLabel`) y
+ * las de mantenimiento (`mesocycleWeek === 0`, sin label) no dependen de ninguna estructura y no se tocan.
+ */
+export function isCachedSessionOrphaned(session: DailySession, profile: AthleteProfile, dateIso: string): boolean {
+  if (session.source === 'custom' || session.swapLabel) return false;
+  const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
+  return periodized && !hasActiveTrainingStructure(profile, dateIso);
+}
+
 export function toHistoryEntry(
   session: DailySession,
   rxOrScaled: RxOrScaled,

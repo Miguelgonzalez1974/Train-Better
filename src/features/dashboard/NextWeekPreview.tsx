@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from '../planificacion/DaySessionBlocks';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import { generateSessionForDate, hasActiveTrainingStructure } from '../../engine/generateSession';
+import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned } from '../../engine/generateSession';
 import { getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import type { DailySession } from '../../data/athlete/types';
 
@@ -40,7 +40,7 @@ export function NextWeekPreview({ onClose }: NextWeekPreviewProps) {
       date.setDate(date.getDate() + i);
       const dateIso = toLocalIsoDate(date);
       const cached = athleteRepository.getCachedSession(dateIso);
-      if (cached) return { date: dateIso, session: cached };
+      if (cached && !isCachedSessionOrphaned(cached, profile, dateIso)) return { date: dateIso, session: cached };
       if (!hasActiveTrainingStructure(profile, dateIso)) return { date: dateIso, session: null };
       const fresh = generateSessionForDate(profile, history, date, goals);
       athleteRepository.saveCachedSession(fresh);

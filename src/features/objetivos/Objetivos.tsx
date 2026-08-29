@@ -204,6 +204,11 @@ export function Objetivos() {
   }
 
   function deleteStrengthProgram(id: string) {
+    const program = (profile.strengthPrograms ?? []).find((p) => p.id === id);
+    if (!window.confirm('¿Eliminar este programa de fuerza? Las sesiones que ya generó dejarán de mostrarse.')) return;
+    // Sin esto, las sesiones periodizadas que el programa ya dejó cacheadas se seguirían mostrando
+    // en Planificación aunque el programa ya no exista (ver `isCachedSessionOrphaned`).
+    if (program) athleteRepository.deleteCachedSessionsInRange(program.startDate, program.endDate);
     persist({ ...profile, strengthPrograms: (profile.strengthPrograms ?? []).filter((p) => p.id !== id) });
   }
 
@@ -233,6 +238,11 @@ export function Objetivos() {
   }
 
   function deleteMacro(id: string) {
+    const macro = profile.macrocycles.find((m) => m.id === id);
+    if (!window.confirm('¿Eliminar este macrociclo? Las sesiones que ya generó dejarán de mostrarse.')) return;
+    // Sin esto, las sesiones periodizadas que el macro ya dejó cacheadas se seguirían mostrando en
+    // Planificación aunque el macro ya no exista (ver `isCachedSessionOrphaned`).
+    if (macro) athleteRepository.deleteCachedSessionsInRange(macro.startDate, macro.endDate);
     persist({ ...profile, macrocycles: profile.macrocycles.filter((m) => m.id !== id) });
   }
 

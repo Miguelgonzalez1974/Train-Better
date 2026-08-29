@@ -22,6 +22,7 @@ import {
   generateOverrideSession,
   generateSessionForDate,
   hasActiveTrainingStructure,
+  isCachedSessionOrphaned,
   peekRetestHeadsUp,
   resolveOlyPRKey,
   resolveStrengthPRKey,
@@ -94,7 +95,13 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const todayIso = toLocalIsoDate(new Date());
   const [session, setSession] = useState<DailySession | null>(() => {
     const cached = athleteRepository.getCachedSession(todayIso);
-    if (cached) return cached;
+    // Una sesión periodizada cacheada cuyo macro/programa ya se borró queda huérfana — se descarta
+    // en vez de seguir mostrando un entreno de un plan que ya no existe.
+    if (cached && isCachedSessionOrphaned(cached, profile, todayIso)) {
+      athleteRepository.deleteCachedSession(todayIso);
+    } else if (cached) {
+      return cached;
+    }
     // Sin macrociclo NI programa de fuerza activo, y nada elegido todavía para hoy: no se
     // auto-genera ni se muestra "Mantenimiento" — se espera a que el atleta elija qué quiere hacer.
     if (!hasActiveTrainingStructure(profile, todayIso)) return null;
@@ -261,7 +268,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   // estados de "hoy" que dependen de ella) con el dia real la proxima vez que algo dispare un
   // render, en vez de quedarse mostrando el dia de ayer hasta recargar la pagina a mano.
   useEffect(() => {
-    const cached = athleteRepository.getCachedSession(todayIso);
+    let cached = athleteRepository.getCachedSession(todayIso);
+    if (cached && isCachedSessionOrphaned(cached, profile, todayIso)) {
+      athleteRepository.deleteCachedSession(todayIso);
+      cached = null;
+    }
     setSession(cached ?? (hasActiveTrainingStructure(profile, todayIso) ? generateAndCache(profile) : null));
     setShowCompletePanel(false);
     setEditMode(false);
