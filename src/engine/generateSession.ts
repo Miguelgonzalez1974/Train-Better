@@ -975,6 +975,18 @@ function buildBarbellComplexEntries(
   return entries;
 }
 
+/**
+ * Cada dia de entreno lleva WOD; lo que cambia con el enfasis del dia es cuanto: en un dia de
+ * fuerza el metcon es corto y de bajo impacto (el presupuesto de recuperacion va a la barra), en un
+ * dia de metcon es mas largo, y en un dia mixto es el de siempre. Factor sobre rondas/minutos, ADEMAS
+ * del `energy.durationScale` de la fase.
+ */
+const EMPHASIS_WOD_SCALE: Record<'mixto' | 'fuerza' | 'metcon', number> = {
+  fuerza: 0.6,
+  mixto: 1,
+  metcon: 1.15,
+};
+
 function buildWodBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -987,7 +999,13 @@ function buildWodBlock(
   wodRampActive: boolean,
   prs: PersonalRecords,
   responseProfile: ResponseProfile,
+  dayEmphasis: 'mixto' | 'fuerza' | 'metcon',
 ): SessionBlockResult[] {
+  // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
+  // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
+  // barra ni intervalos de carga creciente), mas monoestructural, y el patron con carga al final
+  // del reparto para minimizar solapamiento.
+  const lowInterferenceWod = dayEmphasis === 'fuerza';
   const recentBenchmarkIds = new Set(
     [...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', '')),
   );
@@ -1079,22 +1097,23 @@ function buildWodBlock(
   // (base aerobica -> umbral -> potencia -> recuperacion), que ajusta la duracion sobre el time
   // domain de la semana, empuja mas o menos cardio ciclico y sesga que formatos salen.
   const energy = resolveEnergySystem(week);
+  const emphasisScale = EMPHASIS_WOD_SCALE[dayEmphasis];
   const timeDomain: WodTimeDomain = {
-    rounds: Math.max(2, Math.round(baseDomain.rounds * energy.durationScale)),
-    amrapMin: Math.max(6, Math.round(baseDomain.amrapMin * energy.durationScale)),
-    emomMin: Math.max(6, Math.round(baseDomain.emomMin * energy.durationScale)),
+    rounds: Math.max(2, Math.round(baseDomain.rounds * energy.durationScale * emphasisScale)),
+    amrapMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.amrapMin * energy.durationScale * emphasisScale)),
+    emomMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.emomMin * energy.durationScale * emphasisScale)),
   };
 
   // Semana pico: formatos cortos e intensos, sin chipper largo ni escalera de acumulacion de volumen.
   // Rampa de vuelta: mismo criterio que la semana pico, por la razon contraria — nada de formatos
   // largos de alto volumen mientras el atleta esta cogiendo ritmo de nuevo.
-  const isChipperDay = !isPeakWeek && !wodRampActive && Math.random() < 0.15;
+  const isChipperDay = !isPeakWeek && !wodRampActive && !lowInterferenceWod && Math.random() < 0.15;
   const regularFormats: { label: string; kind: WodFormatKind }[] = [
     { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' },
     { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
     { label: `EMOM ${timeDomain.emomMin} min (movimientos alternos)`, kind: 'emom' },
     { label: `Cada 3:00 x ${timeDomain.rounds} rondas`, kind: 'interval' },
-    ...(isPeakWeek || wodRampActive
+    ...(isPeakWeek || wodRampActive || lowInterferenceWod
       ? []
       : [
           { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
@@ -1132,6 +1151,9 @@ function buildWodBlock(
     const progressTarget = resistenciaProgress > 0.5 ? 2 : 1;
     monoTarget = Math.max(monoTarget, emphasisTarget, progressTarget);
   }
+  // Dia de fuerza: al menos 2 de los 3 movimientos ciclicos -> el metcon corto queda aerobico y de
+  // bajo impacto, sin volver a exigir los patrones que ya han cargado en la barra.
+  if (lowInterferenceWod) monoTarget = Math.max(monoTarget, 2);
 
   // Mismo mecanismo de sesgo que ya usan fuerza y skill (goalPreference + pickVariedWithPreference):
   // si el atleta tiene un objetivo de fuerza/potencia sobre un lift que ademas es de los habilitados
@@ -1148,12 +1170,19 @@ function buildWodBlock(
   // margen para tolerar volumen de barra, asi que "con carga" se prueba primero; en pico/descarga
   // (semana 3-4) se prueba al final — mismo criterio conservador que ya usa el resto del motor esas
   // semanas (nada de chipper ni escalera), aqui aplicado a que domina el WOD en vez de a su formato.
-  const domainCycle = week <= 2 ? [weightedPool, gymnasticsPool, monoPool] : [gymnasticsPool, monoPool, weightedPool];
+  const domainCycle =
+    lowInterferenceWod || week > 2 ? [gymnasticsPool, monoPool, weightedPool] : [weightedPool, gymnasticsPool, monoPool];
 
   const title = generateWodName();
   const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
+  const emphasisWodNote =
+    dayEmphasis === 'fuerza'
+      ? ' Día de fuerza: WOD corto y de bajo impacto — hoy la prioridad es la barra, esto mantiene el motor sin restarle a la recuperación.'
+      : dayEmphasis === 'metcon'
+        ? ' Día de metcon: pieza algo más larga de lo normal para acumular estímulo de condición física.'
+        : '';
   const energyNote = ` Enfoque de hoy (${energy.label}): ${energy.paceCue}.`;
-  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}${energyNote}`;
+  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}${emphasisWodNote}${energyNote}`;
 
   if (chosenFormat.kind === 'barbellComplex') {
     const usedForComplex = new Set(recentIds);
@@ -1608,7 +1637,8 @@ export function generateDailySession(
   // semana sin metcon y sin referencia. A partir de la semana 2 la periodizacion actua normal.
   if (weeksSinceStart(macro.startDate, date) === 0) dayEmphasis = 'mixto';
   const doStrength = dayEmphasis !== 'metcon';
-  const doWod = dayEmphasis !== 'fuerza';
+  // Todos los días de entreno llevan WOD — el énfasis del día ya no lo quita, solo escala su
+  // duración/intensidad dentro de `buildWodBlock` (día de fuerza = corto y de bajo impacto).
 
   const strengthResult = doStrength
     ? buildStrengthBlock(
@@ -1658,21 +1688,20 @@ export function generateDailySession(
       )
     : { blocks: [] as SessionBlockResult[], reasons: [] as string[] };
 
-  const wodBlock = doWod
-    ? buildWodBlock(
-        dayPlan,
-        week,
-        profile.trainingDaysPerWeek,
-        recentIds,
-        new Set([trainedStrengthPattern, ...avoidedPatterns, ...fatiguedPatterns]),
-        goals,
-        isTaper,
-        history,
-        wodRampActive,
-        profile.prs,
-        responseProfile,
-      )
-    : [];
+  const wodBlock = buildWodBlock(
+    dayPlan,
+    week,
+    profile.trainingDaysPerWeek,
+    recentIds,
+    new Set([trainedStrengthPattern, ...avoidedPatterns, ...fatiguedPatterns]),
+    goals,
+    isTaper,
+    history,
+    wodRampActive,
+    profile.prs,
+    responseProfile,
+    dayEmphasis,
+  );
   const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, recentIds, avoidedPatterns) : [];
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns, date);
   const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
@@ -1685,12 +1714,11 @@ export function generateDailySession(
   const deloadNote = deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined;
   const emphasisNote =
     dayEmphasis === 'fuerza'
-      ? 'Hoy es día de fuerza — sin WOD, para cargar más trabajo de barra en esta fase.'
+      ? 'Hoy es día de fuerza — el WOD es corto y de bajo impacto, la prioridad está en la barra.'
       : dayEmphasis === 'metcon'
-        ? 'Hoy es día de metcon — sin fuerza pesada ni oly, para afilar tu condición física de cara al pico.'
+        ? 'Hoy es día de metcon — sin fuerza pesada ni oly y con un WOD algo más largo, para afilar tu condición física de cara al pico.'
         : undefined;
-  // Enfoque de acondicionamiento de la fase (sistema energetico) — solo si hoy hay WOD.
-  const energyReason = doWod ? resolveEnergySystem(week).note : undefined;
+  const energyReason = resolveEnergySystem(week).note;
   const coachReasons = Array.from(new Set(collectReasons(deloadNote, emphasisNote, energyReason, ...strengthReasons, ...olyReasons)));
 
   return {
