@@ -364,4 +364,11 @@ export interface Goal {
   targetDate: string;
   emphasis: GoalEmphasis;
   createdAt: string;
+  /**
+   * Solo `mejorar-gimnasticos` con arbol de progresion: punto de partida declarado por el atleta,
+   * 0-1 (0 = desde el principio, 1 = ya en el movimiento objetivo). El motor nunca programa un
+   * escalon por debajo de esto — la fecha objetivo sigue tirando hacia arriba desde ahi. Ausente =
+   * comportamiento anterior (empieza siempre por el escalon mas facil).
+   */
+  skillLevel?: number;
 }

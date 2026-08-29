@@ -17,6 +17,7 @@ import {
 import { STRENGTH_METHOD_META, STRENGTH_METHODS, STRENGTH_METHOD_COLOR } from './strengthMethodMeta';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
+import { getSkillProgressionFor } from '../../data/movements/skillProgressions';
 import type {
   AthleteProfile,
   Goal,
@@ -1201,7 +1202,14 @@ export function Objetivos() {
                       type="button"
                       onClick={() =>
                         setGoalDraft((prev) =>
-                          prev ? { ...prev, type, movementId: GOAL_TYPE_META[type].needsMovement ? firstMovementId(type) : undefined } : prev,
+                          prev
+                            ? {
+                                ...prev,
+                                type,
+                                movementId: GOAL_TYPE_META[type].needsMovement ? firstMovementId(type) : undefined,
+                                skillLevel: undefined,
+                              }
+                            : prev,
                         )
                       }
                       className={`flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-xs font-medium transition-all duration-200 ${
@@ -1223,7 +1231,9 @@ export function Objetivos() {
                 Movimiento
                 <select
                   value={goalDraft.movementId}
-                  onChange={(e) => setGoalDraft((prev) => (prev ? { ...prev, movementId: e.target.value } : prev))}
+                  onChange={(e) =>
+                    setGoalDraft((prev) => (prev ? { ...prev, movementId: e.target.value, skillLevel: undefined } : prev))
+                  }
                   className={inputClass}
                 >
                   {goalMeta.movementGroups.map((group) => (
@@ -1238,6 +1248,41 @@ export function Objetivos() {
                 </select>
               </label>
             )}
+
+            {goalDraft.type === 'mejorar-gimnasticos' &&
+              (() => {
+                const progression = goalDraft.movementId ? getSkillProgressionFor(goalDraft.movementId) : undefined;
+                if (!progression) return null;
+                const total = progression.steps.length;
+                const selectedIndex =
+                  goalDraft.skillLevel != null ? Math.min(total - 1, Math.floor(goalDraft.skillLevel * total)) : -1;
+                return (
+                  <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                    ¿Por dónde empiezas?
+                    <select
+                      value={selectedIndex}
+                      onChange={(e) =>
+                        setGoalDraft((prev) => {
+                          if (!prev) return prev;
+                          const i = Number(e.target.value);
+                          return { ...prev, skillLevel: i < 0 ? undefined : (i + 0.5) / total };
+                        })
+                      }
+                      className={inputClass}
+                    >
+                      <option value={-1}>Desde el principio</option>
+                      {progression.steps.map((step, i) => (
+                        <option key={step.movementId} value={i}>
+                          Paso {i + 1} de {total} — {getMovementById(step.movementId)?.name ?? step.movementId}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-[11px] text-neutral-600">
+                      El coach no programará un escalón por debajo de este. La fecha objetivo sigue tirando hacia arriba.
+                    </span>
+                  </label>
+                );
+              })()}
 
             <label className="flex flex-col gap-1 text-xs text-neutral-400">
               Fecha objetivo

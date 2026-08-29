@@ -673,6 +673,16 @@ function buildStrengthBlock(
   };
 }
 
+/**
+ * Drills de recepcion por familia — el primer del complejo cuando un desbalance `direction: 'high'`
+ * dice que el limite es recibir abajo (ver `getImbalanceBias`). El snatch tiene versiones de
+ * recepcion puras en el catalogo; el clean no (se apoya solo en el sesgo hacia el lift completo).
+ */
+const RECEIVING_PRIMER_IDS: Record<OlyFamily, string[]> = {
+  snatch: ['snatch-balance', 'overhead-squat'],
+  clean: [],
+};
+
 function buildOlyBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -772,12 +782,22 @@ function buildOlyBlock(
     family = avoidOlyFamilyRepeat(family, history);
   }
 
+  // Desbalance `direction: 'high'`: la variante de potencia de esta familia va demasiado cerca del
+  // levantamiento completo -> el limite es recibir abajo, no el tiron. Hoy se prioriza la version
+  // completa (recepcion en sentadilla) y un primer de recepcion, sea cual sea la semana.
+  const receivingFocus = imbalanceBias.receivingFamilies.includes(family);
+  const receivingTag = receivingFocus
+    ? ` Tu ${family === 'snatch' ? 'power snatch' : 'power clean'} va muy cerca de tu levantamiento completo — hoy el foco es recibir abajo (${
+        family === 'snatch' ? 'snatch balance / overhead squat, recepción profunda' : 'recepción en sentadilla completa'
+      }), no la fuerza de tirón.`
+    : '';
+
   const fullLiftIds = family === 'snatch' ? ['snatch'] : ['clean-and-jerk', 'clean'];
   let candidates = getMovementsByBlock('oly').filter((m) =>
     family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk'),
   );
 
-  const isEarlyWeek = week <= 2;
+  const isEarlyWeek = week <= 2 && !receivingFocus;
   const biased = isEarlyWeek
     ? candidates.filter((m) => !fullLiftIds.includes(m.id))
     : candidates.filter((m) => fullLiftIds.includes(m.id));
@@ -842,11 +862,12 @@ function buildOlyBlock(
     setFeelNote +
     bwNote +
     weakPointTag +
+    receivingTag +
     reintroNote +
     fatigueNote +
     rampNote +
     (autoregNote ? ` ${autoregNote}` : '');
-  const reasons = collectReasons(responseTag, setFeelNote, bwNote, weakPointTag, reintroNote, fatigueNote, rampNote, autoregNote);
+  const reasons = collectReasons(responseTag, setFeelNote, bwNote, weakPointTag, receivingTag, reintroNote, fatigueNote, rampNote, autoregNote);
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).
@@ -885,7 +906,12 @@ function buildOlyBlock(
     family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk'),
   );
   const primerCandidates = familyPool.filter((m) => m.id !== movement.id && m.progressionOf);
-  const primerMovement = pickVaried(primerCandidates, recentIds);
+  // Con foco de recepcion, el primer se elige entre drills de recibir abajo (solo el snatch tiene
+  // versiones de recepcion puras en el catalogo; el clean se apoya solo en el sesgo de arriba).
+  const receivingPrimers = receivingFocus
+    ? primerCandidates.filter((m) => RECEIVING_PRIMER_IDS[family].includes(m.id))
+    : [];
+  const primerMovement = pickVaried(receivingPrimers.length > 0 ? receivingPrimers : primerCandidates, recentIds);
   if (!primerMovement) return { blocks: [mainEntry], reasons };
 
   const primerLoadKg = roundToNearestPlate(resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * 0.75 * autoregFactor);
@@ -894,8 +920,10 @@ function buildOlyBlock(
     movementId: primerMovement.id,
     sets: scheme.sets,
     reps: '2-3',
+    notes: `Primer técnico antes del levantamiento principal — prioriza posición, no peso.${
+      receivingPrimers.length > 0 ? ' Hoy es un drill de recepción: recibe lo más abajo posible.' : ''
+    }${autoregNote ? ` ${autoregNote}` : ''}`,
     loadKg: primerLoadKg,
-    notes: `Primer técnico antes del levantamiento principal — prioriza posición, no peso.${autoregNote ? ` ${autoregNote}` : ''}`,
   };
 
   return { blocks: [primerEntry, mainEntry], reasons };
@@ -1479,16 +1507,21 @@ function buildSkillBlock(
   if (progressionGoal?.movementId) {
     const progression = getSkillProgressionFor(progressionGoal.movementId);
     if (progression) {
-      const { step, index, total } = skillProgressionStepAt(progression, getGoalProgress(progressionGoal, history, date));
+      const { step, index, total, driver } = skillProgressionStepAt(
+        progression,
+        getGoalProgress(progressionGoal, history, date),
+        progressionGoal.skillLevel ?? 0,
+      );
       const stepMovement = getMovementById(step.movementId);
       if (stepMovement && !avoidedPatterns.has(stepMovement.pattern)) {
+        const levelNote = driver === 'level' ? ' (empezamos aquí por el nivel de partida que marcaste).' : '';
         return [
           {
             block: 'skill',
             movementId: step.movementId,
             sets: 4,
             reps: 'tecnica / tiempo',
-            notes: `Progresión hacia ${progression.targetName} — paso ${index + 1} de ${total}: ${step.cue}`,
+            notes: `Progresión hacia ${progression.targetName} — paso ${index + 1} de ${total}: ${step.cue}${levelNote}`,
           },
         ];
       }

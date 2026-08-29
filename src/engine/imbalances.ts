@@ -282,9 +282,13 @@ export interface ImbalanceBias {
   strengthLiftIds: string[];
   /** familias oly (snatch/clean) infra-desarrolladas, por la misma logica. */
   olyFamilies: OlyFamily[];
+  /** familias oly donde una regla `direction: 'high'` esta marcada — la variante de potencia esta
+   *  demasiado cerca del levantamiento completo, asi que el limite es la RECEPCION abajo, no la
+   *  fuerza de tiron. El motor sesga hacia la version completa (sentadilla) + drills de recibo. */
+  receivingFamilies: OlyFamily[];
 }
 
-const EMPTY_IMBALANCE_BIAS: ImbalanceBias = { strengthLiftIds: [], olyFamilies: [] };
+const EMPTY_IMBALANCE_BIAS: ImbalanceBias = { strengthLiftIds: [], olyFamilies: [], receivingFamilies: [] };
 
 /** targetKey de una regla oly -> familia que se debe reforzar. */
 function olyFamilyForLiftKey(key: LiftKey): OlyFamily | null {
@@ -294,12 +298,13 @@ function olyFamilyForLiftKey(key: LiftKey): OlyFamily | null {
 }
 
 /**
- * Traduce los desbalances detectados a un sesgo de seleccion para el motor de sesion: hacia que
- * levantamiento concreto (fuerza) o familia (oly) inclinarse dentro de lo que ya toca hoy. Solo
- * mira reglas `direction: 'low'` (el target va genuinamente flojo respecto al reference) — las
- * `'high'` (p.ej. Power Clean demasiado cerca del Clean) son tecnica de recepcion, no falta de
- * fuerza, y darles mas frecuencia no las arregla. Nunca fabrica una senal desde un PR por defecto:
- * `evaluateRule` ya exige un test real en ambos lados.
+ * Traduce los desbalances detectados a un sesgo de seleccion para el motor de sesion:
+ *  - reglas `direction: 'low'` (el target va genuinamente flojo respecto al reference) -> mas
+ *    frecuencia de ese levantamiento (fuerza) o familia (oly) dentro de lo que ya toca hoy.
+ *  - reglas `direction: 'high'` (p.ej. Power Clean demasiado cerca del Clean completo) -> el limite
+ *    es recibir abajo, no la fuerza de tiron: se marca la familia como `receivingFamilies` para que
+ *    el oly sesgue hacia la version completa y drills de recepcion, no mas trabajo de potencia.
+ * Nunca fabrica una senal desde un PR por defecto: `evaluateRule` ya exige un test real en ambos lados.
  */
 export function getImbalanceBias(
   prs: PersonalRecords,
@@ -309,17 +314,21 @@ export function getImbalanceBias(
   const testedRootKeys = getTestedRootKeys(history);
   const strengthLiftIds = new Set<string>();
   const olyFamilies = new Set<OlyFamily>();
+  const receivingFamilies = new Set<OlyFamily>();
 
   for (const group of GROUPS) {
     for (const rule of group.rules) {
-      if (rule.direction !== 'low') continue;
       if (!evaluateRule(rule, prs, variantPrs, testedRootKeys).flagged) continue;
       const family = olyFamilyForLiftKey(rule.targetKey);
+      if (rule.direction === 'high') {
+        if (family) receivingFamilies.add(family);
+        continue;
+      }
       if (family) olyFamilies.add(family);
       else strengthLiftIds.add(LIFTS[rule.targetKey].id);
     }
   }
 
-  if (strengthLiftIds.size === 0 && olyFamilies.size === 0) return EMPTY_IMBALANCE_BIAS;
-  return { strengthLiftIds: [...strengthLiftIds], olyFamilies: [...olyFamilies] };
+  if (strengthLiftIds.size === 0 && olyFamilies.size === 0 && receivingFamilies.size === 0) return EMPTY_IMBALANCE_BIAS;
+  return { strengthLiftIds: [...strengthLiftIds], olyFamilies: [...olyFamilies], receivingFamilies: [...receivingFamilies] };
 }
