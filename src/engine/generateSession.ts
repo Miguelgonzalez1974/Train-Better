@@ -82,6 +82,7 @@ import {
 } from './movementBalance';
 import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
+import { buildMicrocyclePlan } from './weekPlan';
 import {
   computeResponseProfile,
   engineResponseProfile,
@@ -358,6 +359,8 @@ function buildStrengthBlock(
   painReintro: Map<MovementPattern, number>,
   patternFatigue: Map<MovementPattern, PatternFatigue>,
   responseProfile: ResponseProfile,
+  /** Patron que el planificador de microciclo reservo para hoy (ver weekPlan.ts); null si no hay macro/plan. */
+  plannedPattern: MovementPattern | null,
 ): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
   const responseBias = clampResponseBias(responseProfile.rpe.bias);
   const rpeAutoreg = getRpeAutoregFactor(history, date, responseProfile.rpe.reliability);
@@ -388,7 +391,8 @@ function buildStrengthBlock(
     }
   }
 
-  let pattern = dayPlan.strengthPattern;
+  // Base: lo que reservo el planificador de microciclo para este dia; si no hay plan, el ciclo natural.
+  let pattern = plannedPattern ?? dayPlan.strengthPattern;
   let weakPointTag = '';
   // Si el objetivo va claramente por detras de su calendario (no solo "se acerca la fecha"), se
   // fuerza todos los dias que apliquen, no solo en los dias de enfasis alternos — un atleta que se
@@ -401,7 +405,10 @@ function buildStrengthBlock(
   );
   if (goalForcedPattern) {
     pattern = getMovementById(pref.movementId!)!.pattern;
-  } else {
+  } else if (!plannedPattern) {
+    // Sin plan de semana: se decide el patron dia a dia como antes. Con plan, el reparto ya
+    // equilibro la semana (incluido el sesgo por estancamiento del perfil de respuesta) y esta
+    // cadena reactiva se salta — pelearia contra una eleccion deliberada.
     // Antes de mirar puntos debiles a largo plazo, se corrige un desequilibrio real de la semana en
     // curso (p.ej. horizontalPush lleva 7 dias a cero mientras otro patron ya va por 2+) — el ciclo
     // natural de 4 patrones deja huecos estructurales para atletas de 3 o 6 dias/semana, y esto pesa
@@ -623,6 +630,8 @@ function buildOlyBlock(
   painReintro: Map<MovementPattern, number>,
   patternFatigue: Map<MovementPattern, PatternFatigue>,
   responseProfile: ResponseProfile,
+  /** Familia que el planificador de microciclo reservo para hoy (ver weekPlan.ts); null si no hay macro/plan. */
+  plannedFamily: OlyFamily | null,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -664,7 +673,7 @@ function buildOlyBlock(
     }
   }
 
-  let family = dayPlan.olyFamily;
+  let family = plannedFamily ?? dayPlan.olyFamily;
   let weakPointTag = '';
   const goalForcedFamily = Boolean(
     pref.movementId &&
@@ -674,7 +683,9 @@ function buildOlyBlock(
   );
   if (goalForcedFamily) {
     family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
-  } else {
+  } else if (!plannedFamily) {
+    // Sin plan de semana: se decide la familia dia a dia. Con plan ya viene alternada y con el
+    // ancla del objetivo/estancamiento, asi que esta cadena reactiva se salta.
     // Mismo orden que en fuerza: primero una familia con un levantamiento estancado/en caida en el
     // historial real de PRs, si no la peor valorada en `computeWeakPoints`, si no el sesgo de desbalance.
     const stalledFam = stalledOlyFamily(responseProfile);
@@ -1644,6 +1655,25 @@ export function generateDailySession(
   const patternFatigue = computePatternFatigue(history, date);
   const fatiguedPatterns = overcookedPatterns(patternFatigue);
 
+  // Planificador de microciclo (ver weekPlan.ts): reparte el patron de fuerza y la familia de oly
+  // sobre LA SEMANA ENTERA de una vez, en vez de decidir cada dia en aislamiento. Se pasa como
+  // preferencia base a los bloques; el forzado por objetivo, la sustitucion por dolor, el
+  // anti-repeticion entre semanas y la autorregulacion siguen actuando encima, por dia.
+  const strengthGoal = pickPriorityGoal(goals, (g) => (g.type === 'elevar-fuerza' || g.type === 'subir-pr') && Boolean(g.movementId));
+  const olyGoal = pickPriorityGoal(goals, (g) => (g.type === 'mejorar-potencia' || g.type === 'subir-pr') && Boolean(g.movementId));
+  const microPlan = buildMicrocyclePlan({
+    macroId: macro.id,
+    weekNumber: weeksSinceStart(macro.startDate, date) + 1,
+    phase: week,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek,
+    responseProfile,
+    avoidedPatterns,
+    goalForcedPattern: strengthGoal?.movementId ? getMovementById(strengthGoal.movementId)?.pattern ?? null : null,
+    goalForcedFamily: olyGoal?.movementId ? (olyGoal.movementId.includes('snatch') ? 'snatch' : 'clean') : null,
+  });
+  const plannedPattern = microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
+  const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
+
   // Enfasis del dia segun la fase (ver `resolveDayEmphasis`): 'fuerza' = solo barra, sin WOD;
   // 'metcon' = solo condicion fisica, sin fuerza pesada; 'mixto' = ambos, como siempre. Dos
   // anulaciones: en taper el ultimo dia de la semana es un metcon de simulacion, y un dia de test
@@ -1682,8 +1712,9 @@ export function generateDailySession(
         painReintro,
         patternFatigue,
         responseProfile,
+        plannedPattern,
       )
-    : { blocks: [] as SessionBlockResult[], pattern: dayPlan.strengthPattern, reasons: [] as string[] };
+    : { blocks: [] as SessionBlockResult[], pattern: plannedPattern ?? dayPlan.strengthPattern, reasons: [] as string[] };
   const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
 
   const { blocks: olyBlock, reasons: olyReasons } = doStrength
@@ -1706,6 +1737,7 @@ export function generateDailySession(
         painReintro,
         patternFatigue,
         responseProfile,
+        plannedFamily,
       )
     : { blocks: [] as SessionBlockResult[], reasons: [] as string[] };
 
