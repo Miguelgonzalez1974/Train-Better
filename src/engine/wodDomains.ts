@@ -289,11 +289,14 @@ export interface EnergySystemPlan {
 /**
  * La fuerza ya esta periodizada (volumen -> intensidad -> pico). El acondicionamiento no lo estaba:
  * el WOD solo variaba duracion por semana. Aqui se le da la misma progresion clasica de resistencia
- * — base aerobica -> umbral -> potencia anaerobica -> recuperacion — atada a la fase del macrociclo,
- * sesgando duracion, formato y cantidad de cardio ciclico del WOD sin cambiar la trifecta de fondo.
+ * — base aerobica -> umbral -> potencia anaerobica -> recuperacion — con dos niveles: la FASE del
+ * macrociclo fija el sistema dominante, y dentro de la semana el planificador de microciclo ROTA los
+ * dias alrededor de ese dominante (ver PHASE_ENERGY_MENU en weekPlan.ts) para que dos dias seguidos
+ * no repitan el mismo estimulo metabolico. Cada plan sesga duracion, formato y cardio ciclico del
+ * WOD sin tocar la trifecta de fondo.
  */
-const ENERGY_SYSTEM_BY_WEEK: Record<1 | 2 | 3 | 4, EnergySystemPlan> = {
-  1: {
+const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
+  'base-aerobica': {
     system: 'base-aerobica',
     label: 'Base aeróbica',
     monoFloor: 2,
@@ -302,39 +305,53 @@ const ENERGY_SYSTEM_BY_WEEK: Record<1 | 2 | 3 | 4, EnergySystemPlan> = {
     preferFormats: ['amrap', 'interval', 'chipper'],
     durationScale: 1.15,
     paceCue: 'ritmo sostenible y conversacional, sin sprints',
-    note: 'Acondicionamiento de esta fase: base aeróbica — piezas más largas a ritmo sostenible y más cardio cíclico. Construyes motor, no buscas fallar.',
+    note: 'Acondicionamiento de hoy: base aeróbica — pieza más larga a ritmo sostenible y más cardio cíclico. Construyes motor, no buscas fallar.',
   },
-  2: {
+  umbral: {
     system: 'umbral',
     label: 'Umbral',
     monoFloor: 1,
     preferFormats: ['forTime', 'interval', 'ladder', 'ascendingLadderFiller'],
     durationScale: 1.0,
     paceCue: 'cómodo-duro: rápido pero sin colapsar',
-    note: 'Acondicionamiento de esta fase: umbral — intervalos y For Time de duración media a ritmo "cómodo-duro", justo por debajo de acumular demasiado lactato.',
+    note: 'Acondicionamiento de hoy: umbral — intervalos y For Time de duración media a ritmo "cómodo-duro", justo por debajo de acumular demasiado lactato.',
   },
-  3: {
+  potencia: {
     system: 'potencia',
     label: 'Potencia anaeróbica',
     monoFloor: 1,
     preferFormats: ['forTime', 'emom', 'risingLoadInterval', 'risingInterval'],
     durationScale: 0.9,
     paceCue: 'máximo esfuerzo en piezas cortas',
-    note: 'Acondicionamiento de esta fase: potencia anaeróbica — piezas cortas y máximas, estilo competición. Menos volumen, más intensidad.',
+    note: 'Acondicionamiento de hoy: potencia anaeróbica — pieza corta y máxima, estilo competición. Menos volumen, más intensidad.',
   },
-  4: {
+  recuperacion: {
     system: 'recuperacion',
     label: 'Recuperación aeróbica',
     monoFloor: 2,
     preferFormats: ['amrap', 'interval'],
     durationScale: 0.9,
     paceCue: 'suave, para recuperar — nunca al límite',
-    note: 'Acondicionamiento de esta fase: recuperación aeróbica — cardio suave y continuo para bajar fatiga, nunca cerca del fallo.',
+    note: 'Acondicionamiento de hoy: recuperación aeróbica — cardio suave y continuo para bajar fatiga, nunca cerca del fallo.',
   },
 };
 
+/** Sistema energetico dominante de cada fase de mesociclo — el punto de gravedad alrededor del cual rota la semana. */
+export const PHASE_DOMINANT_ENERGY: Record<1 | 2 | 3 | 4, EnergySystem> = {
+  1: 'base-aerobica',
+  2: 'umbral',
+  3: 'potencia',
+  4: 'recuperacion',
+};
+
+/** Plan del sistema energetico dominante de la fase — usado cuando no hay un plan de dia concreto (fallback). */
 export function resolveEnergySystem(week: 1 | 2 | 3 | 4): EnergySystemPlan {
-  return ENERGY_SYSTEM_BY_WEEK[week];
+  return ENERGY_SYSTEM_PLANS[PHASE_DOMINANT_ENERGY[week]];
+}
+
+/** Plan de un sistema energetico concreto — usado con el sistema que el planificador de microciclo asigno a HOY. */
+export function resolveEnergySystemPlan(system: EnergySystem): EnergySystemPlan {
+  return ENERGY_SYSTEM_PLANS[system];
 }
 
 /**

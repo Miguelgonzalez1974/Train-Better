@@ -51,11 +51,13 @@ import {
   getWodDomain,
   pickSmartBenchmark,
   resolveEnergySystem,
+  resolveEnergySystemPlan,
   RISING_LOAD_INTERVAL_INCREMENT_PERCENT,
   RISING_LOAD_INTERVAL_STEPS,
   WOD_BARBELL_LOAD_PERCENT,
   WOD_PRESCRIPTION,
   WOD_TIME_DOMAIN,
+  type EnergySystem,
   type WodFormatKind,
   type WodTimeDomain,
 } from './wodDomains';
@@ -1092,6 +1094,9 @@ function buildWodBlock(
   prs: PersonalRecords,
   responseProfile: ResponseProfile,
   dayEmphasis: 'mixto' | 'fuerza' | 'metcon',
+  /** Sistema energetico que el planificador de microciclo asigno a HOY (ver weekPlan.ts); null sin
+   *  macro/plan -> cae al dominante de la fase. */
+  plannedEnergy: EnergySystem | null,
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1185,10 +1190,12 @@ function buildWodBlock(
   const baseDomain = WOD_TIME_DOMAIN[week];
   const isPeakWeek = week === 3;
 
-  // Periodizacion del acondicionamiento: la fase del macrociclo marca el sistema energetico
-  // (base aerobica -> umbral -> potencia -> recuperacion), que ajusta la duracion sobre el time
-  // domain de la semana, empuja mas o menos cardio ciclico y sesga que formatos salen.
-  const energy = resolveEnergySystem(week);
+  // Periodizacion del acondicionamiento en dos niveles: la FASE marca el sistema energetico
+  // dominante y el planificador de microciclo ROTA el sistema de cada dia a su alrededor (para no
+  // encadenar el mismo estimulo dos dias seguidos). El plan resultante ajusta la duracion sobre el
+  // time domain de la semana, empuja mas o menos cardio ciclico y sesga que formatos salen. Sin
+  // plan de dia (no deberia pasar en el motor periodizado) cae al dominante de la fase.
+  const energy = plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week);
   const emphasisScale = EMPHASIS_WOD_SCALE[dayEmphasis];
   const timeDomain: WodTimeDomain = {
     rounds: Math.max(2, Math.round(baseDomain.rounds * energy.durationScale * emphasisScale)),
@@ -1744,6 +1751,7 @@ export function generateDailySession(
   });
   const plannedPattern = microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
   const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
+  const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
 
   // Enfasis del dia segun la fase (ver `resolveDayEmphasis`): 'fuerza' = solo barra, sin WOD;
   // 'metcon' = solo condicion fisica, sin fuerza pesada; 'mixto' = ambos, como siempre. Dos
@@ -1825,6 +1833,7 @@ export function generateDailySession(
     profile.prs,
     responseProfile,
     dayEmphasis,
+    plannedEnergy,
   );
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
@@ -1844,7 +1853,7 @@ export function generateDailySession(
       : dayEmphasis === 'metcon'
         ? 'Hoy es día de metcon — sin fuerza pesada ni oly y con un WOD algo más largo, para afilar tu condición física de cara al pico.'
         : undefined;
-  const energyReason = resolveEnergySystem(week).note;
+  const energyReason = (plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week)).note;
   const coachReasons = Array.from(new Set(collectReasons(deloadNote, emphasisNote, energyReason, ...strengthReasons, ...olyReasons)));
 
   return {

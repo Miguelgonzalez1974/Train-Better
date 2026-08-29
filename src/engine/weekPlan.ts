@@ -1,6 +1,7 @@
 import type { MovementPattern } from '../data/movements/types';
 import { resolveDayEmphasis, type OlyFamily } from './periodization';
 import { stalledOlyFamily, stalledStrengthPattern, type ResponseProfile } from './responseProfile';
+import { PHASE_DOMINANT_ENERGY, type EnergySystem } from './wodDomains';
 
 /**
  * Planificador de microciclo: en vez de decidir cada dia en aislamiento (ciclo crudo de patron +
@@ -27,6 +28,10 @@ export interface MicrocyclePlan {
   strengthPattern: MovementPattern[];
   /** Familia de oly por `trainingDayIndex`. */
   olyFamily: OlyFamily[];
+  /** Sistema energetico del WOD por `trainingDayIndex` — rota alrededor del dominante de la fase para
+   *  que dos dias seguidos no repitan estimulo metabolico. Los slots sin WOD (recuperacion de n=6)
+   *  llevan el dominante como relleno inocuo. */
+  energySystem: EnergySystem[];
 }
 
 /** Los 4 patrones que el bloque de fuerza cicla (STRENGTH_PATTERN_CYCLE). */
@@ -78,17 +83,76 @@ function shuffle<T>(xs: T[], rand: () => number): T[] {
   return out;
 }
 
-/** Reordena la bolsa para que no queden dos patrones iguales seguidos siempre que sea posible. */
-function spaceOut(bag: StrengthPattern[]): StrengthPattern[] {
+/** Reordena la bolsa para que no queden dos elementos iguales seguidos siempre que sea posible. */
+function spaceOut<T>(bag: T[]): T[] {
   const remaining = [...bag];
-  const out: StrengthPattern[] = [];
+  const out: T[] = [];
   while (remaining.length > 0) {
     let pick = remaining.findIndex((p) => p !== out[out.length - 1]);
-    if (pick === -1) pick = 0; // solo queda el mismo patron: no hay mas remedio
+    if (pick === -1) pick = 0; // solo queda el mismo elemento: no hay mas remedio
     out.push(remaining[pick]);
     remaining.splice(pick, 1);
   }
   return out;
+}
+
+/**
+ * Menu de sistemas energeticos por fase, en orden de prioridad. El primero es el dominante de la
+ * fase (mismo que `PHASE_DOMINANT_ENERGY`); los siguientes son los contrastes que la semana rota
+ * para no encadenar el mismo estimulo. La cobertura la marca el conjunto de sistemas distintos del
+ * menu; los dias que sobren se rellenan con el dominante.
+ *  - Acumulacion: base aerobica manda, con un dia de umbral y uno de potencia para no perder chispa.
+ *  - Intensificacion: umbral manda, potencia arriba y un dia aerobico de descarga activa.
+ *  - Pico: potencia manda, umbral como unico contraste — nada de dias largos aerobicos esta semana.
+ *  - Descarga: casi todo recuperacion, algun dia de aerobico continuo algo mas largo.
+ */
+const PHASE_ENERGY_MENU: Record<1 | 2 | 3 | 4, EnergySystem[]> = {
+  1: ['base-aerobica', 'umbral', 'potencia'],
+  2: ['umbral', 'potencia', 'base-aerobica'],
+  3: ['potencia', 'umbral'],
+  4: ['recuperacion', 'base-aerobica'],
+};
+
+/**
+ * Reordena por conteo: en cada paso coloca el elemento con mas repeticiones pendientes que no sea el
+ * ultimo colocado. Optimo para "no dos iguales seguidos" cuando es alcanzable (el `spaceOut` greedy
+ * de arriba, pensado para repartos casi planos como los patrones de fuerza, deja adyacencias
+ * evitables cuando un elemento domina 3:1 como pasa en los menus de energia).
+ */
+function spaceOutByCount<T>(bag: T[]): T[] {
+  const counts = new Map<T, number>();
+  for (const x of bag) counts.set(x, (counts.get(x) ?? 0) + 1);
+  const out: T[] = [];
+  while (out.length < bag.length) {
+    const last = out[out.length - 1];
+    const live = [...counts.entries()].filter(([, c]) => c > 0);
+    const avoidingLast = live.filter(([x]) => x !== last);
+    const [pick] = (avoidingLast.length > 0 ? avoidingLast : live).sort((a, b) => b[1] - a[1])[0];
+    out.push(pick);
+    counts.set(pick, counts.get(pick)! - 1);
+  }
+  return out;
+}
+
+/** `trainingDayIndex` de los dias que haran WOD generado esta semana — todos menos el de recuperacion de n=6. */
+function wodDoingSlots(n: 3 | 4 | 5 | 6): number[] {
+  const recoveryIdx = n === 6 ? 3 : -1;
+  const slots: number[] = [];
+  for (let idx = 0; idx < n; idx++) if (idx !== recoveryIdx) slots.push(idx);
+  return slots;
+}
+
+/**
+ * Reparte los sistemas energeticos sobre los dias de WOD de la semana: cubre cada sistema del menu
+ * de la fase, rellena los dias sobrantes con el dominante, baraja de forma determinista y separa
+ * iguales adyacentes para que dos dias seguidos no lleven el mismo estimulo metabolico.
+ */
+function allocateEnergySystems(wodSlotCount: number, phase: 1 | 2 | 3 | 4, rand: () => number): EnergySystem[] {
+  if (wodSlotCount <= 0) return [];
+  const menu = PHASE_ENERGY_MENU[phase];
+  const bag: EnergySystem[] = [...new Set(menu)].slice(0, wodSlotCount);
+  while (bag.length < wodSlotCount) bag.push(menu[0]);
+  return spaceOutByCount(shuffle(bag, rand));
 }
 
 /** `trainingDayIndex` de los slots que de verdad haran bloque de fuerza esta semana. */
@@ -199,5 +263,16 @@ export function buildMicrocyclePlan(input: {
     olyFamily[slotIdx] = i % 2 === 0 ? anchorFam : other(anchorFam);
   });
 
-  return { weekNumber, phase, strengthPattern, olyFamily };
+  // Rotacion de dominios energeticos: la fase fija el sistema dominante (PHASE_DOMINANT_ENERGY) y
+  // dentro de la semana los dias rotan a su alrededor para no encadenar el mismo estimulo metabolico
+  // dos dias seguidos. Se asigna a cada dia que hara WOD; los demas (recuperacion de n=6) llevan el
+  // dominante como relleno inocuo. Consume `rand` DESPUES de fuerza/oly, asi que no altera su reparto.
+  const wodSlots = wodDoingSlots(n);
+  const allocatedEnergy = allocateEnergySystems(wodSlots.length, phase, rand);
+  const energySystem: EnergySystem[] = Array.from({ length: n }, () => PHASE_DOMINANT_ENERGY[phase]);
+  wodSlots.forEach((slotIdx, i) => {
+    energySystem[slotIdx] = allocatedEnergy[i];
+  });
+
+  return { weekNumber, phase, strengthPattern, olyFamily, energySystem };
 }
