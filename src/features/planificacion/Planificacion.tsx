@@ -47,6 +47,7 @@ import { DaySessionBlocks } from './DaySessionBlocks';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { SetFeedbackPanel } from './SetFeedbackPanel';
+import { RestTimer } from './RestTimer';
 import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -585,6 +586,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
   return (
     <div className="flex flex-col gap-4">
+      {session && !session.isRestDay && <RestTimer />}
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
 
       {goals.length > 0 && (

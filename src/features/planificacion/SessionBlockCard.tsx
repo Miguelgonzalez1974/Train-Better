@@ -11,6 +11,7 @@ import {
 } from '../../data/movements';
 import type { SessionBlockResult } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
+import { LoadStat } from './LoadStat';
 
 type Accent = 'orange' | 'gold' | 'neutral';
 
@@ -276,7 +277,7 @@ function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                 <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
                   {entry.sets && <StatBox value={entry.sets} label="series" />}
                   {entry.reps && <StatBox value={entry.reps} label="reps" />}
-                  {entry.loadKg && <StatBox value={`${entry.loadKg}`} label="kg" />}
+                  {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
                   {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
                 </div>
               )}
@@ -340,7 +341,7 @@ function EntryRow({ entry }: { entry: SessionBlockResult }) {
         <div className="mt-2 flex flex-wrap gap-1.5">
           {entry.sets && <StatBox value={entry.sets} label="series" />}
           {entry.reps && <StatBox value={entry.reps} label="reps" />}
-          {entry.loadKg && <StatBox value={`${entry.loadKg}`} label="kg" />}
+          {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
           {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
         </div>
       )}
