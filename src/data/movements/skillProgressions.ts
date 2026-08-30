@@ -145,22 +145,17 @@ export function getSkillProgressionFor(movementId: string): SkillProgression | u
 }
 
 /**
- * Escalon de la progresion segun `progress` (0-1, del propio objetivo): 0 -> el mas facil, cerca
- * de la fecha del objetivo -> el movimiento objetivo. El atleta ajusta el ritmo cambiando la fecha.
- *
- * `floorLevel` (0-1, opcional): nivel de partida que el atleta declara — el escalon nunca baja de
- * ahi aunque el progreso por fecha diga menos. `driver` indica cual de los dos manda hoy.
+ * Escalon de la progresion segun una fraccion `progress` (0-1): 0 -> el mas facil, 1 -> el
+ * movimiento objetivo. Primitiva pura; el motor (`resolveSkillProgression`) es quien calcula esa
+ * fraccion combinando competencia real, calendario y nivel de partida declarado.
  */
 export function skillProgressionStepAt(
   progression: SkillProgression,
   progress: number,
-  floorLevel = 0,
-): { step: SkillProgressionStep; index: number; total: number; driver: 'progress' | 'level' } {
+): { step: SkillProgressionStep; index: number; total: number } {
   const total = progression.steps.length;
-  const fromProgress = Math.floor(progress * total);
-  const fromFloor = Math.floor(Math.min(1, Math.max(0, floorLevel)) * total);
-  const index = Math.min(total - 1, Math.max(0, fromProgress, fromFloor));
-  return { step: progression.steps[index], index, total, driver: fromFloor > fromProgress ? 'level' : 'progress' };
+  const index = Math.min(total - 1, Math.max(0, Math.floor(progress * total)));
+  return { step: progression.steps[index], index, total };
 }
 
 /** Movimientos objetivo (para el selector de "Mejorar gimnásticos" en Objetivos). */

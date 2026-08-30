@@ -7,7 +7,12 @@ import {
   olyMovements,
   skillMovements,
 } from '../data/movements';
-import { getSkillProgressionFor, skillProgressionStepAt } from '../data/movements/skillProgressions';
+import {
+  getSkillProgressionFor,
+  skillProgressionStepAt,
+  type SkillProgression,
+  type SkillProgressionStep,
+} from '../data/movements/skillProgressions';
 import type {
   AthleteProfile,
   DailySession,
@@ -1492,6 +1497,58 @@ function buildAccessoryBlock(
   return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: accSets, reps, format, notes }));
 }
 
+/** Sesiones de gimnasticos (registradas, con un movimiento del arbol) que valen para subir un escalon. */
+const SKILL_SESSIONS_PER_RUNG = 10;
+
+/**
+ * Micro-progresion DENTRO de un escalon — para que no se prescriba el mismo texto identico semana
+ * tras semana. Se elige por cuantas sesiones se llevan en el escalon actual (0 -> volumen tecnico,
+ * 1 -> mas control/tempo, 2+ -> estirar el rango antes de subir).
+ */
+const SKILL_RUNG_BLOCKS = [
+  { reps: '4-5 series cortas', focus: 'Volumen técnico: series cortas y perfectas, descanso completo entre ellas.' },
+  { reps: '3-4 series · más control', focus: 'Sube el tiempo bajo tensión: cada repetición más lenta y controlada que la semana pasada.' },
+  { reps: '3 series · al filo del paso', focus: 'Estira el rango o la dificultad dentro de este paso — casi listo para el siguiente.' },
+];
+
+/**
+ * Escalon efectivo de una progresion de gimnasticos. Antes solo miraba el calendario
+ * (`tiempo transcurrido / plazo del objetivo`), en saltos de `1/nº escalones`, asi que un objetivo
+ * largo mostraba el MISMO ejercicio en todas las sesiones durante muchas semanas. Ahora sube por el
+ * mayor de tres: sesiones de gimnasticos ya registradas (competencia real, `SKILL_SESSIONS_PER_RUNG`
+ * por escalon), calendario (suelo lento), y el nivel de partida declarado. `sessionsOnRung` alimenta
+ * la micro-progresion dentro del escalon.
+ */
+function resolveSkillProgression(
+  progression: SkillProgression,
+  goal: Goal,
+  history: SessionHistoryEntry[],
+  date: Date,
+): { index: number; total: number; sessionsOnRung: number; driver: 'tiempo' | 'sesiones' | 'nivel' } {
+  const total = progression.steps.length;
+  const treeIds = new Set<string>(progression.steps.map((s) => s.movementId));
+  treeIds.add(progression.targetMovementId);
+  const dateIso = toLocalIsoDate(date);
+  const sessionsDone = history.filter(
+    (h) => h.date >= goal.createdAt && h.date <= dateIso && h.movementIds.some((id) => treeIds.has(id)),
+  ).length;
+
+  const competenceFrac = sessionsDone / (total * SKILL_SESSIONS_PER_RUNG);
+  const timeFrac = getGoalProgress(goal, history, date); // objetivos de skill: es progreso puramente temporal
+  const levelFrac = Math.min(1, Math.max(0, goal.skillLevel ?? 0));
+  const bestFrac = Math.max(competenceFrac, timeFrac, levelFrac);
+
+  const { index } = skillProgressionStepAt(progression, bestFrac);
+  const driver =
+    bestFrac === competenceFrac && competenceFrac >= timeFrac && competenceFrac >= levelFrac
+      ? 'sesiones'
+      : levelFrac === bestFrac && levelFrac > timeFrac
+        ? 'nivel'
+        : 'tiempo';
+  const sessionsOnRung = Math.max(0, sessionsDone - index * SKILL_SESSIONS_PER_RUNG);
+  return { index, total, sessionsOnRung, driver };
+}
+
 function buildSkillBlock(
   history: SessionHistoryEntry[],
   goals: Goal[],
@@ -1500,28 +1557,54 @@ function buildSkillBlock(
 ): SessionBlockResult[] {
   const candidates = filterAvoidingPain(getMovementsByBlock('skill'), avoidedPatterns);
 
-  // Objetivo de gimnasticos con arbol de progresion conocido: se programa el escalon que toca segun
-  // lo avanzado que va el objetivo (0% -> el mas facil; cerca de la fecha -> el movimiento
-  // objetivo). El atleta ajusta el ritmo cambiando la fecha del objetivo.
+  // Objetivo de gimnasticos con arbol de progresion: se programa el escalon efectivo (competencia +
+  // calendario + nivel de partida, ver `resolveSkillProgression`), y se ROTA que sale hoy — casi
+  // siempre el escalon actual, a veces el anterior para reforzar la base, y de vez en cuando un
+  // toque del siguiente cuando ya se lleva rodaje. Dentro del escalon, la prescripcion tambien
+  // progresa (`SKILL_RUNG_BLOCKS`).
   const progressionGoal = pickPriorityGoal(goals, (g) => g.type === 'mejorar-gimnasticos' && Boolean(g.movementId));
   if (progressionGoal?.movementId) {
     const progression = getSkillProgressionFor(progressionGoal.movementId);
     if (progression) {
-      const { step, index, total, driver } = skillProgressionStepAt(
-        progression,
-        getGoalProgress(progressionGoal, history, date),
-        progressionGoal.skillLevel ?? 0,
-      );
-      const stepMovement = getMovementById(step.movementId);
+      const { index, total, sessionsOnRung, driver } = resolveSkillProgression(progression, progressionGoal, history, date);
+      const steps = progression.steps;
+      const feeder = index > 0 ? steps[index - 1] : null;
+      const reach = index < total - 1 ? steps[index + 1] : null;
+      const rungPhase = Math.min(SKILL_RUNG_BLOCKS.length - 1, Math.floor(sessionsOnRung / 4));
+
+      const roll = Math.random();
+      let picked: { step: SkillProgressionStep; role: 'actual' | 'feeder' | 'reach'; rung: number };
+      if (feeder && roll < 0.28) {
+        picked = { step: feeder, role: 'feeder', rung: index - 1 };
+      } else if (reach && rungPhase >= 1 && roll > 0.86) {
+        picked = { step: reach, role: 'reach', rung: index + 1 };
+      } else {
+        picked = { step: steps[index], role: 'actual', rung: index };
+      }
+
+      const stepMovement = getMovementById(picked.step.movementId);
       if (stepMovement && !avoidedPatterns.has(stepMovement.pattern)) {
-        const levelNote = driver === 'level' ? ' (empezamos aquí por el nivel de partida que marcaste).' : '';
+        const rb = SKILL_RUNG_BLOCKS[rungPhase];
+        const currentName = getMovementById(steps[index].movementId)?.name ?? 'el paso actual';
+        const roleNote =
+          picked.role === 'feeder'
+            ? ` Hoy vuelves un paso atrás para reforzar el patrón base — más ligero, mañana sigues con ${currentName}.`
+            : picked.role === 'reach'
+              ? ` Toque del paso siguiente para tantearlo — sin forzar, vuelves a ${currentName} la próxima.`
+              : ` ${rb.focus}`;
+        const driverNote =
+          driver === 'sesiones'
+            ? ' Subes de paso por las sesiones de gimnásticos que ya llevas, no solo por el calendario.'
+            : driver === 'nivel'
+              ? ' Empezaste aquí por el nivel de partida que marcaste.'
+              : '';
         return [
           {
             block: 'skill',
-            movementId: step.movementId,
+            movementId: picked.step.movementId,
             sets: 4,
-            reps: 'tecnica / tiempo',
-            notes: `Progresión hacia ${progression.targetName} — paso ${index + 1} de ${total}: ${step.cue}${levelNote}`,
+            reps: picked.role === 'actual' ? rb.reps : 'técnica / calidad',
+            notes: `Progresión hacia ${progression.targetName} — paso ${picked.rung + 1} de ${total}: ${picked.step.cue}${roleNote}${driverNote}`,
           },
         ];
       }
