@@ -50,7 +50,7 @@ export const STRENGTH_WEEK_SCHEMES: Record<1 | 2 | 3 | 4, WeekScheme> = {
 /** El oly trabaja a % mas bajo que el strength y con menos repeticiones por serie. */
 export const OLY_WEEK_SCHEMES: Record<1 | 2 | 3 | 4, WeekScheme> = {
   1: {
-    percent: 0.65,
+    percent: 0.68,
     sets: 5,
     reps: 3,
     label: 'Técnica (semana 1/4)',

@@ -688,6 +688,19 @@ const RECEIVING_PRIMER_IDS: Record<OlyFamily, string[]> = {
   clean: [],
 };
 
+/**
+ * Factor de carga del primer del complejo sobre el % del esquema, segun su tipo — un tiron o un
+ * hang NO es un drill ligero, se hace casi al peso del levantamiento; solo los tecnicos puros
+ * (muscle, tall, tres posiciones) van de verdad ligeros. El `0.75` plano de antes dejaba, p.ej.,
+ * un hang clean en ~46% del PR, que no tiene sentido (deberia rondar 60-70%).
+ */
+function primerLoadFactor(primerId: string): number {
+  if (/pull|deadlift/.test(primerId)) return 1.0; // clean/snatch pull, high-pull, deadlift — como el lift
+  if (primerId.includes('hang')) return 0.9; // hang clean/snatch (from / above knee)
+  if (/balance|overhead-squat|dip-drill/.test(primerId)) return 0.9; // trabajo de recepcion
+  return 0.7; // muscle, tall, tres-posiciones... — drill tecnico ligero de verdad
+}
+
 function buildOlyBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -919,7 +932,9 @@ function buildOlyBlock(
   const primerMovement = pickVaried(receivingPrimers.length > 0 ? receivingPrimers : primerCandidates, recentIds);
   if (!primerMovement) return { blocks: [mainEntry], reasons };
 
-  const primerLoadKg = roundToNearestPlate(resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * 0.75 * autoregFactor);
+  const primerLoadKg = roundToNearestPlate(
+    resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * primerLoadFactor(primerMovement.id) * autoregFactor,
+  );
   const primerEntry: SessionBlockResult = {
     block: 'oly',
     movementId: primerMovement.id,
@@ -1873,7 +1888,13 @@ export function generateDailySession(
   }
 
   const acwrResult = computeAcwr(history, date);
-  const acwrZone = acwrResult.zone;
+  // Cold-start del ACWR: sin >=4 sesiones en la ventana cronica, `computeAcwr` fuerza la zona a
+  // 'moderada' (−5% de carga) por precaucion. Pero si el atleta ya trae PRs reales editados (o un
+  // registro de fechas de entreno), es evidencia de que entrena — no de que vuelve desentrenado.
+  // En ese caso se mantiene el aviso de "empezamos conservador" pero sin el recorte de carga.
+  const knownAthlete = (profile.prLog?.length ?? 0) > 0 || (profile.trainingDatesLog?.length ?? 0) > 0;
+  const acwrZone: AcwrZone =
+    acwrResult.coldStart && knownAthlete && acwrResult.zone === 'moderada' ? 'optima' : acwrResult.zone;
   // Perfil de respuesta del atleta (ver responseProfile.ts) — el motor solo lo aplica cuando hay
   // datos suficientes (`engineResponseProfile` devuelve el neutro si no). Individualiza: cuanto se
   // fia del RPE, sesgo de reporte, ritmo de progreso por lift, y velocidad de recuperacion.
@@ -1925,7 +1946,7 @@ export function generateDailySession(
   const dayDose: DayDose = {
     wodVolume: clampDose(weekProg.wodVolume * INTENSITY_VOL[dayIntensity], 0.72, 1.2),
     strengthSets: clampDose(weekProg.strengthVolume * INTENSITY_VOL[dayIntensity], 0.75, 1.18),
-    strengthLoad: clampDose(weekProg.strengthLoad * INTENSITY_LOAD[dayIntensity], 0.93, 1.04),
+    strengthLoad: clampDose(weekProg.strengthLoad * INTENSITY_LOAD[dayIntensity], 0.93, 1.07),
     dayIntensity,
   };
 

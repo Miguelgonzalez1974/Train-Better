@@ -210,19 +210,21 @@ export function resolveWeekProgression(
   let strengthLoad = 1;
   let what = '';
   if (phaseIndex === 1) {
+    // Acumulacion: la semana 1 arranca a la carga base (sin recorte) y sube ~5% hasta la ultima
+    // semana de la fase; el volumen es lo que mas crece.
     wodVolume = lerp(0.92, 1.1, t);
     strengthVolume = lerp(0.92, 1.1, t);
-    strengthLoad = lerp(0.98, 1.0, t);
-    what = 'el volumen sube progresivamente dentro del bloque';
+    strengthLoad = lerp(1.0, 1.05, t);
+    what = 'la carga sube ~5% y el volumen bastante más a lo largo del bloque';
   } else if (phaseIndex === 2) {
     wodVolume = lerp(1.02, 0.9, t);
     strengthVolume = lerp(1.0, 0.88, t);
-    strengthLoad = lerp(0.99, 1.03, t);
+    strengthLoad = lerp(1.0, 1.06, t);
     what = 'la intensidad sube y el volumen baja a medida que avanza el bloque';
   } else {
     wodVolume = lerp(0.98, 0.86, t);
     strengthVolume = lerp(0.95, 0.85, t);
-    strengthLoad = lerp(1.0, 1.01, t);
+    strengthLoad = lerp(1.0, 1.02, t);
     what = 'afinando hacia el pico, el volumen baja semana a semana';
   }
 
