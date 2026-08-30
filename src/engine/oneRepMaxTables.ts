@@ -47,31 +47,35 @@ export const STRENGTH_WEEK_SCHEMES: Record<1 | 2 | 3 | 4, WeekScheme> = {
   },
 };
 
-/** El oly trabaja a % mas bajo que el strength y con menos repeticiones por serie. */
+/**
+ * El oly trabaja con menos repeticiones por serie que el strength, pero NO a un % ridiculamente
+ * bajo — un levantamiento tecnico necesita carga real para que la posicion importe. Curva:
+ * tecnica 72% x3 -> carga 78% x2 -> completo 85% x1 -> descarga 60% x2.
+ */
 export const OLY_WEEK_SCHEMES: Record<1 | 2 | 3 | 4, WeekScheme> = {
   1: {
-    percent: 0.68,
+    percent: 0.72,
     sets: 5,
     reps: 3,
     label: 'Técnica (semana 1/4)',
-    coachNote: 'Fase técnica — prioriza posición y timing antes que el peso en la barra.',
+    coachNote: 'Fase técnica — prioriza posición y timing, pero con carga suficiente para que cuente.',
   },
   2: {
-    percent: 0.7,
+    percent: 0.78,
     sets: 5,
     reps: 2,
     label: 'Técnica-carga (semana 2/4)',
-    coachNote: 'Añade algo más de carga sin perder las posiciones trabajadas la semana pasada.',
+    coachNote: 'Añade carga sin perder las posiciones trabajadas la semana pasada.',
   },
   3: {
-    percent: 0.78,
-    sets: 5,
+    percent: 0.85,
+    sets: 4,
     reps: 1,
     label: 'Levantamiento completo (semana 3/4)',
-    coachNote: 'Levantamiento completo a mayor intensidad — la técnica ya está consolidada.',
+    coachNote: 'Singles pesados con la técnica ya consolidada — cerca de tu máximo del ciclo.',
   },
   4: {
-    percent: 0.55,
+    percent: 0.6,
     sets: 3,
     reps: 2,
     label: 'Deload (semana 4/4)',

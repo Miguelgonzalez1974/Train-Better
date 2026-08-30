@@ -722,6 +722,8 @@ function buildOlyBlock(
   responseProfile: ResponseProfile,
   /** Familia que el planificador de microciclo reservo para hoy (ver weekPlan.ts); null si no hay macro/plan. */
   plannedFamily: OlyFamily | null,
+  /** Dosis del dia — solo se usa `strengthLoad` para que la carga de oly progrese dentro de la fase (el volumen de oly no se toca). */
+  dose: DayDose,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -868,7 +870,7 @@ function buildOlyBlock(
   const bwFactor = bodyweightLoadFactor(responseProfile);
   const bwNote = bwFactor < 1 ? ' Vienes perdiendo peso corporal — bajamos un poco la carga hasta que se estabilice.' : '';
   const loadKg = roundToNearestPlate(
-    resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor,
+    resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor * dose.strengthLoad,
   );
   const baseNote =
     (pref.movementId && movement.id === pref.movementId
@@ -2015,6 +2017,7 @@ export function generateDailySession(
         patternFatigue,
         responseProfile,
         plannedFamily,
+        dayDose,
       )
     : { blocks: [] as SessionBlockResult[], reasons: [] as string[] };
 
