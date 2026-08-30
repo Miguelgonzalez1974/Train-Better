@@ -7,14 +7,14 @@ interface BottomNavProps {
 
 export function BottomNav({ active, onChange }: BottomNavProps) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-brand-border/70 bg-brand-surface/90 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-brand-border/70 bg-brand-surface shadow-[0_-8px_24px_rgba(0,0,0,0.35)] pb-[env(safe-area-inset-bottom)] md:hidden">
       {NAV_ITEMS.map(({ id, label, Icon }) => {
         const isActive = active === id;
         return (
           <button
             key={id}
             onClick={() => onChange(id)}
-            className={`relative flex flex-1 flex-col items-center gap-1 py-2.5 text-xs font-medium transition-all duration-200 ${
+            className={`relative flex flex-1 basis-0 flex-col items-center gap-1 whitespace-nowrap py-2.5 text-xs font-medium transition-all duration-200 ${
               isActive ? 'text-brand-gold' : 'text-neutral-500'
             }`}
           >

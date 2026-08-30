@@ -1502,8 +1502,9 @@ const SKILL_SESSIONS_PER_RUNG = 10;
 
 /**
  * Micro-progresion DENTRO de un escalon — para que no se prescriba el mismo texto identico semana
- * tras semana. Se elige por cuantas sesiones se llevan en el escalon actual (0 -> volumen tecnico,
- * 1 -> mas control/tempo, 2+ -> estirar el rango antes de subir).
+ * tras semana. Sube por el mayor de: sesiones ya hechas en este escalon, y semanas transcurridas
+ * (con tope 1 — el calendario solo, sin sesiones registradas, no llega a "casi listo para subir").
+ * 0 -> volumen tecnico, 1 -> mas control/tempo, 2 -> estirar el rango antes de subir.
  */
 const SKILL_RUNG_BLOCKS = [
   { reps: '4-5 series cortas', focus: 'Volumen técnico: series cortas y perfectas, descanso completo entre ellas.' },
@@ -1524,7 +1525,7 @@ function resolveSkillProgression(
   goal: Goal,
   history: SessionHistoryEntry[],
   date: Date,
-): { index: number; total: number; sessionsOnRung: number; driver: 'tiempo' | 'sesiones' | 'nivel' } {
+): { index: number; total: number; rungPhase: number; driver: 'tiempo' | 'sesiones' | 'nivel' } {
   const total = progression.steps.length;
   const treeIds = new Set<string>(progression.steps.map((s) => s.movementId));
   treeIds.add(progression.targetMovementId);
@@ -1545,8 +1546,19 @@ function resolveSkillProgression(
       : levelFrac === bestFrac && levelFrac > timeFrac
         ? 'nivel'
         : 'tiempo';
+
+  // Micro-progresion dentro del escalon: sesiones ya hechas en el / semanas transcurridas (tope 1),
+  // lo que sea mayor. Sin esto, previsualizando la semana con el historial vacio salia el mismo
+  // texto identico todos los dias (lo que veia el usuario). Se estima ~2 semanas por escalon para
+  // no contar dos veces el tiempo ya "gastado" en escalones anteriores.
   const sessionsOnRung = Math.max(0, sessionsDone - index * SKILL_SESSIONS_PER_RUNG);
-  return { index, total, sessionsOnRung, driver };
+  const weeksSinceStart = Math.max(0, (date.getTime() - new Date(`${goal.createdAt}T00:00:00`).getTime()) / (7 * 86400000));
+  const weeksOnRung = weeksSinceStart - index * 2;
+  const rungPhase = Math.min(
+    SKILL_RUNG_BLOCKS.length - 1,
+    Math.max(Math.floor(sessionsOnRung / 4), Math.min(1, Math.floor(Math.max(0, weeksOnRung)))),
+  );
+  return { index, total, rungPhase, driver };
 }
 
 function buildSkillBlock(
@@ -1566,11 +1578,10 @@ function buildSkillBlock(
   if (progressionGoal?.movementId) {
     const progression = getSkillProgressionFor(progressionGoal.movementId);
     if (progression) {
-      const { index, total, sessionsOnRung, driver } = resolveSkillProgression(progression, progressionGoal, history, date);
+      const { index, total, rungPhase, driver } = resolveSkillProgression(progression, progressionGoal, history, date);
       const steps = progression.steps;
       const feeder = index > 0 ? steps[index - 1] : null;
       const reach = index < total - 1 ? steps[index + 1] : null;
-      const rungPhase = Math.min(SKILL_RUNG_BLOCKS.length - 1, Math.floor(sessionsOnRung / 4));
 
       const roll = Math.random();
       let picked: { step: SkillProgressionStep; role: 'actual' | 'feeder' | 'reach'; rung: number };
