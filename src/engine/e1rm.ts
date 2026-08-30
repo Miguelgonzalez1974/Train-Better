@@ -12,6 +12,22 @@ export function estimateE1RM(loadKg: number, reps: number): number {
 }
 
 /**
+ * e1RM ajustado por RPE — para una serie de trabajo que NO fue hasta el fallo. Convierte el RPE en
+ * repeticiones en reserva (RIR = 10 - RPE) y estima el maximo como si la serie hubiera llegado al
+ * fallo (reps + RIR), con la misma formula de Epley. Metodo estandar RTS/Helms. Devuelve null fuera
+ * del rango fiable: RPE 5-10, reps 1-8, y sobre todo reps-equivalentes (reps + RIR) <= 10 — mas alla
+ * Epley pierde fiabilidad.
+ */
+export function estimateE1RMFromRpe(loadKg: number, reps: number, rpe: number): number | null {
+  if (!(loadKg > 0) || !Number.isFinite(reps) || !Number.isFinite(rpe)) return null;
+  if (reps < 1 || reps > 8 || rpe < 5 || rpe > 10) return null;
+  const rir = Math.max(0, 10 - rpe);
+  const effReps = reps + rir;
+  if (effReps > 10) return null;
+  return Math.round(estimateE1RM(loadKg, effReps) * 10) / 10;
+}
+
+/**
  * Extrae las reps de una serie principal solo si es un numero limpio y fiable — descarta
  * escaleras ("5-3-1"), rangos del primer tecnico de oly ("2-3") y formatos EMOM ("1 rep/min"
  * pasa porque "1" es una rep unica valida, pero cualquier cosa con guion o rango no).

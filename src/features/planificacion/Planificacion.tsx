@@ -38,7 +38,7 @@ import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRam
 import { getReadinessCheckForDate } from '../../engine/readiness';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
-import { estimateE1RM, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
+import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { adjustRemainingSets, parseWorkingReps } from '../../engine/setFeedback';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
@@ -194,11 +194,25 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           block.firstSetFeel && logEntry
             ? { kg: logEntry.prescribedKg, sets: logEntry.prescribedSets, reps: logEntry.prescribedReps }
             : { kg: block.loadKg ?? 0, sets: block.sets ?? 0, reps: parseWorkingReps(block.reps ?? '') ?? 0 };
+        const logged =
+          logEntry?.actualKg != null && logEntry.actualReps != null && logEntry.actualRpe != null
+            ? {
+                kg: logEntry.actualKg,
+                reps: logEntry.actualReps,
+                rpe: logEntry.actualRpe,
+                estimated1rm: logEntry.estimated1rm,
+                assumedMax:
+                  logEntry.pctOf1rm && logEntry.pctOf1rm > 0
+                    ? Math.round(logEntry.prescribedKg / logEntry.pctOf1rm)
+                    : undefined,
+              }
+            : null;
         return {
           index,
           movementName: getMovementById(block.movementId)?.name ?? block.movementId,
           prescribed,
           currentFeel: block.firstSetFeel ?? null,
+          logged,
         };
       });
   }, [session, setFeedbackLog]);
@@ -241,6 +255,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       feel,
       prKey,
       pctOf1rm,
+      // Conserva la serie real si ya se registró antes de tocar la pastilla.
+      actualKg: existing?.actualKg,
+      actualReps: existing?.actualReps,
+      actualRpe: existing?.actualRpe,
+      estimated1rm: existing?.estimated1rm,
     });
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
 
@@ -250,6 +269,57 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       sets: adj.changed ? adj.adjustedSets : prescribedSets,
       firstSetFeel: feel,
     });
+  }
+
+  /** RPE de una serie de trabajo -> sensación equivalente, para que el ajuste inmediato funcione aunque el atleta solo registre números. */
+  function feelFromRpe(rpe: number): SetFeel {
+    if (rpe <= 7) return 'sobro';
+    if (rpe < 8.5) return 'justo';
+    if (rpe < 9.5) return 'duro';
+    return 'muy-duro';
+  }
+
+  /** "Hice X kg × Y @ RPE Z" — calcula el e1RM y lo guarda; el perfil de respuesta lo usa para calibrar la carga futura de ese lift. */
+  function handleLogActualSet(index: number, actual: { kg: number; reps: number; rpe: number }) {
+    if (!session) return;
+    const block = session.blocks[index];
+    if (!block) return;
+    const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
+    const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
+    const prescribedSets = existing?.prescribedSets ?? block.sets ?? 0;
+    const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
+    if (prescribedKg <= 0 || prescribedSets < 2) return;
+
+    const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
+    const estimated1rm = estimateE1RMFromRpe(actual.kg, actual.reps, actual.rpe) ?? undefined;
+    const feel: SetFeel = existing?.feel ?? feelFromRpe(actual.rpe);
+
+    athleteRepository.appendSetFeedbackEntry({
+      date: session.date,
+      movementId: block.movementId,
+      block: block.block as 'strength' | 'oly',
+      prescribedKg,
+      prescribedReps,
+      prescribedSets,
+      feel,
+      prKey,
+      pctOf1rm,
+      actualKg: actual.kg,
+      actualReps: actual.reps,
+      actualRpe: actual.rpe,
+      estimated1rm,
+    });
+    setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
+
+    // Si aún no había pastilla, la serie real también dispara el ajuste inmediato de lo que queda.
+    if (!existing?.feel) {
+      const adj = adjustRemainingSets({ prescribedKg, prescribedSets, completedSets: 1, feel });
+      handleUpdateEntry(index, {
+        loadKg: adj.changed ? adj.adjustedKg : prescribedKg,
+        sets: adj.changed ? adj.adjustedSets : prescribedSets,
+        firstSetFeel: feel,
+      });
+    }
   }
 
   function handleResetSetFeedback(index: number) {
@@ -1010,7 +1080,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
               movementName={b.movementName}
               prescribed={b.prescribed}
               currentFeel={b.currentFeel}
+              logged={b.logged}
               onPick={(feel) => handleSetFeedback(b.index, feel)}
+              onLogActual={(actual) => handleLogActualSet(b.index, actual)}
               onReset={() => handleResetSetFeedback(b.index)}
             />
           ))}

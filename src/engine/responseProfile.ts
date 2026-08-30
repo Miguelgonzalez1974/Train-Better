@@ -31,6 +31,13 @@ const SETFEEL_RECENT = 8;
 /** Cada punto de sensacion media (justo = 0, "muy duro" = +2) mueve la carga de trabajo ~3%, acotado a [-6%, +4%]. */
 const SETFEEL_KG_PER_POINT = 0.03;
 
+/** Registro cuantitativo "hice X kg x Y @ RPE Z": series minimas por lift y cuantas de las recientes se promedian. */
+const SETLOAD_MIN_OBS = 3;
+const SETLOAD_RECENT = 6;
+/** Cuanto puede mover la carga la calibracion por e1RM medido — mas ancho tras `confident`. */
+const SETLOAD_CLAMP_PRE = 0.05;
+const SETLOAD_CLAMP_POST = 0.08;
+
 /** RPE: sesiones minimas en cada cubo (semanas duras / semanas suaves) para medir si el RPE discrimina. */
 const RPE_MIN_PER_BUCKET = 3;
 /** Diferencia de RPE esperada entre semanas duras (2-3) y suaves (1-4) en un atleta que calibra bien. */
@@ -88,6 +95,19 @@ export interface SetFeelCalibration {
   loadFactor: number;
 }
 
+export interface LiftLoadCalibration {
+  /** Clave de PR (`keyof PersonalRecords` o `keyof VariantPersonalRecords`). */
+  key: string;
+  label: string;
+  /** e1RM medido (media ponderada por recencia de las series reales registradas). */
+  measuredMax: number;
+  /** El maximo que el coach asumia al prescribir (media ponderada de `prescribedKg / pctOf1rm`). */
+  assumedMax: number;
+  samples: number;
+  /** Factor de carga acotado: measuredMax / assumedMax. >1 = el coach te infravalora, sube; <1 = baja. */
+  loadFactor: number;
+}
+
 export interface ResponseProfile {
   /** Semanas de historial disponibles. */
   dataWeeks: number;
@@ -110,6 +130,12 @@ export interface ResponseProfile {
    * directa que el atleta da a proposito y va acotada por lift.
    */
   setFeel: SetFeelCalibration[];
+  /**
+   * Calibracion de carga por levantamiento a partir de las series reales registradas ("hice X kg x
+   * Y @ RPE Z" -> e1RM). Mas precisa que `setFeel`; cuando un lift tiene esta senal, el motor la
+   * usa en su lugar. Como `setFeel`, sigue viva aunque `confident` sea false (gate propio por lift).
+   */
+  perLiftLoad: LiftLoadCalibration[];
   recovery: {
     tier: RecoveryTier | null;
     avgDays: number | null;
@@ -282,6 +308,55 @@ function analyzeSetFeel(log: SetFeedbackEntry[]): SetFeelCalibration[] {
 }
 
 /**
+ * Calibracion de carga por levantamiento a partir de las series REALES que el atleta ha registrado
+ * ("hice X kg x Y reps @ RPE Z" -> e1RM por RTS/Helms). Compara ese e1RM medido con el maximo que
+ * el coach asumia al prescribir (`prescribedKg / pctOf1rm`) y devuelve un factor acotado: si de
+ * forma consistente mueves mas de lo que el coach cree, sube la carga futura de ese lift; si menos,
+ * baja. Media ponderada por recencia (la ultima serie pesa mas). Senal mas precisa que la sensacion
+ * cualitativa — cuando existe, el motor la usa en lugar de `setFeel` para ese lift.
+ */
+function analyzeSetLoads(log: SetFeedbackEntry[], confident: boolean): LiftLoadCalibration[] {
+  const byKey = new Map<string, SetFeedbackEntry[]>();
+  for (const entry of log) {
+    if (!entry.prKey || entry.estimated1rm == null || !entry.pctOf1rm) continue;
+    const list = byKey.get(entry.prKey) ?? [];
+    list.push(entry);
+    byKey.set(entry.prKey, list);
+  }
+
+  const clampWidth = confident ? SETLOAD_CLAMP_POST : SETLOAD_CLAMP_PRE;
+  const out: LiftLoadCalibration[] = [];
+  for (const [key, raw] of byKey) {
+    const recent = [...raw].sort((a, b) => a.date.localeCompare(b.date)).slice(-SETLOAD_RECENT);
+    if (recent.length < SETLOAD_MIN_OBS) continue;
+
+    let wSum = 0;
+    let ratioSum = 0;
+    let measuredSum = 0;
+    let assumedSum = 0;
+    recent.forEach((e, i) => {
+      const w = i + 1; // recencia: la ultima serie pesa n veces mas que la primera
+      const assumed = e.prescribedKg / e.pctOf1rm!;
+      wSum += w;
+      ratioSum += w * (e.estimated1rm! / assumed);
+      measuredSum += w * e.estimated1rm!;
+      assumedSum += w * assumed;
+    });
+    const loadFactor = clamp(ratioSum / wSum, 1 - clampWidth, 1 + clampWidth);
+    out.push({
+      key,
+      label: PR_KEY_LABEL[key] ?? key,
+      measuredMax: Math.round((measuredSum / wSum) * 10) / 10,
+      assumedMax: Math.round((assumedSum / wSum) * 10) / 10,
+      samples: recent.length,
+      loadFactor,
+    });
+  }
+  out.sort((a, b) => Math.abs(b.loadFactor - 1) - Math.abs(a.loadFactor - 1));
+  return out;
+}
+
+/**
  * Tendencia de peso corporal en la ventana reciente por regresion lineal simple sobre (dia, kg),
  * expresada en % del peso medio por semana. Solo se clasifica como sube/baja si supera
  * `BW_TREND_PCT_PER_WEEK` — por debajo es ruido de bascula.
@@ -346,6 +421,7 @@ export function computeResponseProfile(
     rpe: analyzeRpe(sorted),
     perLift: analyzePerLift(prLog ?? []),
     setFeel: analyzeSetFeel(setFeedbackLog),
+    perLiftLoad: analyzeSetLoads(setFeedbackLog, confident),
     recovery: analyzeRecovery(sorted),
     rx: analyzeRx(sorted),
     bodyweight: analyzeBodyweight(bodyweightLog, today),
@@ -359,6 +435,7 @@ export const NEUTRAL_RESPONSE_PROFILE: ResponseProfile = {
   rpe: { reliability: 1, bias: 0, observations: 0 },
   perLift: [],
   setFeel: [],
+  perLiftLoad: [],
   recovery: { tier: null, avgDays: null, cycles: 0 },
   rx: { trend: null, recentRate: null },
   bodyweight: { trend: null, pctPerWeek: null, points: 0 },
@@ -372,7 +449,17 @@ export const NEUTRAL_RESPONSE_PROFILE: ResponseProfile = {
  */
 export function engineResponseProfile(profile: ResponseProfile): ResponseProfile {
   if (profile.confident) return profile;
-  return { ...NEUTRAL_RESPONSE_PROFILE, setFeel: profile.setFeel };
+  return { ...NEUTRAL_RESPONSE_PROFILE, setFeel: profile.setFeel, perLiftLoad: profile.perLiftLoad };
+}
+
+/**
+ * Factor de carga a partir del e1RM medido de las series reales registradas para un levantamiento.
+ * 1 (sin efecto) si no hay clave o no hay datos suficientes. Cuando devuelve != 1, el motor lo usa
+ * en lugar de `setFeelLoadFactor` para ese lift (senal cuantitativa > cualitativa).
+ */
+export function perLiftLoadFactor(profile: ResponseProfile, key: string | null | undefined): number {
+  if (!key) return 1;
+  return profile.perLiftLoad.find((c) => c.key === key)?.loadFactor ?? 1;
 }
 
 /** tier de progreso de una clave de PR concreta, o null si no hay dato suficiente. */

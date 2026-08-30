@@ -84,6 +84,17 @@ export interface SetFeedbackEntry {
   prKey?: string;
   /** Fraccion del PR de referencia que representaba `prescribedKg` (0-1), si se pudo resolver — para calibrar sensacion vs. intensidad real. */
   pctOf1rm?: number;
+  /**
+   * Registro cuantitativo opcional: la carga y reps REALES que el atleta movio en esa serie, y su
+   * RPE. Si estan las tres, la app calcula `estimated1rm` y el perfil de respuesta lo usa como
+   * medida directa del maximo de trabajo de ese lift para calibrar futuras prescripciones — una
+   * senal mas precisa que la sensacion cualitativa (`feel`).
+   */
+  actualKg?: number;
+  actualReps?: number;
+  actualRpe?: number;
+  /** e1RM estimado a partir de (actualKg, actualReps, actualRpe) — lo calcula la app al guardar (ver `estimateE1RMFromRpe`). */
+  estimated1rm?: number;
 }
 
 export interface Macrocycle {

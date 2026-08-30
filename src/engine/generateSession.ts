@@ -96,6 +96,7 @@ import {
   engineResponseProfile,
   liftTierFor,
   bodyweightLoadFactor,
+  perLiftLoadFactor,
   setFeelLoadFactor,
   stalledOlyFamily,
   stalledStrengthPattern,
@@ -560,15 +561,19 @@ function buildStrengthBlock(
     ? liftTierFor(responseProfile, todayLiftKey) === 'lento' || liftTierFor(responseProfile, todayLiftKey) === 'regresion'
     : false;
 
-  // Perfil de respuesta: calibracion de carga por el feedback en caliente de la 1ª serie de este
-  // mismo levantamiento (ver `setFeelLoadFactor`). Factor acotado [0.94, 1.04]; 1 = sin efecto.
-  const setFeelFactor = setFeelLoadFactor(responseProfile, todayLiftKey);
+  // Perfil de respuesta: calibracion de carga de la serie de trabajo de ESTE levantamiento. Si el
+  // atleta ha registrado series reales ("hice X kg x Y @ RPE Z"), se usa el factor por e1RM medido
+  // (mas preciso); si no, el cualitativo del feedback de la 1ª serie. Ambos acotados; 1 = sin efecto.
+  const loadCalibFactor = perLiftLoadFactor(responseProfile, todayLiftKey);
+  const setFeelFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, todayLiftKey);
   const setFeelNote =
-    setFeelFactor < 1
-      ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
-      : setFeelFactor > 1
-        ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
-        : '';
+    loadCalibFactor !== 1
+      ? ` Ajustado a tu 1RM estimado por las series reales que registraste en este levantamiento (${loadCalibFactor > 1 ? 'ibas sobrado, subimos' : 'venías justo, bajamos'}).`
+      : setFeelFactor < 1
+        ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
+        : setFeelFactor > 1
+          ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
+          : '';
   // Perfil de respuesta: si el atleta viene perdiendo peso corporal, menos margen de recuperacion — carga algo mas baja.
   const bwFactor = bodyweightLoadFactor(responseProfile);
   const bwNote =
@@ -858,15 +863,19 @@ function buildOlyBlock(
   }
 
   const scheme = OLY_WEEK_SCHEMES[week];
-  // Perfil de respuesta: calibracion de carga por el feedback en caliente de la 1ª serie de este lift.
+  // Perfil de respuesta: calibracion de carga de este lift — e1RM medido de series reales si lo hay,
+  // si no el feedback cualitativo de la 1ª serie (ver buildStrengthBlock).
   const olyLiftKey = resolveOlyPRKey(movement) ?? resolveVariantPRKey(movement);
-  const setFeelFactor = setFeelLoadFactor(responseProfile, olyLiftKey);
+  const loadCalibFactor = perLiftLoadFactor(responseProfile, olyLiftKey);
+  const setFeelFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, olyLiftKey);
   const setFeelNote =
-    setFeelFactor < 1
-      ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
-      : setFeelFactor > 1
-        ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
-        : '';
+    loadCalibFactor !== 1
+      ? ` Ajustado a tu 1RM estimado por las series reales que registraste (${loadCalibFactor > 1 ? 'ibas sobrado, subimos' : 'venías justo, bajamos'}).`
+      : setFeelFactor < 1
+        ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
+        : setFeelFactor > 1
+          ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
+          : '';
   const bwFactor = bodyweightLoadFactor(responseProfile);
   const bwNote = bwFactor < 1 ? ' Vienes perdiendo peso corporal — bajamos un poco la carga hasta que se estabilice.' : '';
   const loadKg = roundToNearestPlate(
