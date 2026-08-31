@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { NotebookPen } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult } from '../../data/athlete/types';
@@ -9,10 +10,12 @@ interface DaySessionBlocksProps {
   session: DailySession;
   editable?: boolean;
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
+  /** Contenido opcional bajo un bloque concreto — usado para la valoración de series de fuerza/oly, justo donde el atleta actúa. */
+  renderBlockFooter?: (block: Block, entryIndices: number[]) => ReactNode;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
-export function DaySessionBlocks({ session, editable, onUpdateEntry }: DaySessionBlocksProps) {
+export function DaySessionBlocks({ session, editable, onUpdateEntry, renderBlockFooter }: DaySessionBlocksProps) {
   if (session.source === 'custom') {
     return (
       <div className="card flex flex-col gap-2 p-4">
@@ -33,17 +36,22 @@ export function DaySessionBlocks({ session, editable, onUpdateEntry }: DaySessio
 
   return (
     <div className="card flex flex-col p-4">
-      {blocksWithResults.map(({ block, results, entryIndices }, index) => (
-        <SessionBlockCard
-          key={block}
-          block={block}
-          results={results}
-          entryIndices={entryIndices}
-          isLast={index === blocksWithResults.length - 1}
-          editable={editable}
-          onUpdateEntry={onUpdateEntry}
-        />
-      ))}
+      {blocksWithResults.map(({ block, results, entryIndices }, index) => {
+        const footer = renderBlockFooter?.(block, entryIndices);
+        return (
+          <div key={block}>
+            <SessionBlockCard
+              block={block}
+              results={results}
+              entryIndices={entryIndices}
+              isLast={index === blocksWithResults.length - 1 && !footer}
+              editable={editable}
+              onUpdateEntry={onUpdateEntry}
+            />
+            {footer && <div className="mb-3 mt-1 flex flex-col gap-2 pl-1">{footer}</div>}
+          </div>
+        );
+      })}
     </div>
   );
 }

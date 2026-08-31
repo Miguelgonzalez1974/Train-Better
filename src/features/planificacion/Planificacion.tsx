@@ -195,10 +195,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       .filter(({ block }) => isAdjustableSetBlock(block))
       .map(({ block, index }) => {
         const logEntry = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
-        const prescribed =
-          block.firstSetFeel && logEntry
-            ? { kg: logEntry.prescribedKg, sets: logEntry.prescribedSets, reps: logEntry.prescribedReps }
-            : { kg: block.loadKg ?? 0, sets: block.sets ?? 0, reps: parseWorkingReps(block.reps ?? '') ?? 0 };
+        // Con un registro previo, la prescripción original vive en él (el bloque puede estar ya
+        // ajustado o la sesión ya completada); si no, se toma del bloque tal cual.
+        const prescribed = logEntry
+          ? { kg: logEntry.prescribedKg, sets: logEntry.prescribedSets, reps: logEntry.prescribedReps }
+          : { kg: block.loadKg ?? 0, sets: block.sets ?? 0, reps: parseWorkingReps(block.reps ?? '') ?? 0 };
         const logged =
           logEntry?.actualKg != null && logEntry.actualReps != null && logEntry.actualRpe != null
             ? {
@@ -216,11 +217,18 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           index,
           movementName: getMovementById(block.movementId)?.name ?? block.movementId,
           prescribed,
-          currentFeel: block.firstSetFeel ?? null,
+          // El bloque cacheado manda; tras completar la sesión ya no se muta, así que el registro persistente es la fuente.
+          currentFeel: block.firstSetFeel ?? logEntry?.feel ?? null,
           logged,
         };
       });
   }, [session, setFeedbackLog]);
+
+  /** index de bloque -> props de su panel de valoración, para renderizarlo inline bajo la tarjeta de fuerza/oly. */
+  const setFeedbackByIndex = useMemo(
+    () => new Map(adjustableSetBlocks.map((b) => [b.index, b])),
+    [adjustableSetBlocks],
+  );
 
   /**
    * Clave de PR y % del 1RM del levantamiento valorado. La clave se resuelve igual que en el motor
@@ -268,6 +276,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     });
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
 
+    // Tras completar la sesión el registro sigue calibrando al coach, pero no se reajusta ni se
+    // toca el bloque ya hecho.
+    if (alreadyCompletedToday) return;
     const adj = adjustRemainingSets({ prescribedKg, prescribedSets, completedSets: 1, feel });
     handleUpdateEntry(index, {
       loadKg: adj.changed ? adj.adjustedKg : prescribedKg,
@@ -316,8 +327,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     });
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
 
-    // Si aún no había pastilla, la serie real también dispara el ajuste inmediato de lo que queda.
-    if (!existing?.feel) {
+    // Con la sesión ya completada, solo se registra (calibra al coach). Si aún está en curso y no
+    // había pastilla, la serie real también dispara el ajuste inmediato de lo que queda.
+    if (!alreadyCompletedToday && !existing?.feel) {
       const adj = adjustRemainingSets({ prescribedKg, prescribedSets, completedSets: 1, feel });
       handleUpdateEntry(index, {
         loadKg: adj.changed ? adj.adjustedKg : prescribedKg,
@@ -334,6 +346,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
     athleteRepository.deleteSetFeedbackEntry(session.date, block.movementId);
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
+    if (alreadyCompletedToday) return;
     handleUpdateEntry(index, {
       loadKg: existing?.prescribedKg ?? block.loadKg,
       sets: existing?.prescribedSets ?? block.sets,
@@ -1075,24 +1088,35 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           </button>
         </div>
       ) : (
-        <DaySessionBlocks session={session} editable={editMode} onUpdateEntry={handleUpdateEntry} />
-      )}
-
-      {!editMode && !showCompletePanel && !alreadyCompletedToday && adjustableSetBlocks.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {adjustableSetBlocks.map((b) => (
-            <SetFeedbackPanel
-              key={b.index}
-              movementName={b.movementName}
-              prescribed={b.prescribed}
-              currentFeel={b.currentFeel}
-              logged={b.logged}
-              onPick={(feel) => handleSetFeedback(b.index, feel)}
-              onLogActual={(actual) => handleLogActualSet(b.index, actual)}
-              onReset={() => handleResetSetFeedback(b.index)}
-            />
-          ))}
-        </div>
+        <DaySessionBlocks
+          session={session}
+          editable={editMode}
+          onUpdateEntry={handleUpdateEntry}
+          renderBlockFooter={
+            editMode || showCompletePanel
+              ? undefined
+              : (block, entryIndices) => {
+                  if (block !== 'strength' && block !== 'oly') return null;
+                  const panels = entryIndices
+                    .map((i) => setFeedbackByIndex.get(i))
+                    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+                  if (panels.length === 0) return null;
+                  return panels.map((b) => (
+                    <SetFeedbackPanel
+                      key={b.index}
+                      movementName={b.movementName}
+                      prescribed={b.prescribed}
+                      currentFeel={b.currentFeel}
+                      logged={b.logged}
+                      postCompletion={alreadyCompletedToday}
+                      onPick={(feel) => handleSetFeedback(b.index, feel)}
+                      onLogActual={(actual) => handleLogActualSet(b.index, actual)}
+                      onReset={() => handleResetSetFeedback(b.index)}
+                    />
+                  ));
+                }
+          }
+        />
       )}
 
       {session.strengthProgramLabel && !session.isRestDay && (

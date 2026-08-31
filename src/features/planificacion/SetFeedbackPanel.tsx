@@ -18,6 +18,9 @@ interface SetFeedbackPanelProps {
   currentFeel: SetFeel | null;
   /** Serie real ya registrada hoy para este levantamiento, si la hay. */
   logged: LoggedActual | null;
+  /** La sesión de hoy ya está marcada como completada: la valoración sigue disponible (calibra al
+   *  coach), pero ya no reajusta series en caliente. */
+  postCompletion?: boolean;
   onPick: (feel: SetFeel) => void;
   onLogActual: (actual: { kg: number; reps: number; rpe: number }) => void;
   onReset: () => void;
@@ -167,6 +170,7 @@ export function SetFeedbackPanel({
   prescribed,
   currentFeel,
   logged,
+  postCompletion = false,
   onPick,
   onLogActual,
   onReset,
@@ -176,7 +180,9 @@ export function SetFeedbackPanel({
       <div className="rounded-xl border border-brand-border bg-brand-surfaceMuted/40 p-3.5">
         <div className="mb-2.5 flex items-center gap-1.5">
           <Activity size={13} strokeWidth={2.5} className="shrink-0 text-brand-neon" />
-          <p className="text-xs font-semibold text-neutral-200">¿Cómo fue la primera serie de {movementName}?</p>
+          <p className="text-xs font-semibold text-neutral-200">
+            {postCompletion ? `Valora ${movementName}` : `¿Cómo fue la primera serie de ${movementName}?`}
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {SET_FEEL_ORDER.map((feel) => (
@@ -192,7 +198,9 @@ export function SetFeedbackPanel({
         </div>
         <LogActualForm prescribed={prescribed} logged={logged} onLogActual={onLogActual} />
         <p className="mt-2 text-[10px] text-neutral-600">
-          Opcional. Ajusta solo las series que te quedan de {movementName} — no el WOD ni el resto.
+          {postCompletion
+            ? 'El coach usa esto para calibrar la carga futura de este levantamiento.'
+            : `Opcional. Ajusta solo las series que te quedan de ${movementName} — no el WOD ni el resto.`}
         </p>
       </div>
     );
@@ -209,7 +217,7 @@ export function SetFeedbackPanel({
     <div className="rounded-xl border border-brand-border bg-brand-surfaceMuted/40 p-3.5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-neutral-400">
-          {movementName} · 1ª serie:{' '}
+          {movementName} · {postCompletion ? 'valoración' : '1ª serie'}:{' '}
           <span className={`font-semibold ${FEEL_ACCENT[currentFeel]}`}>{SET_FEEL_LABEL[currentFeel]}</span>
         </p>
         <button
@@ -221,7 +229,7 @@ export function SetFeedbackPanel({
         </button>
       </div>
 
-      {adjustment.changed && (
+      {!postCompletion && adjustment.changed && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <span className="rounded-md bg-black/25 px-2 py-1 text-[11px] font-bold text-white">
             {adjustment.fromSet === adjustment.adjustedSets
@@ -237,7 +245,7 @@ export function SetFeedbackPanel({
         </div>
       )}
 
-      {adjustment.note && (
+      {!postCompletion && adjustment.note && (
         <div className="mt-2 flex items-start gap-1.5">
           <Brain size={12} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-neon" />
           <p className="text-xs text-neutral-400">{adjustment.note}</p>
