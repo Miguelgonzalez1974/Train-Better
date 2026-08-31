@@ -52,7 +52,7 @@ function LogActualForm({
 }) {
   const [open, setOpen] = useState(false);
   const [kg, setKg] = useState(String(logged?.kg ?? prescribed.kg ?? ''));
-  const [reps, setReps] = useState(String(logged?.reps ?? prescribed.reps ?? ''));
+  const [reps, setReps] = useState(String(logged?.reps ?? (prescribed.reps || '')));
   const [rpe, setRpe] = useState(String(logged?.rpe ?? ''));
   const [err, setErr] = useState<string | null>(null);
 

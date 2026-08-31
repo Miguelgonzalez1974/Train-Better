@@ -15,31 +15,36 @@ export const MESOCYCLE_PHASE: Record<1 | 2 | 3 | 4, string> = {
   4: 'Descarga',
 };
 
-/** Semana 1-3: progresion de intensidad. Semana 4: deload. */
+/**
+ * Semana 1-3: progresion de intensidad clasica de un bloque de fuerza — abre en 73% x5 (volumen
+ * real, no un lunes tímido), sube a 80% x3, y pica en 85% x2 con menos volumen. Semana 4: deload.
+ * El pico no sube mas de 0.85 a proposito: encima ya multiplican autoregulacion, la calibracion
+ * por e1RM medido y la dosis intra-fase, y un doble en semana 3 no debe salir prescrito al 95%+.
+ */
 export const STRENGTH_WEEK_SCHEMES: Record<1 | 2 | 3 | 4, WeekScheme> = {
   1: {
-    percent: 0.7,
+    percent: 0.73,
     sets: 5,
     reps: 5,
     label: 'Volumen (semana 1/4)',
-    coachNote: 'Volumen alto a intensidad moderada — prioriza la técnica sobre la velocidad de la barra.',
+    coachNote: 'Volumen de trabajo a intensidad de acumulación — técnica y velocidad de barra constantes en cada serie.',
   },
   2: {
-    percent: 0.75,
+    percent: 0.8,
     sets: 5,
     reps: 3,
     label: 'Intensificación (semana 2/4)',
     coachNote: 'Sube la intensidad manteniendo la velocidad de la barra constante en cada serie.',
   },
   3: {
-    percent: 0.82,
-    sets: 4,
-    reps: 3,
+    percent: 0.85,
+    sets: 3,
+    reps: 2,
     label: 'Pico (semana 3/4)',
-    coachNote: 'Pico de intensidad del mesociclo — calidad sobre cantidad, cuida cada repetición.',
+    coachNote: 'Pico del mesociclo: menos volumen, más intensidad — dobles pesados, calidad absoluta en cada repetición.',
   },
   4: {
-    percent: 0.6,
+    percent: 0.62,
     sets: 3,
     reps: 5,
     label: 'Deload (semana 4/4)',

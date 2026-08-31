@@ -82,7 +82,12 @@ function isAdjustableSetBlock(b: SessionBlockResult): boolean {
   if (b.movementId.startsWith('benchmark:')) return false;
   if (b.sets === undefined || b.sets < 2) return false;
   if (!b.loadKg || b.loadKg <= 0) return false;
-  return parseWorkingReps(b.reps ?? '') !== null;
+  // El primer técnico del complejo de oly (reps "2-3") es preparación, no el esfuerzo principal.
+  if (b.block === 'oly' && b.reps === '2-3') return false;
+  // Cualquier otro levantamiento principal con carga lleva tarjeta — incluidos los días de rampa
+  // "5-3-1" (reps no parseables): el ajuste por sensación no usa las reps y el registro de la serie
+  // real pide sus propios números.
+  return true;
 }
 
 interface PlanificacionProps {
