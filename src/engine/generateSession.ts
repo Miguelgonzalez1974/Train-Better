@@ -7,12 +7,7 @@ import {
   olyMovements,
   skillMovements,
 } from '../data/movements';
-import {
-  getSkillProgressionFor,
-  skillProgressionStepAt,
-  type SkillProgression,
-  type SkillProgressionStep,
-} from '../data/movements/skillProgressions';
+import { getSkillProgressionFor, skillProgressionStepAt, type SkillProgression } from '../data/movements/skillProgressions';
 import type {
   AthleteProfile,
   DailySession,
@@ -1541,8 +1536,24 @@ function buildAccessoryBlock(
   return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: accSets, reps, format, notes }));
 }
 
-/** Sesiones de gimnasticos (registradas, con un movimiento del arbol) que valen para subir un escalon. */
-const SKILL_SESSIONS_PER_RUNG = 10;
+/**
+ * Sesiones de gimnasticos (registradas, con un movimiento del arbol) que valen para subir un
+ * escalon. Calibrado para ~2 dias de skill por semana (ver `SKILL_DAY_INDICES`): 6 ≈ 3 semanas de
+ * trabajo real por escalon si el atleta no falta.
+ */
+const SKILL_SESSIONS_PER_RUNG = 6;
+
+/**
+ * En que dias de entreno de la semana (por `trainingDayIndex`) se programa el bloque de skill —
+ * 2 por microciclo, espaciados y evitando (salvo en 3 dias/semana) el dia 0, que ya abre con el
+ * benchmark. El resto de dias no llevan skill: se entrena una progresion, no se toca a diario.
+ */
+const SKILL_DAY_INDICES: Record<3 | 4 | 5 | 6, readonly number[]> = {
+  3: [0, 2],
+  4: [1, 3],
+  5: [1, 3],
+  6: [1, 4],
+};
 
 /**
  * Micro-progresion DENTRO de un escalon — para que no se prescriba el mismo texto identico semana
@@ -1624,46 +1635,80 @@ function buildSkillBlock(
     if (progression) {
       const { index, total, rungPhase, driver } = resolveSkillProgression(progression, progressionGoal, history, date);
       const steps = progression.steps;
-      const feeder = index > 0 ? steps[index - 1] : null;
-      const reach = index < total - 1 ? steps[index + 1] : null;
+      const anchor = steps[index];
+      const anchorMovement = getMovementById(anchor.movementId);
 
-      const roll = rng();
-      let picked: { step: SkillProgressionStep; role: 'actual' | 'feeder' | 'reach'; rung: number };
-      if (feeder && roll < 0.28) {
-        picked = { step: feeder, role: 'feeder', rung: index - 1 };
-      } else if (reach && rungPhase >= 1 && roll > 0.86) {
-        picked = { step: reach, role: 'reach', rung: index + 1 };
-      } else {
-        picked = { step: steps[index], role: 'actual', rung: index };
-      }
-
-      const stepMovement = getMovementById(picked.step.movementId);
-      if (stepMovement && !avoidedPatterns.has(stepMovement.pattern)) {
+      // El escalon de hoy toca un patron con aviso de molestia -> cae a la rotacion normal de abajo.
+      if (anchorMovement && !avoidedPatterns.has(anchorMovement.pattern)) {
         const rb = SKILL_RUNG_BLOCKS[rungPhase];
-        const currentName = getMovementById(steps[index].movementId)?.name ?? 'el paso actual';
-        const roleNote =
-          picked.role === 'feeder'
-            ? ` Hoy vuelves un paso atrás para reforzar el patrón base — más ligero, mañana sigues con ${currentName}.`
-            : picked.role === 'reach'
-              ? ` Toque del paso siguiente para tantearlo — sin forzar, vuelves a ${currentName} la próxima.`
-              : ` ${rb.focus}`;
         const driverNote =
           driver === 'sesiones'
             ? ' Subes de paso por las sesiones de gimnásticos que ya llevas, no solo por el calendario.'
             : driver === 'nivel'
               ? ' Empezaste aquí por el nivel de partida que marcaste.'
               : '';
-        return [
+
+        // Junto al escalon actual (ancla, siempre presente) se intercala un paso vecino de forma
+        // deterministica y ciclica, para tocar toda la escalera camino de la meta: feeder = afianzar
+        // la base; reach = tantear el siguiente (cuando ya hay rodaje en el escalon o la meta esta
+        // cerca); objetivo = intentos del movimiento final cuando quedan <= 2 escalones. Se descarta
+        // el vecino que toque un patron con aviso de molestia.
+        const rungsLeft = total - 1 - index;
+        const nearTarget = rungsLeft <= 2;
+        const feeder = index > 0 ? steps[index - 1] : null;
+        const reach = index < total - 1 ? steps[index + 1] : null;
+        type Comp = { role: 'feeder' | 'reach' | 'objetivo'; movementId: string; name: string };
+        const nameOf = (id: string, fallback: string) => getMovementById(id)?.name ?? fallback;
+        const rotation: Comp[] = [];
+        if (feeder) rotation.push({ role: 'feeder', movementId: feeder.movementId, name: nameOf(feeder.movementId, 'el paso anterior') });
+        if (reach && (rungPhase >= 1 || nearTarget)) {
+          const isTarget = reach.movementId === progression.targetMovementId;
+          rotation.push({
+            role: isTarget ? 'objetivo' : 'reach',
+            movementId: reach.movementId,
+            name: nameOf(reach.movementId, 'el paso siguiente'),
+          });
+        }
+        if (
+          nearTarget &&
+          reach?.movementId !== progression.targetMovementId &&
+          anchor.movementId !== progression.targetMovementId
+        ) {
+          rotation.push({ role: 'objetivo', movementId: progression.targetMovementId, name: progression.targetName });
+        }
+        const usable = rotation.filter((c) => {
+          const m = getMovementById(c.movementId);
+          return Boolean(m) && !avoidedPatterns.has(m!.pattern);
+        });
+
+        const entries: SessionBlockResult[] = [
           {
             block: 'skill',
-            movementId: picked.step.movementId,
+            movementId: anchor.movementId,
             sets: 4,
-            reps: picked.role === 'actual' ? rb.reps : 'técnica / calidad',
-            notes: `Progresión hacia ${progression.targetName} — paso ${picked.rung + 1} de ${total}: ${picked.step.cue}${roleNote}${driverNote}`,
+            reps: rb.reps,
+            notes: `Progresión hacia ${progression.targetName} — paso ${index + 1} de ${total}: ${anchor.cue} ${rb.focus}${driverNote}`,
           },
         ];
+
+        if (usable.length > 0) {
+          // tick deterministico (dias desde el alta del objetivo): cicla parejo entre los dos dias
+          // de skill de la semana y avanza semana a semana, sin RNG — misma sesion en todo dispositivo.
+          const tick = Math.floor(
+            Math.max(0, (date.getTime() - new Date(`${progressionGoal.createdAt}T00:00:00`).getTime()) / 86400000),
+          );
+          const comp = usable[tick % usable.length];
+          const compNote =
+            comp.role === 'feeder'
+              ? `Complemento — un paso por debajo (${comp.name}) para afianzar el patrón base: ligero, calidad sobre cantidad.`
+              : comp.role === 'objetivo'
+                ? `Complemento — intentos técnicos de ${comp.name}, el movimiento objetivo: ya estás cerca, pruébalo fresco al principio y para antes del fallo.`
+                : `Complemento — tanteo del paso siguiente (${comp.name}): 1-2 series técnicas, sin forzar.`;
+          entries.push({ block: 'skill', movementId: comp.movementId, sets: 2, reps: 'técnica / calidad', notes: compNote });
+        }
+
+        return entries;
       }
-      // El escalon de hoy toca un patron con aviso de molestia — se cae a la rotacion normal de abajo.
     }
   }
 
@@ -2105,7 +2150,11 @@ export function generateDailySession(
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
   const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns, dayDose) : [];
-  const skillBlock = buildSkillBlock(history, goals, avoidedPatterns, date);
+  // Skill 2 dias por microciclo (ver `SKILL_DAY_INDICES`) — una progresion se entrena por bloques,
+  // no a diario. El resto de dias no llevan bloque de skill.
+  const skillBlock = SKILL_DAY_INDICES[profile.trainingDaysPerWeek].includes(dayPlan.trainingDayIndex)
+    ? buildSkillBlock(history, goals, avoidedPatterns, date)
+    : [];
   // El especifico del WOD se calienta con los movimientos reales de hoy (rampa progresiva), no con
   // estiramientos genericos — ver `buildWarmupBlock`. En dia de benchmark el WOD es una pieza unica
   // conocida, asi que no hay rampa y cae al calentamiento clasico.
