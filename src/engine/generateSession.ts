@@ -931,6 +931,22 @@ function buildOlyBlock(
     };
   }
 
+  // Calentamiento especifico de barra, al inicio del bloque de Oly (que se hace despues del WOD, ya
+  // en caliente): Burgener con PVC segun la familia -> complejo de barra vacia -> rampa de carga en
+  // 3-4 series hasta el primer peso de trabajo. Nada de movilidad/articular aqui: eso ya se hizo
+  // arriba. Ver `buildWarmupBlock` para el reparto por fases.
+  const barbellPrimer: SessionBlockResult[] = [
+    {
+      block: 'oly',
+      movementId: family === 'snatch' ? 'burgener-warmup-snatch' : 'burgener-warmup-clean',
+      subgroup: 'Calentamiento de barra',
+      reps: 'PVC · 3-5 reps/posición',
+      notes: `Ya vienes en caliente del WOD — aquí solo barra, sin movilidad. Burgener con PVC y complejo de barra vacía, y luego sube en 3-4 series hasta tu primer peso de trabajo (${loadKg} kg). Prioriza posiciones y velocidad de codos, no la carga.`,
+    },
+    { block: 'oly', movementId: 'barbell-warmup-complex', subgroup: 'Calentamiento de barra', reps: '2-3 rondas' },
+    { block: 'oly', movementId: 'movement-specific-primer', subgroup: 'Calentamiento de barra', reps: '3-4 series ascendentes', loadKg },
+  ];
+
   // Complejo real de oly: un primer tecnico (hang, muscle, pull, balance...) antes del levantamiento
   // principal, no un movimiento aislado — asi se entrena de verdad en programacion profesional.
   const familyPool = getMovementsByBlock('oly').filter((m) =>
@@ -943,7 +959,7 @@ function buildOlyBlock(
     ? primerCandidates.filter((m) => RECEIVING_PRIMER_IDS[family].includes(m.id))
     : [];
   const primerMovement = pickVaried(receivingPrimers.length > 0 ? receivingPrimers : primerCandidates, recentIds);
-  if (!primerMovement) return { blocks: [mainEntry], reasons };
+  if (!primerMovement) return { blocks: [...barbellPrimer, mainEntry], reasons };
 
   const primerLoadKg = roundToNearestPlate(
     resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * primerLoadFactor(primerMovement.id) * autoregFactor,
@@ -959,7 +975,7 @@ function buildOlyBlock(
     loadKg: primerLoadKg,
   };
 
-  return { blocks: [primerEntry, mainEntry], reasons };
+  return { blocks: [...barbellPrimer, primerEntry, mainEntry], reasons };
 }
 
 /**
@@ -1674,30 +1690,68 @@ function buildSkillBlock(
  * eligiendas con `pickManyVaried` (evita lo usado en sesiones recientes) sobre el pool ampliado
  * con rutinas reales de programacion de box.
  */
-function buildWarmupBlock(strengthPattern: MovementPattern, recentIds: Set<string>, includeOly = true): SessionBlockResult[] {
+/** Pool minimo de piezas monoestructurales para "subir el pulso" al arrancar el especifico del WOD. */
+const WARMUP_PULSE_IDS = ['row', 'air-bike', 'ski-erg', 'jumping-jacks'];
+
+interface WodRampInfo {
+  /** movementIds reales del WOD de hoy (sin benchmarks) — para hacer una rampa progresiva con ellos. */
+  movementIds: string[];
+  /** true si algun movimiento del WOD lleva carga: cambia el texto de la ultima ronda ("al peso" vs "al ritmo"). */
+  weighted: boolean;
+}
+
+/**
+ * Calentamiento por fases: (1) Activacion fija (hombro/escapula + gluteo/cadera), y (2) Especifico
+ * del WOD. Cuando llegan los movimientos reales del WOD (`wodRamp`), el especifico deja de ser
+ * estiramientos sueltos y pasa a ser una rampa progresiva con esos mismos movimientos, terminando en
+ * una ronda al peso y ritmo del WOD. Sin esa info (mantenimiento, programas de fuerza) se mantiene el
+ * comportamiento clasico. El calentamiento especifico de barra (Burgener + rampa de carga) YA NO va
+ * aqui: se ancla al inicio del bloque de Oly, que se hace despues del WOD — ver `buildOlyBlock`.
+ */
+function buildWarmupBlock(
+  strengthPattern: MovementPattern,
+  recentIds: Set<string>,
+  wodRamp?: WodRampInfo | null,
+): SessionBlockResult[] {
   const generalPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes('general'));
-  const specificPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes(`especifico-${strengthPattern}`));
-
   const generalPicks = pickManyVaried(generalPool, 2, recentIds);
-  const usedIds = new Set([...recentIds, ...generalPicks.map((m) => m.id)]);
-  const specificPick = pickVaried(specificPool, usedIds);
-  const wodEntries = specificPick ? [...generalPicks, specificPick] : generalPicks;
-
-  const olyPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes('especifico-oly'));
-  const olyPicks = includeOly ? pickManyVaried(olyPool, 2, recentIds) : [];
 
   const toEntries = (movs: (Movement | undefined)[], subgroup: string, notes: string): SessionBlockResult[] =>
     movs.filter((m): m is Movement => Boolean(m)).map((m) => ({ block: 'warmup', movementId: m.id, subgroup, notes }));
 
-  return [
-    ...toEntries(
-      [getMovementById('crossover-symmetry'), getMovementById('hip-halo')],
-      'Activación',
-      'Ritual fijo antes de cada sesión: hombro/escápula (Crossover Symmetry) y glúteo/cadera (Hip Halo) activados, da igual lo que toque hoy.',
-    ),
-    ...toEntries(wodEntries, 'Para el WOD', 'Activa el patrón de movimiento de hoy antes de cargar peso.'),
-    ...toEntries(olyPicks, 'Para Oly', 'Prepara posición y movilidad de hombro antes de tocar la barra de trabajo.'),
-  ];
+  const activacion = toEntries(
+    [getMovementById('crossover-symmetry'), getMovementById('hip-halo')],
+    'Activación',
+    'Ritual fijo antes de cada sesión: hombro/escápula (Crossover Symmetry) y glúteo/cadera (Hip Halo) activados, da igual lo que toque hoy.',
+  );
+
+  const rampIds = (wodRamp?.movementIds ?? [])
+    .filter((id, i, arr) => arr.indexOf(id) === i && Boolean(getMovementById(id)))
+    .slice(0, 3);
+
+  let paraWod: SessionBlockResult[];
+  if (rampIds.length > 0) {
+    const pulse = pickVaried(
+      WARMUP_PULSE_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+      new Set([...recentIds, ...rampIds]),
+    );
+    const lastRound = wodRamp?.weighted ? 'una ronda al peso y ritmo del WOD' : 'una ronda al ritmo del WOD';
+    paraWod = toEntries(
+      [pulse, ...rampIds.map((id) => getMovementById(id))],
+      'Específico del WOD',
+      `Sube el pulso 2 min y haz 3 rondas ascendentes con estos movimientos: técnica ligera → ritmo de trabajo → ${lastRound}.`,
+    );
+  } else {
+    const specificPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes(`especifico-${strengthPattern}`));
+    const specificPick = pickVaried(specificPool, new Set([...recentIds, ...generalPicks.map((m) => m.id)]));
+    paraWod = toEntries(
+      specificPick ? [...generalPicks, specificPick] : generalPicks,
+      'Específico del WOD',
+      'Activa el patrón de movimiento de hoy antes de cargar peso.',
+    );
+  }
+
+  return [...activacion, ...paraWod];
 }
 
 /** Piezas de cardio suave para el dia de recuperacion activa (bike, row, ski, run, trineo). */
@@ -1885,7 +1939,7 @@ export function generateDailySession(
   const painReintro = getPainReintroPatterns(profile.painFlags, dateIso);
 
   if (dayPlan.isRecoveryDay) {
-    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
+    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
     const recoveryWodBlock = buildRecoveryWodBlock(recentIds, avoidedPatterns);
     const recoverySkillBlock = buildRecoverySkillBlock(recentIds, avoidedPatterns);
     const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
@@ -2052,7 +2106,14 @@ export function generateDailySession(
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
   const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns, dayDose) : [];
   const skillBlock = buildSkillBlock(history, goals, avoidedPatterns, date);
-  const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds);
+  // El especifico del WOD se calienta con los movimientos reales de hoy (rampa progresiva), no con
+  // estiramientos genericos — ver `buildWarmupBlock`. En dia de benchmark el WOD es una pieza unica
+  // conocida, asi que no hay rampa y cae al calentamiento clasico.
+  const wodRamp: WodRampInfo = {
+    movementIds: wodBlock.filter((b) => !b.movementId.startsWith('benchmark:')).map((b) => b.movementId),
+    weighted: wodBlock.some((b) => (b.loadKg ?? 0) > 0),
+  };
+  const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds, wodRamp);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
 
   // Mismos fragmentos ya visibles en cada bloque, deduplicados (fuerza y oly casi siempre comparten
@@ -2109,7 +2170,7 @@ function buildMaintenanceStyleBlocks(
   avoidedPatterns: Set<MovementPattern>,
   wodRampActive: boolean,
 ): SessionBlockResult[] {
-  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, false);
+  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
   const wodBlock = isRecovery
     ? buildRecoveryWodBlock(recentIds, avoidedPatterns)
     : buildMaintenanceWodBlock(recentIds, avoidedPatterns, wodRampActive);
@@ -2235,7 +2296,7 @@ export function generateStrengthProgramSession(
     }));
     const primaryPattern = getMovementById(halteroDay.lifts[0].movementId)!.pattern;
     const recentIdsHaltero = getRecentMovementIds(history);
-    const warmupHaltero = buildWarmupBlock(primaryPattern, recentIdsHaltero, false);
+    const warmupHaltero = buildWarmupBlock(primaryPattern, recentIdsHaltero);
     const cooldownHaltero = buildCooldownBlock(primaryPattern, recentIdsHaltero);
 
     return {
@@ -2293,7 +2354,7 @@ export function generateStrengthProgramSession(
       ];
 
   const recentIds = getRecentMovementIds(history);
-  const warmupBlock = buildWarmupBlock(movement.pattern, recentIds, false);
+  const warmupBlock = buildWarmupBlock(movement.pattern, recentIds);
   const cooldownBlock = buildCooldownBlock(movement.pattern, recentIds);
 
   return {

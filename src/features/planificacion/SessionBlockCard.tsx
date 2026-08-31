@@ -258,35 +258,71 @@ function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
  * levantamiento principal) y la superserie de fuerza (levantamiento principal + A2 antagonista).
  */
 function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
+  // Las entradas con `subgroup` (ej. "Calentamiento de barra" del bloque de Oly) van como una
+  // sección propia arriba, numerada y sin peso destacado — no como un paso A/B/C del complejo.
+  const prep = entries.filter((e) => e.subgroup);
+  const complex = entries.filter((e) => !e.subgroup);
+  const prepNote = prep.find((e) => e.notes)?.notes;
+
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       <div className="flex flex-col gap-3">
-        {entries.map((entry, idx) => {
-          const movement = getMovementById(entry.movementId);
-          if (!movement) return null;
-          return (
-            <div key={`${entry.movementId}-${idx}`} className={idx > 0 ? 'border-t border-white/5 pt-3' : ''}>
-              <div className="flex items-baseline gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                  {String.fromCharCode(65 + idx)}
-                </span>
-                <p className="font-bold leading-tight text-white">{movement.name}</p>
-              </div>
-
-              {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
-                <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
-                  {entry.sets && <StatBox value={entry.sets} label="series" />}
-                  {entry.reps && <StatBox value={entry.reps} label="reps" />}
-                  {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
-                  {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
-                </div>
-              )}
-
-              {entry.notes && <div className="ml-7">{<CoachNote text={entry.notes} />}</div>}
-              <p className="ml-7 mt-1.5 text-xs text-neutral-600">{movement.standard}</p>
+        {prep.length > 0 && (
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/80">{prep[0].subgroup}</p>
+            <div className="flex flex-col gap-2">
+              {prep.map((entry, idx) => {
+                const movement = getMovementById(entry.movementId);
+                if (!movement) return null;
+                return (
+                  <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm font-semibold text-white">{movement.name}</p>
+                        {entry.reps && <span className="text-xs text-neutral-500">{entry.reps}</span>}
+                        {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
+                      </div>
+                      <p className="text-xs text-neutral-500">{movement.standard}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+            {prepNote && <CoachNote text={prepNote} />}
+          </div>
+        )}
+
+        <div className={prep.length > 0 ? 'flex flex-col gap-3 border-t border-white/5 pt-3' : 'flex flex-col gap-3'}>
+          {complex.map((entry, idx) => {
+            const movement = getMovementById(entry.movementId);
+            if (!movement) return null;
+            return (
+              <div key={`${entry.movementId}-${idx}`} className={idx > 0 ? 'border-t border-white/5 pt-3' : ''}>
+                <div className="flex items-baseline gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                    {String.fromCharCode(65 + idx)}
+                  </span>
+                  <p className="font-bold leading-tight text-white">{movement.name}</p>
+                </div>
+
+                {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
+                  <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
+                    {entry.sets && <StatBox value={entry.sets} label="series" />}
+                    {entry.reps && <StatBox value={entry.reps} label="reps" />}
+                    {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
+                    {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
+                  </div>
+                )}
+
+                {entry.notes && <div className="ml-7">{<CoachNote text={entry.notes} />}</div>}
+                <p className="ml-7 mt-1.5 text-xs text-neutral-600">{movement.standard}</p>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -388,6 +424,9 @@ function EditableBlockEntries({
     <div className="flex flex-col gap-2.5">
       {entries.map((entry, i) => {
         const index = entryIndices[i];
+        // Las filas de calentamiento de barra ("Calentamiento de barra") no se editan aquí — se
+        // edita el complejo de trabajo, no el warm-up.
+        if (entry.subgroup) return null;
         if (entry.movementId.startsWith('benchmark:')) {
           const benchmarkId = entry.movementId.replace('benchmark:', '');
           const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);

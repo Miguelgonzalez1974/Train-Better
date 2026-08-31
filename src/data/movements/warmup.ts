@@ -103,6 +103,30 @@ export const warmupMovements: Movement[] = [
     tags: ['especifico-oly', 'especifico-strength'],
   },
   {
+    id: 'burgener-warmup-snatch',
+    name: 'Burgener Warm-up (Arranque)',
+    blocks: ['warmup'],
+    pattern: 'mobility',
+    equipment: ['pvc o barra vacia'],
+    primaryMuscles: ['cuerpo completo'],
+    standard:
+      'Con PVC o barra vacia, 3-5 reps por posicion en orden: 1) down & up (extension de cadera + shrug) - 2) codos altos y afuera (jalon) - 3) muscle snatch - 4) snatch lands a tres alturas (potencia -> sobre paralelo -> cuclillas completa) - 5) hang power snatch. Prioriza posiciones y velocidad de codos, no la carga.',
+    scaling: { easier: [], harder: [] },
+    tags: ['especifico-oly'],
+  },
+  {
+    id: 'burgener-warmup-clean',
+    name: 'Burgener Warm-up (Envion)',
+    blocks: ['warmup'],
+    pattern: 'mobility',
+    equipment: ['pvc o barra vacia'],
+    primaryMuscles: ['cuerpo completo'],
+    standard:
+      'Con PVC o barra vacia, 3-5 reps por posicion en orden: 1) down & up (extension de cadera + shrug) - 2) codos altos (jalon) - 3) muscle clean - 4) clean lands a tres alturas (potencia -> sobre paralelo -> front squat completo) - 5) hang power clean, y 3-5 dip-drives del jerk. Prioriza posicion de recepcion y timing, no la carga.',
+    scaling: { easier: [], harder: [] },
+    tags: ['especifico-oly'],
+  },
+  {
     id: 'dynamic-stretch-flow',
     name: 'Flujo de Estiramiento Dinamico',
     blocks: ['warmup'],
