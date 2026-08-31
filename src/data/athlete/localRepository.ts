@@ -1,4 +1,4 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SessionHistoryEntry, SetFeedbackEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
@@ -193,7 +193,8 @@ export const localAthleteRepository: AthleteRepository = {
   },
   saveCachedSession(session) {
     const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
-    cache[session.date] = session;
+    // Sella con la version del motor con la que se genero — ver `SESSION_GEN_VERSION`.
+    cache[session.date] = { ...session, genVersion: SESSION_GEN_VERSION };
     localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(pruneSessionCache(cache)));
   },
   deleteCachedSession(dateIso) {

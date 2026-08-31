@@ -259,11 +259,25 @@ export interface SessionBlockResult {
   firstSetFeel?: SetFeel;
 }
 
+/**
+ * Version del generador de sesiones periodizadas. Se sube a mano cuando la logica de
+ * `generateDailySession`/`generateStrengthProgramSession` cambia de forma que el mismo dia
+ * deberia programarse distinto. Cada sesion cacheada se sella con este numero al guardarla
+ * (`saveCachedSession`); al abrir la app, una sesion periodizada cacheada AUN NO COMPLETADA
+ * con un sello anterior se descarta y se regenera —determinista— en vez de seguir mostrando
+ * un entreno de una version vieja del motor. Asi el "mismo dia, mismo entreno en todos los
+ * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
+ * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
+ */
+export const SESSION_GEN_VERSION = 1;
+
 export interface DailySession {
   date: string;
   mesocycleWeek: number;
   isRestDay: boolean;
   blocks: SessionBlockResult[];
+  /** Sello de `SESSION_GEN_VERSION` con el que se genero — lo pone `saveCachedSession`. Ausente en sesiones cacheadas antes de introducir el sello (se tratan como version 0). */
+  genVersion?: number;
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */
   deloadReason?: 'fatiga' | 'taper';
   deloadNote?: string;

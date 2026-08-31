@@ -23,6 +23,7 @@ import {
   previewMacroSession,
   hasActiveTrainingStructure,
   isCachedSessionOrphaned,
+  isCachedSessionStale,
   peekRetestHeadsUp,
   resolveOlyPRKey,
   resolveStrengthPRKey,
@@ -101,9 +102,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const todayIso = toLocalIsoDate(new Date());
   const [session, setSession] = useState<DailySession | null>(() => {
     const cached = athleteRepository.getCachedSession(todayIso);
-    // Una sesión periodizada cacheada cuyo macro/programa ya se borró queda huérfana — se descarta
-    // en vez de seguir mostrando un entreno de un plan que ya no existe.
-    if (cached && isCachedSessionOrphaned(cached, profile, todayIso)) {
+    const completedToday = history.some((h) => h.date === todayIso);
+    // Se descarta y se vuelve a generar cuando: (a) es una sesión periodizada huérfana —su
+    // macro/programa ya no existe—, o (b) la generó una versión anterior del motor y el atleta
+    // aún no la ha registrado (así PC y móvil convergen en el mismo día tras un deploy).
+    if (cached && (isCachedSessionOrphaned(cached, profile, todayIso) || (!completedToday && isCachedSessionStale(cached)))) {
       athleteRepository.deleteCachedSession(todayIso);
     } else if (cached) {
       return cached;
@@ -366,7 +369,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   // render, en vez de quedarse mostrando el dia de ayer hasta recargar la pagina a mano.
   useEffect(() => {
     let cached = athleteRepository.getCachedSession(todayIso);
-    if (cached && isCachedSessionOrphaned(cached, profile, todayIso)) {
+    const completedToday = history.some((h) => h.date === todayIso);
+    if (cached && (isCachedSessionOrphaned(cached, profile, todayIso) || (!completedToday && isCachedSessionStale(cached)))) {
       athleteRepository.deleteCachedSession(todayIso);
       cached = null;
     }

@@ -29,6 +29,7 @@ import type {
   VariantPersonalRecords,
   WodResult,
 } from '../data/athlete/types';
+import { SESSION_GEN_VERSION } from '../data/athlete/types';
 import {
   expectedStrengthSessionsPerWeek,
   getActiveMacrocycle,
@@ -2389,6 +2390,22 @@ export function isCachedSessionOrphaned(session: DailySession, profile: AthleteP
   if (session.source === 'custom' || session.swapLabel) return false;
   const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
   return periodized && !hasActiveTrainingStructure(profile, dateIso);
+}
+
+/**
+ * True si una sesion periodizada cacheada la genero una version anterior del motor
+ * (`genVersion` < `SESSION_GEN_VERSION`, o ausente = version 0). La UI la descarta y regenera
+ * —determinista, misma semilla— para que un cambio del generador se propague a todos los
+ * dispositivos en la siguiente apertura sin pasos manuales, y no se queden mostrando dias
+ * distintos entre PC y movil. El que llama debe respetar aparte las sesiones ya registradas
+ * (esas no se regeneran aunque el sello sea viejo). Sesiones propias (`source: 'custom'`),
+ * elegidas a mano (`swapLabel`) y de mantenimiento (no periodizadas) nunca son "viejas".
+ */
+export function isCachedSessionStale(session: DailySession): boolean {
+  if (session.source === 'custom' || session.swapLabel) return false;
+  const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
+  if (!periodized) return false;
+  return (session.genVersion ?? 0) < SESSION_GEN_VERSION;
 }
 
 export function toHistoryEntry(
