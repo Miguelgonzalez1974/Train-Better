@@ -1,5 +1,6 @@
 import type { Movement } from '../data/movements/types';
 import type { SessionHistoryEntry } from '../data/athlete/types';
+import { rng } from './rng';
 
 export function getRecentMovementIds(history: SessionHistoryEntry[], lookbackSessions = 5): Set<string> {
   const recent = history.slice(-lookbackSessions);
@@ -11,7 +12,7 @@ export function pickVaried(candidates: Movement[], excludeIds: Set<string>): Mov
   if (candidates.length === 0) return undefined;
   const fresh = candidates.filter((m) => !excludeIds.has(m.id));
   const pool = fresh.length > 0 ? fresh : candidates;
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(rng() * pool.length)];
 }
 
 /** Elige varios movimientos distintos entre si, evitando ademas los recientes cuando sea posible. */
@@ -42,7 +43,7 @@ export function pickVariedWithPreference(
 ): Movement | undefined {
   if (preferredId) {
     const preferred = candidates.find((m) => m.id === preferredId);
-    if (preferred && Math.random() < preferChance) return preferred;
+    if (preferred && rng() < preferChance) return preferred;
   }
   return pickVaried(candidates, excludeIds);
 }

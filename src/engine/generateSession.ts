@@ -91,6 +91,7 @@ import {
 import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { buildMicrocyclePlan, type DayIntensity } from './weekPlan';
+import { rng, withSeededRng } from './rng';
 import {
   computeResponseProfile,
   engineResponseProfile,
@@ -180,7 +181,7 @@ function buildStrengthSuperset(
   recentIds: Set<string>,
   avoidedPatterns: Set<MovementPattern>,
 ): SessionBlockResult | null {
-  if (Math.random() >= strengthSupersetChance(pattern, week)) return null;
+  if (rng() >= strengthSupersetChance(pattern, week)) return null;
   const ids = STRENGTH_SUPERSET_POOL[pattern];
   if (!ids) return null;
   const pool = filterAvoidingPain(
@@ -261,8 +262,8 @@ const STRENGTH_SCHEME_NOTE: Record<StrengthSchemeStyle, string> = {
  * volumen ligero perpetuo, sigue viendo dias de intensidad.
  */
 function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4, preferVolume = false): StrengthSchemeStyle {
-  if (week === 4) return Math.random() < 0.5 ? 'straightSets' : 'volumeSets';
-  const roll = Math.random();
+  if (week === 4) return rng() < 0.5 ? 'straightSets' : 'volumeSets';
+  const roll = rng();
   if (preferVolume) {
     if (roll < 0.35) return 'straightSets';
     if (roll < 0.55) return 'ascendingLadder';
@@ -320,9 +321,9 @@ function pickTempoForDay(params: {
   // no anadir exigencia tecnica — en ambos casos el tempo no aplica, sea cual sea el resto de senales.
   if (week === 4 || readinessIsLow) return undefined;
   const chance = hasWeakPointFocus || hasGoalFocus ? Math.max(TEMPO_BASE_CHANCE_BY_WEEK[week], TEMPO_FOCUS_CHANCE) : TEMPO_BASE_CHANCE_BY_WEEK[week];
-  if (Math.random() >= chance) return undefined;
+  if (rng() >= chance) return undefined;
   const pool = TEMPO_POOL_BY_WEEK[week];
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[Math.floor(rng() * pool.length)];
 }
 
 export type TestDayFocus = 'strength' | 'oly' | null;
@@ -335,7 +336,7 @@ export type TestDayFocus = 'strength' | 'oly' | null;
  */
 function resolveTestDayFocus(week: 1 | 2 | 3 | 4): TestDayFocus {
   if (week !== 3) return null;
-  const roll = Math.random();
+  const roll = rng();
   if (roll < 0.175) return 'strength';
   if (roll < 0.35) return 'oly';
   return null;
@@ -494,10 +495,10 @@ function buildStrengthBlock(
       // coach da mas frecuencia al punto flaco, no reconstruye la semana entera alrededor de el.
       const stalledPattern = stalledStrengthPattern(responseProfile);
       const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history);
-      if (stalledPattern && !blockedForBias(stalledPattern) && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+      if (stalledPattern && !blockedForBias(stalledPattern) && rng() < WEAK_POINT_BIAS_CHANCE) {
         pattern = stalledPattern;
         weakPointTag = ' Este patrón lleva estancado en tu historial de PRs — prioridad de frecuencia para desbloquearlo.';
-      } else if (weakPattern && !blockedForBias(weakPattern) && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+      } else if (weakPattern && !blockedForBias(weakPattern) && rng() < WEAK_POINT_BIAS_CHANCE) {
         pattern = weakPattern;
         weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
       }
@@ -787,13 +788,13 @@ function buildOlyBlock(
     // historial real de PRs, si no la peor valorada en `computeWeakPoints`, si no el sesgo de desbalance.
     const stalledFam = stalledOlyFamily(responseProfile);
     const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history);
-    if (stalledFam && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+    if (stalledFam && rng() < WEAK_POINT_BIAS_CHANCE) {
       family = stalledFam;
       weakPointTag = ' Esta familia lleva estancada en tu historial de PRs — más frecuencia para desbloquearla.';
-    } else if (weakFamily && Math.random() < WEAK_POINT_BIAS_CHANCE) {
+    } else if (weakFamily && rng() < WEAK_POINT_BIAS_CHANCE) {
       family = weakFamily;
       weakPointTag = ' Prioridad extra hoy: esta familia lleva estancada, le damos más frecuencia.';
-    } else if (weakPointTag === '' && imbalanceBias.olyFamilies.length > 0 && Math.random() < IMBALANCE_BIAS_CHANCE) {
+    } else if (weakPointTag === '' && imbalanceBias.olyFamilies.length > 0 && rng() < IMBALANCE_BIAS_CHANCE) {
       // Sin punto debil de familia que corregir, inclina hacia la familia infra-desarrollada de un
       // par en desbalance (p.ej. snatch bajo respecto al clean). Mismo mecanismo, prioridad menor.
       family = imbalanceBias.olyFamilies[0];
@@ -901,11 +902,11 @@ function buildOlyBlock(
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).
   const canUseEmom = week !== 3;
-  const useEmom = canUseEmom && Math.random() < 0.3;
+  const useEmom = canUseEmom && rng() < 0.3;
 
   let mainEntry: SessionBlockResult;
   if (useEmom) {
-    const emomMinutes = [8, 10, 12][Math.floor(Math.random() * 3)];
+    const emomMinutes = [8, 10, 12][Math.floor(rng() * 3)];
     mainEntry = {
       block: 'oly',
       movementId: movement.id,
@@ -1298,7 +1299,7 @@ function buildWodBlock(
   // Semana pico: formatos cortos e intensos, sin chipper largo ni escalera de acumulacion de volumen.
   // Rampa de vuelta: mismo criterio que la semana pico, por la razon contraria — nada de formatos
   // largos de alto volumen mientras el atleta esta cogiendo ritmo de nuevo.
-  const isChipperDay = !isPeakWeek && !wodRampActive && !lowInterferenceWod && Math.random() < 0.15;
+  const isChipperDay = !isPeakWeek && !wodRampActive && !lowInterferenceWod && rng() < 0.15;
   const regularFormats: { label: string; kind: WodFormatKind }[] = [
     { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' },
     { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
@@ -1324,7 +1325,7 @@ function buildWodBlock(
   const formatPool = preferredFormats.length > 0 ? [...regularFormats, ...preferredFormats, ...preferredFormats] : regularFormats;
   const chosenFormat = isChipperDay
     ? { label: 'Chipper — 1 ronda completa', kind: 'chipper' as WodFormatKind }
-    : formatPool[Math.floor(Math.random() * formatPool.length)];
+    : formatPool[Math.floor(rng() * formatPool.length)];
   // Escalera compartida, ascendente o descendente — misma pareja de movimientos, misma cifra de
   // reps para los dos, solo cambia si cuenta hacia arriba o hacia abajo (Fran/Diane/Elizabeth son
   // descendentes; "Climb the Ladder" es la version ascendente del mismo patron).
@@ -1406,7 +1407,7 @@ function buildWodBlock(
 
   if (chosenFormat.kind === 'descendingLadderFiller' || chosenFormat.kind === 'ascendingLadderFiller') {
     const isAscending = chosenFormat.kind === 'ascendingLadderFiller';
-    const mainPool = Math.random() < 0.5 ? weightedPool : gymnasticsPool;
+    const mainPool = rng() < 0.5 ? weightedPool : gymnasticsPool;
     const usedForLadder = new Set(recentIds);
     const main = pickVariedWithPreference(mainPool, usedForLadder, wodLiftPref.movementId, wodLiftPref.preferChance);
     if (main) {
@@ -1463,7 +1464,7 @@ function buildWodBlock(
   }
 
   const ladderSchemes = chosenFormat.kind === 'ascendingLadder' ? ASCENDING_LADDER_SCHEMES : DESCENDING_LADDER_SCHEMES;
-  const ladderReps = isSharedLadder ? ladderSchemes[Math.floor(Math.random() * ladderSchemes.length)] : null;
+  const ladderReps = isSharedLadder ? ladderSchemes[Math.floor(rng() * ladderSchemes.length)] : null;
   const format = ladderReps ? `${ladderReps} — ${chosenFormat.label}` : chosenFormat.label;
 
   return picks.map((m) => {
@@ -1504,7 +1505,7 @@ function buildAccessoryBlock(
 
   // Un coach no repite siempre la misma metodologia: la mayoria de dias son series independientes,
   // pero con variabilidad entra el giant set (estilo "Body Armor") o el superset.
-  const roll = Math.random();
+  const roll = rng();
   const method: AccessoryMethod = roll < 0.6 ? 'straightSets' : roll < 0.85 ? 'giantSet' : 'superset';
   const notes = `${baseRationale} ${ACCESSORY_METHOD_NOTE[method]}`;
 
@@ -1609,7 +1610,7 @@ function buildSkillBlock(
       const feeder = index > 0 ? steps[index - 1] : null;
       const reach = index < total - 1 ? steps[index + 1] : null;
 
-      const roll = Math.random();
+      const roll = rng();
       let picked: { step: SkillProgressionStep; role: 'actual' | 'feeder' | 'reach'; rung: number };
       if (feeder && roll < 0.28) {
         picked = { step: feeder, role: 'feeder', rung: index - 1 };
@@ -1718,7 +1719,7 @@ function buildRecoveryWodBlock(recentIds: Set<string>, avoidedPatterns: Set<Move
   const picks = pickManyVaried(pool, 2, recentIds);
   if (picks.length === 0) return [];
 
-  const totalMinutes = 45 + Math.floor(Math.random() * 4) * 5; // 45 / 50 / 55 / 60
+  const totalMinutes = 45 + Math.floor(rng() * 4) * 5; // 45 / 50 / 55 / 60
   const perPieceMinutes = Math.max(10, Math.round(totalMinutes / picks.length / 5) * 5);
   const title = 'Recuperación activa';
   const format = `RPE 2 · ~${totalMinutes} min total`;
@@ -1761,7 +1762,7 @@ function buildRecoverySkillBlock(recentIds: Set<string>, avoidedPatterns: Set<Mo
  * progresion realista para semanas seguidas de espera antes del macrociclo.
  */
 function isMaintenanceRecoveryDay(): boolean {
-  return Math.random() < 0.25;
+  return rng() < 0.25;
 }
 
 function buildMaintenanceWodBlock(
@@ -1787,7 +1788,7 @@ function buildMaintenanceWodBlock(
     // La triada de barra (WOD_BARBELL_LOAD_PERCENT) queda fuera a proposito: necesita un PR para
     // calcular su carga, y mantenimiento no hace cargas basadas en PR (ver arriba).
   ];
-  const chosenFormat = regularFormats[Math.floor(Math.random() * regularFormats.length)];
+  const chosenFormat = regularFormats[Math.floor(rng() * regularFormats.length)];
 
   // Misma trifecta clasica que en el macrociclo completo: 1 gimnastico + 1 con carga + 1 monoestructural.
   const gymnasticsPool = pool.filter((m) => getWodDomain(m.id) === 'gymnastics');
@@ -1801,7 +1802,7 @@ function buildMaintenanceWodBlock(
 
   if (chosenFormat.kind === 'descendingLadderFiller' || chosenFormat.kind === 'ascendingLadderFiller') {
     const isAscending = chosenFormat.kind === 'ascendingLadderFiller';
-    const mainPool = Math.random() < 0.5 ? weightedPool : gymnasticsPool;
+    const mainPool = rng() < 0.5 ? weightedPool : gymnasticsPool;
     const usedForLadder = new Set(recentIds);
     const main = pickVaried(mainPool, usedForLadder);
     if (main) {
@@ -2171,7 +2172,11 @@ export function generateOverrideSession(
   const recentIds = getRecentMovementIds(history);
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
-  const blocks = buildMaintenanceStyleBlocks(dayPlan, history, recentIds, type === 'recovery', avoidedPatterns, wodRampActive);
+  // Determinista igual que `generateSessionForDate` — el tipo de override entra en la semilla para
+  // que "propia" y "recuperación" del mismo día no salgan idénticas.
+  const blocks = withSeededRng(`ovr:${type}:${dateIso}`, () =>
+    buildMaintenanceStyleBlocks(dayPlan, history, recentIds, type === 'recovery', avoidedPatterns, wodRampActive),
+  );
 
   return {
     date: dateIso,
@@ -2331,12 +2336,35 @@ export function generateSessionForDate(
 ): DailySession {
   const dateIso = toLocalIsoDate(date);
   const activeProgram = getActiveStrengthProgram(profile.strengthPrograms ?? [], dateIso);
-  if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
-
   const activeMacro = getActiveMacrocycle(profile.macrocycles, dateIso);
-  return activeMacro
-    ? generateDailySession(profile, history, activeMacro, date, goals)
-    : generateOffSeasonSession(profile, history, date);
+  // Generación DETERMINISTA: el RNG del motor se siembra con la estructura activa + la fecha, así
+  // que el mismo perfil sincronizado produce EXACTAMENTE la misma sesión en cualquier dispositivo y
+  // en cada refresco. `withSeededRng` es síncrono y restaura `Math.random` al salir.
+  const seedKey = `sess:${activeProgram?.id ?? activeMacro?.id ?? 'off'}:${dateIso}`;
+  return withSeededRng(seedKey, () => {
+    if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
+    return activeMacro
+      ? generateDailySession(profile, history, activeMacro, date, goals)
+      : generateOffSeasonSession(profile, history, date);
+  });
+}
+
+/**
+ * Sesión que daría el macrociclo `macro` en `date` — misma semilla determinista que usaría
+ * `generateSessionForDate` si ese macro fuese la estructura activa. La usa la vista previa de
+ * "añadir el WOD de mi macro" a un día de programa de fuerza, para que lo que se ve sea lo que se
+ * añade.
+ */
+export function previewMacroSession(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  macro: Macrocycle,
+  date: Date,
+  goals: Goal[],
+): DailySession {
+  return withSeededRng(`sess:${macro.id}:${toLocalIsoDate(date)}`, () =>
+    generateDailySession(profile, history, macro, date, goals),
+  );
 }
 
 /**

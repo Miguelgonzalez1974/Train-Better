@@ -18,9 +18,9 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import {
   buildStrengthProgramWodAddition,
-  generateDailySession,
   generateOverrideSession,
   generateSessionForDate,
+  previewMacroSession,
   hasActiveTrainingStructure,
   isCachedSessionOrphaned,
   peekRetestHeadsUp,
@@ -484,10 +484,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
   function openAddWodPicker() {
     const macro = getActiveMacrocycle(profile.macrocycles, todayIso);
-    // Se genera una unica vez aqui y se reutiliza tal cual al confirmar — el motor usa
-    // aleatoriedad interna, asi que volver a generar en el momento de confirmar podria dar un WOD
-    // distinto al que se vio en la vista previa.
-    setMacroWodPreview(macro ? generateDailySession(profile, history, macro, new Date(), goals).blocks.filter((b) => b.block === 'wod') : null);
+    // Determinista (misma semilla que `generateSessionForDate`): lo que se ve en la vista previa es
+    // exactamente lo que se añade al confirmar.
+    setMacroWodPreview(
+      macro ? previewMacroSession(profile, history, macro, new Date(), goals).blocks.filter((b) => b.block === 'wod') : null,
+    );
     setShowAddWodPicker(true);
   }
 

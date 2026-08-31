@@ -7,6 +7,7 @@
 
 import type { BenchmarkWorkout } from '../data/movements/types';
 import { olyMovements, strengthMovements } from '../data/movements';
+import { rng } from './rng';
 
 export const GYMNASTICS_IDS = [
   'strict-pull-up',
@@ -113,7 +114,7 @@ export function pickSmartBenchmark(
   const byDomain = lastDomain ? durationPool.filter((w) => dominantWodDomain(w.movements) !== lastDomain) : durationPool;
   const finalPool = byDomain.length > 0 ? byDomain : durationPool;
 
-  return finalPool[Math.floor(Math.random() * finalPool.length)];
+  return finalPool[Math.floor(rng() * finalPool.length)];
 }
 
 /** Prescripcion realista por movimiento (reps, distancia o tiempo), no un "12-15" generico para todo. */
@@ -393,7 +394,7 @@ const WOD_NAME_PART_B = [
 ];
 
 export function generateWodName(): string {
-  const a = WOD_NAME_PART_A[Math.floor(Math.random() * WOD_NAME_PART_A.length)];
-  const b = WOD_NAME_PART_B[Math.floor(Math.random() * WOD_NAME_PART_B.length)];
+  const a = WOD_NAME_PART_A[Math.floor(rng() * WOD_NAME_PART_A.length)];
+  const b = WOD_NAME_PART_B[Math.floor(rng() * WOD_NAME_PART_B.length)];
   return `${a} ${b}`;
 }
