@@ -306,7 +306,7 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
     preferFormats: ['amrap', 'interval', 'chipper'],
     durationScale: 1.15,
     paceCue: 'ritmo sostenible y conversacional, sin sprints',
-    note: 'Acondicionamiento de hoy: base aeróbica — pieza más larga a ritmo sostenible y más cardio cíclico. Construyes motor, no buscas fallar.',
+    note: 'Hoy: base aeróbica — pieza larga a ritmo sostenible. Construyes motor.',
   },
   umbral: {
     system: 'umbral',
@@ -315,7 +315,7 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
     preferFormats: ['forTime', 'interval', 'ladder', 'ascendingLadderFiller'],
     durationScale: 1.0,
     paceCue: 'cómodo-duro: rápido pero sin colapsar',
-    note: 'Acondicionamiento de hoy: umbral — intervalos y For Time de duración media a ritmo "cómodo-duro", justo por debajo de acumular demasiado lactato.',
+    note: 'Hoy: umbral — duración media a ritmo "cómodo-duro", justo por debajo del lactato.',
   },
   potencia: {
     system: 'potencia',
@@ -324,7 +324,7 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
     preferFormats: ['forTime', 'emom', 'risingLoadInterval', 'risingInterval'],
     durationScale: 0.9,
     paceCue: 'máximo esfuerzo en piezas cortas',
-    note: 'Acondicionamiento de hoy: potencia anaeróbica — pieza corta y máxima, estilo competición. Menos volumen, más intensidad.',
+    note: 'Hoy: potencia anaeróbica — pieza corta y máxima, estilo competición.',
   },
   recuperacion: {
     system: 'recuperacion',
@@ -333,7 +333,7 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
     preferFormats: ['amrap', 'interval'],
     durationScale: 0.9,
     paceCue: 'suave, para recuperar — nunca al límite',
-    note: 'Acondicionamiento de hoy: recuperación aeróbica — cardio suave y continuo para bajar fatiga, nunca cerca del fallo.',
+    note: 'Hoy: recuperación — cardio suave y continuo para bajar fatiga.',
   },
 };
 

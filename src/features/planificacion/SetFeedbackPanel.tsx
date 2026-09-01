@@ -75,7 +75,7 @@ function LogActualForm({
                   <span className={delta > 0 ? ' text-brand-neon' : ' text-brand-orange'}>
                     {' '}
                     ({delta > 0 ? '+' : ''}
-                    {delta} vs. lo que asumía el coach)
+                    {delta} vs. lo previsto)
                   </span>
                 )}
               </>
@@ -99,7 +99,7 @@ function LogActualForm({
         onClick={() => setOpen(true)}
         className="mt-2 w-full rounded-lg border border-dashed border-brand-border py-1.5 text-[11px] font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
       >
-        + Registrar lo que hiciste de verdad (kg · reps · RPE)
+        + Registrar kg · reps · RPE reales
       </button>
     );
   }
@@ -152,7 +152,7 @@ function LogActualForm({
         </button>
       </div>
       <p className="mt-1.5 text-[10px] text-neutral-600">
-        El coach calcula tu 1RM estimado y calibra la carga futura de este levantamiento — señal más precisa que la sensación.
+        El coach lo usa como 1RM estimado para calibrar la carga — más preciso que la sensación.
       </p>
     </div>
   );
@@ -199,8 +199,8 @@ export function SetFeedbackPanel({
         <LogActualForm prescribed={prescribed} logged={logged} onLogActual={onLogActual} />
         <p className="mt-2 text-[10px] text-neutral-600">
           {postCompletion
-            ? 'El coach usa esto para calibrar la carga futura de este levantamiento.'
-            : `Opcional. Ajusta solo las series que te quedan de ${movementName} — no el WOD ni el resto.`}
+            ? 'Calibra la carga futura de este levantamiento.'
+            : `Opcional — ajusta las series que te quedan de ${movementName}.`}
         </p>
       </div>
     );

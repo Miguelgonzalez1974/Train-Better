@@ -48,7 +48,7 @@ export const STRENGTH_WEEK_SCHEMES: Record<1 | 2 | 3 | 4, WeekScheme> = {
     sets: 3,
     reps: 5,
     label: 'Deload (semana 4/4)',
-    coachNote: 'Semana de descarga — baja el volumen para permitir la supercompensación antes del siguiente bloque.',
+    coachNote: 'Semana de descarga — menos volumen para asimilar antes del siguiente bloque.',
   },
 };
 

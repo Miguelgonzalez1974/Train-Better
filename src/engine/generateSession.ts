@@ -596,7 +596,7 @@ function buildStrengthBlock(
           format: 'Test 1RM',
           reps: '1',
           loadKg: testLoadKg,
-          notes: `Día de test de fuerza máxima — calienta con series de aproximación y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${imbalanceTag}${painTag}${testReintroNote}${fatigueNote}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
+          notes: `Test de fuerza máxima — calienta con aproximaciones y busca un nuevo máximo a 1 rep. Referencia: ${testLoadKg} kg.${goalTag}${testReintroNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
         },
       ],
       pattern,
@@ -856,7 +856,7 @@ function buildOlyBlock(
           format: 'Test 1RM',
           reps: '1',
           loadKg: testLoadKg,
-          notes: `Día de test de máximo en ${liftLabel} — calienta con series de aproximación técnica y busca un nuevo máximo a 1 repetición. Tu referencia de hoy es ${testLoadKg} kg.${goalTag}${weakPointTag}${fatigueNote}${rampNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
+          notes: `Test de máximo en ${liftLabel} — calienta con aproximaciones técnicas y busca un nuevo máximo a 1 rep. Referencia: ${testLoadKg} kg.${goalTag}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
         },
       ],
       reasons: testReasons,
@@ -1381,15 +1381,10 @@ function buildWodBlock(
     lowInterferenceWod || week > 2 ? [gymnasticsPool, monoPool, weightedPool] : [weightedPool, gymnasticsPool, monoPool];
 
   const title = generateWodName();
-  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito mientras coges ritmo de nuevo.' : '';
-  const emphasisWodNote =
-    dayEmphasis === 'fuerza'
-      ? ' Día de fuerza: WOD corto y de bajo impacto — hoy la prioridad es la barra, esto mantiene el motor sin restarle a la recuperación.'
-      : dayEmphasis === 'metcon'
-        ? ' Día de metcon: pieza algo más larga de lo normal para acumular estímulo de condición física.'
-        : '';
-  const energyNote = ` Enfoque de hoy (${energy.label}): ${energy.paceCue}.`;
-  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}${emphasisWodNote}${energyNote}`;
+  const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito.' : '';
+  // El énfasis del día (fuerza/metcon) y el sistema energético van a `coachReasons` (emphasisNote /
+  // energyReason) — la nota del bloque se queda solo con cómo atacar este formato + la rampa.
+  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`;
 
   if (chosenFormat.kind === 'barbellComplex') {
     const usedForComplex = new Set(recentIds);
@@ -2184,9 +2179,9 @@ export function generateDailySession(
   const progressionNote = weekProg.note || undefined;
   const intensityNote =
     dayIntensity === 'alta'
-      ? 'Día exigente de la semana — aquí es donde empujas.'
+      ? 'Día fuerte de la semana — aquí empujas.'
       : dayIntensity === 'baja'
-        ? 'Día suave de la semana — menos volumen a propósito para que la semana ondule y asimiles.'
+        ? 'Día suave de la semana — menos volumen para asimilar.'
         : undefined;
   const coachReasons = Array.from(
     new Set(collectReasons(deloadNote, emphasisNote, progressionNote, intensityNote, energyReason, ...strengthReasons, ...olyReasons)),

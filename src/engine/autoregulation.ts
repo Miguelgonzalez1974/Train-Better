@@ -15,13 +15,12 @@ const AUTOREG_FACTOR: Record<AcwrZone, number> = {
 };
 
 const AUTOREG_NOTE: Partial<Record<AcwrZone, string>> = {
-  moderada: 'Carga ajustada -5% por tu volumen acumulado esta semana (ACWR en riesgo moderado) — prioriza la técnica.',
-  alta: 'Carga ajustada -12% por tu volumen acumulado (ACWR alto) — hoy toca bajar el pie del acelerador, no sumar más fatiga.',
+  moderada: 'Carga −5% por volumen acumulado (ACWR en riesgo moderado) — prioriza técnica.',
+  alta: 'Carga −12% por volumen acumulado (ACWR alto) — hoy bajas el pie del acelerador.',
 };
 
 /** Nota distinta a la de riesgo moderado real: aqui la cautela es por falta de historial, no por volumen acumulado. */
-const COLD_START_NOTE =
-  'Carga ajustada con cautela — todavía no hay suficiente historial reciente para calcular tu ACWR real, así que el coach empieza conservador hasta conocer tu tolerancia.';
+const COLD_START_NOTE = 'Carga conservadora — aún sin historial para calcular tu ACWR.';
 
 export function getAutoregFactor(zone: AcwrZone): number {
   return AUTOREG_FACTOR[zone];
@@ -82,7 +81,7 @@ function rawRpeAutoregFactor(history: SessionHistoryEntry[], referenceDate: Date
   if (daysSinceLast >= 0 && daysSinceLast <= RPE_HIGH_LOOKBACK_DAYS && last.rpe >= RPE_HIGH_THRESHOLD) {
     return {
       factor: RPE_HIGH_FACTOR,
-      note: `Ayer registraste RPE ${last.rpe} — hoy se baja un poco más para no acumular fatiga encima de eso.`,
+      note: `Ayer RPE ${last.rpe} — hoy se baja un poco para no acumular fatiga.`,
     };
   }
 
@@ -93,7 +92,7 @@ function rawRpeAutoregFactor(history: SessionHistoryEntry[], referenceDate: Date
   if (recentLight.length >= RPE_LIGHT_STREAK_MIN_SESSIONS && recentLight.every((entry) => entry.rpe <= RPE_LOW_THRESHOLD)) {
     return {
       factor: RPE_LIGHT_FACTOR,
-      note: 'Tus últimas sesiones se han sentido ligeras (RPE bajo) — hoy se sube un poco la intensidad.',
+      note: 'Últimas sesiones ligeras (RPE bajo) — hoy se sube un poco la intensidad.',
     };
   }
 

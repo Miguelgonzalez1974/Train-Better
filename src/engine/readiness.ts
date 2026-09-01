@@ -38,14 +38,14 @@ export function getReadinessFactor(check: ReadinessCheck | undefined): Readiness
   if (score <= READINESS_LOW_THRESHOLD) {
     return {
       factor: READINESS_LOW_FACTOR,
-      note: 'Tu check-in de hoy indica poca energía (sueño/agujetas/estrés/motivación) — se reduce un poco la carga.',
+      note: 'Check-in de hoy con poca energía — se reduce un poco la carga.',
       isLow: true,
     };
   }
   if (score >= READINESS_HIGH_THRESHOLD) {
     return {
       factor: READINESS_HIGH_FACTOR,
-      note: 'Tu check-in de hoy pinta bien — se sube un poco la intensidad.',
+      note: 'Check-in de hoy positivo — se sube un poco la intensidad.',
       isLow: false,
     };
   }
