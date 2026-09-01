@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
@@ -50,6 +50,7 @@ import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { SetFeedbackPanel } from './SetFeedbackPanel';
 import { SessionSummaryCard } from './SessionSummaryCard';
+import { FocusMode } from './FocusMode';
 import { RestTimer } from './RestTimer';
 import { Modal } from '../shell/Modal';
 
@@ -122,6 +123,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   });
 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(60);
@@ -386,6 +388,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     }
     setSession(cached ?? (hasActiveTrainingStructure(profile, todayIso) ? generateAndCache(profile) : null));
     setShowCompletePanel(false);
+    setFocusMode(false);
     setEditMode(false);
     setPrUpdateMessage(null);
     setE1rmSuggestions([]);
@@ -690,6 +693,22 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   return (
     <div className="flex flex-col gap-4">
       {session && !session.isRestDay && <RestTimer />}
+      {focusMode && session && !session.isRestDay && (
+        <FocusMode
+          session={session}
+          setFeedbackByIndex={setFeedbackByIndex}
+          onSetFeedback={handleSetFeedback}
+          onLogActual={handleLogActualSet}
+          onResetSetFeedback={handleResetSetFeedback}
+          onExit={() => setFocusMode(false)}
+          onFinish={() => {
+            setFocusMode(false);
+            setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+            setPrUpdateMessage(null);
+            setShowCompletePanel(true);
+          }}
+        />
+      )}
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
 
       {goals.length > 0 && (
@@ -862,6 +881,15 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
                 <Bandage size={16} />
               </button>
             </div>
+            {!alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && (
+              <button
+                onClick={() => setFocusMode(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-neon/15 px-3 py-2 text-sm font-semibold text-brand-neon ring-1 ring-brand-neon/40 transition-all duration-200 hover:bg-brand-neon/25 sm:w-auto"
+              >
+                <Play size={14} strokeWidth={2.5} />
+                Empezar sesión
+              </button>
+            )}
             <button
               onClick={() => {
                 setTestedLoadKg(testDayBlock?.loadKg ?? 0);
