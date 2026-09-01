@@ -1,4 +1,5 @@
 import type { Block, Movement } from './types';
+import { benchmarkWorkouts } from './benchmarkWods';
 import { strengthMovements } from './strength';
 import { olyMovements } from './oly';
 import { wodMovements } from './wod';
@@ -30,6 +31,15 @@ export function getMovementById(id: string): Movement | undefined {
 
 export function getMovementsByBlock(block: Block): Movement[] {
   return allMovements.filter((m) => m.blocks.includes(block));
+}
+
+/** Nombre legible de un `movementId` de bloque o un `benchmark:<id>` — el prefijo `benchmark:` resuelve al catálogo de WODs de referencia; si nada casa, se devuelve el id crudo. */
+export function resolveMovementDisplayName(id: string): string {
+  if (id.startsWith('benchmark:')) {
+    const benchId = id.slice('benchmark:'.length);
+    return benchmarkWorkouts.find((w) => w.id === benchId)?.name ?? benchId;
+  }
+  return movementsById.get(id)?.name ?? id;
 }
 
 export function getMovementsByTag(tag: string): Movement[] {

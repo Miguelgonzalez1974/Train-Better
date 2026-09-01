@@ -45,6 +45,7 @@ import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
+import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
@@ -124,6 +125,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [showDiary, setShowDiary] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(60);
@@ -733,15 +735,38 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         </div>
       )}
 
-      <WeekStrip
-        profile={profile}
-        history={history}
-        goals={goals}
-        onDeleteHistoryEntry={(date) => {
-          athleteRepository.deleteHistoryEntry(date);
-          setHistory(athleteRepository.getHistory());
-        }}
-      />
+      <div className="flex flex-col gap-1.5">
+        <WeekStrip
+          profile={profile}
+          history={history}
+          goals={goals}
+          onDeleteHistoryEntry={(date) => {
+            athleteRepository.deleteHistoryEntry(date);
+            setHistory(athleteRepository.getHistory());
+          }}
+        />
+        {history.length > 0 && (
+          <button
+            onClick={() => setShowDiary(true)}
+            className="self-end text-xs font-semibold text-neutral-500 transition-colors duration-200 hover:text-brand-gold"
+          >
+            Ver diario completo →
+          </button>
+        )}
+      </div>
+
+      {showDiary && (
+        <TrainingDiary
+          history={history}
+          trainingDatesLog={profile.trainingDatesLog ?? []}
+          onDeleteEntry={(date) => {
+            athleteRepository.deleteHistoryEntry(date);
+            setHistory(athleteRepository.getHistory());
+            setProfile(athleteRepository.getProfile());
+          }}
+          onClose={() => setShowDiary(false)}
+        />
+      )}
 
       <CoachNotices
         activePainFlags={activePainFlags}
