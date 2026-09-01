@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, TrendingUp } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
@@ -41,6 +41,7 @@ import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { adjustRemainingSets, parseWorkingReps } from '../../engine/setFeedback';
+import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -48,6 +49,7 @@ import { DaySessionBlocks } from './DaySessionBlocks';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { SetFeedbackPanel } from './SetFeedbackPanel';
+import { SessionSummaryCard } from './SessionSummaryCard';
 import { RestTimer } from './RestTimer';
 import { Modal } from '../shell/Modal';
 
@@ -63,9 +65,9 @@ const PAIN_DURATION_OPTIONS: { value: PainDuration; label: string }[] = [
 ];
 
 /** A que PR se escribiria la estimacion — raiz (prs) o de variante (variantPrs), segun de cual se calculo la carga de hoy. */
-type E1rmTarget = { kind: 'root'; key: keyof PersonalRecords } | { kind: 'variant'; key: keyof VariantPersonalRecords };
+export type E1rmTarget = { kind: 'root'; key: keyof PersonalRecords } | { kind: 'variant'; key: keyof VariantPersonalRecords };
 
-interface E1rmSuggestion {
+export interface E1rmSuggestion {
   target: E1rmTarget;
   movementName: string;
   estimatedKg: number;
@@ -173,6 +175,14 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long' }).format(new Date(upcoming.startDate));
   }, [profile.macrocycles, todayIso]);
   const alreadyCompletedToday = useMemo(() => (session ? history.some((h) => h.date === session.date) : false), [history, session]);
+  // Reconstruido desde el historial persistido (no desde estado efimero de la sesion) para que el
+  // resumen post-sesion sobreviva a un refresco de pagina, igual que `alreadyCompletedToday`.
+  const todayHistoryEntry = useMemo(() => history.find((h) => h.date === todayIso), [history, todayIso]);
+  const adherenceStreak = useMemo(
+    () => (alreadyCompletedToday ? computeAdherenceStreak(profile, history, todayIso) : 0),
+    [alreadyCompletedToday, profile, history, todayIso],
+  );
+  const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history, todayIso]);
   const [readinessLog, setReadinessLog] = useState<ReadinessCheck[]>(() => athleteRepository.getReadinessLog());
   const [readinessDismissed, setReadinessDismissed] = useState(false);
   const [setFeedbackLog, setSetFeedbackLog] = useState<SetFeedbackEntry[]>(() => athleteRepository.getSetFeedbackLog());
@@ -876,44 +886,17 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         )}
       </div>
 
-      {prUpdateMessage && (
-        <div className="rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-sm text-brand-gold">{prUpdateMessage}</div>
-      )}
-
-      {e1rmSuggestions.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {e1rmSuggestions.map((s) => (
-            <div
-              key={`${s.target.kind}-${s.target.key}`}
-              className="flex items-start gap-2.5 rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-2.5 text-sm"
-            >
-              <TrendingUp size={15} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-gold" />
-              <div className="flex-1">
-                <p className="text-neutral-200">
-                  Estimación de nuevo máximo en <span className="font-semibold text-brand-gold">{s.movementName}</span>: ~
-                  {s.estimatedKg} kg (tu PR actual es {s.currentKg} kg)
-                </p>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  A partir de tu serie de hoy — es una estimación, no un test. Puedes confirmarla o esperar a probarla de verdad.
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => handleConfirmE1rmSuggestion(s)}
-                    className="rounded-md bg-brand-gold px-2.5 py-1 text-xs font-semibold text-black transition-colors duration-200 hover:bg-brand-gold-soft"
-                  >
-                    Actualizar PR a {s.estimatedKg} kg
-                  </button>
-                  <button
-                    onClick={() => handleDismissE1rmSuggestion(s)}
-                    className="rounded-md border border-brand-border px-2.5 py-1 text-xs text-neutral-400 transition-colors duration-200 hover:bg-white/5"
-                  >
-                    Ahora no
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {alreadyCompletedToday && todayHistoryEntry && (
+        <SessionSummaryCard
+          session={session}
+          entry={todayHistoryEntry}
+          streak={adherenceStreak}
+          weekCount={weekCount}
+          prUpdateMessage={prUpdateMessage}
+          e1rmSuggestions={e1rmSuggestions}
+          onConfirmE1rm={handleConfirmE1rmSuggestion}
+          onDismissE1rm={handleDismissE1rmSuggestion}
+        />
       )}
 
       {showCompletePanel && !alreadyCompletedToday && (
