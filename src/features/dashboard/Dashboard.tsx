@@ -4,7 +4,7 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
 import { computeWeakPoints, computePrTrends, type PrTrendDirection } from '../../engine/weakPoints';
-import { toLocalIsoDate } from '../../engine/periodization';
+import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { AcwrGauge } from './AcwrGauge';
 import { WeakPointsCard } from './WeakPointsCard';
@@ -12,6 +12,7 @@ import { TrainingHeatmap } from './TrainingHeatmap';
 import { NextWeekPreview } from './NextWeekPreview';
 import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
+import { PrTrajectoryCard } from './PrTrajectoryCard';
 import { ProgressOverviewCard } from './ProgressOverviewCard';
 import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
 import { ImbalancesCard } from './ImbalancesCard';
@@ -217,6 +218,8 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
           macrocycles={profile.macrocycles}
         />
       </div>
+
+      <PrTrajectoryCard prLog={profile.prLog ?? []} macroStartIso={getActiveMacrocycle(profile.macrocycles, todayIso)?.startDate} />
 
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
         <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
