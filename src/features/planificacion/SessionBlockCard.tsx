@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Info, type LucideIcon } from 'lucide-react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Info, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -298,40 +298,50 @@ function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
  * levantamiento principal) y la superserie de fuerza (levantamiento principal + A2 antagonista).
  */
 function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
-  // Las entradas con `subgroup` (ej. "Calentamiento de barra" del bloque de Oly) van como una
-  // sección propia arriba, numerada y sin peso destacado — no como un paso A/B/C del complejo.
+  // Las entradas con `subgroup` (ej. "Calentamiento de barra" del bloque de Oly) son preparación —
+  // van plegadas por defecto para que la tarjeta muestre solo el complejo de trabajo (A/B).
   const prep = entries.filter((e) => e.subgroup);
   const complex = entries.filter((e) => !e.subgroup);
   const prepNote = prep.find((e) => e.notes)?.notes;
+  const [prepOpen, setPrepOpen] = useState(false);
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       <div className="flex flex-col gap-3">
         {prep.length > 0 && (
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/80">{prep[0].subgroup}</p>
-            <div className="flex flex-col gap-2">
-              {prep.map((entry, idx) => {
-                const movement = getMovementById(entry.movementId);
-                if (!movement) return null;
-                return (
-                  <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                      {idx + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className={NAME_STEP}>{movement.name}</p>
-                        {entry.reps && <span className="text-xs text-neutral-500">{entry.reps}</span>}
-                        {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
+            <button
+              onClick={() => setPrepOpen((o) => !o)}
+              className="flex w-full items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/80"
+            >
+              {prepOpen ? <ChevronDown size={13} strokeWidth={2.5} /> : <ChevronRight size={13} strokeWidth={2.5} />}
+              <span className="min-w-0 truncate">{prep[0].subgroup}</span>
+              <span className="shrink-0 font-normal normal-case text-neutral-600">· {prep.length}</span>
+            </button>
+            {prepOpen && (
+              <div className="mt-2 flex flex-col gap-2">
+                {prep.map((entry, idx) => {
+                  const movement = getMovementById(entry.movementId);
+                  if (!movement) return null;
+                  return (
+                    <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <p className={NAME_STEP}>{movement.name}</p>
+                          {entry.reps && <span className="text-xs text-neutral-500">{entry.reps}</span>}
+                          {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
+                        </div>
+                        <StandardHint standard={movement.standard} />
                       </div>
-                      <StandardHint standard={movement.standard} />
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-            {prepNote && <CoachNote text={prepNote} />}
+                  );
+                })}
+                {prepNote && <CoachNote text={prepNote} />}
+              </div>
+            )}
           </div>
         )}
 
