@@ -12,6 +12,7 @@ import {
 import type { SessionBlockResult } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
 import { LoadStat } from './LoadStat';
+import { noteHead } from './noteText';
 
 type Accent = 'orange' | 'gold' | 'neutral';
 
@@ -46,14 +47,6 @@ function FormatBadge({ format }: { format: string }) {
       {format}
     </span>
   );
-}
-
-/** Primera frase de una nota — corta en `. `/`! `/`? ` seguido de mayúscula (no en "1RM." ni cifras). */
-function noteHead(text: string): { head: string; hasMore: boolean } {
-  const t = text.trim();
-  const parts = t.split(/(?<=[.!?])\s+(?=[¡¿A-ZÁÉÍÓÚ])/);
-  if (parts.length <= 1 || parts[0].length >= t.length - 2) return { head: t, hasMore: false };
-  return { head: parts[0], hasMore: true };
 }
 
 /**

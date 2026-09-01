@@ -626,7 +626,11 @@ function buildStrengthBlock(
           readinessIsLow: readiness.isLow,
         });
   const tempoNote = tempo ? ` Tempo ${tempo} — ${describeTempoNotation(tempo)}.` : '';
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${responseTag}${setFeelNote}${bwNote}${weakPointTag}${imbalanceTag}${painTag}${reintroNote}${fatigueNote}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}${tempoNote}`;
+  // La nota del bloque se queda con lo específico de ESTE levantamiento (esquema, estilo, objetivo,
+  // tempo, y las causas cortas de que el peso se desvíe: sensación previa, rampa, reintro, fatiga).
+  // El "por qué hoy" de la sesión entera (ACWR/RPE/readiness, punto débil, desbalance, peso
+  // corporal, perfil de respuesta) va SOLO a `coachReasons` — ver el resumen "Avisos del coach".
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${setFeelNote}${painTag}${reintroNote}${fatigueNote}${rampNote}${tempoNote}`;
   const reasons = collectReasons(responseTag, setFeelNote, bwNote, weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
 
   if (style === 'ascendingLadder') {
@@ -878,21 +882,20 @@ function buildOlyBlock(
   const loadKg = roundToNearestPlate(
     resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor * dose.strengthLoad,
   );
+  // Igual que en fuerza: la nota del bloque solo lleva lo de ESTE levantamiento (esquema, objetivo,
+  // sensación previa, foco de recepción, rampa/reintro/fatiga). El "por qué hoy" de la sesión
+  // (ACWR/RPE/readiness, punto débil, peso corporal, perfil de respuesta) va solo a `coachReasons`.
   const baseNote =
     (pref.movementId && movement.id === pref.movementId
       ? `${scheme.coachNote}${
           pref.behindSchedule ? ' Vas por detrás de tu objetivo — le damos más peso hasta que te pongas al día.' : ' Prioridad por tu objetivo activo.'
         }`
       : scheme.coachNote) +
-    responseTag +
     setFeelNote +
-    bwNote +
-    weakPointTag +
     receivingTag +
     reintroNote +
     fatigueNote +
-    rampNote +
-    (autoregNote ? ` ${autoregNote}` : '');
+    rampNote;
   const reasons = collectReasons(responseTag, setFeelNote, bwNote, weakPointTag, receivingTag, reintroNote, fatigueNote, rampNote, autoregNote);
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.

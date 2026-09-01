@@ -4,6 +4,7 @@ import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { parseWorkingReps } from '../../engine/setFeedback';
+import { noteHead } from './noteText';
 import { BLOCK_ORDER } from './DaySessionBlocks';
 import { PlateCalculator } from './PlateCalculator';
 import { SetFeedbackPanel, type LoggedActual } from './SetFeedbackPanel';
@@ -51,6 +52,25 @@ const BLOCK_ACCENT: Record<Block, string> = {
   skill: 'text-brand-neon',
   cooldown: 'text-neutral-400',
 };
+
+/** Nota del coach en el modo enfocado: primera frase + "ver más" para el resto. */
+function FocusNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const { head, hasMore } = noteHead(text);
+  return (
+    <span className="mt-1 block text-xs leading-relaxed text-neutral-500">
+      {open ? text : head}
+      {hasMore && (
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="ml-1.5 align-baseline text-[11px] font-semibold text-neutral-400 transition-colors hover:text-brand-gold"
+        >
+          {open ? 'menos' : 'ver más'}
+        </button>
+      )}
+    </span>
+  );
+}
 
 function resolveName(id: string): string {
   if (id.startsWith('benchmark:')) {
@@ -153,7 +173,9 @@ export function FocusMode({
                       {e.entry.reps && <span className="text-xs text-neutral-500">{e.entry.reps}</span>}
                       {e.entry.loadKg ? <span className="text-xs text-neutral-500">· {e.entry.loadKg} kg</span> : null}
                     </span>
-                    {e.entry.notes && <span className="mt-0.5 block text-xs leading-relaxed text-neutral-500">{e.entry.notes}</span>}
+                    {e.entry.notes && (
+                      <span className="mt-1 block text-xs leading-relaxed text-neutral-500">{noteHead(e.entry.notes).head}</span>
+                    )}
                   </span>
                 </button>
               );
@@ -271,7 +293,7 @@ export function FocusMode({
                     </div>
                   );
                 })()}
-              {b.notes && <p className="text-xs leading-relaxed text-neutral-500">{b.notes}</p>}
+              {b.notes && <FocusNote text={b.notes} />}
               {fb && (
                 <SetFeedbackPanel
                   movementName={fb.movementName}
@@ -306,7 +328,7 @@ export function FocusMode({
               {wod.movements.map((m) => resolveName(m)).join(' · ')}
             </p>
           )}
-          {first.notes && <p className="text-xs leading-relaxed text-neutral-500">{first.notes}</p>}
+          {first.notes && <FocusNote text={first.notes} />}
         </div>
       );
     }
@@ -328,7 +350,7 @@ export function FocusMode({
             </li>
           ))}
         </ul>
-        {first.notes && <p className="text-xs leading-relaxed text-neutral-500">{first.notes}</p>}
+        {first.notes && <FocusNote text={first.notes} />}
       </div>
     );
   };
