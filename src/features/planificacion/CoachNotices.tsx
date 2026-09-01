@@ -61,7 +61,10 @@ export function CoachNotices({
   retestHeadsUp,
   coachReasons,
 }: CoachNoticesProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Plegada por defecto para no abrir la sesión con un muro de texto — solo se abre sola si hay un
+  // aviso de molestia activo (eso sí conviene tenerlo delante). El resto (por qué hoy, rampa,
+  // revisión de macro) queda tras el contador.
+  const [collapsed, setCollapsed] = useState(activePainFlags.length === 0);
 
   const count =
     activePainFlags.length +

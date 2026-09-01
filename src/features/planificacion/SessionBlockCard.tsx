@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, type LucideIcon } from 'lucide-react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Info, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -48,11 +48,53 @@ function FormatBadge({ format }: { format: string }) {
   );
 }
 
+/** Primera frase de una nota — corta en `. `/`! `/`? ` seguido de mayúscula (no en "1RM." ni cifras). */
+function noteHead(text: string): { head: string; hasMore: boolean } {
+  const t = text.trim();
+  const parts = t.split(/(?<=[.!?])\s+(?=[¡¿A-ZÁÉÍÓÚ])/);
+  if (parts.length <= 1 || parts[0].length >= t.length - 2) return { head: t, hasMore: false };
+  return { head: parts[0], hasMore: true };
+}
+
+/**
+ * Nota del coach: por defecto solo la primera frase (la accionable), el resto detrás de "ver más".
+ * Sube densidad sin perder el porqué — ver la pasada de limpieza de 2026-09-01.
+ */
 function CoachNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const { head, hasMore } = noteHead(text);
   return (
     <div className="mt-2 flex items-start gap-1.5">
       <Brain size={12} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-neon" />
-      <p className="text-xs text-neutral-400">{text}</p>
+      <p className="text-xs leading-relaxed text-neutral-400">
+        {open ? text : head}
+        {hasMore && (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="ml-1.5 whitespace-nowrap align-baseline text-[11px] font-semibold text-neutral-500 transition-colors hover:text-brand-gold"
+          >
+            {open ? 'menos' : 'ver más'}
+          </button>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** "cómo se hace" plegable — la descripción del movimiento no ocupa sitio hasta que se pide. */
+function StandardHint({ standard, className = '' }: { standard?: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  if (!standard) return null;
+  return (
+    <div className={className}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="mt-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-600 transition-colors hover:text-neutral-400"
+      >
+        <Info size={9} strokeWidth={2.75} />
+        {open ? 'ocultar' : 'cómo se hace'}
+      </button>
+      {open && <p className="mt-1 text-xs leading-relaxed text-neutral-500">{standard}</p>}
     </div>
   );
 }
@@ -213,7 +255,7 @@ function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-white">{movement.name}</p>
-                      <p className="text-xs text-neutral-500">{movement.standard}</p>
+                      <StandardHint standard={movement.standard} />
                     </div>
                   </div>
                 );
@@ -243,7 +285,7 @@ function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
               </span>
               <div>
                 <p className="font-semibold text-white">{movement.name}</p>
-                <p className="text-xs text-neutral-500">{movement.standard}</p>
+                <StandardHint standard={movement.standard} />
               </div>
             </div>
           );
@@ -285,7 +327,7 @@ function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                         {entry.reps && <span className="text-xs text-neutral-500">{entry.reps}</span>}
                         {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
                       </div>
-                      <p className="text-xs text-neutral-500">{movement.standard}</p>
+                      <StandardHint standard={movement.standard} />
                     </div>
                   </div>
                 );
@@ -318,7 +360,7 @@ function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                 )}
 
                 {entry.notes && <div className="ml-7">{<CoachNote text={entry.notes} />}</div>}
-                <p className="ml-7 mt-1.5 text-xs text-neutral-600">{movement.standard}</p>
+                <StandardHint standard={movement.standard} className="ml-7" />
               </div>
             );
           })}
@@ -383,7 +425,7 @@ function EntryRow({ entry }: { entry: SessionBlockResult }) {
       )}
 
       {entry.notes && <CoachNote text={entry.notes} />}
-      <p className="mt-2 text-xs text-neutral-600">{movement.standard}</p>
+      <StandardHint standard={movement.standard} />
     </div>
   );
 }
