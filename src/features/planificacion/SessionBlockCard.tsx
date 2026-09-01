@@ -22,15 +22,20 @@ const ACCENT_CLASSES: Record<Accent, { icon: string; iconBg: string; halo: strin
   neutral: { icon: 'text-neutral-400', iconBg: 'bg-white/5', halo: 'bg-white/10', line: 'from-white/20' },
 };
 
-const BLOCK_META: Record<Block, { label: string; blurb: string; Icon: LucideIcon; accent: Accent }> = {
-  warmup: { label: 'Warm Up', blurb: 'Preparación', Icon: Flame, accent: 'gold' },
-  strength: { label: 'Strength', blurb: 'Fuerza máxima', Icon: Dumbbell, accent: 'orange' },
-  wod: { label: 'WOD', blurb: 'Condición física', Icon: Zap, accent: 'gold' },
-  oly: { label: 'Oly', blurb: 'Técnica olímpica', Icon: Trophy, accent: 'orange' },
-  accessory: { label: 'Accesorio', blurb: 'Refuerzo específico', Icon: Layers, accent: 'gold' },
-  skill: { label: 'Skill', blurb: 'Habilidad gimnástica', Icon: Star, accent: 'orange' },
-  cooldown: { label: 'Cool Down', blurb: 'Recuperación', Icon: Wind, accent: 'neutral' },
+const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent: Accent }> = {
+  warmup: { label: 'Calentamiento', Icon: Flame, accent: 'gold' },
+  strength: { label: 'Fuerza', Icon: Dumbbell, accent: 'orange' },
+  wod: { label: 'WOD', Icon: Zap, accent: 'gold' },
+  oly: { label: 'Oly', Icon: Trophy, accent: 'orange' },
+  accessory: { label: 'Accesorio', Icon: Layers, accent: 'gold' },
+  skill: { label: 'Skill', Icon: Star, accent: 'orange' },
+  cooldown: { label: 'Vuelta a la calma', Icon: Wind, accent: 'neutral' },
 };
+
+/** Jerarquía de nombres de movimiento — una sola escala en toda la tarjeta. */
+const NAME_HEADLINE = 'text-lg font-bold leading-tight text-white'; // título de WOD / benchmark
+const NAME_MAIN = 'text-base font-bold leading-tight text-white'; // levantamiento de trabajo
+const NAME_STEP = 'text-sm font-semibold text-white'; // pasos de lista (calentamiento, accesorio…)
 
 function StatBox({ value, label }: { value: string | number; label: string }) {
   return (
@@ -169,7 +174,7 @@ function BenchmarkWodCard({ entry }: { entry: SessionBlockResult }) {
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
-      <p className="text-lg font-bold leading-tight text-white">{wod.name}</p>
+      <p className={NAME_HEADLINE}>{wod.name}</p>
       <p className="text-sm text-neutral-300">{wod.format}</p>
       <p className="mt-1 text-xs text-neutral-500">{movementNames}</p>
       <CoachNote text="WOD de referencia: compara tu resultado con intentos anteriores para medir tu progreso real." />
@@ -193,7 +198,7 @@ function CustomWodCard({
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
-      {title && <p className="mb-1 text-lg font-bold leading-tight text-white">"{title}"</p>}
+      {title && <p className={`mb-1 ${NAME_HEADLINE}`}>"{title}"</p>}
       {format && <FormatBadge format={format} />}
       <div className="flex flex-col gap-2.5">
         {entries.map((entry, idx) => {
@@ -206,7 +211,7 @@ function CustomWodCard({
                   {idx + 1}
                 </span>
                 <div>
-                  <p className="font-semibold leading-tight text-white">{movement.name}</p>
+                  <p className={NAME_STEP}>{movement.name}</p>
                   {entry.reps && (
                     <p className="text-xs text-neutral-500">
                       {entry.reps} reps{entry.loadKg ? ` @ ${entry.loadKg} kg` : ''}
@@ -247,7 +252,7 @@ function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
                       {idx + 1}
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-white">{movement.name}</p>
+                      <p className={NAME_STEP}>{movement.name}</p>
                       <StandardHint standard={movement.standard} />
                     </div>
                   </div>
@@ -277,7 +282,7 @@ function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
                 {idx + 1}
               </span>
               <div>
-                <p className="font-semibold text-white">{movement.name}</p>
+                <p className={NAME_STEP}>{movement.name}</p>
                 <StandardHint standard={movement.standard} />
               </div>
             </div>
@@ -316,7 +321,7 @@ function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="text-sm font-semibold text-white">{movement.name}</p>
+                        <p className={NAME_STEP}>{movement.name}</p>
                         {entry.reps && <span className="text-xs text-neutral-500">{entry.reps}</span>}
                         {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
                       </div>
@@ -340,7 +345,7 @@ function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
                     {String.fromCharCode(65 + idx)}
                   </span>
-                  <p className="font-bold leading-tight text-white">{movement.name}</p>
+                  <p className={NAME_MAIN}>{movement.name}</p>
                 </div>
 
                 {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
@@ -381,7 +386,7 @@ function AccessoryGroupCard({ entries }: { entries: SessionBlockResult[] }) {
                 {idx + 1}
               </span>
               <div>
-                <p className="font-semibold leading-tight text-white">{movement.name}</p>
+                <p className={NAME_STEP}>{movement.name}</p>
                 {(entry.sets || entry.reps) && (
                   <p className="text-xs text-neutral-500">
                     {entry.sets && `${entry.sets} series`}
@@ -406,7 +411,7 @@ function EntryRow({ entry }: { entry: SessionBlockResult }) {
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       {entry.format && <FormatBadge format={entry.format} />}
-      <p className="text-lg font-bold leading-tight text-white">{movement.name}</p>
+      <p className={NAME_MAIN}>{movement.name}</p>
 
       {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -550,7 +555,7 @@ interface SessionBlockCardProps {
 
 export function SessionBlockCard({ block, results, isLast, entryIndices, editable, onUpdateEntry }: SessionBlockCardProps) {
   if (results.length === 0) return null;
-  const { label, blurb, Icon, accent } = BLOCK_META[block];
+  const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
   const isBenchmarkWod = block === 'wod' && results[0].movementId.startsWith('benchmark:');
 
@@ -565,10 +570,7 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
       </div>
 
       <div className={`flex-1 ${isLast ? 'pb-0' : 'pb-6'}`}>
-        <div className="mb-2 flex items-baseline gap-2">
-          <span className="text-sm font-semibold uppercase tracking-wide text-white">{label}</span>
-          <span className="text-xs text-neutral-500">· {blurb}</span>
-        </div>
+        <p className={`mb-2.5 text-sm font-bold uppercase tracking-[0.08em] ${accentClasses.icon}`}>{label}</p>
 
         {editable && onUpdateEntry && entryIndices ? (
           <EditableBlockEntries block={block} entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
