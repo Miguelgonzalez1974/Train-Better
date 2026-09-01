@@ -10,6 +10,7 @@ import type {
   SessionBlockResult,
   SessionHistoryEntry,
   SetFeedbackEntry,
+  WorkSetEntry,
   SetFeel,
   VariantPersonalRecords,
   WodResult,
@@ -190,6 +191,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [readinessLog, setReadinessLog] = useState<ReadinessCheck[]>(() => athleteRepository.getReadinessLog());
   const [readinessDismissed, setReadinessDismissed] = useState(false);
   const [setFeedbackLog, setSetFeedbackLog] = useState<SetFeedbackEntry[]>(() => athleteRepository.getSetFeedbackLog());
+  const [workLog, setWorkLog] = useState<WorkSetEntry[]>(() => athleteRepository.getWorkLog());
+  const todayWorkLog = useMemo(() => workLog.filter((e) => e.date === todayIso), [workLog, todayIso]);
   const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
   const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && !todayReadiness && !readinessDismissed);
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
@@ -354,6 +357,18 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         firstSetFeel: feel,
       });
     }
+  }
+
+  function handleLogWorkSet(movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number) {
+    if (!session) return;
+    athleteRepository.saveWorkSet({ date: session.date, movementId, block, setNumber, kg, reps });
+    setWorkLog(athleteRepository.getWorkLog());
+  }
+
+  function handleClearWorkSet(movementId: string, setNumber: number) {
+    if (!session) return;
+    athleteRepository.clearWorkSet(session.date, movementId, setNumber);
+    setWorkLog(athleteRepository.getWorkLog());
   }
 
   function handleResetSetFeedback(index: number) {
@@ -655,6 +670,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     if (!window.confirm('¿Deshacer el registro de hoy? Esto no se puede deshacer.')) return;
     athleteRepository.deleteHistoryEntry(session.date);
     setHistory(athleteRepository.getHistory());
+    setWorkLog(athleteRepository.getWorkLog());
     setPrUpdateMessage(null);
     setE1rmSuggestions([]);
   }
@@ -702,6 +718,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           onSetFeedback={handleSetFeedback}
           onLogActual={handleLogActualSet}
           onResetSetFeedback={handleResetSetFeedback}
+          todayWorkLog={todayWorkLog}
+          onLogWorkSet={handleLogWorkSet}
+          onClearWorkSet={handleClearWorkSet}
           onExit={() => setFocusMode(false)}
           onFinish={() => {
             setFocusMode(false);
@@ -758,10 +777,12 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       {showDiary && (
         <TrainingDiary
           history={history}
+          workLog={workLog}
           trainingDatesLog={profile.trainingDatesLog ?? []}
           onDeleteEntry={(date) => {
             athleteRepository.deleteHistoryEntry(date);
             setHistory(athleteRepository.getHistory());
+            setWorkLog(athleteRepository.getWorkLog());
             setProfile(athleteRepository.getProfile());
           }}
           onClose={() => setShowDiary(false)}
@@ -943,6 +964,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         <SessionSummaryCard
           session={session}
           entry={todayHistoryEntry}
+          workLog={todayWorkLog}
           streak={adherenceStreak}
           weekCount={weekCount}
           prUpdateMessage={prUpdateMessage}

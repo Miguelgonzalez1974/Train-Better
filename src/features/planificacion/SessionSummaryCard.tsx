@@ -1,17 +1,30 @@
 import { Flame, CalendarCheck2, TrendingUp, PartyPopper } from 'lucide-react';
-import type { DailySession, SessionHistoryEntry } from '../../data/athlete/types';
+import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import type { E1rmSuggestion } from './Planificacion';
 
 interface SessionSummaryCardProps {
   session: DailySession;
   entry: SessionHistoryEntry;
+  workLog: WorkSetEntry[];
   streak: number;
   weekCount: { done: number; planned: number };
   prUpdateMessage: string | null;
   e1rmSuggestions: E1rmSuggestion[];
   onConfirmE1rm: (s: E1rmSuggestion) => void;
   onDismissE1rm: (s: E1rmSuggestion) => void;
+}
+
+/** "4/5 series · 90 kg" (o rango "85–95 kg") a partir del registro serie a serie, o null si no hay. */
+function workSummary(workLog: WorkSetEntry[], movementId: string, prescribedSets: number): string | null {
+  const sets = workLog.filter((e) => e.movementId === movementId).sort((a, b) => a.setNumber - b.setNumber);
+  if (sets.length === 0) return null;
+  const kgs = sets.map((s) => s.kg).filter((k) => k > 0);
+  const min = Math.min(...kgs);
+  const max = Math.max(...kgs);
+  const kgLabel = kgs.length === 0 ? '' : min === max ? ` · ${max} kg` : ` · ${min}–${max} kg`;
+  const total = prescribedSets > 0 ? `${sets.length}/${prescribedSets}` : String(sets.length);
+  return `${total} series${kgLabel}`;
 }
 
 function resolveWodDisplayName(movementId: string): string | null {
@@ -26,7 +39,11 @@ function resolveWodDisplayName(movementId: string): string | null {
  * `subgroup` — la anterior al calentamiento de barra, ver `buildOlyBlock`) y el WOD (nombre del
  * benchmark, o los movimientos reales del historial si es generado).
  */
-function buildRecapLines(session: DailySession, entry: SessionHistoryEntry): { label: string; detail: string }[] {
+function buildRecapLines(
+  session: DailySession,
+  entry: SessionHistoryEntry,
+  workLog: WorkSetEntry[],
+): { label: string; detail: string }[] {
   if (session.source === 'custom') {
     return session.customTitle ? [{ label: 'Sesión propia', detail: session.customTitle }] : [];
   }
@@ -36,9 +53,13 @@ function buildRecapLines(session: DailySession, entry: SessionHistoryEntry): { l
   if (strengthMain) {
     const name = getMovementById(strengthMain.movementId)?.name;
     if (name) {
-      const scheme = [strengthMain.sets && `${strengthMain.sets}×${strengthMain.reps}`, strengthMain.loadKg && `${strengthMain.loadKg} kg`]
-        .filter(Boolean)
-        .join(' · ');
+      // Si hay registro serie a serie, manda ese (lo que de verdad hiciste); si no, lo prescrito.
+      const logged = workSummary(workLog, strengthMain.movementId, strengthMain.sets ?? 0);
+      const scheme =
+        logged ??
+        [strengthMain.sets && `${strengthMain.sets}×${strengthMain.reps}`, strengthMain.loadKg && `${strengthMain.loadKg} kg`]
+          .filter(Boolean)
+          .join(' · ');
       lines.push({ label: 'Fuerza', detail: scheme ? `${name} — ${scheme}` : name });
     }
   }
@@ -48,7 +69,9 @@ function buildRecapLines(session: DailySession, entry: SessionHistoryEntry): { l
   if (olyMain) {
     const name = getMovementById(olyMain.movementId)?.name;
     if (name) {
-      const scheme = [olyMain.sets && `${olyMain.sets}×${olyMain.reps}`, olyMain.loadKg && `${olyMain.loadKg} kg`].filter(Boolean).join(' · ');
+      const logged = workSummary(workLog, olyMain.movementId, olyMain.sets ?? 0);
+      const scheme =
+        logged ?? [olyMain.sets && `${olyMain.sets}×${olyMain.reps}`, olyMain.loadKg && `${olyMain.loadKg} kg`].filter(Boolean).join(' · ');
       lines.push({ label: 'Oly', detail: scheme ? `${name} — ${scheme}` : name });
     }
   }
@@ -94,6 +117,7 @@ const rxPillClass = 'rounded-md px-2 py-0.5 text-xs font-semibold';
 export function SessionSummaryCard({
   session,
   entry,
+  workLog,
   streak,
   weekCount,
   prUpdateMessage,
@@ -101,7 +125,7 @@ export function SessionSummaryCard({
   onConfirmE1rm,
   onDismissE1rm,
 }: SessionSummaryCardProps) {
-  const recap = buildRecapLines(session, entry);
+  const recap = buildRecapLines(session, entry, workLog);
   const hasAchievements = Boolean(prUpdateMessage) || e1rmSuggestions.length > 0;
 
   return (

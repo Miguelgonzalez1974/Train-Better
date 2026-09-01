@@ -231,6 +231,26 @@ export interface AthleteProfile {
    * levantamiento del perfil de respuesta.
    */
   setFeedbackLog?: SetFeedbackEntry[];
+  /**
+   * Registro serie a serie de fuerza/oly, marcado en el modo entreno enfocado (ver [[WorkSetEntry]]).
+   * Persiste qué series se completaron y con qué carga real — de momento solo para mostrarlo en el
+   * resumen y el diario; mas adelante puede alimentar la calibracion de carga (`analyzeSetLoads`).
+   */
+  workLog?: WorkSetEntry[];
+}
+
+/** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */
+export interface WorkSetEntry {
+  /** Fecha ISO (yyyy-mm-dd). */
+  date: string;
+  movementId: string;
+  block: 'strength' | 'oly';
+  /** 1-indexado. */
+  setNumber: number;
+  /** Carga real de esa serie (kg). */
+  kg: number;
+  /** Reps de esa serie — 0 si la prescripción no da un número limpio (rampas "5-3-1", EMOM…). */
+  reps: number;
 }
 
 export interface SessionBlockResult {

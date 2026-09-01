@@ -1,4 +1,4 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
@@ -12,6 +12,8 @@ const READINESS_LOG_LIMIT = 120;
 const PR_LOG_LIMIT = 150;
 /** Mismo orden de magnitud que los demas logs del perfil: ~4-5 meses de series principales valoradas a 4-5 dias/semana. */
 const SET_FEEDBACK_LOG_LIMIT = 120;
+/** ~6 levantamientos x 5 series x ~10 sesiones recientes — series a series completo del modo enfocado. */
+const WORK_LOG_LIMIT = 300;
 /** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
 const TRAINING_DATES_LOG_LIMIT = 400;
 
@@ -49,6 +51,13 @@ export interface AthleteRepository {
   appendSetFeedbackEntry(entry: SetFeedbackEntry): void;
   /** Deshace el feedback de una serie (el atleta pulsa "cambiar" y no vuelve a elegir). */
   deleteSetFeedbackEntry(date: string, movementId: string): void;
+  getWorkLog(): WorkSetEntry[];
+  /** Registra (o sustituye, por date+movementId+setNumber) una serie de trabajo marcada en el modo enfocado. */
+  saveWorkSet(entry: WorkSetEntry): void;
+  /** Quita una serie registrada (el atleta la desmarca). */
+  clearWorkSet(date: string, movementId: string, setNumber: number): void;
+  /** Borra todas las series registradas de un dia — al deshacer/borrar esa sesion. */
+  clearWorkLogForDate(date: string): void;
   /**
    * Borra historial de sesiones, cache de sesiones generadas, contador de dias entrenados y
    * pone los PRs a 0 — para arrancar un macrociclo nuevo sin datos previos influyendo en el
@@ -180,7 +189,8 @@ export const localAthleteRepository: AthleteRepository = {
 
     const profile = localAthleteRepository.getProfile();
     const trainingDatesLog = (profile.trainingDatesLog ?? []).filter((d) => d !== date);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog }));
+    const workLog = (profile.workLog ?? []).filter((e) => e.date !== date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog }));
   },
   updateHistoryTestLoad(date, testLoadKg) {
     const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
@@ -247,6 +257,29 @@ export const localAthleteRepository: AthleteRepository = {
     const setFeedbackLog = (profile.setFeedbackLog ?? []).filter((e) => !(e.date === date && e.movementId === movementId));
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, setFeedbackLog }));
   },
+  getWorkLog() {
+    return localAthleteRepository.getProfile().workLog ?? [];
+  },
+  saveWorkSet(entry) {
+    const profile = localAthleteRepository.getProfile();
+    const without = (profile.workLog ?? []).filter(
+      (e) => !(e.date === entry.date && e.movementId === entry.movementId && e.setNumber === entry.setNumber),
+    );
+    const workLog = [...without, entry].sort((a, b) => a.date.localeCompare(b.date)).slice(-WORK_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, workLog }));
+  },
+  clearWorkSet(date, movementId, setNumber) {
+    const profile = localAthleteRepository.getProfile();
+    const workLog = (profile.workLog ?? []).filter(
+      (e) => !(e.date === date && e.movementId === movementId && e.setNumber === setNumber),
+    );
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, workLog }));
+  },
+  clearWorkLogForDate(date) {
+    const profile = localAthleteRepository.getProfile();
+    const workLog = (profile.workLog ?? []).filter((e) => e.date !== date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, workLog }));
+  },
   resetTrainingData() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify([]));
     localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({}));
@@ -263,7 +296,7 @@ export const localAthleteRepository: AthleteRepository = {
     };
     localStorage.setItem(
       PROFILE_KEY,
-      JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [], prLog: [], setFeedbackLog: [] }),
+      JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [], prLog: [], setFeedbackLog: [], workLog: [] }),
     );
   },
 };

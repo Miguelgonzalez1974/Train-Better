@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
-import type { SessionHistoryEntry } from '../../data/athlete/types';
+import type { SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { resolveMovementDisplayName } from '../../data/movements';
 import { getWeekdayIndex } from '../../engine/periodization';
 import { getMonthlyStats } from '../dashboard/stats';
@@ -8,6 +8,7 @@ import { Modal } from '../shell/Modal';
 
 interface TrainingDiaryProps {
   history: SessionHistoryEntry[];
+  workLog: WorkSetEntry[];
   trainingDatesLog: string[];
   onDeleteEntry: (date: string) => void;
   onClose: () => void;
@@ -47,11 +48,19 @@ function movementSummary(entry: SessionHistoryEntry): string[] {
   return names;
 }
 
-function DiaryRow({ entry, onDelete }: { entry: SessionHistoryEntry; onDelete: () => void }) {
+function DiaryRow({ entry, sets, onDelete }: { entry: SessionHistoryEntry; sets: WorkSetEntry[]; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
   const date = parseIso(entry.date);
   const names = movementSummary(entry);
   const preview = names.slice(0, 4).join(' · ') + (names.length > 4 ? ` +${names.length - 4}` : '');
+
+  // Series registradas agrupadas por movimiento (registro serie a serie del modo enfocado).
+  const setsByMovement = new Map<string, WorkSetEntry[]>();
+  for (const s of [...sets].sort((a, b) => a.setNumber - b.setNumber)) {
+    const arr = setsByMovement.get(s.movementId) ?? [];
+    arr.push(s);
+    setsByMovement.set(s.movementId, arr);
+  }
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/60">
@@ -74,7 +83,7 @@ function DiaryRow({ entry, onDelete }: { entry: SessionHistoryEntry; onDelete: (
               {entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado'}
             </span>
             <span className="text-[11px] text-neutral-500">RPE {entry.rpe}</span>
-            {entry.wodResult && (
+            {entry.wodResult && !/^0([:+]0+)?$/.test(entry.wodResult.value.trim()) && (
               <span className="rounded-md bg-brand-orange/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-orange">
                 {entry.wodResult.value}
               </span>
@@ -87,6 +96,17 @@ function DiaryRow({ entry, onDelete }: { entry: SessionHistoryEntry; onDelete: (
       {open && (
         <div className="flex flex-col gap-2 border-t border-white/5 px-3 pb-3 pt-2.5 pl-[38px]">
           {names.length > 0 && <p className="text-xs leading-relaxed text-neutral-300">{names.join(' · ')}</p>}
+          {setsByMovement.size > 0 && (
+            <div className="flex flex-col gap-1">
+              {[...setsByMovement.entries()].map(([movementId, ms]) => (
+                <p key={movementId} className="text-[11px] text-neutral-400">
+                  <span className="text-neutral-300">{resolveMovementDisplayName(movementId)}:</span>{' '}
+                  {ms.map((s) => (s.kg > 0 ? `${s.kg}` : '·')).join(' · ')} kg
+                  <span className="text-neutral-600"> ({ms.length} series)</span>
+                </p>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-neutral-500">
             {entry.mesocycleWeek > 0 && <span>Semana {entry.mesocycleWeek} de mesociclo</span>}
             <span>{entry.durationMin} min</span>
@@ -114,8 +134,17 @@ function DiaryRow({ entry, onDelete }: { entry: SessionHistoryEntry; onDelete: (
  * calendario, cada sesión se despliega para ver movimientos, dominio energético y duración.
  * Modal, mismo patrón que `NextWeekPreview` / `MacroPlanModal`.
  */
-export function TrainingDiary({ history, trainingDatesLog, onDeleteEntry, onClose }: TrainingDiaryProps) {
+export function TrainingDiary({ history, workLog, trainingDatesLog, onDeleteEntry, onClose }: TrainingDiaryProps) {
   const stats = useMemo(() => getMonthlyStats(history, trainingDatesLog), [history, trainingDatesLog]);
+  const setsByDate = useMemo(() => {
+    const map = new Map<string, WorkSetEntry[]>();
+    for (const e of workLog) {
+      const arr = map.get(e.date) ?? [];
+      arr.push(e);
+      map.set(e.date, arr);
+    }
+    return map;
+  }, [workLog]);
 
   const weeks = useMemo(() => {
     const sorted = [...history].sort((a, b) => b.date.localeCompare(a.date));
@@ -161,7 +190,12 @@ export function TrainingDiary({ history, trainingDatesLog, onDeleteEntry, onClos
                 </span>
               </p>
               {week.entries.map((entry) => (
-                <DiaryRow key={entry.date} entry={entry} onDelete={() => onDeleteEntry(entry.date)} />
+                <DiaryRow
+                  key={entry.date}
+                  entry={entry}
+                  sets={setsByDate.get(entry.date) ?? []}
+                  onDelete={() => onDeleteEntry(entry.date)}
+                />
               ))}
             </div>
           ))}

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Check, Timer } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession, SessionBlockResult, SetFeel } from '../../data/athlete/types';
+import type { DailySession, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { parseWorkingReps } from '../../engine/setFeedback';
 import { BLOCK_ORDER } from './DaySessionBlocks';
 import { PlateCalculator } from './PlateCalculator';
 import { SetFeedbackPanel, type LoggedActual } from './SetFeedbackPanel';
@@ -22,6 +23,10 @@ interface FocusModeProps {
   onSetFeedback: (index: number, feel: SetFeel) => void;
   onLogActual: (index: number, actual: { kg: number; reps: number; rpe: number }) => void;
   onResetSetFeedback: (index: number) => void;
+  /** Series de trabajo ya registradas hoy (fuerza/oly) — la fuente de verdad de qué está marcado. */
+  todayWorkLog: WorkSetEntry[];
+  onLogWorkSet: (movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number) => void;
+  onClearWorkSet: (movementId: string, setNumber: number) => void;
   onExit: () => void;
   onFinish: () => void;
 }
@@ -68,6 +73,9 @@ export function FocusMode({
   onSetFeedback,
   onLogActual,
   onResetSetFeedback,
+  todayWorkLog,
+  onLogWorkSet,
+  onClearWorkSet,
   onExit,
   onFinish,
 }: FocusModeProps) {
@@ -83,6 +91,15 @@ export function FocusMode({
   const [step, setStep] = useState(0);
   const [doneSets, setDoneSets] = useState<Record<string, boolean>>({});
   const [plateTarget, setPlateTarget] = useState<number | null>(null);
+  // Carga en curso por serie de fuerza/oly (clave `${movementId}:${setNumber}`) antes de fijarla al
+  // marcar la serie. Si no hay valor en curso se usa el ya registrado, y si no, lo prescrito.
+  const [perSetKg, setPerSetKg] = useState<Record<string, number>>({});
+  const loggedKg = (movementId: string, n: number) =>
+    todayWorkLog.find((e) => e.movementId === movementId && e.setNumber === n)?.kg;
+  const setIsDone = (movementId: string, n: number) =>
+    todayWorkLog.some((e) => e.movementId === movementId && e.setNumber === n);
+  const kgFor = (movementId: string, n: number, prescribed: number) =>
+    perSetKg[`${movementId}:${n}`] ?? loggedKg(movementId, n) ?? prescribed;
 
   if (groups.length === 0) {
     return (
@@ -193,26 +210,67 @@ export function FocusMode({
                   </span>
                 </div>
               </div>
-              {sets > 1 && (
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: sets }, (_, s) => {
-                    const key = `${i}:${e.index}:${s}`;
-                    const on = doneSets[key];
-                    return (
-                      <button
-                        key={s}
-                        onClick={() => toggleSet(key)}
-                        aria-label={`Serie ${s + 1}${on ? ' hecha' : ''}`}
-                        className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                          on ? 'bg-brand-neon text-black' : 'border border-brand-border text-neutral-400 hover:border-brand-gold hover:text-brand-gold'
-                        }`}
-                      >
-                        {on ? <Check size={15} strokeWidth={3} /> : s + 1}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {sets > 1 &&
+                (() => {
+                  const mid = b.movementId;
+                  const blk = b.block === 'oly' ? 'oly' : 'strength';
+                  const reps = parseWorkingReps(b.reps ?? '') ?? 0;
+                  const prescribed = b.loadKg ?? 0;
+                  const bump = (n: number, delta: number) => {
+                    const next = Math.max(0, Math.round((kgFor(mid, n, prescribed) + delta) * 4) / 4);
+                    setPerSetKg((p) => ({ ...p, [`${mid}:${n}`]: next }));
+                    if (setIsDone(mid, n)) onLogWorkSet(mid, blk, n, next, reps);
+                  };
+                  return (
+                    <div className="flex flex-col gap-1.5">
+                      {Array.from({ length: sets }, (_, s) => {
+                        const n = s + 1;
+                        const on = setIsDone(mid, n);
+                        const kg = kgFor(mid, n, prescribed);
+                        return (
+                          <div
+                            key={n}
+                            className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${on ? 'bg-brand-neon/10' : 'bg-brand-surfaceMuted/50'}`}
+                          >
+                            <button
+                              onClick={() => (on ? onClearWorkSet(mid, n) : onLogWorkSet(mid, blk, n, kg, reps))}
+                              aria-label={`Serie ${n}${on ? ' hecha' : ''}`}
+                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
+                                on ? 'bg-brand-neon text-black' : 'border border-brand-border text-neutral-400'
+                              }`}
+                            >
+                              {on ? <Check size={14} strokeWidth={3} /> : n}
+                            </button>
+                            <span className="w-12 shrink-0 text-xs text-neutral-500">Serie {n}</span>
+                            {prescribed > 0 && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => bump(n, -2.5)}
+                                  aria-label="Menos peso"
+                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10"
+                                >
+                                  <Minus size={13} strokeWidth={2.5} />
+                                </button>
+                                <button onClick={() => setPlateTarget(kg)} className="min-w-[54px] text-center text-sm font-bold text-brand-gold">
+                                  {kg}
+                                  <span className="text-[10px] font-normal text-neutral-500"> kg</span>
+                                </button>
+                                <button
+                                  onClick={() => bump(n, 2.5)}
+                                  aria-label="Más peso"
+                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10"
+                                >
+                                  <Plus size={13} strokeWidth={2.5} />
+                                </button>
+                              </div>
+                            )}
+                            {reps > 0 && <span className="ml-auto text-xs text-neutral-500">× {reps}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               {b.notes && <p className="text-xs leading-relaxed text-neutral-500">{b.notes}</p>}
               {fb && (
                 <SetFeedbackPanel
