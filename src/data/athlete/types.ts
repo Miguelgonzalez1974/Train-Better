@@ -182,6 +182,8 @@ export interface ReadinessCheck {
 export interface AthleteProfile {
   prs: PersonalRecords;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
+  /** ISO del momento en que el atleta terminó (o saltó) el asistente de alta — ausente = no lo ha visto. */
+  onboardedAt?: string;
   /**
    * Macrociclos planificados (pasados, activo, futuros). Solo puede haber uno "activo" a la vez
    * (el que contiene la fecha de hoy) — fuera de todos ellos se entrena en modo mantenimiento.

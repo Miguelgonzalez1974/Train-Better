@@ -9,11 +9,16 @@ import { Login } from './features/auth/Login';
 import { useSession } from './features/auth/useSession';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { pullRemoteOrSeed } from './data/athlete/remoteSync';
+import { athleteRepository } from './data/athlete/athleteRepository';
+import { OnboardingWizard } from './features/onboarding/OnboardingWizard';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('planificacion');
   const { session, loading } = useSession();
   const [syncing, setSyncing] = useState(isSupabaseConfigured);
+  // Alta guiada: perfil sin `onboardedAt` y sin ningún macrociclo = atleta nuevo. Se recomprueba tras
+  // sincronizar (un usuario que ya se dio de alta en otro dispositivo trae `onboardedAt` del remoto).
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const userId = session?.user?.id ?? null;
   useEffect(() => {
@@ -28,6 +33,12 @@ export default function App() {
     pullRemoteOrSeed().finally(() => setSyncing(false));
   }, [userId]);
 
+  useEffect(() => {
+    if (isSupabaseConfigured && (loading || syncing)) return; // espera a que termine la sincronización
+    const p = athleteRepository.getProfile();
+    setNeedsOnboarding(!p.onboardedAt && p.macrocycles.length === 0);
+  }, [loading, syncing]);
+
   if (isSupabaseConfigured && (loading || (session && syncing))) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-brand-bg">
@@ -38,6 +49,10 @@ export default function App() {
 
   if (isSupabaseConfigured && !session) {
     return <Login />;
+  }
+
+  if (needsOnboarding) {
+    return <OnboardingWizard onDone={() => setNeedsOnboarding(false)} />;
   }
 
   return (
