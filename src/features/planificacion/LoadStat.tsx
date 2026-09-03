@@ -44,14 +44,14 @@ export function LoadStat({ kg, movementId, block, progress }: LoadStatProps) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5 transition-colors duration-200 hover:bg-black/40"
+        className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-brand-neon/10 px-2.5 py-1.5 ring-1 ring-brand-neon/40 transition-colors duration-200 hover:bg-brand-neon/20 hover:ring-brand-neon/70"
         aria-label={`Ver progresión de ${movement?.name ?? 'este movimiento'}`}
       >
         <span className="flex items-center gap-1 text-sm font-bold text-white">
           {kg}
-          <ChartSpline size={11} strokeWidth={2.25} className="text-neutral-500" />
+          <ChartSpline size={13} strokeWidth={2.5} className="text-brand-neon" />
         </span>
-        <span className="text-[10px] uppercase tracking-wide text-neutral-500">kg</span>
+        <span className="text-[10px] uppercase tracking-wide text-brand-neon/80">kg · ver</span>
       </button>
       {open && progress && movementId && (
         <MovementProgressModal
