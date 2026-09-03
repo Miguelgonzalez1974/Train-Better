@@ -11,7 +11,7 @@ import {
 } from '../../data/movements';
 import type { SessionBlockResult } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
-import { LoadStat } from './LoadStat';
+import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
 
 type Accent = 'orange' | 'gold' | 'neutral';
@@ -297,7 +297,7 @@ function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
  * Bloque con pasos A/B en una sola tarjeta, no dos sueltas: el complejo de oly (primer técnico +
  * levantamiento principal) y la superserie de fuerza (levantamiento principal + A2 antagonista).
  */
-function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
+function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; progress?: MovementProgressData }) {
   // Las entradas con `subgroup` (ej. "Calentamiento de barra" del bloque de Oly) son preparación —
   // van plegadas por defecto para que la tarjeta muestre solo el complejo de trabajo (A/B).
   const prep = entries.filter((e) => e.subgroup);
@@ -332,7 +332,9 @@ function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <p className={NAME_STEP}>{movement.name}</p>
                           {entry.reps && <span className="text-xs text-neutral-500">{entry.reps}</span>}
-                          {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
+                          {entry.loadKg ? (
+                            <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                          ) : null}
                         </div>
                         <StandardHint standard={movement.standard} />
                       </div>
@@ -362,7 +364,9 @@ function ComplexCard({ entries }: { entries: SessionBlockResult[] }) {
                   <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
                     {entry.sets && <StatBox value={entry.sets} label="series" />}
                     {entry.reps && <StatBox value={entry.reps} label="reps" />}
-                    {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
+                    {entry.loadKg ? (
+                      <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                    ) : null}
                     {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
                   </div>
                 )}
@@ -414,7 +418,7 @@ function AccessoryGroupCard({ entries }: { entries: SessionBlockResult[] }) {
   );
 }
 
-function EntryRow({ entry }: { entry: SessionBlockResult }) {
+function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: MovementProgressData }) {
   const movement = getMovementById(entry.movementId);
   if (!movement) return null;
 
@@ -427,7 +431,9 @@ function EntryRow({ entry }: { entry: SessionBlockResult }) {
         <div className="mt-2 flex flex-wrap gap-1.5">
           {entry.sets && <StatBox value={entry.sets} label="series" />}
           {entry.reps && <StatBox value={entry.reps} label="reps" />}
-          {entry.loadKg ? <LoadStat kg={entry.loadKg} /> : null}
+          {entry.loadKg ? (
+            <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+          ) : null}
           {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
         </div>
       )}
@@ -561,9 +567,11 @@ interface SessionBlockCardProps {
   entryIndices?: number[];
   editable?: boolean;
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
+  /** Datos del atleta para el popup de progresión del movimiento (solo lectura fuera del modo edición). */
+  progress?: MovementProgressData;
 }
 
-export function SessionBlockCard({ block, results, isLast, entryIndices, editable, onUpdateEntry }: SessionBlockCardProps) {
+export function SessionBlockCard({ block, results, isLast, entryIndices, editable, onUpdateEntry, progress }: SessionBlockCardProps) {
   if (results.length === 0) return null;
   const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
@@ -595,7 +603,7 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
         ) : block === 'warmup' ? (
           <WarmupRoutineCard entries={results} />
         ) : (block === 'oly' || block === 'strength') && results.length > 1 ? (
-          <ComplexCard entries={results} />
+          <ComplexCard entries={results} progress={progress} />
         ) : block === 'accessory' && results[0]?.format ? (
           <AccessoryGroupCard entries={results} />
         ) : (
@@ -606,7 +614,7 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
                   <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{group.subgroup}</p>
                 )}
                 {group.items.map((entry, idx) => (
-                  <EntryRow key={`${entry.movementId}-${idx}`} entry={entry} />
+                  <EntryRow key={`${entry.movementId}-${idx}`} entry={entry} progress={progress} />
                 ))}
               </div>
             ))}

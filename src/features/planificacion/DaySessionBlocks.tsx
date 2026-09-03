@@ -3,6 +3,7 @@ import { NotebookPen } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult } from '../../data/athlete/types';
 import { SessionBlockCard } from './SessionBlockCard';
+import type { MovementProgressData } from './LoadStat';
 
 export const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
 
@@ -12,10 +13,12 @@ interface DaySessionBlocksProps {
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
   /** Contenido opcional bajo un bloque concreto — usado para la valoración de series de fuerza/oly, justo donde el atleta actúa. */
   renderBlockFooter?: (block: Block, entryIndices: number[]) => ReactNode;
+  /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de una serie de fuerza/oly). */
+  progress?: MovementProgressData;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
-export function DaySessionBlocks({ session, editable, onUpdateEntry, renderBlockFooter }: DaySessionBlocksProps) {
+export function DaySessionBlocks({ session, editable, onUpdateEntry, renderBlockFooter, progress }: DaySessionBlocksProps) {
   if (session.source === 'custom') {
     return (
       <div className="card flex flex-col gap-2 p-4">
@@ -47,6 +50,7 @@ export function DaySessionBlocks({ session, editable, onUpdateEntry, renderBlock
               isLast={index === blocksWithResults.length - 1 && !footer}
               editable={editable}
               onUpdateEntry={onUpdateEntry}
+              progress={progress}
             />
             {footer && <div className="mb-3 mt-1 flex flex-col gap-2 pl-1">{footer}</div>}
           </div>

@@ -193,6 +193,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [setFeedbackLog, setSetFeedbackLog] = useState<SetFeedbackEntry[]>(() => athleteRepository.getSetFeedbackLog());
   const [workLog, setWorkLog] = useState<WorkSetEntry[]>(() => athleteRepository.getWorkLog());
   const todayWorkLog = useMemo(() => workLog.filter((e) => e.date === todayIso), [workLog, todayIso]);
+  /** Bundle para el popup de progresión del movimiento (tocar la carga de una serie de fuerza/oly). */
+  const movementProgress = useMemo(
+    () => ({ prs: profile.prs, prLog: profile.prLog ?? [], workLog }),
+    [profile.prs, profile.prLog, workLog],
+  );
   const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
   const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && !todayReadiness && !readinessDismissed);
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
@@ -719,6 +724,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           onLogActual={handleLogActualSet}
           onResetSetFeedback={handleResetSetFeedback}
           todayWorkLog={todayWorkLog}
+          progress={movementProgress}
           onLogWorkSet={handleLogWorkSet}
           onClearWorkSet={handleClearWorkSet}
           onExit={() => setFocusMode(false)}
@@ -1154,6 +1160,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           session={session}
           editable={editMode}
           onUpdateEntry={handleUpdateEntry}
+          progress={movementProgress}
           renderBlockFooter={
             editMode || showCompletePanel
               ? undefined

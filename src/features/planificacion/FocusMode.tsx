@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { parseWorkingReps } from '../../engine/setFeedback';
+import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { noteHead } from './noteText';
 import { BLOCK_ORDER } from './DaySessionBlocks';
-import { PlateCalculator } from './PlateCalculator';
+import { MovementProgressModal } from './MovementProgressModal';
+import type { MovementProgressData } from './LoadStat';
 import { SetFeedbackPanel, type LoggedActual } from './SetFeedbackPanel';
 
 /** Sub-set de `adjustableSetBlocks` de Planificacion — lo justo para renderizar el panel de valoración. */
@@ -26,6 +28,8 @@ interface FocusModeProps {
   onResetSetFeedback: (index: number) => void;
   /** Series de trabajo ya registradas hoy (fuerza/oly) — la fuente de verdad de qué está marcado. */
   todayWorkLog: WorkSetEntry[];
+  /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de un levantamiento). */
+  progress: MovementProgressData;
   onLogWorkSet: (movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number) => void;
   onClearWorkSet: (movementId: string, setNumber: number) => void;
   onExit: () => void;
@@ -82,9 +86,9 @@ function resolveName(id: string): string {
 
 /**
  * Modo entreno enfocado — superpuesto a Planificación (z-30, por debajo del cronómetro flotante
- * z-40 y de los modales z-50, así el atleta conserva el temporizador y la calculadora de discos).
- * Un bloque de la sesión a la vez, números grandes, checklist de series (solo visual en v1 — el
- * registro serie a serie real es una fase posterior). Al terminar el último bloque llama a
+ * z-40 y de los modales z-50, así el atleta conserva el temporizador y el popup de progresión del
+ * movimiento). Un bloque de la sesión a la vez, números grandes, checklist de series (solo visual en
+ * v1 — el registro serie a serie real es una fase posterior). Al terminar el último bloque llama a
  * `onFinish`, que en el padre abre «Marcar como completado».
  */
 export function FocusMode({
@@ -94,6 +98,7 @@ export function FocusMode({
   onLogActual,
   onResetSetFeedback,
   todayWorkLog,
+  progress,
   onLogWorkSet,
   onClearWorkSet,
   onExit,
@@ -110,7 +115,11 @@ export function FocusMode({
 
   const [step, setStep] = useState(0);
   const [doneSets, setDoneSets] = useState<Record<string, boolean>>({});
-  const [plateTarget, setPlateTarget] = useState<number | null>(null);
+  const [progressTarget, setProgressTarget] = useState<{ movementId: string; targetKg: number } | null>(null);
+  const liftHasPr = (movementId: string) => {
+    const m = getMovementById(movementId);
+    return Boolean(m && resolveLiftPrKey(m));
+  };
   // Carga en curso por serie de fuerza/oly (clave `${movementId}:${setNumber}`) antes de fijarla al
   // marcar la serie. Si no hay valor en curso se usa el ya registrado, y si no, lo prescrito.
   const [perSetKg, setPerSetKg] = useState<Record<string, number>>({});
@@ -220,11 +229,24 @@ export function FocusMode({
                 </div>
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
                   {b.loadKg ? (
-                    <button onClick={() => setPlateTarget(b.loadKg ?? null)} className="flex items-baseline gap-1.5 text-brand-gold">
-                      <span className="text-4xl font-bold leading-none">{b.loadKg}</span>
-                      <span className="text-sm">kg</span>
-                      <span className="ml-1 text-[10px] uppercase tracking-wide text-neutral-500">discos</span>
-                    </button>
+                    liftHasPr(b.movementId) ? (
+                      <button
+                        onClick={() => setProgressTarget({ movementId: b.movementId, targetKg: b.loadKg ?? 0 })}
+                        className="flex items-baseline gap-1.5 text-brand-gold"
+                      >
+                        <span className="text-4xl font-bold leading-none">{b.loadKg}</span>
+                        <span className="text-sm">kg</span>
+                        <span className="ml-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-neutral-500">
+                          <ChartSpline size={11} strokeWidth={2.25} />
+                          progresión
+                        </span>
+                      </button>
+                    ) : (
+                      <span className="flex items-baseline gap-1.5 text-brand-gold">
+                        <span className="text-4xl font-bold leading-none">{b.loadKg}</span>
+                        <span className="text-sm">kg</span>
+                      </span>
+                    )
                   ) : null}
                   <span className="text-sm text-neutral-400">
                     {b.sets ? `${b.sets} × ${b.reps}` : b.reps}
@@ -273,10 +295,20 @@ export function FocusMode({
                                 >
                                   <Minus size={13} strokeWidth={2.5} />
                                 </button>
-                                <button onClick={() => setPlateTarget(kg)} className="min-w-[54px] text-center text-sm font-bold text-brand-gold">
-                                  {kg}
-                                  <span className="text-[10px] font-normal text-neutral-500"> kg</span>
-                                </button>
+                                {liftHasPr(mid) ? (
+                                  <button
+                                    onClick={() => setProgressTarget({ movementId: mid, targetKg: kg })}
+                                    className="min-w-[54px] text-center text-sm font-bold text-brand-gold"
+                                  >
+                                    {kg}
+                                    <span className="text-[10px] font-normal text-neutral-500"> kg</span>
+                                  </button>
+                                ) : (
+                                  <span className="min-w-[54px] text-center text-sm font-bold text-brand-gold">
+                                    {kg}
+                                    <span className="text-[10px] font-normal text-neutral-500"> kg</span>
+                                  </span>
+                                )}
                                 <button
                                   onClick={() => bump(n, 2.5)}
                                   aria-label="Más peso"
@@ -415,7 +447,17 @@ export function FocusMode({
         </div>
       </div>
 
-      {plateTarget != null && <PlateCalculator targetKg={plateTarget} open onClose={() => setPlateTarget(null)} />}
+      {progressTarget && (
+        <MovementProgressModal
+          movementId={progressTarget.movementId}
+          targetKg={progressTarget.targetKg}
+          open
+          onClose={() => setProgressTarget(null)}
+          prs={progress.prs}
+          prLog={progress.prLog}
+          workLog={progress.workLog}
+        />
+      )}
     </div>
   );
 }
