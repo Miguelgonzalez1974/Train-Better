@@ -239,6 +239,15 @@ export interface AthleteProfile {
    * resumen y el diario; mas adelante puede alimentar la calibracion de carga (`analyzeSetLoads`).
    */
   workLog?: WorkSetEntry[];
+  /**
+   * Cache de sesiones diarias generadas, por fecha ISO — vive en el perfil (en vez de una clave de
+   * localStorage aparte) para que viaje con el resto del perfil en cada `pushRemote`/`pullRemoteOrSeed`.
+   * Sin esto, dos dispositivos que abrían la app en momentos distintos podían generar cada uno su
+   * propia sesión para el mismo día (cada uno determinista respecto a SU perfil local del momento,
+   * pero no coordinados entre sí) y quedarse cada uno con la suya para siempre. Con esto, el primer
+   * dispositivo que genera el día "gana" y el otro la hereda al sincronizar en vez de generar la suya.
+   */
+  sessionCache?: Record<string, DailySession>;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */

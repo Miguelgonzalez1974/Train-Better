@@ -4,9 +4,16 @@ const PROFILE_KEY = 'train-better:profile';
 const HISTORY_KEY = 'train-better:history';
 /** @deprecated Solo se lee para migrar el objetivo unico legado a `profile.goals`. */
 const LEGACY_GOAL_KEY = 'train-better:goal';
-const SESSION_CACHE_KEY = 'train-better:session-cache';
+/** @deprecated La cache de sesiones vive en `profile.sessionCache` para que sincronice — solo se lee para migrar lo que hubiera aqui. */
+const LEGACY_SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
-const SESSION_CACHE_LIMIT = 60;
+/**
+ * Antes 60 cuando la cache vivia en su propia clave de localStorage — ahora viaja dentro de
+ * `profile.sessionCache` en cada sincronizacion, y nada en la app lee sesiones cacheadas mas alla
+ * de "hoy" y la semana en curso (`Planificacion`/`WeekStrip`), asi que un limite mucho menor no
+ * pierde funcionalidad y evita cargar cada `pushRemote` con meses de sesiones viejas.
+ */
+const SESSION_CACHE_LIMIT = 21;
 const BODYWEIGHT_LOG_LIMIT = 120;
 const READINESS_LOG_LIMIT = 120;
 const PR_LOG_LIMIT = 150;
@@ -105,6 +112,12 @@ function migrateProfile(raw: AthleteProfile & { mesocycleStartDate?: string }): 
     profile.goals = legacyGoal ? [{ ...legacyGoal, id: legacyGoal.id ?? 'legacy' }] : [];
   }
 
+  // La cache de sesiones vivia en su propia clave de localStorage (nunca sincronizaba) — se pliega
+  // dentro del perfil una sola vez para no perder lo que ya hubiera cacheado este dispositivo.
+  if (!raw.sessionCache) {
+    profile.sessionCache = pruneSessionCache(readJson<Record<string, DailySession>>(LEGACY_SESSION_CACHE_KEY, {}));
+  }
+
   return profile;
 }
 
@@ -198,30 +211,33 @@ export const localAthleteRepository: AthleteRepository = {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
   },
   getCachedSession(dateIso) {
-    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
+    const cache = localAthleteRepository.getProfile().sessionCache ?? {};
     return cache[dateIso] ?? null;
   },
   saveCachedSession(session) {
-    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
+    const profile = localAthleteRepository.getProfile();
+    const cache = { ...(profile.sessionCache ?? {}) };
     // Sella con la version del motor con la que se genero — ver `SESSION_GEN_VERSION`.
     cache[session.date] = { ...session, genVersion: SESSION_GEN_VERSION };
-    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(pruneSessionCache(cache)));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, sessionCache: pruneSessionCache(cache) }));
   },
   deleteCachedSession(dateIso) {
-    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
-    delete cache[dateIso];
-    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(cache));
+    const profile = localAthleteRepository.getProfile();
+    const sessionCache = { ...(profile.sessionCache ?? {}) };
+    delete sessionCache[dateIso];
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, sessionCache }));
   },
   deleteCachedSessionsInRange(startDateIso, endDateIso) {
-    const cache = readJson<Record<string, DailySession>>(SESSION_CACHE_KEY, {});
+    const profile = localAthleteRepository.getProfile();
+    const sessionCache = { ...(profile.sessionCache ?? {}) };
     let changed = false;
-    for (const [date, session] of Object.entries(cache)) {
+    for (const [date, session] of Object.entries(sessionCache)) {
       if (date < startDateIso || date > endDateIso) continue;
       if (session.source === 'custom' || session.swapLabel) continue;
-      delete cache[date];
+      delete sessionCache[date];
       changed = true;
     }
-    if (changed) localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(cache));
+    if (changed) localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, sessionCache }));
   },
   getBodyweightLog() {
     return localAthleteRepository.getProfile().bodyweightLog ?? [];
@@ -282,7 +298,6 @@ export const localAthleteRepository: AthleteRepository = {
   },
   resetTrainingData() {
     localStorage.setItem(HISTORY_KEY, JSON.stringify([]));
-    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({}));
     const profile = localAthleteRepository.getProfile();
     const prs: AthleteProfile['prs'] = {
       backSquat: 0,
@@ -296,7 +311,16 @@ export const localAthleteRepository: AthleteRepository = {
     };
     localStorage.setItem(
       PROFILE_KEY,
-      JSON.stringify({ ...profile, prs, variantPrs: {}, trainingDatesLog: [], prLog: [], setFeedbackLog: [], workLog: [] }),
+      JSON.stringify({
+        ...profile,
+        prs,
+        variantPrs: {},
+        trainingDatesLog: [],
+        prLog: [],
+        setFeedbackLog: [],
+        workLog: [],
+        sessionCache: {},
+      }),
     );
   },
 };

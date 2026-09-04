@@ -49,4 +49,16 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.clearWorkLogForDate(date);
     void pushRemote();
   },
+  saveCachedSession(session) {
+    localAthleteRepository.saveCachedSession(session);
+    void pushRemote();
+  },
+  deleteCachedSession(dateIso) {
+    localAthleteRepository.deleteCachedSession(dateIso);
+    void pushRemote();
+  },
+  deleteCachedSessionsInRange(startDateIso, endDateIso) {
+    localAthleteRepository.deleteCachedSessionsInRange(startDateIso, endDateIso);
+    void pushRemote();
+  },
 };
