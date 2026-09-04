@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
+import type { DailySession, SessionBlockResult, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { parseWorkingReps } from '../../engine/setFeedback';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
@@ -9,23 +9,21 @@ import { noteHead } from './noteText';
 import { BLOCK_ORDER } from './DaySessionBlocks';
 import { MovementProgressModal } from './MovementProgressModal';
 import type { MovementProgressData } from './LoadStat';
-import { SetFeedbackPanel, type LoggedActual } from './SetFeedbackPanel';
+import { RpeCheckIn } from './RpeCheckIn';
 
-/** Sub-set de `adjustableSetBlocks` de Planificacion — lo justo para renderizar el panel de valoración. */
+/** Sub-set de `adjustableSetBlocks` de Planificacion — lo justo para renderizar el check-in de RPE. */
 export interface FocusSetFeedback {
   index: number;
   movementName: string;
-  prescribed: { kg: number; sets: number; reps: number };
-  currentFeel: SetFeel | null;
-  logged: LoggedActual | null;
+  topSet: { kg: number; reps: number };
+  loggedRpe: number | null;
+  estimated1rm?: number;
 }
 
 interface FocusModeProps {
   session: DailySession;
   setFeedbackByIndex: Map<number, FocusSetFeedback>;
-  onSetFeedback: (index: number, feel: SetFeel) => void;
-  onLogActual: (index: number, actual: { kg: number; reps: number; rpe: number }) => void;
-  onResetSetFeedback: (index: number) => void;
+  onRateSet: (index: number, rpe: number) => void;
   /** Series de trabajo ya registradas hoy (fuerza/oly) — la fuente de verdad de qué está marcado. */
   todayWorkLog: WorkSetEntry[];
   /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de un levantamiento). */
@@ -94,9 +92,7 @@ function resolveName(id: string): string {
 export function FocusMode({
   session,
   setFeedbackByIndex,
-  onSetFeedback,
-  onLogActual,
-  onResetSetFeedback,
+  onRateSet,
   todayWorkLog,
   progress,
   onLogWorkSet,
@@ -327,14 +323,12 @@ export function FocusMode({
                 })()}
               {b.notes && <FocusNote text={b.notes} />}
               {fb && (
-                <SetFeedbackPanel
+                <RpeCheckIn
                   movementName={fb.movementName}
-                  prescribed={fb.prescribed}
-                  currentFeel={fb.currentFeel}
-                  logged={fb.logged}
-                  onPick={(feel) => onSetFeedback(fb.index, feel)}
-                  onLogActual={(a) => onLogActual(fb.index, a)}
-                  onReset={() => onResetSetFeedback(fb.index)}
+                  topSet={fb.topSet}
+                  loggedRpe={fb.loggedRpe}
+                  estimated1rm={fb.estimated1rm}
+                  onRate={(rpe) => onRateSet(fb.index, rpe)}
                 />
               )}
             </div>

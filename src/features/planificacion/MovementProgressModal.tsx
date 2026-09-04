@@ -9,7 +9,9 @@ import {
   summariseMovementWork,
   type MovementSessionPoint,
 } from '../../engine/movementProgress';
+import { buildWeeklyVolumeSeries, summariseVolumeTrend } from '../../engine/volumeMetrics';
 import { Modal } from '../shell/Modal';
+import { Sparkline } from '../dashboard/Sparkline';
 
 interface MovementProgressModalProps {
   movementId: string;
@@ -127,6 +129,9 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
     () => (prKey ? summarisePrProgress(buildPrSeries(prLog, prKey)) : null),
     [prKey, prLog],
   );
+  const volumeSeries = useMemo(() => buildWeeklyVolumeSeries(workLog, movementId), [workLog, movementId]);
+  const volumeTrend = useMemo(() => summariseVolumeTrend(volumeSeries), [volumeSeries]);
+  const hasVolume = volumeSeries.some((p) => p.tonnageKg > 0);
 
   if (!open) return null;
 
@@ -211,6 +216,35 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
                 ))}
               </div>
             </div>
+
+            {hasVolume && (
+              <div className="border-t border-white/5 pt-3">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">Volumen semanal</p>
+                  {volumeTrend.deltaPct != null && volumeTrend.deltaPct !== 0 && (
+                    <span className={`text-[11px] font-semibold ${volumeTrend.deltaPct > 0 ? 'text-brand-neon' : 'text-brand-orange'}`}>
+                      {volumeTrend.deltaPct > 0 ? '+' : ''}
+                      {volumeTrend.deltaPct}% vs. semana anterior
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="shrink-0">
+                    <p className="text-lg font-bold leading-none text-white">
+                      {volumeTrend.thisWeekKg.toLocaleString('es')} <span className="text-xs font-normal text-neutral-500">kg</span>
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-neutral-500">esta semana</p>
+                  </div>
+                  <Sparkline
+                    values={volumeSeries.map((p) => p.tonnageKg)}
+                    strokeClassName="stroke-brand-gold"
+                    areaClassName="fill-brand-gold/10"
+                    dotClassName="fill-brand-gold"
+                    className="h-9 flex-1"
+                  />
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

@@ -11,7 +11,6 @@ import type {
   SessionHistoryEntry,
   SetFeedbackEntry,
   WorkSetEntry,
-  SetFeel,
   VariantPersonalRecords,
   WodResult,
 } from '../../data/athlete/types';
@@ -41,7 +40,7 @@ import { getReadinessCheckForDate } from '../../engine/readiness';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
-import { adjustRemainingSets, parseWorkingReps } from '../../engine/setFeedback';
+import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
@@ -50,7 +49,7 @@ import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
-import { SetFeedbackPanel } from './SetFeedbackPanel';
+import { RpeCheckIn } from './RpeCheckIn';
 import { SessionSummaryCard } from './SessionSummaryCard';
 import { FocusMode } from './FocusMode';
 import { RestTimer } from './RestTimer';
@@ -207,49 +206,32 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
   /**
-   * Bloques de fuerza/oly de hoy que admiten feedback en caliente de la primera serie, ya resueltos
-   * con lo prescrito y la sensación elegida (si la hay). `firstSetFeel` vive en el bloque cacheado
-   * y manda: si el atleta regenera la sesión, se resetea solo; el registro persistente
-   * (`setFeedbackLog`) solo se usa para recuperar la prescripción original una vez que el bloque ya
-   * se ajustó.
+   * Bloques de fuerza/oly de hoy con una serie ya registrada en `workLog` (modo enfocado) — solo esos
+   * admiten el check-in de RPE: el peso y las reps salen de ahí, no se vuelven a pedir. Sin serie
+   * registrada todavía no hay nada que calibrar.
    */
   const adjustableSetBlocks = useMemo(() => {
     if (!session || session.isRestDay || session.source === 'custom') return [];
     return session.blocks
       .map((block, index) => ({ block, index }))
       .filter(({ block }) => isAdjustableSetBlock(block))
-      .map(({ block, index }) => {
+      .flatMap(({ block, index }) => {
+        const topSet = findTopWorkSet(todayWorkLog, block.movementId);
+        if (!topSet) return [];
         const logEntry = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
-        // Con un registro previo, la prescripción original vive en él (el bloque puede estar ya
-        // ajustado o la sesión ya completada); si no, se toma del bloque tal cual.
-        const prescribed = logEntry
-          ? { kg: logEntry.prescribedKg, sets: logEntry.prescribedSets, reps: logEntry.prescribedReps }
-          : { kg: block.loadKg ?? 0, sets: block.sets ?? 0, reps: parseWorkingReps(block.reps ?? '') ?? 0 };
-        const logged =
-          logEntry?.actualKg != null && logEntry.actualReps != null && logEntry.actualRpe != null
-            ? {
-                kg: logEntry.actualKg,
-                reps: logEntry.actualReps,
-                rpe: logEntry.actualRpe,
-                estimated1rm: logEntry.estimated1rm,
-                assumedMax:
-                  logEntry.pctOf1rm && logEntry.pctOf1rm > 0
-                    ? Math.round(logEntry.prescribedKg / logEntry.pctOf1rm)
-                    : undefined,
-              }
-            : null;
-        return {
-          index,
-          movementName: getMovementById(block.movementId)?.name ?? block.movementId,
-          prescribed,
-          // El bloque cacheado manda; tras completar la sesión ya no se muta, así que el registro persistente es la fuente.
-          currentFeel: block.firstSetFeel ?? logEntry?.feel ?? null,
-          logged,
-        };
+        return [
+          {
+            index,
+            movementName: getMovementById(block.movementId)?.name ?? block.movementId,
+            topSet,
+            loggedRpe: logEntry?.actualRpe ?? null,
+            estimated1rm: logEntry?.estimated1rm,
+          },
+        ];
       });
-  }, [session, setFeedbackLog]);
+  }, [session, setFeedbackLog, todayWorkLog]);
 
-  /** index de bloque -> props de su panel de valoración, para renderizarlo inline bajo la tarjeta de fuerza/oly. */
+  /** index de bloque -> props de su check-in de RPE, para renderizarlo inline bajo la tarjeta de fuerza/oly. */
   const setFeedbackByIndex = useMemo(
     () => new Map(adjustableSetBlocks.map((b) => [b.index, b])),
     [adjustableSetBlocks],
@@ -272,10 +254,18 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     return { prKey, pctOf1rm };
   }
 
-  function handleSetFeedback(index: number, feel: SetFeel) {
+  /**
+   * Calibra el coach con el RPE de la serie más pesada que el atleta ya registró en `workLog` — el
+   * peso y las reps de esa serie no se vuelven a pedir. Ya no reajusta las series que quedan hoy:
+   * para eso el atleta ya tiene los +/- del modo enfocado, más directos que una sugerencia derivada
+   * de una sensación cualitativa.
+   */
+  function handleRateSet(index: number, rpe: number) {
     if (!session) return;
     const block = session.blocks[index];
     if (!block) return;
+    const topSet = findTopWorkSet(todayWorkLog, block.movementId);
+    if (!topSet) return;
     const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
     const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
     const prescribedSets = existing?.prescribedSets ?? block.sets ?? 0;
@@ -283,57 +273,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     if (prescribedKg <= 0 || prescribedSets < 2) return;
 
     const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
-    athleteRepository.appendSetFeedbackEntry({
-      date: session.date,
-      movementId: block.movementId,
-      block: block.block as 'strength' | 'oly',
-      prescribedKg,
-      prescribedReps,
-      prescribedSets,
-      feel,
-      prKey,
-      pctOf1rm,
-      // Conserva la serie real si ya se registró antes de tocar la pastilla.
-      actualKg: existing?.actualKg,
-      actualReps: existing?.actualReps,
-      actualRpe: existing?.actualRpe,
-      estimated1rm: existing?.estimated1rm,
-    });
-    setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
-
-    // Tras completar la sesión el registro sigue calibrando al coach, pero no se reajusta ni se
-    // toca el bloque ya hecho.
-    if (alreadyCompletedToday) return;
-    const adj = adjustRemainingSets({ prescribedKg, prescribedSets, completedSets: 1, feel });
-    handleUpdateEntry(index, {
-      loadKg: adj.changed ? adj.adjustedKg : prescribedKg,
-      sets: adj.changed ? adj.adjustedSets : prescribedSets,
-      firstSetFeel: feel,
-    });
-  }
-
-  /** RPE de una serie de trabajo -> sensación equivalente, para que el ajuste inmediato funcione aunque el atleta solo registre números. */
-  function feelFromRpe(rpe: number): SetFeel {
-    if (rpe <= 7) return 'sobro';
-    if (rpe < 8.5) return 'justo';
-    if (rpe < 9.5) return 'duro';
-    return 'muy-duro';
-  }
-
-  /** "Hice X kg × Y @ RPE Z" — calcula el e1RM y lo guarda; el perfil de respuesta lo usa para calibrar la carga futura de ese lift. */
-  function handleLogActualSet(index: number, actual: { kg: number; reps: number; rpe: number }) {
-    if (!session) return;
-    const block = session.blocks[index];
-    if (!block) return;
-    const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
-    const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
-    const prescribedSets = existing?.prescribedSets ?? block.sets ?? 0;
-    const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
-    if (prescribedKg <= 0 || prescribedSets < 2) return;
-
-    const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
-    const estimated1rm = estimateE1RMFromRpe(actual.kg, actual.reps, actual.rpe) ?? undefined;
-    const feel: SetFeel = existing?.feel ?? feelFromRpe(actual.rpe);
+    const estimated1rm = estimateE1RMFromRpe(topSet.kg, topSet.reps, rpe) ?? undefined;
 
     athleteRepository.appendSetFeedbackEntry({
       date: session.date,
@@ -342,26 +282,15 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       prescribedKg,
       prescribedReps,
       prescribedSets,
-      feel,
+      feel: feelFromRpe(rpe),
       prKey,
       pctOf1rm,
-      actualKg: actual.kg,
-      actualReps: actual.reps,
-      actualRpe: actual.rpe,
+      actualKg: topSet.kg,
+      actualReps: topSet.reps,
+      actualRpe: rpe,
       estimated1rm,
     });
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
-
-    // Con la sesión ya completada, solo se registra (calibra al coach). Si aún está en curso y no
-    // había pastilla, la serie real también dispara el ajuste inmediato de lo que queda.
-    if (!alreadyCompletedToday && !existing?.feel) {
-      const adj = adjustRemainingSets({ prescribedKg, prescribedSets, completedSets: 1, feel });
-      handleUpdateEntry(index, {
-        loadKg: adj.changed ? adj.adjustedKg : prescribedKg,
-        sets: adj.changed ? adj.adjustedSets : prescribedSets,
-        firstSetFeel: feel,
-      });
-    }
   }
 
   function handleLogWorkSet(movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number) {
@@ -374,21 +303,6 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     if (!session) return;
     athleteRepository.clearWorkSet(session.date, movementId, setNumber);
     setWorkLog(athleteRepository.getWorkLog());
-  }
-
-  function handleResetSetFeedback(index: number) {
-    if (!session) return;
-    const block = session.blocks[index];
-    if (!block) return;
-    const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
-    athleteRepository.deleteSetFeedbackEntry(session.date, block.movementId);
-    setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
-    if (alreadyCompletedToday) return;
-    handleUpdateEntry(index, {
-      loadKg: existing?.prescribedKg ?? block.loadKg,
-      sets: existing?.prescribedSets ?? block.sets,
-      firstSetFeel: undefined,
-    });
   }
 
   function generateAndCache(nextProfile: AthleteProfile): DailySession {
@@ -720,9 +634,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         <FocusMode
           session={session}
           setFeedbackByIndex={setFeedbackByIndex}
-          onSetFeedback={handleSetFeedback}
-          onLogActual={handleLogActualSet}
-          onResetSetFeedback={handleResetSetFeedback}
+          onRateSet={handleRateSet}
           todayWorkLog={todayWorkLog}
           progress={movementProgress}
           onLogWorkSet={handleLogWorkSet}
@@ -1171,16 +1083,13 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
                     .filter((p): p is NonNullable<typeof p> => Boolean(p));
                   if (panels.length === 0) return null;
                   return panels.map((b) => (
-                    <SetFeedbackPanel
+                    <RpeCheckIn
                       key={b.index}
                       movementName={b.movementName}
-                      prescribed={b.prescribed}
-                      currentFeel={b.currentFeel}
-                      logged={b.logged}
-                      postCompletion={alreadyCompletedToday}
-                      onPick={(feel) => handleSetFeedback(b.index, feel)}
-                      onLogActual={(actual) => handleLogActualSet(b.index, actual)}
-                      onReset={() => handleResetSetFeedback(b.index)}
+                      topSet={b.topSet}
+                      loggedRpe={b.loggedRpe}
+                      estimated1rm={b.estimated1rm}
+                      onRate={(rpe) => handleRateSet(b.index, rpe)}
                     />
                   ));
                 }

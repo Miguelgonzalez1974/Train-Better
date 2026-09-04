@@ -272,13 +272,6 @@ export interface SessionBlockResult {
   scaledFrom?: string;
   /** Notacion de tempo real (ej. "3011", "10X0"): excentrica-pausa abajo-concentrica-pausa arriba, "X" = maxima velocidad. Solo bloque strength. */
   tempo?: string;
-  /**
-   * Presente cuando el atleta valoro su primera serie de trabajo (ver [[SetFeedbackEntry]]) y el
-   * coach ajusto las series restantes: `sets`/`loadKg` de este bloque YA reflejan el ajuste. Marca
-   * el estado para no volver a pedir el feedback al recargar y para senalar en la tarjeta que los
-   * numeros incluyen la correccion. Solo bloque strength/oly.
-   */
-  firstSetFeel?: SetFeel;
 }
 
 /**

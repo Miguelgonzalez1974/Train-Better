@@ -4,7 +4,7 @@ import {
   BadgeCheck,
   Gauge,
   CalendarRange,
-  CalendarPlus,
+  BarChart3,
   ArrowRight,
   TrendingUp,
   TrendingDown,
@@ -22,7 +22,7 @@ import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { AcwrGauge } from './AcwrGauge';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
-import { NextWeekPreview } from './NextWeekPreview';
+import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
 import { PrTrajectoryCard } from './PrTrajectoryCard';
@@ -115,7 +115,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   const [profile] = useState(() => athleteRepository.getProfile());
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
-  const [showNextWeek, setShowNextWeek] = useState(false);
+  const [showVolume, setShowVolume] = useState(false);
   // La sección "Más detalle" del Dashboard arranca plegada — lo esencial (constancia, fase,
   // objetivos, ACWR) queda arriba y el resto (PRs, tendencias, heatmap, desequilibrios) detrás de
   // un clic. Se recuerda por navegador para quien siempre lo despliega.
@@ -164,11 +164,11 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowNextWeek(true)}
-            title="Programar próxima semana"
+            onClick={() => setShowVolume(true)}
+            title="Volumen semanal"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
           >
-            <CalendarPlus size={17} strokeWidth={2.25} />
+            <BarChart3 size={17} strokeWidth={2.25} />
           </button>
           <button
             onClick={onNavigateToPlanificacion}
@@ -181,7 +181,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         </div>
       </div>
 
-      {showNextWeek && <NextWeekPreview onClose={() => setShowNextWeek(false)} />}
+      {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
 
       <AttentionBanner items={attentionItems} />
 
