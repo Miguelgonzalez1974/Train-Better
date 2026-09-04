@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import type { PersonalRecords, PrLogEntry, VariantPersonalRecords, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
+import { toLocalIsoDate } from '../../engine/periodization';
 import { buildPrSeries, summarisePrProgress } from '../../engine/progressSeries';
 import {
   buildMovementSessionSeries,
@@ -15,7 +16,7 @@ import { Sparkline } from '../dashboard/Sparkline';
 
 interface MovementProgressModalProps {
   movementId: string;
-  /** Carga objetivo de la serie desde la que se abrió — solo para contexto en la cabecera. */
+  /** Carga PRESCRITA de la serie desde la que se abrió — solo se muestra si hoy no hay nada real registrado todavía (ver `todayPoint`). */
   targetKg: number;
   open: boolean;
   onClose: () => void;
@@ -138,6 +139,8 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
   const volumeSeries = useMemo(() => buildWeeklyVolumeSeries(workLog, movementId), [workLog, movementId]);
   const volumeTrend = useMemo(() => summariseVolumeTrend(volumeSeries), [volumeSeries]);
   const hasVolume = volumeSeries.some((p) => p.tonnageKg > 0);
+  const todayIso = toLocalIsoDate(new Date());
+  const todayPoint = series.find((p) => p.date === todayIso);
 
   if (!open) return null;
 
@@ -165,9 +168,15 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
           </div>
           <p className="mt-1 text-[11px] uppercase tracking-wide text-neutral-500">
             {oneRepMax > 0 ? '1RM actual' : '1RM sin registrar'}
-            {targetKg > 0 && oneRepMax > 0 && (
+            {oneRepMax > 0 && todayPoint && (
+              <span className="ml-2 normal-case tracking-normal text-brand-neon">
+                · hoy {todayPoint.topKg} kg{todayPoint.reps > 0 ? ` × ${todayPoint.reps}` : ''}
+                {todayPoint.pct != null && ` (${todayPoint.pct}%)`} — real
+              </span>
+            )}
+            {oneRepMax > 0 && !todayPoint && targetKg > 0 && (
               <span className="ml-2 normal-case tracking-normal text-neutral-600">
-                · serie de hoy {targetKg} kg ({Math.round((targetKg / oneRepMax) * 100)}%)
+                · previsto hoy {targetKg} kg ({Math.round((targetKg / oneRepMax) * 100)}%)
               </span>
             )}
           </p>

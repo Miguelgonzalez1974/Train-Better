@@ -165,7 +165,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowVolume(true)}
-            title="Volumen semanal"
+            title="Volumen por día"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
           >
             <BarChart3 size={17} strokeWidth={2.25} />
