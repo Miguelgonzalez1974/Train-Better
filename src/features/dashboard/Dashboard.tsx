@@ -25,7 +25,6 @@ import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
-import { PrTrajectoryCard } from './PrTrajectoryCard';
 import { ProgressOverviewCard } from './ProgressOverviewCard';
 import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
 import { ImbalancesCard } from './ImbalancesCard';
@@ -35,73 +34,65 @@ import { EnergyDomainsCard } from './EnergyDomainsCard';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
-/** Tarjeta protagonista del mes: numero grande + dato anual como contexto secundario debajo. */
-function HeroMetricCard({
-  icon: Icon,
-  value,
-  annualValue,
-}: {
-  icon: typeof CalendarCheck;
-  value: string;
-  annualValue: string | null;
-}) {
-  return (
-    <div className="flex flex-col rounded-xl border border-brand-orange/25 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-3.5 transition-transform duration-200 hover:-translate-y-0.5">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-brand-orange/20 text-brand-orange">
-          <Icon size={16} strokeWidth={2.25} />
-        </span>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-gold">Este mes</p>
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-[26px] font-bold leading-none tracking-tight text-white">{value}</span>
-        <span className="text-xs text-neutral-400">días entrenados</span>
-      </div>
-      {annualValue && (
-        <div className="mt-2 flex items-baseline gap-1.5 border-t border-white/5 pt-2">
-          <span className="text-[13px] font-bold text-brand-gold">{annualValue}</span>
-          <span className="text-[11px] text-neutral-500">días este año</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
 const RPE_TREND_ICON: Record<PrTrendDirection, typeof TrendingUp> = {
   subida: TrendingUp,
   bajada: TrendingDown,
   estable: Minus,
 };
 
-/** Tarjeta compacta secundaria: icono + numero en linea, sin competir con la protagonista. Admite una linea de comparacion opcional (p.ej. RPE del mes frente al de la semana). */
-function CompactMetricCard({
-  icon: Icon,
-  label,
-  value,
-  comparisonLabel,
-  comparisonTrend,
+/**
+ * Constancia del mes, adherencia Rx y esfuerzo medio en una sola tarjeta de 3 cifras — antes eran
+ * 3 tarjetas separadas ("Este mes" + 2 compactas) que en móvil se apilaban una debajo de otra sin
+ * aportar más que esto: un borde en vez de tres, mismo contenido.
+ */
+function MonthSummaryCard({
+  diasEntrenados,
+  diasEsteAnio,
+  diasRxLabel,
+  rpeLabel,
+  rpeTrend,
 }: {
-  icon: typeof CalendarCheck;
-  label: string;
-  value: string;
-  comparisonLabel?: string;
-  comparisonTrend?: PrTrendDirection;
+  diasEntrenados: string;
+  diasEsteAnio: string | null;
+  diasRxLabel: string;
+  rpeLabel: string;
+  rpeTrend: { direction: PrTrendDirection; label: string } | null;
 }) {
-  const TrendIcon = comparisonTrend ? RPE_TREND_ICON[comparisonTrend] : null;
+  const RpeTrendIcon = rpeTrend ? RPE_TREND_ICON[rpeTrend.direction] : null;
   return (
-    <div className="card flex flex-1 items-center gap-2.5 p-2.5 transition-transform duration-200 hover:-translate-y-0.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 text-brand-orange">
-        <Icon size={14} strokeWidth={2.25} />
-      </span>
-      <div className="flex-1">
-        <p className="text-[10px] text-neutral-400">{label}</p>
-        <p className="text-base font-bold leading-tight text-white">{value}</p>
-        {comparisonLabel && (
-          <div className="mt-0.5 flex items-center gap-1">
-            {TrendIcon && <TrendIcon size={10} strokeWidth={2.75} className="text-neutral-500" />}
-            <p className="text-[10px] text-neutral-500">{comparisonLabel}</p>
-          </div>
-        )}
+    <div className="card p-3.5">
+      <div className="mb-2.5 flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-orange/15 text-brand-orange">
+          <CalendarCheck size={14} strokeWidth={2.25} />
+        </span>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-gold">Este mes</p>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-white/5">
+        <div className="pr-2">
+          <p className="text-[22px] font-bold leading-none tracking-tight text-white">{diasEntrenados}</p>
+          <p className="mt-1 text-[10px] leading-tight text-neutral-400">días entrenados</p>
+          {diasEsteAnio && <p className="mt-0.5 text-[10px] font-semibold text-brand-gold">{diasEsteAnio} este año</p>}
+        </div>
+        <div className="px-2">
+          <p className="text-[22px] font-bold leading-none tracking-tight text-white">{diasRxLabel}</p>
+          <p className="mt-1 flex items-center gap-1 text-[10px] leading-tight text-neutral-400">
+            <BadgeCheck size={11} strokeWidth={2.5} className="shrink-0" />
+            días Rx
+          </p>
+        </div>
+        <div className="pl-2">
+          <p className="text-[22px] font-bold leading-none tracking-tight text-white">{rpeLabel}</p>
+          <p className="mt-1 flex items-center gap-1 text-[10px] leading-tight text-neutral-400">
+            <Gauge size={11} strokeWidth={2.5} className="shrink-0" />
+            RPE medio
+          </p>
+          {rpeTrend && (
+            <p className="mt-0.5 flex items-center gap-1 text-[10px] text-neutral-500">
+              {RpeTrendIcon && <RpeTrendIcon size={10} strokeWidth={2.75} />}
+              {rpeTrend.label}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -185,27 +176,13 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
 
       <AttentionBanner items={attentionItems} />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.3fr_1fr]">
-        <HeroMetricCard
-          icon={CalendarCheck}
-          value={String(stats.diasEntrenados)}
-          annualValue={stats.diasEsteAnio > 0 ? String(stats.diasEsteAnio) : null}
-        />
-        <div className="flex flex-col gap-2.5">
-          <CompactMetricCard
-            icon={BadgeCheck}
-            label="Días Rx"
-            value={stats.diasEntrenados > 0 ? `${stats.diasRx} / ${stats.diasEntrenados}` : '—'}
-          />
-          <CompactMetricCard
-            icon={Gauge}
-            label="RPE medio"
-            value={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'}
-            comparisonLabel={rpeTrend?.label}
-            comparisonTrend={rpeTrend?.direction}
-          />
-        </div>
-      </div>
+      <MonthSummaryCard
+        diasEntrenados={String(stats.diasEntrenados)}
+        diasEsteAnio={stats.diasEsteAnio > 0 ? String(stats.diasEsteAnio) : null}
+        diasRxLabel={stats.diasEntrenados > 0 ? `${stats.diasRx} / ${stats.diasEntrenados}` : '—'}
+        rpeLabel={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'}
+        rpeTrend={rpeTrend}
+      />
 
       {/*
         Lo esencial, siempre visible: dónde estás en el plan (fase/semana + objetivos) y el estado
@@ -257,7 +234,12 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
               items-start: nunca se estira para igualar, siempre altura real.
             */}
             <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
-              <PersonalRecordsCard prs={profile.prs} trends={prTrends} />
+              <PersonalRecordsCard
+                prs={profile.prs}
+                trends={prTrends}
+                prLog={profile.prLog ?? []}
+                macroStartIso={getActiveMacrocycle(profile.macrocycles, todayIso)?.startDate}
+              />
 
               <TrainingHeatmap
                 history={history}
@@ -265,11 +247,6 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
                 macrocycles={profile.macrocycles}
               />
             </div>
-
-            <PrTrajectoryCard
-              prLog={profile.prLog ?? []}
-              macroStartIso={getActiveMacrocycle(profile.macrocycles, todayIso)?.startDate}
-            />
 
             <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} />
 
