@@ -1,15 +1,34 @@
-import type { PersonalRecords, WorkSetEntry } from '../data/athlete/types';
+import type { PersonalRecords, VariantPersonalRecords, WorkSetEntry } from '../data/athlete/types';
 import type { Movement } from '../data/movements/types';
-import { resolveStrengthPRKey, resolveOlyPRKey } from './prResolution';
+import { resolveStrengthPRKey, resolveOlyPRKey, resolveVariantPRKey } from './prResolution';
 
 /**
  * Clave de PR raíz (fuerza u oly) de un movimiento, o null si no tiene — el popup de progresión del
  * movimiento solo aplica a levantamientos con 1RM propio, así que este null es la señal de "no
- * mostrar". No mezcla PRs de variante a propósito: la serie del gráfico se compara siempre contra el
- * 1RM del lift raíz.
+ * mostrar". Úsese solo para saber SI hay 1RM que mostrar (gate de interactividad); para el VALOR a
+ * mostrar, ver `resolveLiftPrTarget`, que sí tiene en cuenta el PR de variante.
  */
 export function resolveLiftPrKey(movement: Movement): keyof PersonalRecords | null {
   return resolveStrengthPRKey(movement) ?? resolveOlyPRKey(movement) ?? null;
+}
+
+export interface LiftPrTarget {
+  kind: 'root' | 'variant';
+  key: string;
+}
+
+/**
+ * A qué PR comparar el 1RM de este movimiento: el de variante (sumo deadlift, push press...) si el
+ * atleta lo tiene puesto, si no el del lift raíz — mismo criterio de prioridad que ya usa el motor
+ * al prescribir carga y al sugerir e1RM (`findE1rmSuggestions` en Planificacion.tsx). Antes el popup
+ * de progresión siempre comparaba contra el raíz (p.ej. sumo deadlift contra el PR de peso muerto
+ * convencional) aunque hubiera un PR de sumo propio — esto lo corrige.
+ */
+export function resolveLiftPrTarget(movement: Movement, variantPrs: VariantPersonalRecords | undefined): LiftPrTarget | null {
+  const variantKey = resolveVariantPRKey(movement);
+  if (variantKey && variantPrs?.[variantKey]) return { kind: 'variant', key: variantKey };
+  const rootKey = resolveLiftPrKey(movement);
+  return rootKey ? { kind: 'root', key: rootKey } : null;
 }
 
 export interface MovementSessionPoint {

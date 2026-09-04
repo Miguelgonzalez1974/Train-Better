@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import type { PersonalRecords, PrLogEntry, WorkSetEntry } from '../../data/athlete/types';
+import type { PersonalRecords, PrLogEntry, VariantPersonalRecords, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
 import { buildPrSeries, summarisePrProgress } from '../../engine/progressSeries';
 import {
   buildMovementSessionSeries,
-  resolveLiftPrKey,
+  resolveLiftPrTarget,
   summariseMovementWork,
   type MovementSessionPoint,
 } from '../../engine/movementProgress';
@@ -20,6 +20,7 @@ interface MovementProgressModalProps {
   open: boolean;
   onClose: () => void;
   prs: PersonalRecords;
+  variantPrs: VariantPersonalRecords | undefined;
   prLog: PrLogEntry[];
   workLog: WorkSetEntry[];
 }
@@ -112,22 +113,27 @@ function SessionBars({ series, oneRepMax }: { series: MovementSessionPoint[]; on
  * Popup de progresión de un levantamiento — sustituye a la antigua calculadora de discos. Se abre al
  * tocar la carga de una serie de fuerza u oly y muestra el 1RM actual del atleta y, sesión a sesión,
  * el peso máximo real que ha cogido en ese movimiento, para que vea de un vistazo cómo de cerca de su
- * 1RM está trabajando. Solo aplica a movimientos con PR raíz (`resolveLiftPrKey`); la serie se filtra
- * por `movementId` exacto, sin mezclar variantes.
+ * 1RM está trabajando. El 1RM se compara contra el PR de variante (sumo deadlift, push press...) si
+ * el atleta lo tiene puesto, si no contra el del lift raíz (`resolveLiftPrTarget`) — la serie de
+ * sesiones se filtra por `movementId` exacto en cualquier caso, sin mezclar variantes.
  */
-export function MovementProgressModal({ movementId, targetKg, open, onClose, prs, prLog, workLog }: MovementProgressModalProps) {
+export function MovementProgressModal({ movementId, targetKg, open, onClose, prs, variantPrs, prLog, workLog }: MovementProgressModalProps) {
   const movement = getMovementById(movementId);
-  const prKey = movement ? resolveLiftPrKey(movement) : null;
-  const oneRepMax = prKey ? prs[prKey] : 0;
+  const prTarget = movement ? resolveLiftPrTarget(movement, variantPrs) : null;
+  const oneRepMax = prTarget
+    ? prTarget.kind === 'root'
+      ? prs[prTarget.key as keyof PersonalRecords]
+      : (variantPrs?.[prTarget.key as keyof VariantPersonalRecords] ?? 0)
+    : 0;
 
   const series = useMemo(
-    () => (prKey ? buildMovementSessionSeries(workLog, movementId, oneRepMax) : []),
-    [prKey, workLog, movementId, oneRepMax],
+    () => (prTarget ? buildMovementSessionSeries(workLog, movementId, oneRepMax) : []),
+    [prTarget, workLog, movementId, oneRepMax],
   );
   const summary = useMemo(() => summariseMovementWork(series), [series]);
   const prProgress = useMemo(
-    () => (prKey ? summarisePrProgress(buildPrSeries(prLog, prKey)) : null),
-    [prKey, prLog],
+    () => (prTarget ? summarisePrProgress(buildPrSeries(prLog, prTarget.key)) : null),
+    [prTarget, prLog],
   );
   const volumeSeries = useMemo(() => buildWeeklyVolumeSeries(workLog, movementId), [workLog, movementId]);
   const volumeTrend = useMemo(() => summariseVolumeTrend(volumeSeries), [volumeSeries]);

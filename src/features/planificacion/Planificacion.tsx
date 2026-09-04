@@ -194,8 +194,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const todayWorkLog = useMemo(() => workLog.filter((e) => e.date === todayIso), [workLog, todayIso]);
   /** Bundle para el popup de progresión del movimiento (tocar la carga de una serie de fuerza/oly). */
   const movementProgress = useMemo(
-    () => ({ prs: profile.prs, prLog: profile.prLog ?? [], workLog }),
-    [profile.prs, profile.prLog, workLog],
+    () => ({ prs: profile.prs, variantPrs: profile.variantPrs, prLog: profile.prLog ?? [], workLog }),
+    [profile.prs, profile.variantPrs, profile.prLog, workLog],
   );
   const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
   const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && !todayReadiness && !readinessDismissed);

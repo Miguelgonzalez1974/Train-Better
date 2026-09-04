@@ -37,4 +37,16 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.deleteSetFeedbackEntry(date, movementId);
     void pushRemote();
   },
+  saveWorkSet(entry) {
+    localAthleteRepository.saveWorkSet(entry);
+    void pushRemote();
+  },
+  clearWorkSet(date, movementId, setNumber) {
+    localAthleteRepository.clearWorkSet(date, movementId, setNumber);
+    void pushRemote();
+  },
+  clearWorkLogForDate(date) {
+    localAthleteRepository.clearWorkLogForDate(date);
+    void pushRemote();
+  },
 };

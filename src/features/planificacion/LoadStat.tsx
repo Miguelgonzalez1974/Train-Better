@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { PersonalRecords, PrLogEntry, WorkSetEntry } from '../../data/athlete/types';
+import type { PersonalRecords, PrLogEntry, VariantPersonalRecords, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { MovementProgressModal } from './MovementProgressModal';
 
 export interface MovementProgressData {
   prs: PersonalRecords;
+  variantPrs: VariantPersonalRecords | undefined;
   prLog: PrLogEntry[];
   workLog: WorkSetEntry[];
 }
@@ -60,6 +61,7 @@ export function LoadStat({ kg, movementId, block, progress }: LoadStatProps) {
           open={open}
           onClose={() => setOpen(false)}
           prs={progress.prs}
+          variantPrs={progress.variantPrs}
           prLog={progress.prLog}
           workLog={progress.workLog}
         />

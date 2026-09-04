@@ -1,39 +1,16 @@
 import { useState } from 'react';
-import type { PersonalRecords } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
+import { getMovementById } from '../../data/movements';
 import { buildWeeklyVolumeSeries, summariseVolumeTrend } from '../../engine/volumeMetrics';
 import { Modal } from '../shell/Modal';
 import { Sparkline } from './Sparkline';
-
-/** Movimiento exacto que representa cada PR raíz para el tonelaje — mismo criterio de "sin mezclar variantes" que `MovementProgressModal`. */
-const ROOT_MOVEMENT_ID: Record<keyof PersonalRecords, string> = {
-  backSquat: 'back-squat',
-  frontSquat: 'front-squat',
-  benchPress: 'bench-press',
-  deadlift: 'deadlift',
-  strictPress: 'strict-press',
-  clean: 'clean',
-  snatch: 'snatch',
-  cleanAndJerk: 'clean-and-jerk',
-};
-
-const ROOT_LABEL: Record<keyof PersonalRecords, string> = {
-  backSquat: 'Back Squat',
-  frontSquat: 'Front Squat',
-  benchPress: 'Bench Press',
-  deadlift: 'Deadlift',
-  strictPress: 'Strict Press',
-  clean: 'Clean',
-  snatch: 'Snatch',
-  cleanAndJerk: 'C&J',
-};
 
 interface VolumeSummaryModalProps {
   onClose: () => void;
 }
 
 interface Row {
-  key: keyof PersonalRecords;
+  movementId: string;
   label: string;
   values: number[];
   thisWeekKg: number;
@@ -41,19 +18,28 @@ interface Row {
 }
 
 /**
- * Tonelaje semanal (Σ kg × reps, `workLog`) de los 8 levantamientos raíz — ocupa el hueco del botón
- * de "próxima semana" en el Dashboard: ver la sesión de dentro de 7 días aportaba poco a un atleta
- * que va semana a semana, mientras que saber si el volumen de cada lift sube, baja o se estanca es
- * justo la pregunta que antes no tenía respuesta en la app. Solo lista lifts con tonelaje registrado.
+ * Tonelaje semanal (Σ kg × reps, `workLog`) de cada movimiento de fuerza/oly que el atleta ha
+ * registrado — ocupa el hueco del botón de "próxima semana" en el Dashboard: ver la sesión de
+ * dentro de 7 días aportaba poco a un atleta que va semana a semana, mientras que saber si el
+ * volumen de cada lift sube, baja o se estanca es justo la pregunta que antes no tenía respuesta en
+ * la app. Se calcula sobre el `movementId` exacto que aparece en `workLog` — cualquier levantamiento
+ * o variante que el atleta haya marcado en el modo enfocado sale aquí, no solo los 8 PRs raíz.
  */
 export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
   const [workLog] = useState(() => athleteRepository.getWorkLog());
 
-  const rows: Row[] = (Object.keys(ROOT_MOVEMENT_ID) as (keyof PersonalRecords)[])
-    .map((key) => {
-      const series = buildWeeklyVolumeSeries(workLog, ROOT_MOVEMENT_ID[key]);
+  const movementIds = [...new Set(workLog.map((e) => e.movementId))];
+  const rows: Row[] = movementIds
+    .map((movementId) => {
+      const series = buildWeeklyVolumeSeries(workLog, movementId);
       const trend = summariseVolumeTrend(series);
-      return { key, label: ROOT_LABEL[key], values: series.map((p) => p.tonnageKg), thisWeekKg: trend.thisWeekKg, deltaPct: trend.deltaPct };
+      return {
+        movementId,
+        label: getMovementById(movementId)?.name ?? movementId,
+        values: series.map((p) => p.tonnageKg),
+        thisWeekKg: trend.thisWeekKg,
+        deltaPct: trend.deltaPct,
+      };
     })
     .filter((row) => row.values.some((v) => v > 0))
     .sort((a, b) => b.thisWeekKg - a.thisWeekKg);
@@ -68,7 +54,7 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
       ) : (
         <div className="flex flex-col gap-1">
           {rows.map((row) => (
-            <div key={row.key} className="border-l-2 border-white/10 py-1.5 pl-3">
+            <div key={row.movementId} className="border-l-2 border-white/10 py-1.5 pl-3">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-[13px] font-semibold text-white">{row.label}</p>
                 <p className="shrink-0 text-sm font-bold text-white">

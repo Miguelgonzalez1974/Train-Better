@@ -448,6 +448,7 @@ export function FocusMode({
           open
           onClose={() => setProgressTarget(null)}
           prs={progress.prs}
+          variantPrs={progress.variantPrs}
           prLog={progress.prLog}
           workLog={progress.workLog}
         />
