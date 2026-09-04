@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { buildDailyVolume } from '../../engine/volumeMetrics';
-import { toLocalIsoDate, getWeekdayIndex } from '../../engine/periodization';
+import { toLocalIsoDate } from '../../engine/periodization';
 import { Modal } from '../shell/Modal';
 
 interface VolumeSummaryModalProps {
@@ -9,21 +9,20 @@ interface VolumeSummaryModalProps {
 }
 
 const DAYS_SHOWN = 14;
-/** Inicial de cada día — lunes = 0, mismo orden que `getWeekdayIndex`. */
-const WEEKDAY_LETTER = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
-/** "1.2k" a partir de 1000, si no el entero — para que la etiqueta nunca desborde una columna estrecha. */
-function fmtKg(kg: number): string {
-  if (kg <= 0) return '—';
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1)}k`;
-  return String(kg);
-}
+/**
+ * Ancho de columna fijo en px — deliberadamente pequeño y sin `flex-1`: un flex item con `flex-1`
+ * pero sin `min-width` no encoge por debajo del ancho de su propio contenido, así que un número o
+ * texto ancho en una sola columna empujaba la fila entera fuera de la tarjeta (el bug reportado).
+ * Con ancho fijo, 14 columnas + gaps (250px) caben con margen en el ancho disponible incluso en un
+ * móvil pequeño (~280px, recuperando el padding de la tarjeta con el `-mx-5` de abajo) sin scroll
+ * ni desbordar, sea cual sea el contenido — los números van en texto aparte, no sobre cada barra.
+ */
+const COLUMN_PX = 16;
 
 /**
- * Tonelaje total (Σ kg × reps, todos los movimientos) por día — últimos 14 días, columnas de ancho
- * fijo dentro de una franja con scroll horizontal propio, así nunca desborda el modal por muy grande
- * que sea un número (el fallo que había con columnas `flex-1`: sin `min-width`, un texto ancho
- * empujaba la fila entera fuera de la tarjeta en pantallas estrechas). Se abre centrado en hoy.
+ * Tonelaje total (Σ kg × reps, todos los movimientos) por día — últimos 14 días. Sin scroll lateral:
+ * columnas estrechas de ancho fijo, y los números (total / hoy / máximo) van en texto arriba, no
+ * flotando sobre cada barra — así una columna nunca necesita ser más ancha que la barra en sí.
  * Ocupa el hueco del botón de "próxima semana" en el Dashboard.
  */
 export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
@@ -32,11 +31,7 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
   const totalKg = days.reduce((sum, d) => sum + d.tonnageKg, 0);
   const maxKg = Math.max(...days.map((d) => d.tonnageKg), 1);
   const todayIso = toLocalIsoDate(new Date());
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ left: scrollRef.current.scrollWidth });
-  }, []);
+  const todayKg = days[days.length - 1]?.tonnageKg ?? 0;
 
   return (
     <Modal open onClose={onClose} title="Volumen por día">
@@ -47,34 +42,33 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
         </p>
       ) : (
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-neutral-400">
-            Total últimos 14 días <span className="font-bold text-white">{totalKg.toLocaleString('es')} kg</span>
-          </p>
-          <div ref={scrollRef} className="overflow-x-auto">
-            <div className="flex items-end gap-1">
-              {days.map((d) => {
-                const pct = Math.max(4, Math.round((d.tonnageKg / maxKg) * 100));
-                const isToday = d.date === todayIso;
-                const dayNum = Number(d.date.slice(8, 10));
-                const weekday = WEEKDAY_LETTER[getWeekdayIndex(new Date(`${d.date}T00:00:00`))];
-                return (
-                  <div key={d.date} className="flex w-10 shrink-0 flex-col items-center gap-1.5">
-                    <span className="whitespace-nowrap text-[10px] font-semibold text-white">{fmtKg(d.tonnageKg)}</span>
-                    <div className="flex h-28 w-full items-end">
-                      <div
-                        className={`w-full rounded-t-md ${isToday ? 'bg-brand-neon' : 'bg-brand-gold/70'}`}
-                        style={{ height: `${pct}%` }}
-                      />
-                    </div>
-                    <span
-                      className={`whitespace-nowrap text-[10px] uppercase tracking-wide ${isToday ? 'font-bold text-brand-neon' : 'text-neutral-500'}`}
-                    >
-                      {weekday} {dayNum}
-                    </span>
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <p className="text-sm text-neutral-400">
+              Total 14 días <span className="font-bold text-white">{totalKg.toLocaleString('es')} kg</span>
+            </p>
+            {todayKg > 0 && (
+              <p className="text-sm text-neutral-400">
+                Hoy <span className="font-bold text-brand-neon">{todayKg.toLocaleString('es')} kg</span>
+              </p>
+            )}
+          </div>
+          <div className="-mx-5 flex items-end justify-center gap-0.5 px-2">
+            {days.map((d) => {
+              const pct = Math.max(4, Math.round((d.tonnageKg / maxKg) * 100));
+              const isToday = d.date === todayIso;
+              const dayNum = Number(d.date.slice(8, 10));
+              return (
+                <div key={d.date} className="flex shrink-0 flex-col items-center gap-1" style={{ width: COLUMN_PX }}>
+                  <div className="flex h-24 w-full items-end">
+                    <div
+                      className={`w-full rounded-t-sm ${isToday ? 'bg-brand-neon' : 'bg-brand-gold/70'}`}
+                      style={{ height: `${pct}%` }}
+                    />
                   </div>
-                );
-              })}
-            </div>
+                  <span className={`text-[9px] ${isToday ? 'font-bold text-brand-neon' : 'text-neutral-600'}`}>{dayNum}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
