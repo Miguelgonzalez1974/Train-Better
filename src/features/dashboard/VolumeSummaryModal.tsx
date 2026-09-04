@@ -13,11 +13,12 @@ const DAYS_SHOWN = 14;
  * Ancho de columna fijo en px — deliberadamente pequeño y sin `flex-1`: un flex item con `flex-1`
  * pero sin `min-width` no encoge por debajo del ancho de su propio contenido, así que un número o
  * texto ancho en una sola columna empujaba la fila entera fuera de la tarjeta (el bug reportado).
- * Con ancho fijo, 14 columnas + gaps (250px) caben con margen en el ancho disponible incluso en un
- * móvil pequeño (~280px, recuperando el padding de la tarjeta con el `-mx-5` de abajo) sin scroll
- * ni desbordar, sea cual sea el contenido — los números van en texto aparte, no sobre cada barra.
+ * Con ancho fijo, 14 columnas + gaps (194px) caben con margen de sobra dentro del padding NORMAL de
+ * la tarjeta (`.card` no recorta overflow — un truco de margen negativo para ganar ancho dejaba las
+ * barras asomando por fuera de las esquinas redondeadas, que es justo lo que se veía "excedido").
+ * Los números van en texto aparte, no flotando sobre cada barra, para no necesitar más ancho.
  */
-const COLUMN_PX = 16;
+const COLUMN_PX = 12;
 
 /**
  * Tonelaje total (Σ kg × reps, todos los movimientos) por día — últimos 14 días. Sin scroll lateral:
@@ -52,7 +53,7 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
               </p>
             )}
           </div>
-          <div className="-mx-5 flex items-end justify-center gap-0.5 px-2">
+          <div className="flex items-end justify-center gap-0.5">
             {days.map((d) => {
               const pct = Math.max(4, Math.round((d.tonnageKg / maxKg) * 100));
               const isToday = d.date === todayIso;
