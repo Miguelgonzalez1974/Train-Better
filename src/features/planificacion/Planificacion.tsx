@@ -151,6 +151,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [showPainPicker, setShowPainPicker] = useState(false);
   const [painAreaDraft, setPainAreaDraft] = useState<PainArea>('hombro');
   const [painDurationDraft, setPainDurationDraft] = useState<PainDuration>('semanas');
+  const [showQuickLog, setShowQuickLog] = useState(false);
+  const [quickRpe, setQuickRpe] = useState(7);
+  const [quickDuration, setQuickDuration] = useState(60);
 
   const activePainFlags = useMemo(() => getActivePainFlags(profile.painFlags, todayIso), [profile.painFlags, todayIso]);
   const rampStatus = useMemo(() => describeRampStatus(profile.intensityRamp, new Date()), [profile.intensityRamp, todayIso]);
@@ -594,6 +597,32 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     setE1rmSuggestions([]);
   }
 
+  /**
+   * Registro rápido de un día fuera de plan (p.ej. entreno de equipo el sábado): sin Rx/escalado ni
+   * detalle de bloques, solo RPE + duración — lo justo para que ACWR, racha y volumen semanal vean
+   * el día, sin fingir que se hizo lo prescrito. Sustituye la sesión de hoy por una nota genérica
+   * (mismo mecanismo que "Tu sesión") y registra el historial con `movementIds` vacío.
+   */
+  function handleConfirmQuickLog() {
+    if (!session) return;
+    const next: DailySession = {
+      date: session.date,
+      mesocycleWeek: session.mesocycleWeek,
+      isRestDay: false,
+      blocks: [],
+      source: 'custom',
+      customTitle: 'Entreno de equipo',
+      customNote: 'Registrado solo con RPE, sin detalle de bloques.',
+      swapLabel: 'Otra cosa',
+    };
+    athleteRepository.saveCachedSession(next);
+    setSession(next);
+    athleteRepository.appendHistoryEntry(toHistoryEntry(next, 'rx', quickRpe, quickDuration));
+    setHistory(athleteRepository.getHistory());
+    setProfile(athleteRepository.getProfile());
+    setShowQuickLog(false);
+  }
+
   function handleDeleteTodaySession() {
     if (!session) return;
     if (!window.confirm('¿Borrar la sesión de hoy? Volverás a elegir qué hacer.')) return;
@@ -865,6 +894,18 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
             >
               {alreadyCompletedToday ? 'Completado ✓' : 'Marcar como completado'}
             </button>
+            {!alreadyCompletedToday && (
+              <button
+                onClick={() => {
+                  setQuickRpe(7);
+                  setQuickDuration(60);
+                  setShowQuickLog(true);
+                }}
+                className="w-full rounded-lg border border-brand-border px-3 py-2 text-sm font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold sm:w-auto"
+              >
+                Hice otra cosa (solo RPE)
+              </button>
+            )}
             {alreadyCompletedToday && (
               <button
                 onClick={handleUndoComplete}
@@ -1148,6 +1189,61 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
             </button>
             <button
               onClick={() => setShowCustomEditor(false)}
+              className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={showQuickLog} onClose={() => setShowQuickLog(false)} title="Hice otra cosa hoy">
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-neutral-500">
+            Para los días fuera de plan (entreno de equipo, por ejemplo) — sin Rx/escalado ni detalle de bloques, solo el
+            esfuerzo, para que el coach tenga algo de información.
+          </p>
+          <div>
+            <p className="mb-2 text-sm font-medium text-neutral-300">RPE (esfuerzo percibido)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {RPE_SCALE.map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setQuickRpe(value)}
+                  className={`h-8 w-8 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    quickRpe === value ? 'bg-brand-orange text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
+                  }`}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-medium text-neutral-300">Duración</p>
+            <div className="flex flex-wrap gap-1.5">
+              {DURATION_PRESETS.map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setQuickDuration(value)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-all duration-200 ${
+                    quickDuration === value ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
+                  }`}
+                >
+                  {value} min
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirmQuickLog}
+              className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
+            >
+              Registrar
+            </button>
+            <button
+              onClick={() => setShowQuickLog(false)}
               className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
             >
               Cancelar

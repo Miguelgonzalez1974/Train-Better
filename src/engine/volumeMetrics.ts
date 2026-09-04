@@ -46,6 +46,36 @@ export function buildWeeklyVolumeSeries(
   return points;
 }
 
+export interface DayVolumePoint {
+  /** Fecha ISO del día. */
+  date: string;
+  /** Tonelaje total (Σ kg × reps, TODOS los movimientos) de ese día. */
+  tonnageKg: number;
+}
+
+/**
+ * Tonelaje total por día (todos los movimientos juntos, no uno concreto) de la semana en curso —
+ * lunes a domingo de `referenceDate`. Para ver cómo se reparte la carga entre los días de la semana,
+ * no cómo evoluciona un lift en el tiempo (eso es `buildWeeklyVolumeSeries`).
+ */
+export function buildWeekDailyVolume(workLog: WorkSetEntry[], referenceDate: Date = new Date()): DayVolumePoint[] {
+  const byDate = new Map<string, number>();
+  for (const entry of workLog) {
+    if (!(entry.kg > 0) || !(entry.reps > 0)) continue;
+    byDate.set(entry.date, (byDate.get(entry.date) ?? 0) + entry.kg * entry.reps);
+  }
+
+  const monday = mondayOf(toLocalIsoDate(referenceDate));
+  const points: DayVolumePoint[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(`${monday}T00:00:00`);
+    d.setDate(d.getDate() + i);
+    const date = toLocalIsoDate(d);
+    points.push({ date, tonnageKg: Math.round(byDate.get(date) ?? 0) });
+  }
+  return points;
+}
+
 export interface VolumeTrend {
   thisWeekKg: number;
   lastWeekKg: number;

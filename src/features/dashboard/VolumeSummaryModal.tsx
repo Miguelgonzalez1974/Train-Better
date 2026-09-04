@@ -1,81 +1,62 @@
 import { useState } from 'react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import { getMovementById } from '../../data/movements';
-import { buildWeeklyVolumeSeries, summariseVolumeTrend } from '../../engine/volumeMetrics';
+import { buildWeekDailyVolume } from '../../engine/volumeMetrics';
+import { toLocalIsoDate } from '../../engine/periodization';
 import { Modal } from '../shell/Modal';
-import { Sparkline } from './Sparkline';
 
 interface VolumeSummaryModalProps {
   onClose: () => void;
 }
 
-interface Row {
-  movementId: string;
-  label: string;
-  values: number[];
-  thisWeekKg: number;
-  deltaPct: number | null;
-}
+/** Lunes a domingo, mismo orden que `buildWeekDailyVolume`. */
+const DAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
 /**
- * Tonelaje semanal (Σ kg × reps, `workLog`) de cada movimiento de fuerza/oly que el atleta ha
- * registrado — ocupa el hueco del botón de "próxima semana" en el Dashboard: ver la sesión de
- * dentro de 7 días aportaba poco a un atleta que va semana a semana, mientras que saber si el
- * volumen de cada lift sube, baja o se estanca es justo la pregunta que antes no tenía respuesta en
- * la app. Se calcula sobre el `movementId` exacto que aparece en `workLog` — cualquier levantamiento
- * o variante que el atleta haya marcado en el modo enfocado sale aquí, no solo los 8 PRs raíz.
+ * Tonelaje total (Σ kg × reps, todos los movimientos) por día de la semana en curso — 7 columnas,
+ * lunes a domingo. Ocupa el hueco del botón de "próxima semana" en el Dashboard: importa más ver
+ * cómo se reparte la carga entre los días de esta semana que la sesión de dentro de 7 días. Antes
+ * agrupaba por levantamiento con 8 semanas de histórico por fila, que en móvil quedaba apretado —
+ * esto es más simple de leer y más compacto.
  */
 export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
   const [workLog] = useState(() => athleteRepository.getWorkLog());
-
-  const movementIds = [...new Set(workLog.map((e) => e.movementId))];
-  const rows: Row[] = movementIds
-    .map((movementId) => {
-      const series = buildWeeklyVolumeSeries(workLog, movementId);
-      const trend = summariseVolumeTrend(series);
-      return {
-        movementId,
-        label: getMovementById(movementId)?.name ?? movementId,
-        values: series.map((p) => p.tonnageKg),
-        thisWeekKg: trend.thisWeekKg,
-        deltaPct: trend.deltaPct,
-      };
-    })
-    .filter((row) => row.values.some((v) => v > 0))
-    .sort((a, b) => b.thisWeekKg - a.thisWeekKg);
+  const days = buildWeekDailyVolume(workLog);
+  const totalKg = days.reduce((sum, d) => sum + d.tonnageKg, 0);
+  const maxKg = Math.max(...days.map((d) => d.tonnageKg), 1);
+  const todayIso = toLocalIsoDate(new Date());
 
   return (
-    <Modal open onClose={onClose} title="Volumen semanal">
-      {rows.length === 0 ? (
+    <Modal open onClose={onClose} title="Volumen esta semana">
+      {totalKg === 0 ? (
         <p className="py-6 text-center text-sm text-neutral-400">
-          Aún no hay series registradas en el modo entreno — el tonelaje semanal de cada levantamiento aparecerá aquí en cuanto
-          marques alguna.
+          Aún no hay series registradas en el modo entreno esta semana — el tonelaje de cada día aparecerá aquí en cuanto marques
+          alguna.
         </p>
       ) : (
-        <div className="flex flex-col gap-1">
-          {rows.map((row) => (
-            <div key={row.movementId} className="border-l-2 border-white/10 py-1.5 pl-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-[13px] font-semibold text-white">{row.label}</p>
-                <p className="shrink-0 text-sm font-bold text-white">
-                  {row.thisWeekKg.toLocaleString('es')} <span className="text-[10px] font-normal text-neutral-500">kg</span>
-                </p>
-              </div>
-              {row.deltaPct != null && row.deltaPct !== 0 && (
-                <p className={`text-[11px] ${row.deltaPct > 0 ? 'text-brand-neon' : 'text-brand-orange'}`}>
-                  {row.deltaPct > 0 ? '+' : ''}
-                  {row.deltaPct}% vs. semana anterior
-                </p>
-              )}
-              <Sparkline
-                values={row.values}
-                strokeClassName="stroke-brand-gold"
-                areaClassName="fill-brand-gold/10"
-                dotClassName="fill-brand-gold"
-                className="mt-1.5 h-10 w-full"
-              />
-            </div>
-          ))}
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-neutral-400">
+            Total <span className="font-bold text-white">{totalKg.toLocaleString('es')} kg</span>
+          </p>
+          <div className="flex items-end gap-1.5">
+            {days.map((d, i) => {
+              const pct = Math.max(4, Math.round((d.tonnageKg / maxKg) * 100));
+              const isToday = d.date === todayIso;
+              return (
+                <div key={d.date} className="flex flex-1 flex-col items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-white">{d.tonnageKg > 0 ? d.tonnageKg.toLocaleString('es') : '—'}</span>
+                  <div className="flex h-28 w-full items-end">
+                    <div
+                      className={`w-full rounded-t-md ${isToday ? 'bg-brand-neon' : 'bg-brand-gold/70'}`}
+                      style={{ height: `${pct}%` }}
+                    />
+                  </div>
+                  <span className={`text-[10px] uppercase tracking-wide ${isToday ? 'font-bold text-brand-neon' : 'text-neutral-500'}`}>
+                    {DAY_LABELS[i]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </Modal>
