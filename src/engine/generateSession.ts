@@ -103,8 +103,10 @@ import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthP
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import {
   MAYHEM_BASE_TOTAL_WEEKS,
+  MAYHEM_PICO_TOTAL_WEEKS,
   MAYHEM_TECNICA_TOTAL_WEEKS,
   resolveMayhemBaseDay,
+  resolveMayhemPicoDay,
   resolveMayhemTecnicaDay,
 } from './mayhemProgram';
 import { filterAvoidingPain, getAvoidedPatterns, getPainReintroFactor, getPainReintroPatterns } from './painFlags';
@@ -2574,13 +2576,17 @@ export function generateStrengthProgramSession(
     };
   }
 
-  // Mayhem Burgener (Ciclo 9 "base" / Ciclo 3 "tecnica"): igual que haltero, varios levantamientos
-  // por dia con formatos mixtos (escaleras, esquemas ciclicos, EMOM, complejos). Ver `mayhemProgram.ts`.
-  if (program.method === 'mayhem-base' || program.method === 'mayhem-tecnica') {
-    const isTecnica = program.method === 'mayhem-tecnica';
-    const mayhemDay = isTecnica
-      ? resolveMayhemTecnicaDay(program, dayPlan, profile.prs, autoregFactor, date)
-      : resolveMayhemBaseDay(program, dayPlan, profile.prs, autoregFactor, date);
+  // Mayhem Burgener (Ciclo 9 "base" / Ciclo 3 "tecnica" / Ciclo 4 "pico"): igual que haltero, varios
+  // levantamientos por dia con formatos mixtos (escaleras, esquemas ciclicos, EMOM, complejos, olas,
+  // "single en X min", MAX OUT). Ver `mayhemProgram.ts`.
+  if (program.method === 'mayhem-base' || program.method === 'mayhem-tecnica' || program.method === 'mayhem-pico') {
+    const mayhemSpec =
+      program.method === 'mayhem-tecnica'
+        ? { resolve: resolveMayhemTecnicaDay, name: 'Mayhem Técnica', total: MAYHEM_TECNICA_TOTAL_WEEKS }
+        : program.method === 'mayhem-pico'
+          ? { resolve: resolveMayhemPicoDay, name: 'Mayhem Pico', total: MAYHEM_PICO_TOTAL_WEEKS }
+          : { resolve: resolveMayhemBaseDay, name: 'Mayhem Base', total: MAYHEM_BASE_TOTAL_WEEKS };
+    const mayhemDay = mayhemSpec.resolve(program, dayPlan, profile.prs, autoregFactor, date);
     if (!mayhemDay) return generateOffSeasonSession(profile, history, date);
 
     const mayhemBlocks: SessionBlockResult[] = mayhemDay.lifts.map((lift) => ({
@@ -2603,9 +2609,7 @@ export function generateStrengthProgramSession(
         ...mayhemBlocks,
         ...buildCooldownBlock(mayhemPattern, recentIdsMayhem),
       ],
-      strengthProgramLabel: isTecnica
-        ? `Mayhem Técnica · Semana ${mayhemDay.weekNumber}/${MAYHEM_TECNICA_TOTAL_WEEKS}`
-        : `Mayhem Base · Semana ${mayhemDay.weekNumber}/${MAYHEM_BASE_TOTAL_WEEKS}`,
+      strengthProgramLabel: `${mayhemSpec.name} · Semana ${mayhemDay.weekNumber}/${mayhemSpec.total}`,
     };
   }
 

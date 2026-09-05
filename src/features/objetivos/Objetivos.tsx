@@ -34,8 +34,10 @@ import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay, TEMPORADA_TO
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
 import {
   MAYHEM_BASE_TOTAL_WEEKS,
+  MAYHEM_PICO_TOTAL_WEEKS,
   MAYHEM_TECNICA_TOTAL_WEEKS,
   resolveMayhemBaseDay,
+  resolveMayhemPicoDay,
   resolveMayhemTecnicaDay,
 } from '../../engine/mayhemProgram';
 import { getAvoidedPatterns } from '../../engine/painFlags';
@@ -115,14 +117,16 @@ function todayProgramFormat(program: StrengthProgram, profile: AthleteProfile): 
     if (!halteroDay) return null;
     return `Semana ${halteroDay.weekNumber}/${HALTERO_TOTAL_WEEKS} · ${halteroDay.lifts.map((l) => l.format.split('· ').pop()).join(', ')}`;
   }
-  if (program.method === 'mayhem-base' || program.method === 'mayhem-tecnica') {
-    const isTecnica = program.method === 'mayhem-tecnica';
-    const mayhemDay = isTecnica
-      ? resolveMayhemTecnicaDay(program, dayPlan, profile.prs, 1, now)
-      : resolveMayhemBaseDay(program, dayPlan, profile.prs, 1, now);
+  if (program.method === 'mayhem-base' || program.method === 'mayhem-tecnica' || program.method === 'mayhem-pico') {
+    const spec =
+      program.method === 'mayhem-tecnica'
+        ? { resolve: resolveMayhemTecnicaDay, total: MAYHEM_TECNICA_TOTAL_WEEKS }
+        : program.method === 'mayhem-pico'
+          ? { resolve: resolveMayhemPicoDay, total: MAYHEM_PICO_TOTAL_WEEKS }
+          : { resolve: resolveMayhemBaseDay, total: MAYHEM_BASE_TOTAL_WEEKS };
+    const mayhemDay = spec.resolve(program, dayPlan, profile.prs, 1, now);
     if (!mayhemDay) return null;
-    const total = isTecnica ? MAYHEM_TECNICA_TOTAL_WEEKS : MAYHEM_BASE_TOTAL_WEEKS;
-    return `Semana ${mayhemDay.weekNumber}/${total} · ${mayhemDay.lifts.map((l) => l.format.split('· ').pop()).join(', ')}`;
+    return `Semana ${mayhemDay.weekNumber}/${spec.total} · ${mayhemDay.lifts.map((l) => l.format.split('· ').pop()).join(', ')}`;
   }
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, toLocalIsoDate(now));
   const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek, avoidedPatterns, profile.variantPrs);
@@ -729,7 +733,7 @@ export function Objetivos() {
             const liftsLabel =
               p.method === 'haltero'
                 ? 'Snatch · Clean & Jerk · Tirones · Sentadilla'
-                : p.method === 'mayhem-base' || p.method === 'mayhem-tecnica'
+                : p.method === 'mayhem-base' || p.method === 'mayhem-tecnica' || p.method === 'mayhem-pico'
                   ? 'Snatch · Clean & Jerk · Complejos · Sentadilla'
                   : lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ');
 
@@ -880,7 +884,9 @@ export function Objetivos() {
                                   ? MAYHEM_BASE_TOTAL_WEEKS
                                   : method === 'mayhem-tecnica'
                                     ? MAYHEM_TECNICA_TOTAL_WEEKS
-                                    : null;
+                                    : method === 'mayhem-pico'
+                                      ? MAYHEM_PICO_TOTAL_WEEKS
+                                      : null;
                           if (fixedWeeks !== null && prev.method !== method) {
                             const end = new Date(`${prev.startDate}T00:00:00`);
                             end.setDate(end.getDate() + fixedWeeks * 7 - 1);
@@ -906,7 +912,8 @@ export function Objetivos() {
 
             {programDraft.method !== 'haltero' &&
               programDraft.method !== 'mayhem-base' &&
-              programDraft.method !== 'mayhem-tecnica' && (
+              programDraft.method !== 'mayhem-tecnica' &&
+              programDraft.method !== 'mayhem-pico' && (
               <div>
                 <p className="mb-2 text-sm font-medium text-neutral-300">Levantamientos</p>
                 <div className="flex flex-wrap gap-2">
@@ -933,7 +940,10 @@ export function Objetivos() {
             )}
 
             <p className="text-xs text-neutral-600">
-              {programDraft.method === 'haltero' || programDraft.method === 'mayhem-base' || programDraft.method === 'mayhem-tecnica'
+              {programDraft.method === 'haltero' ||
+              programDraft.method === 'mayhem-base' ||
+              programDraft.method === 'mayhem-tecnica' ||
+              programDraft.method === 'mayhem-pico'
                 ? 'Mientras esté activo, tu día se reduce a calentamiento + los levantamientos de olímpico/sentadilla que toquen esa semana + enfriamiento — el ciclo ya trae fijos los movimientos de cada día, no hace falta elegir. Puedes añadir un WOD aparte cualquier día desde Planificación.'
                 : 'Mientras esté activo, tu día se reduce a calentamiento + este levantamiento + enfriamiento. Puedes añadir un WOD aparte cualquier día desde Planificación, incluido el que tocaría según tu macrociclo.'}
             </p>
@@ -945,6 +955,7 @@ export function Objetivos() {
                   programDraft.method !== 'haltero' &&
                   programDraft.method !== 'mayhem-base' &&
                   programDraft.method !== 'mayhem-tecnica' &&
+                  programDraft.method !== 'mayhem-pico' &&
                   programDraft.lifts.length === 0
                 }
                 className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50"

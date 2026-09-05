@@ -16,6 +16,7 @@ import { parseLadder } from './ladderProgram';
 
 export const MAYHEM_BASE_TOTAL_WEEKS = 6;
 export const MAYHEM_TECNICA_TOTAL_WEEKS = 4;
+export const MAYHEM_PICO_TOTAL_WEEKS = 8;
 
 type MayhemBlock = 'oly' | 'strength' | 'accessory';
 
@@ -382,6 +383,244 @@ const MAYHEM_TECNICA: MayhemWeek[] = [
   ],
 ];
 
+// --- Ciclo 4 (8 semanas x 5 días) — peaking / prep de competición --------
+// Complejos de tirón largos, "off the blocks" (bloques a la altura de la rodilla), déficit, olas de
+// intensidad (sube-baja-sube el % dentro de la serie) y simulacros de "sube a un single pesado en X
+// minutos". Semana 8 = MAX OUT en snatch / clean & jerk / front squat.
+
+/** Día 5 estándar del ciclo: simulacro de competición (subir a un single pesado en X minutos). */
+const PICO_D5_15_10: MayhemDay = [
+  snZ({ label: 'Snatch — single del día (15 min)', movementId: 'snatch', percent: 0.88, sets: 1, reps: '1', note: 'Sube a un single pesado del día en 15 min.' }),
+  cjZ({ label: 'Clean & Jerk — single del día (15 min)', movementId: 'clean-and-jerk', percent: 0.88, sets: 1, reps: '1', note: 'Sube a un single pesado del día en 15 min.' }),
+  snZ({ label: 'Snatch — single (10 min)', movementId: 'snatch', percent: 0.9, sets: 1, reps: '1', note: 'Otra vez: single pesado en 10 min.' }),
+  cjZ({ label: 'Clean & Jerk — single (10 min)', movementId: 'clean-and-jerk', percent: 0.9, sets: 1, reps: '1', note: 'Otra vez: single pesado en 10 min.' }),
+  snZ({ label: 'Back Squat — single (6 series)', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', percent: 0.9, sets: 1, reps: '1', note: 'Sube a un single pesado en 6 series.' }),
+];
+
+const MAYHEM_PICO: MayhemWeek[] = [
+  // ===== SEMANA 1 =====
+  [
+    [
+      snZ({ label: 'Pause Snatch Pull + Power Snatch + Panda Pull + Snatch', movementId: 'snatch', ladder: '60/4×2 65/4×2', complex: ['Pause snatch pull', 'Power snatch', 'Panda pull', 'Snatch'], note: '(1+1+1+1) por serie, sin soltar.' }),
+      snZ({ label: 'Snatch', movementId: 'snatch', ladder: '70/3×2 75/2×2 80/1×2' }),
+      snZ({ label: 'Snatch Deadlift + High Hang Shrug', movementId: 'snatch-shrug', percent: 0.9, sets: 3, reps: '3+5', note: '(3 snatch deadlift + 5 high-hang shrug) por serie al 90% del snatch.' }),
+      snZ({ label: 'In-the-Hole Front Squat', movementId: 'in-the-hole-front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.7, sets: 5, reps: '3', note: 'Pausa larga en el fondo.' }),
+    ],
+    [
+      cjZ({ label: 'Push Press — a un tope (10 min)', movementId: 'push-press', block: 'strength', percent: 0.6, sets: 1, reps: '1', note: 'Sube a un push press pesado en 10 min. % sobre tu clean & jerk.' }),
+      cjZ({ label: 'Pause Jerk Dip + Push Jerk + Jerk Dip + Jerk', movementId: 'push-jerk', percent: 0.72, sets: 4, reps: '1+1+1+1', complex: ['Pause jerk dip', 'Push jerk', 'Jerk dip', 'Jerk'], note: '70-75% de tu mejor push jerk.' }),
+      clZ({ label: 'Power Clean + Front Squat + Pause Squat Clean + Jerk', movementId: 'power-clean', percent: 0.75, sets: 5, reps: '1+1+1+1', complex: ['Power clean', 'Front squat', 'Pause squat clean', 'Jerk'], note: 'Sube a una serie pesada.' }),
+      clZ({ label: 'Clean Deadlift', movementId: 'clean-deadlift', percent: 0.9, sets: 4, reps: '3', note: 'Entre series: KB single-leg RDL 7/pierna.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch — olas', movementId: 'power-snatch', ladder: '65/3 70/2 75/1 70/3 75/2 80/1 82/1 82/1', note: '% sobre tu power snatch. Los dos últimos singles: 80%+.' }),
+      clZ({ label: 'Power Clean + Push Jerk — olas', movementId: 'power-clean', ladder: '65/3 70/2 75/1 70/3 75/2 80/1 82/1 82/1', complex: ['Power clean', 'Push jerk'], note: '% sobre tu power clean. Los dos últimos: 80%+.' }),
+      snZ({ label: 'Front Squat + Back Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.7, sets: 5, reps: '2+3', complex: ['Front squat', 'Back squat'], note: 'Sube el peso cada serie.' }),
+    ],
+    [
+      snZ({ label: 'Snatch desde Bloques (encima de rodilla)', movementId: 'off-blocks-snatch', ladder: '65/3 70/2 75/1 70/3 75/2 80/1 82/1', note: 'Sube, baja y vuelve a subir.' }),
+      clZ({ label: 'Clean Pull + Clean + Jerk desde Bloques', movementId: 'off-blocks-clean', percent: 0.75, sets: 5, reps: '1+1+2', complex: ['Clean pull', 'Clean', 'Jerk'], note: 'Sube el peso cada serie. Bloques a la altura de la rodilla.' }),
+      clZ({ label: 'Deficit Clean Deadlift (4")', movementId: 'deficit-deadlift', block: 'strength', prKey: 'clean', percent: 0.9, sets: 4, reps: '3', note: 'De pie sobre un disco de 4", agarre de clean.' }),
+    ],
+    PICO_D5_15_10,
+  ],
+
+  // ===== SEMANA 2 =====
+  [
+    [
+      snZ({ label: 'Snatch DL a medio muslo + High Pull (suelo) + Snatch', movementId: 'snatch', ladder: '65/3 70/3 75/3', complex: ['Snatch deadlift a medio muslo', 'Snatch high pull (desde suelo)', 'Snatch'], note: '(1+1+1) por serie.' }),
+      snZ({ label: 'Snatch High Pull + Snatch', movementId: 'snatch', percent: 0.82, sets: 1, reps: '1+1', complex: ['Snatch high pull', 'Snatch'], note: '80-85% del snatch.' }),
+      snZ({ label: 'Snatch Deficit Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 0.95, sets: 5, reps: '3', note: 'Entre series: 10 single-arm DB deadlift (DB por fuera de los pies).' }),
+      snZ({ label: 'In-the-Hole Front Squat', movementId: 'in-the-hole-front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.75, sets: 6, reps: '2', note: 'Entre series: 5 tall box jumps.' }),
+    ],
+    [
+      cjZ({ label: 'Pause Clean + Clean + Jerk Dip + Jerk', movementId: 'clean-and-jerk', percent: 0.75, sets: 3, reps: '1+1+1+1', complex: ['Pause clean', 'Clean', 'Jerk dip', 'Jerk'] }),
+      cjZ({ label: 'Clean & Jerk — 4 singles', movementId: 'clean-and-jerk', percent: 0.85, sets: 4, reps: '1', note: 'Sube en peso desde el complejo anterior.' }),
+      clZ({ label: '3-Position Halting Clean Deadlift', movementId: 'halting-deadlift', block: 'strength', prKey: 'clean', percent: 0.95, sets: 5, reps: '3', note: '3 posiciones con parada. 90-100% del clean.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch — olas', movementId: 'power-snatch', ladder: '70/3 75/2 80/1 75/3 80/2 85/1 87/1 87/1', note: '% sobre tu power snatch. Los dos últimos: 85%+.' }),
+      clZ({ label: 'Power Clean + Push Jerk — olas', movementId: 'power-clean', ladder: '70/3 75/2 80/1 75/3 80/2 80/1 82/1 82/1', complex: ['Power clean', 'Push jerk'], note: '% sobre tu power clean.' }),
+      snZ({ label: 'Front Squat + Back Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.72, sets: 5, reps: '3+3', complex: ['Front squat', 'Back squat'] }),
+    ],
+    [
+      cjZ({ label: 'Jerk desde nuca — a un tope (10 min)', movementId: 'split-jerk', percent: 0.8, sets: 1, reps: '1', note: 'Sube a un jerk desde nuca pesado en 10 min.' }),
+      snZ({ label: 'Power Snatch + Snatch desde Bloques (media rodilla)', movementId: 'off-blocks-snatch', percent: 0.75, sets: 5, reps: '1+1', complex: ['Power snatch', 'Snatch'] }),
+      clZ({ label: 'Clean High Pull + Clean + Jerk desde Bloques', movementId: 'off-blocks-clean', percent: 0.75, sets: 5, reps: '1+1+2', complex: ['Clean high pull', 'Clean', 'Jerk'], note: 'Sube el peso cada serie.' }),
+      clZ({ label: 'Deficit Clean Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'clean', percent: 0.95, sets: 4, reps: '3' }),
+    ],
+    PICO_D5_15_10,
+  ],
+
+  // ===== SEMANA 3 =====
+  [
+    [
+      snZ({ label: 'Snatch Pull + High Pull + Snatch', movementId: 'snatch', ladder: '70/3 75/3 80/3', complex: ['Snatch pull', 'Snatch high pull', 'Snatch'], note: '(1+1+1) por serie.' }),
+      snZ({ label: 'Snatch Pull + Snatch', movementId: 'snatch', ladder: '82/2 88/2', complex: ['Snatch pull', 'Snatch'], note: '(1+1): 80-85% y luego 85-90%.' }),
+      snZ({ label: 'Snatch — 3 singles', movementId: 'snatch', percent: 0.92, sets: 3, reps: '1', note: '90-95% del snatch.' }),
+      snZ({ label: 'Snatch Deficit Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.0, sets: 4, reps: '3', note: '100% de tu mejor snatch.' }),
+      snZ({ label: 'In-the-Hole FS + 1¼ FS + FS', movementId: 'in-the-hole-front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.9, sets: 6, reps: '1+1+1', complex: ['In-the-hole front squat', '1¼ front squat', 'Front squat'], note: 'Referencia: 85-100% de tu clean.' }),
+    ],
+    [
+      cjZ({ label: 'DL a medio muslo + Pause Clean (3s) + Clean + Jerk Dip + Jerk', movementId: 'clean-and-jerk', percent: 0.7, sets: 3, reps: '1+1+1+1+1', complex: ['Deadlift a medio muslo', 'Pause clean (3s recepción)', 'Clean', 'Jerk dip', 'Jerk'], note: '65-75% del clean.' }),
+      cjZ({ label: 'Clean DL a medio muslo + Clean + Jerk — 4 singles', movementId: 'clean-and-jerk', percent: 0.85, sets: 4, reps: '1', complex: ['Clean deadlift a medio muslo', 'Clean', 'Jerk'], note: '80-90% del clean.' }),
+      clZ({ label: '3-Position Halting Clean Deadlift', movementId: 'halting-deadlift', block: 'strength', prKey: 'clean', percent: 1.02, sets: 5, reps: '3', note: '100-105% del clean.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch — olas con descansos', movementId: 'power-snatch', ladder: '70/3 75/2 80/1 75/3 80/2 85/1 87/1 87/1', note: 'Descanso 2 min tras cada tramo de 3, 1 min antes de cada single final. % sobre tu power snatch.' }),
+      clZ({ label: 'Clean desde encima de rodilla + Jerk', movementId: 'hang-clean', percent: 0.85, sets: 5, reps: '1+1', complex: ['Clean desde encima de rodilla', 'Jerk'], note: '80-90% de tu power clean.' }),
+      snZ({ label: 'Front Squat + Back Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.75, sets: 5, reps: '2+2', complex: ['Front squat', 'Back squat'], note: 'Sube el peso cada serie.' }),
+    ],
+    [
+      snZ({ label: 'Snatch desde Bloques (medio muslo) — olas', movementId: 'off-blocks-snatch', ladder: '65/3 70/2 75/1 70/3 75/2 80/1 82/1', note: '% sobre tu snatch.' }),
+      clZ({ label: 'Power Clean + Push Jerk desde Bloques — olas', movementId: 'off-blocks-clean', ladder: '65/3 70/2 75/1 70/3 75/2 80/1 82/1', complex: ['Power clean', 'Push jerk'], note: '% sobre tu clean.' }),
+      clZ({ label: 'Deficit Clean Deadlift (4")', movementId: 'deficit-deadlift', block: 'strength', prKey: 'clean', percent: 0.95, sets: 4, reps: '3' }),
+    ],
+    [
+      snZ({ label: 'Snatch — single del día (15 min)', movementId: 'snatch', percent: 0.9, sets: 1, reps: '1', note: 'Sube a un single pesado del día en 15 min.' }),
+      cjZ({ label: 'Clean & Jerk — single del día (15 min)', movementId: 'clean-and-jerk', percent: 0.9, sets: 1, reps: '1', note: 'Sube a un single pesado del día en 15 min.' }),
+      snZ({ label: 'Snatch — 2º intento (10 min)', movementId: 'snatch', percent: 0.93, sets: 1, reps: '1', note: 'Segundo intento: single pesado en 10 min.' }),
+      snZ({ label: 'Back Squat — single (6 series)', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', percent: 0.92, sets: 6, reps: '1', note: 'Sube a un single pesado en 6 series.' }),
+    ],
+  ],
+
+  // ===== SEMANA 4 ("sube si te sientes bien") =====
+  [
+    [
+      snZ({ label: 'Snatch Pull a medio muslo + Snatch', movementId: 'snatch', percent: 0.75, sets: 5, reps: '1+1', complex: ['Snatch pull a medio muslo', 'Snatch'] }),
+      snZ({ label: 'Snatch Deficit Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.05, sets: 3, reps: '3', note: '105% de tu mejor snatch.' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.8, sets: 6, reps: '2' }),
+    ],
+    [
+      clZ({ label: 'Power Clean + Jerk Dip + Jerk', movementId: 'power-clean', percent: 0.72, sets: 3, reps: '1+1+1', complex: ['Power clean', 'Jerk dip', 'Jerk'] }),
+      clZ({ label: 'Power Clean + Jerk', movementId: 'power-clean', percent: 0.78, sets: 3, reps: '1+1', complex: ['Power clean', 'Jerk'], note: 'Si te sientes bien, sube el peso.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch', movementId: 'power-snatch', ladder: '72/3 75/3 80/2 84/2 88/1 90/1', note: 'Sube a 80-90% de tu power snatch.' }),
+      clZ({ label: 'Clean (1" del suelo, de arriba a abajo) + Jerk', movementId: 'clean-and-jerk', percent: 0.82, sets: 5, reps: '1+1', complex: ['Clean (1" del suelo, top-down)', 'Jerk'], note: '80-85% del clean.' }),
+      snZ({ label: 'Front Squat + Back Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.82, sets: 5, reps: '1+2', complex: ['Front squat', 'Back squat'], note: '80-85% del front squat.' }),
+    ],
+    [
+      snZ({ label: 'Snatch desde Bloques (encima de rodilla)', movementId: 'off-blocks-snatch', ladder: '60/3 65/2 70/1 65/3 70/2 75/1 75/1', note: '% sobre tu snatch.' }),
+      clZ({ label: 'Power Clean + Push Jerk — olas', movementId: 'power-clean', ladder: '65/2 70/2 75/1 70/2 75/2 75/1', complex: ['Power clean', 'Push jerk'], note: '% sobre tu power clean.' }),
+      clZ({ label: 'Deficit Clean Deadlift (4")', movementId: 'deficit-deadlift', block: 'strength', prKey: 'clean', percent: 1.0, sets: 3, reps: '3' }),
+    ],
+    [
+      snZ({ label: 'Snatch — 3 singles', movementId: 'snatch', percent: 0.82, sets: 3, reps: '1', note: 'Sube a 80-85% y haz 3 singles ahí.' }),
+      cjZ({ label: 'Clean & Jerk — 2 singles', movementId: 'clean-and-jerk', percent: 0.82, sets: 2, reps: '1', note: 'Sube a 80-85% y haz 2 singles ahí.' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.9, sets: 3, reps: '1', note: 'Referencia: 100% de tu clean.' }),
+    ],
+  ],
+
+  // ===== SEMANA 5 =====
+  [
+    [
+      snZ({ label: 'Snatch DL bajo rodilla + Snatch Pull (pausa 1s arriba) + Snatch', movementId: 'snatch', percent: 0.75, sets: 4, reps: '1+1+1', complex: ['Snatch deadlift bajo rodilla', 'Snatch pull (pausa 1s arriba)', 'Snatch'], note: '70-80% del snatch.' }),
+      snZ({ label: 'Snatch DL bajo rodilla + Snatch', movementId: 'snatch', percent: 0.82, sets: 3, reps: '1+1', complex: ['Snatch deadlift bajo rodilla', 'Snatch'], note: '80-85% del snatch.' }),
+      snZ({ label: 'Snatch Deadlift', movementId: 'snatch-deadlift', percent: 1.0, sets: 3, reps: '3', note: '100% de tu mejor snatch.' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.72, sets: 5, reps: '5', note: 'Entre series: 5 tall box jumps.' }),
+    ],
+    [
+      cjZ({ label: 'Clean DL bajo rodilla + Clean DL a medio muslo + Clean + Jerk', movementId: 'clean-and-jerk', percent: 0.8, sets: 5, reps: '1+1+1+1', complex: ['Clean deadlift bajo rodilla', 'Clean deadlift a medio muslo', 'Clean', 'Jerk'], note: '70-85% del C&J.' }),
+      cjZ({ label: 'Clean & Jerk — 3 singles', movementId: 'clean-and-jerk', percent: 0.88, sets: 3, reps: '1', note: '85-90% del C&J.' }),
+      dl({ label: 'Peso Muerto', movementId: 'deadlift', percent: 0.7, sets: 5, reps: '5', note: 'Entre series: 5 KB single-leg deadlift/pierna.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch + Snatch Balance + Snatch', movementId: 'power-snatch', percent: 0.8, sets: 5, reps: '1+1+1', complex: ['Power snatch', 'Snatch balance', 'Snatch'], note: '75-85% del power snatch.' }),
+      clZ({ label: 'Power Clean + Clean + Jerk + Jerk desde nuca', movementId: 'power-clean', percent: 0.8, sets: 4, reps: '1+1+1+1', complex: ['Power clean', 'Clean', 'Jerk', 'Jerk desde nuca'], note: '75-85% del power clean.' }),
+      snZ({ label: 'Back Squat + Front Squat', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', percent: 0.75, sets: 5, reps: '5+1', complex: ['Back squat', 'Front squat'] }),
+    ],
+    [
+      snZ({ label: 'Snatch desde Bloques (encima de rodilla) — olas', movementId: 'off-blocks-snatch', ladder: '70/3 75/2 80/1 75/3 80/2 85/1 87/1', note: '% sobre tu snatch.' }),
+      clZ({ label: 'Clean desde Bloques + Jerk — olas', movementId: 'off-blocks-clean', ladder: '70/2 75/2 80/1 75/2 80/2 85/1 87/1', complex: ['Clean', 'Jerk'], note: '% sobre tu clean.' }),
+      snZ({ label: 'Deficit Snatch Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.0, sets: 3, reps: '3' }),
+    ],
+    PICO_D5_15_10,
+  ],
+
+  // ===== SEMANA 6 (4 días) =====
+  [
+    [
+      snZ({ label: 'Snatch DL media rodilla + Snatch DL medio muslo + Snatch', movementId: 'snatch', percent: 0.78, sets: 3, reps: '1+1+1', complex: ['Snatch deadlift a media rodilla', 'Snatch deadlift a medio muslo', 'Snatch'], note: '75-80% del snatch.' }),
+      snZ({ label: 'Snatch DL medio muslo + Snatch', movementId: 'snatch', percent: 0.85, sets: 3, reps: '1+1', complex: ['Snatch deadlift a medio muslo', 'Snatch'], note: '80-87% del snatch.' }),
+      snZ({ label: 'Snatch Deficit Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.05, sets: 3, reps: '3', note: '105% de tu mejor snatch.' }),
+      snZ({ label: 'In-the-Hole Front Squat', movementId: 'in-the-hole-front-squat', block: 'strength', prKey: 'frontSquat', ladder: '78/3 80/3 84/2 86/2 90/1 92/1 93/1' }),
+    ],
+    [
+      cjZ({ label: 'Pause Clean (3s) + Clean + Pause Jerk (3s)', movementId: 'clean-and-jerk', percent: 0.72, sets: 3, reps: '1+1+1', complex: ['Pause clean (3s recepción)', 'Clean', 'Pause jerk (3s recepción)'], note: '70-75% del C&J.' }),
+      cjZ({ label: 'Clean & Jerk — 3 singles', movementId: 'clean-and-jerk', percent: 0.9, sets: 3, reps: '1', note: 'Sube en peso desde el complejo (80-95% del C&J).' }),
+      dl({ label: 'Peso Muerto', movementId: 'deadlift', percent: 0.75, sets: 4, reps: '4', note: 'Más pesado que las series de 5 de la semana pasada.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch directo a OHS (pausa 1s)', movementId: 'power-snatch', ladder: '60/3 65/3 70/2 75/2 80/1 80/1', complex: ['Power snatch', 'Overhead squat'], note: 'Pausa 1s en la recepción y luego squat. % sobre tu power snatch.' }),
+      clZ({ label: 'Power Clean + Push Jerk — olas', movementId: 'power-clean', ladder: '70/2 75/2 80/1 75/2 80/2 85/1 80/2 90/1', complex: ['Power clean', 'Push jerk'], note: '% sobre tu power clean.' }),
+      snZ({ label: 'Front Squat + Back Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.75, sets: 5, reps: '3+3', complex: ['Front squat', 'Back squat'] }),
+    ],
+    PICO_D5_15_10,
+  ],
+
+  // ===== SEMANA 7 =====
+  [
+    [
+      snZ({ label: 'Snatch Pull + High Pull + Snatch', movementId: 'snatch', percent: 0.82, sets: 5, reps: '1+1+1', complex: ['Snatch pull', 'Snatch high pull', 'Snatch'], note: 'Sube de 65-70% a 80-85% a lo largo de las series.' }),
+      snZ({ label: 'Snatch — 3 singles', movementId: 'snatch', percent: 0.9, sets: 3, reps: '1', note: '85-93% del snatch.' }),
+      snZ({ label: 'Snatch Deficit Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.05, sets: 3, reps: '3' }),
+      snZ({ label: 'FS + 1¼ FS + FS', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 1.0, sets: 5, reps: '1+1+1', complex: ['Front squat', '1¼ front squat', 'Front squat'], note: 'Referencia: 90-110% de tu clean.' }),
+    ],
+    [
+      cjZ({ label: 'DL a 1" + DL media rodilla + DL medio muslo + Clean + Jerk', movementId: 'clean-and-jerk', percent: 0.78, sets: 3, reps: '1+1+1+1+1', complex: ['Deadlift a 1"', 'Deadlift a media rodilla', 'Deadlift a medio muslo', 'Clean', 'Jerk'], note: '70-80% del C&J.' }),
+      cjZ({ label: 'Clean DL medio muslo + Clean + Jerk — 4 singles', movementId: 'clean-and-jerk', percent: 0.9, sets: 4, reps: '1', complex: ['Clean deadlift a medio muslo', 'Clean', 'Jerk'], note: '85-95% del C&J.' }),
+      dl({ label: 'Peso Muerto', movementId: 'deadlift', percent: 0.82, sets: 4, reps: '3', note: 'Más pesado que la serie de 4 de la semana pasada.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch + Pause Snatch (3s)', movementId: 'power-snatch', percent: 0.78, sets: 4, reps: '1+1', complex: ['Power snatch', 'Pause snatch (3s recepción)'], note: '70-80% del snatch.' }),
+      cjZ({ label: 'Clean (1" del suelo, top-down) + Jerk', movementId: 'clean-and-jerk', percent: 0.88, sets: 4, reps: '1+1', complex: ['Clean (1" del suelo, top-down)', 'Jerk'], note: '80-95% del C&J.' }),
+      snZ({ label: 'Front Squat + Back Squat + Goblet Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.75, sets: 5, reps: '2+2+10', complex: ['Front squat', 'Back squat', 'Goblet squat'] }),
+    ],
+    [
+      snZ({ label: 'Snatch desde Bloques (encima de rodilla) — olas', movementId: 'off-blocks-snatch', ladder: '65/3 70/2 75/1 70/3 75/2 80/1 85/1', note: '% sobre tu snatch.' }),
+      clZ({ label: 'Power Clean + Push Jerk desde Bloques — olas', movementId: 'off-blocks-clean', ladder: '65/3 70/2 75/1 70/3 75/2 80/1 80/1 80/1', complex: ['Power clean', 'Push jerk'], note: '% sobre tu clean.' }),
+      snZ({ label: 'Deficit Snatch Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.05, sets: 3, reps: '3' }),
+    ],
+    [
+      snZ({ label: 'Snatch — single (10 min)', movementId: 'snatch', percent: 0.92, sets: 1, reps: '1', note: 'Sube a un single pesado en 10 min.' }),
+      cjZ({ label: 'Clean & Jerk — single (10 min)', movementId: 'clean-and-jerk', percent: 0.92, sets: 1, reps: '1', note: 'Sube a un single pesado en 10 min.' }),
+      snZ({ label: 'Snatch — single (5 min)', movementId: 'snatch', percent: 0.95, sets: 1, reps: '1', note: 'Otra vez: single pesado en 5 min.' }),
+      cjZ({ label: 'Clean & Jerk — single (5 min)', movementId: 'clean-and-jerk', percent: 0.95, sets: 1, reps: '1', note: 'Otra vez: single pesado en 5 min.' }),
+      snZ({ label: 'Back Squat — single (6 series)', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', percent: 0.93, sets: 1, reps: '1', note: 'Sube a un single pesado en 6 series.' }),
+    ],
+  ],
+
+  // ===== SEMANA 8 (MAX OUT) =====
+  [
+    [
+      snZ({ label: 'Snatch DL a medio muslo + Snatch', movementId: 'snatch', percent: 0.78, sets: 5, reps: '1+1', complex: ['Snatch deadlift a medio muslo', 'Snatch'], note: '75-80% del snatch.' }),
+      snZ({ label: 'Snatch Deficit Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.05, sets: 3, reps: '3' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', ladder: '78/5 83/4 88/3 92/2 95/1', note: 'Sube a un peso exigente.' }),
+    ],
+    [
+      clZ({ label: 'Power Clean + Jerk + Power Clean', movementId: 'power-clean', percent: 0.78, sets: 3, reps: '1+1+1', complex: ['Power clean', 'Jerk', 'Power clean'], note: '75-80% del power clean.' }),
+      clZ({ label: 'Power Clean & Jerk', movementId: 'power-clean', percent: 0.82, sets: 3, reps: '1+1', complex: ['Power clean', 'Jerk'], note: '80-85% del power clean.' }),
+      dl({ label: 'Peso Muerto — a un tope (10 min)', movementId: 'deadlift', percent: 0.85, sets: 1, reps: '1', note: 'Sube a un single pesado en 10 min.' }),
+    ],
+    [
+      snZ({ label: 'Power Snatch — a un tope', movementId: 'power-snatch', ladder: '72/3 75/3 80/2 84/2 88/1 92/1', note: 'Sube a un single pesado.' }),
+      cjZ({ label: 'Clean (1" del suelo, top-down) + Jerk', movementId: 'clean-and-jerk', percent: 0.8, sets: 3, reps: '1+1', complex: ['Clean (1" del suelo, top-down)', 'Jerk'], note: '80% del C&J.' }),
+      snZ({ label: 'Back Squat — a un tope', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', ladder: '78/5 83/4 88/3 92/2 96/1', note: 'Sube a un single pesado.' }),
+    ],
+    [
+      snZ({ label: 'Snatch desde Bloques (medio muslo) — 3 singles', movementId: 'off-blocks-snatch', percent: 0.78, sets: 3, reps: '1', note: 'Sube a 70-80% y haz 3 singles ahí.' }),
+      clZ({ label: 'Power Clean desde Bloques (medio muslo) + Jerk — 3 singles', movementId: 'off-blocks-clean', percent: 0.78, sets: 3, reps: '1+1', complex: ['Power clean', 'Jerk'], note: 'Sube a 75-80% y haz 3 singles ahí.' }),
+      snZ({ label: 'Deficit Snatch Deadlift', movementId: 'deficit-deadlift', block: 'strength', prKey: 'snatch', percent: 1.0, sets: 3, reps: '3' }),
+    ],
+    [
+      snZ({ label: 'Snatch — MAX OUT', movementId: 'snatch', percent: 1.0, isMaxAttempt: true, sets: 1, reps: '1', note: 'Día de MAX OUT — busca un nuevo 1RM de snatch.' }),
+      cjZ({ label: 'Clean & Jerk — MAX OUT', movementId: 'clean-and-jerk', percent: 1.0, isMaxAttempt: true, sets: 1, reps: '1', note: 'Día de MAX OUT — busca un nuevo 1RM de clean & jerk.' }),
+      snZ({ label: 'Front Squat — MAX OUT', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 1.0, isMaxAttempt: true, sets: 1, reps: '1', note: 'Día de MAX OUT — busca un nuevo 1RM de front squat.' }),
+    ],
+  ],
+];
+
 export interface MayhemDayResult {
   weekNumber: number;
   lifts: {
@@ -543,4 +782,15 @@ export function resolveMayhemTecnicaDay(
   today: Date,
 ): MayhemDayResult | null {
   return resolveMayhemCycleDay(MAYHEM_TECNICA, MAYHEM_TECNICA_TOTAL_WEEKS, 'Mayhem Técnica', program, dayPlan, prs, autoregFactor, today);
+}
+
+/** Día de hoy en el Ciclo 4 ("mayhem-pico", 8 semanas de peaking, termina en MAX OUT). */
+export function resolveMayhemPicoDay(
+  program: StrengthProgram,
+  dayPlan: DayPlan,
+  prs: PersonalRecords,
+  autoregFactor: number,
+  today: Date,
+): MayhemDayResult | null {
+  return resolveMayhemCycleDay(MAYHEM_PICO, MAYHEM_PICO_TOTAL_WEEKS, 'Mayhem Pico', program, dayPlan, prs, autoregFactor, today);
 }

@@ -1,4 +1,4 @@
-import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, Dumbbell, Flame, Timer, type LucideIcon } from 'lucide-react';
+import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, Dumbbell, Flame, Timer, Trophy, type LucideIcon } from 'lucide-react';
 import type { StrengthMethod } from '../../data/athlete/types';
 
 export interface StrengthMethodMeta {
@@ -68,9 +68,14 @@ export const STRENGTH_METHOD_META: Record<StrengthMethod, StrengthMethodMeta> = 
     blurb: 'Mini-bloque Mayhem de posiciones, pausas y tempo: pausa de 3 s en OHS y snatch balance, tempo 32X1 en sentadilla, halting deadlift, complejos lentos. Poco volumen de squat, mucha técnica controlada — ideal como puente entre bloques o antes de competir.',
     Icon: Timer,
   },
+  'mayhem-pico': {
+    label: 'Mayhem Burgener — Pico (8 semanas)',
+    blurb: 'Bloque de peaking / prep de competición: complejos de tirón largos, trabajo "desde bloques" a la altura de la rodilla, déficit, olas de intensidad y simulacros de "sube a un single pesado en 15/10 min". La semana 8 es un MAX OUT de snatch, clean & jerk y front squat.',
+    Icon: Trophy,
+  },
 };
 
-export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada', 'dieSet', 'mayhem-base', 'mayhem-tecnica'];
+export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada', 'dieSet', 'mayhem-base', 'mayhem-tecnica', 'mayhem-pico'];
 
 /**
  * Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto.
@@ -90,4 +95,5 @@ export const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   dieSet: '#2dd4bf',
   'mayhem-base': '#f59e0b',
   'mayhem-tecnica': '#fb923c',
+  'mayhem-pico': '#fbbf24',
 };

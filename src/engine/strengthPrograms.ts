@@ -21,6 +21,7 @@ export const STRENGTH_METHOD_LABEL: Record<StrengthProgram['method'], string> = 
   dieSet: 'Die Set (autorregulado)',
   'mayhem-base': 'Mayhem Burgener — Base (6 semanas)',
   'mayhem-tecnica': 'Mayhem Burgener — Técnica (4 semanas)',
+  'mayhem-pico': 'Mayhem Burgener — Pico (8 semanas)',
 };
 
 /** Programa cuya ventana [startDate, endDate] contiene la fecha dada, o undefined — mismo criterio que getActiveMacrocycle. */
