@@ -984,6 +984,36 @@ function buildOlyBlock(
   const canUseEmom = week !== 3;
   const useEmom = canUseEmom && rng() < 0.3;
 
+  const repStyleNote =
+    scheme.reps >= 2
+      ? 'Toca y sigue (touch-and-go): encadena las repeticiones sin soltar la barra para acumular volumen técnico.'
+      : 'Repeticiones individuales: resetea la posición por completo en cada una — prioriza la técnica a esta intensidad.';
+  const straightEntry: SessionBlockResult = {
+    block: 'oly',
+    movementId: movement.id,
+    sets: scheme.sets,
+    reps: String(scheme.reps),
+    loadKg,
+    notes: `${baseNote} ${repStyleNote}`,
+  };
+  // "10 singles de calidad" (patrón Mayhem): EMOM largo de una repetición a peso constante — mucho
+  // volumen técnico a intensidad media-alta sin acercarse al fallo.
+  const tenSinglesEntry: SessionBlockResult = {
+    block: 'oly',
+    movementId: movement.id,
+    sets: 10,
+    reps: '1',
+    loadKg,
+    notes: `${baseNote} 10 singles de calidad: 1 repetición cada 60-75 s a un peso constante que puedas clavar las 10 veces (${loadKg} kg) — técnica idéntica en todas.`,
+  };
+  const heavySingleEntry: SessionBlockResult = {
+    block: 'oly',
+    movementId: movement.id,
+    reps: '1',
+    loadKg,
+    notes: `${baseNote} Sube a un single pesado del día: aproxima en 5-7 series y busca el más pesado que salga técnicamente limpio, sin forzar un fallo. Referencia: ${loadKg} kg.`,
+  };
+
   let mainEntry: SessionBlockResult;
   if (useEmom) {
     const emomMinutes = [8, 10, 12][Math.floor(rng() * 3)];
@@ -994,29 +1024,14 @@ function buildOlyBlock(
       loadKg,
       notes: `${baseNote} Formato EMOM ${emomMinutes} min: una repetición técnica cada minuto.`,
     };
-  } else if (week === 3 && rng() < 0.4) {
-    // Semana pico, variante Mayhem: en vez de series fijas, sube a un single pesado del día.
-    mainEntry = {
-      block: 'oly',
-      movementId: movement.id,
-      reps: '1',
-      loadKg,
-      notes: `${baseNote} Sube a un single pesado del día: aproxima en 5-7 series y busca el más pesado que salga técnicamente limpio, sin forzar un fallo. Referencia: ${loadKg} kg.`,
-    };
+  } else if (week === 3) {
+    // Semana pico: variantes Mayhem — subir a un single del día, o 10 singles de calidad; si no, series rectas.
+    const r = rng();
+    mainEntry = r < 0.35 ? heavySingleEntry : r < 0.6 ? tenSinglesEntry : straightEntry;
+  } else if (week === 2 && rng() < 0.22) {
+    mainEntry = tenSinglesEntry;
   } else {
-    const repStyleNote =
-      scheme.reps >= 2
-        ? 'Toca y sigue (touch-and-go): encadena las repeticiones sin soltar la barra para acumular volumen técnico.'
-        : 'Repeticiones individuales: resetea la posición por completo en cada una — prioriza la técnica a esta intensidad.';
-
-    mainEntry = {
-      block: 'oly',
-      movementId: movement.id,
-      sets: scheme.sets,
-      reps: String(scheme.reps),
-      loadKg,
-      notes: `${baseNote} ${repStyleNote}`,
-    };
+    mainEntry = straightEntry;
   }
 
   // Tracción por encima del levantamiento, DESPUÉS del trabajo principal (patrón Mayhem/haltero):
@@ -2008,6 +2023,31 @@ function buildWarmupBlock(
   return [...activacion, ...paraWod];
 }
 
+/**
+ * Prep de barra Burgener (arranque o envion) para los dias de olimpico de un programa de fuerza
+ * (haltero / mayhem): `buildWarmupBlock` solo cubre el patron general, asi que en un dia de snatch o
+ * clean se antepone la secuencia Burgener real con PVC — down&up, codos altos, muscle snatch, snatch
+ * lands a 3 alturas, hang power. Devuelve [] si el dia no lleva ningun levantamiento olimpico
+ * (dia de sentadilla o peso muerto puro).
+ */
+function burgenerBarbellPrep(lifts: { movementId: string; block: string }[]): SessionBlockResult[] {
+  const olyIds = lifts.filter((l) => l.block === 'oly').map((l) => l.movementId);
+  const hasSnatch = olyIds.some((id) => id.includes('snatch'));
+  const hasClean = olyIds.some((id) => id.includes('clean') || id.includes('jerk'));
+  const primerId = hasSnatch ? 'burgener-warmup-snatch' : hasClean ? 'burgener-warmup-clean' : null;
+  if (!primerId) return [];
+  return [
+    {
+      block: 'warmup',
+      movementId: primerId,
+      subgroup: 'Calentamiento de barra',
+      reps: 'PVC · 3-5 reps/posición',
+      notes: 'Antes de cargar la barra: la secuencia Burgener completa con PVC o barra vacía — posiciones y velocidad de codos, no carga.',
+    },
+    { block: 'warmup', movementId: 'barbell-warmup-complex', subgroup: 'Calentamiento de barra', reps: '2-3 rondas' },
+  ];
+}
+
 /** Piezas de cardio suave para el dia de recuperacion activa (bike, row, ski, run, trineo). */
 const RECOVERY_CARDIO_IDS = ['row', 'air-bike', 'ski-erg', 'run', 'sled-push'];
 
@@ -2571,7 +2611,7 @@ export function generateStrengthProgramSession(
       date: dateIso,
       mesocycleWeek: 0,
       isRestDay: false,
-      blocks: [...warmupHaltero, ...halteroBlocks, ...cooldownHaltero],
+      blocks: [...warmupHaltero, ...burgenerBarbellPrep(halteroDay.lifts), ...halteroBlocks, ...cooldownHaltero],
       strengthProgramLabel: `Ciclo Halterofilia · Semana ${halteroDay.weekNumber}/${HALTERO_TOTAL_WEEKS}`,
     };
   }
@@ -2606,6 +2646,7 @@ export function generateStrengthProgramSession(
       isRestDay: false,
       blocks: [
         ...buildWarmupBlock(mayhemPattern, recentIdsMayhem),
+        ...burgenerBarbellPrep(mayhemDay.lifts),
         ...mayhemBlocks,
         ...buildCooldownBlock(mayhemPattern, recentIdsMayhem),
       ],
