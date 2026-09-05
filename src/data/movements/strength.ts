@@ -268,4 +268,30 @@ export const strengthMovements: Movement[] = [
     progressionOf: 'strict-press',
     tags: ['barbell', 'bilateral', 'core-demandante'],
   },
+
+  // --- VARIANTES TECNICAS (BURGENER / MAYHEM) ---
+  {
+    id: 'in-the-hole-front-squat',
+    name: 'In-the-Hole Front Squat',
+    blocks: ['strength', 'oly'],
+    pattern: 'squat',
+    equipment: ['barbell', 'rack'],
+    primaryMuscles: ['cuadriceps', 'core', 'gluteos'],
+    standard: 'Front squat con una pausa larga (3-5 segundos) en el fondo del recorrido manteniendo el torso vertical y los codos altos antes de subir.',
+    scaling: { easier: ['front-squat'], harder: [] },
+    progressionOf: 'front-squat',
+    tags: ['barbell', 'bilateral', 'pausa'],
+  },
+  {
+    id: 'halting-deadlift',
+    name: 'Halting Deadlift',
+    blocks: ['strength'],
+    pattern: 'hinge',
+    equipment: ['barbell'],
+    primaryMuscles: ['cadena posterior', 'espalda baja', 'trapecio'],
+    standard: 'Deadlift con una pausa de 2-3 segundos justo por debajo de la rodilla en la subida, reforzando la posicion de tiron antes de completar la extension.',
+    scaling: { easier: ['deadlift'], harder: ['deficit-deadlift'] },
+    progressionOf: 'deadlift',
+    tags: ['barbell', 'bilateral', 'pausa', 'fuerza-tirada'],
+  },
 ];
