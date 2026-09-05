@@ -19,6 +19,7 @@ export const STRENGTH_METHOD_LABEL: Record<StrengthProgram['method'], string> = 
   haltero: 'Ciclo Halterofilia (14 semanas)',
   temporada: 'Bloque de Temporada (8 semanas)',
   dieSet: 'Die Set (autorregulado)',
+  'mayhem-base': 'Mayhem Burgener — Base (6 semanas)',
 };
 
 /** Programa cuya ventana [startDate, endDate] contiene la fecha dada, o undefined — mismo criterio que getActiveMacrocycle. */

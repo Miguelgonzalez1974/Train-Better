@@ -1,4 +1,4 @@
-import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, Dumbbell, type LucideIcon } from 'lucide-react';
+import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, Dumbbell, Flame, type LucideIcon } from 'lucide-react';
 import type { StrengthMethod } from '../../data/athlete/types';
 
 export interface StrengthMethodMeta {
@@ -58,9 +58,14 @@ export const STRENGTH_METHOD_META: Record<StrengthMethod, StrengthMethodMeta> = 
     blurb: 'Eliges tú el peso cada vez, buscando 8-15 repeticiones a máximo esfuerzo — subes, repites o bajas según lo que hagas la vez anterior. Ninguna semana es igual a otra por diseño.',
     Icon: Dumbbell,
   },
+  'mayhem-base': {
+    label: 'Mayhem Burgener — Base (6 semanas)',
+    blurb: 'Ciclo real de Mayhem Athlete transcrito literal: snatch y clean & jerk con complejos, sentadilla de soporte y días de olas de singles. 5 días/semana, sesgo olímpico para CrossFitters, termina en semana de pico.',
+    Icon: Flame,
+  },
 };
 
-export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada', 'dieSet'];
+export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada', 'dieSet', 'mayhem-base'];
 
 /**
  * Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto.
@@ -78,4 +83,5 @@ export const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   haltero: '#6366f1',
   temporada: '#84cc16',
   dieSet: '#2dd4bf',
+  'mayhem-base': '#f59e0b',
 };

@@ -32,6 +32,7 @@ import type {
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
+import { MAYHEM_BASE_TOTAL_WEEKS, resolveMayhemBaseDay } from '../../engine/mayhemProgram';
 import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
 import { GOAL_TYPE_COLOR, GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
@@ -108,6 +109,11 @@ function todayProgramFormat(program: StrengthProgram, profile: AthleteProfile): 
     const halteroDay = resolveHalteroDay(program, dayPlan, profile.prs, 1, now);
     if (!halteroDay) return null;
     return `Semana ${halteroDay.weekNumber}/${HALTERO_TOTAL_WEEKS} · ${halteroDay.lifts.map((l) => l.format.split('· ').pop()).join(', ')}`;
+  }
+  if (program.method === 'mayhem-base') {
+    const mayhemDay = resolveMayhemBaseDay(program, dayPlan, profile.prs, 1, now);
+    if (!mayhemDay) return null;
+    return `Semana ${mayhemDay.weekNumber}/${MAYHEM_BASE_TOTAL_WEEKS} · ${mayhemDay.lifts.map((l) => l.format.split('· ').pop()).join(', ')}`;
   }
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, toLocalIsoDate(now));
   const day = resolveStrengthProgramDay(program, dayPlan, profile.prs, 1, now, profile.trainingDaysPerWeek, avoidedPatterns, profile.variantPrs);
@@ -714,7 +720,9 @@ export function Objetivos() {
             const liftsLabel =
               p.method === 'haltero'
                 ? 'Snatch · Clean & Jerk · Tirones · Sentadilla'
-                : lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ');
+                : p.method === 'mayhem-base'
+                  ? 'Snatch · Clean & Jerk · Complejos · Sentadilla'
+                  : lifts.map((key) => LIFT_OPTIONS.find((l) => l.key === key)?.label ?? key).join(', ');
 
             if (status === 'activo') {
               const todayFormat = todayProgramFormat(p, profile);
@@ -854,7 +862,14 @@ export function Objetivos() {
                           // fija (14 y 8 semanas respectivamente) — al elegirlos se propone esa fecha de
                           // fin en vez de dejar el default generico de 2 meses, para que el ciclo pueda
                           // llegar hasta su cierre real (3 intentos de 1RM / semana de retest).
-                          const fixedWeeks = method === 'haltero' ? 14 : method === 'temporada' ? TEMPORADA_TOTAL_WEEKS : null;
+                          const fixedWeeks =
+                            method === 'haltero'
+                              ? 14
+                              : method === 'temporada'
+                                ? TEMPORADA_TOTAL_WEEKS
+                                : method === 'mayhem-base'
+                                  ? MAYHEM_BASE_TOTAL_WEEKS
+                                  : null;
                           if (fixedWeeks !== null && prev.method !== method) {
                             const end = new Date(`${prev.startDate}T00:00:00`);
                             end.setDate(end.getDate() + fixedWeeks * 7 - 1);
@@ -878,7 +893,7 @@ export function Objetivos() {
               </div>
             </div>
 
-            {programDraft.method !== 'haltero' && (
+            {programDraft.method !== 'haltero' && programDraft.method !== 'mayhem-base' && (
               <div>
                 <p className="mb-2 text-sm font-medium text-neutral-300">Levantamientos</p>
                 <div className="flex flex-wrap gap-2">
@@ -905,15 +920,15 @@ export function Objetivos() {
             )}
 
             <p className="text-xs text-neutral-600">
-              {programDraft.method === 'haltero'
-                ? 'Mientras esté activo, tu día se reduce a calentamiento + los levantamientos de olimpico/sentadilla que toquen esa semana + enfriamiento — el ciclo ya trae fijos snatch, clean & jerk, tirones, jerks y sentadilla, no hace falta elegir. Puedes añadir un WOD aparte cualquier día desde Planificación.'
+              {programDraft.method === 'haltero' || programDraft.method === 'mayhem-base'
+                ? 'Mientras esté activo, tu día se reduce a calentamiento + los levantamientos de olímpico/sentadilla que toquen esa semana + enfriamiento — el ciclo ya trae fijos los movimientos de cada día, no hace falta elegir. Puedes añadir un WOD aparte cualquier día desde Planificación.'
                 : 'Mientras esté activo, tu día se reduce a calentamiento + este levantamiento + enfriamiento. Puedes añadir un WOD aparte cualquier día desde Planificación, incluido el que tocaría según tu macrociclo.'}
             </p>
 
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={programDraft.method !== 'haltero' && programDraft.lifts.length === 0}
+                disabled={programDraft.method !== 'haltero' && programDraft.method !== 'mayhem-base' && programDraft.lifts.length === 0}
                 className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Guardar programa

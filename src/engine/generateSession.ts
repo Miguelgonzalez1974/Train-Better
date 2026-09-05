@@ -101,6 +101,7 @@ import {
 } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
+import { MAYHEM_BASE_TOTAL_WEEKS, resolveMayhemBaseDay } from './mayhemProgram';
 import { filterAvoidingPain, getAvoidedPatterns, getPainReintroFactor, getPainReintroPatterns } from './painFlags';
 import { getRampFactor, isWodRampActive } from './intensityRamp';
 
@@ -2565,6 +2566,36 @@ export function generateStrengthProgramSession(
       isRestDay: false,
       blocks: [...warmupHaltero, ...halteroBlocks, ...cooldownHaltero],
       strengthProgramLabel: `Ciclo Halterofilia · Semana ${halteroDay.weekNumber}/${HALTERO_TOTAL_WEEKS}`,
+    };
+  }
+
+  // Mayhem Burgener — Base (Ciclo 9): igual que haltero, varios levantamientos por dia con formatos
+  // mixtos (escaleras, esquemas ciclicos, EMOM, complejos). Ver `mayhemProgram.ts`.
+  if (program.method === 'mayhem-base') {
+    const mayhemDay = resolveMayhemBaseDay(program, dayPlan, profile.prs, autoregFactor, date);
+    if (!mayhemDay) return generateOffSeasonSession(profile, history, date);
+
+    const mayhemBlocks: SessionBlockResult[] = mayhemDay.lifts.map((lift) => ({
+      block: lift.block,
+      movementId: lift.movementId,
+      sets: lift.sets,
+      reps: lift.reps,
+      loadKg: lift.loadKg,
+      format: lift.format,
+      notes: `${lift.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`,
+    }));
+    const mayhemPattern = getMovementById(mayhemDay.lifts[0].movementId)!.pattern;
+    const recentIdsMayhem = getRecentMovementIds(history);
+    return {
+      date: dateIso,
+      mesocycleWeek: 0,
+      isRestDay: false,
+      blocks: [
+        ...buildWarmupBlock(mayhemPattern, recentIdsMayhem),
+        ...mayhemBlocks,
+        ...buildCooldownBlock(mayhemPattern, recentIdsMayhem),
+      ],
+      strengthProgramLabel: `Mayhem Base · Semana ${mayhemDay.weekNumber}/${MAYHEM_BASE_TOTAL_WEEKS}`,
     };
   }
 
