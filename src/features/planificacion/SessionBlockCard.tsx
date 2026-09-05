@@ -383,37 +383,55 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
 }
 
 /** Bloque accesorio en giant set/superset: una tarjeta con los movimientos agrupados y la metodologia una sola vez. */
+/** Reps "planas" (solo dígitos/comas/guiones) llevan el sufijo "reps"; "30-45 s" o "10-12/lado" van literales. */
+function repsLabel(reps: string): string {
+  return /^[\d,\-\s]+$/.test(reps) ? `${reps} reps` : reps;
+}
+
 function AccessoryGroupCard({ entries }: { entries: SessionBlockResult[] }) {
-  const format = entries[0]?.format;
-  const notes = entries[0]?.notes;
+  // Agrupa por `format` conservando el orden (Superserie A / Superserie B / Core...): un bloque de
+  // accesorio con un solo format sigue saliendo como una única tarjeta, igual que antes.
+  const groups: { format?: string; notes?: string; items: SessionBlockResult[] }[] = [];
+  for (const entry of entries) {
+    const last = groups[groups.length - 1];
+    if (last && last.format === entry.format) last.items.push(entry);
+    else groups.push({ format: entry.format, notes: entry.notes, items: [entry] });
+  }
 
   return (
-    <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
-      {format && <FormatBadge format={format} />}
-      <div className="flex flex-col gap-2.5">
-        {entries.map((entry, idx) => {
-          const movement = getMovementById(entry.movementId);
-          if (!movement) return null;
-          return (
-            <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                {idx + 1}
-              </span>
-              <div>
-                <p className={NAME_STEP}>{movement.name}</p>
-                {(entry.sets || entry.reps) && (
-                  <p className="text-xs text-neutral-500">
-                    {entry.sets && `${entry.sets} series`}
-                    {entry.sets && entry.reps && ' · '}
-                    {entry.reps && `${entry.reps} reps`}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {notes && <CoachNote text={notes} />}
+    <div className="flex flex-col gap-3">
+      {groups.map((group, gi) => (
+        <div
+          key={gi}
+          className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted"
+        >
+          {group.format && <FormatBadge format={group.format} />}
+          <div className="flex flex-col gap-2.5">
+            {group.items.map((entry, idx) => {
+              const movement = getMovementById(entry.movementId);
+              if (!movement) return null;
+              return (
+                <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <p className={NAME_STEP}>{movement.name}</p>
+                    {(entry.sets || entry.reps) && (
+                      <p className="text-xs text-neutral-500">
+                        {entry.sets && `${entry.sets} series`}
+                        {entry.sets && entry.reps && ' · '}
+                        {entry.reps && repsLabel(entry.reps)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {group.notes && <CoachNote text={group.notes} />}
+        </div>
+      ))}
     </div>
   );
 }

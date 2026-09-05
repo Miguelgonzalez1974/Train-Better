@@ -143,11 +143,14 @@ export function FocusMode({
   const toggleSet = (key: string) => setDoneSets((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const renderChecklist = (entries: Indexed[]) => {
+    // Agrupa por subgrupo si lo hay; si no, por `format` (Superserie A / Core...) para que el bloque
+    // de accesorio conserve su estructura en el modo entreno.
     const bySub: { sub: string | undefined; items: Indexed[] }[] = [];
     for (const e of entries) {
+      const key = e.entry.subgroup ?? e.entry.format;
       const last = bySub[bySub.length - 1];
-      if (last && last.sub === e.entry.subgroup) last.items.push(e);
-      else bySub.push({ sub: e.entry.subgroup, items: [e] });
+      if (last && last.sub === key) last.items.push(e);
+      else bySub.push({ sub: key, items: [e] });
     }
     return (
       <div className="flex flex-col gap-4">

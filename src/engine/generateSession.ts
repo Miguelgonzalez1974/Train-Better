@@ -131,19 +131,92 @@ function clampResponseBias(rpeBias: number): number {
   return Math.min(1.03, Math.max(0.97, 1 + rpeBias * 0.015));
 }
 
-const ACCESSORY_COMPLEMENT: Partial<Record<MovementPattern, MovementPattern[]>> = {
-  squat: ['hinge', 'lunge'],
-  hinge: ['squat', 'core'],
-  // El A2 de la superserie ya cubre el tiron antagonista; el accesorio abre a core para no apilar 3 remos.
-  horizontalPush: ['horizontalPull', 'core'],
-  verticalPush: ['horizontalPull', 'core'],
+/**
+ * Rol funcional de un movimiento dentro del bloque de accesorio. El dia de accesorio se construye
+ * como 1-2 superseries "principal + contraste" (patron del dia 4 de Mayhem Burgener): pierna
+ * unilateral + salto, empuje + tiron, etc. Los ids salen del catalogo (accessory / wod / strength) —
+ * no hace falta que sean de bloque 'accessory', igual que en STRENGTH_SUPERSET_POOL.
+ */
+type AccessoryRole = 'unilateralLeg' | 'plyo' | 'posterior' | 'hPush' | 'vPush' | 'hPull' | 'vPull';
+
+const ACCESSORY_ROLE_POOL: Record<AccessoryRole, string[]> = {
+  unilateralLeg: ['walking-lunge', 'reverse-lunge', 'bulgarian-split-squat', 'step-up', 'cossack-squat'],
+  plyo: ['box-jump', 'broad-jump', 'jumping-lunge'],
+  posterior: ['romanian-deadlift', 'good-morning', 'back-extension', 'ghd-hip-extension', 'hip-thrust'],
+  hPush: ['close-grip-bench-press', 'dumbbell-bench-press', 'push-up', 'dumbbell-floor-press', 'bench-press'],
+  vPush: ['seated-strict-press', 'dumbbell-z-press', 'lateral-raise', 'strict-press'],
+  hPull: ['pendlay-row', 'landmine-row', 'chest-supported-row', 'single-arm-dumbbell-row'],
+  vPull: ['strict-pull-up', 'kipping-pull-up', 'chest-to-bar-pull-up', 'lat-pulldown'],
 };
 
-const ACCESSORY_RATIONALE: Partial<Record<MovementPattern, string>> = {
-  squat: 'Refuerza cadera e isquiotibiales para proteger la rodilla en el squat.',
-  hinge: 'Equilibrio de tren inferior tras el trabajo de bisagra de hoy.',
-  horizontalPush: 'Equilibrio empuje/tirón para proteger el hombro tras el press horizontal.',
-  verticalPush: 'Equilibrio empuje/tirón y estabilidad de core tras el press vertical.',
+/** Familia del levantamiento principal de hoy -> las superseries de accesorio que mejor complementan. */
+type StrengthFamily = 'lower' | 'push' | 'pull';
+
+function strengthFamilyOf(pattern: MovementPattern): StrengthFamily {
+  if (pattern === 'horizontalPush' || pattern === 'verticalPush') return 'push';
+  if (pattern === 'horizontalPull' || pattern === 'verticalPull') return 'pull';
+  return 'lower';
+}
+
+interface AccessorySupersetPlan {
+  roles: [AccessoryRole, AccessoryRole];
+  label: string;
+  rationale: string;
+}
+
+const ACCESSORY_SUPERSET_PLAN: Record<StrengthFamily, AccessorySupersetPlan[]> = {
+  lower: [
+    { roles: ['unilateralLeg', 'plyo'], label: 'Pierna unilateral + salto', rationale: 'Corrige asimetrías de pierna y añade potencia sin recargar la sentadilla de hoy.' },
+    { roles: ['hPull', 'vPull'], label: 'Tirón horizontal + vertical', rationale: 'Volumen de espalda para equilibrar la sesión de tren inferior.' },
+  ],
+  push: [
+    { roles: ['hPull', 'vPull'], label: 'Tirón horizontal + vertical', rationale: 'Equilibrio empuje/tirón para proteger el hombro tras el press de hoy.' },
+    { roles: ['unilateralLeg', 'posterior'], label: 'Pierna unilateral + cadena posterior', rationale: 'Mantenimiento de tren inferior a baja fatiga en un día de empuje.' },
+  ],
+  pull: [
+    { roles: ['hPush', 'vPush'], label: 'Empuje horizontal + vertical', rationale: 'Equilibrio tirón/empuje tras el trabajo de espalda de hoy.' },
+    { roles: ['unilateralLeg', 'plyo'], label: 'Pierna unilateral + salto', rationale: 'Potencia y simetría de pierna sin recargar el patrón de hoy.' },
+  ],
+};
+
+/** Reps del accesorio por semana de meso — sube intensidad y baja reps hacia el pico, descarga en W4. */
+const ACCESSORY_WEEK_SCHEME: Record<1 | 2 | 3 | 4, { reps: string; note: string }> = {
+  1: { reps: '10-12', note: 'Sube la carga cada serie hasta un tope exigente; deja 2 repeticiones en reserva.' },
+  2: { reps: '8-10', note: 'Sube la carga cada serie; la última debe costar de verdad (1-2 en reserva).' },
+  3: { reps: '6-8', note: 'Series cortas y pesadas — para a 1 repetición del fallo.' },
+  4: { reps: '12-15', note: 'Semana de descarga: carga moderada, técnica limpia, sin acercarte al fallo.' },
+};
+
+/** Patron de fuerza marcado "a trabajar" por computeWeakPoints -> rol de accesorio que lo refuerza. */
+const WEAK_POINT_ACCESSORY_ROLE: Record<string, AccessoryRole> = {
+  squat: 'unilateralLeg',
+  hinge: 'posterior',
+  horizontalPush: 'hPush',
+  verticalPush: 'vPush',
+};
+
+/** Categorías del circuito de core — se rota entre ellas para que no sea siempre lo mismo. */
+type CoreCategory = 'antiExtension' | 'antiRotation' | 'flexion' | 'carry';
+
+const CORE_POOL: Record<CoreCategory, string[]> = {
+  antiExtension: ['weighted-plank', 'dead-bug', 'ab-wheel-rollout', 'plank'],
+  antiRotation: ['pallof-press', 'side-plank-hold'],
+  flexion: ['toes-to-bar', 'ghd-situp', 'v-up', 'abmat-situp'],
+  carry: ['farmers-carry', 'suitcase-carry'],
+};
+
+const CORE_REPS: Record<CoreCategory, string> = {
+  antiExtension: '30-45 s',
+  antiRotation: '10-12/lado',
+  flexion: '12-15',
+  carry: '30-40 m',
+};
+
+/** Orden de categorías de core segun el patron de fuerza del dia (lo primero pesa mas en la seleccion). */
+const CORE_PRIORITY_BY_FAMILY: Record<StrengthFamily, CoreCategory[]> = {
+  lower: ['antiExtension', 'carry', 'antiRotation', 'flexion'],
+  push: ['antiRotation', 'flexion', 'antiExtension', 'carry'],
+  pull: ['flexion', 'antiRotation', 'carry', 'antiExtension'],
 };
 
 /**
@@ -195,20 +268,6 @@ function buildStrengthSuperset(
       'Superserie con el levantamiento principal (A2): carga moderada, deja 2-3 repeticiones en reserva — equilibra el patrón y suma volumen sin restarle a la barra pesada.',
   };
 }
-
-type AccessoryMethod = 'straightSets' | 'giantSet' | 'superset';
-
-const ACCESSORY_METHOD_LABEL: Record<AccessoryMethod, string> = {
-  straightSets: 'Series independientes',
-  giantSet: 'Giant Set',
-  superset: 'Superset',
-};
-
-const ACCESSORY_METHOD_NOTE: Record<AccessoryMethod, string> = {
-  straightSets: 'Completa todas las series de un movimiento antes de pasar al siguiente.',
-  giantSet: 'Encadena los movimientos sin descanso entre ellos; descansa solo al terminar la ronda completa.',
-  superset: 'Alterna ambos movimientos con el mínimo descanso entre ellos — descansa al completar la pareja.',
-};
 
 const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   forTime: 'Estímulo de intensidad — controla el ritmo en las primeras rondas para no colapsar al final.',
@@ -1496,42 +1555,135 @@ function buildWodBlock(
   });
 }
 
+/** Elige un movimiento para un rol de accesorio, evitando dolor y lo ya usado; null si el pool se agota. */
+function pickAccessoryRoleMovement(
+  role: AccessoryRole,
+  used: Set<string>,
+  avoidedPatterns: Set<MovementPattern>,
+): Movement | null {
+  const pool = filterAvoidingPain(
+    (ACCESSORY_ROLE_POOL[role] ?? []).map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+    avoidedPatterns,
+  );
+  return pickVaried(pool, used) ?? null;
+}
+
+/**
+ * Bloque de accesorio como 1-2 superseries "principal + contraste" (patron del dia 4 de Mayhem
+ * Burgener), elegidas para complementar el levantamiento principal de hoy y sesgadas por el patron
+ * de fuerza peor situado en `computeWeakPoints`. Reps y carga siguen la onda del meso
+ * (`ACCESSORY_WEEK_SCHEME`). Cada superserie sale con su propio `format` para que la tarjeta la
+ * agrupe aparte; si el pool se agota, cae a 2 movimientos sueltos como antes.
+ */
 function buildAccessoryBlock(
   strengthPattern: MovementPattern,
   recentIds: Set<string>,
   avoidedPatterns: Set<MovementPattern>,
   dose: DayDose,
+  week: 1 | 2 | 3 | 4,
+  history: SessionHistoryEntry[],
 ): SessionBlockResult[] {
   // 3 series es el base; la dosis del dia lo mueve entre 2 y 4.
   const accSets = Math.min(4, Math.max(2, Math.round(3 * dose.strengthSets)));
-  const complementPatterns = ACCESSORY_COMPLEMENT[strengthPattern] ?? [];
-  const filtered = getMovementsByBlock('accessory').filter((m) => complementPatterns.includes(m.pattern));
-  const painFiltered = filterAvoidingPain(filtered.length > 0 ? filtered : getMovementsByBlock('accessory'), avoidedPatterns);
-  // Excluye de raiz lo recien usado (incluido el A2 de la superserie de fuerza de hoy) mientras
-  // quede pool para elegir; si el pool ya es fino, se cae al normal — mejor repetir que quedarse corto.
-  const fresh = painFiltered.filter((m) => !recentIds.has(m.id));
-  const pool = fresh.length >= 3 ? fresh : painFiltered;
-  const baseRationale = ACCESSORY_RATIONALE[strengthPattern] ?? 'Hipertrofia / accesorio complementario a la sesión de hoy.';
+  const family = strengthFamilyOf(strengthPattern);
+  const scheme = ACCESSORY_WEEK_SCHEME[week];
+  // 2 superseries de normal; en un dia suave (dosis baja) solo 1.
+  const supersetCount = dose.strengthSets < 0.9 ? 1 : 2;
 
-  // Un coach no repite siempre la misma metodologia: la mayoria de dias son series independientes,
-  // pero con variabilidad entra el giant set (estilo "Body Armor") o el superset.
-  const roll = rng();
-  const method: AccessoryMethod = roll < 0.6 ? 'straightSets' : roll < 0.85 ? 'giantSet' : 'superset';
-  const notes = `${baseRationale} ${ACCESSORY_METHOD_NOTE[method]}`;
+  const plan: AccessorySupersetPlan[] = ACCESSORY_SUPERSET_PLAN[family]
+    .slice(0, supersetCount)
+    .map((p) => ({ ...p, roles: [...p.roles] as [AccessoryRole, AccessoryRole] }));
 
-  if (method === 'giantSet') {
-    const unilateralPool = pool.filter((m) => m.tags.includes('unilateral'));
-    const unilateral = pickVaried(unilateralPool.length > 0 ? unilateralPool : pool, recentIds);
-    const restPool = pool.filter((m) => m.id !== unilateral?.id);
-    const rest = pickManyVaried(restPool, 2, new Set([...recentIds, ...(unilateral ? [unilateral.id] : [])]));
-    const picks = unilateral ? [unilateral, ...rest] : pickManyVaried(pool, 3, recentIds);
-    return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: accSets, reps: '8-12', format: ACCESSORY_METHOD_LABEL.giantSet, notes }));
+  // Sesgo de punto debil: si un patron de fuerza esta "a trabajar" y su rol no entra ya en el plan
+  // de hoy, se fuerza como principal de la primera superserie (no siempre, es un ajuste fino).
+  const weakKey = computeWeakPoints(history).find((w) => w.status === 'a-trabajar' && WEAK_POINT_ACCESSORY_ROLE[w.key])?.key;
+  const weakRole = weakKey ? WEAK_POINT_ACCESSORY_ROLE[weakKey] : undefined;
+  if (weakRole && !plan.some((p) => p.roles.includes(weakRole)) && rng() < 0.6) {
+    plan[0] = {
+      roles: [weakRole, plan[0].roles[1]],
+      label: `${plan[0].label} · énfasis punto débil`,
+      rationale: 'Rol reforzado hoy: este patrón va flojo en tu historial de PRs.',
+    };
   }
 
-  const picks = pickManyVaried(pool, 2, recentIds);
-  const reps = method === 'superset' ? '10-12' : '8-12';
-  const format = method === 'superset' ? ACCESSORY_METHOD_LABEL.superset : undefined;
-  return picks.map((m) => ({ block: 'accessory', movementId: m.id, sets: accSets, reps, format, notes }));
+  const used = new Set(recentIds);
+  const out: SessionBlockResult[] = [];
+  plan.forEach((p, i) => {
+    const members: Movement[] = [];
+    for (const role of p.roles) {
+      const pick = pickAccessoryRoleMovement(role, used, avoidedPatterns);
+      if (pick) {
+        used.add(pick.id);
+        members.push(pick);
+      }
+    }
+    if (members.length === 0) return;
+    const format = `Superserie ${String.fromCharCode(65 + i)}`;
+    const notes = `${p.label}. ${p.rationale} ${scheme.note} Alterna ambos movimientos con el mínimo descanso; descansa al completar la pareja.`;
+    for (const m of members) {
+      out.push({ block: 'accessory', movementId: m.id, sets: accSets, reps: scheme.reps, format, notes });
+    }
+  });
+
+  if (out.length === 0) {
+    // Pool agotado por dolor/variedad: 2 movimientos sueltos, mejor eso que un bloque vacio.
+    const fallback = pickManyVaried(getMovementsByBlock('accessory'), 2, recentIds);
+    return fallback.map((m) => ({
+      block: 'accessory',
+      movementId: m.id,
+      sets: accSets,
+      reps: scheme.reps,
+      format: 'Accesorio',
+      notes: scheme.note,
+    }));
+  }
+  return out;
+}
+
+/**
+ * Circuito de core de 3 ejercicios / 3 rondas, con la librería de Mayhem Burgener. Rota entre
+ * anti-extensión, anti-rotación, flexión y carry; el orden de prioridad depende del patron de
+ * fuerza del dia (dia de pierna -> mas anti-extensión y carry; dia de empuje/oly -> mas
+ * anti-rotación y flexión). Devuelve entradas de bloque 'accessory' con `format` propio para que la
+ * tarjeta lo muestre como una sección aparte.
+ */
+function buildCoreBlock(
+  strengthPattern: MovementPattern,
+  recentIds: Set<string>,
+  avoidedPatterns: Set<MovementPattern>,
+): SessionBlockResult[] {
+  const family = strengthFamilyOf(strengthPattern);
+  const order = CORE_PRIORITY_BY_FAMILY[family];
+  // Las 2 primeras categorias por prioridad del dia + 1 rotatoria de las 2 restantes.
+  const categories: CoreCategory[] = [order[0], order[1], rng() < 0.5 ? order[2] : order[3]];
+
+  const used = new Set(recentIds);
+  const picks: { movement: Movement; category: CoreCategory }[] = [];
+  for (const category of categories) {
+    const pool = filterAvoidingPain(
+      CORE_POOL[category].map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+      avoidedPatterns,
+    );
+    const pick = pickVaried(pool, used);
+    if (pick) {
+      used.add(pick.id);
+      picks.push({ movement: pick, category });
+    }
+  }
+  if (picks.length === 0) return [];
+
+  const notes =
+    family === 'lower'
+      ? 'Circuito de core para tolerar carga axial tras el trabajo de pierna de hoy — 3 rondas, poco descanso entre ejercicios.'
+      : 'Circuito de core de anti-rotación y control tras el trabajo de empuje/oly de hoy — 3 rondas, poco descanso entre ejercicios.';
+  return picks.map(({ movement, category }) => ({
+    block: 'accessory',
+    movementId: movement.id,
+    sets: 3,
+    reps: CORE_REPS[category],
+    format: 'Core · 3 rondas',
+    notes,
+  }));
 }
 
 /**
@@ -2147,7 +2299,17 @@ export function generateDailySession(
   );
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
-  const accessoryBlock = doStrength ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns, dayDose) : [];
+  const accessoryWork = doStrength
+    ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns, dayDose, week, history)
+    : [];
+  const coreWork = doStrength
+    ? buildCoreBlock(
+        trainedStrengthPattern,
+        new Set([...accessoryExclude, ...accessoryWork.map((b) => b.movementId)]),
+        avoidedPatterns,
+      )
+    : [];
+  const accessoryBlock = [...accessoryWork, ...coreWork];
   // Skill 2 dias por microciclo (ver `SKILL_DAY_INDICES`) — una progresion se entrena por bloques,
   // no a diario. El resto de dias no llevan bloque de skill.
   const skillBlock = SKILL_DAY_INDICES[profile.trainingDaysPerWeek].includes(dayPlan.trainingDayIndex)
