@@ -1,4 +1,4 @@
-import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, Dumbbell, Flame, type LucideIcon } from 'lucide-react';
+import { Repeat, Repeat2, TrendingUp, Waves, Split, ListOrdered, Activity, Medal, Rocket, Dumbbell, Flame, Timer, type LucideIcon } from 'lucide-react';
 import type { StrengthMethod } from '../../data/athlete/types';
 
 export interface StrengthMethodMeta {
@@ -63,9 +63,14 @@ export const STRENGTH_METHOD_META: Record<StrengthMethod, StrengthMethodMeta> = 
     blurb: 'Ciclo real de Mayhem Athlete transcrito literal: snatch y clean & jerk con complejos, sentadilla de soporte y días de olas de singles. 5 días/semana, sesgo olímpico para CrossFitters, termina en semana de pico.',
     Icon: Flame,
   },
+  'mayhem-tecnica': {
+    label: 'Mayhem Burgener — Técnica (4 semanas)',
+    blurb: 'Mini-bloque Mayhem de posiciones, pausas y tempo: pausa de 3 s en OHS y snatch balance, tempo 32X1 en sentadilla, halting deadlift, complejos lentos. Poco volumen de squat, mucha técnica controlada — ideal como puente entre bloques o antes de competir.',
+    Icon: Timer,
+  },
 };
 
-export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada', 'dieSet', 'mayhem-base'];
+export const STRENGTH_METHODS: StrengthMethod[] = ['531', 'lineal', 'ondulante', 'conjugado', 'ruso', 'texas', 'juggernaut', 'haltero', 'temporada', 'dieSet', 'mayhem-base', 'mayhem-tecnica'];
 
 /**
  * Un color propio por metodo — de un vistazo se distingue la lista sin tener que leer el texto.
@@ -84,4 +89,5 @@ export const STRENGTH_METHOD_COLOR: Record<StrengthMethod, string> = {
   temporada: '#84cc16',
   dieSet: '#2dd4bf',
   'mayhem-base': '#f59e0b',
+  'mayhem-tecnica': '#fb923c',
 };

@@ -15,6 +15,7 @@ import { parseLadder } from './ladderProgram';
  */
 
 export const MAYHEM_BASE_TOTAL_WEEKS = 6;
+export const MAYHEM_TECNICA_TOTAL_WEEKS = 4;
 
 type MayhemBlock = 'oly' | 'strength' | 'accessory';
 
@@ -259,6 +260,128 @@ const MAYHEM_BASE: MayhemWeek[] = [
   ],
 ];
 
+// --- Ciclo 3 (4 semanas x 4 días) — posiciones, pausas y tempo -----------
+
+const MAYHEM_TECNICA: MayhemWeek[] = [
+  // ===== SEMANA 1 =====
+  [
+    // Día 1
+    [
+      snZ({ label: 'Snatch Push Press + Pause OHS', movementId: 'pause-overhead-squat', ladder: '67/2×3 75/2×2', complex: ['Snatch push press', 'Pause OHS (3 s abajo)'], note: '(1+1) por serie. Pausa de 3 s en el fondo del OHS.' }),
+      snZ({ label: 'Snatch 3 Posiciones', movementId: 'three-position-snatch', percent: 0.7, sets: 5, reps: '1+1+1', note: 'High hang + media rodilla + suelo, sin soltar.' }),
+      snZ({ label: 'Tempo Back Squat', movementId: 'tempo-back-squat', block: 'strength', prKey: 'backSquat', percent: 0.65, sets: 5, reps: '5', note: 'Tempo 32X1: 3 s de bajada, 2 s de pausa abajo, subida explosiva, 1 s arriba.' }),
+      snZ({ label: 'Snatch Pull', movementId: 'snatch-pull', percent: 0.85, sets: 3, reps: '5' }),
+    ],
+    // Día 2
+    [
+      cjZ({ label: 'Push Press + Pause Push Jerk', movementId: 'push-jerk', percent: 0.7, sets: 3, reps: '2+1', note: '+ 2 series de (1+1). Pausa de 2 s en la recepción del jerk.' }),
+      cjZ({ label: 'Halting Clean Deadlift a media rodilla', movementId: 'halting-deadlift', block: 'strength', prKey: 'deadlift', percent: 0.8, sets: 3, reps: '3', note: 'Parada de 2 s a media rodilla en la subida.' }),
+      cjZ({ label: 'Clean + Jerk', movementId: 'clean-and-jerk', ladder: '65/5×3 70/3×2', complex: ['Clean', 'Jerk', 'Jerk'], note: '(2 clean + 1 jerk + 2 jerk) las 3 primeras cargas, (1+1+1) las 2 últimas.' }),
+      clZ({ label: 'Clean Deadlift', movementId: 'clean-deadlift', percent: 0.85, sets: 3, reps: '3' }),
+    ],
+    // Día 3
+    [
+      snZ({ label: 'Pause Snatch Balance', movementId: 'snatch-balance', ladder: '65/3×3 75/2×2', note: 'Pausa de 3 s en el fondo.' }),
+      snZ({ label: 'Pause Snatch', movementId: 'pause-snatch', ladder: '65/3 75/2×2 85/1×2', note: 'Pausa de 3 s en el fondo de la recepción.' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', ladder: '70/5×2 75/4×2 80/3' }),
+    ],
+    // Día 4
+    [
+      cjZ({ label: 'Tall Jerk + Press en split', movementId: 'tall-jerk', sets: 3, reps: '3+3', note: 'Trabajo de recepción del jerk — carga ligera.' }),
+      cjZ({ label: 'Dip + Dip + Pause Jerk', movementId: 'split-jerk', ladder: '65/4×3 78/3×2', note: 'Pausa de 3 s en el split del jerk. (1+1+2) las 3 primeras, (1+1+1) las 2 últimas.' }),
+      clZ({ label: 'Power Clean + Push Jerk + Jerk', movementId: 'power-clean', ladder: '75/3×2 82/3', complex: ['Power clean', 'Push jerk', 'Split jerk'], note: '(1+1+1) por serie. % sobre tu power clean.' }),
+      snZ({ label: 'Snatch Deadlift', movementId: 'snatch-deadlift', percent: 0.92, sets: 3, reps: '5', note: '90-95% del snatch.' }),
+    ],
+  ],
+
+  // ===== SEMANA 2 =====
+  [
+    // Día 1
+    [
+      snZ({ label: 'Snatch Push Press + OHS', movementId: 'overhead-squat', ladder: '70/6×2 80/4×3', complex: ['Snatch push press', 'Overhead squat'], note: '(5+1) las 2 primeras cargas, (3+1) las 3 siguientes.' }),
+      snZ({ label: 'Snatch 2 Posiciones (colgado + suelo)', movementId: 'three-position-snatch', percent: 0.72, sets: 4, reps: '1+1' }),
+      snZ({ label: 'Back Squat', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', percent: 0.75, sets: 8, reps: '3' }),
+      snZ({ label: 'Snatch Pull', movementId: 'snatch-pull', percent: 0.88, sets: 4, reps: '3', note: '85-90% del snatch.' }),
+    ],
+    // Día 2
+    [
+      cjZ({ label: 'Push Press + Push Jerk + Push Press', movementId: 'push-press', block: 'strength', percent: 0.62, sets: 4, reps: '1+1+1', note: '% sobre tu clean & jerk.' }),
+      cjZ({ label: 'Clean lift-off a 1" + Clean + Jerk', movementId: 'clean-and-jerk', ladder: '72/4×3 82/3×2', complex: ['Clean lift-off (1" del suelo)', 'Clean', 'Jerk'], note: '(2+1+1) las 3 primeras cargas, (1+1+1) las 2 últimas. % sobre tu clean.' }),
+      clZ({ label: 'Clean Pull', movementId: 'clean-pull', percent: 0.95, sets: 4, reps: '4', note: '95% de tu mejor clean.' }),
+    ],
+    // Día 3
+    [
+      snZ({ label: 'Pause Snatch Balance + Snatch Balance', movementId: 'snatch-balance', percent: 0.7, sets: 5, reps: '1+1', note: '1 con pausa de 3 s + 1 normal por serie.' }),
+      snZ({ label: 'Power Snatch + OHS', movementId: 'power-snatch', ladder: '68/4×2 73/3×2 78/2×2', complex: ['Power snatch', 'Overhead squat'], note: '(3+1), luego (2+1), luego (1+1).' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', ladder: '72/5×2 77/4×2 82/3' }),
+    ],
+    // Día 4
+    [
+      cjZ({ label: 'Tall Jerk + Jerk Balance + Press en split', movementId: 'tall-jerk', sets: 3, reps: '3+3+3', note: 'Trabajo de recepción — carga ligera.' }),
+      cjZ({ label: 'Dip + Jerk + Overhead Hold', movementId: 'split-jerk', percent: 0.85, sets: 5, reps: '1+1', note: '+ hold de 10 s por encima de la cabeza. 80-90% del jerk.' }),
+      clZ({ label: 'Power Clean', movementId: 'power-clean', ladder: '72/3×2 80/2×2 88/1×2', note: '2×3 @70-75%, 2×2 @75-85%, 2×1 @85-90% del power clean.' }),
+      snZ({ label: 'Snatch Pull', movementId: 'snatch-pull', percent: 0.95, sets: 4, reps: '4', note: '95% de tu mejor snatch.' }),
+    ],
+  ],
+
+  // ===== SEMANA 3 =====
+  [
+    // Día 1
+    [
+      snZ({ label: 'Snatch Push Press + OHS', movementId: 'overhead-squat', ladder: '88/6×2 92/4×3', complex: ['Snatch push press', 'Overhead squat'], note: '85-95% de tu mejor snatch. (5+1) las 2 primeras, (3+1) las 3 siguientes.' }),
+      snZ({ label: 'Snatch High Pull + Power Snatch + Snatch', movementId: 'snatch', ladder: '72/4×2 78/3×3', complex: ['Snatch high pull', 'Power snatch', 'Snatch'], note: '(2+1+1) las 2 primeras cargas, (1+1+1) las 3 siguientes.' }),
+      snZ({ label: 'Back Squat — ola 5-3-1', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', ladder: '75/5 82/3 88/1 78/5 85/3 90/1 65/10', note: 'Dos olas de 5-3-1 subiendo + una serie de 10 de back-off.' }),
+    ],
+    // Día 2
+    [
+      cjZ({ label: 'Push Press — ola 5-3-1', movementId: 'push-press', block: 'strength', ladder: '55/5 62/3 68/1 58/5 65/3 70/1 48/10', note: 'Dos olas de 5-3-1 + una serie de 10 de back-off. % sobre tu clean & jerk.' }),
+      cjZ({ label: 'Clean DL a 1" + Clean Pull + Clean + Jerk', movementId: 'clean-and-jerk', ladder: '72/5×2 82/4×3', complex: ['Clean deadlift (1" del suelo)', 'Clean pull', 'Clean', 'Jerk'], note: '(1+1+1+2) @70-75%, (1+1+1+1) @80-85% del clean.' }),
+      clZ({ label: 'Clean Pull', movementId: 'clean-pull', percent: 0.96, sets: 3, reps: '5', note: '95-97% del clean.' }),
+    ],
+    // Día 3
+    [
+      snZ({ label: 'Snatch Balance', movementId: 'snatch-balance', ladder: '85/3 88/3 90/2 92/2 94/1 95/1', note: '85-95% del snatch.' }),
+      snZ({ label: 'Power Snatch', movementId: 'power-snatch', ladder: '72/3×2 78/2×2 84/1×3' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.95, sets: 5, reps: '3', note: 'Referencia: 90-100% de tu clean.' }),
+    ],
+    // Día 4
+    [
+      cjZ({ label: 'Dip + Pause Push Jerk + Jerk desde nuca', movementId: 'split-jerk', percent: 0.75, sets: 3, reps: '1+1+1', note: 'Pausa en el push jerk.' }),
+      clZ({ label: 'Pause Power Clean + Jerk', movementId: 'power-clean', ladder: '75/3×2 82/2×3', complex: ['Power clean (pausa en recepción)', 'Jerk'], note: '(2+1) x2, (1+1) x3.' }),
+      snZ({ label: 'Snatch Pull', movementId: 'snatch-pull', percent: 0.97, sets: 5, reps: '3', note: '95-100% del snatch.' }),
+    ],
+  ],
+
+  // ===== SEMANA 4 (prehab de hombro entre series) =====
+  [
+    // Día 1
+    [
+      snZ({ label: 'Snatch Push Press + OHS + Snatch Balance', movementId: 'snatch-balance', ladder: '82/6×3 97/3×2', complex: ['Snatch push press', 'Overhead squat', 'Snatch balance'], note: '(3+2+1) @80-85%, (1+1+1) @95-100% del snatch. Entre series: 10 band pull-aparts o Crossover Symmetry (prehab de hombro).' }),
+      snZ({ label: 'Snatch 2 Posiciones (bajo rodilla + suelo)', movementId: 'three-position-snatch', percent: 0.68, sets: 5, reps: '1+1' }),
+      snZ({ label: 'Back Squat — ola 5-3-1', movementId: 'back-squat', block: 'strength', prKey: 'backSquat', ladder: '78/5 85/3 90/1 80/5 87/3 92/1 65/10 65/10', note: 'Dos olas de 5-3-1 + dos series de 10 de back-off.' }),
+    ],
+    // Día 2
+    [
+      cjZ({ label: 'Push Jerk + Jerk', movementId: 'split-jerk', ladder: '78/4×3 88/3×2', note: '(2+2) @75-80%, (2+1) @85-90% del jerk.' }),
+      cjZ({ label: 'Clean DL a 1" (pausa 2 s) + Clean DL a medio muslo + Clean + Jerk', movementId: 'clean-and-jerk', ladder: '78/4×2 85/3×3', complex: ['Clean deadlift (1", pausa 2 s)', 'Clean deadlift a medio muslo', 'Clean', 'Jerk'], note: '80-90% del C&J.' }),
+      clZ({ label: 'Clean Pull', movementId: 'clean-pull', percent: 1.0, sets: 4, reps: '4', note: '100% del clean.' }),
+    ],
+    // Día 3
+    [
+      snZ({ label: 'Snatch Balance — a un tope', movementId: 'snatch-balance', ladder: '80/2 88/2 94/1 100/1', isMaxAttempt: true, note: 'Sube hasta al menos el 100% de tu snatch.' }),
+      snZ({ label: 'Power Snatch + Snatch', movementId: 'power-snatch', ladder: '72/3×2 78/2×3', complex: ['Power snatch', 'Snatch'], note: '(2+1) @70-75%, (1+1) @75-80% del snatch.' }),
+      snZ({ label: 'Front Squat', movementId: 'front-squat', block: 'strength', prKey: 'frontSquat', percent: 0.9, sets: 4, reps: '4', note: 'La última serie de 4 al peso de tu 1RM de clean & jerk.' }),
+    ],
+    // Día 4
+    [
+      cjZ({ label: 'Jerk Balance + Push Press desde nuca en split', movementId: 'jerk-balance', sets: 3, reps: '3+3', note: 'Trabajo de recepción — carga ligera.' }),
+      cjZ({ label: 'Pause Dip (2 s) + Dip + Jerk', movementId: 'split-jerk', percent: 0.78, sets: 4, reps: '1+1+1' }),
+      clZ({ label: 'Power Clean + Clean + Jerk', movementId: 'power-clean', ladder: '85/3×3 92/3×2', complex: ['Power clean', 'Clean', 'Jerk'], note: '(1+1+1) por serie. 85-95% del power clean.' }),
+      snZ({ label: 'Snatch Pull', movementId: 'snatch-pull', percent: 1.05, sets: 3, reps: '3', note: '105% del snatch.' }),
+    ],
+  ],
+];
+
 export interface MayhemDayResult {
   weekNumber: number;
   lifts: {
@@ -369,12 +492,15 @@ function resolveMayhemLift(lift: MayhemLift, prs: PersonalRecords, autoregFactor
 }
 
 /**
- * Resuelve el día de hoy dentro del Ciclo 9: en qué semana (1-6, se queda en la 6 si el atleta
- * alarga la fecha de fin) y cuál de los 5 días toca — mismo índice continuo por días de entreno que
- * usa `resolveHalteroDay`. Con un calendario de menos de 5 días/semana solo se alcanzan los primeros
- * días del ciclo (limitación conocida, igual que en haltero con calendarios que no son múltiplo de 3).
+ * Resuelve el día de hoy dentro de un ciclo Mayhem: en qué semana (se queda en la última si el
+ * atleta alarga la fecha de fin) y cuál de los días toca — mismo índice continuo por días de entreno
+ * que usa `resolveHalteroDay`. Con un calendario de menos días/semana que el ciclo solo se alcanzan
+ * los primeros días (limitación conocida, igual que en haltero con calendarios no múltiplo de 3).
  */
-export function resolveMayhemBaseDay(
+function resolveMayhemCycleDay(
+  cycle: MayhemWeek[],
+  totalWeeks: number,
+  cycleName: string,
   program: StrengthProgram,
   dayPlan: DayPlan,
   prs: PersonalRecords,
@@ -382,12 +508,12 @@ export function resolveMayhemBaseDay(
   today: Date,
 ): MayhemDayResult | null {
   const weeksElapsed = weeksSinceStart(program.startDate, today);
-  const weekIndex = Math.min(weeksElapsed, MAYHEM_BASE_TOTAL_WEEKS - 1);
-  const week = MAYHEM_BASE[weekIndex];
+  const weekIndex = Math.min(weeksElapsed, totalWeeks - 1);
+  const week = cycle[weekIndex];
   const dayIndex = Math.max(dayPlan.trainingDayIndex, 0) % week.length;
   const day = week[dayIndex];
   const weekNumber = weekIndex + 1;
-  const weekLabel = `Mayhem Base · Semana ${weekNumber}/${MAYHEM_BASE_TOTAL_WEEKS}`;
+  const weekLabel = `${cycleName} · Semana ${weekNumber}/${totalWeeks}`;
 
   const lifts = day
     .filter((lift) => getMovementById(lift.movementId))
@@ -395,4 +521,26 @@ export function resolveMayhemBaseDay(
 
   if (lifts.length === 0) return null;
   return { weekNumber, lifts };
+}
+
+/** Día de hoy en el Ciclo 9 ("mayhem-base", 6 semanas). */
+export function resolveMayhemBaseDay(
+  program: StrengthProgram,
+  dayPlan: DayPlan,
+  prs: PersonalRecords,
+  autoregFactor: number,
+  today: Date,
+): MayhemDayResult | null {
+  return resolveMayhemCycleDay(MAYHEM_BASE, MAYHEM_BASE_TOTAL_WEEKS, 'Mayhem Base', program, dayPlan, prs, autoregFactor, today);
+}
+
+/** Día de hoy en el Ciclo 3 ("mayhem-tecnica", 4 semanas de pausas, tempo y posiciones). */
+export function resolveMayhemTecnicaDay(
+  program: StrengthProgram,
+  dayPlan: DayPlan,
+  prs: PersonalRecords,
+  autoregFactor: number,
+  today: Date,
+): MayhemDayResult | null {
+  return resolveMayhemCycleDay(MAYHEM_TECNICA, MAYHEM_TECNICA_TOTAL_WEEKS, 'Mayhem Técnica', program, dayPlan, prs, autoregFactor, today);
 }

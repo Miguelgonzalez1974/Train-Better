@@ -101,7 +101,12 @@ import {
 } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
-import { MAYHEM_BASE_TOTAL_WEEKS, resolveMayhemBaseDay } from './mayhemProgram';
+import {
+  MAYHEM_BASE_TOTAL_WEEKS,
+  MAYHEM_TECNICA_TOTAL_WEEKS,
+  resolveMayhemBaseDay,
+  resolveMayhemTecnicaDay,
+} from './mayhemProgram';
 import { filterAvoidingPain, getAvoidedPatterns, getPainReintroFactor, getPainReintroPatterns } from './painFlags';
 import { getRampFactor, isWodRampActive } from './intensityRamp';
 
@@ -2569,10 +2574,13 @@ export function generateStrengthProgramSession(
     };
   }
 
-  // Mayhem Burgener — Base (Ciclo 9): igual que haltero, varios levantamientos por dia con formatos
-  // mixtos (escaleras, esquemas ciclicos, EMOM, complejos). Ver `mayhemProgram.ts`.
-  if (program.method === 'mayhem-base') {
-    const mayhemDay = resolveMayhemBaseDay(program, dayPlan, profile.prs, autoregFactor, date);
+  // Mayhem Burgener (Ciclo 9 "base" / Ciclo 3 "tecnica"): igual que haltero, varios levantamientos
+  // por dia con formatos mixtos (escaleras, esquemas ciclicos, EMOM, complejos). Ver `mayhemProgram.ts`.
+  if (program.method === 'mayhem-base' || program.method === 'mayhem-tecnica') {
+    const isTecnica = program.method === 'mayhem-tecnica';
+    const mayhemDay = isTecnica
+      ? resolveMayhemTecnicaDay(program, dayPlan, profile.prs, autoregFactor, date)
+      : resolveMayhemBaseDay(program, dayPlan, profile.prs, autoregFactor, date);
     if (!mayhemDay) return generateOffSeasonSession(profile, history, date);
 
     const mayhemBlocks: SessionBlockResult[] = mayhemDay.lifts.map((lift) => ({
@@ -2595,7 +2603,9 @@ export function generateStrengthProgramSession(
         ...mayhemBlocks,
         ...buildCooldownBlock(mayhemPattern, recentIdsMayhem),
       ],
-      strengthProgramLabel: `Mayhem Base · Semana ${mayhemDay.weekNumber}/${MAYHEM_BASE_TOTAL_WEEKS}`,
+      strengthProgramLabel: isTecnica
+        ? `Mayhem Técnica · Semana ${mayhemDay.weekNumber}/${MAYHEM_TECNICA_TOTAL_WEEKS}`
+        : `Mayhem Base · Semana ${mayhemDay.weekNumber}/${MAYHEM_BASE_TOTAL_WEEKS}`,
     };
   }
 
