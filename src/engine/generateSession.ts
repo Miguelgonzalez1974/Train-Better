@@ -766,6 +766,20 @@ function primerLoadFactor(primerId: string): number {
   return 0.7; // muscle, tall, tres-posiciones... — drill tecnico ligero de verdad
 }
 
+/**
+ * Tracción por encima del levantamiento tras el trabajo principal de oly (patrón Mayhem/haltero): el
+ * día de oly del macro no es solo "haz el lift", cierra con un tirón/deadlift sobrecargado que
+ * refuerza la posición y el timing de la primera y segunda tirada. Semana 4 (descarga) y días con
+ * foco de recepción no lo llevan.
+ */
+const OLY_PULL_IDS: Record<OlyFamily, string[]> = {
+  snatch: ['snatch-pull', 'snatch-high-pull', 'snatch-deadlift'],
+  clean: ['clean-pull', 'clean-high-pull', 'clean-deadlift'],
+};
+
+/** % del PR del levantamiento al que se hace la tracción, por semana de meso (0 = no se programa). */
+const OLY_PULL_PERCENT: Record<1 | 2 | 3 | 4, number> = { 1: 0.9, 2: 0.95, 3: 1.05, 4: 0 };
+
 function buildOlyBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -972,6 +986,15 @@ function buildOlyBlock(
       loadKg,
       notes: `${baseNote} Formato EMOM ${emomMinutes} min: una repetición técnica cada minuto.`,
     };
+  } else if (week === 3 && rng() < 0.4) {
+    // Semana pico, variante Mayhem: en vez de series fijas, sube a un single pesado del día.
+    mainEntry = {
+      block: 'oly',
+      movementId: movement.id,
+      reps: '1',
+      loadKg,
+      notes: `${baseNote} Sube a un single pesado del día: aproxima en 5-7 series y busca el más pesado que salga técnicamente limpio, sin forzar un fallo. Referencia: ${loadKg} kg.`,
+    };
   } else {
     const repStyleNote =
       scheme.reps >= 2
@@ -987,6 +1010,34 @@ function buildOlyBlock(
       notes: `${baseNote} ${repStyleNote}`,
     };
   }
+
+  // Tracción por encima del levantamiento, DESPUÉS del trabajo principal (patrón Mayhem/haltero):
+  // tirón alto o deadlift del lift a un % igual o superior al del levantamiento. No en descarga ni
+  // en días de foco de recepción. `excludeId` es el primer del complejo, para no repetir movimiento.
+  const pullPercent = receivingFocus ? 0 : OLY_PULL_PERCENT[week];
+  const buildPullTail = (excludeId?: string): SessionBlockResult[] => {
+    if (pullPercent <= 0) return [];
+    const pullPool = OLY_PULL_IDS[family]
+      .map((id) => getMovementById(id))
+      .filter((m): m is Movement => m !== undefined && m.id !== movement.id && m.id !== excludeId);
+    const pullMovement = pickVaried(pullPool, recentIds);
+    if (!pullMovement) return [];
+    const pullLoadKg = roundToNearestPlate(
+      resolveOlyPR(pullMovement, prs, family, variantPrs) * pullPercent * autoregFactor,
+    );
+    return [
+      {
+        block: 'oly',
+        movementId: pullMovement.id,
+        sets: 3,
+        reps: '3',
+        loadKg: pullLoadKg,
+        notes: `Tracción por encima del levantamiento a ${Math.round(pullPercent * 100)}% de tu ${
+          family === 'snatch' ? 'snatch' : 'clean'
+        } — extensión completa y timing de la tirada, sin tirar hacia abajo bajo la barra.${autoregNote ? ` ${autoregNote}` : ''}`,
+      },
+    ];
+  };
 
   // Calentamiento especifico de barra, al inicio del bloque de Oly (que se hace despues del WOD, ya
   // en caliente): Burgener con PVC segun la familia -> complejo de barra vacia -> rampa de carga en
@@ -1016,7 +1067,7 @@ function buildOlyBlock(
     ? primerCandidates.filter((m) => RECEIVING_PRIMER_IDS[family].includes(m.id))
     : [];
   const primerMovement = pickVaried(receivingPrimers.length > 0 ? receivingPrimers : primerCandidates, recentIds);
-  if (!primerMovement) return { blocks: [...barbellPrimer, mainEntry], reasons };
+  if (!primerMovement) return { blocks: [...barbellPrimer, mainEntry, ...buildPullTail()], reasons };
 
   const primerLoadKg = roundToNearestPlate(
     resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * primerLoadFactor(primerMovement.id) * autoregFactor,
@@ -1032,7 +1083,7 @@ function buildOlyBlock(
     loadKg: primerLoadKg,
   };
 
-  return { blocks: [...barbellPrimer, primerEntry, mainEntry], reasons };
+  return { blocks: [...barbellPrimer, primerEntry, mainEntry, ...buildPullTail(primerMovement.id)], reasons };
 }
 
 /**
