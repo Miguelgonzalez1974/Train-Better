@@ -2139,6 +2139,23 @@ function burgenerBarbellPrep(lifts: { movementId: string; block: string }[]): Se
   ];
 }
 
+/**
+ * Circuito de core (3 ejercicios / 3 rondas, ver `buildCoreBlock`) para cerrar un día de programa de
+ * fuerza — haltero, Mayhem o los métodos de `resolveStrengthProgramDay`. Antes esos días eran solo
+ * calentamiento + levantamientos + enfriamiento. Se salta los días de intento de 1RM real / MAX OUT
+ * (`isMaxDay`): ese día el foco es el máximo, no un finisher.
+ */
+function strengthProgramCore(
+  pattern: MovementPattern,
+  history: SessionHistoryEntry[],
+  painFlags: PainFlag[] | undefined,
+  dateIso: string,
+  isMaxDay: boolean,
+): SessionBlockResult[] {
+  if (isMaxDay) return [];
+  return buildCoreBlock(pattern, getRecentMovementIds(history), getAvoidedPatterns(painFlags, dateIso));
+}
+
 /** Piezas de cardio suave para el dia de recuperacion activa (bike, row, ski, run, trineo). */
 const RECOVERY_CARDIO_IDS = ['row', 'air-bike', 'ski-erg', 'run', 'sled-push'];
 
@@ -2699,12 +2716,19 @@ export function generateStrengthProgramSession(
     const recentIdsHaltero = getRecentMovementIds(history);
     const warmupHaltero = buildWarmupBlock(primaryPattern, recentIdsHaltero);
     const cooldownHaltero = buildCooldownBlock(primaryPattern, recentIdsHaltero);
+    const coreHaltero = strengthProgramCore(
+      primaryPattern,
+      history,
+      profile.painFlags,
+      dateIso,
+      halteroDay.lifts.some((l) => l.isMaxAttempt),
+    );
 
     return {
       date: dateIso,
       mesocycleWeek: 0,
       isRestDay: false,
-      blocks: [...warmupHaltero, ...burgenerBarbellPrep(halteroDay.lifts), ...halteroBlocks, ...cooldownHaltero],
+      blocks: [...warmupHaltero, ...burgenerBarbellPrep(halteroDay.lifts), ...halteroBlocks, ...coreHaltero, ...cooldownHaltero],
       strengthProgramLabel: `Ciclo Halterofilia · Semana ${halteroDay.weekNumber}/${HALTERO_TOTAL_WEEKS}`,
     };
   }
@@ -2733,6 +2757,13 @@ export function generateStrengthProgramSession(
     }));
     const mayhemPattern = getMovementById(mayhemDay.lifts[0].movementId)!.pattern;
     const recentIdsMayhem = getRecentMovementIds(history);
+    const coreMayhem = strengthProgramCore(
+      mayhemPattern,
+      history,
+      profile.painFlags,
+      dateIso,
+      mayhemDay.lifts.some((l) => l.isMaxAttempt),
+    );
     return {
       date: dateIso,
       mesocycleWeek: 0,
@@ -2741,6 +2772,7 @@ export function generateStrengthProgramSession(
         ...buildWarmupBlock(mayhemPattern, recentIdsMayhem),
         ...burgenerBarbellPrep(mayhemDay.lifts),
         ...mayhemBlocks,
+        ...coreMayhem,
         ...buildCooldownBlock(mayhemPattern, recentIdsMayhem),
       ],
       strengthProgramLabel: `${mayhemSpec.name} · Semana ${mayhemDay.weekNumber}/${mayhemSpec.total}`,
@@ -2795,12 +2827,15 @@ export function generateStrengthProgramSession(
   const recentIds = getRecentMovementIds(history);
   const warmupBlock = buildWarmupBlock(movement.pattern, recentIds);
   const cooldownBlock = buildCooldownBlock(movement.pattern, recentIds);
+  // Los tests de max-reps / complex de "temporada" se puntuan como WOD (day.scoreAsWod) — ese dia no
+  // lleva finisher de core, igual que un dia de intento de 1RM.
+  const coreBlock = strengthProgramCore(movement.pattern, history, profile.painFlags, dateIso, Boolean(day.scoreAsWod));
 
   return {
     date: dateIso,
     mesocycleWeek: 0,
     isRestDay: false,
-    blocks: [...warmupBlock, ...strengthBlocks, ...cooldownBlock],
+    blocks: [...warmupBlock, ...strengthBlocks, ...coreBlock, ...cooldownBlock],
     strengthProgramLabel: day.format,
   };
 }

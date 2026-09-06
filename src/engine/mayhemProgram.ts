@@ -632,13 +632,17 @@ export interface MayhemDayResult {
     loadKg?: number;
     format: string;
     notes: string;
+    /** true si el levantamiento es un intento de 1RM real / MAX OUT — el día no lleva circuito de core. */
+    isMaxAttempt: boolean;
   }[];
 }
+
+type ResolvedMayhemLiftBase = Omit<MayhemDayResult['lifts'][number], 'isMaxAttempt'>;
 
 const clampFactor = (isMax: boolean, autoreg: number) => (isMax ? 1 : autoreg);
 
 /** Resuelve un levantamiento del ciclo a un bloque listo (carga, reps, nota). */
-function resolveMayhemLift(lift: MayhemLift, prs: PersonalRecords, autoregFactor: number, weekLabel: string): MayhemDayResult['lifts'][number] {
+function resolveMayhemLift(lift: MayhemLift, prs: PersonalRecords, autoregFactor: number, weekLabel: string): ResolvedMayhemLiftBase {
   const factor = clampFactor(Boolean(lift.isMaxAttempt), autoregFactor);
   const base = lift.prKey ? prs[lift.prKey] : 0;
   const complexNote = lift.complex && lift.complex.length > 0 ? ` Complejo: ${lift.complex.join(' + ')}.` : '';
@@ -756,7 +760,7 @@ function resolveMayhemCycleDay(
 
   const lifts = day
     .filter((lift) => getMovementById(lift.movementId))
-    .map((lift) => resolveMayhemLift(lift, prs, autoregFactor, weekLabel));
+    .map((lift) => ({ ...resolveMayhemLift(lift, prs, autoregFactor, weekLabel), isMaxAttempt: Boolean(lift.isMaxAttempt) }));
 
   if (lifts.length === 0) return null;
   return { weekNumber, lifts };

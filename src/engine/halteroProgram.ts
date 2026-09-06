@@ -151,6 +151,8 @@ export interface HalteroDayResult {
     loadKg: number;
     format: string;
     notes: string;
+    /** true si el último número de la escalera es un intento de 1RM real — ese día no lleva circuito de core. */
+    isMaxAttempt: boolean;
   }[];
 }
 
@@ -187,6 +189,7 @@ export function resolveHalteroDay(
     loadKg: lift.loadKg,
     format: `Ciclo Halterofilia · Semana ${weekNumber}/${HALTERO_TOTAL_WEEKS} · ${lift.liftLabel}`,
     notes: `${lift.notes}${weekNote ? ` ${weekNote}` : ''}`,
+    isMaxAttempt: lift.isMaxAttempt,
   }));
 
   if (lifts.length === 0) return null;

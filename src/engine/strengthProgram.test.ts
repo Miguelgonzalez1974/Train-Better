@@ -30,6 +30,26 @@ describe('programas de fuerza transcritos', () => {
       }
       expect(bad).toEqual([]);
     });
+
+    it(`${STRENGTH_METHOD_LABEL[method]}: lleva circuito de core salvo en dias de intento de 1RM / MAX OUT`, () => {
+      const profile = makeProfile({
+        strengthPrograms: [{ id: 'p', method, startDate: '2026-01-05', endDate: '2027-01-01', lifts: [] }],
+      });
+      let withCore = 0;
+      let daysChecked = 0;
+      for (const d of consecutiveDates('2026-01-05', days)) {
+        const s = generateSessionForDate(profile, [], d, []);
+        if (s.isRestDay) continue;
+        daysChecked++;
+        const hasCore = s.blocks.some((b) => b.format === 'Core · 3 rondas');
+        const isMaxish = s.blocks.some((b) => /MAX OUT|1RM real|intento de 1RM/.test(b.notes ?? ''));
+        if (hasCore) withCore++;
+        // Nunca las dos cosas: un dia de max no lleva finisher de core.
+        expect(hasCore && isMaxish, `${method} ${s.date}: core + max a la vez`).toBe(false);
+      }
+      // La mayoria de dias (los que no son de max) llevan core.
+      expect(withCore / daysChecked, method).toBeGreaterThan(0.6);
+    });
   }
 });
 
