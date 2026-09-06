@@ -96,6 +96,26 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(patterns.some((p) => p === 'verticalPush' || p === 'horizontalPush')).toBe(true);
   });
 
+  it('todo WOD trae un objetivo de esfuerzo (RPE) y una pista de ritmo, y el RPE sigue la onda del meso', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const rpeByWeek: Record<number, Set<string>> = { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set() };
+    for (const d of consecutiveDates(START, 28)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const wod = s.blocks.find((b) => b.block === 'wod');
+      if (!wod || s.isRestDay) continue;
+      const note = wod.notes ?? '';
+      expect(note, `${s.date} WOD sin objetivo de RPE`).toMatch(/RPE ~\S/);
+      // benchmark del día 0 no lleva "Ritmo:" (no tiene formato generado); el resto sí.
+      if (!wod.movementId.startsWith('benchmark:')) expect(note, `${s.date} sin pista de ritmo`).toContain('Ritmo:');
+      const m = note.match(/RPE ~([\d-]+)/);
+      if (m && s.mesocycleWeek >= 1 && s.mesocycleWeek <= 4) rpeByWeek[s.mesocycleWeek].add(m[1]);
+    }
+    // La onda: semana 1 apunta a 7, semana 3 a 9, semana 4 a descarga (5-6).
+    if (rpeByWeek[1].size) expect([...rpeByWeek[1]]).toEqual(['7']);
+    if (rpeByWeek[3].size) expect([...rpeByWeek[3]]).toEqual(['9']);
+    if (rpeByWeek[4].size) expect([...rpeByWeek[4]]).toEqual(['5-6']);
+  });
+
   it('todas las sesiones de 3 semanas traen al menos un bloque', () => {
     const profile = makeProfile();
     const empty: string[] = [];

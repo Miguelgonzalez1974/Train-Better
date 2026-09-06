@@ -337,6 +337,26 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
   },
 };
 
+export interface WodEffortTarget {
+  /** RPE objetivo del metcon esa semana del meso. */
+  rpe: string;
+  /** El "para qué" del esfuerzo de hoy, en una línea. */
+  intent: string;
+}
+
+/**
+ * Objetivo de esfuerzo del metcon por semana de mesociclo. La fuerza ya tiene su onda
+ * (volumen -> intensidad -> pico -> descarga); el acondicionamiento la sigue: RPE creciente hasta el
+ * pico y descarga aeróbica en la 4. Va a la nota del WOD para que el atleta lo ataque con un objetivo
+ * concreto, no solo con "3 movimientos y un formato".
+ */
+export const WOD_EFFORT_BY_WEEK: Record<1 | 2 | 3 | 4, WodEffortTarget> = {
+  1: { rpe: '7', intent: 'construyes motor — a un ritmo que puedas repetir mañana, no lo revientes' },
+  2: { rpe: '8', intent: 'aprieta el ritmo y aguanta la técnica cuando queme' },
+  3: { rpe: '9', intent: 'hoy sí vacías el depósito, estilo competición' },
+  4: { rpe: '5-6', intent: 'suave, para mover sangre y bajar fatiga — hoy no se puntúa' },
+};
+
 /** Sistema energetico dominante de cada fase de mesociclo — el punto de gravedad alrededor del cual rota la semana. */
 export const PHASE_DOMINANT_ENERGY: Record<1 | 2 | 3 | 4, EnergySystem> = {
   1: 'base-aerobica',

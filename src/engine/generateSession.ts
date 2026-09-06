@@ -57,6 +57,7 @@ import {
   RISING_LOAD_INTERVAL_INCREMENT_PERCENT,
   RISING_LOAD_INTERVAL_STEPS,
   WOD_BARBELL_LOAD_PERCENT,
+  WOD_EFFORT_BY_WEEK,
   WOD_PRESCRIPTION,
   WOD_TIME_DOMAIN,
   type EnergySystem,
@@ -322,6 +323,28 @@ function wodSynonymBlockedIds(pickedIds: readonly string[]): Set<string> {
     }
   }
   return blocked;
+}
+
+/**
+ * Pista de ritmo CUANTIFICADA segun el formato — un numero concreto que clavar, ademas del consejo
+ * tactico general de `WOD_FORMAT_RATIONALE`. Vacia para los formatos donde no hay una cifra util que
+ * dar (el objetivo de esos ya lo cubre el RPE de la semana + el consejo tactico).
+ */
+function wodQuantCue(kind: WodFormatKind, td: WodTimeDomain): string {
+  switch (kind) {
+    case 'amrap':
+    case 'ascendingLadderFiller':
+      return `Ritmo para sostener los ${td.amrapMin} min enteros — anota las rondas para comparar.`;
+    case 'emom':
+      return 'Que el trabajo de cada minuto te deje 15-20 s de descanso; si llegas justo, baja las reps.';
+    case 'interval':
+      return 'Que te sobren ~30 s en cada intervalo; si acabas al límite, baja el ritmo en el siguiente.';
+    case 'risingInterval':
+    case 'risingLoadInterval':
+      return 'Para en la primera ronda que de verdad no completes dentro del tiempo.';
+    default:
+      return '';
+  }
 }
 
 /** Que tag de cooldown.ts encaja mejor con cada patron de fuerza del dia (ver buildCooldownBlock). */
@@ -1454,6 +1477,10 @@ function buildWodBlock(
   const isPeakWeekExtraBenchmark =
     !wodRampActive && !rpeUnreliable && week === 3 && dayPlan.trainingDayIndex === Math.floor(trainingDaysPerWeek / 2);
 
+  // Objetivo de esfuerzo del metcon de esta semana del meso — se añade a la nota, sea WOD generado o benchmark.
+  const effort = WOD_EFFORT_BY_WEEK[week];
+  const effortNote = ` Esfuerzo de hoy: RPE ~${effort.rpe} — ${effort.intent}.`;
+
   if (!wodRampActive && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal)) {
     // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
     // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
@@ -1462,13 +1489,16 @@ function buildWodBlock(
 
     if (retestCandidate && isRetestDue) {
       const { wod, prevDate, prevResult } = retestCandidate;
-      const chaseNote = wod.scoreType === 'time' ? 'Intenta bajar ese tiempo.' : 'Intenta superar esa marca.';
+      const chaseNote =
+        wod.scoreType === 'time'
+          ? `Objetivo: bajar de ${prevResult.value} — un 2-4% menos ya es un buen salto.`
+          : `Objetivo: superar ${prevResult.value} — apunta a +2-4 reps.`;
       return [
         {
           block: 'wod',
           movementId: `benchmark:${wod.id}`,
           format: wod.format,
-          notes: `${wod.name} — ${wod.format}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}`,
+          notes: `${wod.name} — ${wod.format}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
         },
       ];
     }
@@ -1489,7 +1519,7 @@ function buildWodBlock(
               block: 'wod',
               movementId: `benchmark:${wod.id}`,
               format: wod.format,
-              notes: `${wod.name} — ${wod.format}. Benchmark de referencia: registra bien tu marca, en unas semanas lo repetimos para medir progreso real.`,
+              notes: `${wod.name} — ${wod.format}. Benchmark de referencia: registra bien tu marca, en unas semanas lo repetimos para medir progreso real.${effortNote}`,
             },
           ];
         }
@@ -1504,7 +1534,7 @@ function buildWodBlock(
         block: 'wod',
         movementId: `benchmark:${wod.id}`,
         format: wod.format,
-        notes: `${wod.name} — ${wod.format}. WOD de referencia: usa el resultado para medir tu progreso real.`,
+        notes: `${wod.name} — ${wod.format}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
       },
     ];
   }
@@ -1603,9 +1633,12 @@ function buildWodBlock(
 
   const title = generateWodName();
   const wodRampNote = wodRampActive ? ' Rampa de vuelta activa — formato más suave a propósito.' : '';
-  // El énfasis del día (fuerza/metcon) y el sistema energético van a `coachReasons` (emphasisNote /
-  // energyReason) — la nota del bloque se queda solo con cómo atacar este formato + la rampa.
-  const notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${wodRampNote}`;
+  // Nota del WOD: consejo de cómo atacar el formato (la versión cuantificada cuando la hay, si no la
+  // táctica genérica) + objetivo de esfuerzo de la semana del meso (RPE) + pista de ritmo del sistema
+  // energético del día. El énfasis del día y el "por qué" del sistema energético van a `coachReasons`.
+  const quantCue = wodQuantCue(chosenFormat.kind, timeDomain);
+  const howToAttack = quantCue || WOD_FORMAT_RATIONALE[chosenFormat.kind];
+  const notes = `${howToAttack}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}`;
 
   if (chosenFormat.kind === 'barbellComplex') {
     const usedForComplex = new Set(recentIds);
