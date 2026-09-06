@@ -28,6 +28,9 @@ export interface MicrocyclePlan {
   strengthPattern: MovementPattern[];
   /** Familia de oly por `trainingDayIndex`. */
   olyFamily: OlyFamily[];
+  /** `true` en el último día de oly de la semana: ese día cierra combinando snatch y clean&jerk
+   *  (estilo Day 5 de Mayhem Burgener). Solo se marca si la semana tuvo ≥2 días de oly separados. */
+  olyCombined: boolean[];
   /** Sistema energetico del WOD por `trainingDayIndex` — rota alrededor del dominante de la fase para
    *  que dos dias seguidos no repitan estimulo metabolico. Los slots sin WOD (recuperacion de n=6)
    *  llevan el dominante como relleno inocuo. */
@@ -316,6 +319,13 @@ export function buildMicrocyclePlan(input: {
     olyFamily[slotIdx] = i % 2 === 0 ? anchorFam : other(anchorFam);
   });
 
+  // El último día de oly de la semana combina las dos familias (estilo Day 5 de Mayhem): cierra con
+  // un toque ligero de la familia contraria. Solo si la semana tuvo al menos 2 días de oly separados.
+  const olyCombined: boolean[] = Array.from({ length: n }, () => false);
+  if (strengthSlots.length >= 2) {
+    olyCombined[strengthSlots[strengthSlots.length - 1]] = true;
+  }
+
   // Rotacion de dominios energeticos: la fase fija el sistema dominante y los dias de WOD rotan a su
   // alrededor para no encadenar el mismo estimulo metabolico dos dias seguidos. PRNG propio (ver
   // `planEnergySystems`), independiente del flujo de fuerza/oly.
@@ -324,5 +334,5 @@ export function buildMicrocyclePlan(input: {
   // Onda de intensidad dura/media/suave de la semana (ver `planDayIntensity`).
   const dayIntensity = planDayIntensity(n, phase);
 
-  return { weekNumber, phase, strengthPattern, olyFamily, energySystem, dayIntensity };
+  return { weekNumber, phase, strengthPattern, olyFamily, olyCombined, energySystem, dayIntensity };
 }

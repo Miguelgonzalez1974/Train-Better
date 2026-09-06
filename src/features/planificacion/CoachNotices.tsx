@@ -61,10 +61,17 @@ export function CoachNotices({
   retestHeadsUp,
   coachReasons,
 }: CoachNoticesProps) {
-  // Plegada por defecto para no abrir la sesión con un muro de texto — solo se abre sola si hay un
-  // aviso de molestia activo (eso sí conviene tenerlo delante). El resto (por qué hoy, rampa,
-  // revisión de macro) queda tras el contador.
-  const [collapsed, setCollapsed] = useState(activePainFlags.length === 0);
+  // Se abre sola cuando hay algo ACCIONABLE (molestia activa, oferta de rampa, revisión de macro,
+  // siguiente bloque, retest mañana) — eso conviene tenerlo delante. Lo meramente informativo
+  // (estado de rampa, "por qué tu sesión es así hoy") no la abre: queda tras el contador para no
+  // abrir la sesión con un muro de texto.
+  const hasActionable =
+    activePainFlags.length > 0 ||
+    Boolean(showReturnRampSuggestion && returnRampSuggestion) ||
+    Boolean(macroReviewSuggestion) ||
+    Boolean(nextMacroSuggestion) ||
+    Boolean(retestHeadsUp);
+  const [collapsed, setCollapsed] = useState(!hasActionable);
 
   const count =
     activePainFlags.length +

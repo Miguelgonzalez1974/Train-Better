@@ -679,6 +679,23 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       )}
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
 
+      <CoachNotices
+        activePainFlags={activePainFlags}
+        onRemovePainFlag={handleRemovePainFlag}
+        rampStatus={rampStatus}
+        returnRampSuggestion={returnRampSuggestion}
+        showReturnRampSuggestion={showReturnRampSuggestion}
+        onActivateReturnRamp={handleActivateReturnRamp}
+        onDismissReturnRamp={() => setReturnRampDismissed(true)}
+        macroReviewSuggestion={macroReviewSuggestion}
+        onConfirmMacroReview={handleConfirmMacroReview}
+        onDismissMacroReview={handleDismissMacroReview}
+        nextMacroSuggestion={nextMacroSuggestion}
+        onNavigateToObjetivos={onNavigateToObjetivos}
+        retestHeadsUp={retestHeadsUp}
+        coachReasons={session?.coachReasons ?? []}
+      />
+
       {goals.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {goals.map((g) => {
@@ -735,23 +752,6 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           onClose={() => setShowDiary(false)}
         />
       )}
-
-      <CoachNotices
-        activePainFlags={activePainFlags}
-        onRemovePainFlag={handleRemovePainFlag}
-        rampStatus={rampStatus}
-        returnRampSuggestion={returnRampSuggestion}
-        showReturnRampSuggestion={showReturnRampSuggestion}
-        onActivateReturnRamp={handleActivateReturnRamp}
-        onDismissReturnRamp={() => setReturnRampDismissed(true)}
-        macroReviewSuggestion={macroReviewSuggestion}
-        onConfirmMacroReview={handleConfirmMacroReview}
-        onDismissMacroReview={handleDismissMacroReview}
-        nextMacroSuggestion={nextMacroSuggestion}
-        onNavigateToObjetivos={onNavigateToObjetivos}
-        retestHeadsUp={retestHeadsUp}
-        coachReasons={session?.coachReasons ?? []}
-      />
 
       {!session && (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
@@ -819,7 +819,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
                   session.strengthProgramLabel ? 'bg-brand-gold/15 text-brand-gold' : 'bg-white/10 text-neutral-300'
                 }`}
               >
-                {session.strengthProgramLabel ?? session.swapLabel ?? 'Mantenimiento'}
+                {/* Solo el nombre del método/ciclo — el "semana X de Y" vive en "Tu progreso" del Dashboard, no hace falta repetirlo. */}
+                {session.strengthProgramLabel?.split(' · Semana ')[0] ?? session.swapLabel ?? 'Mantenimiento'}
               </span>
             )}
             {!session.isRestDay && (

@@ -863,6 +863,8 @@ function buildOlyBlock(
   plannedFamily: OlyFamily | null,
   /** Dosis del dia — solo se usa `strengthLoad` para que la carga de oly progrese dentro de la fase (el volumen de oly no se toca). */
   dose: DayDose,
+  /** true en el ultimo dia de oly de la semana: cierra con un toque ligero de la familia contraria (estilo Day 5 de Mayhem). */
+  combined = false,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -1114,6 +1116,30 @@ function buildOlyBlock(
     ];
   };
 
+  // Día combinado (último de oly de la semana, estilo Day 5 de Mayhem): tras el trabajo de la familia
+  // principal, cierra con un toque ligero de la otra. No en descarga (semana 4) ni en día de foco de
+  // recepción — esos días ya tienen un objetivo concreto.
+  const buildCombinedTail = (): SessionBlockResult[] => {
+    if (!combined || week === 4 || receivingFocus) return [];
+    const otherFamily: OlyFamily = family === 'snatch' ? 'clean' : 'snatch';
+    const otherId = otherFamily === 'snatch' ? 'snatch' : 'clean-and-jerk';
+    const otherMovement = getMovementById(otherId);
+    if (!otherMovement) return [];
+    const otherLoadKg = roundToNearestPlate(resolveOlyPR(otherMovement, prs, otherFamily, variantPrs) * 0.72 * autoregFactor);
+    return [
+      {
+        block: 'oly',
+        movementId: otherId,
+        sets: 3,
+        reps: '1',
+        loadKg: otherLoadKg,
+        notes: `Día combinado (estilo Day 5 de Mayhem): cierra con 3 singles técnicos de ${
+          otherFamily === 'snatch' ? 'snatch' : 'clean & jerk'
+        } al ~72% (${otherLoadKg} kg) — velocidad y posición, sin buscar máximos.`,
+      },
+    ];
+  };
+
   // Calentamiento especifico de barra, al inicio del bloque de Oly (que se hace despues del WOD, ya
   // en caliente): Burgener con PVC segun la familia -> complejo de barra vacia -> rampa de carga en
   // 3-4 series hasta el primer peso de trabajo. Nada de movilidad/articular aqui: eso ya se hizo
@@ -1135,7 +1161,12 @@ function buildOlyBlock(
   const familyPool = getMovementsByBlock('oly').filter((m) =>
     family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk'),
   );
-  const primerCandidates = familyPool.filter((m) => m.id !== movement.id && m.progressionOf);
+  // El primer es trabajo de posición/tirón/técnica DEL levantamiento (snatch o clean), nunca un drill
+  // de jerk suelto — un "tall jerk" o "jerk balance" antes de un complejo de snatch/clean no pega y
+  // ademas saturaba el pool de la familia clean (todos los dias salia el mismo).
+  const primerCandidates = familyPool.filter(
+    (m) => m.id !== movement.id && m.progressionOf && !/jerk/.test(m.id),
+  );
   // Con foco de recepcion, el primer se elige entre drills de recibir abajo (solo el snatch tiene
   // versiones de recepcion puras en el catalogo; el clean se apoya solo en el sesgo de arriba).
   const receivingPrimers = receivingFocus
@@ -1146,7 +1177,7 @@ function buildOlyBlock(
   const primerPool =
     receivingPrimers.length > 0 ? receivingPrimers : weekPrimers.length > 0 ? weekPrimers : primerCandidates;
   const primerMovement = pickVaried(primerPool, recentIds);
-  if (!primerMovement) return { blocks: [...barbellPrimer, mainEntry, ...buildPullTail()], reasons };
+  if (!primerMovement) return { blocks: [...barbellPrimer, mainEntry, ...buildPullTail(), ...buildCombinedTail()], reasons };
 
   const primerLoadKg = roundToNearestPlate(
     resolveOlyPR(primerMovement, prs, family, variantPrs) * scheme.percent * primerLoadFactor(primerMovement.id) * autoregFactor,
@@ -1162,7 +1193,7 @@ function buildOlyBlock(
     loadKg: primerLoadKg,
   };
 
-  return { blocks: [...barbellPrimer, primerEntry, mainEntry, ...buildPullTail(primerMovement.id)], reasons };
+  return { blocks: [...barbellPrimer, primerEntry, mainEntry, ...buildPullTail(primerMovement.id), ...buildCombinedTail()], reasons };
 }
 
 /**
@@ -2355,6 +2386,7 @@ export function generateDailySession(
   });
   const plannedPattern = microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
   const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
+  const plannedOlyCombined = microPlan.olyCombined[dayPlan.trainingDayIndex] ?? false;
   const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
 
   // Dosis del dia = progresion DENTRO del mesociclo (el volumen/intensidad ondula a lo largo de las
@@ -2436,6 +2468,7 @@ export function generateDailySession(
         responseProfile,
         plannedFamily,
         dayDose,
+        plannedOlyCombined,
       )
     : { blocks: [] as SessionBlockResult[], reasons: [] as string[] };
 
