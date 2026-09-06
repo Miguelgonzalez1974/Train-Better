@@ -42,7 +42,6 @@ import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
-import { GOAL_TYPE_META } from '../objetivos/goalMeta';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
@@ -695,28 +694,6 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         retestHeadsUp={retestHeadsUp}
         coachReasons={session?.coachReasons ?? []}
       />
-
-      {goals.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {goals.map((g) => {
-            const meta = GOAL_TYPE_META[g.type];
-            const Icon = meta.Icon;
-            const movement = g.movementId ? getMovementById(g.movementId) : undefined;
-            return (
-              <div
-                key={g.id}
-                className="flex items-center gap-2 rounded-lg border border-brand-gold/30 bg-brand-gold/10 px-3 py-1.5 text-sm text-brand-gold"
-              >
-                <Icon size={16} strokeWidth={2.25} />
-                <span>
-                  {meta.label}
-                  {movement && ` — ${movement.name}`} ({g.emphasis})
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       <div className="flex flex-col gap-1.5">
         <WeekStrip
