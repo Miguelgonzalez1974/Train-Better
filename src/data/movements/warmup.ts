@@ -338,17 +338,6 @@ export const warmupMovements: Movement[] = [
     tags: ['general'],
   },
   {
-    id: 'band-pull-apart',
-    name: 'Band Pull-Aparts',
-    blocks: ['warmup'],
-    pattern: 'mobility',
-    equipment: ['banda elastica'],
-    primaryMuscles: ['deltoides posterior', 'romboides'],
-    standard: 'Banda sujeta con ambas manos frente al pecho, separar los brazos abriendo la banda hasta tocar el pecho. Serie de 15-20 repeticiones.',
-    scaling: { easier: [], harder: [] },
-    tags: ['especifico-oly', 'especifico-strength'],
-  },
-  {
     id: 'duck-walk',
     name: 'Duck Walk',
     blocks: ['warmup'],

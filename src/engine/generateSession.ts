@@ -298,7 +298,7 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
  * WOD, el resto quedan bloqueados para esa selección — no tiene sentido un WOD con "box jump" y "box
  * jump over" a la vez, ni con dos variantes de dominada.
  */
-const WOD_SYNONYM_GROUPS: readonly (readonly string[])[] = [
+export const WOD_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['box-jump', 'box-jump-over', 'burpee-box-jump-over'],
   ['kettlebell-swing-russian', 'kettlebell-swing-american'],
   ['strict-pull-up', 'kipping-pull-up', 'chest-to-bar-pull-up', 'butterfly-pull-up', 'banded-pull-up', 'jumping-pull-up'],

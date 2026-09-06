@@ -275,9 +275,9 @@ export const accessoryMovements: Movement[] = [
     pattern: 'horizontalPull',
     equipment: ['banda elastica'],
     primaryMuscles: ['deltoides posterior', 'romboides'],
-    standard: 'Separacion completa de la banda a la altura del pecho con brazos extendidos.',
+    standard: 'Separacion completa de la banda a la altura del pecho con brazos extendidos. Serie de 15-20 repeticiones como activacion.',
     scaling: { easier: [], harder: [] },
-    tags: ['salud-hombro'],
+    tags: ['salud-hombro', 'especifico-oly', 'especifico-strength'],
   },
   {
     id: 'calf-raise',
