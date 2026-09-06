@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Fingerprint, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
-import type { BodyweightEntry, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../../data/athlete/types';
+import type { BodyweightEntry, PersonalRecords, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from '../../data/athlete/types';
 import {
   computeResponseProfile,
   RESPONSE_MIN_WEEKS,
@@ -94,16 +94,20 @@ export function ResponseProfileCard({
   prLog,
   setFeedbackLog,
   bodyweightLog,
+  workLog,
+  prs,
 }: {
   history: SessionHistoryEntry[];
   prLog: PrLogEntry[];
   setFeedbackLog: SetFeedbackEntry[];
   bodyweightLog: BodyweightEntry[];
+  workLog: WorkSetEntry[];
+  prs: PersonalRecords;
 }) {
   const [collapsed, setCollapsed] = useState(true);
   const profile = useMemo(
-    () => computeResponseProfile(history, prLog, new Date(), setFeedbackLog, bodyweightLog),
-    [history, prLog, setFeedbackLog, bodyweightLog],
+    () => computeResponseProfile(history, prLog, new Date(), setFeedbackLog, bodyweightLog, workLog, prs),
+    [history, prLog, setFeedbackLog, bodyweightLog, workLog, prs],
   );
 
   const weeks = Math.floor(profile.dataWeeks);

@@ -219,6 +219,8 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
               prLog={profile.prLog ?? []}
               setFeedbackLog={profile.setFeedbackLog ?? []}
               bodyweightLog={profile.bodyweightLog ?? []}
+              workLog={profile.workLog ?? []}
+              prs={profile.prs}
             />
 
             {/*

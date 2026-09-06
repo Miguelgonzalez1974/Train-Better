@@ -116,8 +116,9 @@ export function buildNextMacroSuggestion(
   // el proximo bloque — quitandola de intensificacion (la fase mas prescindible para el), o de
   // acumulacion si intensificacion ya esta en su minimo.
   const slowRecovery =
-    engineResponseProfile(computeResponseProfile(history, profile.prLog, today, profile.setFeedbackLog, profile.bodyweightLog))
-      .recovery.tier === 'lento';
+    engineResponseProfile(
+      computeResponseProfile(history, profile.prLog, today, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, profile.prs),
+    ).recovery.tier === 'lento';
 
   let suggestedPhaseWeeks: [number, number, number, number] | undefined;
   let recoveryNote: string | undefined;

@@ -66,7 +66,7 @@ export function buildWeeklyMacroReview(
   const avgRpe = weekEntries.reduce((sum, entry) => sum + entry.rpe, 0) / weekEntries.length;
   const acwr = computeAcwr(history, today);
   const responseProfile = engineResponseProfile(
-    computeResponseProfile(history, profile.prLog, today, profile.setFeedbackLog, profile.bodyweightLog),
+    computeResponseProfile(history, profile.prLog, today, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, profile.prs),
   );
   const slowRecovery = responseProfile.recovery.tier === 'lento';
   const rpeThreshold = slowRecovery ? HIGH_RPE_THRESHOLD_SLOW_RECOVERY : HIGH_RPE_THRESHOLD;

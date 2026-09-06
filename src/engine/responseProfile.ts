@@ -1,6 +1,8 @@
-import type { BodyweightEntry, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry } from '../data/athlete/types';
+import type { BodyweightEntry, PersonalRecords, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from '../data/athlete/types';
 import type { MovementPattern } from '../data/movements/types';
+import { getMovementById } from '../data/movements';
 import { computeAcwr, daysBetween } from './loadMetrics';
+import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPRKey } from './prResolution';
 import { SET_FEEL_SCORE } from './setFeedback';
 
 /**
@@ -37,6 +39,14 @@ const SETLOAD_RECENT = 6;
 /** Cuanto puede mover la carga la calibracion por e1RM medido — mas ancho tras `confident`. */
 const SETLOAD_CLAMP_PRE = 0.05;
 const SETLOAD_CLAMP_POST = 0.08;
+
+/** Calibracion desde el `workLog` (series marcadas en el modo entreno, kg x reps SIN rpe). */
+const WORKLOG_MIN_SESSIONS = 3;
+const WORKLOG_RECENT_SESSIONS = 8;
+/** La serie mas pesada de la sesion debe ir a >= este % del PR para contar — descarta calentamiento y dias de tecnica. */
+const WORKLOG_MIN_INTENSITY = 0.55;
+/** Reps por encima de esto no dan un e1RM fiable por formula. */
+const WORKLOG_MAX_REPS = 10;
 
 /** RPE: sesiones minimas en cada cubo (semanas duras / semanas suaves) para medir si el RPE discrimina. */
 const RPE_MIN_PER_BUCKET = 3;
@@ -131,9 +141,11 @@ export interface ResponseProfile {
    */
   setFeel: SetFeelCalibration[];
   /**
-   * Calibracion de carga por levantamiento a partir de las series reales registradas ("hice X kg x
-   * Y @ RPE Z" -> e1RM). Mas precisa que `setFeel`; cuando un lift tiene esta senal, el motor la
-   * usa en su lugar. Como `setFeel`, sigue viva aunque `confident` sea false (gate propio por lift).
+   * Calibracion de carga por levantamiento a partir de las series REALES: el feedback de la 1ª serie
+   * con RPE ("hice X kg x Y @ RPE Z" -> e1RM, `analyzeSetLoads`) y, para los lifts sin ese feedback,
+   * las series marcadas en el modo entreno sin RPE (mejor esfuerzo reciente vs PR, `analyzeWorkLoads`).
+   * Mas precisa que `setFeel`; cuando un lift tiene esta senal, el motor la usa en su lugar. Como
+   * `setFeel`, sigue viva aunque `confident` sea false (gate propio por lift).
    */
   perLiftLoad: LiftLoadCalibration[];
   recovery: {
@@ -356,6 +368,64 @@ function analyzeSetLoads(log: SetFeedbackEntry[], confident: boolean): LiftLoadC
   return out;
 }
 
+/** e1RM por Epley a partir de (kg, reps). Con 1 rep es el propio kg (un single real). */
+function epley1rm(kg: number, reps: number): number {
+  return reps <= 1 ? kg : kg * (1 + reps / 30);
+}
+
+/** Clave de PR (fuerza / oly / variante) de un `movementId` de `workLog`, o null si no mapea. */
+function prKeyForMovement(movementId: string): string | null {
+  const m = getMovementById(movementId);
+  if (!m) return null;
+  return resolveStrengthPRKey(m) ?? resolveOlyPRKey(m) ?? resolveVariantPRKey(m) ?? null;
+}
+
+/**
+ * Calibracion de carga a partir del `workLog` — las series REALES marcadas en el modo entreno (kg x
+ * reps, sin RPE). Por levantamiento coge la serie mas pesada de cada sesion reciente (solo si va a
+ * >= 55% del PR, para descartar calentamiento y dias de tecnica), estima su 1RM por Epley y compara
+ * el MEJOR esfuerzo reciente con el PR registrado: si mueves consistentemente por encima de tu PR
+ * guardado, tus % de trabajo van cortos -> sube; si por debajo, baja. Menos precisa que
+ * `analyzeSetLoads` (que si tiene RPE); solo se usa para los lifts sin esa senal.
+ */
+function analyzeWorkLoads(workLog: WorkSetEntry[], prs: PersonalRecords | undefined, confident: boolean): LiftLoadCalibration[] {
+  if (!prs) return [];
+  const prByKey = prs as unknown as Record<string, number>;
+
+  // key -> fecha -> mejor e1RM de esa sesion
+  const topByKeyDate = new Map<string, Map<string, number>>();
+  for (const e of workLog) {
+    if (!(e.kg > 0) || !(e.reps >= 1) || e.reps > WORKLOG_MAX_REPS) continue;
+    const key = prKeyForMovement(e.movementId);
+    if (!key) continue;
+    const pr = prByKey[key];
+    if (!pr || e.kg < pr * WORKLOG_MIN_INTENSITY) continue;
+    const byDate = topByKeyDate.get(key) ?? new Map<string, number>();
+    byDate.set(e.date, Math.max(byDate.get(e.date) ?? 0, epley1rm(e.kg, e.reps)));
+    topByKeyDate.set(key, byDate);
+  }
+
+  const clampWidth = confident ? SETLOAD_CLAMP_POST : SETLOAD_CLAMP_PRE;
+  const out: LiftLoadCalibration[] = [];
+  for (const [key, byDate] of topByKeyDate) {
+    const recent = [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-WORKLOG_RECENT_SESSIONS);
+    if (recent.length < WORKLOG_MIN_SESSIONS) continue;
+    // Mejor esfuerzo reciente — resistente a los dias de tecnica (que nunca seran el maximo).
+    const measuredMax = Math.max(...recent.map(([, e1]) => e1));
+    const pr = prByKey[key];
+    const loadFactor = clamp(measuredMax / pr, 1 - clampWidth, 1 + clampWidth);
+    out.push({
+      key,
+      label: PR_KEY_LABEL[key] ?? key,
+      measuredMax: Math.round(measuredMax * 10) / 10,
+      assumedMax: pr,
+      samples: recent.length,
+      loadFactor,
+    });
+  }
+  return out;
+}
+
 /**
  * Tendencia de peso corporal en la ventana reciente por regresion lineal simple sobre (dia, kg),
  * expresada en % del peso medio por semana. Solo se clasifica como sube/baja si supera
@@ -406,6 +476,8 @@ export function computeResponseProfile(
   today: Date = new Date(),
   setFeedbackLog: SetFeedbackEntry[] = [],
   bodyweightLog: BodyweightEntry[] = [],
+  workLog: WorkSetEntry[] = [],
+  prs?: PersonalRecords,
 ): ResponseProfile {
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
   const dataWeeks = sorted.length > 0 ? Math.max(0, daysBetween(sorted[0].date, today) / 7) : 0;
@@ -415,13 +487,23 @@ export function computeResponseProfile(
       sorted.length >= RESPONSE_FAST_SESSIONS &&
       setFeedbackLog.length >= RESPONSE_FAST_SETFEEL);
 
+  // Calibracion de carga por lift desde dos fuentes: el feedback de la 1ª serie con RPE
+  // (`analyzeSetLoads`, mas preciso) y las series reales del modo entreno sin RPE (`analyzeWorkLoads`,
+  // cobertura mas amplia). Para un lift con ambas, gana la del feedback con RPE.
+  const perLiftLoadMap = new Map<string, LiftLoadCalibration>();
+  for (const c of analyzeWorkLoads(workLog, prs, confident)) perLiftLoadMap.set(c.key, c);
+  for (const c of analyzeSetLoads(setFeedbackLog, confident)) perLiftLoadMap.set(c.key, c);
+  const perLiftLoad = [...perLiftLoadMap.values()].sort(
+    (a, b) => Math.abs(b.loadFactor - 1) - Math.abs(a.loadFactor - 1),
+  );
+
   return {
     dataWeeks,
     confident,
     rpe: analyzeRpe(sorted),
     perLift: analyzePerLift(prLog ?? []),
     setFeel: analyzeSetFeel(setFeedbackLog),
-    perLiftLoad: analyzeSetLoads(setFeedbackLog, confident),
+    perLiftLoad,
     recovery: analyzeRecovery(sorted),
     rx: analyzeRx(sorted),
     bodyweight: analyzeBodyweight(bodyweightLog, today),

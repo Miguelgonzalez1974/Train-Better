@@ -2368,7 +2368,7 @@ export function generateDailySession(
   // datos suficientes (`engineResponseProfile` devuelve el neutro si no). Individualiza: cuanto se
   // fia del RPE, sesgo de reporte, ritmo de progreso por lift, y velocidad de recuperacion.
   const responseProfile = engineResponseProfile(
-    computeResponseProfile(history, profile.prLog, date, profile.setFeedbackLog, profile.bodyweightLog),
+    computeResponseProfile(history, profile.prLog, date, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, profile.prs),
   );
   const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goals, date, responseProfile.recovery.tier);
   const isTaper = isTaperActive(goals, date);
