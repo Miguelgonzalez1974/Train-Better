@@ -293,6 +293,37 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   barbellComplex: 'Tres movimientos de barra seguidos — reparte el esfuerzo entre los tres, no vacíes el depósito en el primero.',
 };
 
+/**
+ * Grupos de movimientos de WOD que son casi el mismo ejercicio. En cuanto uno del grupo entra en el
+ * WOD, el resto quedan bloqueados para esa selección — no tiene sentido un WOD con "box jump" y "box
+ * jump over" a la vez, ni con dos variantes de dominada.
+ */
+const WOD_SYNONYM_GROUPS: readonly (readonly string[])[] = [
+  ['box-jump', 'box-jump-over', 'burpee-box-jump-over'],
+  ['kettlebell-swing-russian', 'kettlebell-swing-american'],
+  ['strict-pull-up', 'kipping-pull-up', 'chest-to-bar-pull-up', 'butterfly-pull-up', 'banded-pull-up', 'jumping-pull-up'],
+  ['handstand-push-up', 'kipping-hspu'],
+  ['bar-muscle-up', 'ring-muscle-up'],
+  ['wall-walk', 'wall-walk-alt'],
+  ['rope-climb', 'legless-rope-climb'],
+  ['double-under', 'single-under'],
+  ['toes-to-bar', 'knees-to-elbow'],
+  ['burpee', 'bar-facing-burpee', 'burpee-to-target', 'lateral-burpee'],
+  ['thruster', 'dumbbell-thruster'],
+];
+
+/** Ids del mismo grupo de sinónimos que alguno de `pickedIds` (sin incluir los ya elegidos). */
+function wodSynonymBlockedIds(pickedIds: readonly string[]): Set<string> {
+  const picked = new Set(pickedIds);
+  const blocked = new Set<string>();
+  for (const group of WOD_SYNONYM_GROUPS) {
+    if (group.some((id) => picked.has(id))) {
+      for (const id of group) if (!picked.has(id)) blocked.add(id);
+    }
+  }
+  return blocked;
+}
+
 /** Que tag de cooldown.ts encaja mejor con cada patron de fuerza del dia (ver buildCooldownBlock). */
 const COOLDOWN_TAG_BY_PATTERN: Partial<Record<MovementPattern, string>> = {
   squat: 'especifico-squat',
@@ -788,6 +819,27 @@ const OLY_PULL_IDS: Record<OlyFamily, string[]> = {
 /** % del PR del levantamiento al que se hace la tracción, por semana de meso (0 = no se programa). */
 const OLY_PULL_PERCENT: Record<1 | 2 | 3 | 4, number> = { 1: 0.9, 2: 0.95, 3: 1.05, 4: 0 };
 
+/**
+ * El primer del complejo de oly PROGRESA con la semana del meso (patrón Mayhem/halterofilia): el
+ * bloque olímpico deja de sentirse aleatorio y "construye" el levantamiento a lo largo de las 4
+ * semanas — posiciones y técnica ancha al principio, recepción y levantamiento completo hacia el
+ * pico, técnica ligera en descarga. Es un SESGO: si el pool preferido de la semana queda vacío (pool
+ * de movimientos corto, dolor, etc.) se cae a todas las progresiones de la familia.
+ */
+const OLY_PRIMER_WEEK_BIAS: Record<1 | 2 | 3 | 4, RegExp> = {
+  1: /muscle|tall|three-position|pause|sots|drop|panda/,
+  2: /power-|hang-|three-position|barski/,
+  3: /balance|drop|off-blocks|shrug|^(snatch|clean)$/,
+  4: /muscle|tall|pause|three-position/,
+};
+
+const OLY_PRIMER_PHASE_NOTE: Record<1 | 2 | 3 | 4, string> = {
+  1: ' Fase de posiciones del meso: complejo técnico ancho, carga baja.',
+  2: ' Fase power del meso: power + hang + completo, sube algo la carga.',
+  3: ' Fase de levantamiento completo: recepción abajo y a intensidad.',
+  4: ' Descarga: complejo ligero, foco absoluto en posiciones.',
+};
+
 function buildOlyBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -1089,7 +1141,11 @@ function buildOlyBlock(
   const receivingPrimers = receivingFocus
     ? primerCandidates.filter((m) => RECEIVING_PRIMER_IDS[family].includes(m.id))
     : [];
-  const primerMovement = pickVaried(receivingPrimers.length > 0 ? receivingPrimers : primerCandidates, recentIds);
+  // Sesgo por semana de meso: técnica ancha -> power -> completo -> descarga (ver OLY_PRIMER_WEEK_BIAS).
+  const weekPrimers = primerCandidates.filter((m) => OLY_PRIMER_WEEK_BIAS[week].test(m.id));
+  const primerPool =
+    receivingPrimers.length > 0 ? receivingPrimers : weekPrimers.length > 0 ? weekPrimers : primerCandidates;
+  const primerMovement = pickVaried(primerPool, recentIds);
   if (!primerMovement) return { blocks: [...barbellPrimer, mainEntry, ...buildPullTail()], reasons };
 
   const primerLoadKg = roundToNearestPlate(
@@ -1101,7 +1157,7 @@ function buildOlyBlock(
     sets: scheme.sets,
     reps: '2-3',
     notes: `Primer técnico antes del levantamiento principal — prioriza posición, no peso.${
-      receivingPrimers.length > 0 ? ' Hoy es un drill de recepción: recibe lo más abajo posible.' : ''
+      receivingPrimers.length > 0 ? ' Hoy es un drill de recepción: recibe lo más abajo posible.' : OLY_PRIMER_PHASE_NOTE[week]
     }${autoregNote ? ` ${autoregNote}` : ''}`,
     loadKg: primerLoadKg,
   };
@@ -1572,8 +1628,11 @@ function buildWodBlock(
   const usedIds = new Set(recentIds);
 
   function pickFrom(domainPool: Movement[], preferredId?: string, preferChance = 0): void {
-    const remaining = domainPool.filter((m) => !picks.some((p) => p.id === m.id));
-    const fallback = pool.filter((m) => !picks.some((p) => p.id === m.id));
+    // Bloquea los cuasi-sinonimos de lo ya elegido (box jump + box jump over, dos dominadas...).
+    const blocked = wodSynonymBlockedIds(picks.map((p) => p.id));
+    const isFree = (m: Movement) => !picks.some((p) => p.id === m.id) && !blocked.has(m.id);
+    const remaining = domainPool.filter(isFree);
+    const fallback = pool.filter(isFree);
     const candidates = remaining.length > 0 ? remaining : fallback;
     const pick = preferredId ? pickVariedWithPreference(candidates, usedIds, preferredId, preferChance) : pickVaried(candidates, usedIds);
     if (pick) {
