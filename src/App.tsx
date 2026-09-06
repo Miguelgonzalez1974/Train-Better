@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sidebar } from './features/shell/Sidebar';
 import { BottomNav } from './features/shell/BottomNav';
+import { SyncIndicator } from './features/shell/SyncIndicator';
 import type { TabId } from './features/shell/navItems';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Objetivos } from './features/objetivos/Objetivos';
@@ -57,6 +58,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-brand-bg">
+      <SyncIndicator />
       <Sidebar active={activeTab} onChange={setActiveTab} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-6">
         {activeTab === 'dashboard' && <Dashboard onNavigateToPlanificacion={() => setActiveTab('planificacion')} />}

@@ -1,6 +1,6 @@
 import type { AthleteRepository } from './localRepository';
 import { localAthleteRepository } from './localRepository';
-import { pushRemote } from './remoteSync';
+import { pushRemote, pushRemoteReplace } from './remoteSync';
 
 /** Misma interfaz que el repositorio local, pero cada escritura dispara ademas una sincronizacion a Supabase (fire-and-forget). */
 export const athleteRepository: AthleteRepository = {
@@ -60,5 +60,10 @@ export const athleteRepository: AthleteRepository = {
   deleteCachedSessionsInRange(startDateIso, endDateIso) {
     localAthleteRepository.deleteCachedSessionsInRange(startDateIso, endDateIso);
     void pushRemote();
+  },
+  resetTrainingData() {
+    localAthleteRepository.resetTrainingData();
+    // Borrado deliberado y global: se sube pisando lo remoto, sin fusionar (fusionar reviviria lo borrado).
+    void pushRemoteReplace();
   },
 };
