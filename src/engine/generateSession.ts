@@ -598,13 +598,10 @@ function buildStrengthBlock(
       }
     }
   }
-  // Se aplica siempre que el objetivo no este forzando el patron por ir atrasado: el ciclo natural
-  // de la semana tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas). Si
-  // el atleta va detras de un objetivo de verdad, evitar la repeticion iria en contra de lo que se
-  // acaba de decidir — mas frecuencia es exactamente el punto.
-  if (!(goalForcedPattern && pref.behindSchedule)) {
-    pattern = avoidPatternRepeat(pattern, history);
-  }
+  // Nunca dos dias de fuerza seguidos con el mismo patron, ni siquiera con un objetivo atrasado
+  // forzandolo: mas frecuencia a lo largo de la semana si, pero "deadlift lunes y deadlift miercoles"
+  // no es lo que hace un coach. El objetivo ya se lleva su cuota de dias por el reparto de semana.
+  pattern = avoidPatternRepeat(pattern, history);
 
   // Si el patron de hoy coincide con un aviso de molestia activo, se sustituye por otro de los 4
   // patrones habituales que no este marcado — un coach real no ignora un aviso de dolor solo
@@ -647,7 +644,11 @@ function buildStrengthBlock(
       imbalanceTag = ' Hoy priorizamos este levantamiento: va flojo respecto a otro de su grupo y lo equilibramos.';
     }
   }
-  const movement = pickVariedWithPreference(candidates, recentIds, preferId, preferChance);
+  // El objetivo sesga hacia SU levantamiento, pero no hasta el punto de que salga el mismo lift
+  // literal todos los dias del patron: se acota a 0.7 para que ~1 de cada 3 dias rote a otra variante
+  // (sumo / deficit / RDL / rack pull para un objetivo de peso muerto — todas cuentan para su PR raiz).
+  const movementPreferChance = Math.min(preferChance, 0.7);
+  const movement = pickVariedWithPreference(candidates, recentIds, preferId, movementPreferChance);
   if (!movement) return { blocks: [], pattern, reasons: [] };
 
   // Perfil de respuesta: ¿el levantamiento concreto de hoy viene estancado? (puede diferir del del objetivo)

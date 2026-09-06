@@ -262,6 +262,25 @@ function allocatePatterns(
     const p = avail.sort((a, b) => weight[b] / (counts.get(b)! + 1) - weight[a] / (counts.get(a)! + 1))[0];
     counts.set(p, counts.get(p)! + 1);
   }
+
+  // Ningun patron se lleva mas de ~la mitad de los dias de fuerza de la semana. Un sesgo por
+  // objetivo o por estancamiento da MAS frecuencia a un patron, no monopoliza la semana entera —
+  // aunque el peso diga "hinge x3 de 4", sigue habiendo un dia de sentadilla y uno de press. El
+  // excedente pasa al patron disponible con menos slots (a igualdad, el de mas peso).
+  if (avail.length >= 2) {
+    const maxPerPattern = Math.max(1, Math.ceil(slotCount / 2));
+    for (const p of avail) {
+      while ((counts.get(p) ?? 0) > maxPerPattern) {
+        const recipient = avail
+          .filter((q) => q !== p && (counts.get(q) ?? 0) < maxPerPattern)
+          .sort((a, b) => counts.get(a)! - counts.get(b)! || weight[b] - weight[a])[0];
+        if (!recipient) break;
+        counts.set(p, counts.get(p)! - 1);
+        counts.set(recipient, counts.get(recipient)! + 1);
+      }
+    }
+  }
+
   // Garantiza al menos un slot para el patron del objetivo forzado.
   if (goalForcedPattern && !avoidedPatterns.has(goalForcedPattern) && (counts.get(goalForcedPattern) ?? 0) === 0) {
     const donor = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
