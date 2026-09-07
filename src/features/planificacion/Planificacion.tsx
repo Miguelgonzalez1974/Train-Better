@@ -3,6 +3,7 @@ import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, Cale
 import type {
   AthleteProfile,
   DailySession,
+  Goal,
   PainArea,
   PersonalRecords,
   ReadinessCheck,
@@ -17,6 +18,7 @@ import type {
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import {
+  adoptAdditiveEngineFields,
   buildStrengthProgramWodAddition,
   generateOverrideSession,
   generateSessionForDate,
@@ -96,6 +98,39 @@ function isAdjustableSetBlock(b: SessionBlockResult): boolean {
   return true;
 }
 
+/**
+ * Resuelve la sesión de hoy desde la caché: sirve la cacheada si es válida; si quedó huérfana la
+ * borra y regenera; si la generó una versión anterior del motor y aún no está registrada, la borra y
+ * regenera; y si YA está registrada pero el sello es viejo, no la regenera —conserva lo que el
+ * atleta hizo— pero le añade los campos nuevos aditivos del motor (ver `adoptAdditiveEngineFields`).
+ * Sin macrociclo ni programa activo y nada elegido, devuelve `null`.
+ */
+function loadTodaySession(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  goals: Goal[],
+  todayIso: string,
+): DailySession | null {
+  const cached = athleteRepository.getCachedSession(todayIso);
+  if (cached) {
+    if (isCachedSessionOrphaned(cached, profile, todayIso)) {
+      athleteRepository.deleteCachedSession(todayIso);
+    } else if (!isCachedSessionStale(cached)) {
+      return cached;
+    } else if (history.some((h) => h.date === todayIso)) {
+      const adopted = adoptAdditiveEngineFields(cached, profile, history, new Date(), goals);
+      if (adopted !== cached) athleteRepository.saveCachedSession(adopted);
+      return adopted;
+    } else {
+      athleteRepository.deleteCachedSession(todayIso);
+    }
+  }
+  if (!hasActiveTrainingStructure(profile, todayIso)) return null;
+  const fresh = generateSessionForDate(profile, history, new Date(), goals);
+  athleteRepository.saveCachedSession(fresh);
+  return fresh;
+}
+
 interface PlanificacionProps {
   onNavigateToObjetivos: () => void;
 }
@@ -105,24 +140,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const goals = profile.goals;
   const todayIso = toLocalIsoDate(new Date());
-  const [session, setSession] = useState<DailySession | null>(() => {
-    const cached = athleteRepository.getCachedSession(todayIso);
-    const completedToday = history.some((h) => h.date === todayIso);
-    // Se descarta y se vuelve a generar cuando: (a) es una sesión periodizada huérfana —su
-    // macro/programa ya no existe—, o (b) la generó una versión anterior del motor y el atleta
-    // aún no la ha registrado (así PC y móvil convergen en el mismo día tras un deploy).
-    if (cached && (isCachedSessionOrphaned(cached, profile, todayIso) || (!completedToday && isCachedSessionStale(cached)))) {
-      athleteRepository.deleteCachedSession(todayIso);
-    } else if (cached) {
-      return cached;
-    }
-    // Sin macrociclo NI programa de fuerza activo, y nada elegido todavía para hoy: no se
-    // auto-genera ni se muestra "Mantenimiento" — se espera a que el atleta elija qué quiere hacer.
-    if (!hasActiveTrainingStructure(profile, todayIso)) return null;
-    const fresh = generateSessionForDate(profile, history, new Date(), goals);
-    athleteRepository.saveCachedSession(fresh);
-    return fresh;
-  });
+  const [session, setSession] = useState<DailySession | null>(() => loadTodaySession(profile, history, goals, todayIso));
 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
@@ -320,13 +338,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   // estados de "hoy" que dependen de ella) con el dia real la proxima vez que algo dispare un
   // render, en vez de quedarse mostrando el dia de ayer hasta recargar la pagina a mano.
   useEffect(() => {
-    let cached = athleteRepository.getCachedSession(todayIso);
-    const completedToday = history.some((h) => h.date === todayIso);
-    if (cached && (isCachedSessionOrphaned(cached, profile, todayIso) || (!completedToday && isCachedSessionStale(cached)))) {
-      athleteRepository.deleteCachedSession(todayIso);
-      cached = null;
-    }
-    setSession(cached ?? (hasActiveTrainingStructure(profile, todayIso) ? generateAndCache(profile) : null));
+    setSession(loadTodaySession(profile, history, goals, todayIso));
     setShowCompletePanel(false);
     setFocusMode(false);
     setEditMode(false);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSessionForDate, WOD_SYNONYM_GROUPS } from './generateSession';
+import { adoptAdditiveEngineFields, generateSessionForDate, WOD_SYNONYM_GROUPS } from './generateSession';
 import type { DailySession } from '../data/athlete/types';
 import {
   makeProfile,
@@ -131,6 +131,58 @@ describe('generateSessionForDate — macrociclo', () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  it('adoptAdditiveEngineFields: una sesión registrada adopta logAsSingle sin tocar la prescripción', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 6, goals: [makeStrengthGoal('clean', 'intensivo')] });
+    const dates = consecutiveDates(START, 42);
+    // Primer día cuyo entreno trae un lift de serie única (single del día, EMOM o test de 1RM).
+    const dayWithSingle = dates.find((d) =>
+      generateSessionForDate(profile, [], d, profile.goals).blocks.some((b) => b.logAsSingle),
+    );
+    expect(dayWithSingle, 'no se generó ningún lift de serie única en 42 días').toBeTruthy();
+
+    const fresh = generateSessionForDate(profile, [], dayWithSingle!, profile.goals);
+    const singleIdx = fresh.blocks.findIndex((b) => b.logAsSingle);
+    // Simula lo cacheado por una versión vieja: sin el flag y con una carga editada a mano.
+    const stale: DailySession = {
+      ...fresh,
+      genVersion: 1,
+      blocks: fresh.blocks.map((b, i) => {
+        const rest = { ...b };
+        delete rest.logAsSingle;
+        return i === singleIdx ? { ...rest, loadKg: (rest.loadKg ?? 0) + 7 } : rest;
+      }),
+    };
+
+    const adopted = adoptAdditiveEngineFields(stale, profile, [], dayWithSingle!, profile.goals);
+    expect(adopted).not.toBe(stale);
+    expect(adopted.blocks[singleIdx].logAsSingle).toBe(true);
+    // La carga (y el resto de la prescripción) del bloque editado se conserva, no se pisa con la fresca.
+    expect(adopted.blocks[singleIdx].loadKg).toBe((fresh.blocks[singleIdx].loadKg ?? 0) + 7);
+    expect(adopted.blocks[singleIdx].reps).toBe(fresh.blocks[singleIdx].reps);
+
+    // Idempotente: una vez adoptado, no hay nada más que añadir -> misma referencia.
+    const again = adoptAdditiveEngineFields(
+      { ...adopted, genVersion: 1 },
+      profile,
+      [],
+      dayWithSingle!,
+      profile.goals,
+    );
+    expect(again.blocks[singleIdx].logAsSingle).toBe(true);
+  });
+
+  it('adoptAdditiveEngineFields: si la estructura de bloques no coincide, no toca nada', () => {
+    const profile = makeProfile();
+    const d = consecutiveDates(START, 1)[0];
+    const fresh = generateSessionForDate(profile, [], d, profile.goals);
+    const scrambled: DailySession = {
+      ...fresh,
+      genVersion: 1,
+      blocks: fresh.blocks.map((b) => ({ ...b, movementId: `${b.movementId}-x` })),
+    };
+    expect(adoptAdditiveEngineFields(scrambled, profile, [], d, profile.goals)).toBe(scrambled);
   });
 
   it('todas las sesiones de 3 semanas traen al menos un bloque', () => {

@@ -2980,6 +2980,46 @@ export function isCachedSessionStale(session: DailySession): boolean {
   return (session.genVersion ?? 0) < SESSION_GEN_VERSION;
 }
 
+/**
+ * Una sesion ya REGISTRADA no se regenera (perderia lo que el atleta hizo y sus ediciones), pero si
+ * puede adoptar los campos NUEVOS que aporte una version posterior del motor sin cambiar la
+ * prescripcion — p.ej. `logAsSingle`, que solo habilita una fila de registro. Se regenera con el
+ * historial de entonces (sin la entrada de hoy, para reproducir la misma sesion determinista) y, si
+ * la estructura de bloques coincide 1:1 (mismo `block` y `movementId` en cada indice), se copian solo
+ * las claves AUSENTES en la sesion cacheada — nunca se sobrescribe carga, series, reps ni notas. Si
+ * la estructura no coincide o no hay nada que anadir, devuelve la MISMA referencia intacta.
+ */
+export function adoptAdditiveEngineFields(
+  cached: DailySession,
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  date: Date,
+  goals: Goal[],
+): DailySession {
+  if (cached.source === 'custom' || cached.swapLabel) return cached;
+  const iso = toLocalIsoDate(date);
+  const fresh = generateSessionForDate(profile, history.filter((h) => h.date !== iso), date, goals);
+  if (fresh.blocks.length !== cached.blocks.length) return cached;
+  const aligned = cached.blocks.every(
+    (b, i) => fresh.blocks[i] && fresh.blocks[i].block === b.block && fresh.blocks[i].movementId === b.movementId,
+  );
+  if (!aligned) return cached;
+
+  let changed = false;
+  const blocks = cached.blocks.map((b, i) => {
+    const f = fresh.blocks[i];
+    let merged = b;
+    for (const k of Object.keys(f) as (keyof SessionBlockResult)[]) {
+      if (merged[k] === undefined && f[k] !== undefined) {
+        merged = { ...merged, [k]: f[k] } as SessionBlockResult;
+        changed = true;
+      }
+    }
+    return merged;
+  });
+  return changed ? { ...cached, blocks } : cached;
+}
+
 export function toHistoryEntry(
   session: DailySession,
   rxOrScaled: RxOrScaled,
