@@ -218,6 +218,10 @@ export function FocusMode({
         {work.map((e, wi) => {
           const b = e.entry;
           const sets = b.sets ?? 0;
+          // Formatos de oly de serie única (single del día, EMOM): una sola fila de registro para
+          // guardar el peso realmente movido, con el mismo camino a `workLog` que el stepper.
+          const singleLog = Boolean(b.logAsSingle) && sets <= 1;
+          const rowCount = singleLog ? 1 : sets;
           const fb = setFeedbackByIndex.get(e.index);
           return (
             <div key={e.index} className="flex flex-col gap-3">
@@ -253,7 +257,7 @@ export function FocusMode({
                   </span>
                 </div>
               </div>
-              {sets > 1 &&
+              {(sets > 1 || singleLog) &&
                 (() => {
                   const mid = b.movementId;
                   const blk = b.block === 'oly' ? 'oly' : 'strength';
@@ -266,7 +270,7 @@ export function FocusMode({
                   };
                   return (
                     <div className="flex flex-col gap-1.5">
-                      {Array.from({ length: sets }, (_, s) => {
+                      {Array.from({ length: rowCount }, (_, s) => {
                         const n = s + 1;
                         const on = setIsDone(mid, n);
                         const kg = kgFor(mid, n, prescribed);
@@ -284,7 +288,7 @@ export function FocusMode({
                             >
                               {on ? <Check size={14} strokeWidth={3} /> : n}
                             </button>
-                            <span className="w-12 shrink-0 text-xs text-neutral-500">Serie {n}</span>
+                            <span className="w-12 shrink-0 text-xs text-neutral-500">{singleLog ? 'Top' : `Serie ${n}`}</span>
                             {prescribed > 0 && (
                               <div className="flex items-center gap-1">
                                 <button

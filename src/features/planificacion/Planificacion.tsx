@@ -84,7 +84,9 @@ export interface E1rmSuggestion {
 function isAdjustableSetBlock(b: SessionBlockResult): boolean {
   if (b.block !== 'strength' && b.block !== 'oly') return false;
   if (b.movementId.startsWith('benchmark:')) return false;
-  if (b.sets === undefined || b.sets < 2) return false;
+  // Los formatos de oly de serie única (single del día, EMOM) no llevan `sets` pero sí registran
+  // el peso real y valoran esfuerzo — entran por `logAsSingle`.
+  if ((b.sets === undefined || b.sets < 2) && !b.logAsSingle) return false;
   if (!b.loadKg || b.loadKg <= 0) return false;
   // El primer técnico del complejo de oly (reps "2-3") es preparación, no el esfuerzo principal.
   if (b.block === 'oly' && b.reps === '2-3') return false;
@@ -270,9 +272,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     if (!topSet) return;
     const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
     const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
-    const prescribedSets = existing?.prescribedSets ?? block.sets ?? 0;
+    const prescribedSets = existing?.prescribedSets ?? block.sets ?? (block.logAsSingle ? 1 : 0);
     const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
-    if (prescribedKg <= 0 || prescribedSets < 2) return;
+    if (prescribedKg <= 0 || (prescribedSets < 2 && !block.logAsSingle)) return;
 
     const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
     const estimated1rm = estimateE1RMFromRpe(topSet.kg, topSet.reps, rpe) ?? undefined;

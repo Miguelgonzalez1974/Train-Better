@@ -294,6 +294,13 @@ export interface SessionBlockResult {
   scaledFrom?: string;
   /** Notacion de tempo real (ej. "3011", "10X0"): excentrica-pausa abajo-concentrica-pausa arriba, "X" = maxima velocidad. Solo bloque strength. */
   tempo?: string;
+  /**
+   * Formatos de serie unica (single pesado del dia, EMOM de 1 rep/min, test de 1RM): no llevan `sets`,
+   * pero el atleta necesita registrar el peso realmente movido y valorar el esfuerzo. Con este flag,
+   * FocusMode pinta una unica fila de registro ("Top @ X kg") que escribe en `workLog` igual que el
+   * stepper multiserie, y el bloque entra en la tarjeta de RPE. Bloques strength y oly.
+   */
+  logAsSingle?: boolean;
 }
 
 /**
@@ -306,7 +313,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 16;
+export const SESSION_GEN_VERSION = 17;
 
 export interface DailySession {
   date: string;

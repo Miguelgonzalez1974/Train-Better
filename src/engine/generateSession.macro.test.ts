@@ -116,6 +116,23 @@ describe('generateSessionForDate — macrociclo', () => {
     if (rpeByWeek[4].size) expect([...rpeByWeek[4]]).toEqual(['5-6']);
   });
 
+  it('todo lift con carga es registrable: si no tiene series marcables, trae logAsSingle', () => {
+    // 42 dias con objetivo de PR -> incluye dias de test de 1RM (fuerza y oly) y semanas pico.
+    const profile = makeProfile({ trainingDaysPerWeek: 6, goals: [makeStrengthGoal('clean', 'intensivo')] });
+    const bad: string[] = [];
+    for (const d of consecutiveDates(START, 42)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      for (const b of s.blocks) {
+        // Solo el trabajo real de fuerza/oly: los `subgroup` son calentamiento de barra (no se registran).
+        if ((b.block !== 'oly' && b.block !== 'strength') || b.subgroup || !b.loadKg) continue;
+        if (b.movementId.startsWith('benchmark:')) continue;
+        const markable = (b.sets ?? 0) >= 2;
+        if (!markable && !b.logAsSingle) bad.push(`${s.date}: ${b.movementId} (${b.reps}) sets=${b.sets ?? 'undef'}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('todas las sesiones de 3 semanas traen al menos un bloque', () => {
     const profile = makeProfile();
     const empty: string[] = [];

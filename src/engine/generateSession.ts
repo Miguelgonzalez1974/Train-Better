@@ -718,6 +718,7 @@ function buildStrengthBlock(
           format: 'Test 1RM',
           reps: '1',
           loadKg: testLoadKg,
+          logAsSingle: true,
           notes: `Test de fuerza máxima — calienta con aproximaciones y busca un nuevo máximo a 1 rep. Referencia: ${testLoadKg} kg.${goalTag}${testReintroNote}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
         },
       ],
@@ -1015,6 +1016,7 @@ function buildOlyBlock(
           format: 'Test 1RM',
           reps: '1',
           loadKg: testLoadKg,
+          logAsSingle: true,
           notes: `Test de máximo en ${liftLabel} — calienta con aproximaciones técnicas y busca un nuevo máximo a 1 rep. Referencia: ${testLoadKg} kg.${goalTag}${readiness.isLow ? READINESS_TEST_POSTPONE_NOTE : ''}`,
         },
       ],
@@ -1089,6 +1091,7 @@ function buildOlyBlock(
     movementId: movement.id,
     reps: '1',
     loadKg,
+    logAsSingle: true,
     notes: `${baseNote} Sube a un single pesado del día: aproxima en 5-7 series y busca el más pesado que salga técnicamente limpio, sin forzar un fallo. Referencia: ${loadKg} kg.`,
   };
 
@@ -1100,6 +1103,7 @@ function buildOlyBlock(
       movementId: movement.id,
       reps: '1 rep/min',
       loadKg,
+      logAsSingle: true,
       notes: `${baseNote} Formato EMOM ${emomMinutes} min: una repetición técnica cada minuto.`,
     };
   } else if (week === 3) {
