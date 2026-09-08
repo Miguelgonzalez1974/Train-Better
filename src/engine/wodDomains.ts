@@ -214,6 +214,51 @@ export const WOD_BARBELL_LOAD_PERCENT: Record<string, number> = {
   'clean-and-jerk': 0.5,
 };
 
+/**
+ * Carga RX de un movimiento de WOD como FRACCION DEL PESO CORPORAL, para los movimientos que NO
+ * tienen un PR propio en `PersonalRecords` (thruster, shoulder-to-overhead, mancuernas, kettlebells,
+ * sumo DL high pull…). El `#/lb` de un WOD real escala con el tamaño del atleta, no es un absoluto —
+ * así un WOD generado con un thruster ya trae un peso concreto en vez de solo "12-15". Solo se aplica
+ * si hay peso corporal registrado; si no, esos movimientos van sin carga como hasta ahora. `round`:
+ * 'plate' -> múltiplo de disco; 'kb' -> tamaño de kettlebell real. Valores calibrados a ~80 kg de
+ * referencia contra los estándares RX habituales.
+ */
+export const WOD_RX_BW_FRACTION: Record<string, { fraction: number; round: 'plate' | 'kb' }> = {
+  thruster: { fraction: 0.52, round: 'plate' },
+  'shoulder-to-overhead': { fraction: 0.52, round: 'plate' },
+  'sumo-deadlift-high-pull': { fraction: 0.55, round: 'plate' },
+  'sandbag-clean': { fraction: 0.6, round: 'plate' },
+  'kettlebell-swing-russian': { fraction: 0.3, round: 'kb' },
+  'kettlebell-swing-american': { fraction: 0.3, round: 'kb' },
+  'kettlebell-front-squat': { fraction: 0.3, round: 'kb' },
+  'kettlebell-goblet-squat': { fraction: 0.3, round: 'kb' },
+  'dumbbell-snatch': { fraction: 0.28, round: 'plate' },
+  'dumbbell-clean-and-jerk': { fraction: 0.28, round: 'plate' },
+  'dumbbell-hang-clean': { fraction: 0.28, round: 'plate' },
+  'dumbbell-push-jerk': { fraction: 0.28, round: 'plate' },
+  'devils-press': { fraction: 0.26, round: 'plate' },
+  'man-maker': { fraction: 0.26, round: 'plate' },
+};
+
+/** Tamaños de kettlebell reales (kg) para redondear una carga RX relativa al peso corporal. */
+export const KETTLEBELL_SIZES_KG = [8, 12, 16, 20, 24, 28, 32, 40];
+
+/**
+ * "Cardio chipper" de base aeróbica: 3 bloques descendentes de puro monoestructural (ej. 1.000 m Row
+ * / 1 milla Bike / 200 comba, luego 750 / 0.8 / 150, luego 500 / 0.6 / 100). Cantidad base por
+ * movimiento y factores de cada bloque. Patrón tomado de `docs/importar-coach-ia.md` ("Cardio
+ * Complex").
+ */
+export const CARDIO_CHIPPER_BASE: Record<string, { amount: number; unit: 'm' | 'cal' | 'reps' }> = {
+  run: { amount: 1200, unit: 'm' },
+  row: { amount: 1200, unit: 'm' },
+  'ski-erg': { amount: 1000, unit: 'm' },
+  'air-bike': { amount: 45, unit: 'cal' },
+  'double-under': { amount: 150, unit: 'reps' },
+  'single-under': { amount: 250, unit: 'reps' },
+};
+export const CARDIO_CHIPPER_TIERS = [1, 0.7, 0.5];
+
 /** Escaleras descendentes clasicas (Fran/Diane/Elizabeth siguen este patron) — se elige una al azar cuando toca este formato. */
 export const DESCENDING_LADDER_SCHEMES = ['21-15-9', '15-12-9', '10-8-6', '21-18-15-12-9-6-3'];
 
@@ -266,7 +311,9 @@ export type WodFormatKind =
   | 'risingLoadInterval'
   | 'descendingLadderFiller'
   | 'ascendingLadderFiller'
-  | 'barbellComplex';
+  | 'barbellComplex'
+  | 'maxReps'
+  | 'cardioChipper';
 
 // ---- Periodizacion del acondicionamiento (sistema energetico por fase) ----
 

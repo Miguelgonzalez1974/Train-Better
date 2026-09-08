@@ -5,6 +5,8 @@ function inferScoreTypeFromFormat(format: string): WodScoreType {
   if (format.startsWith('For Time')) return 'time';
   if (format.startsWith('AMRAP')) return 'rounds+reps';
   if (format.startsWith('EMOM')) return 'reps';
+  // "Al máximo · N x 3:00 …" -> se puntúa por repeticiones totales.
+  if (format.startsWith('Al máximo')) return 'reps';
   // Test de complex (varios movimientos a la misma carga, ver "temporada" en strengthPrograms.ts)
   // — se puntua por el peso mas pesado completado, no por reps ni tiempo. Se comprueba antes que la
   // regla generica de "Test —" de abajo, que es para el test de maximo de reps.

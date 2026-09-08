@@ -304,6 +304,67 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
     expect(missing).toEqual([]);
   });
 
+  it('aparecen los formatos nuevos: "al máximo" (puntúa reps) y cardio chipper (base aeróbica)', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    let maxReps = 0;
+    let cardioChipper = 0;
+    for (const d of consecutiveDates(START, 168)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const wod = s.blocks.filter((b) => b.block === 'wod');
+      if (wod.length === 0 || wod[0].movementId.startsWith('benchmark:')) continue;
+      const fmt = wod[0].format ?? '';
+      if (fmt.startsWith('Al máximo')) {
+        maxReps++;
+        expect(wod[0].wodTarget?.scoreType, `${s.date} maxReps sin objetivo de reps`).toBe('reps');
+        expect(wod[0].notes).toMatch(/Objetivo orientativo: ~\d+-\d+ reps/);
+      }
+      if (fmt.startsWith('Cardio chipper')) {
+        cardioChipper++;
+        expect(wod.length).toBeGreaterThanOrEqual(2);
+        expect(wod[0].wodTarget?.scoreType).toBe('time');
+        // 3 tramos descendentes en cada entrada.
+        for (const b of wod) expect((b.reps ?? '').match(/\d+/g)?.length).toBe(3);
+        // Nunca single + double under en el mismo chipper.
+        const ids = wod.map((b) => b.movementId);
+        expect(ids.includes('single-under') && ids.includes('double-under')).toBe(false);
+      }
+    }
+    expect(maxReps, 'ningún WOD "al máximo" en 24 semanas').toBeGreaterThan(0);
+    expect(cardioChipper, 'ningún cardio chipper en 24 semanas').toBeGreaterThan(0);
+  });
+
+  it('con peso corporal registrado, los movimientos de WOD sin PR propio (thruster, KB, DB…) llevan carga', () => {
+    const withBw = makeProfile({ trainingDaysPerWeek: 5, bodyweightLog: [{ date: '2026-01-01', kg: 82 }] });
+    const noBw = makeProfile({ trainingDaysPerWeek: 5 });
+    const BW_MOVES = new Set([
+      'thruster',
+      'shoulder-to-overhead',
+      'sumo-deadlift-high-pull',
+      'kettlebell-swing-russian',
+      'kettlebell-swing-american',
+      'dumbbell-snatch',
+      'dumbbell-clean-and-jerk',
+      'dumbbell-push-jerk',
+      'devils-press',
+    ]);
+    let loadedWithBw = 0;
+    let loadedWithoutBw = 0;
+    for (const d of consecutiveDates(START, 84)) {
+      for (const [profile, bump] of [
+        [withBw, (n: number) => (loadedWithBw += n)] as const,
+        [noBw, (n: number) => (loadedWithoutBw += n)] as const,
+      ]) {
+        const s = generateSessionForDate(profile, [], d, profile.goals);
+        for (const b of s.blocks) {
+          if (b.block !== 'wod' || b.movementId.startsWith('benchmark:')) continue;
+          if (BW_MOVES.has(b.movementId) && b.loadKg && b.loadKg > 0) bump(1);
+        }
+      }
+    }
+    expect(loadedWithBw, 'con peso corporal, ningún movimiento sin-PR recibió carga').toBeGreaterThan(0);
+    expect(loadedWithoutBw, 'sin peso corporal no debería derivarse carga de esos movimientos').toBe(0);
+  });
+
   it('el día de recuperación activa (6 días/semana) lleva un remate de brazos', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 6 });
     // 2026-01-08 es jueves = día de recuperación en el calendario de 6 días.

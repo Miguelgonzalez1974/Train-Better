@@ -206,6 +206,20 @@ function roundsTarget(rounds: number): WodTarget {
   };
 }
 
+function repsTarget(reps: number): WodTarget {
+  const low = Math.max(5, Math.round((reps * 0.88) / 5) * 5);
+  const high = Math.round((reps * 1.12) / 5) * 5;
+  const display = `~${low}-${high} reps`;
+  return {
+    scoreType: 'reps',
+    unit: 'reps',
+    low,
+    high,
+    display,
+    note: `Objetivo orientativo: ${display}.${MODEST_TAIL}`,
+  };
+}
+
 function qualitative(scoreType: WodScoreType, note: string): WodTarget {
   return { scoreType, unit: scoreType === 'time' ? 'seconds' : 'reps', low: 0, high: 0, display: '', note };
 }
@@ -253,6 +267,17 @@ export function estimateWodTarget(input: {
     return timeTarget(total * oh, 0.15);
   }
 
+  // Cardio chipper: cada entrada trae sus 3 tramos en `reps` ("1200-840-600 m"); sumamos todos.
+  if (kind === 'cardioChipper') {
+    let total = 0;
+    for (const e of entries) {
+      const nums = e.reps.match(/\d+/g)?.map(Number) ?? [];
+      const unit: 'm' | 'cal' | 'rep' = /cal/.test(e.reps) ? 'cal' : /m\b/.test(e.reps) ? 'm' : 'rep';
+      for (const amount of nums) total += movementSeconds(e.movementId, { count: amount, unit });
+    }
+    return timeTarget(total * overhead(total, n), 0.12);
+  }
+
   const oneRound = roundSeconds(entries);
 
   switch (kind) {
@@ -262,6 +287,16 @@ export function estimateWodTarget(input: {
     case 'barbellComplex': {
       const total = oneRound * timeDomain.rounds;
       return timeTarget(total * overhead(total, n));
+    }
+    case 'maxReps': {
+      // N ventanas de ~3:00 al máximo, con ~10% de pérdida por transición/fatiga entre ventanas.
+      const workSeconds = timeDomain.rounds * 180 * 0.9;
+      const perUnit =
+        entries.reduce((s, e) => {
+          const p = parseToken(e.reps);
+          return s + movementSeconds(e.movementId, { count: 1, unit: p.unit });
+        }, 0) / n;
+      return repsTarget(workSeconds / Math.max(0.8, perUnit));
     }
     case 'ladder': {
       // Escalera ascendente +3 reps/ronda sobre la prescripción base.

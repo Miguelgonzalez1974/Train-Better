@@ -56,6 +56,44 @@ describe('estimateWodTarget', () => {
     expect(t!.note).toMatch(/14 min/);
   });
 
+  it('"al máximo" -> objetivo en reps totales con banda', () => {
+    const t = estimateWodTarget({
+      kind: 'maxReps',
+      entries: [
+        { movementId: 'thruster', reps: '9-12', loadKg: 43 },
+        { movementId: 'chest-to-bar-pull-up', reps: '9-12' },
+        { movementId: 'row', reps: '12-15 cal' },
+      ],
+      timeDomain: { ...TD, rounds: 4 },
+    });
+    expect(t!.scoreType).toBe('reps');
+    expect(t!.unit).toBe('reps');
+    expect(t!.low).toBeGreaterThan(0);
+    expect(t!.high).toBeGreaterThan(t!.low);
+    expect(t!.display).toMatch(/reps/);
+  });
+
+  it('cardio chipper -> objetivo de tiempo, sumando los 3 tramos de cada movimiento', () => {
+    const short = estimateWodTarget({
+      kind: 'cardioChipper',
+      entries: [
+        { movementId: 'row', reps: '600-420-300 m' },
+        { movementId: 'air-bike', reps: '20-14-10 cal' },
+      ],
+      timeDomain: TD,
+    })!;
+    const long = estimateWodTarget({
+      kind: 'cardioChipper',
+      entries: [
+        { movementId: 'row', reps: '1200-840-600 m' },
+        { movementId: 'air-bike', reps: '45-32-22 cal' },
+      ],
+      timeDomain: TD,
+    })!;
+    expect(short.scoreType).toBe('time');
+    expect(long.low).toBeGreaterThan(short.high);
+  });
+
   it('es determinista y puro: misma entrada -> misma salida', () => {
     const input = {
       kind: 'forTime' as const,

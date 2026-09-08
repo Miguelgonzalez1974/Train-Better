@@ -10,6 +10,7 @@ import {
 import { getSkillProgressionFor, skillProgressionStepAt, type SkillProgression } from '../data/movements/skillProgressions';
 import type {
   AthleteProfile,
+  BodyweightEntry,
   DailySession,
   Goal,
   IntensityRamp,
@@ -56,9 +57,13 @@ import {
   resolveEnergySystemPlan,
   RISING_LOAD_INTERVAL_INCREMENT_PERCENT,
   RISING_LOAD_INTERVAL_STEPS,
+  CARDIO_CHIPPER_BASE,
+  CARDIO_CHIPPER_TIERS,
+  KETTLEBELL_SIZES_KG,
   WOD_BARBELL_LOAD_PERCENT,
   WOD_EFFORT_BY_WEEK,
   WOD_PRESCRIPTION,
+  WOD_RX_BW_FRACTION,
   WOD_TIME_DOMAIN,
   type EnergySystem,
   type WodFormatKind,
@@ -327,6 +332,8 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   descendingLadderFiller: 'El peaje de cardio entre cada tramo es fijo — el ritmo real se ajusta en el movimiento principal, no en el peaje.',
   ascendingLadderFiller: 'Sigue subiendo la escalera mientras quede reloj — anota en qué escalón te pilla el final.',
   barbellComplex: 'Tres movimientos de barra seguidos — reparte el esfuerzo entre los tres, no vacíes el depósito en el primero.',
+  maxReps: 'Puntúa por repeticiones totales — en cada ventana muévete a un ritmo que puedas repetir en la siguiente, no salgas a sprint y te apagues.',
+  cardioChipper: 'Puro motor: 3 bloques que van a menos. Sal conservador en el primer bloque — es el más largo — y aprieta cuando veas el final.',
 };
 
 /**
@@ -1424,6 +1431,7 @@ function buildBarbellComplexEntries(
   mains: Movement[],
   filler: Movement,
   prs: PersonalRecords,
+  bodyweightKg: number | null,
   format: string,
   title: string,
   notes: string,
@@ -1431,9 +1439,7 @@ function buildBarbellComplexEntries(
 ): SessionBlockResult[] {
   const entries: SessionBlockResult[] = [];
   for (const m of mains) {
-    const barbellPercent = WOD_BARBELL_LOAD_PERCENT[m.id];
-    const prKey = barbellPercent ? (resolveStrengthPRKey(m) ?? resolveOlyPRKey(m)) : undefined;
-    const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
+    const loadKg = wodMovementLoadKg(m, prs, bodyweightKg);
     entries.push({ block: 'wod', movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '8-10', loadKg, format, title, notes, wodTarget });
     entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '20-25', format, title, notes, wodTarget });
   }
@@ -1474,6 +1480,38 @@ const INTENSITY_LOAD: Record<DayIntensity, number> = { alta: 1, media: 1, baja: 
 
 const clampDose = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
+/** Peso corporal más reciente del atleta en kg, o null si no hay ningún pesaje registrado. */
+function latestBodyweightKg(log: BodyweightEntry[] | undefined): number | null {
+  if (!log || log.length === 0) return null;
+  const sorted = [...log].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = sorted[sorted.length - 1];
+  return latest && latest.kg > 0 ? latest.kg : null;
+}
+
+/** Redondea una carga (kg) al tamaño de kettlebell real más cercano. */
+function roundKettlebell(kg: number): number {
+  return KETTLEBELL_SIZES_KG.reduce((best, size) => (Math.abs(size - kg) < Math.abs(best - kg) ? size : best));
+}
+
+/**
+ * Carga (kg) de un movimiento de WOD: primero el % de PR (`WOD_BARBELL_LOAD_PERCENT`, más preciso);
+ * si el movimiento no tiene PR propio, una fracción del peso corporal (`WOD_RX_BW_FRACTION`) cuando
+ * hay un pesaje registrado. `undefined` si no aplica ninguna (bodyweight/funcional, o sin peso corporal).
+ */
+function wodMovementLoadKg(m: Movement, prs: PersonalRecords, bodyweightKg: number | null): number | undefined {
+  const pct = WOD_BARBELL_LOAD_PERCENT[m.id];
+  if (pct) {
+    const prKey = resolveStrengthPRKey(m) ?? resolveOlyPRKey(m);
+    if (prKey) return roundToNearestPlate(prs[prKey] * pct);
+  }
+  const bw = WOD_RX_BW_FRACTION[m.id];
+  if (bw && bodyweightKg && bodyweightKg > 0) {
+    const raw = bodyweightKg * bw.fraction;
+    return bw.round === 'kb' ? roundKettlebell(raw) : roundToNearestPlate(raw);
+  }
+  return undefined;
+}
+
 function buildWodBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -1492,6 +1530,9 @@ function buildWodBlock(
   plannedEnergy: EnergySystem | null,
   /** Dosis del dia (progresion intra-fase x onda de intensidad) — ver `DayDose`. */
   dose: DayDose,
+  /** Peso corporal más reciente del atleta (kg) — para la carga RX relativa al peso corporal de los
+   *  movimientos de WOD sin PR propio (thruster, S2OH, DB, KB…). null -> esos van sin carga. */
+  bodyweightKg: number | null,
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1618,6 +1659,14 @@ function buildWodBlock(
     { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
     { label: `EMOM ${timeDomain.emomMin} min (movimientos alternos)`, kind: 'emom' },
     { label: `Cada 3:00 x ${timeDomain.rounds} rondas`, kind: 'interval' },
+    // "Al máximo" (puntúa reps): esfuerzo real acotado — fuera de descarga, rampa y día de fuerza.
+    ...(energy.system !== 'recuperacion' && !wodRampActive && !lowInterferenceWod
+      ? [{ label: `Al máximo · ${timeDomain.rounds} x 3:00 (1:00 descanso) — puntúa reps totales`, kind: 'maxReps' as WodFormatKind }]
+      : []),
+    // Cardio chipper: solo en días de base aeróbica (puro motor monoestructural).
+    ...(energy.system === 'base-aerobica' && !lowInterferenceWod && !isPeakWeek && !wodRampActive
+      ? [{ label: 'Cardio chipper — 3 bloques descendentes', kind: 'cardioChipper' as WodFormatKind }]
+      : []),
     ...(isPeakWeek || wodRampActive || lowInterferenceWod
       ? []
       : [
@@ -1659,6 +1708,9 @@ function buildWodBlock(
   // Dia de fuerza: al menos 2 de los 3 movimientos ciclicos -> el metcon corto queda aerobico y de
   // bajo impacto, sin volver a exigir los patrones que ya han cargado en la barra.
   if (lowInterferenceWod) monoTarget = Math.max(monoTarget, 2);
+  // "Al máximo" se puntúa contando reps -> conviene que la mayoría sean movimientos contables
+  // (gimnástico + con carga), no dos monoestructurales.
+  if (chosenFormat.kind === 'maxReps') monoTarget = 1;
 
   // Mismo mecanismo de sesgo que ya usan fuerza y skill (goalPreference + pickVariedWithPreference):
   // si el atleta tiene un objetivo de fuerza/potencia sobre un lift que ademas es de los habilitados
@@ -1687,6 +1739,43 @@ function buildWodBlock(
   const howToAttack = quantCue || WOD_FORMAT_RATIONALE[chosenFormat.kind];
   const notes = `${howToAttack}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}`;
 
+  if (chosenFormat.kind === 'cardioChipper') {
+    // 3 bloques descendentes de puro monoestructural. Se eligen 2-3 monos con base conocida,
+    // bloqueando cuasi-sinónimos (single + double under no van juntos).
+    const chipperPool = monoPool.filter((m) => m.id in CARDIO_CHIPPER_BASE);
+    const usedChipper = new Set(recentIds);
+    const monos: Movement[] = [];
+    for (let i = 0; i < 3; i++) {
+      const blocked = wodSynonymBlockedIds(monos.map((m) => m.id));
+      const cand = chipperPool.filter((m) => !monos.includes(m) && !blocked.has(m.id));
+      const pick = pickVaried(cand, usedChipper);
+      if (!pick) break;
+      monos.push(pick);
+      usedChipper.add(pick.id);
+    }
+    if (monos.length >= 2) {
+      const unitLabel = (u: 'm' | 'cal' | 'reps') => (u === 'm' ? 'm' : u === 'cal' ? 'cal' : 'reps');
+      const chipperEntries = monos.map((m) => {
+        const base = CARDIO_CHIPPER_BASE[m.id];
+        const tiers = CARDIO_CHIPPER_TIERS.map((f) => Math.round((base.amount * f) / 10) * 10);
+        return { movementId: m.id, reps: `${tiers.join('-')} ${unitLabel(base.unit)}` };
+      });
+      const ccTarget = estimateWodTarget({ kind: 'cardioChipper', entries: chipperEntries, timeDomain });
+      const ccNotes = ccTarget ? `${notes} ${ccTarget.note}` : notes;
+      const field = wodTargetField(ccTarget);
+      return chipperEntries.map((e) => ({
+        block: 'wod' as const,
+        movementId: e.movementId,
+        reps: e.reps,
+        format: chosenFormat.label,
+        title,
+        notes: ccNotes,
+        wodTarget: field,
+      }));
+    }
+    // Pool de monoestructurales con base insuficiente hoy — cae al reparto normal de abajo.
+  }
+
   if (chosenFormat.kind === 'barbellComplex') {
     const usedForComplex = new Set(recentIds);
     const mains = pickManyVaried(weightedPool, 3, usedForComplex);
@@ -1702,6 +1791,7 @@ function buildWodBlock(
         mains,
         filler,
         prs,
+        bodyweightKg,
         chosenFormat.label,
         title,
         bcTarget ? `${notes} ${bcTarget.note}` : notes,
@@ -1752,9 +1842,7 @@ function buildWodBlock(
       const filler = pickVaried(monoPool, usedForLadder);
       if (filler) {
         const steps = isAscending ? ASCENDING_LADDER_FILLER_STEPS : DESCENDING_LADDER_FILLER_STEPS;
-        const barbellPercent = WOD_BARBELL_LOAD_PERCENT[main.id];
-        const prKey = barbellPercent ? (resolveStrengthPRKey(main) ?? resolveOlyPRKey(main)) : undefined;
-        const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
+        const loadKg = wodMovementLoadKg(main, prs, bodyweightKg);
         const lfTarget = estimateWodTarget({
           kind: chosenFormat.kind,
           entries: [
@@ -1825,27 +1913,25 @@ function buildWodBlock(
     timeDomain,
     ladderScheme: ladderReps,
   });
-  const notesWithTarget = wodTarget ? `${notes} ${wodTarget.note}` : notes;
+  const loads = picks.map((m) => wodMovementLoadKg(m, prs, bodyweightKg));
+  // Si algún movimiento lleva carga derivada del PESO CORPORAL (no de un PR), avísalo: es una guía, no un absoluto.
+  const usesBwLoad = picks.some((m, i) => loads[i] != null && !WOD_BARBELL_LOAD_PERCENT[m.id]);
+  const bwLoadNote = usesBwLoad
+    ? ' Las cargas de barra/mancuerna/kettlebell son una guía a tu peso corporal — ajústalas a lo que te deje ciclar sin fallar.'
+    : '';
+  const notesWithTarget = `${notes}${bwLoadNote}${wodTarget ? ` ${wodTarget.note}` : ''}`;
   const targetField = wodTargetField(wodTarget);
 
-  return picks.map((m) => {
-    // Carga de barra/olimpico solo para los levantamientos que de verdad aparecen en WODs reales
-    // (ver WOD_BARBELL_LOAD_PERCENT) — el resto de movimientos de este pool son bodyweight/funcional
-    // y nunca necesitaron loadKg.
-    const barbellPercent = WOD_BARBELL_LOAD_PERCENT[m.id];
-    const prKey = barbellPercent ? (resolveStrengthPRKey(m) ?? resolveOlyPRKey(m)) : undefined;
-    const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
-    return {
-      block: 'wod',
-      movementId: m.id,
-      reps: ladderReps ?? WOD_PRESCRIPTION[m.id] ?? '12-15',
-      loadKg,
-      format,
-      title,
-      notes: notesWithTarget,
-      wodTarget: targetField,
-    };
-  });
+  return picks.map((m, i) => ({
+    block: 'wod',
+    movementId: m.id,
+    reps: ladderReps ?? WOD_PRESCRIPTION[m.id] ?? '12-15',
+    loadKg: loads[i],
+    format,
+    title,
+    notes: notesWithTarget,
+    wodTarget: targetField,
+  }));
 }
 
 /** Elige un movimiento para un rol de accesorio, evitando dolor y lo ya usado; null si el pool se agota. */
@@ -2783,6 +2869,7 @@ export function generateDailySession(
     dayEmphasis,
     plannedEnergy,
     wodDose,
+    latestBodyweightKg(profile.bodyweightLog),
   );
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
