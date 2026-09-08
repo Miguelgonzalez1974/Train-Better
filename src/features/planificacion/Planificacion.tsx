@@ -929,7 +929,13 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         <div className="flex flex-col gap-4 card border-brand-gold/30 p-4">
           {wodScoreType && (
             <div>
-              <p className="mb-2 text-sm font-medium text-neutral-300">Resultado del WOD</p>
+              <p className="mb-2 text-sm font-medium text-neutral-300">
+                Resultado del WOD
+                {(() => {
+                  const t = session?.blocks.find((b) => b.block === 'wod' && b.wodTarget)?.wodTarget;
+                  return t?.display ? <span className="ml-2 font-normal text-neutral-500">objetivo {t.display}</span> : null;
+                })()}
+              </p>
               {wodScoreType === 'time' && (
                 <div className="flex items-center gap-2">
                   <input

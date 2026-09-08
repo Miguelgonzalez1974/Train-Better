@@ -64,6 +64,7 @@ import {
   type WodFormatKind,
   type WodTimeDomain,
 } from './wodDomains';
+import { estimateWodTarget, type WodTarget } from './wodTargets';
 import {
   computeAcwr,
   computePatternFatigue,
@@ -358,6 +359,12 @@ function wodQuantCue(kind: WodFormatKind, td: WodTimeDomain): string {
     default:
       return '';
   }
+}
+
+/** Proyecta un `WodTarget` a la forma inline que guarda el bloque (sin la frase, que ya va en `notes`). */
+function wodTargetField(t: WodTarget | null): SessionBlockResult['wodTarget'] | undefined {
+  if (!t) return undefined;
+  return { scoreType: t.scoreType, unit: t.unit, low: t.low, high: t.high, display: t.display };
 }
 
 /** Que tag de cooldown.ts encaja mejor con cada patron de fuerza del dia (ver buildCooldownBlock). */
@@ -1350,11 +1357,12 @@ function buildLadderFillerEntries(
   format: string,
   title: string,
   notes: string,
+  wodTarget?: SessionBlockResult['wodTarget'],
 ): SessionBlockResult[] {
   const entries: SessionBlockResult[] = [];
   for (const reps of steps) {
-    entries.push({ block: 'wod', movementId: main.id, reps: String(reps), loadKg, format, title, notes });
-    entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '10 cal', format, title, notes });
+    entries.push({ block: 'wod', movementId: main.id, reps: String(reps), loadKg, format, title, notes, wodTarget });
+    entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '10 cal', format, title, notes, wodTarget });
   }
   return entries;
 }
@@ -1398,14 +1406,15 @@ function buildBarbellComplexEntries(
   format: string,
   title: string,
   notes: string,
+  wodTarget?: SessionBlockResult['wodTarget'],
 ): SessionBlockResult[] {
   const entries: SessionBlockResult[] = [];
   for (const m of mains) {
     const barbellPercent = WOD_BARBELL_LOAD_PERCENT[m.id];
     const prKey = barbellPercent ? (resolveStrengthPRKey(m) ?? resolveOlyPRKey(m)) : undefined;
     const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
-    entries.push({ block: 'wod', movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '8-10', loadKg, format, title, notes });
-    entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '20-25', format, title, notes });
+    entries.push({ block: 'wod', movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '8-10', loadKg, format, title, notes, wodTarget });
+    entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '20-25', format, title, notes, wodTarget });
   }
   return entries;
 }
@@ -1663,7 +1672,20 @@ function buildWodBlock(
     mains.forEach((m) => usedForComplex.add(m.id));
     const filler = pickVaried(monoPool, usedForComplex);
     if (mains.length === 3 && filler) {
-      return buildBarbellComplexEntries(mains, filler, prs, chosenFormat.label, title, notes);
+      const bcTarget = estimateWodTarget({
+        kind: 'barbellComplex',
+        entries: [...mains, filler].map((m) => ({ movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '8-10' })),
+        timeDomain,
+      });
+      return buildBarbellComplexEntries(
+        mains,
+        filler,
+        prs,
+        chosenFormat.label,
+        title,
+        bcTarget ? `${notes} ${bcTarget.note}` : notes,
+        wodTargetField(bcTarget),
+      );
     }
     // No hay suficiente variedad de movimientos con carga distintos hoy (pool filtrado muy corto) —
     // cae al reparto normal de abajo en vez de forzar una triada incompleta.
@@ -1680,7 +1702,20 @@ function buildWodBlock(
       const fixed = pickVaried(gymnasticsPool, usedForRisingLoad);
       const prKey = resolveStrengthPRKey(barbell) ?? resolveOlyPRKey(barbell);
       if (fixed && prKey) {
-        return buildRisingLoadIntervalEntries(barbell, fixed, WOD_BARBELL_LOAD_PERCENT[barbell.id], prs[prKey], chosenFormat.label, title, notes);
+        const rlTarget = estimateWodTarget({
+          kind: 'risingLoadInterval',
+          entries: [barbell, fixed].map((m) => ({ movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '5-8' })),
+          timeDomain,
+        });
+        return buildRisingLoadIntervalEntries(
+          barbell,
+          fixed,
+          WOD_BARBELL_LOAD_PERCENT[barbell.id],
+          prs[prKey],
+          chosenFormat.label,
+          title,
+          rlTarget ? `${notes} ${rlTarget.note}` : notes,
+        );
       }
     }
     // Sin candidatos con PR hoy (patron excluido, etc.) — cae al reparto normal de abajo.
@@ -1699,8 +1734,18 @@ function buildWodBlock(
         const barbellPercent = WOD_BARBELL_LOAD_PERCENT[main.id];
         const prKey = barbellPercent ? (resolveStrengthPRKey(main) ?? resolveOlyPRKey(main)) : undefined;
         const loadKg = prKey ? roundToNearestPlate(prs[prKey] * barbellPercent) : undefined;
-        const laddedNotes = isAscending ? `${notes} Sigue +2 reps cada escalón hasta que se acabe el reloj.` : notes;
-        return buildLadderFillerEntries(main, filler, steps, loadKg, chosenFormat.label, title, laddedNotes);
+        const lfTarget = estimateWodTarget({
+          kind: chosenFormat.kind,
+          entries: [
+            { movementId: main.id, reps: String(steps[0]) },
+            { movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '10 cal' },
+          ],
+          timeDomain,
+          fillerSteps: steps,
+        });
+        const baseNotes = lfTarget ? `${notes} ${lfTarget.note}` : notes;
+        const laddedNotes = isAscending ? `${baseNotes} Sigue +2 reps cada escalón hasta que se acabe el reloj.` : baseNotes;
+        return buildLadderFillerEntries(main, filler, steps, loadKg, chosenFormat.label, title, laddedNotes, wodTargetField(lfTarget));
       }
     }
     // Sin candidatos suficientes hoy (pool corto tras excluir patrones) — cae al reparto normal.
@@ -1751,6 +1796,17 @@ function buildWodBlock(
   const ladderReps = isSharedLadder ? ladderSchemes[Math.floor(rng() * ladderSchemes.length)] : null;
   const format = ladderReps ? `${ladderReps} — ${chosenFormat.label}` : chosenFormat.label;
 
+  // Objetivo orientativo del WOD (tiempo / rondas / reps) — ver `wodTargets.ts`. Se añade a la nota
+  // y se guarda estructurado en cada entrada para poder juzgar el resultado al completar la sesión.
+  const wodTarget = estimateWodTarget({
+    kind: chosenFormat.kind,
+    entries: picks.map((m) => ({ movementId: m.id, reps: ladderReps ?? WOD_PRESCRIPTION[m.id] ?? '12-15' })),
+    timeDomain,
+    ladderScheme: ladderReps,
+  });
+  const notesWithTarget = wodTarget ? `${notes} ${wodTarget.note}` : notes;
+  const targetField = wodTargetField(wodTarget);
+
   return picks.map((m) => {
     // Carga de barra/olimpico solo para los levantamientos que de verdad aparecen en WODs reales
     // (ver WOD_BARBELL_LOAD_PERCENT) — el resto de movimientos de este pool son bodyweight/funcional
@@ -1765,7 +1821,8 @@ function buildWodBlock(
       loadKg,
       format,
       title,
-      notes,
+      notes: notesWithTarget,
+      wodTarget: targetField,
     };
   });
 }

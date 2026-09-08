@@ -301,6 +301,19 @@ export interface SessionBlockResult {
    * stepper multiserie, y el bloque entra en la tarjeta de RPE. Bloques strength y oly.
    */
   logAsSingle?: boolean;
+  /**
+   * Objetivo orientativo del WOD estimado por el motor (`src/engine/wodTargets.ts`) — banda de
+   * tiempo / rondas / reps. Solo bloque 'wod' generado (no benchmark). `low === 0 && high === 0`
+   * significa objetivo cualitativo (solo la frase ya va en `notes`). Se usa para juzgar el
+   * resultado al completar la sesion. Union inline para no acoplar la capa de datos con el motor.
+   */
+  wodTarget?: {
+    scoreType: 'time' | 'reps' | 'load' | 'rounds+reps';
+    unit: 'seconds' | 'rounds' | 'reps';
+    low: number;
+    high: number;
+    display: string;
+  };
 }
 
 /**
@@ -313,7 +326,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 18;
+export const SESSION_GEN_VERSION = 19;
 
 export interface DailySession {
   date: string;

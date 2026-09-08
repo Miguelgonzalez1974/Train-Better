@@ -1,6 +1,7 @@
 import { Flame, CalendarCheck2, TrendingUp, PartyPopper } from 'lucide-react';
 import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { describeWodResultVsTarget } from '../../engine/wodTargets';
 import type { E1rmSuggestion } from './Planificacion';
 
 interface SessionSummaryCardProps {
@@ -90,6 +91,13 @@ function buildRecapLines(
     if (name) {
       const meaningful = entry.wodResult && !/^0([:+]0+)?$/.test(entry.wodResult.value.trim());
       lines.push({ label: 'WOD', detail: meaningful ? `${name} — ${entry.wodResult!.value}` : name });
+
+      // Objetivo orientativo del motor vs. lo que hiciste (solo WOD generado con banda numérica).
+      const targeted = wodBlocks.find((b) => b.wodTarget && (b.wodTarget.low > 0 || b.wodTarget.high > 0));
+      if (meaningful && targeted?.wodTarget) {
+        const verdict = describeWodResultVsTarget(entry.wodResult!, { ...targeted.wodTarget, note: '' });
+        if (verdict) lines.push({ label: 'Objetivo', detail: `${targeted.wodTarget.display} · ${verdict}` });
+      }
     }
   }
 

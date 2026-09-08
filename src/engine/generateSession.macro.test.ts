@@ -266,6 +266,18 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
     expect(lightDays, 'no se generó ningún día técnico-ligero en 12 semanas').toBeGreaterThan(0);
   });
 
+  it('todo WOD generado (no benchmark) trae un objetivo orientativo en la nota', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const missing: string[] = [];
+    for (const d of consecutiveDates(START, 42)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const wod = s.blocks.find((b) => b.block === 'wod');
+      if (!wod || s.isRestDay || wod.movementId.startsWith('benchmark:')) continue;
+      if (!/Objetivo orientativo/.test(wod.notes ?? '')) missing.push(`${s.date}: ${wod.format}`);
+    }
+    expect(missing).toEqual([]);
+  });
+
   it('el día de recuperación activa (6 días/semana) lleva un remate de brazos', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 6 });
     // 2026-01-08 es jueves = día de recuperación en el calendario de 6 días.
