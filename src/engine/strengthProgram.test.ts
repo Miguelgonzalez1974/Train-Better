@@ -41,7 +41,8 @@ describe('programas de fuerza transcritos', () => {
         const s = generateSessionForDate(profile, [], d, []);
         if (s.isRestDay) continue;
         daysChecked++;
-        const hasCore = s.blocks.some((b) => b.format === 'Core · 3 rondas');
+        // Circuito de reps o formato en intervalo Tabata — ambos son "core".
+        const hasCore = s.blocks.some((b) => (b.format ?? '').startsWith('Core'));
         const isMaxish = s.blocks.some((b) => /MAX OUT|1RM real|intento de 1RM/.test(b.notes ?? ''));
         if (hasCore) withCore++;
         // Nunca las dos cosas: un dia de max no lleva finisher de core.

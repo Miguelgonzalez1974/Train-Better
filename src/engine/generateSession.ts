@@ -222,9 +222,9 @@ const WEAK_POINT_ACCESSORY_ROLE: Record<string, AccessoryRole> = {
 type CoreCategory = 'antiExtension' | 'antiRotation' | 'flexion' | 'carry';
 
 const CORE_POOL: Record<CoreCategory, string[]> = {
-  antiExtension: ['weighted-plank', 'dead-bug', 'ab-wheel-rollout', 'plank'],
-  antiRotation: ['pallof-press', 'side-plank-hold'],
-  flexion: ['toes-to-bar', 'ghd-situp', 'v-up', 'abmat-situp'],
+  antiExtension: ['weighted-plank', 'dead-bug', 'ab-wheel-rollout', 'plank', 'hollow-hold', 'hollow-rock', 'handstand-hold', 'superman-hold'],
+  antiRotation: ['pallof-press', 'side-plank-hold', 'russian-twist'],
+  flexion: ['toes-to-bar', 'ghd-situp', 'v-up', 'abmat-situp', 'hanging-leg-raise', 'flutter-kick', 'mountain-climbers', 'ball-slam', 'l-sit'],
   carry: ['farmers-carry', 'suitcase-carry'],
 };
 
@@ -234,6 +234,27 @@ const CORE_REPS: Record<CoreCategory, string> = {
   flexion: '12-15',
   carry: '30-40 m',
 };
+
+/**
+ * Subconjunto de core apto para el formato en INTERVALO (Tabata 20/10) — isométricos y dinámicos de
+ * tronco tomados del banco de core de `docs/importar-coach-ia.md`. Los carries y los movimientos con
+ * carga externa quedan fuera: 20 s de acarreo o de slam no encajan en ese formato.
+ */
+const CORE_INTERVAL_IDS = [
+  'hollow-rock',
+  'hollow-hold',
+  'superman-hold',
+  'plank',
+  'weighted-plank',
+  'side-plank-hold',
+  'russian-twist',
+  'flutter-kick',
+  'mountain-climbers',
+  'handstand-hold',
+  'ghd-situp',
+  'abmat-situp',
+  'v-up',
+];
 
 /** Orden de categorías de core segun el patron de fuerza del dia (lo primero pesa mas en la seleccion). */
 const CORE_PRIORITY_BY_FAMILY: Record<StrengthFamily, CoreCategory[]> = {
@@ -1918,13 +1939,36 @@ function buildAccessoryBlock(
 }
 
 /**
- * Circuito de core de 3 ejercicios / 3 rondas, con la librería de Mayhem Burgener. Rota entre
- * anti-extensión, anti-rotación, flexión y carry; el orden de prioridad depende del patron de
- * fuerza del dia (dia de pierna -> mas anti-extensión y carry; dia de empuje/oly -> mas
- * anti-rotación y flexión). Devuelve entradas de bloque 'accessory' con `format` propio para que la
- * tarjeta lo muestre como una sección aparte.
+ * Core en formato INTERVALO (Tabata 20/10): 4 o 6 rondas de 20 s de trabajo y 10 s de descanso
+ * alternando 2 ejercicios de tronco. Patrón muy recurrente en el banco de core de
+ * `docs/importar-coach-ia.md` (Ball Slams, Hollow Rock, Plank Hold, Russian Twists…). Alterna con el
+ * circuito de reps de `buildCoreCircuitBlock`.
  */
-function buildCoreBlock(
+function buildCoreIntervalBlock(recentIds: Set<string>, avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+  const pool = filterAvoidingPain(
+    CORE_INTERVAL_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+    avoidedPatterns,
+  );
+  const picks = pickManyVaried(pool, 2, recentIds);
+  if (picks.length < 2) return [];
+  const rounds = rng() < 0.5 ? 6 : 4;
+  const notes = `Core en intervalo (Tabata 20/10): ${rounds} rondas de 20 s de trabajo y 10 s de descanso, alternando los dos ejercicios. Calidad de posición sobre número de repeticiones.`;
+  return picks.map((movement) => ({
+    block: 'accessory',
+    movementId: movement.id,
+    sets: rounds,
+    reps: '20 s',
+    format: `Core · Tabata 20/10 · ${rounds} rondas`,
+    notes,
+  }));
+}
+
+/**
+ * Circuito de core de 3 ejercicios / 3 rondas. Rota entre anti-extensión, anti-rotación, flexión y
+ * carry; el orden de prioridad depende del patron de fuerza del dia (dia de pierna -> mas
+ * anti-extensión y carry; dia de empuje/oly -> mas anti-rotación y flexión).
+ */
+function buildCoreCircuitBlock(
   strengthPattern: MovementPattern,
   recentIds: Set<string>,
   avoidedPatterns: Set<MovementPattern>,
@@ -1961,6 +2005,23 @@ function buildCoreBlock(
     format: 'Core · 3 rondas',
     notes,
   }));
+}
+
+/**
+ * Bloque de core del día: alterna deterministamente (semilla del día) entre el circuito de reps y el
+ * formato en intervalo Tabata 20/10 — ver `buildCoreCircuitBlock` / `buildCoreIntervalBlock`. Si el
+ * formato en intervalo se queda sin pool suficiente, cae al circuito.
+ */
+function buildCoreBlock(
+  strengthPattern: MovementPattern,
+  recentIds: Set<string>,
+  avoidedPatterns: Set<MovementPattern>,
+): SessionBlockResult[] {
+  if (rng() < 0.4) {
+    const interval = buildCoreIntervalBlock(recentIds, avoidedPatterns);
+    if (interval.length > 0) return interval;
+  }
+  return buildCoreCircuitBlock(strengthPattern, recentIds, avoidedPatterns);
 }
 
 /**

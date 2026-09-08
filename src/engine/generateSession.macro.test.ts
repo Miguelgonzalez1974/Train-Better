@@ -266,6 +266,32 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
     expect(lightDays, 'no se generó ningún día técnico-ligero en 12 semanas').toBeGreaterThan(0);
   });
 
+  it('el core alterna entre circuito de reps y formato en intervalo Tabata, y el Tabata está bien formado', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    let circuits = 0;
+    let tabatas = 0;
+    for (const d of consecutiveDates(START, 56)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const core = s.blocks.filter((b) => (b.format ?? '').startsWith('Core'));
+      if (core.length === 0) continue;
+      const fmt = core[0].format ?? '';
+      if (fmt.startsWith('Core · Tabata')) {
+        tabatas++;
+        expect(new Set(core.map((b) => b.movementId)).size, `${s.date}: Tabata no son 2 movimientos`).toBe(2);
+        for (const b of core) {
+          expect(b.reps).toBe('20 s');
+          expect([4, 6]).toContain(b.sets);
+          expect(getMovementById(b.movementId), `${s.date}: ${b.movementId} no existe`).toBeTruthy();
+        }
+      } else {
+        circuits++;
+        expect(fmt).toBe('Core · 3 rondas');
+      }
+    }
+    expect(circuits, 'ningún circuito de core en 8 semanas').toBeGreaterThan(0);
+    expect(tabatas, 'ningún core en formato Tabata en 8 semanas').toBeGreaterThan(0);
+  });
+
   it('todo WOD generado (no benchmark) trae un objetivo orientativo en la nota', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 5 });
     const missing: string[] = [];
