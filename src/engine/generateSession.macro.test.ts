@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { adoptAdditiveEngineFields, generateSessionForDate, WOD_SYNONYM_GROUPS } from './generateSession';
+import { adoptAdditiveEngineFields, bestAffinityPartner, generateSessionForDate, WOD_SYNONYM_GROUPS } from './generateSession';
+import { WOD_PAIR_AFFINITY } from './wodDomains';
 import type { DailySession } from '../data/athlete/types';
 import {
   makeProfile,
@@ -183,6 +184,44 @@ describe('generateSessionForDate — macrociclo', () => {
       blocks: fresh.blocks.map((b) => ({ ...b, movementId: `${b.movementId}-x` })),
     };
     expect(adoptAdditiveEngineFields(scrambled, profile, [], d, profile.goals)).toBe(scrambled);
+  });
+
+  it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {
+    const bad: string[] = [];
+    for (const [key, partners] of Object.entries(WOD_PAIR_AFFINITY)) {
+      if (!getMovementById(key)) bad.push(`clave ${key}`);
+      for (const p of partners) if (!getMovementById(p)) bad.push(`${key} -> ${p}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('bestAffinityPartner elige la pareja mejor valorada presente en el pool', () => {
+    const pool = ['kipping-pull-up', 'run', 'deadlift', 'abmat-situp']
+      .map((id) => getMovementById(id))
+      .filter((m): m is NonNullable<typeof m> => Boolean(m));
+    // thruster -> [bar-facing-burpee, chest-to-bar-pull-up, kipping-pull-up, ...]; de los del pool, gana kipping-pull-up.
+    expect(bestAffinityPartner(['thruster'], pool)).toBe('kipping-pull-up');
+    // Nada afín en el pool -> undefined.
+    expect(bestAffinityPartner(['rope-climb'], [getMovementById('abmat-situp')!])).toBeUndefined();
+    // Una pareja que encaja con DOS movimientos ya elegidos gana a otra que encaja con uno.
+    const pool2 = ['double-under', 'row'].map((id) => getMovementById(id)!);
+    expect(bestAffinityPartner(['deadlift', 'thruster'], pool2)).toBe('double-under');
+  });
+
+  it('el sesgo de afinidad NO mata la variedad: ninguna combinación domina', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const combos = new Map<string, number>();
+    let total = 0;
+    for (const d of consecutiveDates(START, 140)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const wod = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
+      if (wod.length < 2) continue;
+      total++;
+      const key = [...new Set(wod.map((b) => b.movementId))].sort().join('+');
+      combos.set(key, (combos.get(key) ?? 0) + 1);
+    }
+    const max = Math.max(...combos.values());
+    expect(max / total, 'una combinación de WOD se repite demasiado').toBeLessThan(0.15);
   });
 
   it('todas las sesiones de 3 semanas traen al menos un bloque', () => {

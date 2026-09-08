@@ -259,6 +259,66 @@ export const CARDIO_CHIPPER_BASE: Record<string, { amount: number; unit: 'm' | '
 };
 export const CARDIO_CHIPPER_TIERS = [1, 0.7, 0.5];
 
+/**
+ * Parejas de movimientos de WOD que ENCAJAN — para cada id, sus mejores compañeros ordenados de
+ * mejor a peor. Destilado de ~130 WODs del banco `docs/importar-coach-ia.md` (co-ocurrencia real:
+ * deadlift+box jump, thruster+bar-facing burpee, power snatch+toes-to-bar, pull-up+push-up de
+ * "Cindy", wall ball+pull-up…) más metodología general. `buildWodBlock` lo usa para sesgar
+ * (probabilidad, no obligación) la elección del 2º y 3er movimiento hacia combos probados en vez de
+ * "válido pero al azar". No cambia formato, dominio ni dosis.
+ */
+export const WOD_PAIR_AFFINITY: Record<string, string[]> = {
+  // --- Barra pesada / olímpico ---
+  deadlift: ['box-jump-over', 'box-jump', 'double-under', 'handstand-push-up', 'burpee', 'strict-pull-up'],
+  thruster: ['bar-facing-burpee', 'chest-to-bar-pull-up', 'kipping-pull-up', 'double-under', 'toes-to-bar', 'row'],
+  'power-snatch': ['toes-to-bar', 'double-under', 'handstand-push-up', 'wall-ball', 'run', 'box-jump-over', 'bar-facing-burpee'],
+  'hang-snatch': ['toes-to-bar', 'double-under', 'wall-ball', 'box-jump-over'],
+  snatch: ['toes-to-bar', 'double-under', 'burpee', 'run'],
+  'power-clean': ['bar-facing-burpee', 'box-jump-over', 'toes-to-bar', 'burpee', 'double-under'],
+  'hang-clean': ['bar-facing-burpee', 'front-squat', 'toes-to-bar'],
+  clean: ['bar-facing-burpee', 'front-squat', 'box-jump-over', 'toes-to-bar'],
+  'clean-and-jerk': ['toes-to-bar', 'row', 'box-jump-over', 'bar-facing-burpee', 'kipping-pull-up', 'run'],
+  'front-squat': ['push-up', 'bar-facing-burpee', 'hang-clean', 'toes-to-bar'],
+  'back-squat': ['double-under', 'abmat-situp', 'burpee'],
+  'shoulder-to-overhead': ['kipping-pull-up', 'run', 'abmat-situp', 'burpee'],
+  'sumo-deadlift-high-pull': ['push-up', 'box-jump-over', 'abmat-situp'],
+  // --- Gimnasia ---
+  'chest-to-bar-pull-up': ['thruster', 'deadlift', 'clean-and-jerk', 'double-under', 'wall-ball'],
+  'kipping-pull-up': ['push-up', 'air-squat', 'ring-dip', 'thruster', 'run', 'wall-ball', 'clean-and-jerk'],
+  'strict-pull-up': ['push-up', 'deadlift', 'ring-dip'],
+  'butterfly-pull-up': ['thruster', 'double-under', 'wall-ball'],
+  'toes-to-bar': ['power-snatch', 'clean-and-jerk', 'power-clean', 'double-under', 'burpee-box-jump-over', 'thruster'],
+  'handstand-push-up': ['deadlift', 'power-snatch', 'double-under', 'row'],
+  'kipping-hspu': ['deadlift', 'power-snatch', 'double-under'],
+  'ring-dip': ['kipping-pull-up', 'strict-pull-up', 'row', 'handstand-push-up'],
+  'bar-muscle-up': ['wall-ball', 'row', 'double-under'],
+  'ring-muscle-up': ['wall-ball', 'row', 'double-under'],
+  'wall-walk': ['ski-erg', 'row', 'run'],
+  'rope-climb': ['run', 'row', 'wall-ball'],
+  'push-up': ['air-squat', 'kipping-pull-up', 'row', 'front-squat', 'sumo-deadlift-high-pull', 'air-bike'],
+  'air-squat': ['push-up', 'kipping-pull-up', 'double-under', 'run', 'air-bike', 'row'],
+  'abmat-situp': ['kettlebell-swing-american', 'kettlebell-swing-russian', 'back-squat', 'shoulder-to-overhead', 'row'],
+  'box-jump': ['deadlift', 'double-under'],
+  'box-jump-over': ['deadlift', 'power-clean', 'power-snatch', 'double-under', 'clean-and-jerk'],
+  burpee: ['air-bike', 'wall-ball', 'kipping-pull-up', 'run'],
+  'bar-facing-burpee': ['thruster', 'power-clean', 'clean', 'deadlift'],
+  'burpee-box-jump-over': ['toes-to-bar', 'dumbbell-snatch', 'clean', 'abmat-situp'],
+  // --- Monoestructural ---
+  'double-under': ['deadlift', 'thruster', 'power-snatch', 'box-jump-over', 'back-squat', 'clean-and-jerk'],
+  run: ['kipping-pull-up', 'clean-and-jerk', 'shoulder-to-overhead', 'double-under', 'air-squat', 'power-snatch'],
+  row: ['thruster', 'push-up', 'kettlebell-swing-american', 'ring-dip', 'clean-and-jerk', 'handstand-push-up', 'wall-ball'],
+  'air-bike': ['burpee', 'air-squat', 'push-up', 'kipping-pull-up'],
+  'ski-erg': ['wall-walk', 'burpee', 'push-up'],
+  // --- Con carga funcional ---
+  'wall-ball': ['kipping-pull-up', 'toes-to-bar', 'burpee', 'double-under', 'chest-to-bar-pull-up', 'row', 'kettlebell-swing-american'],
+  'kettlebell-swing-russian': ['abmat-situp', 'row', 'push-up', 'box-jump-over'],
+  'kettlebell-swing-american': ['abmat-situp', 'row', 'push-up', 'wall-ball', 'box-jump-over'],
+  'dumbbell-snatch': ['toes-to-bar', 'burpee-box-jump-over', 'double-under', 'box-jump-over'],
+  'dumbbell-clean-and-jerk': ['toes-to-bar', 'double-under', 'box-jump-over'],
+  'devils-press': ['row', 'double-under', 'box-jump-over'],
+  'farmers-carry': ['double-under', 'air-squat', 'run'],
+};
+
 /** Escaleras descendentes clasicas (Fran/Diane/Elizabeth siguen este patron) — se elige una al azar cuando toca este formato. */
 export const DESCENDING_LADDER_SCHEMES = ['21-15-9', '15-12-9', '10-8-6', '21-18-15-12-9-6-3'];
 

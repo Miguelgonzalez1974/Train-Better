@@ -62,6 +62,7 @@ import {
   KETTLEBELL_SIZES_KG,
   WOD_BARBELL_LOAD_PERCENT,
   WOD_EFFORT_BY_WEEK,
+  WOD_PAIR_AFFINITY,
   WOD_PRESCRIPTION,
   WOD_RX_BW_FRACTION,
   WOD_TIME_DOMAIN,
@@ -365,6 +366,26 @@ function wodSynonymBlockedIds(pickedIds: readonly string[]): Set<string> {
     }
   }
   return blocked;
+}
+
+/**
+ * De un pool de candidatos, el que MEJOR encaja con lo ya elegido según `WOD_PAIR_AFFINITY` — o
+ * `undefined` si ninguno figura como buena pareja. Suma el peso por ranking de cada pick que lo
+ * prefiere, así una combinación que encaja con dos movimientos ya elegidos pesa más que otra que
+ * solo encaja con uno.
+ */
+export function bestAffinityPartner(pickedIds: readonly string[], candidates: readonly Movement[]): string | undefined {
+  const candIds = new Set(candidates.map((c) => c.id));
+  const score = new Map<string, number>();
+  for (const pid of pickedIds) {
+    const partners = WOD_PAIR_AFFINITY[pid] ?? [];
+    partners.forEach((partnerId, rank) => {
+      if (!candIds.has(partnerId)) return;
+      score.set(partnerId, (score.get(partnerId) ?? 0) + (partners.length - rank));
+    });
+  }
+  if (score.size === 0) return undefined;
+  return [...score.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
 }
 
 /**
@@ -1839,7 +1860,10 @@ function buildWodBlock(
     const main = pickVariedWithPreference(mainPool, usedForLadder, wodLiftPref.movementId, wodLiftPref.preferChance);
     if (main) {
       usedForLadder.add(main.id);
-      const filler = pickVaried(monoPool, usedForLadder);
+      const fillerPref = bestAffinityPartner([main.id], monoPool);
+      const filler = fillerPref
+        ? pickVariedWithPreference(monoPool, usedForLadder, fillerPref, 0.5)
+        : pickVaried(monoPool, usedForLadder);
       if (filler) {
         const steps = isAscending ? ASCENDING_LADDER_FILLER_STEPS : DESCENDING_LADDER_FILLER_STEPS;
         const loadKg = wodMovementLoadKg(main, prs, bodyweightKg);
@@ -1870,7 +1894,21 @@ function buildWodBlock(
     const remaining = domainPool.filter(isFree);
     const fallback = pool.filter(isFree);
     const candidates = remaining.length > 0 ? remaining : fallback;
-    const pick = preferredId ? pickVariedWithPreference(candidates, usedIds, preferredId, preferChance) : pickVaried(candidates, usedIds);
+    // Sin preferencia explícita (objetivo de fuerza/potencia), se sesga hacia la pareja que mejor
+    // encaja con lo ya elegido (ver `WOD_PAIR_AFFINITY`) — probabilidad moderada, no obligación.
+    let pid = preferredId;
+    let pc = preferChance;
+    if (!pid && picks.length > 0) {
+      const aff = bestAffinityPartner(
+        picks.map((p) => p.id),
+        candidates,
+      );
+      if (aff) {
+        pid = aff;
+        pc = 0.5;
+      }
+    }
+    const pick = pid ? pickVariedWithPreference(candidates, usedIds, pid, pc) : pickVaried(candidates, usedIds);
     if (pick) {
       picks.push(pick);
       usedIds.add(pick.id);
