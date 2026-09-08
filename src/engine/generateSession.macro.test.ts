@@ -195,3 +195,83 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(empty).toEqual([]);
   });
 });
+
+describe('generateSessionForDate — composición de la sesión (esqueleto fijo)', () => {
+  const hasBlock = (s: DailySession, block: string) => s.blocks.some((b) => b.block === block);
+  const hasFormat = (s: DailySession, prefix: string) =>
+    s.blocks.some((b) => (b.format ?? '').startsWith(prefix));
+
+  it('todo día de entreno (salvo recuperación) lleva warm up + fuerza + WOD + oly + cool down', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const missing: string[] = [];
+    for (const d of consecutiveDates(START, 28)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      if (s.isRestDay) continue;
+      for (const blk of ['warmup', 'strength', 'wod', 'oly', 'cooldown']) {
+        if (!hasBlock(s, blk)) missing.push(`${s.date}: falta ${blk}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('skill solo cae en 2 días del microciclo y no consecutivos', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    // trainingDayIndex 0..4 = lunes..viernes del fixture.
+    const skillDays: number[] = [];
+    consecutiveDates(START, 5).forEach((d, i) => {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      if (s.blocks.some((b) => b.block === 'skill')) skillDays.push(i);
+    });
+    expect(skillDays.length).toBe(2);
+    expect(skillDays[1] - skillDays[0]).toBeGreaterThan(1);
+  });
+
+  it('accesorios en ≤ 2 días por semana; core en ≤ 3 y no consecutivos', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    for (const weekStart of ['2026-01-05', '2026-01-12', '2026-01-19', '2026-01-26']) {
+      const accDays: number[] = [];
+      const coreDays: number[] = [];
+      consecutiveDates(weekStart, 5).forEach((d, i) => {
+        const s = generateSessionForDate(profile, [], d, profile.goals);
+        if (hasFormat(s, 'Superserie')) accDays.push(i);
+        if (hasFormat(s, 'Core')) coreDays.push(i);
+      });
+      expect(accDays.length, `${weekStart} accesorios`).toBeLessThanOrEqual(2);
+      expect(coreDays.length, `${weekStart} core`).toBeLessThanOrEqual(3);
+      for (let i = 1; i < coreDays.length; i++) {
+        expect(coreDays[i] - coreDays[i - 1], `${weekStart} core consecutivo`).toBeGreaterThan(1);
+      }
+    }
+  });
+
+  it('los días de afinar de semana pico llevan fuerza y oly pero en técnico-ligero (menos series + nota del coach)', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const setsOf = (s: DailySession) =>
+      s.blocks.filter((b) => b.block === 'strength' && b.sets).reduce((n, b) => n + (b.sets ?? 0), 0);
+    const baselineSets = setsOf(generateSessionForDate(profile, [], consecutiveDates(START, 1)[0], profile.goals));
+
+    let lightDays = 0;
+    for (const d of consecutiveDates(START, 84)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      if (s.isRestDay) continue;
+      const isLight = (s.coachReasons ?? []).some((r) => /técnico-ligero/i.test(r));
+      if (!isLight) continue;
+      lightDays++;
+      // Sigue llevando los 4 principales, solo que la barra va ligera.
+      expect(s.blocks.some((b) => b.block === 'strength'), `${s.date} sin fuerza`).toBe(true);
+      expect(s.blocks.some((b) => b.block === 'oly'), `${s.date} sin oly`).toBe(true);
+      expect(s.blocks.some((b) => b.block === 'wod'), `${s.date} sin WOD`).toBe(true);
+      expect(setsOf(s), `${s.date} no recorta series`).toBeLessThan(baselineSets);
+    }
+    expect(lightDays, 'no se generó ningún día técnico-ligero en 12 semanas').toBeGreaterThan(0);
+  });
+
+  it('el día de recuperación activa (6 días/semana) lleva un remate de brazos', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 6 });
+    // 2026-01-08 es jueves = día de recuperación en el calendario de 6 días.
+    const thursday = generateSessionForDate(profile, [], new Date('2026-01-08T12:00:00'), profile.goals);
+    expect(thursday.isRestDay).toBe(false);
+    expect(thursday.blocks.some((b) => (b.format ?? '').startsWith('Brazos'))).toBe(true);
+    expect(thursday.blocks.some((b) => b.block === 'strength')).toBe(false);
+  });
+});

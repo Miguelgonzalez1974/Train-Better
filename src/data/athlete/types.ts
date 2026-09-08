@@ -1,4 +1,4 @@
-import type { Block } from '../movements/types';
+import type { Block, MovementPattern } from '../movements/types';
 
 export interface PersonalRecords {
   backSquat: number;
@@ -313,7 +313,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 17;
+export const SESSION_GEN_VERSION = 18;
 
 export interface DailySession {
   date: string;
@@ -388,6 +388,13 @@ export interface SessionHistoryEntry {
    * Ausente en entradas anteriores a esta feature.
    */
   wodMovementIds?: string[];
+  /**
+   * Patron del levantamiento de fuerza principal de esa sesion (bloque 'strength'). Lo escribe
+   * `toHistoryEntry`. Es la fuente fiable para "no repetir patron dos dias seguidos": `movementIds`
+   * se contamina con movimientos de barra del calentamiento y del WOD. Ausente en entradas
+   * anteriores a esta feature (se cae al escaneo de `movementIds`).
+   */
+  strengthPattern?: MovementPattern;
   /**
    * Sistema energetico que el planificador asigno al WOD de ese dia — estructuralmente igual a
    * `EnergySystem` de `src/engine/wodDomains.ts` (union inline aqui para no acoplar la capa de

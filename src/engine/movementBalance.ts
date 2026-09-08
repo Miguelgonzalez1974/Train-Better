@@ -14,6 +14,9 @@ const OLY_MOVEMENT_IDS = new Set(olyMovements.map((m) => m.id));
  * que se sesga hacia el bloque con mas entradas — p.ej. oly casi siempre aporta primer + principal).
  */
 function dominantStrengthPattern(entry: SessionHistoryEntry): MovementPattern | null {
+  // Señal explícita del bloque de fuerza (nueva). Se prefiere al escaneo de `movementIds`, que
+  // ahora incluye movimientos de barra del calentamiento/WOD y puede devolver el patrón equivocado.
+  if (entry.strengthPattern) return entry.strengthPattern;
   for (const id of entry.movementIds) {
     if (STRENGTH_MOVEMENT_IDS.has(id)) return getMovementById(id)!.pattern;
   }

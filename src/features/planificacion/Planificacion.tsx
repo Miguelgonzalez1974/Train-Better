@@ -801,7 +801,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
                   session.dayEmphasis === 'fuerza' ? 'bg-brand-gold/15 text-brand-gold' : 'bg-brand-orange/15 text-brand-orange'
                 }`}
               >
-                {session.dayEmphasis === 'fuerza' ? 'Día de fuerza' : 'Día de metcon'}
+                {session.dayEmphasis === 'fuerza' ? 'Día de fuerza' : 'Foco metcon'}
               </span>
             )}
             {!session.isRestDay && session.mesocycleWeek === 0 && (

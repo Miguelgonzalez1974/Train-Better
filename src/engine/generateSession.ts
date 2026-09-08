@@ -167,6 +167,19 @@ function strengthFamilyOf(pattern: MovementPattern): StrengthFamily {
   return 'lower';
 }
 
+/**
+ * Familia de fuerza que MENOS días tuvo en la semana (según el reparto del microciclo) — es la que
+ * el bloque de accesorios complementa, para equilibrar el volumen semanal en vez de mirar solo el
+ * día de hoy. `pull` casi nunca sale como patrón de fuerza principal (el ciclo es squat/hinge/
+ * verticalPush/horizontalPush), así que se le da ventaja de desempate.
+ */
+function leastTrainedFamily(weekPatterns: readonly MovementPattern[]): StrengthFamily {
+  const count: Record<StrengthFamily, number> = { lower: 0, push: 0, pull: 0 };
+  for (const p of weekPatterns) count[strengthFamilyOf(p)] += 1;
+  const order: StrengthFamily[] = ['pull', 'push', 'lower'];
+  return order.reduce((best, fam) => (count[fam] < count[best] ? fam : best), order[0]);
+}
+
 interface AccessorySupersetPlan {
   roles: [AccessoryRole, AccessoryRole];
   label: string;
@@ -1784,13 +1797,18 @@ function buildAccessoryBlock(
   dose: DayDose,
   week: 1 | 2 | 3 | 4,
   history: SessionHistoryEntry[],
+  /** Familia a complementar según lo que MENOS trabajó la semana (ver `leastTrainedFamily`). Si se
+   *  pasa, el plan de superseries se elige por ella en vez de por el patrón de fuerza de hoy. */
+  complementFamily?: StrengthFamily,
+  /** Tope de superseries — se baja a 1 los días que además llevan el remate de brazos. */
+  maxSupersets = 2,
 ): SessionBlockResult[] {
   // 3 series es el base; la dosis del dia lo mueve entre 2 y 4.
   const accSets = Math.min(4, Math.max(2, Math.round(3 * dose.strengthSets)));
-  const family = strengthFamilyOf(strengthPattern);
+  const family = complementFamily ?? strengthFamilyOf(strengthPattern);
   const scheme = ACCESSORY_WEEK_SCHEME[week];
-  // 2 superseries de normal; en un dia suave (dosis baja) solo 1.
-  const supersetCount = dose.strengthSets < 0.9 ? 1 : 2;
+  // 2 superseries de normal; en un dia suave (dosis baja) solo 1; y nunca mas que `maxSupersets`.
+  const supersetCount = Math.min(maxSupersets, dose.strengthSets < 0.9 ? 1 : 2);
 
   const plan: AccessorySupersetPlan[] = ACCESSORY_SUPERSET_PLAN[family]
     .slice(0, supersetCount)
@@ -1906,6 +1924,55 @@ const SKILL_DAY_INDICES: Record<3 | 4 | 5 | 6, readonly number[]> = {
   5: [1, 3],
   6: [1, 4],
 };
+
+/**
+ * Días de entreno (por `trainingDayIndex`) que llevan el BLOQUE DE ACCESORIOS — 2 por microciclo,
+ * en días de menor carga principal y separados del día 0 (que ya abre con benchmark). El resto de
+ * días no llevan accesorios: el trabajo compuesto (fuerza + oly + WOD) ya cubre el estímulo. El
+ * segundo día de la lista incluye además un remate de brazos cuando no hay día de recuperación
+ * (calendarios de 3-5 días); en 6 días los brazos van en el día de recuperación activa.
+ */
+const ACCESSORY_DAY_INDICES: Record<3 | 4 | 5 | 6, readonly number[]> = {
+  3: [1, 2],
+  4: [1, 3],
+  5: [2, 4],
+  6: [2, 5],
+};
+
+/**
+ * Días de entreno que llevan el CIRCUITO DE CORE — hasta 3 por microciclo y no consecutivos. Con
+ * 3-4 días de entreno solo caben 2 no consecutivos. El día de recuperación (calendario de 6) nunca
+ * entra. Puede coincidir con un día de skill o de accesorios: el core es corto y de bajo estímulo.
+ */
+const CORE_DAY_INDICES: Record<3 | 4 | 5 | 6, readonly number[]> = {
+  3: [0, 2],
+  4: [0, 2],
+  5: [0, 2, 4],
+  6: [0, 2, 4],
+};
+
+/** Superserie de brazos (bíceps + tríceps) para el día de recuperación activa / 2º día de accesorios. */
+const ARMS_SUPERSETS: readonly [string, string][] = [
+  ['bicep-curl', 'tricep-pushdown'],
+  ['hammer-curl', 'overhead-triceps-extension'],
+];
+
+function buildArmsBlock(avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
+  const out: SessionBlockResult[] = [];
+  ARMS_SUPERSETS.forEach((pair, i) => {
+    const members = pair
+      .map((id) => getMovementById(id))
+      .filter((m): m is Movement => m !== undefined && !avoidedPatterns.has(m.pattern));
+    if (members.length === 0) return;
+    const notes = `Remate de brazos — ${
+      i === 0 ? 'bíceps y tríceps básico' : 'segunda pasada, agarre neutro y extensión por encima de la cabeza'
+    }. 3 series de 10-15: alterna los dos movimientos con poco descanso; carga cómoda, buscas bombeo y calidad, no fallo.`;
+    for (const m of members) {
+      out.push({ block: 'accessory', movementId: m.id, sets: 3, reps: '10-15', format: `Brazos ${String.fromCharCode(65 + i)}`, notes });
+    }
+  });
+  return out;
+}
 
 /**
  * Micro-progresion DENTRO de un escalon — para que no se prescriba el mismo texto identico semana
@@ -2070,13 +2137,37 @@ function buildSkillBlock(
     ? goalPreference(goals, (m) => skillMovements.some((s) => s.id === m.id), history)
     : { preferChance: 0, progress: 0, behindSchedule: false };
 
-  const movement = pref.movementId
-    ? pickVariedWithPreference(candidates, new Set(), pref.movementId, pref.preferChance)
-    : pickLeastRecentlyUsed(candidates, history);
+  if (pref.movementId) {
+    const movement = pickVariedWithPreference(candidates, new Set(), pref.movementId, pref.preferChance);
+    if (movement) {
+      const notes =
+        movement.id === pref.movementId
+          ? 'Progresión directa hacia tu objetivo de gimnásticos.'
+          : 'Rotación de habilidades gimnásticas para mantener variedad y evitar estancamiento.';
+      return [{ block: 'skill', movementId: movement.id, sets: 4, reps: 'tecnica / tiempo', notes }];
+    }
+  }
+
+  // Sin objetivo de gimnásticos: el coach elige. Sesga hacia lo que el atleta ESCALA en los WOD
+  // (señal de debilidad) y va rotando entre esos; si no hay señal, rotación por menos usado.
+  const recentIds = getRecentMovementIds(history);
+  const skillIds = new Set(candidates.map((m) => m.id));
+  const scaledFreq = new Map<string, number>();
+  for (const h of history.slice(-16)) {
+    if (h.rxOrScaled !== 'scaled') continue;
+    for (const id of h.wodMovementIds ?? h.movementIds) {
+      if (skillIds.has(id)) scaledFreq.set(id, (scaledFreq.get(id) ?? 0) + 1);
+    }
+  }
+  const weakness = [...scaledFreq.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id]) => id)
+    .filter((id) => !recentIds.has(id));
+  const movement = weakness.length > 0 ? getMovementById(weakness[0]) : pickLeastRecentlyUsed(candidates, history);
   if (!movement) return [];
   const notes =
-    pref.movementId && movement.id === pref.movementId
-      ? 'Progresión directa hacia tu objetivo de gimnásticos.'
+    weakness.length > 0
+      ? 'El coach prioriza esta habilidad: es de las que más escalas en los WOD. Trabájala fresca, técnica antes que volumen.'
       : 'Rotación de habilidades gimnásticas para mantener variedad y evitar estancamiento.';
   return [{ block: 'skill', movementId: movement.id, sets: 4, reps: 'tecnica / tiempo', notes }];
 }
@@ -2381,13 +2472,16 @@ export function generateDailySession(
     const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
     const recoveryWodBlock = buildRecoveryWodBlock(recentIds, avoidedPatterns);
     const recoverySkillBlock = buildRecoverySkillBlock(recentIds, avoidedPatterns);
+    // El día de recuperación activa (calendario de 6) lleva además el remate de brazos: bajo SNC,
+    // aislado, sin robar sitio a los días principales.
+    const armsBlock = buildArmsBlock(avoidedPatterns);
     const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
 
     return {
       date: dateIso,
       mesocycleWeek: calendarWeek,
       isRestDay: false,
-      blocks: [...warmupBlock, ...recoveryWodBlock, ...recoverySkillBlock, ...cooldownBlock],
+      blocks: [...warmupBlock, ...recoveryWodBlock, ...recoverySkillBlock, ...armsBlock, ...cooldownBlock],
       phaseWeekInPhase: phaseProgress.weekInPhase,
       phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
     };
@@ -2470,62 +2564,91 @@ export function generateDailySession(
   // para tener contra que medir el progreso. Recortar dominios por dia desde el dia 1 deja media
   // semana sin metcon y sin referencia. A partir de la semana 2 la periodizacion actua normal.
   if (weeksSinceStart(macro.startDate, date) === 0) dayEmphasis = 'mixto';
-  const doStrength = dayEmphasis !== 'metcon';
-  // Todos los días de entreno llevan WOD — el énfasis del día ya no lo quita, solo escala su
-  // duración/intensidad dentro de `buildWodBlock` (día de fuerza = corto y de bajo impacto).
+  // Esqueleto fijo: warm up + fuerza + WOD + oly TODOS los días de entreno. El énfasis del día ya no
+  // quita bloques; en los días de "afinar" de la fase pico (antes 'metcon' = sin barra) la fuerza y
+  // el oly siguen, pero en TÉCNICO-LIGERO (menos series, ~85% de carga) y con el WOD como prioridad.
+  // Un día de test de 1RM o de retest de benchmark nunca es ligero.
+  const technicalLight = dayEmphasis === 'metcon' && !testDayFocus;
 
-  const strengthResult = doStrength
-    ? buildStrengthBlock(
-        dayPlan,
-        week,
-        profile.prs,
-        recentIds,
-        goals,
-        acwrZone,
-        acwrResult.coldStart,
-        testDayFocus === 'strength',
-        history,
-        avoidedPatterns,
-        strengthRampFactor,
-        profile.variantPrs,
-        readinessCheck,
-        date,
-        profile.trainingDaysPerWeek,
-        imbalanceBias,
-        painReintro,
-        patternFatigue,
-        responseProfile,
-        plannedPattern,
-        dayDose,
-      )
-    : { blocks: [] as SessionBlockResult[], pattern: plannedPattern ?? dayPlan.strengthPattern, reasons: [] as string[] };
+  const n = profile.trainingDaysPerWeek;
+  const idx = dayPlan.trainingDayIndex;
+  // Bloques secundarios por días fijos del microciclo (ver *_DAY_INDICES). Skill: 2 días no
+  // consecutivos. Accesorios: 2 días de menor carga (no en un día ligero, que ya prioriza el WOD).
+  // Core: hasta 3 días no consecutivos, puede solaparse con skill/accesorios. Brazos: 2º día de
+  // accesorios cuando no hay día de recuperación (calendarios de 3-5 días).
+  const skillToday = SKILL_DAY_INDICES[n].includes(idx);
+  const accessoryToday = !technicalLight && ACCESSORY_DAY_INDICES[n].includes(idx);
+  const coreToday = CORE_DAY_INDICES[n].includes(idx);
+  const armsToday = accessoryToday && n < 6 && idx === ACCESSORY_DAY_INDICES[n][1];
+
+  // Control de dosis por acumulación: si hoy caen varios bloques secundarios, se recortan un poco el
+  // WOD y las series de fuerza para que la sesión no se dispare de duración (el core cuenta a medias).
+  const secondaryLoad =
+    (skillToday ? 1 : 0) + (accessoryToday ? 1 : 0) + (coreToday ? 0.5 : 0) + (armsToday ? 0.5 : 0);
+  const crowdTrim = secondaryLoad >= 2 ? 0.85 : secondaryLoad >= 1.5 ? 0.92 : 1;
+
+  // Dosis del WOD y de fuerza/oly tras el recorte por acumulación; en día ligero, además, fuerza y
+  // oly bajan fuerte y el WOD sube (es el foco de ese día).
+  const wodDose: DayDose = technicalLight
+    ? { ...dayDose, wodVolume: clampDose(dayDose.wodVolume * 1.12, 0.72, 1.35) }
+    : { ...dayDose, wodVolume: clampDose(dayDose.wodVolume * crowdTrim, 0.6, 1.3) };
+  const strengthOlyDose: DayDose = technicalLight
+    ? {
+        ...dayDose,
+        strengthSets: clampDose(dayDose.strengthSets * 0.55, 0.4, 1.18),
+        strengthLoad: clampDose(dayDose.strengthLoad * 0.85, 0.75, 1.07),
+        dayIntensity: 'baja',
+      }
+    : { ...dayDose, strengthSets: clampDose(dayDose.strengthSets * crowdTrim, 0.6, 1.18) };
+
+  const strengthResult = buildStrengthBlock(
+    dayPlan,
+    week,
+    profile.prs,
+    recentIds,
+    goals,
+    acwrZone,
+    acwrResult.coldStart,
+    testDayFocus === 'strength',
+    history,
+    avoidedPatterns,
+    strengthRampFactor,
+    profile.variantPrs,
+    readinessCheck,
+    date,
+    profile.trainingDaysPerWeek,
+    imbalanceBias,
+    painReintro,
+    patternFatigue,
+    responseProfile,
+    plannedPattern,
+    strengthOlyDose,
+  );
   const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
 
-  const { blocks: olyBlock, reasons: olyReasons } = doStrength
-    ? buildOlyBlock(
-        dayPlan,
-        week,
-        profile.prs,
-        recentIds,
-        goals,
-        acwrZone,
-        acwrResult.coldStart,
-        testDayFocus === 'oly',
-        history,
-        avoidedPatterns,
-        olyRampFactor,
-        profile.variantPrs,
-        readinessCheck,
-        date,
-        imbalanceBias,
-        painReintro,
-        patternFatigue,
-        responseProfile,
-        plannedFamily,
-        dayDose,
-        plannedOlyCombined,
-      )
-    : { blocks: [] as SessionBlockResult[], reasons: [] as string[] };
+  const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
+    dayPlan,
+    week,
+    profile.prs,
+    recentIds,
+    goals,
+    acwrZone,
+    acwrResult.coldStart,
+    testDayFocus === 'oly',
+    history,
+    avoidedPatterns,
+    olyRampFactor,
+    profile.variantPrs,
+    readinessCheck,
+    date,
+    imbalanceBias,
+    painReintro,
+    patternFatigue,
+    responseProfile,
+    plannedFamily,
+    strengthOlyDose,
+    plannedOlyCombined,
+  );
 
   const wodBlock = buildWodBlock(
     dayPlan,
@@ -2541,26 +2664,32 @@ export function generateDailySession(
     responseProfile,
     dayEmphasis,
     plannedEnergy,
-    dayDose,
+    wodDose,
   );
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
-  const accessoryWork = doStrength
-    ? buildAccessoryBlock(trainedStrengthPattern, accessoryExclude, avoidedPatterns, dayDose, week, history)
+  const accessoryWork = accessoryToday
+    ? buildAccessoryBlock(
+        trainedStrengthPattern,
+        accessoryExclude,
+        avoidedPatterns,
+        dayDose,
+        week,
+        history,
+        leastTrainedFamily(microPlan.strengthPattern),
+        armsToday ? 1 : 2,
+      )
     : [];
-  const coreWork = doStrength
+  const armsWork = armsToday ? buildArmsBlock(avoidedPatterns) : [];
+  const coreWork = coreToday
     ? buildCoreBlock(
         trainedStrengthPattern,
-        new Set([...accessoryExclude, ...accessoryWork.map((b) => b.movementId)]),
+        new Set([...accessoryExclude, ...accessoryWork.map((b) => b.movementId), ...armsWork.map((b) => b.movementId)]),
         avoidedPatterns,
       )
     : [];
-  const accessoryBlock = [...accessoryWork, ...coreWork];
-  // Skill 2 dias por microciclo (ver `SKILL_DAY_INDICES`) — una progresion se entrena por bloques,
-  // no a diario. El resto de dias no llevan bloque de skill.
-  const skillBlock = SKILL_DAY_INDICES[profile.trainingDaysPerWeek].includes(dayPlan.trainingDayIndex)
-    ? buildSkillBlock(history, goals, avoidedPatterns, date)
-    : [];
+  const accessoryBlock = [...accessoryWork, ...armsWork, ...coreWork];
+  const skillBlock = skillToday ? buildSkillBlock(history, goals, avoidedPatterns, date) : [];
   // El especifico del WOD se calienta con los movimientos reales de hoy (rampa progresiva), no con
   // estiramientos genericos — ver `buildWarmupBlock`. En dia de benchmark el WOD es una pieza unica
   // conocida, asi que no hay rampa y cae al calentamiento clasico.
@@ -2579,9 +2708,17 @@ export function generateDailySession(
   const emphasisNote =
     dayEmphasis === 'fuerza'
       ? 'Hoy es día de fuerza — el WOD es corto y de bajo impacto, la prioridad está en la barra.'
-      : dayEmphasis === 'metcon'
-        ? 'Hoy es día de metcon — sin fuerza pesada ni oly y con un WOD algo más largo, para afilar tu condición física de cara al pico.'
-        : undefined;
+      : technicalLight
+        ? 'Semana pico: hoy la fuerza y el oly van en técnico-ligero (menos series, carga contenida) y el WOD manda — llegas fresco a los tests y a los metcons largos. Si te encuentras fuerte, puedes subir la carga desde la edición de la sesión.'
+        : dayEmphasis === 'metcon'
+          ? 'Hoy el foco es el metcon: fuerza y oly presentes pero cortos, el WOD algo más largo.'
+          : undefined;
+  const crowdTrimNote =
+    crowdTrim < 1
+      ? `Hoy hay ${[skillToday ? 'skill' : null, accessoryToday ? 'accesorios' : null, coreToday ? 'core' : null]
+          .filter(Boolean)
+          .join(' + ')} además de lo principal — recortamos un poco el WOD y las series de fuerza para que la sesión no se alargue.`
+      : undefined;
   const energyReason = (plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week)).note;
   // Progresion dentro del bloque + onda de intensidad del dia (ver `resolveWeekProgression` / `planDayIntensity`).
   const progressionNote = weekProg.note || undefined;
@@ -2592,7 +2729,18 @@ export function generateDailySession(
         ? 'Día suave de la semana — menos volumen para asimilar.'
         : undefined;
   const coachReasons = Array.from(
-    new Set(collectReasons(deloadNote, emphasisNote, progressionNote, intensityNote, energyReason, ...strengthReasons, ...olyReasons)),
+    new Set(
+      collectReasons(
+        deloadNote,
+        emphasisNote,
+        crowdTrimNote,
+        progressionNote,
+        intensityNote,
+        energyReason,
+        ...strengthReasons,
+        ...olyReasons,
+      ),
+    ),
   );
 
   // El sistema energetico del dia solo se atribuye cuando el WOD es de verdad el WOD rotativo — en
@@ -3029,6 +3177,7 @@ export function toHistoryEntry(
   testLoadKg?: number,
 ): SessionHistoryEntry {
   const wodMovementIds = session.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
+  const strengthMovement = session.blocks.find((b) => b.block === 'strength');
   return {
     date: session.date,
     mesocycleWeek: session.mesocycleWeek,
@@ -3039,6 +3188,7 @@ export function toHistoryEntry(
     wodResult,
     testLoadKg,
     wodMovementIds: wodMovementIds.length > 0 ? wodMovementIds : undefined,
+    strengthPattern: strengthMovement ? getMovementById(strengthMovement.movementId)?.pattern : undefined,
     energySystem: session.energySystem,
   };
 }

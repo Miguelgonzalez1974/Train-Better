@@ -1,5 +1,5 @@
 import type { MovementPattern } from '../data/movements/types';
-import { resolveDayEmphasis, type OlyFamily } from './periodization';
+import { type OlyFamily } from './periodization';
 import { stalledOlyFamily, stalledStrengthPattern, type ResponseProfile } from './responseProfile';
 import { PHASE_DOMINANT_ENERGY, type EnergySystem } from './wodDomains';
 
@@ -212,14 +212,16 @@ export function planEnergySystems(
 }
 
 /** `trainingDayIndex` de los slots que de verdad haran bloque de fuerza esta semana. */
-function strengthDoingSlots(n: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4, weekNumber: number): number[] {
+function strengthDoingSlots(n: 3 | 4 | 5 | 6): number[] {
+  // Todos los días de entreno llevan fuerza + oly (los 4 principales cada día). El único día sin
+  // bloque de fuerza es el de recuperación activa de mitad de semana en el calendario de 6 días.
+  // Antes se excluían los días de "solo metcon" de la fase pico; ahora esos días siguen haciendo
+  // fuerza y oly pero en técnico-ligero (ver `technicalLight` en generateSession).
   const recoveryIdx = n === 6 ? 3 : -1;
   const slots: number[] = [];
   for (let idx = 0; idx < n; idx++) {
     if (idx === recoveryIdx) continue;
-    // La primera semana del macro va completa (mixto todos los dias); el resto sigue el reparto de fase.
-    const emphasis = weekNumber === 1 ? 'mixto' : resolveDayEmphasis(phase, idx, n);
-    if (emphasis !== 'metcon') slots.push(idx);
+    slots.push(idx);
   }
   return slots;
 }
@@ -315,7 +317,7 @@ export function buildMicrocyclePlan(input: {
     input.goalForcedPattern && isStrengthPattern(input.goalForcedPattern) ? input.goalForcedPattern : null;
   const rand = mulberry32(hashSeed(`${macroId}:${weekNumber}`));
 
-  const strengthSlots = strengthDoingSlots(n, phase, weekNumber);
+  const strengthSlots = strengthDoingSlots(n);
   const allocated = allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand);
 
   // Patron por trainingDayIndex: el planificado para los slots de fuerza, y el del ciclo natural

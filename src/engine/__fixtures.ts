@@ -83,11 +83,13 @@ export function simulateSessions(profile: AthleteProfile, dates: Date[]): DailyS
     if (!s.isRestDay && s.blocks.length > 0) {
       out.push(s);
       const wodIds = s.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
+      const strengthMv = s.blocks.find((b) => b.block === 'strength');
       history.push({
         date: toLocalIsoDate(d),
         mesocycleWeek: s.mesocycleWeek,
         movementIds: [...new Set(s.blocks.map((b) => b.movementId))],
         wodMovementIds: [...new Set(wodIds)],
+        strengthPattern: strengthMv ? getMovementById(strengthMv.movementId)?.pattern : undefined,
         rxOrScaled: 'rx',
         rpe: 7,
         durationMin: 60,
