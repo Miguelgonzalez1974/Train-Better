@@ -29,8 +29,8 @@ export function estimateE1RMFromRpe(loadKg: number, reps: number, rpe: number): 
 
 /**
  * Extrae las reps de una serie principal solo si es un numero limpio y fiable — descarta
- * escaleras ("5-3-1"), rangos del primer tecnico de oly ("2-3") y formatos EMOM ("1 rep/min × 12"
- * pasa como "1" —rep unica valida— porque el minutaje va al final; cualquier cosa con guion o rango no).
+ * escaleras ("5-3-1"), rangos del primer tecnico de oly ("2-3") y formatos EMOM ("1 rep/min" pasa
+ * porque "1" es una rep unica valida, pero cualquier cosa con guion o rango no).
  */
 export function parseCleanReps(reps: string): number | null {
   const match = reps.match(/^(\d+)(?:\s|$)/);

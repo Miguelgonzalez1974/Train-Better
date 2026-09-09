@@ -1170,8 +1170,9 @@ function buildOlyBlock(
     mainEntry = {
       block: 'oly',
       movementId: movement.id,
-      // El nº de minutos delante NO: `parseWorkingReps` cogería 12 como reps. Al final se lee "1".
-      reps: `1 rep/min × ${emomMinutes}`,
+      // La duración va en `format` (chip visible en la tarjeta); las reps quedan limpias en "1 rep/min".
+      format: `EMOM ${emomMinutes} min`,
+      reps: '1 rep/min',
       loadKg,
       logAsSingle: true,
       notes: `${baseNote} Formato EMOM ${emomMinutes} min: una repetición técnica cada minuto.`,
