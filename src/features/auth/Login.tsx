@@ -28,19 +28,19 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-brand-bg px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-brand-border bg-brand-surface p-6">
-        <div className="mb-6 flex items-center gap-3">
-          <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-surfaceMuted">
-            <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
-            <Brain size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.65)]" />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-brand-bg px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-7 flex flex-col items-center text-center">
+          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-border bg-brand-surfaceMuted">
+            <Brain size={26} strokeWidth={2} className="text-brand-neon" />
           </span>
-          <div>
-            <p className="text-lg font-bold tracking-tight text-white">Train Better</p>
-            <p className="text-xs text-neutral-500">Inicia sesión para sincronizar tu entrenamiento</p>
-          </div>
+          <p className="font-display text-2xl font-semibold tracking-tight text-white">
+            Train <span className="text-brand-gold">Better</span>
+          </p>
+          <p className="mt-1.5 text-sm text-neutral-400">Tu entrenador de fuerza y CrossFit, día a día.</p>
         </div>
 
+        <div className="rounded-2xl border border-brand-border bg-brand-surface p-5">
         {status === 'sent' ? (
           <p className="text-sm text-neutral-300">
             Te enviamos un enlace a <span className="font-semibold text-white">{email}</span>. Ábrelo desde este mismo dispositivo para
@@ -73,6 +73,7 @@ export function Login() {
             )}
           </form>
         )}
+        </div>
       </div>
     </div>
   );

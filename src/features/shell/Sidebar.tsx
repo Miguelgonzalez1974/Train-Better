@@ -10,11 +10,10 @@ export function Sidebar({ active, onChange }: SidebarProps) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-brand-border/70 bg-brand-surface/80 backdrop-blur md:flex">
       <div className="flex items-center gap-2.5 px-5 py-6">
-        <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-brand-surface">
-          <span className="absolute inset-0 animate-pulse rounded-xl bg-brand-neon/20 blur-md" />
-          <Brain size={18} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.65)]" />
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-border bg-brand-surfaceMuted">
+          <Brain size={18} strokeWidth={2} className="text-brand-neon" />
         </span>
-        <span className="text-lg font-bold tracking-tight text-white">
+        <span className="font-display text-lg font-semibold tracking-tight text-white">
           Train <span className="text-brand-gold">Better</span>
         </span>
       </div>

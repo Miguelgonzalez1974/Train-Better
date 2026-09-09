@@ -20,6 +20,10 @@ export default defineConfig({
         // control de las pestañas ya abiertas en cuanto termina de instalarse.
         clientsClaim: true,
         skipWaiting: true,
+        // La app es en español: solo se precachean las fuentes latinas. Los subsets cirílico/
+        // griego/vietnamita van con `unicode-range`, así que el navegador nunca los pide aquí —
+        // no tiene sentido meterlos en el precache del service worker.
+        globIgnores: ['**/*-{cyrillic,cyrillic-ext,greek,greek-ext,vietnamese}-*.woff2'],
       },
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon.svg'],
       manifest: {
