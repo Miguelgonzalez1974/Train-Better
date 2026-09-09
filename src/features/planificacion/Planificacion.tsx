@@ -140,6 +140,10 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const goals = profile.goals;
   const todayIso = toLocalIsoDate(new Date());
+  const todayWeekdayLabel = (() => {
+    const s = new Date().toLocaleDateString('es-ES', { weekday: 'long' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  })();
   const [session, setSession] = useState<DailySession | null>(() => loadTodaySession(profile, history, goals, todayIso));
 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
@@ -746,9 +750,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
       {!session && (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
-          <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-surface">
-            <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
-            <Brain size={26} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]" />
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-border bg-brand-surfaceMuted">
+            <Brain size={24} strokeWidth={2} className="text-brand-neon" />
           </span>
           <div>
             <p className="text-sm font-semibold text-white">Todavía no hay macrociclo activo</p>
@@ -784,45 +787,47 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
       {session && (
       <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          {session.mesocycleWeek > 0 && (
-            <p className="text-sm text-neutral-400">
-              Fase: {MESOCYCLE_PHASE[session.mesocycleWeek as 1 | 2 | 3 | 4]}
-              {session.phaseWeekInPhase && session.phaseLengthWeeks && session.phaseLengthWeeks > 1 &&
-                ` · semana ${session.phaseWeekInPhase} de ${session.phaseLengthWeeks}`}
-            </p>
-          )}
           <div className="flex items-center gap-2">
-            <p className="text-lg font-semibold text-white">{session.isRestDay ? 'Día de descanso' : 'Sesión de hoy'}</p>
-            {!session.isRestDay && session.dayEmphasis && (
-              <span
-                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                  session.dayEmphasis === 'fuerza' ? 'bg-brand-gold/15 text-brand-gold' : 'bg-brand-orange/15 text-brand-orange'
-                }`}
-              >
-                {session.dayEmphasis === 'fuerza' ? 'Día de fuerza' : 'Foco metcon'}
-              </span>
-            )}
-            {!session.isRestDay && session.mesocycleWeek === 0 && (
-              <span
-                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                  session.strengthProgramLabel ? 'bg-brand-gold/15 text-brand-gold' : 'bg-white/10 text-neutral-300'
-                }`}
-              >
-                {/* Solo el nombre del método/ciclo — el "semana X de Y" vive en "Tu progreso" del Dashboard, no hace falta repetirlo. */}
-                {session.strengthProgramLabel?.split(' · Semana ')[0] ?? session.swapLabel ?? 'Mantenimiento'}
-              </span>
-            )}
+            <h1 className="text-2xl font-semibold text-white">
+              {session.isRestDay ? 'Día de descanso' : todayWeekdayLabel}
+            </h1>
             {!session.isRestDay && (
               <button
                 onClick={() => setShowTypePicker(true)}
                 title="Elegir tipo de sesión"
-                className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-surfaceMuted transition-transform duration-200 hover:scale-110"
+                aria-label="Elegir tipo de sesión"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-border bg-brand-surfaceMuted text-brand-neon transition-colors duration-200 hover:border-brand-neon/50"
               >
-                <span className="absolute inset-0 animate-pulse rounded-full bg-brand-neon/20 blur-md" />
-                <Brain size={14} strokeWidth={2.25} className="relative text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.65)]" />
+                <Brain size={14} strokeWidth={2.25} />
               </button>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-400">
+            {session.mesocycleWeek > 0 && (
+              <span>
+                {MESOCYCLE_PHASE[session.mesocycleWeek as 1 | 2 | 3 | 4]}
+                {session.phaseWeekInPhase && session.phaseLengthWeeks && session.phaseLengthWeeks > 1 &&
+                  ` · sem. ${session.phaseWeekInPhase}/${session.phaseLengthWeeks}`}
+              </span>
+            )}
+            {session.mesocycleWeek === 0 && !session.isRestDay && (
+              <span>{session.strengthProgramLabel?.split(' · Semana ')[0] ?? session.swapLabel ?? 'Mantenimiento'}</span>
+            )}
+            {!session.isRestDay && weekCount.planned > 0 && (
+              <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-xs text-neutral-300">
+                <span className="num">{weekCount.done}/{weekCount.planned}</span> esta semana
+              </span>
+            )}
+            {!session.isRestDay && session.dayEmphasis && (
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                  session.dayEmphasis === 'fuerza' ? 'bg-brand-gold/10 text-brand-gold' : 'bg-brand-orange/10 text-brand-orange'
+                }`}
+              >
+                {session.dayEmphasis === 'fuerza' ? 'Día de fuerza' : 'Foco metcon'}
+              </span>
             )}
           </div>
         </div>

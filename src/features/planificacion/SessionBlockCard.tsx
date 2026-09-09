@@ -16,10 +16,10 @@ import { noteHead } from './noteText';
 
 type Accent = 'orange' | 'gold' | 'neutral';
 
-const ACCENT_CLASSES: Record<Accent, { icon: string; iconBg: string; halo: string; line: string }> = {
-  orange: { icon: 'text-brand-orange', iconBg: 'bg-brand-orange/15', halo: 'bg-brand-orange/25', line: 'from-brand-orange/50' },
-  gold: { icon: 'text-brand-gold', iconBg: 'bg-brand-gold/15', halo: 'bg-brand-gold/25', line: 'from-brand-gold/50' },
-  neutral: { icon: 'text-neutral-400', iconBg: 'bg-white/5', halo: 'bg-white/10', line: 'from-white/20' },
+const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
+  orange: { icon: 'text-brand-orange', bar: 'bg-brand-orange/50' },
+  gold: { icon: 'text-brand-gold', bar: 'bg-brand-gold/45' },
+  neutral: { icon: 'text-neutral-400', bar: 'bg-white/15' },
 };
 
 const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent: Accent }> = {
@@ -37,10 +37,24 @@ const NAME_HEADLINE = 'text-lg font-bold leading-tight text-white'; // título d
 const NAME_MAIN = 'text-base font-bold leading-tight text-white'; // levantamiento de trabajo
 const NAME_STEP = 'text-sm font-semibold text-white'; // pasos de lista (calentamiento, accesorio…)
 
+/** Índice de la entrada del complejo cuya carga es la protagonista — la más pesada que no sea el primer técnico ("2-3"). */
+function complexHeroIdx(complex: SessionBlockResult[]): number {
+  let best = -1;
+  let bestKg = -1;
+  complex.forEach((e, i) => {
+    if (e.reps === '2-3') return;
+    if ((e.loadKg ?? 0) > bestKg) {
+      bestKg = e.loadKg ?? 0;
+      best = i;
+    }
+  });
+  return best;
+}
+
 function StatBox({ value, label }: { value: string | number; label: string }) {
   return (
     <div className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5">
-      <span className="text-sm font-bold text-white">{value}</span>
+      <span className="num text-base font-semibold text-white">{value}</span>
       <span className="text-[10px] uppercase tracking-wide text-neutral-500">{label}</span>
     </div>
   );
@@ -48,7 +62,7 @@ function StatBox({ value, label }: { value: string | number; label: string }) {
 
 function FormatBadge({ format }: { format: string }) {
   return (
-    <span className="mb-2 inline-block rounded-md bg-white/5 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
+    <span className="mb-2 inline-block rounded-md bg-brand-gold/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/90">
       {format}
     </span>
   );
@@ -58,8 +72,8 @@ function FormatBadge({ format }: { format: string }) {
  * Nota del coach: por defecto solo la primera frase (la accionable), el resto detrás de "ver más".
  * Sube densidad sin perder el porqué — ver la pasada de limpieza de 2026-09-01.
  */
-function CoachNote({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
+function CoachNote({ text, defaultOpen = false }: { text: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const { head, hasMore } = noteHead(text);
   return (
     <div className="mt-2 flex items-start gap-1.5">
@@ -195,31 +209,30 @@ function CustomWodCard({
   const title = entries[0]?.title;
   const format = entries[0]?.format;
   const notes = entries[0]?.notes;
+  const target = entries[0]?.wodTarget;
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       {title && <p className={`mb-1 ${NAME_HEADLINE}`}>"{title}"</p>}
       {format && <FormatBadge format={format} />}
-      <div className="flex flex-col gap-2.5">
+      {/* Pizarra: un movimiento por línea, reps y carga alineados a la derecha con cifra tabular. */}
+      <div className="flex flex-col divide-y divide-white/5 border-y border-white/5">
         {entries.map((entry, idx) => {
           const movement = getMovementById(entry.movementId);
           if (!movement) return null;
           return (
-            <div key={`${entry.movementId}-${idx}`} className="flex items-start justify-between gap-2.5">
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                  {idx + 1}
-                </span>
-                <div>
-                  <p className={NAME_STEP}>{movement.name}</p>
-                  {entry.reps && (
-                    <p className="text-xs text-neutral-500">
-                      {entry.reps} reps{entry.loadKg ? ` @ ${entry.loadKg} kg` : ''}
-                    </p>
-                  )}
-                  {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
-                </div>
+            <div key={`${entry.movementId}-${idx}`} className="flex items-baseline gap-3 py-2">
+              <span className="num w-4 shrink-0 text-[11px] text-neutral-600">{idx + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className={`${NAME_STEP} truncate`}>{movement.name}</p>
+                {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
               </div>
+              {entry.reps && (
+                <span className="num shrink-0 text-sm text-neutral-300">
+                  {entry.reps}
+                  {entry.loadKg ? <span className="text-neutral-500"> · {entry.loadKg} kg</span> : ''}
+                </span>
+              )}
               {onUpdateEntry && entryIndices && (
                 <ScalingPicker entry={entry} index={entryIndices[idx]} onUpdateEntry={onUpdateEntry} />
               )}
@@ -227,7 +240,13 @@ function CustomWodCard({
           );
         })}
       </div>
-      {notes && <CoachNote text={notes} />}
+      {target?.display && (
+        <p className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
+          <Trophy size={12} strokeWidth={2.5} />
+          Objetivo {target.display}
+        </p>
+      )}
+      {notes && <CoachNote text={notes} defaultOpen />}
     </div>
   );
 }
@@ -351,6 +370,12 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
           {complex.map((entry, idx) => {
             const movement = getMovementById(entry.movementId);
             if (!movement) return null;
+            // La carga protagonista: en fuerza es el levantamiento principal (A); en oly, la entrada
+            // con más carga que no sea el primer técnico ("2-3").
+            const isHero =
+              entry.block === 'strength'
+                ? idx === 0
+                : idx === complexHeroIdx(complex);
             return (
               <div key={`${entry.movementId}-${idx}`} className={idx > 0 ? 'border-t border-white/5 pt-3' : ''}>
                 <div className="flex items-baseline gap-2">
@@ -359,19 +384,34 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
                   </span>
                   <p className={NAME_MAIN}>{movement.name}</p>
                 </div>
+                {entry.format && (
+                  <div className="ml-7 mt-1">
+                    <FormatBadge format={entry.format} />
+                  </div>
+                )}
 
                 {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
-                  <div className="ml-7 mt-1.5 flex flex-wrap gap-1.5">
+                  <div className="ml-7 mt-1.5 flex flex-wrap items-center gap-1.5">
                     {entry.sets && <StatBox value={entry.sets} label="series" />}
                     {entry.reps && <StatBox value={entry.reps} label="reps" />}
                     {entry.loadKg ? (
-                      <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                      <LoadStat
+                        kg={entry.loadKg}
+                        movementId={entry.movementId}
+                        block={entry.block}
+                        progress={progress}
+                        size={isHero ? 'lg' : 'sm'}
+                      />
                     ) : null}
                     {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
                   </div>
                 )}
 
-                {entry.notes && <div className="ml-7">{<CoachNote text={entry.notes} />}</div>}
+                {entry.notes && (
+                  <div className="ml-7">
+                    <CoachNote text={entry.notes} defaultOpen={isHero} />
+                  </div>
+                )}
                 <StandardHint standard={movement.standard} className="ml-7" />
               </div>
             );
@@ -440,23 +480,30 @@ function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: M
   const movement = getMovementById(entry.movementId);
   if (!movement) return null;
 
+  const isMainLift = entry.block === 'strength' || entry.block === 'oly';
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       {entry.format && <FormatBadge format={entry.format} />}
       <p className={NAME_MAIN}>{movement.name}</p>
 
       {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {entry.sets && <StatBox value={entry.sets} label="series" />}
           {entry.reps && <StatBox value={entry.reps} label="reps" />}
           {entry.loadKg ? (
-            <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+            <LoadStat
+              kg={entry.loadKg}
+              movementId={entry.movementId}
+              block={entry.block}
+              progress={progress}
+              size={isMainLift ? 'lg' : 'sm'}
+            />
           ) : null}
           {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
         </div>
       )}
 
-      {entry.notes && <CoachNote text={entry.notes} />}
+      {entry.notes && <CoachNote text={entry.notes} defaultOpen={isMainLift} />}
       <StandardHint standard={movement.standard} />
     </div>
   );
@@ -596,17 +643,14 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
   const isBenchmarkWod = block === 'wod' && results[0].movementId.startsWith('benchmark:');
 
   return (
-    <div className="flex gap-4">
-      <div className="flex flex-col items-center">
-        <span className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${accentClasses.iconBg}`}>
-          <span className={`absolute inset-0 rounded-2xl ${accentClasses.halo} blur-md`} />
-          <Icon size={19} strokeWidth={2.25} className={`relative ${accentClasses.icon}`} />
-        </span>
-        {!isLast && <div className={`mt-2 w-0.5 flex-1 bg-gradient-to-b ${accentClasses.line} to-transparent`} />}
-      </div>
+    <div className={`relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`}>
+      <span className={`absolute bottom-1 left-0 top-0.5 w-[3px] ${accentClasses.bar}`} />
 
-      <div className={`flex-1 ${isLast ? 'pb-0' : 'pb-6'}`}>
-        <p className={`mb-2.5 text-sm font-bold uppercase tracking-[0.08em] ${accentClasses.icon}`}>{label}</p>
+      <div>
+        <p className={`mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.12em] ${accentClasses.icon}`}>
+          <Icon size={13} strokeWidth={2.5} aria-hidden />
+          {label}
+        </p>
 
         {editable && onUpdateEntry && entryIndices ? (
           <EditableBlockEntries block={block} entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />

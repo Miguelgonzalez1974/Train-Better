@@ -21,6 +21,8 @@ interface LoadStatProps {
   block?: Block;
   /** Datos del atleta para el popup de progresión — si faltan, el recuadro es solo lectura. */
   progress?: MovementProgressData;
+  /** `lg` = la carga es la cifra protagonista del bloque (levantamiento principal). */
+  size?: 'sm' | 'lg';
 }
 
 /**
@@ -34,17 +36,19 @@ interface LoadStatProps {
  * prescripción original aunque el atleta hubiera levantado otra cosa, lo cual confundía sobre si lo
  * que se veía era el plan o lo que de verdad se hizo.
  */
-export function LoadStat({ kg, movementId, block, progress }: LoadStatProps) {
+export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadStatProps) {
   const [open, setOpen] = useState(false);
   const movement = movementId ? getMovementById(movementId) : undefined;
   const interactive =
     Boolean(progress) && (block === 'strength' || block === 'oly') && Boolean(movement && resolveLiftPrKey(movement));
+  const lg = size === 'lg';
+  const numClass = lg ? 'num text-3xl font-semibold leading-none' : 'num text-base font-semibold';
 
   if (!interactive) {
     return (
       <div className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5">
-        <span className="text-sm font-bold text-white">{kg}</span>
-        <span className="text-[10px] uppercase tracking-wide text-neutral-500">kg</span>
+        <span className={numClass + ' text-white'}>{kg}</span>
+        <span className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">kg</span>
       </div>
     );
   }
@@ -57,14 +61,16 @@ export function LoadStat({ kg, movementId, block, progress }: LoadStatProps) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-brand-neon/10 px-2.5 py-1.5 ring-1 ring-brand-neon/40 transition-colors duration-200 hover:bg-brand-neon/20 hover:ring-brand-neon/70"
+        className={`flex flex-col items-center rounded-lg bg-brand-neon/10 ring-1 ring-brand-neon/30 transition-colors duration-200 hover:bg-brand-neon/20 hover:ring-brand-neon/60 ${
+          lg ? 'px-3 py-2' : 'min-w-[3.5rem] px-2.5 py-1.5'
+        }`}
         aria-label={`Ver progresión de ${movement?.name ?? 'este movimiento'}`}
       >
-        <span className="flex items-center gap-1 text-sm font-bold text-white">
+        <span className={`flex items-center gap-1.5 text-white ${numClass}`}>
           {displayKg}
-          <ChartSpline size={13} strokeWidth={2.5} className="text-brand-neon" />
+          <ChartSpline size={lg ? 15 : 13} strokeWidth={2.5} className="text-brand-neon" />
         </span>
-        <span className="text-[10px] uppercase tracking-wide text-brand-neon/80">{todaySet ? 'kg real · ver' : 'kg · ver'}</span>
+        <span className="mt-0.5 text-[10px] uppercase tracking-wide text-brand-neon/80">{todaySet ? 'kg real · ver' : 'kg · ver'}</span>
       </button>
       {open && progress && movementId && (
         <MovementProgressModal
