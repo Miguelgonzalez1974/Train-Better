@@ -9,15 +9,27 @@ export default {
         display: ['"Space Grotesk Variable"', '"Inter Variable"', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Colores resueltos por variable CSS para poder cambiar de tema (oscuro por defecto, claro
+        // opcional con [data-theme="light"] en <html>). Los valores viven en `src/index.css`. Solo se
+        // redefinen `white` y `neutral 100-600` (casi siempre texto) — el resto de `neutral` y `black`
+        // se quedan con el default de Tailwind, que ya funciona en ambos temas.
+        white: 'rgb(var(--c-white) / <alpha-value>)',
+        neutral: {
+          100: 'rgb(var(--c-n-100) / <alpha-value>)',
+          200: 'rgb(var(--c-n-200) / <alpha-value>)',
+          300: 'rgb(var(--c-n-300) / <alpha-value>)',
+          400: 'rgb(var(--c-n-400) / <alpha-value>)',
+          500: 'rgb(var(--c-n-500) / <alpha-value>)',
+          600: 'rgb(var(--c-n-600) / <alpha-value>)',
+        },
         brand: {
-          bg: '#0a0908',
-          surface: '#171310',
-          surfaceMuted: '#1f1a15',
-          border: '#2a2420',
-          orange: { DEFAULT: '#f97316', dark: '#c2410c' },
-          gold: { DEFAULT: '#d4af37', soft: '#e9cf7a' },
-          // Verde "hecho / vivo" — antes era neón puro (#39ff14) y chillaba en cada pantalla.
-          neon: { DEFAULT: '#4ade80', soft: '#86efac' },
+          bg: 'rgb(var(--c-brand-bg) / <alpha-value>)',
+          surface: 'rgb(var(--c-brand-surface) / <alpha-value>)',
+          surfaceMuted: 'rgb(var(--c-brand-surface-muted) / <alpha-value>)',
+          border: 'rgb(var(--c-brand-border) / <alpha-value>)',
+          orange: { DEFAULT: 'rgb(var(--c-brand-orange) / <alpha-value>)', dark: 'rgb(var(--c-brand-orange-dark) / <alpha-value>)' },
+          gold: { DEFAULT: 'rgb(var(--c-brand-gold) / <alpha-value>)', soft: 'rgb(var(--c-brand-gold-soft) / <alpha-value>)' },
+          neon: { DEFAULT: 'rgb(var(--c-brand-neon) / <alpha-value>)', soft: 'rgb(var(--c-brand-neon-soft) / <alpha-value>)' },
         },
       },
     },

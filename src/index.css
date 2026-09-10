@@ -2,6 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: dark;
+  --c-white: 255 255 255;
+  --c-n-100: 245 245 245;
+  --c-n-200: 229 229 229;
+  --c-n-300: 212 212 212;
+  --c-n-400: 163 163 163;
+  --c-n-500: 115 115 115;
+  --c-n-600: 82 82 82;
+  --c-brand-bg: 10 9 8;
+  --c-brand-surface: 23 19 16;
+  --c-brand-surface-muted: 31 26 21;
+  --c-brand-border: 42 36 32;
+  --c-brand-orange: 249 115 22;
+  --c-brand-orange-dark: 194 65 12;
+  --c-brand-gold: 212 175 55;
+  --c-brand-gold-soft: 233 207 122;
+  --c-brand-neon: 74 222 128;
+  --c-brand-neon-soft: 134 239 172;
+}
+
+/* Tema claro (opt-in): "white" pasa a ser texto oscuro, el ramo neutral se invierte, y las
+   superficies de marca pasan a claras. El oro y el verde se oscurecen para tener contraste sobre
+   blanco. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --c-white: 28 25 23;
+  --c-n-100: 41 37 36;
+  --c-n-200: 55 50 47;
+  --c-n-300: 68 64 60;
+  --c-n-400: 87 83 78;
+  --c-n-500: 107 101 96;
+  --c-n-600: 150 143 138;
+  --c-brand-bg: 250 248 245;
+  --c-brand-surface: 255 255 255;
+  --c-brand-surface-muted: 244 241 236;
+  --c-brand-border: 230 225 216;
+  --c-brand-orange: 234 88 12;
+  --c-brand-orange-dark: 154 52 18;
+  --c-brand-gold: 161 116 26;
+  --c-brand-gold-soft: 133 95 20;
+  --c-brand-neon: 22 163 74;
+  --c-brand-neon-soft: 21 128 61;
+}
+
 body {
   @apply bg-brand-bg text-neutral-100 font-sans;
   -webkit-font-smoothing: antialiased;

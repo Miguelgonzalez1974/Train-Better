@@ -28,6 +28,7 @@ import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
 import { ProgressOverviewCard } from './ProgressOverviewCard';
 import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
+import { ThemeToggle } from '../shell/ThemeToggle';
 import { ImbalancesCard } from './ImbalancesCard';
 import { computeImbalances } from '../../engine/imbalances';
 import { ResponseProfileCard } from './ResponseProfileCard';
@@ -161,6 +162,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
           <p className="text-lg font-semibold text-white">Resumen</p>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle className="h-10 w-10" />
           <button
             onClick={() => setShowVolume(true)}
             title="Volumen por día"

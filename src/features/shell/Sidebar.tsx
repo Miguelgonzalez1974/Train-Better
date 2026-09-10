@@ -1,5 +1,6 @@
 import { Brain } from 'lucide-react';
 import { NAV_ITEMS, type TabId } from './navItems';
+import { ThemeToggle } from './ThemeToggle';
 
 interface SidebarProps {
   active: TabId;
@@ -44,6 +45,11 @@ export function Sidebar({ active, onChange }: SidebarProps) {
           );
         })}
       </nav>
+
+      <div className="mt-auto flex items-center justify-between px-5 pb-6 pt-4">
+        <span className="text-[11px] text-neutral-600">Tema</span>
+        <ThemeToggle />
+      </div>
     </aside>
   );
 }
