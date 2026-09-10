@@ -3,6 +3,7 @@ import { ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { PersonalRecords, PrLogEntry, VariantPersonalRecords, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
+import { fmtKgValue } from '../../lib/format';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { findTopWorkSet } from '../../engine/setFeedback';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -47,7 +48,7 @@ export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadS
   if (!interactive) {
     return (
       <div className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5">
-        <span className={numClass + ' text-white'}>{kg}</span>
+        <span className={numClass + ' text-white'}>{fmtKgValue(kg)}</span>
         <span className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">kg</span>
       </div>
     );
@@ -67,7 +68,7 @@ export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadS
         aria-label={`Ver progresión de ${movement?.name ?? 'este movimiento'}`}
       >
         <span className={`flex items-center gap-1.5 text-white ${numClass}`}>
-          {displayKg}
+          {fmtKgValue(displayKg)}
           <ChartSpline size={lg ? 15 : 13} strokeWidth={2.5} className="text-brand-neon" />
         </span>
         <span className="mt-0.5 text-[10px] uppercase tracking-wide text-brand-neon/80">{todaySet ? 'kg real · ver' : 'kg · ver'}</span>

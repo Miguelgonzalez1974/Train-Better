@@ -10,6 +10,7 @@ import {
   type ScalingOption,
 } from '../../data/movements';
 import type { SessionBlockResult } from '../../data/athlete/types';
+import { fmtKg } from '../../lib/format';
 import { Modal } from '../shell/Modal';
 import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
@@ -230,7 +231,7 @@ function CustomWodCard({
               {entry.reps && (
                 <span className="num shrink-0 text-sm text-neutral-300">
                   {entry.reps}
-                  {entry.loadKg ? <span className="text-neutral-500"> · {entry.loadKg} kg</span> : ''}
+                  {entry.loadKg ? <span className="text-neutral-500"> · {fmtKg(entry.loadKg)}</span> : ''}
                 </span>
               )}
               {onUpdateEntry && entryIndices && (

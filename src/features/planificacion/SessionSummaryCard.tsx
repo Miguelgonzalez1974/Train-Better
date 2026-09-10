@@ -1,6 +1,7 @@
 import { Flame, CalendarCheck2, TrendingUp, PartyPopper } from 'lucide-react';
 import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { fmtKg, fmtNumber } from '../../lib/format';
 import { describeWodResultVsTarget } from '../../engine/wodTargets';
 import type { E1rmSuggestion } from './Planificacion';
 
@@ -23,7 +24,7 @@ function workSummary(workLog: WorkSetEntry[], movementId: string, prescribedSets
   const kgs = sets.map((s) => s.kg).filter((k) => k > 0);
   const min = Math.min(...kgs);
   const max = Math.max(...kgs);
-  const kgLabel = kgs.length === 0 ? '' : min === max ? ` · ${max} kg` : ` · ${min}–${max} kg`;
+  const kgLabel = kgs.length === 0 ? '' : min === max ? ` · ${fmtKg(max)}` : ` · ${fmtNumber(min)}–${fmtKg(max)}`;
   const total = prescribedSets > 0 ? `${sets.length}/${prescribedSets}` : String(sets.length);
   return `${total} series${kgLabel}`;
 }
@@ -58,7 +59,7 @@ function buildRecapLines(
       const logged = workSummary(workLog, strengthMain.movementId, strengthMain.sets ?? 0);
       const scheme =
         logged ??
-        [strengthMain.sets && `${strengthMain.sets}×${strengthMain.reps}`, strengthMain.loadKg && `${strengthMain.loadKg} kg`]
+        [strengthMain.sets && `${strengthMain.sets}×${strengthMain.reps}`, strengthMain.loadKg && fmtKg(strengthMain.loadKg)]
           .filter(Boolean)
           .join(' · ');
       lines.push({ label: 'Fuerza', detail: scheme ? `${name} — ${scheme}` : name });
@@ -72,7 +73,7 @@ function buildRecapLines(
     if (name) {
       const logged = workSummary(workLog, olyMain.movementId, olyMain.sets ?? 0);
       const scheme =
-        logged ?? [olyMain.sets && `${olyMain.sets}×${olyMain.reps}`, olyMain.loadKg && `${olyMain.loadKg} kg`].filter(Boolean).join(' · ');
+        logged ?? [olyMain.sets && `${olyMain.sets}×${olyMain.reps}`, olyMain.loadKg && fmtKg(olyMain.loadKg)].filter(Boolean).join(' · ');
       lines.push({ label: 'Oly', detail: scheme ? `${name} — ${scheme}` : name });
     }
   }
