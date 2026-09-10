@@ -696,43 +696,6 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       )}
       <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
 
-      <CoachNotices
-        activePainFlags={activePainFlags}
-        onRemovePainFlag={handleRemovePainFlag}
-        rampStatus={rampStatus}
-        returnRampSuggestion={returnRampSuggestion}
-        showReturnRampSuggestion={showReturnRampSuggestion}
-        onActivateReturnRamp={handleActivateReturnRamp}
-        onDismissReturnRamp={() => setReturnRampDismissed(true)}
-        macroReviewSuggestion={macroReviewSuggestion}
-        onConfirmMacroReview={handleConfirmMacroReview}
-        onDismissMacroReview={handleDismissMacroReview}
-        nextMacroSuggestion={nextMacroSuggestion}
-        onNavigateToObjetivos={onNavigateToObjetivos}
-        retestHeadsUp={retestHeadsUp}
-        coachReasons={session?.coachReasons ?? []}
-      />
-
-      <div className="flex flex-col gap-1.5">
-        <WeekStrip
-          profile={profile}
-          history={history}
-          goals={goals}
-          onDeleteHistoryEntry={(date) => {
-            athleteRepository.deleteHistoryEntry(date);
-            setHistory(athleteRepository.getHistory());
-          }}
-        />
-        {history.length > 0 && (
-          <button
-            onClick={() => setShowDiary(true)}
-            className="self-end text-xs font-semibold text-neutral-500 transition-colors duration-200 hover:text-brand-gold"
-          >
-            Ver diario completo →
-          </button>
-        )}
-      </div>
-
       {showDiary && (
         <TrainingDiary
           history={history}
@@ -747,6 +710,51 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           onClose={() => setShowDiary(false)}
         />
       )}
+
+      {/* En escritorio (lg+) la sesión ocupa la columna ancha y la banda de semana + los avisos del
+          coach van a un raíl fijo a la derecha. En móvil todo se apila en el orden de siempre. */}
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
+        <div className="contents lg:col-start-2 lg:row-start-1 lg:block">
+          <div className="flex flex-col gap-3 lg:sticky lg:top-6">
+            <CoachNotices
+              activePainFlags={activePainFlags}
+              onRemovePainFlag={handleRemovePainFlag}
+              rampStatus={rampStatus}
+              returnRampSuggestion={returnRampSuggestion}
+              showReturnRampSuggestion={showReturnRampSuggestion}
+              onActivateReturnRamp={handleActivateReturnRamp}
+              onDismissReturnRamp={() => setReturnRampDismissed(true)}
+              macroReviewSuggestion={macroReviewSuggestion}
+              onConfirmMacroReview={handleConfirmMacroReview}
+              onDismissMacroReview={handleDismissMacroReview}
+              nextMacroSuggestion={nextMacroSuggestion}
+              onNavigateToObjetivos={onNavigateToObjetivos}
+              retestHeadsUp={retestHeadsUp}
+              coachReasons={session?.coachReasons ?? []}
+            />
+            <div className="flex flex-col gap-1.5">
+              <WeekStrip
+                profile={profile}
+                history={history}
+                goals={goals}
+                onDeleteHistoryEntry={(date) => {
+                  athleteRepository.deleteHistoryEntry(date);
+                  setHistory(athleteRepository.getHistory());
+                }}
+              />
+              {history.length > 0 && (
+                <button
+                  onClick={() => setShowDiary(true)}
+                  className="self-end text-xs font-semibold text-neutral-500 transition-colors duration-200 hover:text-brand-gold"
+                >
+                  Ver diario completo →
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="contents lg:col-start-1 lg:row-start-1 lg:flex lg:flex-col lg:gap-4">
 
       {!session && (
         <div className="card flex flex-col items-center gap-3 p-6 text-center">
@@ -1156,6 +1164,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       )}
       </>
       )}
+        </div>
+      </div>
 
       <Modal open={showCustomEditor} onClose={() => setShowCustomEditor(false)} title="Tu sesión de hoy">
         <div className="flex flex-col gap-3">
