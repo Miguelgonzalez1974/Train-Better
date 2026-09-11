@@ -1955,8 +1955,15 @@ function buildWodBlock(
     let fillIndex = 0;
     while (picks.length < movementCount) {
       const domain = domainCycle[fillIndex % domainCycle.length];
+      const before = picks.length;
       if (domain === weightedPool) pickFrom(domain, wodLiftPref.movementId, wodLiftPref.preferChance);
       else pickFrom(domain);
+      // `pickFrom` ya cae al pool entero (`pool.filter(isFree)`) cuando su dominio se queda corto, asi
+      // que si aun asi no metio nada es que el pool entero esta agotado (todo excluido por patron
+      // evitado/fatigado o bloqueado como cuasi-sinonimo de lo ya elegido) — reintentar con otro
+      // dominio no lo arregla, siempre falla igual. Sin este corte el bucle giraba para siempre
+      // (cuelga la pestaña entera): mejor un WOD con menos movimientos de los pedidos que congelar la app.
+      if (picks.length === before) break;
       fillIndex++;
     }
   }

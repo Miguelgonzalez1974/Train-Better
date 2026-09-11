@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { adoptAdditiveEngineFields, bestAffinityPartner, generateSessionForDate, WOD_SYNONYM_GROUPS } from './generateSession';
 import { WOD_PAIR_AFFINITY } from './wodDomains';
-import type { DailySession } from '../data/athlete/types';
+import type { DailySession, Goal } from '../data/athlete/types';
 import {
   makeProfile,
   makeStrengthGoal,
@@ -143,6 +143,43 @@ describe('generateSessionForDate — macrociclo', () => {
         .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId)
         .map(familyOf);
       expect(preview, JSON.stringify(goals)).toEqual(real);
+    }
+  });
+
+  it('con 3 objetivos activos a la vez (gimnasticos + subir-pr + elevar-fuerza, ambos intensivos) el WOD nunca se cuelga', () => {
+    // Bug real encontrado investigando el reporte anterior: `buildWodBlock` rellenaba movimientos con
+    // un `while (picks.length < movementCount)` que reintentaba sin fin si el pool de candidatos se
+    // agotaba (todo excluido por patron evitado/fatigado + sinonimos ya elegidos) — colgaba la
+    // pestana entera. Con 3 objetivos intensivos a la vez (el patron de fuerza forzado + los patrones
+    // ya excluidos) el pool se queda corto justo el dia 12 de esta combinacion exacta. Si el bug
+    // reaparece, este test se queda colgado y falla por timeout (no hace falta un timeout explicito
+    // mas largo: el default de vitest ya lo detecta).
+    const makeGoal = (type: Goal['type'], movementId: string, emphasis: Goal['emphasis'], id: string): Goal => ({
+      id,
+      type,
+      movementId,
+      targetDate: '2026-06-01',
+      emphasis,
+      createdAt: '2026-01-01',
+    });
+    for (const [olyId, strengthId] of [
+      ['snatch', 'back-squat'],
+      ['clean', 'deadlift'],
+    ] as const) {
+      const goals: Goal[] = [
+        makeGoal('mejorar-gimnasticos', 'bar-muscle-up', 'intensivo', 'g1'),
+        makeGoal('subir-pr', olyId, 'intensivo', 'g2'),
+        makeGoal('elevar-fuerza', strengthId, 'intensivo', 'g3'),
+      ];
+      const profile = makeProfile({ trainingDaysPerWeek: 6, goals });
+      const dates = consecutiveDates(START, 42);
+      const sessions = simulateSessions(profile, dates);
+      expect(sessions.length).toBeGreaterThan(0);
+      // Degrada con menos movimientos si el pool se agota, pero nunca se queda sin ninguno.
+      for (const s of sessions) {
+        const wodCount = s.blocks.filter((b) => b.block === 'wod').length;
+        if (!s.isRestDay) expect(wodCount, s.date).toBeGreaterThan(0);
+      }
     }
   });
 
