@@ -690,7 +690,7 @@ function buildStrengthBlock(
       // `computeWeakPoints` (RPE/escalado/tendencia). Ninguno se aplica el 100% de las veces — un
       // coach da mas frecuencia al punto flaco, no reconstruye la semana entera alrededor de el.
       const stalledPattern = stalledStrengthPattern(responseProfile);
-      const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history);
+      const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history, date);
       if (stalledPattern && !blockedForBias(stalledPattern) && rng() < WEAK_POINT_BIAS_CHANCE) {
         pattern = stalledPattern;
         weakPointTag = ' Este patrón lleva estancado en tu historial de PRs — prioridad de frecuencia para desbloquearlo.';
@@ -703,7 +703,7 @@ function buildStrengthBlock(
   // Nunca dos dias de fuerza seguidos con el mismo patron, ni siquiera con un objetivo atrasado
   // forzandolo: mas frecuencia a lo largo de la semana si, pero "deadlift lunes y deadlift miercoles"
   // no es lo que hace un coach. El objetivo ya se lleva su cuota de dias por el reparto de semana.
-  pattern = avoidPatternRepeat(pattern, history);
+  pattern = avoidPatternRepeat(pattern, history, date);
 
   // Si el patron de hoy coincide con un aviso de molestia activo, se sustituye por otro de los 4
   // patrones habituales que no este marcado — un coach real no ignora un aviso de dolor solo
@@ -1035,7 +1035,7 @@ function buildOlyBlock(
         (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
     );
     const stalledFam = stalledOlyFamily(responseProfile);
-    const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history);
+    const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history, date);
     if (goalUrgentFamily && rng() < OLY_GOAL_URGENT_BIAS_CHANCE) {
       family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
       weakPointTag = ' Tu objetivo de oly pide más frecuencia — hoy priorizamos esta familia.';
@@ -1055,7 +1055,7 @@ function buildOlyBlock(
   // Igual que en fuerza (ver buildStrengthBlock): la alternancia nunca se desactiva. Con plan de
   // semana esto es solo un cinturon extra sobre una decision ya buena; sin plan, es la unica defensa
   // real que queda contra repetir familia dos dias seguidos.
-  family = avoidOlyFamilyRepeat(family, history);
+  family = avoidOlyFamilyRepeat(family, history, date);
 
   // Desbalance `direction: 'high'`: la variante de potencia de esta familia va demasiado cerca del
   // levantamiento completo -> el limite es recibir abajo, no el tiron. Hoy se prioriza la version

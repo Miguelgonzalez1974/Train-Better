@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { adoptAdditiveEngineFields, bestAffinityPartner, generateSessionForDate, WOD_SYNONYM_GROUPS } from './generateSession';
 import { WOD_PAIR_AFFINITY } from './wodDomains';
-import type { DailySession, Goal } from '../data/athlete/types';
+import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../data/athlete/types';
 import {
   makeProfile,
   makeStrengthGoal,
@@ -127,23 +127,101 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(cleanShare, `${families.join(' ')}`).toBeGreaterThan(0.25);
   });
 
-  it('con macro activo, la familia de oly de un dia futuro NO cambia segun si se mira en vista previa o ya se entrenaron los dias anteriores', () => {
-    // Este es justo el bug que reportó el usuario: al mirar la semana en el WeekStrip (vista previa,
-    // sin historial de los días anteriores de esa misma semana) la familia podía salir distinta —y
-    // peor, se quedaba cacheada así— que la que de verdad tocaba una vez entrenados esos días. Con
-    // plan de semana activo, la familia de cada día tiene que ser la MISMA en los dos caminos.
+  it('con macro activo, ni la vista previa de una semana futura ni el entreno real monopolizan una familia de oly', () => {
+    // Este es justo el bug que reportó el usuario, reproducido con sus datos reales: al mirar
+    // varias semanas futuras en el WeekStrip (vista previa, con el historial real de HOY fijo para
+    // todos esos días), si los últimos 2 días REALES de historial compartían familia, el cortafuegos
+    // anti-repetición (`avoidOlyFamilyRepeat`) lo veía como "recién repetido" en TODOS los días
+    // futuros por igual (esas 2 entradas nunca cambian en una vista previa) y forzaba la familia
+    // contraria sin límite — semanas enteras de solo snatch. El cortafuegos ahora exige que esas
+    // entradas sean REALMENTE recientes en días de calendario respecto al día que se genera
+    // (`wasOlyFamilyRecentlyDominant` con `referenceDate`), así que deja de pesar sobre un futuro
+    // lejano. Por eso la vista previa y el entreno real ya no tienen por qué coincidir día a día
+    // (el entreno real sí puede corregirse por un choque real de últimos días, la vista previa no
+    // tiene ese historial que mirar) — lo que nunca debe pasar en NINGUNO de los dos caminos es que
+    // una familia se coma la vista, así que se comprueba eso en vez de la igualdad exacta.
     const familyOf = (id: string | undefined) => (id ? (id.includes('snatch') ? 'S' : 'C') : '-');
+    const maxRun = (fams: string[]) => {
+      let best = 1;
+      let cur = 1;
+      for (let i = 1; i < fams.length; i++) {
+        if (fams[i] === '-') continue;
+        cur = fams[i] === fams[i - 1] ? cur + 1 : 1;
+        if (cur > best) best = cur;
+      }
+      return best;
+    };
     for (const goals of [[], [makeStrengthGoal('clean', 'intensivo')], [makeStrengthGoal('snatch', 'intensivo')]]) {
       const profile = makeProfile({ trainingDaysPerWeek: 6, goals });
-      const dates = consecutiveDates(START, 28);
-      const preview = sessionsOver(profile, dates)
-        .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId)
-        .map(familyOf);
-      const real = simulateSessions(profile, dates)
-        .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId)
-        .map(familyOf);
-      expect(preview, JSON.stringify(goals)).toEqual(real);
+      const dates = consecutiveDates(START, 56);
+      for (const [label, fams] of [
+        ['preview', sessionsOver(profile, dates).map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId).map(familyOf)],
+        ['real', simulateSessions(profile, dates).map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId).map(familyOf)],
+      ] as const) {
+        const ctx = `${label} ${JSON.stringify(goals)}: ${fams.join('')}`;
+        expect(maxRun(fams), ctx).toBeLessThanOrEqual(2);
+        const real = fams.filter((f) => f !== '-');
+        const minorityShare = Math.min(real.filter((f) => f === 'S').length, real.filter((f) => f === 'C').length) / real.length;
+        expect(minorityShare, ctx).toBeGreaterThan(0.2);
+      }
     }
+  });
+
+  it('caso real reportado: historial real de un usuario congelado hace dias, vista previa de un mes futuro no se va todo a snatch', () => {
+    // Reproduccion exacta del reporte real (no un caso inventado): objetivo "Subir PR" en Power
+    // Clean moderado + macro de fases custom 7/5/2/2 + historial real de las 2 primeras semanas de
+    // esa persona, tal cual salio de su perfil guardado. Los ultimos 2 dias reales de ese historial
+    // (7 y 11 sept.) resultaron ser AMBOS de familia clean por pura coincidencia del entreno real —
+    // y antes del arreglo, el cortafuegos anti-repeticion leia esos mismos 2 dias como "recien
+    // repetido" para CUALQUIER dia futuro que se mirase (semanas y meses despues, sin que ese
+    // historial creciera nunca en una vista previa) y forzaba snatch sin excepcion el resto del mes.
+    const goals: Goal[] = [
+      { id: 'g1', type: 'mejorar-gimnasticos', emphasis: 'moderado', createdAt: '2026-08-30', movementId: 'bar-muscle-up', targetDate: '2026-12-20' },
+      { id: 'g2', type: 'subir-pr', emphasis: 'moderado', createdAt: '2026-08-30', movementId: 'power-clean', targetDate: '2026-12-20' },
+      { id: 'g3', type: 'elevar-fuerza', emphasis: 'moderado', createdAt: '2026-08-30', movementId: 'strict-press', targetDate: '2026-12-20' },
+    ];
+    const profile: AthleteProfile = {
+      prs: { clean: 85, snatch: 50, deadlift: 160, backSquat: 120, benchPress: 100, frontSquat: 95, strictPress: 60, cleanAndJerk: 70 },
+      variantPrs: { pushPress: 65, splitJerk: 60, powerClean: 80, powerSnatch: 60, sumoDeadlift: 130, overheadSquat: 35 },
+      trainingDaysPerWeek: 6,
+      onboardedAt: '2026-08-30T00:00:00.000Z',
+      macrocycles: [
+        { id: 'm1', label: 'Otoño', endDate: '2026-12-20', startDate: '2026-08-31', phaseWeeks: [7, 5, 2, 2] },
+        { id: 'm2', label: 'Invierno-Primavera', endDate: '2027-06-30', startDate: '2027-01-04', phaseWeeks: [10, 8, 4, 3] },
+      ],
+      goals,
+      strengthPrograms: [],
+      painFlags: [],
+    };
+    // Los ultimos 2 dias reales antes de la fecha en que esta persona miro la vista previa — ambos
+    // clean, el disparador exacto del bug (ver `dominantOlyFamily` en movementBalance.ts).
+    const history: SessionHistoryEntry[] = [
+      {
+        date: '2026-09-09',
+        mesocycleWeek: 4,
+        rxOrScaled: 'rx',
+        rpe: 7,
+        durationMin: 75,
+        movementIds: ['burgener-warmup-clean', 'barbell-warmup-complex', 'movement-specific-primer', 'tall-clean', 'clean-and-jerk'],
+      },
+      {
+        date: '2026-09-11',
+        mesocycleWeek: 4,
+        rxOrScaled: 'scaled',
+        rpe: 7,
+        durationMin: 75,
+        movementIds: ['burgener-warmup-clean', 'barbell-warmup-complex', 'movement-specific-primer', 'muscle-clean', 'power-clean'],
+      },
+    ];
+    const familyOf = (id: string | undefined) => (id ? (id.includes('snatch') ? 'S' : 'C') : '-');
+    const dates = consecutiveDates('2026-10-01', 31); // vista previa de octubre entero, historial congelado en el 11 de sept.
+    const families = dates
+      .map((d) => generateSessionForDate(profile, history, d, goals))
+      .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId)
+      .map(familyOf)
+      .filter((f) => f !== '-');
+    expect(families, families.join('')).toContain('C');
+    expect(families, families.join('')).toContain('S');
   });
 
   it('con 3 objetivos activos a la vez (gimnasticos + subir-pr + elevar-fuerza, ambos intensivos) el WOD nunca se cuelga', () => {

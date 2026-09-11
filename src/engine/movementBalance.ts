@@ -25,12 +25,30 @@ function dominantStrengthPattern(entry: SessionHistoryEntry): MovementPattern | 
 
 /**
  * True si `pattern` fue el patron del levantamiento de fuerza principal en alguno de los ultimos
- * `lookbackDays` dias de entreno. Un coach de verdad no deja que el sesgo de un objetivo (aunque
- * sea "intensivo") ni el ciclo natural de la semana apilen el mismo patron pesado — tiron, hombro,
+ * `lookbackDays` dias de CALENDARIO antes de `referenceDate` (no las ultimas `lookbackDays`
+ * entradas del array). Un coach de verdad no deja que el sesgo de un objetivo (aunque sea
+ * "intensivo") ni el ciclo natural de la semana apilen el mismo patron pesado — tiron, hombro,
  * sentadilla — varios dias seguidos.
+ *
+ * Por que por fecha y no por posicion en el array: al mirar una semana futura en vista previa
+ * (`WeekStrip`, sin haber entrenado nada de ella todavia), CADA dia de esa semana se genera contra
+ * el MISMO historial real, que no crece. Con `history.slice(-N)` esas ultimas 2 entradas reales
+ * (que pueden ser de hace semanas) seguian contando como "recientes" para CUALQUIER dia futuro,
+ * sea el de mañana o el de dentro de dos meses — si esas 2 ultimas sesiones reales compartian
+ * patron/familia, el cortafuegos anti-repeticion lo interpretaba como "recien repetido" y forzaba
+ * el contrario en TODOS los dias futuros sin excepcion, para siempre. Filtrando por antiguedad real
+ * (dias de calendario), una sesion de hace semanas deja de cegar la alternancia de dias muy futuros.
  */
-export function wasPatternRecentlyDominant(pattern: MovementPattern, history: SessionHistoryEntry[], lookbackDays = 2): boolean {
-  return history.slice(-lookbackDays).some((entry) => dominantStrengthPattern(entry) === pattern);
+export function wasPatternRecentlyDominant(
+  pattern: MovementPattern,
+  history: SessionHistoryEntry[],
+  referenceDate: Date,
+  lookbackDays = 2,
+): boolean {
+  return history.some((entry) => {
+    const age = daysBetween(entry.date, referenceDate);
+    return age >= 1 && age <= lookbackDays && dominantStrengthPattern(entry) === pattern;
+  });
 }
 
 /** Familia de oly (snatch vs. clean/jerk) del levantamiento principal de un dia de historial. */
@@ -45,9 +63,17 @@ function dominantOlyFamily(entry: SessionHistoryEntry): OlyFamily | null {
   return null;
 }
 
-/** Mismo criterio que `wasPatternRecentlyDominant`, pero para la familia de oly (snatch vs. clean/jerk). */
-export function wasOlyFamilyRecentlyDominant(family: OlyFamily, history: SessionHistoryEntry[], lookbackDays = 2): boolean {
-  return history.slice(-lookbackDays).some((entry) => dominantOlyFamily(entry) === family);
+/** Mismo criterio que `wasPatternRecentlyDominant` (por antiguedad real, no por posicion en el array), pero para la familia de oly (snatch vs. clean/jerk). */
+export function wasOlyFamilyRecentlyDominant(
+  family: OlyFamily,
+  history: SessionHistoryEntry[],
+  referenceDate: Date,
+  lookbackDays = 2,
+): boolean {
+  return history.some((entry) => {
+    const age = daysBetween(entry.date, referenceDate);
+    return age >= 1 && age <= lookbackDays && dominantOlyFamily(entry) === family;
+  });
 }
 
 const STRENGTH_PATTERN_CYCLE: MovementPattern[] = ['squat', 'hinge', 'verticalPush', 'horizontalPush'];
@@ -59,17 +85,19 @@ const STRENGTH_PATTERN_CYCLE: MovementPattern[] = ['squat', 'hinge', 'verticalPu
  * con uno forzado el dia anterior (p.ej. viernes forzado + lunes natural de la semana siguiente son
  * el mismo patron), y ese hueco no lo cierra solo bloquear el forzado de un objetivo.
  */
-export function avoidPatternRepeat(candidate: MovementPattern, history: SessionHistoryEntry[]): MovementPattern {
-  if (!wasPatternRecentlyDominant(candidate, history)) return candidate;
-  const alternative = STRENGTH_PATTERN_CYCLE.find((p) => p !== candidate && !wasPatternRecentlyDominant(p, history));
+export function avoidPatternRepeat(candidate: MovementPattern, history: SessionHistoryEntry[], referenceDate: Date): MovementPattern {
+  if (!wasPatternRecentlyDominant(candidate, history, referenceDate)) return candidate;
+  const alternative = STRENGTH_PATTERN_CYCLE.find(
+    (p) => p !== candidate && !wasPatternRecentlyDominant(p, history, referenceDate),
+  );
   return alternative ?? candidate;
 }
 
 /** Mismo criterio que `avoidPatternRepeat`, pero para la familia de oly (solo snatch/clean, sin alternativa mas alla de la otra). */
-export function avoidOlyFamilyRepeat(candidate: OlyFamily, history: SessionHistoryEntry[]): OlyFamily {
-  if (!wasOlyFamilyRecentlyDominant(candidate, history)) return candidate;
+export function avoidOlyFamilyRepeat(candidate: OlyFamily, history: SessionHistoryEntry[], referenceDate: Date): OlyFamily {
+  if (!wasOlyFamilyRecentlyDominant(candidate, history, referenceDate)) return candidate;
   const alternative: OlyFamily = candidate === 'snatch' ? 'clean' : 'snatch';
-  return wasOlyFamilyRecentlyDominant(alternative, history) ? candidate : alternative;
+  return wasOlyFamilyRecentlyDominant(alternative, history, referenceDate) ? candidate : alternative;
 }
 
 /** Patrones de fuerza que `computeWeakPoints` puede marcar directamente como MovementPattern validos. */
@@ -85,19 +113,27 @@ export const WEAK_POINT_BIAS_CHANCE = 0.45;
  * ultimos `WEAK_POINT_LOOKBACK_DAYS` dias — o null si no hay ninguno disponible (todos en
  * progreso, o los debiles ya se entrenaron hace poco).
  */
-export function weakestUntrainedStrengthPattern(weakPoints: PatternStrain[], history: SessionHistoryEntry[]): MovementPattern | null {
+export function weakestUntrainedStrengthPattern(
+  weakPoints: PatternStrain[],
+  history: SessionHistoryEntry[],
+  referenceDate: Date,
+): MovementPattern | null {
   const candidates = weakPoints
     .filter((p) => p.status === 'a-trabajar' && (WEAK_POINT_STRENGTH_KEYS as string[]).includes(p.key))
     .map((p) => p.key as MovementPattern);
-  return candidates.find((pattern) => !wasPatternRecentlyDominant(pattern, history, WEAK_POINT_LOOKBACK_DAYS)) ?? null;
+  return candidates.find((pattern) => !wasPatternRecentlyDominant(pattern, history, referenceDate, WEAK_POINT_LOOKBACK_DAYS)) ?? null;
 }
 
 /** Mismo criterio que `weakestUntrainedStrengthPattern`, para las dos familias de oly (snatch / clean & jerk). */
-export function weakestUntrainedOlyFamily(weakPoints: PatternStrain[], history: SessionHistoryEntry[]): OlyFamily | null {
+export function weakestUntrainedOlyFamily(
+  weakPoints: PatternStrain[],
+  history: SessionHistoryEntry[],
+  referenceDate: Date,
+): OlyFamily | null {
   const candidates = weakPoints
     .filter((p) => p.status === 'a-trabajar' && (p.key === 'snatch' || p.key === 'clean'))
     .map((p) => p.key as OlyFamily);
-  return candidates.find((family) => !wasOlyFamilyRecentlyDominant(family, history, WEAK_POINT_LOOKBACK_DAYS)) ?? null;
+  return candidates.find((family) => !wasOlyFamilyRecentlyDominant(family, history, referenceDate, WEAK_POINT_LOOKBACK_DAYS)) ?? null;
 }
 
 /**
