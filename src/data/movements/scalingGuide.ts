@@ -76,6 +76,60 @@ export const SCALING_GUIDE: Record<string, ScalingOption[]> = {
     { label: 'Empty Bar Thruster (45/35)', movementId: 'thruster' },
     { label: 'DB Thruster (2x35/2x25)', movementId: 'dumbbell-thruster' },
   ],
+  'chest-to-bar-pull-up': [
+    { label: 'Kipping Pull-Up (mismas reps)', movementId: 'kipping-pull-up' },
+    { label: '10-15 Banded Pull-Ups', movementId: 'banded-pull-up', reps: '10-15' },
+    { label: '15 Ring Rows', movementId: 'ring-row', reps: '15' },
+  ],
+  'butterfly-pull-up': [
+    { label: 'Kipping Pull-Up (mismas reps)', movementId: 'kipping-pull-up' },
+    { label: '5 Strict Pull-Ups', movementId: 'strict-pull-up', reps: '5' },
+  ],
+  'bar-muscle-up': [
+    { label: 'Ring Muscle-Up (mismas reps)', movementId: 'ring-muscle-up' },
+    { label: 'Burpee Pull-Up — 2 por cada muscle-up (si te falta equipo)', movementId: 'burpee-pull-up', perRepRatio: 2 },
+    { label: 'Burpee Pull-Up — 1 por cada muscle-up (si te falta la técnica)', movementId: 'burpee-pull-up', perRepRatio: 1 },
+  ],
+  'handstand-push-up': [
+    { label: 'Kipping HSPU (mismas reps)', movementId: 'kipping-hspu' },
+    { label: 'Push-Ups — 2 por cada HSPU', movementId: 'push-up', perRepRatio: 2 },
+    { label: '6 Wall Walks', movementId: 'wall-walk', reps: '6' },
+  ],
+  'kipping-hspu': [
+    { label: 'Push-Ups — 2 por cada HSPU', movementId: 'push-up', perRepRatio: 2 },
+    { label: '40 HS Shoulder Taps', movementId: 'hs-shoulder-taps', reps: '40' },
+  ],
+  'ring-dip': [
+    { label: 'Push-Ups (mismas reps)', movementId: 'push-up' },
+    { label: 'Push-Ups — el doble de reps', movementId: 'push-up', perRepRatio: 2 },
+  ],
+  'box-jump': [
+    { label: 'Air Squats (mismas reps)', movementId: 'air-squat' },
+    { label: 'Burpees — la mitad de reps', movementId: 'burpee', perRepRatio: 0.5 },
+  ],
+  'box-jump-over': [
+    { label: 'Air Squats (mismas reps)', movementId: 'air-squat' },
+    { label: 'Burpees — la mitad de reps', movementId: 'burpee', perRepRatio: 0.5 },
+  ],
+  'burpee-box-jump-over': [{ label: 'Burpees (mismas reps)', movementId: 'burpee' }],
+  'pistol-squat': [
+    { label: 'Air Squats — 2 por cada pistol', movementId: 'air-squat', perRepRatio: 2 },
+    { label: 'Air Squats (mismas reps)', movementId: 'air-squat' },
+  ],
+  'legless-rope-climb': [
+    { label: 'Rope Climb con piernas (mismas reps)', movementId: 'rope-climb' },
+    { label: '4-5 Strict Knees-to-Elbows', movementId: 'knees-to-elbow', reps: '4-5' },
+  ],
+  'l-sit': [{ label: 'V-Ups (mismas reps)', movementId: 'v-up' }],
+  'burpee-pull-up': [{ label: 'Burpees (mismas reps)', movementId: 'burpee' }],
+  'bar-facing-burpee': [{ label: 'Burpees (mismas reps)', movementId: 'burpee' }],
+  'burpee-to-target': [{ label: 'Burpees (mismas reps)', movementId: 'burpee' }],
+  'lateral-burpee': [{ label: 'Burpees (mismas reps)', movementId: 'burpee' }],
+  'shuttle-run': [
+    { label: '15/12 Cal Assault Bike', movementId: 'air-bike', reps: '15/12 cal' },
+    { label: '200m Row', movementId: 'row', reps: '200m' },
+    { label: '20 Double-Unders por shuttle', movementId: 'double-under', reps: '20' },
+  ],
 };
 
 /**
