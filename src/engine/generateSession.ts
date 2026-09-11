@@ -1012,29 +1012,34 @@ function buildOlyBlock(
 
   let family = plannedFamily ?? dayPlan.olyFamily;
   let weakPointTag = '';
-  // Un objetivo de oly urgente (intensivo, muy avanzado, o detras de calendario) le da MAS
-  // FRECUENCIA a su familia, nunca el monopolio de la semana entera: se decide con la misma
-  // probabilidad `pref.preferChance` que ya pesa la eleccion del movimiento en si (ver
-  // `goalPreference` mas arriba), no de forma determinista. Forzarlo siempre rompia la alternancia
-  // snatch/clean que ya reservo el planificador de semana y podia dar la misma familia 3+ dias
-  // seguidos — justo lo que el cortafuegos de mas abajo (`avoidOlyFamilyRepeat`) existe para evitar.
-  const goalUrgentFamily = Boolean(
-    pref.movementId &&
-      pref.goal &&
-      actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
-      (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
-  );
-  if (goalUrgentFamily && rng() < OLY_GOAL_URGENT_BIAS_CHANCE) {
-    family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
-    weakPointTag = ' Tu objetivo de oly pide más frecuencia — hoy priorizamos esta familia.';
-  } else if (!plannedFamily) {
-    // Sin plan de semana: se decide la familia dia a dia. Con plan ya viene alternada y con el
-    // ancla del objetivo/estancamiento, asi que esta cadena reactiva se salta.
-    // Mismo orden que en fuerza: primero una familia con un levantamiento estancado/en caida en el
-    // historial real de PRs, si no la peor valorada en `computeWeakPoints`, si no el sesgo de desbalance.
+  // Con plan de semana activo (el caso normal, con macro), la familia de HOY ya viene decidida por
+  // `weekPlan.buildMicrocyclePlan` para LA SEMANA ENTERA de una vez — incluida la prioridad de un
+  // objetivo de oly urgente, que ya ancla su familia a la mayoria de los dias de oly (ver
+  // `anchorFam`/`goalForcedFamily` en weekPlan.ts) sin dejar de alternar. Nada de lo de aqui abajo
+  // debe tocar esa decision dia a dia: un sesgo reactivo por dia (aunque sea con baja probabilidad)
+  // no tiene forma de saber que decidio el dia anterior/siguiente cuando el atleta esta viendo una
+  // semana futura sin entrenar todavia (vista previa desde `WeekStrip`, que ademas CACHEA lo que
+  // genera) — eso fue justo lo que paso: cada dia tiraba sus propios dados por separado y a veces
+  // salian 3-4 seguidos de la misma familia, y al estar cacheado se quedaba asi para siempre aunque
+  // luego el historial real dijera otra cosa. Esta cadena reactiva por dia solo tiene sentido, y solo
+  // se usa, cuando NO hay plan de semana (sin macro activo).
+  if (!plannedFamily) {
+    // Sin plan de semana: se decide la familia dia a dia. Primero un objetivo de oly urgente
+    // (intensivo, muy avanzado, o detras de calendario); si no aplica, el mismo orden que en fuerza:
+    // una familia con un levantamiento estancado/en caida en el historial real de PRs, si no la peor
+    // valorada en `computeWeakPoints`, si no el sesgo de desbalance.
+    const goalUrgentFamily = Boolean(
+      pref.movementId &&
+        pref.goal &&
+        actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
+        (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
+    );
     const stalledFam = stalledOlyFamily(responseProfile);
     const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history);
-    if (stalledFam && rng() < WEAK_POINT_BIAS_CHANCE) {
+    if (goalUrgentFamily && rng() < OLY_GOAL_URGENT_BIAS_CHANCE) {
+      family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
+      weakPointTag = ' Tu objetivo de oly pide más frecuencia — hoy priorizamos esta familia.';
+    } else if (stalledFam && rng() < WEAK_POINT_BIAS_CHANCE) {
       family = stalledFam;
       weakPointTag = ' Esta familia lleva estancada en tu historial de PRs — más frecuencia para desbloquearla.';
     } else if (weakFamily && rng() < WEAK_POINT_BIAS_CHANCE) {
@@ -1047,10 +1052,9 @@ function buildOlyBlock(
       weakPointTag = ' Prioridad hoy: esta familia va floja respecto a la otra — la equilibramos.';
     }
   }
-  // Igual que en fuerza (ver buildStrengthBlock): la alternancia nunca se desactiva, ni con un
-  // objetivo atrasado de por medio — mas frecuencia a lo largo de la semana si, pero "clean lunes,
-  // martes y miercoles" no es lo que hace un coach. El objetivo ya se lleva su sesgo de frecuencia
-  // arriba con `pref.preferChance`.
+  // Igual que en fuerza (ver buildStrengthBlock): la alternancia nunca se desactiva. Con plan de
+  // semana esto es solo un cinturon extra sobre una decision ya buena; sin plan, es la unica defensa
+  // real que queda contra repetir familia dos dias seguidos.
   family = avoidOlyFamilyRepeat(family, history);
 
   // Desbalance `direction: 'high'`: la variante de potencia de esta familia va demasiado cerca del

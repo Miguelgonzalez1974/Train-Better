@@ -127,6 +127,25 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(cleanShare, `${families.join(' ')}`).toBeGreaterThan(0.25);
   });
 
+  it('con macro activo, la familia de oly de un dia futuro NO cambia segun si se mira en vista previa o ya se entrenaron los dias anteriores', () => {
+    // Este es justo el bug que reportó el usuario: al mirar la semana en el WeekStrip (vista previa,
+    // sin historial de los días anteriores de esa misma semana) la familia podía salir distinta —y
+    // peor, se quedaba cacheada así— que la que de verdad tocaba una vez entrenados esos días. Con
+    // plan de semana activo, la familia de cada día tiene que ser la MISMA en los dos caminos.
+    const familyOf = (id: string | undefined) => (id ? (id.includes('snatch') ? 'S' : 'C') : '-');
+    for (const goals of [[], [makeStrengthGoal('clean', 'intensivo')], [makeStrengthGoal('snatch', 'intensivo')]]) {
+      const profile = makeProfile({ trainingDaysPerWeek: 6, goals });
+      const dates = consecutiveDates(START, 28);
+      const preview = sessionsOver(profile, dates)
+        .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId)
+        .map(familyOf);
+      const real = simulateSessions(profile, dates)
+        .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId)
+        .map(familyOf);
+      expect(preview, JSON.stringify(goals)).toEqual(real);
+    }
+  });
+
   it('todo WOD trae un objetivo de esfuerzo (RPE) y una pista de ritmo, y el RPE sigue la onda del meso', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 5 });
     const rpeByWeek: Record<number, Set<string>> = { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set() };
