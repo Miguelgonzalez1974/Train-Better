@@ -53,7 +53,7 @@ import { CoachNotices } from './CoachNotices';
 import { RpeCheckIn } from './RpeCheckIn';
 import { SessionSummaryCard } from './SessionSummaryCard';
 import { FocusMode } from './FocusMode';
-import { RestTimer } from './RestTimer';
+import { TrainingTimer } from './TrainingTimer';
 import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -675,7 +675,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {session && !session.isRestDay && <RestTimer />}
+      {session && !session.isRestDay && <TrainingTimer />}
       {focusMode && session && !session.isRestDay && (
         <FocusMode
           session={session}

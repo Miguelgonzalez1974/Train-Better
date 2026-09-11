@@ -348,6 +348,12 @@ export function FocusMode({
     );
   };
 
+  const wodTimerHint = (
+    <p className="flex items-center gap-1.5 text-[11px] text-neutral-600">
+      <Timer size={12} strokeWidth={2.25} /> Cronometra el WOD con el reloj de entreno (abajo a la derecha).
+    </p>
+  );
+
   const renderWod = (entries: Indexed[]) => {
     const first = entries[0].entry;
     if (first.movementId.startsWith('benchmark:')) {
@@ -362,6 +368,7 @@ export function FocusMode({
             </p>
           )}
           {first.notes && <FocusNote text={first.notes} />}
+          {wodTimerHint}
         </div>
       );
     }
@@ -384,6 +391,7 @@ export function FocusMode({
           ))}
         </ul>
         {first.notes && <FocusNote text={first.notes} />}
+        {wodTimerHint}
       </div>
     );
   };
