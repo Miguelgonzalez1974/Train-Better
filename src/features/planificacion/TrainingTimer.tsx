@@ -35,14 +35,26 @@ function beep() {
 type WakeLockSentinelLike = { release: () => Promise<void>; addEventListener?: (type: string, cb: () => void) => void };
 type NavigatorWithWakeLock = Navigator & { wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> } };
 
+const SCREEN_LOCK_KEY = 'train-better:screen-lock';
+
+/** Preferencia del atleta ("mantener pantalla activa") — encendida por defecto la primera vez. */
+function readScreenLockPref(): boolean {
+  try {
+    const v = localStorage.getItem(SCREEN_LOCK_KEY);
+    return v === null ? true : v === '1';
+  } catch {
+    return true;
+  }
+}
+
 /**
- * Mantiene la pantalla encendida mientras `active` es true — para que el reloj de entreno se pueda
- * leer sin tocar el móvil a mitad de un AMRAP. Usa la Screen Wake Lock API (Chrome/Android y
- * Safari/iOS 16.4+ instalada como PWA); si el navegador no la soporta, `supported` es false y no se
- * rompe nada, solo no hay garantía de pantalla encendida. Se reengancha sola si el móvil se bloquea
- * y el atleta vuelve a la app (`visibilitychange`).
+ * Screen Wake Lock API a bajo nivel — solo pide/suelta, sin decidir cuándo. Soportada en
+ * Chrome/Android en cualquier pestaña y en Safari/iOS 16.4+ **solo si la app está instalada en la
+ * pantalla de inicio** (en Safari normal la propiedad puede existir pero la petición se rechaza en
+ * silencio). El llamador decide cuándo pedirla — mejor dentro del propio gesto del usuario (pulsar
+ * "Empezar"), porque algunos navegadores exigen que la petición ocurra pegada a esa interacción.
  */
-function useWakeLock(active: boolean): { held: boolean; supported: boolean } {
+function useWakeLock(): { held: boolean; supported: boolean; request: () => void; release: () => void } {
   const [held, setHeld] = useState(false);
   const sentinelRef = useRef<WakeLockSentinelLike | null>(null);
   const supported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
@@ -53,37 +65,22 @@ function useWakeLock(active: boolean): { held: boolean; supported: boolean } {
     setHeld(false);
   }, []);
 
-  const acquire = useCallback(async () => {
-    try {
-      const nav = navigator as NavigatorWithWakeLock;
-      if (!nav.wakeLock) return;
-      const sentinel = await nav.wakeLock.request('screen');
-      sentinelRef.current = sentinel;
-      setHeld(true);
-      sentinel.addEventListener?.('release', () => setHeld(false));
-    } catch {
-      setHeld(false);
-    }
+  const request = useCallback(() => {
+    const nav = navigator as NavigatorWithWakeLock;
+    if (!nav.wakeLock) return;
+    nav.wakeLock
+      .request('screen')
+      .then((sentinel) => {
+        sentinelRef.current = sentinel;
+        setHeld(true);
+        sentinel.addEventListener?.('release', () => setHeld(false));
+      })
+      .catch(() => setHeld(false));
   }, []);
 
-  useEffect(() => {
-    if (!active) {
-      release();
-      return;
-    }
-    acquire();
-    return () => release();
-  }, [active, acquire, release]);
+  useEffect(() => () => release(), [release]);
 
-  useEffect(() => {
-    const onVisibility = () => {
-      if (active && document.visibilityState === 'visible') acquire();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [active, acquire]);
-
-  return { held, supported };
+  return { held, supported, request, release };
 }
 
 /**
@@ -169,7 +166,8 @@ export function TrainingTimer() {
   const [rounds, setRounds] = useState(0);
   const workoutStartRef = useRef<number | null>(null);
   const workoutRafRef = useRef<number | null>(null);
-  const wakeLock = useWakeLock(workoutRunning);
+  const wakeLock = useWakeLock();
+  const [screenLockOn, setScreenLockOn] = useState<boolean>(readScreenLockPref);
 
   const workoutTick = useCallback(() => {
     if (workoutStartRef.current == null) return;
@@ -188,13 +186,39 @@ export function TrainingTimer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutRunning, workoutTick]);
 
-  const toggleWorkout = () => setWorkoutRunning((r) => !r);
+  const toggleWorkout = () => {
+    const next = !workoutRunning;
+    setWorkoutRunning(next);
+    if (next && screenLockOn) wakeLock.request();
+    else wakeLock.release();
+  };
   const resetWorkout = () => {
     setWorkoutRunning(false);
     setWorkoutElapsed(0);
     setRounds(0);
     workoutStartRef.current = null;
+    wakeLock.release();
   };
+  const setScreenLock = (on: boolean) => {
+    setScreenLockOn(on);
+    try {
+      localStorage.setItem(SCREEN_LOCK_KEY, on ? '1' : '0');
+    } catch {
+      /* sin persistencia, no pasa nada */
+    }
+    if (on && workoutRunning) wakeLock.request();
+    else if (!on) wakeLock.release();
+  };
+
+  // Si el móvil se bloquea y vuelve a mitad de entreno, reengancha la pantalla activa.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && workoutRunning && screenLockOn) wakeLock.request();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workoutRunning, screenLockOn]);
 
   const openTo = (m: TimerMode) => {
     setMode(m);
@@ -315,16 +339,40 @@ export function TrainingTimer() {
       ) : (
         <>
           <p className="text-center text-4xl font-bold tabular-nums text-white">{mmss(workoutElapsed)}</p>
-          <p className="mt-1 flex items-center justify-center gap-1.5 text-[11px] text-neutral-500">
+
+          <div className="mt-2.5 flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+            <span className="text-xs font-semibold text-neutral-300">Mantener pantalla activa</span>
+            <button
+              role="switch"
+              aria-checked={screenLockOn}
+              aria-label="Mantener pantalla activa durante el entreno"
+              onClick={() => setScreenLock(!screenLockOn)}
+              disabled={!wakeLock.supported}
+              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-30 ${
+                screenLockOn ? 'bg-brand-neon' : 'bg-white/15'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-black/80 transition-transform duration-200 ${
+                  screenLockOn ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          <p className="mb-2 mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-neutral-500">
             <span
-              className={`h-1.5 w-1.5 rounded-full ${wakeLock.held ? 'bg-brand-neon' : 'bg-neutral-600'}`}
+              className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${wakeLock.held ? 'bg-brand-neon' : 'bg-neutral-600'}`}
               aria-hidden="true"
             />
-            {wakeLock.held
-              ? 'Pantalla activa'
-              : wakeLock.supported
-                ? 'Pantalla puede apagarse'
-                : 'Tu navegador no soporta mantener la pantalla activa'}
+            {!wakeLock.supported
+              ? 'Tu navegador no permite mantener la pantalla activa.'
+              : !screenLockOn
+                ? 'Desactivado — la pantalla puede apagarse sola.'
+                : !workoutRunning
+                  ? 'Se activará al pulsar Empezar.'
+                  : wakeLock.held
+                    ? 'Pantalla activa mientras entrenas.'
+                    : 'No se pudo activar — si estás en iPhone, añade la app a tu pantalla de inicio; si no, revisa el ahorro de batería.'}
           </p>
 
           <div className="my-2.5 flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5">
