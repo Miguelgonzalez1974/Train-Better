@@ -7,6 +7,7 @@ import {
   makeStrengthGoal,
   consecutiveDates,
   simulateSessions,
+  sessionsOver,
   loadsAreFinite,
   allIdsResolve,
 } from './__fixtures';
@@ -109,6 +110,21 @@ describe('generateSessionForDate — macrociclo', () => {
     }
     // Mas frecuencia por el objetivo, pero snatch no desaparece del todo.
     expect(families).toContain('snatch');
+  });
+
+  it('objetivo intensivo de oly visto en vista previa (dias futuros, sin entrenar todavia): la otra familia no desaparece', () => {
+    // `sessionsOver` genera cada dia con historial vacio — como cuando el atleta mira la semana que
+    // viene antes de entrenar ningun dia de ella. Ahi el cortafuegos anti-repeticion no tiene nada
+    // real que comparar, asi que la unica defensa contra "toda la semana snatch" es no tirar el
+    // sesgo del objetivo con demasiada fuerza dia a dia.
+    const profile = makeProfile({ trainingDaysPerWeek: 6, goals: [makeStrengthGoal('snatch', 'intensivo')] });
+    const families = sessionsOver(profile, consecutiveDates(START, 42))
+      .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup))
+      .filter((b): b is NonNullable<typeof b> => Boolean(b))
+      .map((b) => (b.movementId.includes('snatch') ? 'snatch' : 'clean'));
+    expect(families.length).toBeGreaterThan(0);
+    const cleanShare = families.filter((f) => f === 'clean').length / families.length;
+    expect(cleanShare, `${families.join(' ')}`).toBeGreaterThan(0.25);
   });
 
   it('todo WOD trae un objetivo de esfuerzo (RPE) y una pista de ritmo, y el RPE sigue la onda del meso', () => {

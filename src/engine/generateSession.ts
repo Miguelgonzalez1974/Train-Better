@@ -140,6 +140,16 @@ function collectReasons(...fragments: (string | undefined)[]): string[] {
  */
 const IMBALANCE_BIAS_CHANCE = 0.45;
 
+/**
+ * Empuje EXTRA que un objetivo de oly urgente le da a su familia por encima del plan de semana —
+ * el planificador de microciclo (`weekPlan.buildMicrocyclePlan`) ya reserva la familia del objetivo
+ * como ancla (mayoria de los dias de oly de la semana, alternando igualmente), asi que esto es solo
+ * un empujon fino sobre esa base, no una segunda fuente de sesgo a maxima potencia — con
+ * `pref.preferChance` (0.6-0.95, pensado para "que movimiento DENTRO de la familia", no "que
+ * familia") la semana entera acababa siendo casi una sola familia.
+ */
+const OLY_GOAL_URGENT_BIAS_CHANCE = 0.25;
+
 /** Perfil de respuesta: frecuencia extra que gana el lift de un objetivo que progresa despacio/retrocede. */
 const STALLED_LIFT_FREQ_BONUS = 0.15;
 /** Perfil de respuesta: el sesgo de reporte de RPE (±2 pts) se traduce en un factor de carga acotado a ±3%. */
@@ -1014,7 +1024,7 @@ function buildOlyBlock(
       actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
       (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
   );
-  if (goalUrgentFamily && rng() < pref.preferChance) {
+  if (goalUrgentFamily && rng() < OLY_GOAL_URGENT_BIAS_CHANCE) {
     family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
     weakPointTag = ' Tu objetivo de oly pide más frecuencia — hoy priorizamos esta familia.';
   } else if (!plannedFamily) {
