@@ -1002,14 +1002,21 @@ function buildOlyBlock(
 
   let family = plannedFamily ?? dayPlan.olyFamily;
   let weakPointTag = '';
-  const goalForcedFamily = Boolean(
+  // Un objetivo de oly urgente (intensivo, muy avanzado, o detras de calendario) le da MAS
+  // FRECUENCIA a su familia, nunca el monopolio de la semana entera: se decide con la misma
+  // probabilidad `pref.preferChance` que ya pesa la eleccion del movimiento en si (ver
+  // `goalPreference` mas arriba), no de forma determinista. Forzarlo siempre rompia la alternancia
+  // snatch/clean que ya reservo el planificador de semana y podia dar la misma familia 3+ dias
+  // seguidos — justo lo que el cortafuegos de mas abajo (`avoidOlyFamilyRepeat`) existe para evitar.
+  const goalUrgentFamily = Boolean(
     pref.movementId &&
       pref.goal &&
       actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
       (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
   );
-  if (goalForcedFamily) {
+  if (goalUrgentFamily && rng() < pref.preferChance) {
     family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
+    weakPointTag = ' Tu objetivo de oly pide más frecuencia — hoy priorizamos esta familia.';
   } else if (!plannedFamily) {
     // Sin plan de semana: se decide la familia dia a dia. Con plan ya viene alternada y con el
     // ancla del objetivo/estancamiento, asi que esta cadena reactiva se salta.
@@ -1030,12 +1037,11 @@ function buildOlyBlock(
       weakPointTag = ' Prioridad hoy: esta familia va floja respecto a la otra — la equilibramos.';
     }
   }
-  // Se aplica siempre que el objetivo no este forzando la familia por ir atrasado (ver buildStrengthBlock):
-  // el ciclo natural tambien puede coincidir con lo entrenado el dia anterior (p.ej. entre semanas
-  // en calendarios de 3 dias).
-  if (!(goalForcedFamily && pref.behindSchedule)) {
-    family = avoidOlyFamilyRepeat(family, history);
-  }
+  // Igual que en fuerza (ver buildStrengthBlock): la alternancia nunca se desactiva, ni con un
+  // objetivo atrasado de por medio — mas frecuencia a lo largo de la semana si, pero "clean lunes,
+  // martes y miercoles" no es lo que hace un coach. El objetivo ya se lleva su sesgo de frecuencia
+  // arriba con `pref.preferChance`.
+  family = avoidOlyFamilyRepeat(family, history);
 
   // Desbalance `direction: 'high'`: la variante de potencia de esta familia va demasiado cerca del
   // levantamiento completo -> el limite es recibir abajo, no el tiron. Hoy se prioriza la version
@@ -3423,6 +3429,7 @@ export function toHistoryEntry(
 ): SessionHistoryEntry {
   const wodMovementIds = session.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
   const strengthMovement = session.blocks.find((b) => b.block === 'strength');
+  const olyMovement = session.blocks.find((b) => b.block === 'oly' && !b.subgroup);
   return {
     date: session.date,
     mesocycleWeek: session.mesocycleWeek,
@@ -3434,6 +3441,7 @@ export function toHistoryEntry(
     testLoadKg,
     wodMovementIds: wodMovementIds.length > 0 ? wodMovementIds : undefined,
     strengthPattern: strengthMovement ? getMovementById(strengthMovement.movementId)?.pattern : undefined,
+    olyFamily: olyMovement ? (olyMovement.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
     energySystem: session.energySystem,
   };
 }

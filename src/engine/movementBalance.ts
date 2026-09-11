@@ -35,6 +35,10 @@ export function wasPatternRecentlyDominant(pattern: MovementPattern, history: Se
 
 /** Familia de oly (snatch vs. clean/jerk) del levantamiento principal de un dia de historial. */
 function dominantOlyFamily(entry: SessionHistoryEntry): OlyFamily | null {
+  // Señal explícita del bloque oly (nueva). Se prefiere al escaneo de `movementIds`, que puede
+  // devolver la familia equivocada si el WOD de ese día programó un power-clean/clean-and-jerk
+  // antes de que aparezca en la lista el movimiento del bloque oly de verdad.
+  if (entry.olyFamily) return entry.olyFamily;
   for (const id of entry.movementIds) {
     if (OLY_MOVEMENT_IDS.has(id)) return id.includes('snatch') ? 'snatch' : 'clean';
   }

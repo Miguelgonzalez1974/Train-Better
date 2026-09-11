@@ -97,6 +97,20 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(patterns.some((p) => p === 'verticalPush' || p === 'horizontalPush')).toBe(true);
   });
 
+  it('con objetivo intensivo de clean, snatch no desaparece de la semana (nunca 3 días seguidos con la misma familia de oly)', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 6, goals: [makeStrengthGoal('clean', 'intensivo')] });
+    const families = simulateSessions(profile, consecutiveDates(START, 28))
+      .map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup))
+      .filter((b): b is NonNullable<typeof b> => Boolean(b))
+      .map((b) => (b.movementId.includes('snatch') ? 'snatch' : 'clean'));
+    expect(families.length).toBeGreaterThan(0);
+    for (let i = 2; i < families.length; i++) {
+      expect(families[i] === families[i - 1] && families[i] === families[i - 2], `${families.join(' ')}`).toBe(false);
+    }
+    // Mas frecuencia por el objetivo, pero snatch no desaparece del todo.
+    expect(families).toContain('snatch');
+  });
+
   it('todo WOD trae un objetivo de esfuerzo (RPE) y una pista de ritmo, y el RPE sigue la onda del meso', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 5 });
     const rpeByWeek: Record<number, Set<string>> = { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set() };

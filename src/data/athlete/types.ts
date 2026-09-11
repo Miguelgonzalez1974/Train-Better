@@ -326,7 +326,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 24;
+export const SESSION_GEN_VERSION = 25;
 
 export interface DailySession {
   date: string;
@@ -408,6 +408,15 @@ export interface SessionHistoryEntry {
    * anteriores a esta feature (se cae al escaneo de `movementIds`).
    */
   strengthPattern?: MovementPattern;
+  /**
+   * Familia del levantamiento olimpico principal de esa sesion (bloque 'oly'): 'snatch' o 'clean'
+   * (agrupa clean & jerk). Lo escribe `toHistoryEntry`. Misma razon que `strengthPattern`: sin esto,
+   * detectar la familia escaneando `movementIds` se contamina con un power-clean o clean-and-jerk
+   * que el WOD haya programado ese dia, y el motor "ve" la familia equivocada al decidir si repite.
+   * Union inline en vez de importar `OlyFamily` del motor para no acoplar la capa de datos con el
+   * motor (mismo motivo que `energySystem`). Ausente en entradas anteriores a esta feature.
+   */
+  olyFamily?: 'snatch' | 'clean';
   /**
    * Sistema energetico que el planificador asigno al WOD de ese dia — estructuralmente igual a
    * `EnergySystem` de `src/engine/wodDomains.ts` (union inline aqui para no acoplar la capa de

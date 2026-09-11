@@ -84,12 +84,14 @@ export function simulateSessions(profile: AthleteProfile, dates: Date[]): DailyS
       out.push(s);
       const wodIds = s.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
       const strengthMv = s.blocks.find((b) => b.block === 'strength');
+      const olyMv = s.blocks.find((b) => b.block === 'oly' && !b.subgroup);
       history.push({
         date: toLocalIsoDate(d),
         mesocycleWeek: s.mesocycleWeek,
         movementIds: [...new Set(s.blocks.map((b) => b.movementId))],
         wodMovementIds: [...new Set(wodIds)],
         strengthPattern: strengthMv ? getMovementById(strengthMv.movementId)?.pattern : undefined,
+        olyFamily: olyMv ? (olyMv.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
         rxOrScaled: 'rx',
         rpe: 7,
         durationMin: 60,
