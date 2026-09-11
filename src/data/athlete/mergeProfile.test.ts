@@ -67,10 +67,29 @@ describe('mergeProfile — logs: union por clave', () => {
 });
 
 describe('mergeProfile — config: gana el local', () => {
-  it('PRs: se toman los locales tal cual', () => {
-    const remote = { ...base(), prs: { ...base().prs, deadlift: 200 } };
-    const local = { ...base(), prs: { ...base().prs, deadlift: 190 } };
+  it('PRs: se toman los locales tal cual (dispositivo ya configurado, con onboardedAt)', () => {
+    const remote = { ...base(), onboardedAt: '2026-01-01', prs: { ...base().prs, deadlift: 200 } };
+    const local = { ...base(), onboardedAt: '2026-01-01', prs: { ...base().prs, deadlift: 190 } };
     expect(mergeProfile(remote, local).prs.deadlift).toBe(190);
+  });
+
+  it('dispositivo recien instalado (local sin onboardedAt): PRs y dias/semana ceden a lo remoto, no al perfil de fabrica', () => {
+    // Bug real: tras reinstalar la app (o borrar datos del navegador), el local arranca en
+    // DEFAULT_PROFILE sin onboardedAt. Si esos valores de fabrica "ganan por ser el local", pisan
+    // en silencio los datos reales del atleta que ya vivian en remoto — "6 dias/semana" volvia a
+    // "4" y los PRs volvian a los de partida.
+    const remote = {
+      ...base(),
+      onboardedAt: '2026-01-01',
+      trainingDaysPerWeek: 6 as const,
+      prs: { ...base().prs, deadlift: 200, clean: 130 },
+    };
+    const local = base(); // recien instalado: sin onboardedAt, valores de fabrica
+    const merged = mergeProfile(remote, local);
+    expect(merged.trainingDaysPerWeek).toBe(6);
+    expect(merged.prs.deadlift).toBe(200);
+    expect(merged.prs.clean).toBe(130);
+    expect(merged.onboardedAt).toBe('2026-01-01');
   });
 
   it('objetivos: union por id, gana el local en misma id', () => {

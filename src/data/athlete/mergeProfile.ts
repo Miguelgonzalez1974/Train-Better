@@ -84,15 +84,22 @@ function mergeSessionCache(
 }
 
 export function mergeProfile(remote: AthleteProfile, local: AthleteProfile): AthleteProfile {
+  // Un dispositivo recien instalado (o con el almacenamiento local vaciado) arranca en
+  // `DEFAULT_PROFILE` — sin `onboardedAt` local. Si esos valores de fabrica (PRs base, 4
+  // dias/semana...) "ganan por ser el local" en la primera sincronizacion de ese dispositivo,
+  // pisan en silencio los datos reales del atleta que ya vivian en remoto. Bug real detectado: tras
+  // reinstalar la app, "6 dias/semana" volvio a "4" (el valor de DEFAULT_PROFILE) porque local
+  // ganaba sin condicion. Con el local sin onboarding, esos campos ceden a remoto.
+  const localIsFresh = !local.onboardedAt;
   return {
     // Base = remoto, para que un campo NUEVO que aun no contemple esta funcion no se pierda al subir.
     ...remote,
-    // --- config: gana el local ---
-    prs: local.prs,
-    variantPrs: local.variantPrs ?? remote.variantPrs,
-    trainingDaysPerWeek: local.trainingDaysPerWeek,
+    // --- config: gana el local, salvo que el local sea un perfil recien instalado sin configurar ---
+    prs: localIsFresh ? remote.prs : local.prs,
+    variantPrs: (localIsFresh ? remote.variantPrs : local.variantPrs) ?? remote.variantPrs,
+    trainingDaysPerWeek: localIsFresh ? remote.trainingDaysPerWeek : local.trainingDaysPerWeek,
     onboardedAt: local.onboardedAt ?? remote.onboardedAt,
-    intensityRamp: local.intensityRamp ?? remote.intensityRamp,
+    intensityRamp: (localIsFresh ? remote.intensityRamp : local.intensityRamp) ?? remote.intensityRamp,
 
     // --- estructuras con id: union, gana el local en misma id ---
     macrocycles: mergeByKey(remote.macrocycles, local.macrocycles, (m) => m.id, (m) => m.startDate, 999),
