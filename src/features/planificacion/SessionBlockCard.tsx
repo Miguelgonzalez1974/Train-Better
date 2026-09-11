@@ -147,10 +147,11 @@ function ScalingPicker({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex shrink-0 items-center gap-1 rounded-md border border-brand-border px-1.5 py-0.5 text-[10px] font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+        title="Escalar movimiento"
+        aria-label={`Escalar ${movement?.name ?? entry.movementId}`}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-border text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
       >
-        <ArrowLeftRight size={10} strokeWidth={2.5} />
-        Escalar
+        <ArrowLeftRight size={13} strokeWidth={2.5} />
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={`Escalar ${movement?.name ?? entry.movementId}`}>
         <div className="flex flex-col gap-2">
