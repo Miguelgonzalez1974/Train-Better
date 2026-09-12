@@ -52,6 +52,7 @@ import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { RpeCheckIn } from './RpeCheckIn';
 import { SessionSummaryCard } from './SessionSummaryCard';
+import { NutritionTip } from './NutritionTip';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { Modal } from '../shell/Modal';
@@ -923,6 +924,12 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           </div>
         )}
       </div>
+
+      {!session.isRestDay && !alreadyCompletedToday && (
+        <div className="mt-3">
+          <NutritionTip session={session} variant="pre" />
+        </div>
+      )}
 
       {alreadyCompletedToday && todayHistoryEntry && (
         <SessionSummaryCard

@@ -3,6 +3,7 @@ import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { fmtKg, fmtNumber } from '../../lib/format';
 import { describeWodResultVsTarget } from '../../engine/wodTargets';
+import { NutritionTip } from './NutritionTip';
 import type { E1rmSuggestion } from './Planificacion';
 
 interface SessionSummaryCardProps {
@@ -200,6 +201,12 @@ export function SessionSummaryCard({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {session.source !== 'custom' && (
+        <div className="border-t border-white/5 pt-3">
+          <NutritionTip session={session} variant="post" />
         </div>
       )}
 
