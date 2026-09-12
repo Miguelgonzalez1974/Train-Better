@@ -1,32 +1,19 @@
 import { useMemo, useState } from 'react';
-import {
-  CalendarCheck,
-  BadgeCheck,
-  Gauge,
-  CalendarRange,
-  BarChart3,
-  ArrowRight,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  ChevronDown,
-  ChevronUp,
-  LayoutList,
-  Brain,
-} from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronUp, LayoutList, Brain } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
 import { computeWeakPoints, computePrTrends, type PrTrendDirection } from '../../engine/weakPoints';
+import { computeAdherenceStreak } from '../../engine/adherence';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
-import { AcwrGauge } from './AcwrGauge';
+import { StatusStrip } from './StatusStrip';
+import { TodayPreviewCard } from './TodayPreviewCard';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
-import { ProgressOverviewCard } from './ProgressOverviewCard';
 import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { ImbalancesCard } from './ImbalancesCard';
@@ -35,70 +22,6 @@ import { ResponseProfileCard } from './ResponseProfileCard';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
-
-const RPE_TREND_ICON: Record<PrTrendDirection, typeof TrendingUp> = {
-  subida: TrendingUp,
-  bajada: TrendingDown,
-  estable: Minus,
-};
-
-/**
- * Constancia del mes, adherencia Rx y esfuerzo medio en una sola tarjeta de 3 cifras — antes eran
- * 3 tarjetas separadas ("Este mes" + 2 compactas) que en móvil se apilaban una debajo de otra sin
- * aportar más que esto: un borde en vez de tres, mismo contenido.
- */
-function MonthSummaryCard({
-  diasEntrenados,
-  diasEsteAnio,
-  diasRxLabel,
-  rpeLabel,
-  rpeTrend,
-}: {
-  diasEntrenados: string;
-  diasEsteAnio: string | null;
-  diasRxLabel: string;
-  rpeLabel: string;
-  rpeTrend: { direction: PrTrendDirection; label: string } | null;
-}) {
-  const RpeTrendIcon = rpeTrend ? RPE_TREND_ICON[rpeTrend.direction] : null;
-  return (
-    <div className="card p-3.5">
-      <div className="mb-2.5 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-orange/15 text-brand-orange">
-          <CalendarCheck size={14} strokeWidth={2.25} />
-        </span>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-gold">Este mes</p>
-      </div>
-      <div className="grid grid-cols-3 divide-x divide-white/5">
-        <div className="pr-2">
-          <p className="text-[22px] font-bold leading-none tracking-tight text-white">{diasEntrenados}</p>
-          <p className="mt-1 text-[10px] leading-tight text-neutral-400">días entrenados</p>
-          {diasEsteAnio && <p className="mt-0.5 text-[10px] font-semibold text-brand-gold">{diasEsteAnio} este año</p>}
-        </div>
-        <div className="px-2">
-          <p className="text-[22px] font-bold leading-none tracking-tight text-white">{diasRxLabel}</p>
-          <p className="mt-1 flex items-center gap-1 text-[10px] leading-tight text-neutral-400">
-            <BadgeCheck size={11} strokeWidth={2.5} className="shrink-0" />
-            días Rx
-          </p>
-        </div>
-        <div className="pl-2">
-          <p className="text-[22px] font-bold leading-none tracking-tight text-white">{rpeLabel}</p>
-          <p className="mt-1 flex items-center gap-1 text-[10px] leading-tight text-neutral-400">
-            <Gauge size={11} strokeWidth={2.5} className="shrink-0" />
-            RPE medio
-          </p>
-          {rpeTrend && (
-            <p className="mt-0.5 flex items-center gap-1 text-[10px] text-neutral-500">
-              {RpeTrendIcon && <RpeTrendIcon size={10} strokeWidth={2.75} />}
-              {rpeTrend.label}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 interface DashboardProps {
   onNavigateToPlanificacion: () => void;
@@ -154,6 +77,17 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
   const attentionItems = useMemo(() => buildAttentionItems(acwr, weakPoints), [acwr, weakPoints]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
+  // Streak "tal como esta ahora mismo": si hoy ya se registro, incluye hoy; si no, se corta en ayer
+  // — `computeAdherenceStreak` esta pensada para llamarse con hoy ya completado (si no, "hoy" cuenta
+  // como fallo y sale a 0 aunque lleves semanas sin fallar), asi que aqui se evalua un dia antes
+  // cuando hoy todavia esta por decidir.
+  const completedToday = useMemo(() => history.some((h) => h.date === todayIso), [history, todayIso]);
+  const streak = useMemo(() => {
+    if (completedToday) return computeAdherenceStreak(profile, history, todayIso);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return computeAdherenceStreak(profile, history, toLocalIsoDate(yesterday));
+  }, [profile, history, todayIso, completedToday]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -162,7 +96,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
           <p className="text-sm text-neutral-400 capitalize">{MONTH_LABEL}</p>
           <p className="text-lg font-semibold text-white">Resumen</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <ThemeToggle className="h-10 w-10" />
           <button
             onClick={() => setShowVolume(true)}
@@ -171,38 +105,38 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
           >
             <BarChart3 size={17} strokeWidth={2.25} />
           </button>
-          <button
-            onClick={onNavigateToPlanificacion}
-            className="flex items-center gap-2 rounded-lg bg-brand-orange px-3.5 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark hover:shadow-lg hover:shadow-brand-orange/30"
-          >
-            <CalendarRange size={16} strokeWidth={2.25} />
-            Entrenamiento de hoy
-            <ArrowRight size={16} strokeWidth={2.25} />
-          </button>
         </div>
       </div>
 
       {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
 
+      {/*
+        El titular: que toca hoy, en una linea, sin tener que entrar a Planificacion para saberlo.
+        Sustituye al boton generico "Entrenamiento de hoy" del header — este ya lleva el contenido.
+      */}
+      <TodayPreviewCard profile={profile} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
+
       <AttentionBanner items={attentionItems} />
 
-      <MonthSummaryCard
+      {/*
+        Lo esencial, siempre visible: racha, constancia, RPE, carga (ACWR) y si hay macro/objetivo —
+        una sola franja en vez de 3 tarjetas separadas. El resto (PRs, peso, puntos débiles) vive
+        detrás de "Más detalle", y el diagnóstico interno del coach, un nivel más abajo — el
+        Dashboard no debe ser un muro nada más abrirlo.
+      */}
+      <StatusStrip
+        streak={streak}
         diasEntrenados={String(stats.diasEntrenados)}
         diasEsteAnio={stats.diasEsteAnio > 0 ? String(stats.diasEsteAnio) : null}
         diasRxLabel={stats.diasEntrenados > 0 ? `${stats.diasRx} / ${stats.diasEntrenados}` : '—'}
         rpeLabel={stats.rpeMedio !== null ? stats.rpeMedio.toFixed(1) : '—'}
         rpeTrend={rpeTrend}
+        acwr={acwr}
+        acwrTrend={acwrTrend}
+        structureRow={structureRow}
+        goalRows={goalRows}
+        onNavigateToObjetivos={onNavigateToObjetivos}
       />
-
-      {/*
-        Lo esencial, siempre visible: dónde estás en el plan (fase/semana + objetivos) y el estado
-        de carga/fatiga. El resto (PRs, constancia, peso, puntos débiles) vive detrás de "Más
-        detalle", y el diagnóstico interno del coach, un nivel más abajo — el Dashboard no debe ser
-        un muro nada más abrirlo.
-      */}
-      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
-
-      <AcwrGauge result={acwr} trend={acwrTrend} />
 
       <div className="flex flex-col gap-4">
         <button
