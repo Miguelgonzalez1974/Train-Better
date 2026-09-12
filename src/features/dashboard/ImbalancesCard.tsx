@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ChevronDown, ChevronUp, GitCompare } from 'lucide-react';
 import type { ImbalanceGroup, ImbalanceStatus } from '../../engine/imbalances';
 
@@ -64,10 +63,18 @@ function GroupRow({ group }: { group: ImbalanceGroup }) {
  * defecto para no alargar el scroll, pero el resumen de pildoras ya es visible sin expandir —
  * un grupo equilibrado es un refuerzo positivo real para el atleta, no ruido a esconder detras de
  * un clic, asi que la card nunca devuelve null ni oculta los grupos "equilibrado" por defecto.
+ * Colapso controlado desde fuera (no estado propio) para que el gauge "Desequilibrios" del
+ * Dashboard pueda abrirla directamente al tocarla.
  */
-export function ImbalancesCard({ groups }: { groups: ImbalanceGroup[] }) {
-  const [collapsed, setCollapsed] = useState(true);
-
+export function ImbalancesCard({
+  groups,
+  collapsed,
+  onToggleCollapsed,
+}: {
+  groups: ImbalanceGroup[];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
   const desbalanceCount = groups.filter((g) => g.status === 'desbalance').length;
   const equilibradoCount = groups.filter((g) => g.status === 'equilibrado').length;
   const faltanCount = groups.filter((g) => g.status === 'faltan-datos').length;
@@ -80,7 +87,7 @@ export function ImbalancesCard({ groups }: { groups: ImbalanceGroup[] }) {
 
   return (
     <section className="card overflow-hidden p-0">
-      <button onClick={() => setCollapsed((prev) => !prev)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
+      <button onClick={onToggleCollapsed} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
         <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-surfaceMuted">
           <span className="absolute inset-0 animate-pulse rounded-xl bg-brand-neon/20 blur-md" />
           <GitCompare size={16} strokeWidth={2.25} className="relative text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.6)]" />

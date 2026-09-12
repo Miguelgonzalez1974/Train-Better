@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Activity, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { computeConditioningBalance } from '../../engine/conditioningBalance';
@@ -39,10 +38,20 @@ function ShareBar({ pct, color }: { pct: number; color: string }) {
  * energético (planificado por la rotación de fase vs. sesiones hechas) y trifecta realizada de los
  * WOD. Lectura pura del historial + el planificador determinista — no toca el motor. Devuelve null
  * sin macrociclo activo, igual que el resto de tarjetas del bloque. Colapsable para no alargar el
- * scroll; el titular (insight) ya se ve plegada.
+ * scroll; el titular (insight) ya se ve plegada. Colapso controlado desde fuera (no estado propio)
+ * para que el gauge "Dominios energéticos" del Dashboard pueda abrirla directamente al tocarla.
  */
-export function EnergyDomainsCard({ profile, history }: { profile: AthleteProfile; history: SessionHistoryEntry[] }) {
-  const [collapsed, setCollapsed] = useState(true);
+export function EnergyDomainsCard({
+  profile,
+  history,
+  collapsed,
+  onToggleCollapsed,
+}: {
+  profile: AthleteProfile;
+  history: SessionHistoryEntry[];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
   const balance = computeConditioningBalance(profile, history, new Date());
   if (!balance) return null;
 
@@ -52,7 +61,7 @@ export function EnergyDomainsCard({ profile, history }: { profile: AthleteProfil
 
   return (
     <section className="card overflow-hidden p-0">
-      <button onClick={() => setCollapsed((prev) => !prev)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
+      <button onClick={onToggleCollapsed} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
         <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-surfaceMuted">
           <span className="absolute inset-0 animate-pulse rounded-xl bg-brand-neon/20 blur-md" />
           <Activity size={16} strokeWidth={2.25} className="relative text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.6)]" />
