@@ -1,4 +1,4 @@
-import { Flame, CalendarCheck, Gauge, ChevronRight, Target, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { CalendarCheck, Gauge, ChevronRight, Target, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { PrTrendDirection } from '../../engine/weakPoints';
 import type { ProgressRow } from './progressOverview';
@@ -18,7 +18,6 @@ const ACWR_DOT_CLASS: Record<AcwrResult['zone'], string> = {
 };
 
 interface StatusStripProps {
-  streak: number;
   diasEntrenados: string;
   diasEsteAnio: string | null;
   diasRxLabel: string;
@@ -34,14 +33,14 @@ interface StatusStripProps {
 /**
  * Antes eran 3 tarjetas separadas ("Este mes", "Tu progreso", el gauge de ACWR) apiladas nada más
  * abrir el Dashboard — cada una con su borde e icono propios para, en conjunto, decir bastante
- * poco: racha, unos días, un RPE, si hay macro/objetivo, y la carga. Aquí es una sola franja de 4
- * cifras (racha / días / RPE / carga) más una línea de "estructura activa" tocable — el gauge de
- * ACWR completo (con la barra de zonas y el sparkline) solo se despliega debajo cuando la carga NO
- * está en zona óptima (o aún no hay datos suficientes): es cuando de verdad hace falta mirarlo, el
- * mismo criterio que ya usa `AttentionBanner` para avisar.
+ * poco: unos días, un RPE, si hay macro/objetivo, y la carga. Aquí es una sola franja de 3 cifras
+ * (días / RPE / carga) más una línea de "estructura activa" tocable — el gauge de ACWR completo
+ * (con la barra de zonas y el sparkline) solo se despliega debajo cuando la carga NO está en zona
+ * óptima (o aún no hay datos suficientes): es cuando de verdad hace falta mirarlo, el mismo
+ * criterio que ya usa `AttentionBanner` para avisar. Sin racha: el atleta ya tiene el heatmap de
+ * constancia para eso, y duplicaba la misma idea de dos formas distintas.
  */
 export function StatusStrip({
-  streak,
   diasEntrenados,
   diasEsteAnio,
   diasRxLabel,
@@ -63,15 +62,8 @@ export function StatusStrip({
   return (
     <div className="flex flex-col gap-3">
       <div className="card p-3.5">
-        <div className="grid grid-cols-4 divide-x divide-white/5">
+        <div className="grid grid-cols-3 divide-x divide-white/5">
           <div className="pr-2">
-            <p className="flex items-center gap-1 text-[20px] font-bold leading-none tracking-tight text-white">
-              <Flame size={14} strokeWidth={2.5} className="text-brand-orange" />
-              {streak}
-            </p>
-            <p className="mt-1 text-[10px] leading-tight text-neutral-400">racha</p>
-          </div>
-          <div className="px-2">
             <p className="text-[20px] font-bold leading-none tracking-tight text-white">{diasEntrenados}</p>
             <p className="mt-1 text-[10px] leading-tight text-neutral-400">días{diasEsteAnio ? ` · ${diasEsteAnio} año` : ''}</p>
             <p className="mt-0.5 flex items-center gap-1 text-[10px] text-neutral-500">

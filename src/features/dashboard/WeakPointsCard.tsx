@@ -8,8 +8,14 @@ const STATUS_META: Record<WeakPointStatus, { label: string; badgeClass: string }
   'sin-datos': { label: 'Sin datos', badgeClass: 'bg-white/5 text-neutral-500' },
 };
 
+/**
+ * Solo enseña lo que de verdad pide atención ("a trabajar"/"vigilar") — "en progreso" es
+ * confirmación de que algo va bien, no una acción pendiente, así que no se lista aquí: antes la
+ * tarjeta mostraba TODOS los patrones con datos (a menudo 5-6 filas) para, en la práctica, decir
+ * "todo bien" la mayoría de las veces. Sin nada que vigilar, una frase corta en vez de la lista.
+ */
 export function WeakPointsCard({ points }: { points: PatternStrain[] }) {
-  const withData = points.filter((p) => p.status !== 'sin-datos');
+  const needsAttention = points.filter((p) => p.status === 'a-trabajar' || p.status === 'vigilar');
 
   return (
     <section className="card p-4">
@@ -21,27 +27,22 @@ export function WeakPointsCard({ points }: { points: PatternStrain[] }) {
         <p className="text-sm font-semibold uppercase tracking-wide text-white">Puntos débiles</p>
       </div>
 
-      {withData.length === 0 ? (
-        <p className="mt-3 text-sm text-neutral-500">
-          Completa más sesiones (al menos 2 con el mismo patrón) para que el coach detecte tus puntos débiles.
-        </p>
+      {needsAttention.length === 0 ? (
+        <p className="mt-3 text-sm text-neutral-500">Sin puntos débiles activos — lo que llevas registrado va bien.</p>
       ) : (
-        <div className="mt-3 flex flex-col gap-2">
-          {withData.map((point) => (
+        <div className="mt-3 flex flex-col gap-1.5">
+          {needsAttention.map((point) => (
             <div
               key={point.key}
-              className="flex items-center justify-between rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5 transition-colors duration-200 hover:bg-brand-surfaceMuted"
+              className="flex items-center justify-between gap-3 rounded-lg bg-brand-surfaceMuted/80 px-3 py-2 transition-colors duration-200 hover:bg-brand-surfaceMuted"
             >
-              <div>
-                <p className="text-sm font-medium text-white">{point.label}</p>
-                <p className="text-xs text-neutral-500">
-                  {point.sessions} sesiones · RPE medio {point.avgRpe?.toFixed(1)}
-                  {point.scaledRate ? ` · ${Math.round(point.scaledRate * 100)}% escalado` : ''}
-                  {point.loadTrend === 'estancado' && ' · carga estancada en tus últimos tests'}
-                  {point.loadTrend === 'subida' && ' · carga subiendo en tus últimos tests'}
-                </p>
-              </div>
-              <span className={`rounded-md px-2.5 py-1 text-xs font-semibold ${STATUS_META[point.status].badgeClass}`}>
+              <p className="min-w-0 truncate text-sm text-white">
+                {point.label}
+                <span className="ml-1.5 text-xs text-neutral-500">
+                  · {point.sessions} sesiones{point.avgRpe !== null ? ` · RPE ${point.avgRpe.toFixed(1)}` : ''}
+                </span>
+              </p>
+              <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ${STATUS_META[point.status].badgeClass}`}>
                 {STATUS_META[point.status].label}
               </span>
             </div>

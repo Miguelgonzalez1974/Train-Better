@@ -4,7 +4,6 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { getMonthlyStats } from './stats';
 import { computeWeakPoints, computePrTrends, type PrTrendDirection } from '../../engine/weakPoints';
-import { computeAdherenceStreak } from '../../engine/adherence';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { StatusStrip } from './StatusStrip';
@@ -77,17 +76,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
   const attentionItems = useMemo(() => buildAttentionItems(acwr, weakPoints), [acwr, weakPoints]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
-  // Streak "tal como esta ahora mismo": si hoy ya se registro, incluye hoy; si no, se corta en ayer
-  // — `computeAdherenceStreak` esta pensada para llamarse con hoy ya completado (si no, "hoy" cuenta
-  // como fallo y sale a 0 aunque lleves semanas sin fallar), asi que aqui se evalua un dia antes
-  // cuando hoy todavia esta por decidir.
-  const completedToday = useMemo(() => history.some((h) => h.date === todayIso), [history, todayIso]);
-  const streak = useMemo(() => {
-    if (completedToday) return computeAdherenceStreak(profile, history, todayIso);
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    return computeAdherenceStreak(profile, history, toLocalIsoDate(yesterday));
-  }, [profile, history, todayIso, completedToday]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -119,13 +107,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       <AttentionBanner items={attentionItems} />
 
       {/*
-        Lo esencial, siempre visible: racha, constancia, RPE, carga (ACWR) y si hay macro/objetivo —
-        una sola franja en vez de 3 tarjetas separadas. El resto (PRs, peso, puntos débiles) vive
-        detrás de "Más detalle", y el diagnóstico interno del coach, un nivel más abajo — el
-        Dashboard no debe ser un muro nada más abrirlo.
+        Lo esencial, siempre visible: constancia, RPE, carga (ACWR) y si hay macro/objetivo — una
+        sola franja en vez de 3 tarjetas separadas. El resto (PRs, peso, puntos débiles) vive detrás
+        de "Más detalle", y el diagnóstico interno del coach, un nivel más abajo — el Dashboard no
+        debe ser un muro nada más abrirlo.
       */}
       <StatusStrip
-        streak={streak}
         diasEntrenados={String(stats.diasEntrenados)}
         diasEsteAnio={stats.diasEsteAnio > 0 ? String(stats.diasEsteAnio) : null}
         diasRxLabel={stats.diasEntrenados > 0 ? `${stats.diasRx} / ${stats.diasEntrenados}` : '—'}
