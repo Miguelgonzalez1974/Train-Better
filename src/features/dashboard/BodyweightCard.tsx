@@ -11,9 +11,11 @@ const MAX_POINTS = 20;
 interface BodyweightCardProps {
   log: BodyweightEntry[];
   onChange: (log: BodyweightEntry[]) => void;
+  /** true dentro de un Modal que ya pone su propio título ("Peso corporal") — omite el header propio para no duplicarlo. */
+  embedded?: boolean;
 }
 
-export function BodyweightCard({ log, onChange }: BodyweightCardProps) {
+export function BodyweightCard({ log, onChange, embedded = false }: BodyweightCardProps) {
   const [draft, setDraft] = useState('');
   const sorted = [...log].sort((a, b) => a.date.localeCompare(b.date));
   const recent = sorted.slice(-MAX_POINTS);
@@ -32,24 +34,36 @@ export function BodyweightCard({ log, onChange }: BodyweightCardProps) {
   const TrendIcon = delta === null || Math.abs(delta) < 0.1 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
   const trendClass = delta === null || Math.abs(delta) < 0.1 ? 'text-neutral-500' : delta > 0 ? 'text-brand-orange' : 'text-emerald-400';
 
+  const Wrapper = embedded ? 'div' : 'section';
+
   return (
-    <section className="card p-4">
+    <Wrapper className={embedded ? undefined : 'card p-4'}>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange">
-            <Scale size={18} strokeWidth={2.25} />
-          </span>
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-white">Peso corporal</p>
-            {latest ? (
-              <p className="text-xs text-neutral-500">
-                {latest.kg} kg · {latest.date}
-              </p>
-            ) : (
-              <p className="text-xs text-neutral-500">Sin registros todavía</p>
-            )}
+        {embedded ? (
+          latest ? (
+            <p className="text-sm text-neutral-300">
+              {latest.kg} kg <span className="text-neutral-500">· {latest.date}</span>
+            </p>
+          ) : (
+            <p className="text-sm text-neutral-500">Sin registros todavía</p>
+          )
+        ) : (
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange">
+              <Scale size={18} strokeWidth={2.25} />
+            </span>
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-white">Peso corporal</p>
+              {latest ? (
+                <p className="text-xs text-neutral-500">
+                  {latest.kg} kg · {latest.date}
+                </p>
+              ) : (
+                <p className="text-xs text-neutral-500">Sin registros todavía</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {delta !== null && (
           <span className={`flex items-center gap-1 text-xs font-semibold ${trendClass}`}>
             <TrendIcon size={14} strokeWidth={2.5} />
@@ -90,6 +104,6 @@ export function BodyweightCard({ log, onChange }: BodyweightCardProps) {
           Registrar
         </button>
       </div>
-    </section>
+    </Wrapper>
   );
 }

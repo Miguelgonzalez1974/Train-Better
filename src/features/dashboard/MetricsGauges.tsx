@@ -25,32 +25,36 @@ function Gauge({ spec, onClick }: { spec: GaugeSpec; onClick?: () => void }) {
   const offset = ARC_LENGTH * (1 - clamped);
   const body = (
     <>
-      <svg width="100" height="62" viewBox="0 0 100 62" role="img" aria-label={`${spec.label}: ${spec.valueLabel}`}>
-        <path d="M 10 56 A 40 40 0 0 1 90 56" fill="none" strokeWidth="9" strokeLinecap="round" className="stroke-white/[0.08]" />
+      {/* Sin `width`/`height` fijos: un <svg> con tamaño intrínseco no encoge en un flex item
+          (min-width: auto de los "replaced elements"), y 3 de 100px de ancho ya no caben en un
+          móvil estrecho — de ahí que antes se salieran por la derecha. Con `w-full h-auto` el arco
+          escala con el hueco que le deje el flex, nunca lo desborda. */}
+      <svg viewBox="0 0 100 58" role="img" aria-label={`${spec.label}: ${spec.valueLabel}`} className="h-auto w-full">
+        <path d="M 10 52 A 40 40 0 0 1 90 52" fill="none" strokeWidth="8" strokeLinecap="round" className="stroke-white/[0.08]" />
         <path
-          d="M 10 56 A 40 40 0 0 1 90 56"
+          d="M 10 52 A 40 40 0 0 1 90 52"
           fill="none"
-          strokeWidth="9"
+          strokeWidth="8"
           strokeLinecap="round"
           className={spec.strokeClass}
           style={{ strokeDasharray: ARC_LENGTH, strokeDashoffset: offset, transition: 'stroke-dashoffset 0.6s ease' }}
         />
-        <text x="50" y="46" textAnchor="middle" className="num fill-white" style={{ fontSize: 18, fontWeight: 700 }}>
+        <text x="50" y="43" textAnchor="middle" className="num fill-white" style={{ fontSize: 16, fontWeight: 700 }}>
           {spec.valueLabel}
         </text>
       </svg>
-      <span className="-mt-1 block truncate px-1 text-center text-[10px] leading-tight text-neutral-400">{spec.label}</span>
+      <span className="-mt-1 block w-full truncate px-0.5 text-center text-[9px] leading-tight text-neutral-400">{spec.label}</span>
     </>
   );
 
   if (!onClick) {
-    return <div className="flex flex-1 flex-col items-center">{body}</div>;
+    return <div className="flex min-w-0 flex-1 flex-col items-center">{body}</div>;
   }
   return (
     <button
       onClick={onClick}
       title={`Ver ${spec.label}`}
-      className="flex flex-1 flex-col items-center rounded-xl py-1 transition-colors duration-200 hover:bg-white/[0.05]"
+      className="flex min-w-0 flex-1 flex-col items-center rounded-xl py-1 transition-colors duration-200 hover:bg-white/[0.05]"
     >
       {body}
     </button>
@@ -59,9 +63,10 @@ function Gauge({ spec, onClick }: { spec: GaugeSpec; onClick?: () => void }) {
 
 /**
  * 6 arcos, 2 filas de 3 — "cómo vas ahora mismo" (carga, constancia, dominios energéticos) y "qué
- * tal progresas" (salud de patrones, desequilibrios, PRs). Cada uno es un botón: toca y salta
- * directo a su tarjeta de detalle (`onJumpTo`), en vez de tener que bucear por "Más detalle" para
- * encontrarla. Solo métricas que ya se calculan en algún sitio de la app — ninguna se inventa aquí.
+ * tal progresas" (salud de patrones, desequilibrios, PRs). Cada uno es un botón: toca y se abre (o
+ * cierra, si ya estaba abierta) su tarjeta de detalle justo debajo — el gauge ES la puerta de
+ * entrada, no hay ningún "Más detalle" intermedio que bucear. Solo métricas que ya se calculan en
+ * algún sitio de la app — ninguna se inventa aquí.
  */
 export function MetricsGauges({
   row1,
@@ -73,13 +78,13 @@ export function MetricsGauges({
   onJumpTo: (target: GaugeTarget) => void;
 }) {
   return (
-    <div className="card flex flex-col gap-2 p-3.5">
-      <div className="flex items-stretch gap-1">
+    <div className="card flex flex-col gap-2 p-3">
+      <div className="flex items-stretch gap-0.5">
         {row1.map((spec) => (
           <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
         ))}
       </div>
-      <div className="flex items-stretch gap-1 border-t border-white/5 pt-2">
+      <div className="flex items-stretch gap-0.5 border-t border-white/5 pt-2">
         {row2.map((spec) => (
           <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
         ))}
