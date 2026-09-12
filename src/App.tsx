@@ -61,7 +61,12 @@ export default function App() {
       <SyncIndicator />
       <Sidebar active={activeTab} onChange={setActiveTab} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-6 lg:max-w-5xl">
-        {activeTab === 'dashboard' && <Dashboard onNavigateToPlanificacion={() => setActiveTab('planificacion')} />}
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            onNavigateToPlanificacion={() => setActiveTab('planificacion')}
+            onNavigateToObjetivos={() => setActiveTab('objetivos')}
+          />
+        )}
         {activeTab === 'planificacion' && <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} />}
         {activeTab === 'objetivos' && <Objetivos />}
       </main>

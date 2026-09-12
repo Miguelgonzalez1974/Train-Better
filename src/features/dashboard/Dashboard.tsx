@@ -102,6 +102,7 @@ function MonthSummaryCard({
 
 interface DashboardProps {
   onNavigateToPlanificacion: () => void;
+  onNavigateToObjetivos: () => void;
 }
 
 /** Flag booleano recordado por navegador (secciones plegables del Dashboard). */
@@ -126,7 +127,7 @@ function usePersistedFlag(key: string): [boolean, () => void] {
   return [value, toggle];
 }
 
-export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
+export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   const [profile] = useState(() => athleteRepository.getProfile());
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
@@ -199,7 +200,7 @@ export function Dashboard({ onNavigateToPlanificacion }: DashboardProps) {
         detalle", y el diagnóstico interno del coach, un nivel más abajo — el Dashboard no debe ser
         un muro nada más abrirlo.
       */}
-      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} />
+      <ProgressOverviewCard structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
 
       <AcwrGauge result={acwr} trend={acwrTrend} />
 
