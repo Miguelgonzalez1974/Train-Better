@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, Info, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -10,7 +10,9 @@ import {
   type ScalingOption,
 } from '../../data/movements';
 import type { SessionBlockResult } from '../../data/athlete/types';
-import { fmtKg } from '../../lib/format';
+import { fmtKg, fmtDay } from '../../lib/format';
+import { toLocalIsoDate } from '../../engine/periodization';
+import { findLastSessionTopSet } from '../../engine/movementProgress';
 import { Modal } from '../shell/Modal';
 import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
@@ -66,6 +68,24 @@ function FormatBadge({ format }: { format: string }) {
     <span className="mb-2 inline-block rounded-md bg-brand-gold/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/90">
       {format}
     </span>
+  );
+}
+
+/** Lo que se hizo la ultima vez en este movimiento — mismo dato que ya vive en `MovementProgressModal`, pero de un vistazo, sin tocar la carga para abrir el popup. */
+function LastTimeHint({ movementId, block, progress }: { movementId: string; block: Block; progress?: MovementProgressData }) {
+  if (!progress || (block !== 'strength' && block !== 'oly')) return null;
+  const last = findLastSessionTopSet(progress.workLog, movementId, toLocalIsoDate(new Date()));
+  if (!last) return null;
+  return (
+    <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-neutral-600">
+      <History size={11} strokeWidth={2.5} />
+      última vez{' '}
+      <span className="font-medium text-neutral-400">
+        {fmtKg(last.kg)}
+        {last.reps > 0 ? ` × ${last.reps}` : ''}
+      </span>{' '}
+      · {fmtDay(last.date)}
+    </p>
   );
 }
 
@@ -524,6 +544,9 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
                     {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
                   </div>
                 )}
+                <div className="ml-7">
+                  <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
+                </div>
 
                 {entry.notes && (
                   <div className="ml-7">
@@ -621,6 +644,7 @@ function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: M
           {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
         </div>
       )}
+      <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
 
       {entry.notes && <CoachNote text={entry.notes} defaultOpen={isMainLift} />}
       <StandardHint standard={movement.standard} />

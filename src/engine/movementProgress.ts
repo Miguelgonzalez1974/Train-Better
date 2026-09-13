@@ -71,6 +71,27 @@ export function buildMovementSessionSeries(
     .slice(-limit);
 }
 
+export interface LastSessionSet {
+  date: string;
+  kg: number;
+  reps: number;
+}
+
+/**
+ * Serie mas pesada de la ultima sesion REAL (no la de hoy) de un movimiento — para el aviso "última
+ * vez X kg × Y" junto a la carga prescrita, sin esperar a abrir el popup de progresión completo.
+ */
+export function findLastSessionTopSet(workLog: WorkSetEntry[], movementId: string, beforeDateIso: string): LastSessionSet | null {
+  let best: LastSessionSet | null = null;
+  for (const entry of workLog) {
+    if (entry.movementId !== movementId || !(entry.kg > 0) || entry.date >= beforeDateIso) continue;
+    if (!best || entry.date > best.date || (entry.date === best.date && entry.kg > best.kg)) {
+      best = { date: entry.date, kg: entry.kg, reps: entry.reps };
+    }
+  }
+  return best;
+}
+
 export interface MovementWorkSummary {
   sessions: number;
   lastPct: number | null;

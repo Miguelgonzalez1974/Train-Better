@@ -13,6 +13,7 @@ import {
 import { buildWeeklyVolumeSeries, summariseVolumeTrend } from '../../engine/volumeMetrics';
 import { Modal } from '../shell/Modal';
 import { Sparkline } from '../dashboard/Sparkline';
+import { fmtDay } from '../../lib/format';
 
 interface MovementProgressModalProps {
   movementId: string;
@@ -24,10 +25,6 @@ interface MovementProgressModalProps {
   variantPrs: VariantPersonalRecords | undefined;
   prLog: PrLogEntry[];
   workLog: WorkSetEntry[];
-}
-
-function fmtDay(iso: string): string {
-  return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00:00`));
 }
 
 function pctColor(pct: number): string {

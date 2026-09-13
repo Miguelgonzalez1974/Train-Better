@@ -45,3 +45,10 @@ export function fmtPercent(frac: number, decimals = 0): string {
 export function fmtInt(n: number): string {
   return NF_ES.format(Math.round(n));
 }
+
+const DAY_FORMATTER = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
+
+/** Fecha ISO (yyyy-mm-dd) → "3 sep". */
+export function fmtDay(iso: string): string {
+  return DAY_FORMATTER.format(new Date(`${iso}T00:00:00`));
+}
