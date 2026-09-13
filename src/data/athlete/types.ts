@@ -292,6 +292,8 @@ export interface SessionBlockResult {
   title?: string;
   /** Nombre del movimiento original cuando este bloque se escalo a una alternativa (ver src/data/movements/scalingGuide.ts) — deja constancia de que hoy no fue el prescrito. */
   scaledFrom?: string;
+  /** WOD de referencia (`movementId` = "benchmark:x"): escalados por movimiento, movementId original -> sustituto elegido. El formato oficial del benchmark no se toca (comparabilidad del resultado); esto solo anota que movimiento hacer en su lugar. */
+  benchmarkSwaps?: Record<string, string>;
   /** Notacion de tempo real (ej. "3011", "10X0"): excentrica-pausa abajo-concentrica-pausa arriba, "X" = maxima velocidad. Solo bloque strength. */
   tempo?: string;
   /**
@@ -301,6 +303,8 @@ export interface SessionBlockResult {
    * stepper multiserie, y el bloque entra en la tarjeta de RPE. Bloques strength y oly.
    */
   logAsSingle?: boolean;
+  /** Marca series rectas de oly encadenadas sin soltar la barra (touch-and-go) — pastilla "T&G" junto a series/reps. Ausente = reset entre reps (default). Solo bloque oly. */
+  repStyle?: 'touch-and-go';
   /**
    * Objetivo orientativo del WOD estimado por el motor (`src/engine/wodTargets.ts`) — banda de
    * tiempo / rondas / reps. Solo bloque 'wod' generado (no benchmark). `low === 0 && high === 0`

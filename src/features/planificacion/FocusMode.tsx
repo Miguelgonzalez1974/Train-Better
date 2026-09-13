@@ -364,7 +364,7 @@ export function FocusMode({
           {(first.format || wod?.format) && <p className="text-sm font-semibold text-brand-orange">{first.format || wod?.format}</p>}
           {wod && wod.movements.length > 0 && (
             <p className="text-sm text-neutral-300">
-              {wod.movements.map((m) => resolveName(m)).join(' · ')}
+              {wod.movements.map((m) => resolveName(first.benchmarkSwaps?.[m] ?? m)).join(' · ')}
             </p>
           )}
           {first.notes && <FocusNote text={first.notes} />}

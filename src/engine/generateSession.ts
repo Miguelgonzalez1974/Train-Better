@@ -1153,17 +1153,14 @@ function buildOlyBlock(
   const canUseEmom = week !== 3;
   const useEmom = canUseEmom && rng() < 0.3;
 
-  const repStyleNote =
-    scheme.reps >= 2
-      ? 'Toca y sigue (touch-and-go): encadena las repeticiones sin soltar la barra para acumular volumen técnico.'
-      : 'Repeticiones individuales: resetea la posición por completo en cada una — prioriza la técnica a esta intensidad.';
   const straightEntry: SessionBlockResult = {
     block: 'oly',
     movementId: movement.id,
     sets: scheme.sets,
     reps: String(scheme.reps),
     loadKg,
-    notes: `${baseNote} ${repStyleNote}`,
+    notes: baseNote,
+    ...(scheme.reps >= 2 ? { repStyle: 'touch-and-go' as const } : {}),
   };
   // "10 singles de calidad" (patrón Mayhem): EMOM largo de una repetición a peso constante — mucho
   // volumen técnico a intensidad media-alta sin acercarse al fallo.

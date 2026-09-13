@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Info, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, Info, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -65,6 +65,19 @@ function FormatBadge({ format }: { format: string }) {
   return (
     <span className="mb-2 inline-block rounded-md bg-brand-gold/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/90">
       {format}
+    </span>
+  );
+}
+
+/** Series encadenadas sin soltar la barra: pastilla junto a series/reps en vez de una frase enterrada en la nota del coach. Su ausencia ya dice "reset entre reps" (default en oly). */
+function RepStyleBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-brand-gold/15 px-2.5 py-1 text-[11px] font-semibold text-brand-gold"
+      title="Toca y sigue: encadena las repeticiones sin soltar la barra"
+    >
+      <Link2 size={11} strokeWidth={2.5} />
+      T&amp;G
     </span>
   );
 }
@@ -181,18 +194,120 @@ function ScalingPicker({
   );
 }
 
-/** Bloque wod cuando el dia toca un WOD de referencia (Fran, Grace...): una tarjeta unica con su formato oficial. */
-function BenchmarkWodCard({ entry }: { entry: SessionBlockResult }) {
+/** Boton + selector para escalar un movimiento dentro de un WOD de referencia: anota la sustitucion en `benchmarkSwaps` sin tocar el formato oficial del benchmark (el resultado sigue siendo comparable). */
+function BenchmarkMovementScalingPicker({
+  movementId,
+  swappedTo,
+  entry,
+  index,
+  onUpdateEntry,
+}: {
+  movementId: string;
+  swappedTo?: string;
+  entry: SessionBlockResult;
+  index: number;
+  onUpdateEntry: (index: number, patch: Partial<SessionBlockResult>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const options = getScalingOptions(movementId);
+  if (options.length === 0) return null;
+  const movement = getMovementById(movementId);
+
+  function applySwap(toId: string | undefined) {
+    const swaps = { ...entry.benchmarkSwaps };
+    if (toId) swaps[movementId] = toId;
+    else delete swaps[movementId];
+    onUpdateEntry(index, { benchmarkSwaps: swaps });
+    setOpen(false);
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        title="Escalar movimiento"
+        aria-label={`Escalar ${movement?.name ?? movementId}`}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-border text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+      >
+        <Link2 size={13} strokeWidth={2.5} />
+      </button>
+      <Modal open={open} onClose={() => setOpen(false)} title={`Escalar ${movement?.name ?? movementId}`}>
+        <div className="flex flex-col gap-2">
+          <p className="mb-1 text-xs text-neutral-500">
+            Alternativas si hoy no puedes hacer {movement?.name ?? 'este movimiento'} tal cual — el formato oficial del benchmark
+            no cambia, solo anota qué haces en su lugar.
+          </p>
+          {options.map((option, i) => {
+            const optionMovement = getMovementById(option.movementId);
+            const label = option.label ?? `${option.reps ?? ''} ${optionMovement?.name ?? option.movementId}`.trim();
+            return (
+              <button
+                key={i}
+                onClick={() => applySwap(option.movementId)}
+                className="rounded-lg border border-brand-border bg-white/[0.03] px-3 py-2.5 text-left text-sm font-medium text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+              >
+                {label}
+              </button>
+            );
+          })}
+          {swappedTo && (
+            <button
+              onClick={() => applySwap(undefined)}
+              className="mt-1 text-left text-xs font-semibold text-neutral-500 transition-colors hover:text-brand-gold"
+            >
+              Volver a {movement?.name ?? movementId}
+            </button>
+          )}
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+/** Bloque wod cuando el dia toca un WOD de referencia (Fran, Grace...): una tarjeta con su formato oficial y un movimiento por fila, cada uno escalable por separado. */
+function BenchmarkWodCard({
+  entry,
+  index,
+  onUpdateEntry,
+}: {
+  entry: SessionBlockResult;
+  index?: number;
+  onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
+}) {
   const benchmarkId = entry.movementId.replace('benchmark:', '');
   const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);
   if (!wod) return null;
-  const movementNames = wod.movements.map((id) => getMovementById(id)?.name ?? id).join(', ');
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       <p className={NAME_HEADLINE}>{wod.name}</p>
       <p className="text-sm text-neutral-300">{wod.format}</p>
-      <p className="mt-1 text-xs text-neutral-500">{movementNames}</p>
+      <div className="mt-2 flex flex-col divide-y divide-white/5 border-y border-white/5">
+        {wod.movements.map((movementId, idx) => {
+          const swappedTo = entry.benchmarkSwaps?.[movementId];
+          const displayMovement = getMovementById(swappedTo ?? movementId);
+          if (!displayMovement) return null;
+          return (
+            <div key={`${movementId}-${idx}`} className="flex items-center gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{displayMovement.name}</p>
+                {swappedTo && (
+                  <p className="mt-0.5 text-[10px] text-brand-gold">en vez de {getMovementById(movementId)?.name}</p>
+                )}
+              </div>
+              {onUpdateEntry && index !== undefined && (
+                <BenchmarkMovementScalingPicker
+                  movementId={movementId}
+                  swappedTo={swappedTo}
+                  entry={entry}
+                  index={index}
+                  onUpdateEntry={onUpdateEntry}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
       <CoachNote text="WOD de referencia: compara tu resultado con intentos anteriores para medir tu progreso real." />
     </div>
   );
@@ -406,6 +521,7 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
                       />
                     ) : null}
                     {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
+                    {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
                   </div>
                 )}
 
@@ -502,6 +618,7 @@ function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: M
             />
           ) : null}
           {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
+          {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
         </div>
       )}
 
@@ -658,7 +775,7 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
           <EditableBlockEntries block={block} entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
         ) : block === 'wod' ? (
           isBenchmarkWod ? (
-            <BenchmarkWodCard entry={results[0]} />
+            <BenchmarkWodCard entry={results[0]} index={entryIndices?.[0]} onUpdateEntry={onUpdateEntry} />
           ) : (
             <CustomWodCard entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
           )
