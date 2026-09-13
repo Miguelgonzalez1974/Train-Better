@@ -168,8 +168,8 @@ export function SeasonPlannerModal({ open, profile, initialTargetDate, onClose, 
                   borderColor: b.role === 'pico' ? 'rgba(249,115,22,0.4)' : 'rgba(212,175,55,0.35)',
                   background:
                     b.role === 'pico'
-                      ? 'linear-gradient(135deg, rgba(249,115,22,0.12), #171310 60%)'
-                      : 'linear-gradient(135deg, rgba(212,175,55,0.10), #171310 60%)',
+                      ? 'linear-gradient(135deg, rgba(249,115,22,0.12), rgb(var(--c-brand-surface)) 60%)'
+                      : 'linear-gradient(135deg, rgba(212,175,55,0.10), rgb(var(--c-brand-surface)) 60%)',
                 }}
               >
                 <div

@@ -445,7 +445,7 @@ export function Objetivos() {
                 <div
                   key={m.id}
                   className="relative overflow-hidden rounded-xl border p-3.5"
-                  style={{ borderColor: 'rgba(212,175,55,0.4)', background: 'linear-gradient(135deg, rgba(212,175,55,0.12), #171310 55%)' }}
+                  style={{ borderColor: 'rgba(212,175,55,0.4)', background: 'linear-gradient(135deg, rgba(212,175,55,0.12), rgb(var(--c-brand-surface)) 55%)' }}
                 >
                   <div className="absolute inset-y-0 left-0 w-[3px] bg-brand-gold" />
                   <div className="ml-1.5 flex items-center justify-between gap-3">
@@ -743,7 +743,7 @@ export function Objetivos() {
                 <div
                   key={p.id}
                   className="relative overflow-hidden rounded-xl border p-3.5"
-                  style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, #171310 55%)` }}
+                  style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, rgb(var(--c-brand-surface)) 55%)` }}
                 >
                   <div className="absolute inset-y-0 left-0 w-[3px]" style={{ background: color }} />
                   <div className="ml-1.5 flex items-center justify-between gap-3">
@@ -1010,7 +1010,7 @@ export function Objetivos() {
         )}
 
         {profile.intensityRamp && !rampDraft && (
-          <div className="relative overflow-hidden rounded-xl border border-brand-neon/25 p-3.5" style={{ background: 'linear-gradient(135deg, rgba(57,255,20,0.12), #171310 55%)' }}>
+          <div className="relative overflow-hidden rounded-xl border border-brand-neon/25 p-3.5" style={{ background: 'linear-gradient(135deg, rgba(57,255,20,0.12), rgb(var(--c-brand-surface)) 55%)' }}>
             <div className="absolute inset-y-0 left-0 w-[3px] bg-brand-neon" />
             <div className="ml-1.5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1176,7 +1176,7 @@ export function Objetivos() {
               <div
                 key={g.id}
                 className="relative overflow-hidden rounded-xl border p-3.5"
-                style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, #171310 55%)` }}
+                style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, rgb(var(--c-brand-surface)) 55%)` }}
               >
                 <div className="absolute inset-y-0 left-0 w-[3px]" style={{ background: color }} />
                 <div className="ml-1.5 flex items-center justify-between gap-3">

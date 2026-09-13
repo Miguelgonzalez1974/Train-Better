@@ -86,7 +86,7 @@ export function MacroPlanModal({ macro, prs, onClose }: MacroPlanModalProps) {
         </div>
 
         {/* Fase actual */}
-        <div className="relative overflow-hidden rounded-xl border p-3.5" style={{ borderColor: `${PHASE_COLOR[plan.currentPhaseIndex]}55`, background: `linear-gradient(135deg, ${PHASE_COLOR[plan.currentPhaseIndex]}1f, #171310 60%)` }}>
+        <div className="relative overflow-hidden rounded-xl border p-3.5" style={{ borderColor: `${PHASE_COLOR[plan.currentPhaseIndex]}55`, background: `linear-gradient(135deg, ${PHASE_COLOR[plan.currentPhaseIndex]}1f, rgb(var(--c-brand-surface)) 60%)` }}>
           <div className="absolute inset-y-0 left-0 w-[3px]" style={{ background: PHASE_COLOR[plan.currentPhaseIndex] }} />
           <div className="ml-1.5 flex items-center gap-2">
             {(() => {
