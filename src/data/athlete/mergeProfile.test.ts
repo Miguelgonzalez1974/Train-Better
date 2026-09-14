@@ -64,6 +64,50 @@ describe('mergeProfile — logs: union por clave', () => {
     const merged = mergeProfile(remote, local);
     expect(merged.sessionCache?.['2026-03-01'].source).toBe('custom');
   });
+
+  it('sessionCache: gana el lado con entreno real registrado ese dia, aunque el genVersion empate (bug real: un segundo dispositivo con cache vieja de "hoy" pisaba la sesion ya entrenada al sincronizar mas tarde)', () => {
+    const remote = {
+      ...base(),
+      workLog: [ws('2026-03-01', 'bench-press', 1, 50)],
+      sessionCache: { '2026-03-01': { date: '2026-03-01', mesocycleWeek: 2, isRestDay: false, blocks: [], genVersion: 30 } },
+    };
+    const local = {
+      ...base(),
+      workLog: [],
+      sessionCache: { '2026-03-01': { date: '2026-03-01', mesocycleWeek: 1, isRestDay: false, blocks: [], genVersion: 30 } },
+    };
+    const merged = mergeProfile(remote, local);
+    expect(merged.sessionCache?.['2026-03-01'].mesocycleWeek).toBe(2);
+  });
+
+  it('sessionCache: una sesion cerrada en el historial (WOD sin barra, sin entradas en workLog) tambien cuenta como entreno real', () => {
+    const remoteHistory: SessionHistoryEntry[] = [
+      { date: '2026-03-01', mesocycleWeek: 2, movementIds: ['burpee'], rxOrScaled: 'rx', rpe: 8, durationMin: 20 },
+    ];
+    const remote = {
+      ...base(),
+      sessionCache: { '2026-03-01': { date: '2026-03-01', mesocycleWeek: 2, isRestDay: false, blocks: [], genVersion: 30 } },
+    };
+    const local = {
+      ...base(),
+      sessionCache: { '2026-03-01': { date: '2026-03-01', mesocycleWeek: 1, isRestDay: false, blocks: [], genVersion: 30 } },
+    };
+    const merged = mergeProfile(remote, local, remoteHistory, []);
+    expect(merged.sessionCache?.['2026-03-01'].mesocycleWeek).toBe(2);
+  });
+
+  it('sessionCache: sin entreno registrado en ninguno de los dos, se mantiene el criterio por genVersion', () => {
+    const remote = {
+      ...base(),
+      sessionCache: { '2026-03-01': { date: '2026-03-01', mesocycleWeek: 1, isRestDay: false, blocks: [], genVersion: 25 } },
+    };
+    const local = {
+      ...base(),
+      sessionCache: { '2026-03-01': { date: '2026-03-01', mesocycleWeek: 2, isRestDay: false, blocks: [], genVersion: 30 } },
+    };
+    const merged = mergeProfile(remote, local);
+    expect(merged.sessionCache?.['2026-03-01'].mesocycleWeek).toBe(2);
+  });
 });
 
 describe('mergeProfile — config: gana el local', () => {

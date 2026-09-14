@@ -1,4 +1,4 @@
-import type { AthleteProfile, DailySession, SessionHistoryEntry } from './types';
+import type { AthleteProfile, DailySession, SessionHistoryEntry, WorkSetEntry } from './types';
 
 /**
  * Fusion de dos estados del atleta (remoto y local) para la sincronizacion. Antes cada `pushRemote`
@@ -60,9 +60,19 @@ export function mergeHistory(
   return mergeByKey(remote, local, (e) => e.date, (e) => e.date, HISTORY_LIMIT, pickRicherHistory);
 }
 
+/** Hubo entreno real ese dia: series de fuerza/oly registradas, o una sesion ya cerrada (RPE + duracion) en el historial. */
+function hasRealActivity(workLog: WorkSetEntry[] | undefined, history: SessionHistoryEntry[] | undefined, date: string): boolean {
+  if ((workLog ?? []).some((e) => e.date === date && e.kg > 0)) return true;
+  return (history ?? []).some((e) => e.date === date);
+}
+
 function mergeSessionCache(
   remote: Record<string, DailySession> | undefined,
   local: Record<string, DailySession> | undefined,
+  remoteWorkLog: WorkSetEntry[] | undefined,
+  localWorkLog: WorkSetEntry[] | undefined,
+  remoteHistory: SessionHistoryEntry[] | undefined,
+  localHistory: SessionHistoryEntry[] | undefined,
 ): Record<string, DailySession> {
   const out: Record<string, DailySession> = { ...(remote ?? {}) };
   for (const [date, localS] of Object.entries(local ?? {})) {
@@ -73,9 +83,29 @@ function mergeSessionCache(
     }
     // La sesion propia / elegida a mano del atleta gana a la generada.
     const isChosen = (s: DailySession) => s.source === 'custom' || Boolean(s.swapLabel);
-    if (isChosen(localS) && !isChosen(remoteS)) out[date] = localS;
-    else if (isChosen(remoteS) && !isChosen(localS)) out[date] = remoteS;
-    else out[date] = (localS.genVersion ?? 0) >= (remoteS.genVersion ?? 0) ? localS : remoteS;
+    if (isChosen(localS) && !isChosen(remoteS)) {
+      out[date] = localS;
+      continue;
+    }
+    if (isChosen(remoteS) && !isChosen(localS)) {
+      out[date] = remoteS;
+      continue;
+    }
+    // Empate de "elegida a mano": gana el lado contra el que ya hay entreno real registrado ese dia
+    // -- esa es la sesion que el atleta de verdad siguio, no la que resulte llegar la ultima al push
+    // (bug real: un segundo dispositivo con una cache vieja de "hoy" pisaba la sesion recien
+    // entrenada al sincronizar mas tarde, porque el genVersion de ambas builds era el mismo).
+    const localHasWork = hasRealActivity(localWorkLog, localHistory, date);
+    const remoteHasWork = hasRealActivity(remoteWorkLog, remoteHistory, date);
+    if (localHasWork && !remoteHasWork) {
+      out[date] = localS;
+      continue;
+    }
+    if (remoteHasWork && !localHasWork) {
+      out[date] = remoteS;
+      continue;
+    }
+    out[date] = (localS.genVersion ?? 0) >= (remoteS.genVersion ?? 0) ? localS : remoteS;
   }
   // Recorta a las fechas mas recientes.
   const dates = Object.keys(out).sort();
@@ -83,7 +113,17 @@ function mergeSessionCache(
   return out;
 }
 
-export function mergeProfile(remote: AthleteProfile, local: AthleteProfile): AthleteProfile {
+/**
+ * `remoteHistory`/`localHistory`: el historial vive fuera de `AthleteProfile` (se sincroniza aparte,
+ * ver `mergeHistory` en remoteSync.ts) pero `mergeSessionCache` necesita saber si un dia ya tiene
+ * entreno real registrado — se pasan aqui solo para esa comprobacion, no se devuelven.
+ */
+export function mergeProfile(
+  remote: AthleteProfile,
+  local: AthleteProfile,
+  remoteHistory?: SessionHistoryEntry[],
+  localHistory?: SessionHistoryEntry[],
+): AthleteProfile {
   // Un dispositivo recien instalado (o con el almacenamiento local vaciado) arranca en
   // `DEFAULT_PROFILE` — sin `onboardedAt` local. Si esos valores de fabrica (PRs base, 4
   // dias/semana...) "ganan por ser el local" en la primera sincronizacion de ese dispositivo,
@@ -142,6 +182,6 @@ export function mergeProfile(remote: AthleteProfile, local: AthleteProfile): Ath
       PR_LOG_LIMIT,
     ),
     trainingDatesLog: mergeStringSet(remote.trainingDatesLog, local.trainingDatesLog, TRAINING_DATES_LOG_LIMIT),
-    sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache),
+    sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
   };
 }

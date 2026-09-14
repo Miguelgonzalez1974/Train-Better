@@ -74,7 +74,9 @@ async function flushPush(): Promise<{ ok: boolean }> {
     return { ok: false };
   }
 
-  const mergedProfile = remote ? mergeProfile(normalizeRemote(remote.profile, remote.goal), localProfile) : localProfile;
+  const mergedProfile = remote
+    ? mergeProfile(normalizeRemote(remote.profile, remote.goal), localProfile, remote.history, localHistory)
+    : localProfile;
   const mergedHistory = remote ? mergeHistory(remote.history, localHistory) : localHistory;
 
   // Converge el local a la fusion antes de subir — asi este dispositivo ya tiene lo del otro aunque el upsert falle.
@@ -172,8 +174,9 @@ export async function pullRemoteOrSeed(): Promise<void> {
   }
 
   const local = localAthleteRepository.getProfile();
-  const mergedProfile = mergeProfile(normalizeRemote(remote.profile, remote.goal), local);
-  const mergedHistory = mergeHistory(remote.history, localAthleteRepository.getHistory());
+  const localHistory = localAthleteRepository.getHistory();
+  const mergedProfile = mergeProfile(normalizeRemote(remote.profile, remote.goal), local, remote.history, localHistory);
+  const mergedHistory = mergeHistory(remote.history, localHistory);
   localAthleteRepository.saveProfile(mergedProfile);
   localAthleteRepository.replaceHistory(mergedHistory);
   await pushRemote();
