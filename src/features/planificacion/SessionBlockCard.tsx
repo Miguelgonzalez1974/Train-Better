@@ -25,6 +25,9 @@ const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
   neutral: { icon: 'text-neutral-400', bar: 'bg-white/15' },
 };
 
+/** Catalogo de WOD de referencia ordenado una sola vez (600+ entradas) — para el selector de "cambiar el WOD de hoy por otro benchmark" en modo edicion. */
+const sortedBenchmarkWorkouts = [...benchmarkWorkouts].sort((a, b) => a.name.localeCompare(b.name));
+
 const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent: Accent }> = {
   warmup: { label: 'Calentamiento', Icon: Flame, accent: 'gold' },
   strength: { label: 'Fuerza', Icon: Dumbbell, accent: 'orange' },
@@ -695,9 +698,20 @@ function EditableBlockEntries({
           const benchmarkId = entry.movementId.replace('benchmark:', '');
           const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);
           return (
-            <div key={index} className="rounded-xl bg-brand-surfaceMuted/80 p-3">
-              <p className="font-semibold text-white">{wod?.name ?? benchmarkId}</p>
-              <p className="mt-1 text-xs text-neutral-500">Los WOD de referencia no se editan — usa Regenerar para otro.</p>
+            <div key={index} className="flex flex-col gap-2 rounded-xl bg-brand-surfaceMuted/80 p-3">
+              <select
+                value={benchmarkId}
+                onChange={(e) => onUpdateEntry(index, { movementId: `benchmark:${e.target.value}`, benchmarkSwaps: undefined })}
+                className={`${editInputClass} text-left`}
+              >
+                {!wod && <option value={benchmarkId}>{benchmarkId}</option>}
+                {sortedBenchmarkWorkouts.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+              {wod?.format && <p className="text-xs text-neutral-500">{wod.format}</p>}
             </div>
           );
         }
