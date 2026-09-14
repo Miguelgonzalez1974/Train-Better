@@ -65,6 +65,34 @@ describe('mergeProfile — logs: union por clave', () => {
     expect(merged.sessionCache?.['2026-03-01'].source).toBe('custom');
   });
 
+  it('sessionCache: un movimiento corregido a mano (editedByAthlete) tambien gana a la version generada sin editar', () => {
+    // Bug real: cambiar floor press por bench press en modo edicion no protegia la sesion frente a
+    // la sincronizacion -- un segundo dispositivo con la version sin editar podia pisarla igual que
+    // pisaba la de la cache vieja (ver el fix anterior de hasRealActivity, para cuando ya hay entreno
+    // registrado). Este cubre el caso "el atleta acaba de editar, todavia no ha entrenado".
+    const remote = {
+      ...base(),
+      sessionCache: {
+        '2026-03-01': { date: '2026-03-01', mesocycleWeek: 1, isRestDay: false, blocks: [{ block: 'strength' as const, movementId: 'floor-press' }], genVersion: 30 },
+      },
+    };
+    const local = {
+      ...base(),
+      sessionCache: {
+        '2026-03-01': {
+          date: '2026-03-01',
+          mesocycleWeek: 1,
+          isRestDay: false,
+          blocks: [{ block: 'strength' as const, movementId: 'bench-press' }],
+          genVersion: 30,
+          editedByAthlete: true,
+        },
+      },
+    };
+    const merged = mergeProfile(remote, local);
+    expect(merged.sessionCache?.['2026-03-01'].blocks[0].movementId).toBe('bench-press');
+  });
+
   it('sessionCache: gana el lado con entreno real registrado ese dia, aunque el genVersion empate (bug real: un segundo dispositivo con cache vieja de "hoy" pisaba la sesion ya entrenada al sincronizar mas tarde)', () => {
     const remote = {
       ...base(),

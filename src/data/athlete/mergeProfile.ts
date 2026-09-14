@@ -81,8 +81,8 @@ function mergeSessionCache(
       out[date] = localS;
       continue;
     }
-    // La sesion propia / elegida a mano del atleta gana a la generada.
-    const isChosen = (s: DailySession) => s.source === 'custom' || Boolean(s.swapLabel);
+    // La sesion propia, elegida o corregida a mano por el atleta gana a la generada sin tocar.
+    const isChosen = (s: DailySession) => s.source === 'custom' || Boolean(s.swapLabel) || Boolean(s.editedByAthlete);
     if (isChosen(localS) && !isChosen(remoteS)) {
       out[date] = localS;
       continue;

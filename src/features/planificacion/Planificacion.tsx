@@ -357,7 +357,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   function handleUpdateEntry(index: number, patch: Partial<SessionBlockResult>) {
     setSession((prev) => {
       if (!prev) return prev;
-      const next = { ...prev, blocks: prev.blocks.map((b, i) => (i === index ? { ...b, ...patch } : b)) };
+      const next: DailySession = {
+        ...prev,
+        blocks: prev.blocks.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+        editedByAthlete: true,
+      };
       athleteRepository.saveCachedSession(next);
       return next;
     });

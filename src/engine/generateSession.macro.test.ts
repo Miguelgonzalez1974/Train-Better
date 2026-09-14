@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { adoptAdditiveEngineFields, bestAffinityPartner, generateSessionForDate, WOD_SYNONYM_GROUPS } from './generateSession';
+import {
+  adoptAdditiveEngineFields,
+  bestAffinityPartner,
+  generateSessionForDate,
+  isCachedSessionOrphaned,
+  isCachedSessionStale,
+  WOD_SYNONYM_GROUPS,
+} from './generateSession';
 import { WOD_PAIR_AFFINITY } from './wodDomains';
+import { toLocalIsoDate } from './periodization';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../data/athlete/types';
 import {
   makeProfile,
@@ -348,6 +356,20 @@ describe('generateSessionForDate — macrociclo', () => {
       blocks: fresh.blocks.map((b) => ({ ...b, movementId: `${b.movementId}-x` })),
     };
     expect(adoptAdditiveEngineFields(scrambled, profile, [], d, profile.goals)).toBe(scrambled);
+  });
+
+  it('una sesion corregida a mano (editedByAthlete) nunca se considera vieja, huerfana, ni se regenera al adoptar campos nuevos', () => {
+    // Bug real: cambiar un movimiento en modo edicion (p.ej. floor press -> bench press) no marcaba
+    // la sesion de ninguna forma especial, asi que la siguiente carga la descartaba como "vieja" (el
+    // sello de motor no coincidia) y la regeneraba desde cero, perdiendo el cambio del atleta.
+    const profile = makeProfile();
+    const d = consecutiveDates(START, 1)[0];
+    const fresh = generateSessionForDate(profile, [], d, profile.goals);
+    const edited: DailySession = { ...fresh, genVersion: 1, editedByAthlete: true };
+
+    expect(isCachedSessionStale(edited)).toBe(false);
+    expect(isCachedSessionOrphaned(edited, makeProfile({ macrocycles: [], strengthPrograms: [] }), toLocalIsoDate(d))).toBe(false);
+    expect(adoptAdditiveEngineFields(edited, profile, [], d, profile.goals)).toBe(edited);
   });
 
   it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {

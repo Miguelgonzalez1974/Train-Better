@@ -3376,7 +3376,7 @@ export function hasActiveTrainingStructure(profile: AthleteProfile, dateIso: str
  * las de mantenimiento (`mesocycleWeek === 0`, sin label) no dependen de ninguna estructura y no se tocan.
  */
 export function isCachedSessionOrphaned(session: DailySession, profile: AthleteProfile, dateIso: string): boolean {
-  if (session.source === 'custom' || session.swapLabel) return false;
+  if (session.source === 'custom' || session.swapLabel || session.editedByAthlete) return false;
   const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
   return periodized && !hasActiveTrainingStructure(profile, dateIso);
 }
@@ -3388,10 +3388,11 @@ export function isCachedSessionOrphaned(session: DailySession, profile: AthleteP
  * dispositivos en la siguiente apertura sin pasos manuales, y no se queden mostrando dias
  * distintos entre PC y movil. El que llama debe respetar aparte las sesiones ya registradas
  * (esas no se regeneran aunque el sello sea viejo). Sesiones propias (`source: 'custom'`),
- * elegidas a mano (`swapLabel`) y de mantenimiento (no periodizadas) nunca son "viejas".
+ * elegidas a mano (`swapLabel`), corregidas a mano (`editedByAthlete`) y de mantenimiento (no
+ * periodizadas) nunca son "viejas".
  */
 export function isCachedSessionStale(session: DailySession): boolean {
-  if (session.source === 'custom' || session.swapLabel) return false;
+  if (session.source === 'custom' || session.swapLabel || session.editedByAthlete) return false;
   const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
   if (!periodized) return false;
   return (session.genVersion ?? 0) < SESSION_GEN_VERSION;
@@ -3413,7 +3414,7 @@ export function adoptAdditiveEngineFields(
   date: Date,
   goals: Goal[],
 ): DailySession {
-  if (cached.source === 'custom' || cached.swapLabel) return cached;
+  if (cached.source === 'custom' || cached.swapLabel || cached.editedByAthlete) return cached;
   const iso = toLocalIsoDate(date);
   const fresh = generateSessionForDate(profile, history.filter((h) => h.date !== iso), date, goals);
   if (fresh.blocks.length !== cached.blocks.length) return cached;

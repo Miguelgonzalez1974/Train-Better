@@ -374,6 +374,14 @@ export interface DailySession {
   strengthProgramLabel?: string;
   /** Etiqueta junto al bloque wod cuando se añadio opcionalmente sobre un dia de programa de fuerza (ej. "de tu macrociclo"). */
   wodTag?: string;
+  /**
+   * El atleta corrigio a mano un movimiento/WOD de esta sesion generada (modo edicion, fila a fila —
+   * no el reemplazo completo de `source: 'custom'`). Cuenta como sesion "elegida" para todo lo demas:
+   * no se regenera aunque el sello de motor quede viejo (`isCachedSessionStale`), no se descarta por
+   * huerfana (`isCachedSessionOrphaned`), y gana los empates de sincronizacion entre dispositivos
+   * (`mergeSessionCache`) — lo que el atleta puso a mano prevalece sobre lo generado.
+   */
+  editedByAthlete?: boolean;
 }
 
 export type RxOrScaled = 'rx' | 'scaled';
