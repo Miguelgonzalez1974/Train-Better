@@ -391,37 +391,59 @@ function CustomWodCard({
   );
 }
 
-/** Bloque warm up: 2 mini-rutinas cortas (WOD / Oly) en una sola tarjeta, no una pila de ejercicios. */
+/** Etiqueta corta de pestaña para los subgrupos conocidos del calentamiento — cualquier otro subgrupo usa su propio texto tal cual. */
+const WARMUP_TAB_LABEL: Record<string, string> = {
+  'Específico del WOD': 'Del WOD',
+  'Calentamiento de barra': 'Barra',
+};
+
+/**
+ * Bloque warm up: el calentamiento trae 2-3 mini-rutinas cortas (activación general, específico del
+ * WOD y, en días de programa de fuerza con oly, la barra Burgener) como subgrupos separados. En vez
+ * de apilarlas todas (tarjeta larga), una pestaña por subgrupo — solo se ve una a la vez.
+ */
 function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
+  const groups = groupBySubgroup(entries);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const active = groups[activeIdx] ?? groups[0];
+
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
-      <div className="flex flex-col gap-3">
-        {groupBySubgroup(entries).map((group, gi) => (
-          <div key={gi} className={gi > 0 ? 'border-t border-white/5 pt-3' : ''}>
-            {group.subgroup && (
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/80">{group.subgroup}</p>
-            )}
-            <div className="flex flex-col gap-2">
-              {group.items.map((entry, idx) => {
-                const movement = getMovementById(entry.movementId);
-                if (!movement) return null;
-                return (
-                  <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                      {idx + 1}
-                    </span>
-                    <div>
-                      <p className={NAME_STEP}>{movement.name}</p>
-                      <StandardHint standard={movement.standard} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {group.items[0]?.notes && <CoachNote text={group.items[0].notes} />}
-          </div>
-        ))}
-      </div>
+      {groups.length > 1 && (
+        <div className="mb-3 flex gap-0.5 rounded-lg bg-white/5 p-0.5">
+          {groups.map((group, gi) => (
+            <button
+              key={gi}
+              onClick={() => setActiveIdx(gi)}
+              className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+                gi === activeIdx ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              {(group.subgroup && WARMUP_TAB_LABEL[group.subgroup]) ?? group.subgroup ?? 'Calentamiento'}
+            </button>
+          ))}
+        </div>
+      )}
+      {active && (
+        <div className="flex flex-col gap-2">
+          {active.items.map((entry, idx) => {
+            const movement = getMovementById(entry.movementId);
+            if (!movement) return null;
+            return (
+              <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                  {idx + 1}
+                </span>
+                <div>
+                  <p className={NAME_STEP}>{movement.name}</p>
+                  <StandardHint standard={movement.standard} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {active?.items[0]?.notes && <CoachNote text={active.items[0].notes} />}
     </div>
   );
 }
