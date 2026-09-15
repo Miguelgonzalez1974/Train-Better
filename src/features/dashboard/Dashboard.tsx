@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Scale, ChevronRight, Target } from 'lucide-react';
+import { BarChart3, Scale, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -197,6 +197,28 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
           >
             <BarChart3 size={17} strokeWidth={2.25} />
           </button>
+          {hasStructure && (
+            <button
+              onClick={onNavigateToObjetivos}
+              title={
+                structureRow
+                  ? `${structureRow.label} · ${structureRow.sublabel}${goalRows.length > 0 ? ` · ${goalsLabel}` : ''}`
+                  : goalsLabel
+              }
+              className="relative flex h-10 w-10 items-center justify-center rounded-lg border transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
+              style={{ borderColor: `${structureColor}66`, color: structureColor }}
+            >
+              <StructureIcon size={17} strokeWidth={2.25} />
+              {goalRows.length > 0 && (
+                <span
+                  className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-bold"
+                  style={{ background: structureColor, color: '#171310' }}
+                >
+                  {goalRows.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -280,32 +302,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
             </>
           )}
         </p>
-      )}
-
-      {hasStructure && (
-        <button
-          onClick={onNavigateToObjetivos}
-          title="Ver macrociclos y objetivos"
-          className="card flex items-center gap-2.5 p-3 text-left transition-colors duration-200 hover:border-brand-gold/40"
-        >
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: `${structureColor}26`, color: structureColor }}
-          >
-            <StructureIcon size={14} strokeWidth={2.25} />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-xs text-neutral-300">
-            {structureRow ? (
-              <>
-                {structureRow.label} <span className="text-neutral-500">· {structureRow.sublabel}</span>
-                {goalRows.length > 0 && <span className="text-neutral-500"> · {goalsLabel}</span>}
-              </>
-            ) : (
-              goalsLabel
-            )}
-          </span>
-          <ChevronRight size={14} strokeWidth={2.25} className="shrink-0 text-neutral-600" />
-        </button>
       )}
 
       {/*
