@@ -160,12 +160,30 @@ function appendPrChanges(prev: AthleteProfile, next: AthleteProfile): PrLogEntry
   return log.slice(-PR_LOG_LIMIT);
 }
 
-/** Igual que HISTORY_LIMIT: evita que la cache de sesiones generadas crezca sin limite con el tiempo. */
+/** Fecha ISO local de "hoy" — mismo formato que `toLocalIsoDate` del motor, calculado aqui sin importar `engine/` (esta capa de datos se mantiene independiente). */
+function localTodayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Evita que la cache de sesiones generadas crezca sin limite con el tiempo — recortando a las
+ * `SESSION_CACHE_LIMIT` fechas mas CERCANAS a hoy (para adelante y para atras), no las
+ * alfabeticamente mas recientes. Bug real: WeekStrip cachea dias futuros lejanos al
+ * previsualizarlos; con 21+ de esos, "hoy" quedaba como la fecha mas "antigua" en orden de texto
+ * (por detras de un monton de fechas futuras) y se recortaba — la sesion de hoy, ya entrenada,
+ * desaparecia de la cache. Hoy nunca se recorta, pase lo que pase con el cupo.
+ */
 function pruneSessionCache(cache: Record<string, DailySession>): Record<string, DailySession> {
-  const dates = Object.keys(cache).sort();
+  const dates = Object.keys(cache);
   if (dates.length <= SESSION_CACHE_LIMIT) return cache;
-  const pruned = { ...cache };
-  for (const date of dates.slice(0, dates.length - SESSION_CACHE_LIMIT)) delete pruned[date];
+  const today = localTodayIso();
+  const todayMs = new Date(`${today}T00:00:00`).getTime();
+  const distance = (d: string) => Math.abs(new Date(`${d}T00:00:00`).getTime() - todayMs);
+  const kept = new Set([...dates].sort((a, b) => distance(a) - distance(b)).slice(0, SESSION_CACHE_LIMIT));
+  kept.add(today);
+  const pruned: Record<string, DailySession> = {};
+  for (const date of dates) if (kept.has(date)) pruned[date] = cache[date];
   return pruned;
 }
 

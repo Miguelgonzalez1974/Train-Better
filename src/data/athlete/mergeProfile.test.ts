@@ -12,6 +12,12 @@ const ws = (date: string, movementId: string, setNumber: number, kg: number): Wo
   reps: 3,
   block: 'strength',
 });
+/** Fecha ISO local (mismo metodo que `localTodayIso` en mergeProfile.ts) para no desalinear con timezone en el test. */
+function addDaysIso(base: Date, days: number): string {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 describe('mergeProfile — logs: union por clave', () => {
   it('worklog: une entradas de ambos dispositivos (no se pierde ninguna)', () => {
@@ -122,6 +128,23 @@ describe('mergeProfile — logs: union por clave', () => {
     };
     const merged = mergeProfile(remote, local, remoteHistory, []);
     expect(merged.sessionCache?.['2026-03-01'].mesocycleWeek).toBe(2);
+  });
+
+  it('sessionCache: recorta por cercania a hoy, no alfabeticamente -- "hoy" nunca desaparece por tener muchos dias futuros cacheados', () => {
+    // Bug real: WeekStrip cachea dias futuros al previsualizarlos. Con 21+ de esos, "hoy" era la
+    // fecha alfabeticamente mas "antigua" del lote (por detras de un monton de fechas futuras) y el
+    // recorte por texto se la comia -- la sesion de hoy, ya entrenada, desaparecia de la cache.
+    const now = new Date();
+    const today = addDaysIso(now, 0);
+    const sessionCache: AthleteProfile['sessionCache'] = {
+      [today]: { date: today, mesocycleWeek: 99, isRestDay: false, blocks: [] },
+    };
+    for (let i = 1; i <= 25; i++) {
+      const d = addDaysIso(now, i);
+      sessionCache![d] = { date: d, mesocycleWeek: 1, isRestDay: false, blocks: [] };
+    }
+    const merged = mergeProfile(base(), { ...base(), sessionCache });
+    expect(merged.sessionCache?.[today]?.mesocycleWeek).toBe(99);
   });
 
   it('sessionCache: sin entreno registrado en ninguno de los dos, se mantiene el criterio por genVersion', () => {

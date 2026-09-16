@@ -60,6 +60,32 @@ export function mergeHistory(
   return mergeByKey(remote, local, (e) => e.date, (e) => e.date, HISTORY_LIMIT, pickRicherHistory);
 }
 
+/** Fecha ISO local de "hoy" — mismo formato que `toLocalIsoDate` del motor, calculado aqui sin importar `engine/` (esta capa de datos se mantiene independiente). */
+function localTodayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Recorta un mapa por fecha ISO a las `limit` claves mas CERCANAS a hoy (para adelante y para
+ * atras), no las alfabeticamente mas recientes. Bug real: WeekStrip cachea dias futuros lejanos al
+ * previsualizarlos: con 21+ de esos, "hoy" quedaba como la fecha mas "antigua" en orden de texto
+ * (por detras de un monton de fechas futuras) y se recortaba — la sesion de hoy, ya entrenada,
+ * desaparecia de la cache tras sincronizar. Hoy nunca se recorta, pase lo que pase con el cupo.
+ */
+function pruneByProximityToToday<T>(map: Record<string, T>, limit: number): Record<string, T> {
+  const dates = Object.keys(map);
+  if (dates.length <= limit) return map;
+  const today = localTodayIso();
+  const todayMs = new Date(`${today}T00:00:00`).getTime();
+  const distance = (d: string) => Math.abs(new Date(`${d}T00:00:00`).getTime() - todayMs);
+  const kept = new Set([...dates].sort((a, b) => distance(a) - distance(b)).slice(0, limit));
+  kept.add(today);
+  const out: Record<string, T> = {};
+  for (const d of dates) if (kept.has(d)) out[d] = map[d];
+  return out;
+}
+
 /** Hubo entreno real ese dia: series de fuerza/oly registradas, o una sesion ya cerrada (RPE + duracion) en el historial. */
 function hasRealActivity(workLog: WorkSetEntry[] | undefined, history: SessionHistoryEntry[] | undefined, date: string): boolean {
   if ((workLog ?? []).some((e) => e.date === date && e.kg > 0)) return true;
@@ -107,10 +133,7 @@ function mergeSessionCache(
     }
     out[date] = (localS.genVersion ?? 0) >= (remoteS.genVersion ?? 0) ? localS : remoteS;
   }
-  // Recorta a las fechas mas recientes.
-  const dates = Object.keys(out).sort();
-  for (const d of dates.slice(0, Math.max(0, dates.length - SESSION_CACHE_LIMIT))) delete out[d];
-  return out;
+  return pruneByProximityToToday(out, SESSION_CACHE_LIMIT);
 }
 
 /**
