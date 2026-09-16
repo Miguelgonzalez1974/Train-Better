@@ -577,6 +577,13 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         testDayBlock && testedLoadKg > 0 ? testedLoadKg : undefined,
       ),
     );
+    // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
+    // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes
+    // de enterarse del entreno de hoy podia seguir ganando el empate y pisar la tarjeta del plan
+    // (ver bug real: WOD, accesorios de oly y hasta un ejercicio de fuerza distintos tras completar).
+    const completed: DailySession = { ...session, editedByAthlete: true };
+    athleteRepository.saveCachedSession(completed);
+    setSession(completed);
     setHistory(athleteRepository.getHistory());
     // appendHistoryEntry tambien actualiza trainingDatesLog en el perfil persistido — sin esto,
     // returnRampSuggestion (que lee profile.trainingDatesLog del estado) no veria la sesion de hoy
