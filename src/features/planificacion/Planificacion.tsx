@@ -367,6 +367,27 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     });
   }
 
+  /** Añade un movimiento nuevo justo despues de `afterIndex` — solo en bloques que son listas simples (ver `blockHasFixedShape` en SessionBlockCard.tsx). */
+  function handleAddEntry(newEntry: SessionBlockResult, afterIndex: number) {
+    setSession((prev) => {
+      if (!prev) return prev;
+      const blocks = [...prev.blocks];
+      blocks.splice(afterIndex + 1, 0, newEntry);
+      const next: DailySession = { ...prev, blocks, editedByAthlete: true };
+      athleteRepository.saveCachedSession(next);
+      return next;
+    });
+  }
+
+  function handleRemoveEntry(index: number) {
+    setSession((prev) => {
+      if (!prev) return prev;
+      const next: DailySession = { ...prev, blocks: prev.blocks.filter((_, i) => i !== index), editedByAthlete: true };
+      athleteRepository.saveCachedSession(next);
+      return next;
+    });
+  }
+
   function handleSaveProfile(newProfile: AthleteProfile) {
     athleteRepository.saveProfile(newProfile);
     setProfile(newProfile);
@@ -1142,6 +1163,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           session={session}
           editable={editMode}
           onUpdateEntry={handleUpdateEntry}
+          onAddEntry={handleAddEntry}
+          onRemoveEntry={handleRemoveEntry}
           progress={movementProgress}
           renderBlockFooter={
             editMode || showCompletePanel

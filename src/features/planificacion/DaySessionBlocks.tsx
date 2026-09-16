@@ -11,6 +11,8 @@ interface DaySessionBlocksProps {
   session: DailySession;
   editable?: boolean;
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
+  onAddEntry?: (newEntry: SessionBlockResult, afterIndex: number) => void;
+  onRemoveEntry?: (index: number) => void;
   /** Contenido opcional bajo un bloque concreto — usado para la valoración de series de fuerza/oly, justo donde el atleta actúa. */
   renderBlockFooter?: (block: Block, entryIndices: number[]) => ReactNode;
   /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de una serie de fuerza/oly). */
@@ -18,7 +20,7 @@ interface DaySessionBlocksProps {
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
-export function DaySessionBlocks({ session, editable, onUpdateEntry, renderBlockFooter, progress }: DaySessionBlocksProps) {
+export function DaySessionBlocks({ session, editable, onUpdateEntry, onAddEntry, onRemoveEntry, renderBlockFooter, progress }: DaySessionBlocksProps) {
   if (session.source === 'custom') {
     return (
       <div className="card flex flex-col gap-2 p-4">
@@ -50,6 +52,8 @@ export function DaySessionBlocks({ session, editable, onUpdateEntry, renderBlock
               isLast={index === blocksWithResults.length - 1 && !footer}
               editable={editable}
               onUpdateEntry={onUpdateEntry}
+              onAddEntry={onAddEntry}
+              onRemoveEntry={onRemoveEntry}
               progress={progress}
             />
             {footer && <div className="mb-3 mt-1 flex flex-col gap-2 pl-1">{footer}</div>}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -697,18 +697,46 @@ function groupBySubgroup(results: SessionBlockResult[]): SubgroupBucket[] {
 
 const editInputClass = 'rounded-lg border border-brand-border bg-brand-bg px-2 py-1 text-center text-sm text-white';
 
-/** Modo edicion: sustituye las tarjetas visuales por una lista uniforme con select de movimiento + inputs de series/reps/kg. */
+/** Bloques con forma fija (primer tecnico + principal): aqui solo se cambia movimiento/series/reps/kg de cada fila, nunca se añade ni se quita ninguna — hacerlo rompería la lógica especial de esa tarjeta (qué carga es la protagonista, etc.). El resto son listas simples donde añadir/quitar es seguro. */
+function blockHasFixedShape(block: Block): boolean {
+  return block === 'strength' || block === 'oly';
+}
+
+/** Plantilla razonable para un movimiento nuevo dentro de un bloque — copia forma (series/reps/formato/subgrupo) de la fila junto a la que se añade, cambia solo el movimiento. */
+function buildNewEntry(block: Block, template: SessionBlockResult | undefined): SessionBlockResult {
+  const pool = getMovementsByBlock(block);
+  const movementId = pool.find((m) => m.id !== template?.movementId)?.id ?? pool[0]?.id ?? template?.movementId ?? '';
+  return {
+    block,
+    movementId,
+    sets: template?.sets,
+    reps: template?.reps ?? '10',
+    format: template?.format,
+    subgroup: template?.subgroup,
+  };
+}
+
+/** Modo edicion: sustituye las tarjetas visuales por una lista uniforme con select de movimiento + inputs de series/reps/kg/formato, con añadir/quitar movimiento en los bloques que son listas simples. */
 function EditableBlockEntries({
   block,
   entries,
   entryIndices,
   onUpdateEntry,
+  onAddEntry,
+  onRemoveEntry,
 }: {
   block: Block;
   entries: SessionBlockResult[];
   entryIndices: number[];
   onUpdateEntry: (index: number, patch: Partial<SessionBlockResult>) => void;
+  onAddEntry?: (newEntry: SessionBlockResult, afterIndex: number) => void;
+  onRemoveEntry?: (index: number) => void;
 }) {
+  const isBenchmarkWod = entries.some((e) => e.movementId.startsWith('benchmark:'));
+  const canAddRemove = !blockHasFixedShape(block) && !isBenchmarkWod && Boolean(onAddEntry) && Boolean(onRemoveEntry);
+  const editableEntries = entries.filter((e) => !e.subgroup);
+  const lastEntryIndex = entryIndices[entries.length - 1];
+
   return (
     <div className="flex flex-col gap-2.5">
       {entries.map((entry, i) => {
@@ -746,18 +774,29 @@ function EditableBlockEntries({
 
         return (
           <div key={index} className="flex flex-col gap-2 rounded-xl bg-brand-surfaceMuted/80 p-3">
-            <select
-              value={entry.movementId}
-              onChange={(e) => onUpdateEntry(index, { movementId: e.target.value })}
-              className={`${editInputClass} text-left`}
-            >
-              {!hasCurrentInOptions && currentMovement && <option value={entry.movementId}>{currentMovement.name}</option>}
-              {options.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={entry.movementId}
+                onChange={(e) => onUpdateEntry(index, { movementId: e.target.value })}
+                className={`${editInputClass} flex-1 text-left`}
+              >
+                {!hasCurrentInOptions && currentMovement && <option value={entry.movementId}>{currentMovement.name}</option>}
+                {options.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              {canAddRemove && editableEntries.length > 1 && (
+                <button
+                  onClick={() => onRemoveEntry!(index)}
+                  aria-label={`Quitar ${currentMovement?.name ?? 'movimiento'}`}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-400"
+                >
+                  <Trash2 size={14} strokeWidth={2.25} />
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               {entry.sets !== undefined && (
                 <label className="flex items-center gap-1.5 text-xs text-neutral-400">
@@ -797,9 +836,28 @@ function EditableBlockEntries({
               )}
               {entry.tempo && <span className="text-xs text-neutral-500">Tempo {entry.tempo}</span>}
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+              Formato
+              <input
+                type="text"
+                value={entry.format ?? ''}
+                placeholder="p.ej. 3 rondas · For Time, Tabata 8 rondas..."
+                onChange={(e) => onUpdateEntry(index, { format: e.target.value || undefined })}
+                className={`${editInputClass} flex-1 text-left`}
+              />
+            </label>
           </div>
         );
       })}
+      {canAddRemove && (
+        <button
+          onClick={() => onAddEntry!(buildNewEntry(block, entries[entries.length - 1]), lastEntryIndex)}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-border py-2 text-xs font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          Añadir movimiento
+        </button>
+      )}
     </div>
   );
 }
@@ -811,11 +869,15 @@ interface SessionBlockCardProps {
   entryIndices?: number[];
   editable?: boolean;
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
+  /** Añade un movimiento nuevo al bloque, justo despues de `afterIndex` (indice global en session.blocks). Solo en bloques que son listas simples — ver `blockHasFixedShape`. */
+  onAddEntry?: (newEntry: SessionBlockResult, afterIndex: number) => void;
+  /** Quita el movimiento en `index` (indice global en session.blocks). */
+  onRemoveEntry?: (index: number) => void;
   /** Datos del atleta para el popup de progresión del movimiento (solo lectura fuera del modo edición). */
   progress?: MovementProgressData;
 }
 
-export function SessionBlockCard({ block, results, isLast, entryIndices, editable, onUpdateEntry, progress }: SessionBlockCardProps) {
+export function SessionBlockCard({ block, results, isLast, entryIndices, editable, onUpdateEntry, onAddEntry, onRemoveEntry, progress }: SessionBlockCardProps) {
   if (results.length === 0) return null;
   const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
@@ -832,7 +894,14 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
         </p>
 
         {editable && onUpdateEntry && entryIndices ? (
-          <EditableBlockEntries block={block} entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
+          <EditableBlockEntries
+            block={block}
+            entries={results}
+            entryIndices={entryIndices}
+            onUpdateEntry={onUpdateEntry}
+            onAddEntry={onAddEntry}
+            onRemoveEntry={onRemoveEntry}
+          />
         ) : block === 'wod' ? (
           isBenchmarkWod ? (
             <BenchmarkWodCard entry={results[0]} index={entryIndices?.[0]} onUpdateEntry={onUpdateEntry} />
