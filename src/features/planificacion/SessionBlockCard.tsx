@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, type LucideIcon } from 'lucide-react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
   getMovementsByBlock,
+  allMovements,
   benchmarkWorkouts,
   getScalingOptions,
   parseLeadingRepCount,
@@ -697,6 +698,64 @@ function groupBySubgroup(results: SessionBlockResult[]): SubgroupBucket[] {
 
 const editInputClass = 'rounded-lg border border-brand-border bg-brand-bg px-2 py-1 text-center text-sm text-white';
 
+const MAX_SEARCH_RESULTS = 20;
+
+/**
+ * Buscador de movimiento en modo edicion: busca en TODO el catalogo de la app (`allMovements`), no
+ * solo en el bloque actual — al editar a mano el atleta puede querer cualquier sustituto real, no
+ * solo uno pensado originalmente para ese bloque. Cada resultado muestra de que bloque(s) viene, para
+ * elegir con contexto.
+ */
+function MovementSearchPicker({ value, onSelect }: { value: string; onSelect: (movementId: string) => void }) {
+  const currentMovement = getMovementById(value);
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const results = open && query.trim()
+    ? allMovements.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase())).slice(0, MAX_SEARCH_RESULTS)
+    : [];
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <div className={`${editInputClass} flex items-center gap-1.5 text-left`}>
+        <Search size={13} strokeWidth={2.5} className="shrink-0 text-neutral-500" />
+        <input
+          type="text"
+          value={open ? query : (currentMovement?.name ?? value)}
+          onFocus={() => setQuery('')}
+          onChange={(e) => {
+            setOpen(true);
+            setQuery(e.target.value);
+          }}
+          onBlur={() => setOpen(false)}
+          placeholder="Buscar movimiento…"
+          className="min-w-0 flex-1 bg-transparent text-left text-white outline-none"
+        />
+      </div>
+      {results.length > 0 && (
+        <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-lg border border-brand-border bg-brand-bg shadow-xl">
+          {results.map((m) => (
+            <button
+              key={m.id}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onSelect(m.id);
+                setOpen(false);
+                setQuery('');
+              }}
+              className="flex w-full flex-col items-start px-3 py-2 text-left transition-colors duration-200 hover:bg-white/5"
+            >
+              <span className="text-sm font-medium text-white">{m.name}</span>
+              <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+                {m.blocks.map((b) => BLOCK_META[b].label).join(' · ')}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Plantilla razonable para un movimiento nuevo dentro de un bloque — copia forma (series/reps/formato/subgrupo) de la fila junto a la que se añade, cambia solo el movimiento. */
 function buildNewEntry(block: Block, template: SessionBlockResult | undefined): SessionBlockResult {
   const pool = getMovementsByBlock(block);
@@ -766,27 +825,11 @@ function EditableBlockEntries({
         }
 
         const currentMovement = getMovementById(entry.movementId);
-        // Todo el catalogo del bloque, no solo los del mismo patron que el que ya hay — al editar a
-        // mano el atleta puede querer cualquier sustituto, no solo uno "parecido" al que salio por
-        // defecto.
-        const options = [...getMovementsByBlock(block)].sort((a, b) => a.name.localeCompare(b.name));
-        const hasCurrentInOptions = options.some((m) => m.id === entry.movementId);
 
         return (
           <div key={index} className="flex flex-col gap-2 rounded-xl bg-brand-surfaceMuted/80 p-3">
             <div className="flex items-center gap-2">
-              <select
-                value={entry.movementId}
-                onChange={(e) => onUpdateEntry(index, { movementId: e.target.value })}
-                className={`${editInputClass} flex-1 text-left`}
-              >
-                {!hasCurrentInOptions && currentMovement && <option value={entry.movementId}>{currentMovement.name}</option>}
-                {options.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
+              <MovementSearchPicker value={entry.movementId} onSelect={(movementId) => onUpdateEntry(index, { movementId })} />
               {canAddRemove && editableEntries.length > 1 && (
                 <button
                   onClick={() => onRemoveEntry!(index)}

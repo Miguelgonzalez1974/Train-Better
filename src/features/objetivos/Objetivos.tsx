@@ -289,24 +289,31 @@ export function Objetivos() {
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {SECTION_TABS.map((tab) => {
           const isActive = activeSection === tab.key;
+          const badgeCount = tab.key === 'objetivos' ? profile.goals.length : 0;
           return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveSection(tab.key)}
-              className={`relative flex items-center justify-center gap-2 overflow-hidden rounded-full px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                isActive
-                  ? 'bg-brand-bg text-white'
-                  : 'border border-brand-border text-neutral-400 hover:border-brand-neon/40 hover:text-neutral-200'
-              }`}
-            >
-              {isActive && <span className="absolute inset-0 rounded-full bg-brand-neon/20 blur-md" />}
-              <tab.Icon
-                size={16}
-                strokeWidth={2.25}
-                className={`relative shrink-0 ${isActive ? 'text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.7)]' : 'text-neutral-500'}`}
-              />
-              <span className="relative">{tab.label}</span>
-            </button>
+            <div key={tab.key} className="relative">
+              <button
+                onClick={() => setActiveSection(tab.key)}
+                className={`relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                  isActive
+                    ? 'bg-brand-bg text-white'
+                    : 'border border-brand-border text-neutral-400 hover:border-brand-neon/40 hover:text-neutral-200'
+                }`}
+              >
+                {isActive && <span className="absolute inset-0 rounded-full bg-brand-neon/20 blur-md" />}
+                <tab.Icon
+                  size={16}
+                  strokeWidth={2.25}
+                  className={`relative shrink-0 ${isActive ? 'text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.7)]' : 'text-neutral-500'}`}
+                />
+                <span className="relative">{tab.label}</span>
+              </button>
+              {badgeCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-gold text-[9px] font-bold text-black">
+                  {badgeCount}
+                </span>
+              )}
+            </div>
           );
         })}
       </div>
