@@ -766,9 +766,10 @@ function EditableBlockEntries({
         }
 
         const currentMovement = getMovementById(entry.movementId);
-        const pool = getMovementsByBlock(block);
-        const samePattern = currentMovement ? pool.filter((m) => m.pattern === currentMovement.pattern) : [];
-        const options = samePattern.length >= 2 ? samePattern : pool;
+        // Todo el catalogo del bloque, no solo los del mismo patron que el que ya hay — al editar a
+        // mano el atleta puede querer cualquier sustituto, no solo uno "parecido" al que salio por
+        // defecto.
+        const options = [...getMovementsByBlock(block)].sort((a, b) => a.name.localeCompare(b.name));
         const hasCurrentInOptions = options.some((m) => m.id === entry.movementId);
 
         return (
