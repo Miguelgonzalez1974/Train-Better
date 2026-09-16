@@ -697,11 +697,6 @@ function groupBySubgroup(results: SessionBlockResult[]): SubgroupBucket[] {
 
 const editInputClass = 'rounded-lg border border-brand-border bg-brand-bg px-2 py-1 text-center text-sm text-white';
 
-/** Bloques con forma fija (primer tecnico + principal): aqui solo se cambia movimiento/series/reps/kg de cada fila, nunca se añade ni se quita ninguna — hacerlo rompería la lógica especial de esa tarjeta (qué carga es la protagonista, etc.). El resto son listas simples donde añadir/quitar es seguro. */
-function blockHasFixedShape(block: Block): boolean {
-  return block === 'strength' || block === 'oly';
-}
-
 /** Plantilla razonable para un movimiento nuevo dentro de un bloque — copia forma (series/reps/formato/subgrupo) de la fila junto a la que se añade, cambia solo el movimiento. */
 function buildNewEntry(block: Block, template: SessionBlockResult | undefined): SessionBlockResult {
   const pool = getMovementsByBlock(block);
@@ -733,7 +728,11 @@ function EditableBlockEntries({
   onRemoveEntry?: (index: number) => void;
 }) {
   const isBenchmarkWod = entries.some((e) => e.movementId.startsWith('benchmark:'));
-  const canAddRemove = !blockHasFixedShape(block) && !isBenchmarkWod && Boolean(onAddEntry) && Boolean(onRemoveEntry);
+  // Un WOD de referencia es una unidad con nombre propio (formato oficial fijo) — no tiene sentido
+  // "añadirle un movimiento". El calentamiento no lo pide (y ahora mismo sus filas ni se ven aqui,
+  // ver el subgroup de mas abajo). El resto, complejo de fuerza/oly incluido, son listas: el numero
+  // de entradas de ComplexCard/EntryRow ya es dinamico, no asume 2 exactas.
+  const canAddRemove = !isBenchmarkWod && block !== 'warmup' && Boolean(onAddEntry) && Boolean(onRemoveEntry);
   const editableEntries = entries.filter((e) => !e.subgroup);
   const lastEntryIndex = entryIndices[entries.length - 1];
 
@@ -869,7 +868,7 @@ interface SessionBlockCardProps {
   entryIndices?: number[];
   editable?: boolean;
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
-  /** Añade un movimiento nuevo al bloque, justo despues de `afterIndex` (indice global en session.blocks). Solo en bloques que son listas simples — ver `blockHasFixedShape`. */
+  /** Añade un movimiento nuevo al bloque, justo despues de `afterIndex` (indice global en session.blocks). No aplica a un WOD de referencia (formato oficial fijo). */
   onAddEntry?: (newEntry: SessionBlockResult, afterIndex: number) => void;
   /** Quita el movimiento en `index` (indice global en session.blocks). */
   onRemoveEntry?: (index: number) => void;
