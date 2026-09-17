@@ -1725,7 +1725,7 @@ function buildWodBlock(
   // filtrada por pico/rampa, asi que nunca reintroduce un formato descartado.
   const preferredFormats = regularFormats.filter((f) => energy.preferFormats.includes(f.kind));
   const formatPool = preferredFormats.length > 0 ? [...regularFormats, ...preferredFormats, ...preferredFormats] : regularFormats;
-  const chosenFormat = isChipperDay
+  let chosenFormat = isChipperDay
     ? { label: 'Chipper — 1 ronda completa', kind: 'chipper' as WodFormatKind }
     : formatPool[Math.floor(rng() * formatPool.length)];
   // Escalera compartida, ascendente o descendente — misma pareja de movimientos, misma cifra de
@@ -1777,7 +1777,7 @@ function buildWodBlock(
   // energético del día. El énfasis del día y el "por qué" del sistema energético van a `coachReasons`.
   const quantCue = wodQuantCue(chosenFormat.kind, timeDomain);
   const howToAttack = quantCue || WOD_FORMAT_RATIONALE[chosenFormat.kind];
-  const notes = `${howToAttack}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}`;
+  let notes = `${howToAttack}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}`;
 
   if (chosenFormat.kind === 'cardioChipper') {
     // 3 bloques descendentes de puro monoestructural. Se eligen 2-3 monos con base conocida,
@@ -1901,6 +1901,25 @@ function buildWodBlock(
       }
     }
     // Sin candidatos suficientes hoy (pool corto tras excluir patrones) — cae al reparto normal.
+  }
+
+  // Los formatos especiales de arriba (cardioChipper, barbellComplex, risingLoadInterval, las
+  // escaleras con peaje) devuelven pronto si su construccion especifica funciona. Si el codigo llega
+  // hasta aqui con uno de esos kinds, es que fallo (pool corto tras excluir patrones/recientes) y
+  // toca el reparto generico de abajo — pero `format`/`notes` seguian describiendo el formato
+  // especial que NO se va a construir (bug real: "tres movimientos de barra" en la nota cuando el
+  // reparto generico solo metio 1). Se sustituyen aqui por los de un For Time generico, acorde a lo
+  // que de verdad se va a montar.
+  const FALLBACK_PRONE_KINDS = new Set<WodFormatKind>([
+    'cardioChipper',
+    'barbellComplex',
+    'risingLoadInterval',
+    'descendingLadderFiller',
+    'ascendingLadderFiller',
+  ]);
+  if (FALLBACK_PRONE_KINDS.has(chosenFormat.kind)) {
+    chosenFormat = { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' };
+    notes = `${WOD_FORMAT_RATIONALE.forTime}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}`;
   }
 
   const picks: Movement[] = [];
