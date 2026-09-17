@@ -2552,9 +2552,6 @@ function strengthProgramCore(
   return buildCoreBlock(pattern, getRecentMovementIds(history), getAvoidedPatterns(painFlags, dateIso));
 }
 
-/** Piezas de cardio suave para el dia de recuperacion activa (bike, row, ski, run, trineo). */
-const RECOVERY_CARDIO_IDS = ['row', 'air-bike', 'ski-erg', 'run', 'sled-push'];
-
 /** Habilidades gimnasticas ligeras aptas para un dia de recuperacion (sin fatiga ni carga). */
 const RECOVERY_SKILL_IDS = [
   'handstand-walk-progression',
@@ -2564,29 +2561,86 @@ const RECOVERY_SKILL_IDS = [
   'rope-climb-technique',
 ];
 
+/**
+ * Base fija del dia de recuperacion activa: bike erg continuo, interrumpido cada X metros por un
+ * "corte" de bajo impacto — vuelve a la bici y repite hasta completar el total. Los 3 grupos de
+ * corte no se mezclan entre si en la misma sesion (un corte de cardio + otro de carga cargada en el
+ * mismo dia no tiene mucho sentido) — se elige un grupo entero y de ahi 1 o 2 movimientos.
+ */
+const RECOVERY_CUT_CARDIO_IDS = ['row', 'ski-erg'];
+const RECOVERY_CUT_CARRY_IDS = [
+  'farmers-carry',
+  'sandbag-carry',
+  'yoke-walk',
+  'suitcase-carry',
+  'sled-push',
+  'sled-drag',
+  'sled-row',
+  'waiters-carry',
+  'overhead-carry',
+];
+const RECOVERY_CUT_CORE_IDS = ['abmat-situp', 'v-up', 'l-sit', 'bear-crawl'];
+const RECOVERY_CUT_GROUPS = [RECOVERY_CUT_CARDIO_IDS, RECOVERY_CUT_CARRY_IDS, RECOVERY_CUT_CORE_IDS];
+
+/** Cuanto hacer de cada corte — fijo por movimiento, no depende de PRs (dia de recuperacion, sin carga real que calcular). */
+const RECOVERY_CUT_REPS: Record<string, string> = {
+  row: '500m',
+  'ski-erg': '400m',
+  'farmers-carry': '40m',
+  'sandbag-carry': '40m',
+  'yoke-walk': '30m',
+  'suitcase-carry': '40m',
+  'waiters-carry': '40m',
+  'overhead-carry': '40m',
+  'sled-push': '20m',
+  'sled-drag': '20m',
+  'sled-row': '20m',
+  'abmat-situp': '15-20 reps',
+  'v-up': '12-15 reps',
+  'l-sit': '20-30 s',
+  'bear-crawl': '20m',
+};
+
+/** Metros de bici entre corte y corte — varia de una sesion a otra, no siempre el mismo tramo. */
+const RECOVERY_BIKE_CHECKPOINTS_M = [2000, 2200, 2500];
+
 function buildRecoveryWodBlock(recentIds: Set<string>, avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
-  const pool = filterAvoidingPain(
-    RECOVERY_CARDIO_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+  const bike = getMovementById('air-bike');
+  if (!bike) return [];
+
+  const group = RECOVERY_CUT_GROUPS[Math.floor(rng() * RECOVERY_CUT_GROUPS.length)];
+  const cutPool = filterAvoidingPain(
+    group.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
     avoidedPatterns,
   );
-  const picks = pickManyVaried(pool, 2, recentIds);
-  if (picks.length === 0) return [];
+  const cuts = pickManyVaried(cutPool, rng() < 0.5 ? 1 : 2, recentIds);
+  if (cuts.length === 0) return [];
 
-  const totalMinutes = 45 + Math.floor(rng() * 4) * 5; // 45 / 50 / 55 / 60
-  const perPieceMinutes = Math.max(10, Math.round(totalMinutes / picks.length / 5) * 5);
+  const totalMinutes = 45;
+  const checkpointMeters = RECOVERY_BIKE_CHECKPOINTS_M[Math.floor(rng() * RECOVERY_BIKE_CHECKPOINTS_M.length)];
+  const cutLabel = cuts.map((m) => `${RECOVERY_CUT_REPS[m.id] ?? ''} ${m.name}`.trim()).join(' + ');
   const title = 'Recuperación activa';
-  const format = `RPE 2 · ~${totalMinutes} min total`;
-  const notes =
-    'No es un WOD puntuable: ritmo conversacional (RPE 2) en toda la pieza — el objetivo es circular sangre y acelerar la recuperación, no generar fatiga.';
+  const format = `RPE 2 · ${totalMinutes} min total`;
+  const sharedNote = 'No es un WOD puntuable: ritmo conversacional (RPE 2) en toda la pieza — el objetivo es circular sangre y acelerar la recuperación, no generar fatiga.';
 
-  return picks.map((movement) => ({
+  const bikeEntry: SessionBlockResult = {
     block: 'wod',
-    movementId: movement.id,
-    reps: movement.id === 'sled-push' ? '8-10 x 30-40m caminando' : `${perPieceMinutes} min continuo`,
+    movementId: bike.id,
+    reps: `${totalMinutes} min total`,
     title,
     format,
-    notes,
+    notes: `Cada ${checkpointMeters}m de bici, para y haz ${cutLabel}. Vuelve a la bici y repite hasta completar los ${totalMinutes} min — el último tramo se recorta si no da tiempo. ${sharedNote}`,
+  };
+  const cutEntries: SessionBlockResult[] = cuts.map((m) => ({
+    block: 'wod',
+    movementId: m.id,
+    reps: RECOVERY_CUT_REPS[m.id] ?? '',
+    title,
+    format,
+    notes: `El corte cada ${checkpointMeters}m de bici. ${sharedNote}`,
   }));
+
+  return [bikeEntry, ...cutEntries];
 }
 
 function buildRecoverySkillBlock(recentIds: Set<string>, avoidedPatterns: Set<MovementPattern>): SessionBlockResult[] {
