@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { BarChart3 } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { buildDailyVolume } from '../../engine/volumeMetrics';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { Modal } from '../shell/Modal';
+import { EmptyState } from '../shell/EmptyState';
 
 interface VolumeSummaryModalProps {
   onClose: () => void;
@@ -37,10 +39,12 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
   return (
     <Modal open onClose={onClose} title="Volumen por día">
       {totalKg === 0 ? (
-        <p className="py-6 text-center text-sm text-neutral-400">
-          Aún no hay series registradas en el modo entreno en los últimos 14 días — el tonelaje de cada día aparecerá aquí en
-          cuanto marques alguna.
-        </p>
+        <EmptyState
+          Icon={BarChart3}
+          title="Sin volumen todavía"
+          description="En cuanto marques una serie con peso en el modo entreno, el tonelaje de cada uno de los últimos 14 días aparecerá aquí."
+          accent="gold"
+        />
       ) : (
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">

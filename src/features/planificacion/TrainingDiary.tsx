@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, NotebookPen, Trash2 } from 'lucide-react';
 import type { SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { resolveMovementDisplayName } from '../../data/movements';
 import { getWeekdayIndex } from '../../engine/periodization';
 import { getMonthlyStats } from '../dashboard/stats';
 import { Modal } from '../shell/Modal';
+import { EmptyState } from '../shell/EmptyState';
 
 interface TrainingDiaryProps {
   history: SessionHistoryEntry[];
@@ -178,7 +179,11 @@ export function TrainingDiary({ history, workLog, trainingDatesLog, onDeleteEntr
       {rxPct != null && <p className="mb-3 text-[11px] text-neutral-500">{rxPct}% de las sesiones de este mes a Rx.</p>}
 
       {weeks.length === 0 ? (
-        <p className="py-6 text-center text-sm text-neutral-500">Aún no has registrado ninguna sesión.</p>
+        <EmptyState
+          Icon={NotebookPen}
+          title="Sin sesiones todavía"
+          description="En cuanto completes tu primer entreno desde Planificación, aparecerá aquí — agrupado por semana, con series, dominio energético y duración."
+        />
       ) : (
         <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
           {weeks.map((week) => (

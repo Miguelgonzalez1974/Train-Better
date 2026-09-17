@@ -799,9 +799,11 @@ function EditableBlockEntries({
     <div className="flex flex-col gap-2.5">
       {entries.map((entry, i) => {
         const index = entryIndices[i];
-        // Las filas de calentamiento de barra ("Calentamiento de barra") no se editan aquí — se
-        // edita el complejo de trabajo, no el warm-up.
-        if (entry.subgroup) return null;
+        // Solo la preparación de barra ("Calentamiento de barra", el Burgener del complejo de oly)
+        // no se edita aquí — se edita el complejo de trabajo, no el warm-up. Antes este filtro
+        // saltaba CUALQUIER fila con subgrupo, lo que de paso dejaba todo el bloque de calentamiento
+        // (que siempre lleva subgrupo: "Activación" / "Específico del WOD") sin poder editarse.
+        if (entry.subgroup === 'Calentamiento de barra') return null;
         if (entry.movementId.startsWith('benchmark:')) {
           const benchmarkId = entry.movementId.replace('benchmark:', '');
           const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);
