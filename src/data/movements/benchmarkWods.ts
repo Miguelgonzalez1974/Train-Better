@@ -875,7 +875,7 @@ export const benchmarkWorkouts: BenchmarkWorkout[] = [
     id: 'weapon-of-choice',
     name: "Weapon of Choice",
     category: 'custom',
-    format: "For time, partir como quieras",
+    format: "For time, partir como quieras: 30 Power Snatch (135/95 lb), 2000m Row, 100 Wall Ball (20/14 lb)",
     movements: ['power-snatch', 'row', 'wall-ball'],
     scoreType: 'time',
     tags: ['comptrain', 'largo', 'oly'],
