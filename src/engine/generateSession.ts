@@ -8,6 +8,7 @@ import {
   skillMovements,
 } from '../data/movements';
 import { getSkillProgressionFor, skillProgressionStepAt, type SkillProgression } from '../data/movements/skillProgressions';
+import { benchmarkHasExplicitScheme } from '../data/movements/benchmarkCompleteness';
 import type {
   AthleteProfile,
   BodyweightEntry,
@@ -1695,8 +1696,13 @@ function buildWodBlock(
       const benchmarkDayCount = countBenchmarkDaySessions(history);
       const dueForSeed = benchmarkDayCount > 0 && benchmarkDayCount % RETEST_INTERVAL === 0;
       if (dueForSeed) {
-        const realPool = benchmarkWorkouts.filter((w) => w.category !== 'custom' && !recentBenchmarkIds.has(w.id));
-        const seedPool = realPool.length > 0 ? realPool : benchmarkWorkouts.filter((w) => w.category !== 'custom');
+        const realPool = benchmarkWorkouts.filter(
+          (w) => w.category !== 'custom' && benchmarkHasExplicitScheme(w) && !recentBenchmarkIds.has(w.id)
+        );
+        const seedPool =
+          realPool.length > 0
+            ? realPool
+            : benchmarkWorkouts.filter((w) => w.category !== 'custom' && benchmarkHasExplicitScheme(w));
         if (seedPool.length > 0) {
           const wod = pickSmartBenchmark(seedPool, week, getLastBenchmarkDomain(history));
           return [
@@ -1711,8 +1717,9 @@ function buildWodBlock(
       }
     }
 
-    const freshBenchmarks = benchmarkWorkouts.filter((w) => !recentBenchmarkIds.has(w.id));
-    const pool = freshBenchmarks.length > 0 ? freshBenchmarks : benchmarkWorkouts;
+    const completeBenchmarks = benchmarkWorkouts.filter(benchmarkHasExplicitScheme);
+    const freshBenchmarks = completeBenchmarks.filter((w) => !recentBenchmarkIds.has(w.id));
+    const pool = freshBenchmarks.length > 0 ? freshBenchmarks : completeBenchmarks.length > 0 ? completeBenchmarks : benchmarkWorkouts;
     const wod = pickSmartBenchmark(pool, week, getLastBenchmarkDomain(history));
     return [
       {
