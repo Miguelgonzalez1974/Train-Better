@@ -221,6 +221,21 @@ describe('mergeProfile — config: gana el local', () => {
     const merged = mergeProfile(remote, base()) as unknown as { _futuro?: number };
     expect(merged._futuro).toBe(42);
   });
+
+  it('weeklyLocks: union por fecha, ninguna semana bloqueada en un dispositivo se pierde', () => {
+    const remote = { ...base(), weeklyLocks: { '2026-03-02': { strengthMovementId: 'back-squat' } } };
+    const local = { ...base(), weeklyLocks: { '2026-03-04': { olyMovementId: 'snatch' } } };
+    const merged = mergeProfile(remote, local);
+    expect(merged.weeklyLocks?.['2026-03-02']?.strengthMovementId).toBe('back-squat');
+    expect(merged.weeklyLocks?.['2026-03-04']?.olyMovementId).toBe('snatch');
+  });
+
+  it('weeklyLocks: en la misma fecha gana el local (decision de planificacion deliberada)', () => {
+    const remote = { ...base(), weeklyLocks: { '2026-03-02': { strengthMovementId: 'back-squat' } } };
+    const local = { ...base(), weeklyLocks: { '2026-03-02': { strengthMovementId: 'front-squat' } } };
+    const merged = mergeProfile(remote, local);
+    expect(merged.weeklyLocks?.['2026-03-02']?.strengthMovementId).toBe('front-squat');
+  });
 });
 
 describe('mergeHistory', () => {

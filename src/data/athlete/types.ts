@@ -261,6 +261,13 @@ export interface AthleteProfile {
    * dispositivo que genera el día "gana" y el otro la hereda al sincronizar en vez de generar la suya.
    */
   sessionCache?: Record<string, DailySession>;
+  /**
+   * Movimiento de fuerza/oly bloqueado para ese día, por fecha ISO — decidido una vez al planificar
+   * la semana (ver `planWeekLocks` en generateSession.ts) para que "qué movimiento toca" no cambie
+   * solo entre una vista y otra; la carga sigue calculándose fresca cada vez a partir de este
+   * movimiento fijo. Solo cubre fuerza y oly — ver planWeekLocks.
+   */
+  weeklyLocks?: Record<string, { strengthMovementId?: string; olyMovementId?: string }>;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */
@@ -330,7 +337,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 32;
+export const SESSION_GEN_VERSION = 33;
 
 export interface DailySession {
   date: string;

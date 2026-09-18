@@ -621,6 +621,13 @@ function buildStrengthBlock(
   plannedPattern: MovementPattern | null,
   /** Dosis del dia (progresion intra-fase x onda de intensidad) — ver `DayDose`. */
   dose: DayDose,
+  /**
+   * Movimiento bloqueado para hoy por `planWeekLocks` (ver AthleteProfile.weeklyLocks) — si es
+   * valido (existe, patron no evitado por dolor), se usa tal cual y se salta toda la eleccion de
+   * patron/movimiento de aqui abajo; la carga sigue calculandose fresca como siempre. Null/undefined
+   * o invalido -> comportamiento normal, sin bloqueo.
+   */
+  lockedMovementId?: string,
 ): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
   const responseBias = clampResponseBias(responseProfile.rpe.bias);
   const rpeAutoreg = getRpeAutoregFactor(history, date, responseProfile.rpe.reliability);
@@ -651,70 +658,109 @@ function buildStrengthBlock(
     }
   }
 
-  // Base: lo que reservo el planificador de microciclo para este dia; si no hay plan, el ciclo natural.
-  let pattern = plannedPattern ?? dayPlan.strengthPattern;
+  // Movimiento bloqueado por la planificacion semanal (ver AthleteProfile.weeklyLocks): valido solo
+  // si existe y su patron no esta evitado por un aviso de dolor nuevo desde que se bloqueo la semana
+  // — nunca se fuerza un movimiento contraindicado, ese dia se decide como si no hubiera bloqueo.
+  const lockedMovement = lockedMovementId ? getMovementById(lockedMovementId) : undefined;
+  const lockedValid = Boolean(lockedMovement && !avoidedPatterns.has(lockedMovement.pattern));
+
+  let pattern: MovementPattern;
+  let movement: Movement;
   let weakPointTag = '';
-  // Si el objetivo va claramente por detras de su calendario (no solo "se acerca la fecha"), se
-  // fuerza todos los dias que apliquen, no solo en los dias de enfasis alternos — un atleta que se
-  // esta quedando atras de verdad no puede esperar a que le toque el turno.
-  const goalForcedPattern = Boolean(
-    pref.movementId &&
-      pref.goal &&
-      actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
-      (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
-  );
-  if (goalForcedPattern) {
-    pattern = getMovementById(pref.movementId!)!.pattern;
-  } else if (!plannedPattern) {
-    // Sin plan de semana: se decide el patron dia a dia como antes. Con plan, el reparto ya
-    // equilibro la semana (incluido el sesgo por estancamiento del perfil de respuesta) y esta
-    // cadena reactiva se salta — pelearia contra una eleccion deliberada.
-    // Antes de mirar puntos debiles a largo plazo, se corrige un desequilibrio real de la semana en
-    // curso (p.ej. horizontalPush lleva 7 dias a cero mientras otro patron ya va por 2+) — el ciclo
-    // natural de 4 patrones deja huecos estructurales para atletas de 3 o 6 dias/semana, y esto pesa
-    // mas que el sesgo probabilistico de un punto flaco: no es una posibilidad, es un hueco real ya
-    // confirmado en el historial de esta semana.
-    // Un patron en reintroduccion progresiva (aviso de molestia recien retirado) o sobrecargado esta
-    // semana (fatiga de zona) no se usa para forzar frecuencia extra: tras semanas evitandolo saldra
-    // como "hueco" y como punto flaco, pero lo que toca es volver poco a poco / dejar asimilar, no
-    // meterle un dia de mas. El ciclo natural si puede caer en el — a carga reducida (ver factores
-    // reintroFactor / fatigueFactor mas abajo).
-    const blockedForBias = (p: MovementPattern) => painReintro.has(p) || isPatternOvercooked(patternFatigue, p);
-    const weeklyGapPattern = weeklyUnderTrainedPattern(history, date, expectedStrengthSessionsPerWeek(trainingDaysPerWeek));
-    if (weeklyGapPattern && !blockedForBias(weeklyGapPattern)) {
-      pattern = weeklyGapPattern;
-      weakPointTag = ' Esta semana no había tocado este patrón todavía — se corrige antes de que se acumule el hueco.';
-    } else {
-      // Prioridad, en orden: un patron cuyo levantamiento raiz lleva estancado/en caida en el
-      // historial real de PRs (señal concreta, no probabilistica) y, si no, el peor valorado por
-      // `computeWeakPoints` (RPE/escalado/tendencia). Ninguno se aplica el 100% de las veces — un
-      // coach da mas frecuencia al punto flaco, no reconstruye la semana entera alrededor de el.
-      const stalledPattern = stalledStrengthPattern(responseProfile);
-      const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history, date);
-      if (stalledPattern && !blockedForBias(stalledPattern) && rng() < WEAK_POINT_BIAS_CHANCE) {
-        pattern = stalledPattern;
-        weakPointTag = ' Este patrón lleva estancado en tu historial de PRs — prioridad de frecuencia para desbloquearlo.';
-      } else if (weakPattern && !blockedForBias(weakPattern) && rng() < WEAK_POINT_BIAS_CHANCE) {
-        pattern = weakPattern;
-        weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
+  let painTag = '';
+  let imbalanceTag = '';
+
+  if (lockedValid) {
+    movement = lockedMovement!;
+    pattern = movement.pattern;
+  } else {
+    // Base: lo que reservo el planificador de microciclo para este dia; si no hay plan, el ciclo natural.
+    pattern = plannedPattern ?? dayPlan.strengthPattern;
+    // Si el objetivo va claramente por detras de su calendario (no solo "se acerca la fecha"), se
+    // fuerza todos los dias que apliquen, no solo en los dias de enfasis alternos — un atleta que se
+    // esta quedando atras de verdad no puede esperar a que le toque el turno.
+    const goalForcedPattern = Boolean(
+      pref.movementId &&
+        pref.goal &&
+        actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
+        (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
+    );
+    if (goalForcedPattern) {
+      pattern = getMovementById(pref.movementId!)!.pattern;
+    } else if (!plannedPattern) {
+      // Sin plan de semana: se decide el patron dia a dia como antes. Con plan, el reparto ya
+      // equilibro la semana (incluido el sesgo por estancamiento del perfil de respuesta) y esta
+      // cadena reactiva se salta — pelearia contra una eleccion deliberada.
+      // Antes de mirar puntos debiles a largo plazo, se corrige un desequilibrio real de la semana en
+      // curso (p.ej. horizontalPush lleva 7 dias a cero mientras otro patron ya va por 2+) — el ciclo
+      // natural de 4 patrones deja huecos estructurales para atletas de 3 o 6 dias/semana, y esto pesa
+      // mas que el sesgo probabilistico de un punto flaco: no es una posibilidad, es un hueco real ya
+      // confirmado en el historial de esta semana.
+      // Un patron en reintroduccion progresiva (aviso de molestia recien retirado) o sobrecargado esta
+      // semana (fatiga de zona) no se usa para forzar frecuencia extra: tras semanas evitandolo saldra
+      // como "hueco" y como punto flaco, pero lo que toca es volver poco a poco / dejar asimilar, no
+      // meterle un dia de mas. El ciclo natural si puede caer en el — a carga reducida (ver factores
+      // reintroFactor / fatigueFactor mas abajo).
+      const blockedForBias = (p: MovementPattern) => painReintro.has(p) || isPatternOvercooked(patternFatigue, p);
+      const weeklyGapPattern = weeklyUnderTrainedPattern(history, date, expectedStrengthSessionsPerWeek(trainingDaysPerWeek));
+      if (weeklyGapPattern && !blockedForBias(weeklyGapPattern)) {
+        pattern = weeklyGapPattern;
+        weakPointTag = ' Esta semana no había tocado este patrón todavía — se corrige antes de que se acumule el hueco.';
+      } else {
+        // Prioridad, en orden: un patron cuyo levantamiento raiz lleva estancado/en caida en el
+        // historial real de PRs (señal concreta, no probabilistica) y, si no, el peor valorado por
+        // `computeWeakPoints` (RPE/escalado/tendencia). Ninguno se aplica el 100% de las veces — un
+        // coach da mas frecuencia al punto flaco, no reconstruye la semana entera alrededor de el.
+        const stalledPattern = stalledStrengthPattern(responseProfile);
+        const weakPattern = weakestUntrainedStrengthPattern(computeWeakPoints(history), history, date);
+        if (stalledPattern && !blockedForBias(stalledPattern) && rng() < WEAK_POINT_BIAS_CHANCE) {
+          pattern = stalledPattern;
+          weakPointTag = ' Este patrón lleva estancado en tu historial de PRs — prioridad de frecuencia para desbloquearlo.';
+        } else if (weakPattern && !blockedForBias(weakPattern) && rng() < WEAK_POINT_BIAS_CHANCE) {
+          pattern = weakPattern;
+          weakPointTag = ' Prioridad extra hoy: este patrón lleva estancado, le damos más frecuencia.';
+        }
       }
     }
-  }
-  // Nunca dos dias de fuerza seguidos con el mismo patron, ni siquiera con un objetivo atrasado
-  // forzandolo: mas frecuencia a lo largo de la semana si, pero "deadlift lunes y deadlift miercoles"
-  // no es lo que hace un coach. El objetivo ya se lleva su cuota de dias por el reparto de semana.
-  pattern = avoidPatternRepeat(pattern, history, date);
+    // Nunca dos dias de fuerza seguidos con el mismo patron, ni siquiera con un objetivo atrasado
+    // forzandolo: mas frecuencia a lo largo de la semana si, pero "deadlift lunes y deadlift miercoles"
+    // no es lo que hace un coach. El objetivo ya se lleva su cuota de dias por el reparto de semana.
+    pattern = avoidPatternRepeat(pattern, history, date);
 
-  // Si el patron de hoy coincide con un aviso de molestia activo, se sustituye por otro de los 4
-  // patrones habituales que no este marcado — un coach real no ignora un aviso de dolor solo
-  // porque "hoy tocaba" ese movimiento.
-  let painTag = '';
-  if (avoidedPatterns.has(pattern)) {
-    const substitute = STRENGTH_SUBSTITUTE_PATTERNS.find((p) => p !== pattern && !avoidedPatterns.has(p));
-    if (substitute) {
-      painTag = ` Cambiado de ${pattern === 'squat' ? 'sentadilla' : pattern === 'hinge' ? 'bisagra de cadera' : pattern === 'verticalPush' ? 'press vertical' : 'press horizontal'} — tienes un aviso de molestia activo que lo evita.`;
-      pattern = substitute;
+    // Si el patron de hoy coincide con un aviso de molestia activo, se sustituye por otro de los 4
+    // patrones habituales que no este marcado — un coach real no ignora un aviso de dolor solo
+    // porque "hoy tocaba" ese movimiento.
+    if (avoidedPatterns.has(pattern)) {
+      const substitute = STRENGTH_SUBSTITUTE_PATTERNS.find((p) => p !== pattern && !avoidedPatterns.has(p));
+      if (substitute) {
+        painTag = ` Cambiado de ${pattern === 'squat' ? 'sentadilla' : pattern === 'hinge' ? 'bisagra de cadera' : pattern === 'verticalPush' ? 'press vertical' : 'press horizontal'} — tienes un aviso de molestia activo que lo evita.`;
+        pattern = substitute;
+      }
     }
+
+    const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
+
+    // Sesgo de desbalance: dentro del patron que ya toca hoy, inclina hacia el levantamiento
+    // infra-desarrollado de un par en desbalance. Solo si ningun objetivo reclama movimiento y
+    // ninguna correccion de patron (hueco semanal / punto debil) ha actuado — es el ajuste mas fino,
+    // cede ante todo lo demas y no genera una segunda nota de "prioridad".
+    let preferId = pref.movementId;
+    let preferChance = pref.preferChance;
+    if (!pref.movementId && weakPointTag === '' && !painReintro.has(pattern) && !isPatternOvercooked(patternFatigue, pattern)) {
+      const imbId = imbalanceBias.strengthLiftIds.find((id) => candidates.some((c) => c.id === id));
+      if (imbId) {
+        preferId = imbId;
+        preferChance = IMBALANCE_BIAS_CHANCE;
+        imbalanceTag = ' Hoy priorizamos este levantamiento: va flojo respecto a otro de su grupo y lo equilibramos.';
+      }
+    }
+    // El objetivo sesga hacia SU levantamiento, pero no hasta el punto de que salga el mismo lift
+    // literal todos los dias del patron: se acota a 0.7 para que ~1 de cada 3 dias rote a otra variante
+    // (sumo / deficit / RDL / rack pull para un objetivo de peso muerto — todas cuentan para su PR raiz).
+    const movementPreferChance = Math.min(preferChance, 0.7);
+    const picked = pickVariedWithPreference(candidates, recentIds, preferId, movementPreferChance);
+    if (!picked) return { blocks: [], pattern, reasons: [] };
+    movement = picked;
   }
 
   // Reintroduccion progresiva: si el patron final de hoy sale de un aviso de molestia retirado hace
@@ -728,30 +774,6 @@ function buildStrengthBlock(
   const fatigueFactor = getPatternFatigueFactor(patternFatigue, [pattern]);
   const fatigueNote =
     fatigueFactor < 1 ? ' Este patrón lleva bastante carga esta semana — bajamos algo el peso para que la zona asimile.' : '';
-
-  const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
-
-  // Sesgo de desbalance: dentro del patron que ya toca hoy, inclina hacia el levantamiento
-  // infra-desarrollado de un par en desbalance. Solo si ningun objetivo reclama movimiento y
-  // ninguna correccion de patron (hueco semanal / punto debil) ha actuado — es el ajuste mas fino,
-  // cede ante todo lo demas y no genera una segunda nota de "prioridad".
-  let imbalanceTag = '';
-  let preferId = pref.movementId;
-  let preferChance = pref.preferChance;
-  if (!pref.movementId && weakPointTag === '' && !painReintro.has(pattern) && !isPatternOvercooked(patternFatigue, pattern)) {
-    const imbId = imbalanceBias.strengthLiftIds.find((id) => candidates.some((c) => c.id === id));
-    if (imbId) {
-      preferId = imbId;
-      preferChance = IMBALANCE_BIAS_CHANCE;
-      imbalanceTag = ' Hoy priorizamos este levantamiento: va flojo respecto a otro de su grupo y lo equilibramos.';
-    }
-  }
-  // El objetivo sesga hacia SU levantamiento, pero no hasta el punto de que salga el mismo lift
-  // literal todos los dias del patron: se acota a 0.7 para que ~1 de cada 3 dias rote a otra variante
-  // (sumo / deficit / RDL / rack pull para un objetivo de peso muerto — todas cuentan para su PR raiz).
-  const movementPreferChance = Math.min(preferChance, 0.7);
-  const movement = pickVariedWithPreference(candidates, recentIds, preferId, movementPreferChance);
-  if (!movement) return { blocks: [], pattern, reasons: [] };
 
   // Perfil de respuesta: ¿el levantamiento concreto de hoy viene estancado? (puede diferir del del objetivo)
   const todayLiftKey = resolveStrengthPRKey(movement) ?? resolveVariantPRKey(movement);
@@ -969,6 +991,13 @@ function buildOlyBlock(
   dose: DayDose,
   /** true en el ultimo dia de oly de la semana: cierra con un toque ligero de la familia contraria (estilo Day 5 de Mayhem). */
   combined = false,
+  /**
+   * Movimiento bloqueado para hoy por `planWeekLocks` (ver AthleteProfile.weeklyLocks) — si existe y
+   * hoy no hay aviso de dolor que afecte a oly, se usa tal cual (la familia se deriva del propio
+   * movimiento) y se salta toda la eleccion de familia/movimiento de aqui abajo; la carga sigue
+   * calculandose fresca como siempre.
+   */
+  lockedMovementId?: string,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -1010,82 +1039,110 @@ function buildOlyBlock(
     }
   }
 
-  let family = plannedFamily ?? dayPlan.olyFamily;
+  const lockedMovement = lockedMovementId ? getMovementById(lockedMovementId) : undefined;
+  const lockedFamily: OlyFamily | undefined = lockedMovement
+    ? lockedMovement.id.includes('snatch')
+      ? 'snatch'
+      : lockedMovement.id.includes('clean') || lockedMovement.id.includes('jerk')
+        ? 'clean'
+        : undefined
+    : undefined;
+  // `avoidedPatterns.has('olyLift')` ya corto la funcion entera al principio si aplica hoy, asi que
+  // aqui basta con que el movimiento bloqueado exista y resuelva a una familia real.
+  const lockedValid = Boolean(lockedMovement && lockedFamily);
+
+  let family: OlyFamily;
+  let movement: Movement;
   let weakPointTag = '';
-  // Con plan de semana activo (el caso normal, con macro), la familia de HOY ya viene decidida por
-  // `weekPlan.buildMicrocyclePlan` para LA SEMANA ENTERA de una vez — incluida la prioridad de un
-  // objetivo de oly urgente, que ya ancla su familia a la mayoria de los dias de oly (ver
-  // `anchorFam`/`goalForcedFamily` en weekPlan.ts) sin dejar de alternar. Nada de lo de aqui abajo
-  // debe tocar esa decision dia a dia: un sesgo reactivo por dia (aunque sea con baja probabilidad)
-  // no tiene forma de saber que decidio el dia anterior/siguiente cuando el atleta esta viendo una
-  // semana futura sin entrenar todavia (vista previa desde `WeekStrip`, que ademas CACHEA lo que
-  // genera) — eso fue justo lo que paso: cada dia tiraba sus propios dados por separado y a veces
-  // salian 3-4 seguidos de la misma familia, y al estar cacheado se quedaba asi para siempre aunque
-  // luego el historial real dijera otra cosa. Esta cadena reactiva por dia solo tiene sentido, y solo
-  // se usa, cuando NO hay plan de semana (sin macro activo).
-  if (!plannedFamily) {
-    // Sin plan de semana: se decide la familia dia a dia. Primero un objetivo de oly urgente
-    // (intensivo, muy avanzado, o detras de calendario); si no aplica, el mismo orden que en fuerza:
-    // una familia con un levantamiento estancado/en caida en el historial real de PRs, si no la peor
-    // valorada en `computeWeakPoints`, si no el sesgo de desbalance.
-    const goalUrgentFamily = Boolean(
-      pref.movementId &&
-        pref.goal &&
-        actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
-        (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
-    );
-    const stalledFam = stalledOlyFamily(responseProfile);
-    const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history, date);
-    if (goalUrgentFamily && rng() < OLY_GOAL_URGENT_BIAS_CHANCE) {
-      family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
-      weakPointTag = ' Tu objetivo de oly pide más frecuencia — hoy priorizamos esta familia.';
-    } else if (stalledFam && rng() < WEAK_POINT_BIAS_CHANCE) {
-      family = stalledFam;
-      weakPointTag = ' Esta familia lleva estancada en tu historial de PRs — más frecuencia para desbloquearla.';
-    } else if (weakFamily && rng() < WEAK_POINT_BIAS_CHANCE) {
-      family = weakFamily;
-      weakPointTag = ' Prioridad extra hoy: esta familia lleva estancada, le damos más frecuencia.';
-    } else if (weakPointTag === '' && imbalanceBias.olyFamilies.length > 0 && rng() < IMBALANCE_BIAS_CHANCE) {
-      // Sin punto debil de familia que corregir, inclina hacia la familia infra-desarrollada de un
-      // par en desbalance (p.ej. snatch bajo respecto al clean). Mismo mecanismo, prioridad menor.
-      family = imbalanceBias.olyFamilies[0];
-      weakPointTag = ' Prioridad hoy: esta familia va floja respecto a la otra — la equilibramos.';
+
+  if (lockedValid) {
+    family = lockedFamily!;
+    movement = lockedMovement!;
+  } else {
+    family = plannedFamily ?? dayPlan.olyFamily;
+    // Con plan de semana activo (el caso normal, con macro), la familia de HOY ya viene decidida por
+    // `weekPlan.buildMicrocyclePlan` para LA SEMANA ENTERA de una vez — incluida la prioridad de un
+    // objetivo de oly urgente, que ya ancla su familia a la mayoria de los dias de oly (ver
+    // `anchorFam`/`goalForcedFamily` en weekPlan.ts) sin dejar de alternar. Nada de lo de aqui abajo
+    // debe tocar esa decision dia a dia: un sesgo reactivo por dia (aunque sea con baja probabilidad)
+    // no tiene forma de saber que decidio el dia anterior/siguiente cuando el atleta esta viendo una
+    // semana futura sin entrenar todavia (vista previa desde `WeekStrip`, que ademas CACHEA lo que
+    // genera) — eso fue justo lo que paso: cada dia tiraba sus propios dados por separado y a veces
+    // salian 3-4 seguidos de la misma familia, y al estar cacheado se quedaba asi para siempre aunque
+    // luego el historial real dijera otra cosa. Esta cadena reactiva por dia solo tiene sentido, y solo
+    // se usa, cuando NO hay plan de semana (sin macro activo).
+    if (!plannedFamily) {
+      // Sin plan de semana: se decide la familia dia a dia. Primero un objetivo de oly urgente
+      // (intensivo, muy avanzado, o detras de calendario); si no aplica, el mismo orden que en fuerza:
+      // una familia con un levantamiento estancado/en caida en el historial real de PRs, si no la peor
+      // valorada en `computeWeakPoints`, si no el sesgo de desbalance.
+      const goalUrgentFamily = Boolean(
+        pref.movementId &&
+          pref.goal &&
+          actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
+          (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
+      );
+      const stalledFam = stalledOlyFamily(responseProfile);
+      const weakFamily = weakestUntrainedOlyFamily(computeWeakPoints(history), history, date);
+      if (goalUrgentFamily && rng() < OLY_GOAL_URGENT_BIAS_CHANCE) {
+        family = pref.movementId!.includes('snatch') ? 'snatch' : 'clean';
+        weakPointTag = ' Tu objetivo de oly pide más frecuencia — hoy priorizamos esta familia.';
+      } else if (stalledFam && rng() < WEAK_POINT_BIAS_CHANCE) {
+        family = stalledFam;
+        weakPointTag = ' Esta familia lleva estancada en tu historial de PRs — más frecuencia para desbloquearla.';
+      } else if (weakFamily && rng() < WEAK_POINT_BIAS_CHANCE) {
+        family = weakFamily;
+        weakPointTag = ' Prioridad extra hoy: esta familia lleva estancada, le damos más frecuencia.';
+      } else if (weakPointTag === '' && imbalanceBias.olyFamilies.length > 0 && rng() < IMBALANCE_BIAS_CHANCE) {
+        // Sin punto debil de familia que corregir, inclina hacia la familia infra-desarrollada de un
+        // par en desbalance (p.ej. snatch bajo respecto al clean). Mismo mecanismo, prioridad menor.
+        family = imbalanceBias.olyFamilies[0];
+        weakPointTag = ' Prioridad hoy: esta familia va floja respecto a la otra — la equilibramos.';
+      }
     }
+    // Igual que en fuerza (ver buildStrengthBlock): la alternancia nunca se desactiva. Con plan de
+    // semana esto es solo un cinturon extra sobre una decision ya buena; sin plan, es la unica defensa
+    // real que queda contra repetir familia dos dias seguidos.
+    family = avoidOlyFamilyRepeat(family, history, date);
+
+    // Desbalance `direction: 'high'` (version local, solo para sesgar los candidatos de aqui abajo —
+    // se recalcula fuera del if/else para las notas, igual en los dos casos): la variante de potencia
+    // de esta familia va demasiado cerca del levantamiento completo -> el limite es recibir abajo.
+    const receivingFocusForBias = imbalanceBias.receivingFamilies.includes(family);
+
+    const fullLiftIdsForBias = family === 'snatch' ? ['snatch'] : ['clean-and-jerk', 'clean'];
+    let candidates = getMovementsByBlock('oly').filter((m) =>
+      family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk'),
+    );
+
+    const isEarlyWeek = week <= 2 && !receivingFocusForBias;
+    const biased = isEarlyWeek
+      ? candidates.filter((m) => !fullLiftIdsForBias.includes(m.id))
+      : candidates.filter((m) => fullLiftIdsForBias.includes(m.id));
+    if (biased.length > 0) candidates = biased;
+
+    if (pref.movementId && !candidates.some((c) => c.id === pref.movementId)) {
+      const preferredMovement = getMovementById(pref.movementId);
+      const sameFamily = preferredMovement && (family === 'snatch' ? preferredMovement.id.includes('snatch') : true);
+      if (preferredMovement && sameFamily) candidates = [...candidates, preferredMovement];
+    }
+
+    const picked = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
+    if (!picked) return { blocks: [], reasons: [] };
+    movement = picked;
   }
-  // Igual que en fuerza (ver buildStrengthBlock): la alternancia nunca se desactiva. Con plan de
-  // semana esto es solo un cinturon extra sobre una decision ya buena; sin plan, es la unica defensa
-  // real que queda contra repetir familia dos dias seguidos.
-  family = avoidOlyFamilyRepeat(family, history, date);
 
   // Desbalance `direction: 'high'`: la variante de potencia de esta familia va demasiado cerca del
   // levantamiento completo -> el limite es recibir abajo, no el tiron. Hoy se prioriza la version
-  // completa (recepcion en sentadilla) y un primer de recepcion, sea cual sea la semana.
+  // completa (recepcion en sentadilla) y un primer de recepcion, sea cual sea la semana. Se calcula
+  // aqui (tras converger family/movement) para que aplique igual con o sin bloqueo de semana.
   const receivingFocus = imbalanceBias.receivingFamilies.includes(family);
   const receivingTag = receivingFocus
     ? ` Tu ${family === 'snatch' ? 'power snatch' : 'power clean'} va muy cerca de tu levantamiento completo — hoy el foco es recibir abajo (${
         family === 'snatch' ? 'snatch balance / overhead squat, recepción profunda' : 'recepción en sentadilla completa'
       }), no la fuerza de tirón.`
     : '';
-
   const fullLiftIds = family === 'snatch' ? ['snatch'] : ['clean-and-jerk', 'clean'];
-  let candidates = getMovementsByBlock('oly').filter((m) =>
-    family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk'),
-  );
-
-  const isEarlyWeek = week <= 2 && !receivingFocus;
-  const biased = isEarlyWeek
-    ? candidates.filter((m) => !fullLiftIds.includes(m.id))
-    : candidates.filter((m) => fullLiftIds.includes(m.id));
-  if (biased.length > 0) candidates = biased;
-
-  if (pref.movementId && !candidates.some((c) => c.id === pref.movementId)) {
-    const preferredMovement = getMovementById(pref.movementId);
-    const sameFamily = preferredMovement && (family === 'snatch' ? preferredMovement.id.includes('snatch') : true);
-    if (preferredMovement && sameFamily) candidates = [...candidates, preferredMovement];
-  }
-
-  const movement = pickVariedWithPreference(candidates, recentIds, pref.movementId, pref.preferChance);
-  if (!movement) return { blocks: [], reasons: [] };
 
   if (isTestDay && fullLiftIds.includes(movement.id)) {
     const testLoadKg = roundToNearestPlate(resolveOlyPR(movement, prs, family, variantPrs));
@@ -2942,6 +2999,11 @@ export function generateDailySession(
       }
     : { ...dayDose, strengthSets: clampDose(dayDose.strengthSets * crowdTrim, 0.6, 1.18) };
 
+  // Movimiento de fuerza/oly bloqueado para hoy por la planificacion semanal (ver
+  // AthleteProfile.weeklyLocks / planWeekLocks) — si no hay bloqueo para esta fecha, undefined, y
+  // buildStrengthBlock/buildOlyBlock deciden como siempre.
+  const weekLock = profile.weeklyLocks?.[dateIso];
+
   const strengthResult = buildStrengthBlock(
     dayPlan,
     week,
@@ -2964,6 +3026,7 @@ export function generateDailySession(
     responseProfile,
     plannedPattern,
     strengthOlyDose,
+    weekLock?.strengthMovementId,
   );
   const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
 
@@ -2989,6 +3052,7 @@ export function generateDailySession(
     plannedFamily,
     strengthOlyDose,
     plannedOlyCombined,
+    weekLock?.olyMovementId,
   );
 
   const wodBlock = buildWodBlock(
@@ -3410,6 +3474,43 @@ export function generateSessionForDate(
       ? generateDailySession(profile, history, activeMacro, date, goals)
       : generateOffSeasonSession(profile, history, date);
   });
+}
+
+/**
+ * Genera y bloquea el movimiento de fuerza/oly de cada dia de una semana (lunes a domingo) de una
+ * sola vez — "el coach planifica y bloquea la semana" sin depender de un disparador real de domingo
+ * (ver AthleteProfile.weeklyLocks). Encadena cada dia generado como una entrada de historial
+ * "simulada" (mismo `toHistoryEntry` que usa completar una sesion de verdad, con valores neutros:
+ * Rx, RPE 7, 60 min — no se persisten ni se muestran, solo alimentan la variedad DENTRO de la
+ * semana) antes de generar el siguiente, para que "no repetir patron/familia dos dias seguidos" y
+ * "hueco semanal" funcionen igual que si ya se hubiera entrenado. Solo se extrae el `movementId`
+ * elegido — la carga de esta pasada se descarta; se recalcula fresca cada vez que esa fecha se
+ * genera de verdad (ver `weekLock` en `generateDailySession`).
+ *
+ * Solo tiene efecto en dias que caen dentro de un macrociclo activo (unico camino que hoy lee
+ * `weeklyLocks`) — un dia de programa de fuerza pura o fuera de estructura ignora el bloqueo.
+ */
+export function planWeekLocks(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  mondayDate: Date,
+  goals: Goal[],
+): Record<string, { strengthMovementId?: string; olyMovementId?: string }> {
+  const locks: Record<string, { strengthMovementId?: string; olyMovementId?: string }> = {};
+  let workingHistory = history;
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(mondayDate);
+    day.setDate(day.getDate() + i);
+    const dateIso = toLocalIsoDate(day);
+    const session = generateSessionForDate(profile, workingHistory, day, goals);
+    const strengthMovementId = session.blocks.find((b) => b.block === 'strength')?.movementId;
+    // El primer tecnico del complejo de oly ("2-3" reps) no es el levantamiento principal — se salta
+    // para no bloquear el dia a un movimiento de calentamiento en vez del lift de verdad.
+    const olyMovementId = session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
+    if (strengthMovementId || olyMovementId) locks[dateIso] = { strengthMovementId, olyMovementId };
+    workingHistory = [...workingHistory, toHistoryEntry(session, 'rx', 7, 60)];
+  }
+  return locks;
 }
 
 /**

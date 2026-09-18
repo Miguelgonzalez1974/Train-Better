@@ -34,6 +34,7 @@ import {
   type SessionOverrideType,
 } from '../../engine/generateSession';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
+import { ensureWeekLocked } from './weeklyLock';
 import { MESOCYCLE_PHASE, roundToNearestPlate } from '../../engine/oneRepMaxTables';
 import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
@@ -127,7 +128,8 @@ function loadTodaySession(
     }
   }
   if (!hasActiveTrainingStructure(profile, todayIso)) return null;
-  const fresh = generateSessionForDate(profile, history, new Date(), goals);
+  const lockedProfile = ensureWeekLocked(profile, history, goals, todayIso);
+  const fresh = generateSessionForDate(lockedProfile, history, new Date(), goals);
   athleteRepository.saveCachedSession(fresh);
   return fresh;
 }
@@ -344,6 +346,10 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   // render, en vez de quedarse mostrando el dia de ayer hasta recargar la pagina a mano.
   useEffect(() => {
     setSession(loadTodaySession(profile, history, goals, todayIso));
+    // `loadTodaySession` puede haber bloqueado la semana (`ensureWeekLocked`) escribiendo
+    // directamente en el repositorio — se relee aqui para que el estado de React no se quede con un
+    // `profile.weeklyLocks` desactualizado (un `handleSaveProfile` posterior partiria de este estado).
+    setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
     setFocusMode(false);
     setEditMode(false);

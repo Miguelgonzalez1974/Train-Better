@@ -5,6 +5,7 @@ import {
   generateSessionForDate,
   isCachedSessionOrphaned,
   isCachedSessionStale,
+  planWeekLocks,
   WOD_SYNONYM_GROUPS,
 } from './generateSession';
 import { WOD_PAIR_AFFINITY } from './wodDomains';
@@ -370,6 +371,54 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(isCachedSessionStale(edited)).toBe(false);
     expect(isCachedSessionOrphaned(edited, makeProfile({ macrocycles: [], strengthPrograms: [] }), toLocalIsoDate(d))).toBe(false);
     expect(adoptAdditiveEngineFields(edited, profile, [], d, profile.goals)).toBe(edited);
+  });
+
+  it('planWeekLocks: el movimiento de fuerza/oly de cada dia de la semana no cambia aunque el historial real sea distinto al usado para planificarla', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 6 });
+    const monday = consecutiveDates(START, 1)[0]; // START es lunes, semana 1 del macro fixture
+    const locks = planWeekLocks(profile, [], monday, profile.goals);
+    const weekDates = consecutiveDates(START, 7);
+    const lockedProfile: AthleteProfile = { ...profile, weeklyLocks: locks };
+
+    // Historial real "distinto al planificado" -- perturba autorregulacion/RPE sin tocar que
+    // movimiento toca, que es justo lo que debe quedarse fijo.
+    const perturbedHistory: SessionHistoryEntry[] = [
+      {
+        date: toLocalIsoDate(new Date(monday.getTime() - 86400000)),
+        mesocycleWeek: 1,
+        movementIds: ['deadlift'],
+        rxOrScaled: 'rx',
+        rpe: 9,
+        durationMin: 70,
+        strengthPattern: 'hinge',
+      },
+    ];
+
+    let checkedAny = false;
+    for (const d of weekDates) {
+      const dateIso = toLocalIsoDate(d);
+      const lock = locks[dateIso];
+      if (!lock) continue;
+
+      const sessionA = generateSessionForDate(lockedProfile, [], d, profile.goals);
+      const sessionB = generateSessionForDate(lockedProfile, perturbedHistory, d, profile.goals);
+
+      if (lock.strengthMovementId) {
+        checkedAny = true;
+        const idA = sessionA.blocks.find((b) => b.block === 'strength')?.movementId;
+        const idB = sessionB.blocks.find((b) => b.block === 'strength')?.movementId;
+        expect(idA).toBe(lock.strengthMovementId);
+        expect(idB).toBe(lock.strengthMovementId);
+      }
+      if (lock.olyMovementId) {
+        checkedAny = true;
+        const idA = sessionA.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
+        const idB = sessionB.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
+        expect(idA).toBe(lock.olyMovementId);
+        expect(idB).toBe(lock.olyMovementId);
+      }
+    }
+    expect(checkedAny, 'no se bloqueo ningun movimiento de fuerza/oly en toda la semana').toBe(true);
   });
 
   it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {

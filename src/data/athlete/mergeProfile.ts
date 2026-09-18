@@ -22,6 +22,8 @@ const PR_LOG_LIMIT = 150;
 const SET_FEEDBACK_LOG_LIMIT = 120;
 const WORK_LOG_LIMIT = 300;
 const TRAINING_DATES_LOG_LIMIT = 400;
+/** ~8-9 semanas de bloqueos (7 fechas cada una) — mas que de sobra, ver `pruneByProximityToToday`. */
+const WEEKLY_LOCKS_LIMIT = 60;
 
 /** Une dos listas por una clave; en colision gana `pick` (por defecto, la de `b` = local). Ordena por `sortKey` y recorta a `limit` (los mas recientes). */
 function mergeByKey<T>(
@@ -206,5 +208,8 @@ export function mergeProfile(
     ),
     trainingDatesLog: mergeStringSet(remote.trainingDatesLog, local.trainingDatesLog, TRAINING_DATES_LOG_LIMIT),
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
+    // Union por fecha, gana el local en la misma fecha (es una decision de planificacion deliberada,
+    // igual criterio que el resto de campos "de config") — recortado igual que sessionCache.
+    weeklyLocks: pruneByProximityToToday({ ...(remote.weeklyLocks ?? {}), ...(local.weeklyLocks ?? {}) }, WEEKLY_LOCKS_LIMIT),
   };
 }

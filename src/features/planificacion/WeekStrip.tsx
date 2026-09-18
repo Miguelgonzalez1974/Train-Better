@@ -7,6 +7,7 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from './DaySessionBlocks';
+import { ensureWeekLocked } from './weeklyLock';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -67,7 +68,8 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     // Sin macrociclo NI programa de fuerza activo ese dia y nada elegido todavia: no se
     // auto-genera ni se muestra "Mantenimiento" — mismo criterio que la vista de "Sesion de hoy".
     if (!hasActiveTrainingStructure(profile, dateIso)) return null;
-    const fresh = generateSessionForDate(profile, history, date, goals);
+    const lockedProfile = ensureWeekLocked(profile, history, goals, dateIso);
+    const fresh = generateSessionForDate(lockedProfile, history, date, goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;
   }, [expanded, weekOffset, profile, history, goals]);
