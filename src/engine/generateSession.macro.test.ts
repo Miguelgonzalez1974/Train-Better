@@ -421,6 +421,82 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(checkedAny, 'no se bloqueo ningun movimiento de fuerza/oly en toda la semana').toBe(true);
   });
 
+  it('planWeekLocks: el movimiento de accesorio bloqueado por rol no cambia aunque el historial real sea distinto', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 6 });
+    const monday = consecutiveDates(START, 1)[0];
+    const locks = planWeekLocks(profile, [], monday, profile.goals);
+    const weekDates = consecutiveDates(START, 7);
+    const lockedProfile: AthleteProfile = { ...profile, weeklyLocks: locks };
+
+    const perturbedHistory: SessionHistoryEntry[] = [
+      {
+        date: toLocalIsoDate(new Date(monday.getTime() - 86400000)),
+        mesocycleWeek: 1,
+        movementIds: ['deadlift'],
+        rxOrScaled: 'rx',
+        rpe: 9,
+        durationMin: 70,
+        strengthPattern: 'hinge',
+      },
+    ];
+
+    let checkedAny = false;
+    for (const d of weekDates) {
+      const dateIso = toLocalIsoDate(d);
+      const lock = locks[dateIso];
+      if (!lock?.accessoryMovements) continue;
+
+      const sessionA = generateSessionForDate(lockedProfile, [], d, profile.goals);
+      const sessionB = generateSessionForDate(lockedProfile, perturbedHistory, d, profile.goals);
+      for (const [role, movementId] of Object.entries(lock.accessoryMovements)) {
+        checkedAny = true;
+        const idA = sessionA.blocks.find((b) => b.block === 'accessory' && b.accessoryRole === role)?.movementId;
+        const idB = sessionB.blocks.find((b) => b.block === 'accessory' && b.accessoryRole === role)?.movementId;
+        // Un rol bloqueado puede no salir ese dia (menos superseries por dosis) -- si sale, tiene que
+        // ser el movimiento bloqueado; si no sale, no rompe nada.
+        if (idA !== undefined) expect(idA).toBe(movementId);
+        if (idB !== undefined) expect(idB).toBe(movementId);
+      }
+    }
+    expect(checkedAny, 'no se bloqueo ningun rol de accesorio en toda la semana').toBe(true);
+  });
+
+  it('planWeekLocks: el benchmark de un dia de test bloqueado no cambia aunque el historial real sea distinto', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 6 });
+    const monday = consecutiveDates(START, 1)[0];
+    const locks = planWeekLocks(profile, [], monday, profile.goals);
+    const weekDates = consecutiveDates(START, 7);
+    const lockedProfile: AthleteProfile = { ...profile, weeklyLocks: locks };
+
+    const perturbedHistory: SessionHistoryEntry[] = [
+      {
+        date: toLocalIsoDate(new Date(monday.getTime() - 86400000)),
+        mesocycleWeek: 1,
+        movementIds: ['benchmark:fran'],
+        rxOrScaled: 'rx',
+        rpe: 9,
+        durationMin: 20,
+        wodResult: { scoreType: 'time', value: '3:45' },
+      },
+    ];
+
+    let checkedAny = false;
+    for (const d of weekDates) {
+      const dateIso = toLocalIsoDate(d);
+      const lock = locks[dateIso];
+      if (!lock?.wodBenchmarkId) continue;
+      checkedAny = true;
+
+      const sessionA = generateSessionForDate(lockedProfile, [], d, profile.goals);
+      const sessionB = generateSessionForDate(lockedProfile, perturbedHistory, d, profile.goals);
+      const wodA = sessionA.blocks.find((b) => b.block === 'wod')?.movementId;
+      const wodB = sessionB.blocks.find((b) => b.block === 'wod')?.movementId;
+      expect(wodA).toBe(`benchmark:${lock.wodBenchmarkId}`);
+      expect(wodB).toBe(`benchmark:${lock.wodBenchmarkId}`);
+    }
+    expect(checkedAny, 'ningun dia de la semana salio como dia de test').toBe(true);
+  });
+
   it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {
     const bad: string[] = [];
     for (const [key, partners] of Object.entries(WOD_PAIR_AFFINITY)) {

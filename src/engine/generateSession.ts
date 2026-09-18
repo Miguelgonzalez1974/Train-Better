@@ -1631,6 +1631,10 @@ function buildWodBlock(
   /** Peso corporal más reciente del atleta (kg) — para la carga RX relativa al peso corporal de los
    *  movimientos de WOD sin PR propio (thruster, S2OH, DB, KB…). null -> esos van sin carga. */
   bodyweightKg: number | null,
+  /** Benchmark bloqueado para hoy si esta fecha salio como dia de test al planificar la semana (ver
+   *  `planWeekLocks`) — si no resuelve a un WOD real del catalogo, se decide normal. Solo aplica a
+   *  dias de benchmark; el WOD "normal" nunca se bloquea. */
+  lockedBenchmarkId?: string,
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1672,6 +1676,35 @@ function buildWodBlock(
     // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
     const retestCandidate = !isTaper ? findRetestCandidate(history) : null;
     const isRetestDue = retestCandidate ? benchmarkDaysSince(history, retestCandidate.prevDate) >= RETEST_INTERVAL : false;
+
+    // Dia de test bloqueado al planificar la semana: se sirve el mismo benchmark siempre, sin pasar
+    // por la cascada de retest/siembra/pick libre — igual que un movimiento de fuerza/oly bloqueado.
+    const lockedWod = lockedBenchmarkId ? benchmarkWorkouts.find((w) => w.id === lockedBenchmarkId) : undefined;
+    if (lockedWod) {
+      if (retestCandidate && retestCandidate.wod.id === lockedWod.id) {
+        const { prevDate, prevResult } = retestCandidate;
+        const chaseNote =
+          lockedWod.scoreType === 'time'
+            ? `Objetivo: bajar de ${prevResult.value} — un 2-4% menos ya es un buen salto.`
+            : `Objetivo: superar ${prevResult.value} — apunta a +2-4 reps.`;
+        return [
+          {
+            block: 'wod',
+            movementId: `benchmark:${lockedWod.id}`,
+            format: lockedWod.format,
+            notes: `${lockedWod.name} — ${lockedWod.format}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
+          },
+        ];
+      }
+      return [
+        {
+          block: 'wod',
+          movementId: `benchmark:${lockedWod.id}`,
+          format: lockedWod.format,
+          notes: `${lockedWod.name} — ${lockedWod.format}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
+        },
+      ];
+    }
 
     if (retestCandidate && isRetestDue) {
       const { wod, prevDate, prevResult } = retestCandidate;
@@ -2113,6 +2146,9 @@ function buildAccessoryBlock(
   complementFamily?: StrengthFamily,
   /** Tope de superseries — se baja a 1 los días que además llevan el remate de brazos. */
   maxSupersets = 2,
+  /** Movimiento bloqueado por rol, decidido al planificar la semana (ver `planWeekLocks`). Un rol sin
+   *  entrada aquí, o cuyo movimiento ya no es válido hoy (patrón evitado por dolor), se decide normal. */
+  lockedByRole?: Partial<Record<AccessoryRole, string>>,
 ): SessionBlockResult[] {
   // 3 series es el base; la dosis del dia lo mueve entre 2 y 4.
   const accSets = Math.min(4, Math.max(2, Math.round(3 * dose.strengthSets)));
@@ -2140,19 +2176,24 @@ function buildAccessoryBlock(
   const used = new Set(recentIds);
   const out: SessionBlockResult[] = [];
   plan.forEach((p, i) => {
-    const members: Movement[] = [];
+    const members: { movement: Movement; role: AccessoryRole }[] = [];
     for (const role of p.roles) {
-      const pick = pickAccessoryRoleMovement(role, used, avoidedPatterns);
+      const lockedId = lockedByRole?.[role];
+      const lockedMovement = lockedId ? getMovementById(lockedId) : undefined;
+      const pick =
+        lockedMovement && !avoidedPatterns.has(lockedMovement.pattern)
+          ? lockedMovement
+          : pickAccessoryRoleMovement(role, used, avoidedPatterns);
       if (pick) {
         used.add(pick.id);
-        members.push(pick);
+        members.push({ movement: pick, role });
       }
     }
     if (members.length === 0) return;
     const format = `Superserie ${String.fromCharCode(65 + i)}`;
     const notes = `${p.label}. ${p.rationale} ${scheme.note} Alterna ambos movimientos con el mínimo descanso; descansa al completar la pareja.`;
-    for (const m of members) {
-      out.push({ block: 'accessory', movementId: m.id, sets: accSets, reps: scheme.reps, format, notes });
+    for (const { movement: m, role } of members) {
+      out.push({ block: 'accessory', movementId: m.id, sets: accSets, reps: scheme.reps, format, notes, accessoryRole: role });
     }
   });
 
@@ -3078,6 +3119,7 @@ export function generateDailySession(
     plannedEnergy,
     wodDose,
     latestBodyweightKg(profile.bodyweightLog),
+    weekLock?.wodBenchmarkId,
   );
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
@@ -3091,6 +3133,7 @@ export function generateDailySession(
         history,
         leastTrainedFamily(microPlan.strengthPattern),
         armsToday ? 1 : 2,
+        weekLock?.accessoryMovements,
       )
     : [];
   const armsWork = armsToday ? buildArmsBlock(avoidedPatterns) : [];
@@ -3502,8 +3545,8 @@ export function planWeekLocks(
   history: SessionHistoryEntry[],
   mondayDate: Date,
   goals: Goal[],
-): Record<string, { strengthMovementId?: string; olyMovementId?: string }> {
-  const locks: Record<string, { strengthMovementId?: string; olyMovementId?: string }> = {};
+): NonNullable<AthleteProfile['weeklyLocks']> {
+  const locks: NonNullable<AthleteProfile['weeklyLocks']> = {};
   let workingHistory = history;
   for (let i = 0; i < 7; i++) {
     const day = new Date(mondayDate);
@@ -3514,7 +3557,22 @@ export function planWeekLocks(
     // El primer tecnico del complejo de oly ("2-3" reps) no es el levantamiento principal — se salta
     // para no bloquear el dia a un movimiento de calentamiento en vez del lift de verdad.
     const olyMovementId = session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
-    if (strengthMovementId || olyMovementId) locks[dateIso] = { strengthMovementId, olyMovementId };
+    const accessoryEntries = session.blocks.filter(
+      (b): b is typeof b & { accessoryRole: AccessoryRole } => b.block === 'accessory' && Boolean(b.accessoryRole),
+    );
+    const accessoryMovements =
+      accessoryEntries.length > 0
+        ? Object.fromEntries(accessoryEntries.map((b) => [b.accessoryRole, b.movementId]))
+        : undefined;
+    // Solo los dias que la simulacion marco como dia de test llevan un benchmark que bloquear — el
+    // WOD "normal" (no-benchmark) no se bloquea, sigue variando hasta que se entrena.
+    const wodBenchmarkMovementId = session.blocks.find((b) => b.block === 'wod')?.movementId;
+    const wodBenchmarkId = wodBenchmarkMovementId?.startsWith('benchmark:')
+      ? wodBenchmarkMovementId.replace('benchmark:', '')
+      : undefined;
+    if (strengthMovementId || olyMovementId || accessoryMovements || wodBenchmarkId) {
+      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId };
+    }
     workingHistory = [...workingHistory, toHistoryEntry(session, 'rx', 7, 60)];
   }
   return locks;

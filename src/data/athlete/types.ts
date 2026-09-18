@@ -262,12 +262,25 @@ export interface AthleteProfile {
    */
   sessionCache?: Record<string, DailySession>;
   /**
-   * Movimiento de fuerza/oly bloqueado para ese día, por fecha ISO — decidido una vez al planificar
-   * la semana (ver `planWeekLocks` en generateSession.ts) para que "qué movimiento toca" no cambie
-   * solo entre una vista y otra; la carga sigue calculándose fresca cada vez a partir de este
-   * movimiento fijo. Solo cubre fuerza y oly — ver planWeekLocks.
+   * Movimiento de fuerza/oly (y, si aplica, accesorio por rol / benchmark del día de test) bloqueado
+   * para ese día, por fecha ISO — decidido una vez al planificar la semana (ver `planWeekLocks` en
+   * generateSession.ts) para que "qué toca" no cambie solo entre una vista y otra; la carga/series
+   * siguen calculándose frescas cada vez a partir de lo ya fijado. El WOD "normal" (no-benchmark) no
+   * se bloquea — ver planWeekLocks.
    */
-  weeklyLocks?: Record<string, { strengthMovementId?: string; olyMovementId?: string }>;
+  weeklyLocks?: Record<
+    string,
+    {
+      strengthMovementId?: string;
+      olyMovementId?: string;
+      /** Movimiento bloqueado por rol de accesorio (ver `AccessoryRole` en generateSession.ts) — unión inline para no acoplar esta capa al motor. */
+      accessoryMovements?: Partial<
+        Record<'unilateralLeg' | 'plyo' | 'posterior' | 'hPush' | 'vPush' | 'hPull' | 'vPull', string>
+      >;
+      /** Id (sin el prefijo "benchmark:") del WOD de referencia bloqueado para este día, si ese día salió como día de test al planificar la semana. */
+      wodBenchmarkId?: string;
+    }
+  >;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */
@@ -312,6 +325,8 @@ export interface SessionBlockResult {
   logAsSingle?: boolean;
   /** Marca series rectas de oly encadenadas sin soltar la barra (touch-and-go) — pastilla "T&G" junto a series/reps. Ausente = reset entre reps (default). Solo bloque oly. */
   repStyle?: 'touch-and-go';
+  /** Rol que cubre esta entrada dentro del superset de accesorio (ver `AccessoryRole` en generateSession.ts) — permite bloquear el movimiento de ese rol al planificar la semana. Solo bloque accessory, ausente en el fallback de pool agotado. */
+  accessoryRole?: 'unilateralLeg' | 'plyo' | 'posterior' | 'hPush' | 'vPush' | 'hPull' | 'vPull';
   /**
    * Objetivo orientativo del WOD estimado por el motor (`src/engine/wodTargets.ts`) — banda de
    * tiempo / rondas / reps. Solo bloque 'wod' generado (no benchmark). `low === 0 && high === 0`
@@ -337,7 +352,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 34;
+export const SESSION_GEN_VERSION = 35;
 
 export interface DailySession {
   date: string;
