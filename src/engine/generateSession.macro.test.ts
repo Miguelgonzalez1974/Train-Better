@@ -10,7 +10,7 @@ import {
   WOD_SYNONYM_GROUPS,
 } from './generateSession';
 import { getWodLoadFactor, WOD_LOAD_FLOOR } from './autoregulation';
-import { WOD_PAIR_AFFINITY } from './wodDomains';
+import { getWodDomain, WOD_PAIR_AFFINITY } from './wodDomains';
 import { toLocalIsoDate } from './periodization';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../data/athlete/types';
 import {
@@ -543,6 +543,27 @@ describe('generateSessionForDate — macrociclo', () => {
     // Sin memoria salen ~6 de 38; con ella 0 (se tolera 1 por el reset a forTime cuando un formato especial no se llega a construir).
     const inWindow = kinds.filter((k, i) => (i > 0 && k === kinds[i - 1]) || (i > 1 && k === kinds[i - 2])).length;
     expect(inWindow, `formatos repetidos dentro de la ventana: ${inWindow}/${kinds.length}`).toBeLessThanOrEqual(1);
+  });
+
+  it('dominio planificado del WOD: el dominio que manda aporta al menos 2 movimientos, y la semana reparte los tres', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const leadByLabel: [string, 'weighted' | 'gymnastics' | 'monostructural'][] = [
+      ['manda la barra', 'weighted'],
+      ['mandan los gimnásticos', 'gymnastics'],
+      ['manda el cardio', 'monostructural'],
+    ];
+    const seen = new Set<string>();
+    for (const d of consecutiveDates(START, 84)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const wod = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
+      const note = wod[0]?.notes ?? '';
+      const hit = leadByLabel.find(([label]) => note.includes(`Foco de la semana: hoy ${label}`));
+      if (!hit) continue;
+      seen.add(hit[1]);
+      const inLead = wod.filter((b) => getWodDomain(b.movementId) === hit[1]).length;
+      expect(inLead, `${s.date}: ${wod.map((b) => b.movementId).join(', ')}`).toBeGreaterThanOrEqual(2);
+    }
+    expect(seen.size, 'la semana no reparte los tres dominios').toBe(3);
   });
 
   it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {

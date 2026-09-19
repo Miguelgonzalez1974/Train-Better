@@ -1,7 +1,7 @@
 import type { MovementPattern } from '../data/movements/types';
 import { type OlyFamily } from './periodization';
 import { stalledOlyFamily, stalledStrengthPattern, type ResponseProfile } from './responseProfile';
-import { PHASE_DOMINANT_ENERGY, type EnergySystem } from './wodDomains';
+import { PHASE_DOMINANT_ENERGY, type EnergySystem, type WodDomain } from './wodDomains';
 
 /**
  * Planificador de microciclo: en vez de decidir cada dia en aislamiento (ciclo crudo de patron +
@@ -35,6 +35,9 @@ export interface MicrocyclePlan {
    *  que dos dias seguidos no repitan estimulo metabolico. Los slots sin WOD (recuperacion de n=6)
    *  llevan el dominante como relleno inocuo. */
   energySystem: EnergySystem[];
+  /** Dominio que manda en el WOD de cada `trainingDayIndex` (barra / gimnasticos / cardio) — repartido
+   *  para que los WODs de la semana queden equilibrados. Ver `planWodDomains`. */
+  wodDomain: WodDomain[];
   /** Intensidad relativa del dia por `trainingDayIndex` — onda dura/media/suave para que la semana
    *  no sea plana y dos dias exigentes no caigan seguidos. El dia 0 (benchmark) siempre es 'alta'. */
   dayIntensity: DayIntensity[];
@@ -211,6 +214,47 @@ export function planEnergySystems(
   return out;
 }
 
+/** Dominio "natural" de cada sistema energetico — desempata cuando la semana esta equilibrada. */
+const ENERGY_DOMAIN_AFFINITY: Record<EnergySystem, WodDomain> = {
+  'base-aerobica': 'monostructural',
+  umbral: 'gymnastics',
+  potencia: 'weighted',
+  recuperacion: 'monostructural',
+};
+const WOD_DOMAIN_ORDER: WodDomain[] = ['gymnastics', 'weighted', 'monostructural'];
+const MONO_HEAVY_ENERGY = new Set<EnergySystem>(['base-aerobica', 'recuperacion']);
+
+/**
+ * Reparte que dominio manda en cada WOD generado de la semana: equilibra los tres (barra, gimnasticos,
+ * cardio) en vez de dejarlo al azar dia a dia, sin repetir el mismo dos dias seguidos, y a igualdad
+ * favorece el dominio natural del sistema energetico del dia. Determinista y sin PRNG. El slot 0 es el
+ * dia de benchmark (no genera WOD) y no cuenta para el reparto.
+ */
+export function planWodDomains(n: 3 | 4 | 5 | 6, energySystem: EnergySystem[]): WodDomain[] {
+  const counts: Record<WodDomain, number> = { gymnastics: 0, weighted: 0, monostructural: 0 };
+  const out: WodDomain[] = Array.from({ length: n }, () => 'gymnastics');
+  let prev: WodDomain | null = null;
+  for (const slot of wodDoingSlots(n)) {
+    if (slot === 0) continue;
+    // Base aerobica y recuperacion ya exigen 2 de 3 movimientos ciclicos (`monoFloor` del sistema
+    // energetico): ese dia es de cardio por definicion, y asignarle barra o gimnasticos como "lider"
+    // seria una promesa que el WOD no puede cumplir.
+    if (MONO_HEAVY_ENERGY.has(energySystem[slot])) {
+      out[slot] = 'monostructural';
+      counts.monostructural++;
+      prev = 'monostructural';
+      continue;
+    }
+    const preferred = ENERGY_DOMAIN_AFFINITY[energySystem[slot]];
+    const score = (d: WodDomain) => counts[d] * 10 + (d === preferred ? 0 : 3) + (d === prev ? 100 : 0);
+    const best = [...WOD_DOMAIN_ORDER].sort((a, b) => score(a) - score(b))[0];
+    out[slot] = best;
+    counts[best]++;
+    prev = best;
+  }
+  return out;
+}
+
 /** `trainingDayIndex` de los slots que de verdad haran bloque de fuerza esta semana. */
 function strengthDoingSlots(n: 3 | 4 | 5 | 6): number[] {
   // Todos los días de entreno llevan fuerza + oly (los 4 principales cada día). El único día sin
@@ -355,5 +399,8 @@ export function buildMicrocyclePlan(input: {
   // Onda de intensidad dura/media/suave de la semana (ver `planDayIntensity`).
   const dayIntensity = planDayIntensity(n, phase);
 
-  return { weekNumber, phase, strengthPattern, olyFamily, olyCombined, energySystem, dayIntensity };
+  // Dominio que manda en el WOD de cada dia (ver `planWodDomains`).
+  const wodDomain = planWodDomains(n, energySystem);
+
+  return { weekNumber, phase, strengthPattern, olyFamily, olyCombined, energySystem, wodDomain, dayIntensity };
 }

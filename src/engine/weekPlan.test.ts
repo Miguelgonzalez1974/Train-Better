@@ -48,6 +48,31 @@ describe('buildMicrocyclePlan', () => {
     }
   });
 
+  it('wodDomain: un dominio por dia; dias de base aerobica/recuperacion son de cardio y el resto se reparte sin repetir dias seguidos', () => {
+    const monoHeavy = new Set(['base-aerobica', 'recuperacion']);
+    for (const n of [3, 4, 5, 6] as const) {
+      for (const phase of [1, 2, 3, 4] as const) {
+        const p = plan(n, phase);
+        expect(p.wodDomain).toHaveLength(n);
+        // Dias de WOD generado: todos menos el 0 (benchmark) y el de recuperacion de n=6 (indice 3).
+        const slots = p.wodDomain.map((_, i) => i).filter((i) => i !== 0 && !(n === 6 && i === 3));
+        for (const i of slots) {
+          if (monoHeavy.has(p.energySystem[i])) expect(p.wodDomain[i], `n=${n} fase=${phase} slot=${i}`).toBe('monostructural');
+        }
+        for (let k = 1; k < slots.length; k++) {
+          const a = slots[k - 1];
+          const b = slots[k];
+          if (monoHeavy.has(p.energySystem[a]) && monoHeavy.has(p.energySystem[b])) continue;
+          expect(p.wodDomain[a] === p.wodDomain[b], `n=${n} fase=${phase} slots=${a},${b}`).toBe(false);
+        }
+        // En acumulacion/intensificacion (fase 1-2) con >=3 dias de WOD salen los tres dominios.
+        if (phase <= 2 && slots.length >= 3) {
+          expect(new Set(slots.map((i) => p.wodDomain[i])).size, `n=${n} fase=${phase}`).toBe(3);
+        }
+      }
+    }
+  });
+
   it('marca como combinado exactamente el ultimo dia de oly de la semana (si hay >=2)', () => {
     for (const n of [3, 4, 5, 6] as const) {
       const p = plan(n, 1);

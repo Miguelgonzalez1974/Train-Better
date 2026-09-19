@@ -279,6 +279,8 @@ export interface AthleteProfile {
       >;
       /** Id (sin el prefijo "benchmark:") del WOD de referencia bloqueado para este día, si ese día salió como día de test al planificar la semana. */
       wodBenchmarkId?: string;
+      /** Fecha ISO en que se decidio este bloqueo — permite saber si un dia perdido de la semana ocurrio DESPUES de planificar (y hay que re-planificar los dias que quedan). */
+      plannedOn?: string;
     }
   >;
 }
@@ -354,7 +356,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 36;
+export const SESSION_GEN_VERSION = 37;
 
 export interface DailySession {
   date: string;

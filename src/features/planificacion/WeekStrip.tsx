@@ -64,11 +64,20 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     // Ignora una sesión periodizada huérfana (su macro/programa se borró) —se limpia de verdad al
     // borrar la estructura— o generada por una versión anterior del motor (se regenera abajo,
     // determinista, y se re-cachea sellada). Aquí solo hay días futuros sin registrar.
-    if (cached && !isCachedSessionOrphaned(cached, profile, dateIso) && !isCachedSessionStale(cached)) return cached;
+    // El bloqueo semanal se resuelve antes de servir la cache: una re-planificacion tras un dia
+    // perdido puede dejar la sesion cacheada de este dia contradiciendo al bloqueo nuevo.
+    const structured = hasActiveTrainingStructure(profile, dateIso);
+    const lockedProfile = structured ? ensureWeekLocked(profile, history, goals, dateIso) : profile;
+    if (
+      cached &&
+      !isCachedSessionOrphaned(cached, profile, dateIso) &&
+      !isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[dateIso])
+    ) {
+      return cached;
+    }
     // Sin macrociclo NI programa de fuerza activo ese dia y nada elegido todavia: no se
     // auto-genera ni se muestra "Mantenimiento" — mismo criterio que la vista de "Sesion de hoy".
-    if (!hasActiveTrainingStructure(profile, dateIso)) return null;
-    const lockedProfile = ensureWeekLocked(profile, history, goals, dateIso);
+    if (!structured) return null;
     const fresh = generateSessionForDate(lockedProfile, history, date, goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;

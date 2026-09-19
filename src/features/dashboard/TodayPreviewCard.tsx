@@ -60,7 +60,9 @@ export function TodayPreviewCard({
   const session = useMemo(() => {
     if (completedToday || !hasActiveTrainingStructure(profile, todayIso)) return null;
     const cached = athleteRepository.getCachedSession(todayIso);
-    if (cached && !isCachedSessionOrphaned(cached, profile, todayIso) && !isCachedSessionStale(cached)) return cached;
+    if (cached && !isCachedSessionOrphaned(cached, profile, todayIso) && !isCachedSessionStale(cached, profile.weeklyLocks?.[todayIso])) {
+      return cached;
+    }
     return generateSessionForDate(profile, history, new Date(), profile.goals);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, history, todayIso, completedToday]);

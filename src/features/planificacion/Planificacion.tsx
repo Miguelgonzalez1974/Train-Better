@@ -114,10 +114,14 @@ function loadTodaySession(
   todayIso: string,
 ): DailySession | null {
   const cached = athleteRepository.getCachedSession(todayIso);
+  // El bloqueo semanal se resuelve ANTES de servir la cache: si la semana se re-planifico tras un dia
+  // perdido, la sesion cacheada de hoy puede contradecir al bloqueo nuevo y hay que regenerarla.
+  const structured = hasActiveTrainingStructure(profile, todayIso);
+  const lockedProfile = structured ? ensureWeekLocked(profile, history, goals, todayIso) : profile;
   if (cached) {
     if (isCachedSessionOrphaned(cached, profile, todayIso)) {
       athleteRepository.deleteCachedSession(todayIso);
-    } else if (!isCachedSessionStale(cached)) {
+    } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso])) {
       return cached;
     } else if (history.some((h) => h.date === todayIso)) {
       const adopted = adoptAdditiveEngineFields(cached, profile, history, new Date(), goals);
@@ -127,8 +131,7 @@ function loadTodaySession(
       athleteRepository.deleteCachedSession(todayIso);
     }
   }
-  if (!hasActiveTrainingStructure(profile, todayIso)) return null;
-  const lockedProfile = ensureWeekLocked(profile, history, goals, todayIso);
+  if (!structured) return null;
   const fresh = generateSessionForDate(lockedProfile, history, new Date(), goals);
   athleteRepository.saveCachedSession(fresh);
   return fresh;

@@ -68,6 +68,7 @@ import {
   WOD_RX_BW_FRACTION,
   WOD_TIME_DOMAIN,
   type EnergySystem,
+  type WodDomain,
   type WodFormatKind,
   type WodTimeDomain,
 } from './wodDomains';
@@ -1380,6 +1381,12 @@ const RETEST_INTERVAL = 6;
 /** Cuantos de los ultimos WODs generados (con formato registrado) se excluyen del sorteo de formato. */
 const WOD_FORMAT_MEMORY = 2;
 
+const WOD_LEAD_LABEL: Record<WodDomain, string> = {
+  weighted: 'hoy manda la barra (el WOD carga peso; otro día de la semana mandan los gimnásticos y otro el cardio)',
+  gymnastics: 'hoy mandan los gimnásticos (el WOD trabaja control corporal; otro día manda la barra y otro el cardio)',
+  monostructural: 'hoy manda el cardio (el WOD es de motor; otro día manda la barra y otro los gimnásticos)',
+};
+
 function formatIsoDateShort(iso: string): string {
   return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00:00`));
 }
@@ -1650,6 +1657,8 @@ function buildWodBlock(
   /** Salida: el `WodFormatKind` final del WOD generado (no benchmark) — el llamador lo estampa en el
    *  bloque para que el historial recuerde que formato se hizo (variedad entre dias). */
   kindOut?: { kind?: WodFormatKind },
+  /** Dominio que manda hoy segun el plan de la semana (`MicrocyclePlan.wodDomain`); null sin macro. */
+  plannedDomain?: WodDomain | null,
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1876,6 +1885,25 @@ function buildWodBlock(
   // (gimnástico + con carga), no dos monoestructurales.
   if (chosenFormat.kind === 'maxReps') monoTarget = 1;
 
+  // Dominio que el microciclo asigno a HOY (ver `planWodDomains`): la semana reparte quien manda —
+  // barra, gimnasticos o cardio— para que el conjunto de WODs quede equilibrado. El dominio que manda
+  // aporta 2 de los 3 movimientos. No aplica a escaleras compartidas (pareja fija barra+gimnastico) ni
+  // a dias de fuerza; y en pico/descarga (semana > 2) "barra manda" se ignora — mismo criterio
+  // conservador que `domainCycle`.
+  // Barra/gimnasticos solo mandan si quedan >=2 huecos no ciclicos: un suelo de cardio alto (base
+  // aerobica, objetivo de resistencia) los deja en 1 y el dominio "lider" no se puede cumplir.
+  const leadDomain: WodDomain | null =
+    plannedDomain &&
+    !lowInterferenceWod &&
+    !isSharedLadder &&
+    !(plannedDomain === 'weighted' && week > 2) &&
+    (plannedDomain === 'monostructural' || movementCount - monoTarget >= 2)
+      ? plannedDomain
+      : null;
+  if (leadDomain === 'monostructural' && chosenFormat.kind !== 'maxReps') {
+    monoTarget = Math.max(monoTarget, Math.min(2, movementCount - 1));
+  }
+
   // Mismo mecanismo de sesgo que ya usan fuerza y skill (goalPreference + pickVariedWithPreference):
   // si el atleta tiene un objetivo de fuerza/potencia sobre un lift que ademas es de los habilitados
   // para WOD (ver WOD_BARBELL_LOAD_PERCENT), ese lift aparece con mas frecuencia como el movimiento
@@ -2089,6 +2117,22 @@ function buildWodBlock(
     // movimientos con carga ni dos gimnasticos en este formato en concreto.
     pickFrom(weightedPool, wodLiftPref.movementId, wodLiftPref.preferChance);
     pickFrom(gymnasticsPool);
+  } else if (leadDomain === 'weighted' || leadDomain === 'gymnastics') {
+    // Dominio planificado para hoy: manda en los movimientos no monoestructurales (2 de 3), el otro
+    // dominio entra solo si sobran huecos (chipper de 5).
+    const leadPool = leadDomain === 'weighted' ? weightedPool : gymnasticsPool;
+    const otherPool = leadDomain === 'weighted' ? gymnasticsPool : weightedPool;
+    const pickDomain = (p: Movement[]) =>
+      p === weightedPool ? pickFrom(p, wodLiftPref.movementId, wodLiftPref.preferChance) : pickFrom(p);
+    pickDomain(leadPool);
+    for (let i = 0; i < monoTarget && picks.length < movementCount; i++) pickFrom(monoPool);
+    let leadFill = 0;
+    while (picks.length < movementCount) {
+      const before = picks.length;
+      pickDomain(leadFill % 2 === 0 ? leadPool : otherPool);
+      if (picks.length === before) break;
+      leadFill++;
+    }
   } else {
     pickFrom(gymnasticsPool);
     for (let i = 0; i < monoTarget && picks.length < movementCount; i++) pickFrom(monoPool);
@@ -2132,7 +2176,11 @@ function buildWodBlock(
   const bwLoadNote = usesBwLoad
     ? ' Las cargas de barra/mancuerna/kettlebell son una guía a tu peso corporal — ajústalas a lo que te deje ciclar sin fallar.'
     : '';
-  const notesWithTarget = `${notes}${bwLoadNote}${wodTarget ? ` ${wodTarget.note}` : ''}`;
+  // Solo se anuncia el foco si de verdad se cumplio (un pool corto por dolor/patrones excluidos puede
+  // impedir el segundo movimiento del dominio que manda).
+  const leadHonored = leadDomain !== null && picks.filter((m) => getWodDomain(m.id) === leadDomain).length >= 2;
+  const leadNote = leadDomain && leadHonored ? ` Foco de la semana: ${WOD_LEAD_LABEL[leadDomain]}.` : '';
+  const notesWithTarget = `${notes}${leadNote}${bwLoadNote}${wodTarget ? ` ${wodTarget.note}` : ''}`;
   const targetField = wodTargetField(wodTarget);
 
   return picks.map((m, i) => ({
@@ -3016,6 +3064,7 @@ export function generateDailySession(
   const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
   const plannedOlyCombined = microPlan.olyCombined[dayPlan.trainingDayIndex] ?? false;
   const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
+  const plannedDomain = microPlan.wodDomain[dayPlan.trainingDayIndex] ?? null;
 
   // Dosis del dia = progresion DENTRO del mesociclo (el volumen/intensidad ondula a lo largo de las
   // semanas de la fase, no es plano) x onda de intensidad dura/media/suave de la semana. Se calcula
@@ -3166,6 +3215,7 @@ export function generateDailySession(
     weekLock?.wodBenchmarkId,
     wodLoadFactor,
     wodKindOut,
+    plannedDomain,
   );
   const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
@@ -3592,14 +3642,41 @@ export function planWeekLocks(
   history: SessionHistoryEntry[],
   mondayDate: Date,
   goals: Goal[],
+  options?: {
+    /** Re-planificacion parcial: solo se (re)deciden los dias desde esta fecha; los anteriores no se tocan. */
+    fromDate?: Date;
+    /** Sesiones ya fijadas por el atleta (editadas a mano o registradas) — no se re-deciden ni se
+     *  bloquean, pero cuentan como historial simulado para que la variedad de los dias que quedan las tenga en cuenta. */
+    protectedSessions?: Record<string, DailySession>;
+    /** Se estampa en cada bloqueo (`plannedOn`). */
+    plannedOn?: string;
+  },
 ): NonNullable<AthleteProfile['weeklyLocks']> {
   const locks: NonNullable<AthleteProfile['weeklyLocks']> = {};
+  const fromIso = options?.fromDate ? toLocalIsoDate(options.fromDate) : null;
+  const protectedSessions = options?.protectedSessions ?? {};
+  // Los bloqueos viejos de los dias que se van a (re)decidir se quitan: si no, generar cada dia los
+  // obedeceria en vez de decidir de nuevo.
+  const strippedLocks = { ...(profile.weeklyLocks ?? {}) };
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mondayDate);
+    d.setDate(d.getDate() + i);
+    const iso = toLocalIsoDate(d);
+    if (!protectedSessions[iso] && (!fromIso || iso >= fromIso)) delete strippedLocks[iso];
+  }
+  const planProfile: AthleteProfile = { ...profile, weeklyLocks: strippedLocks };
   let workingHistory = history;
   for (let i = 0; i < 7; i++) {
     const day = new Date(mondayDate);
     day.setDate(day.getDate() + i);
     const dateIso = toLocalIsoDate(day);
-    const session = generateSessionForDate(profile, workingHistory, day, goals);
+    if (fromIso && dateIso < fromIso) continue;
+    const fixed = protectedSessions[dateIso];
+    if (fixed) {
+      if (!workingHistory.some((h) => h.date === dateIso)) workingHistory = [...workingHistory, toHistoryEntry(fixed, 'rx', 7, 60)];
+      continue;
+    }
+    const session = generateSessionForDate(planProfile, workingHistory, day, goals);
     const strengthMovementId = session.blocks.find((b) => b.block === 'strength')?.movementId;
     // El primer tecnico del complejo de oly ("2-3" reps) no es el levantamiento principal — se salta
     // para no bloquear el dia a un movimiento de calentamiento en vez del lift de verdad.
@@ -3618,7 +3695,7 @@ export function planWeekLocks(
       ? wodBenchmarkMovementId.replace('benchmark:', '')
       : undefined;
     if (strengthMovementId || olyMovementId || accessoryMovements || wodBenchmarkId) {
-      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId };
+      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, plannedOn: options?.plannedOn };
     }
     workingHistory = [...workingHistory, toHistoryEntry(session, 'rx', 7, 60)];
   }
@@ -3677,11 +3754,36 @@ export function isCachedSessionOrphaned(session: DailySession, profile: AthleteP
  * elegidas a mano (`swapLabel`), corregidas a mano (`editedByAthlete`) y de mantenimiento (no
  * periodizadas) nunca son "viejas".
  */
-export function isCachedSessionStale(session: DailySession): boolean {
+export function isCachedSessionStale(session: DailySession, lock?: WeeklyLock): boolean {
   if (session.source === 'custom' || session.swapLabel || session.editedByAthlete) return false;
   const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
   if (!periodized) return false;
-  return (session.genVersion ?? 0) < SESSION_GEN_VERSION;
+  if ((session.genVersion ?? 0) < SESSION_GEN_VERSION) return true;
+  return lock ? cachedSessionDisagreesWithLock(session, lock) : false;
+}
+
+type WeeklyLock = NonNullable<AthleteProfile['weeklyLocks']>[string];
+
+/**
+ * True si la sesion cacheada (no editada ni registrada) no coincide con el bloqueo semanal vigente de
+ * su fecha — p.ej. porque se re-planifico la semana tras un dia perdido, o porque la cacheo una vista
+ * previa anterior al bloqueo. Sirve para que la cache nunca contradiga al bloqueo. Solo compara los
+ * movimientos principales (fuerza/oly/benchmark), que son lo que el bloqueo fija.
+ */
+function cachedSessionDisagreesWithLock(session: DailySession, lock: WeeklyLock): boolean {
+  if (lock.strengthMovementId) {
+    const id = session.blocks.find((b) => b.block === 'strength')?.movementId;
+    if (id && id !== lock.strengthMovementId) return true;
+  }
+  if (lock.olyMovementId) {
+    const id = session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
+    if (id && id !== lock.olyMovementId) return true;
+  }
+  if (lock.wodBenchmarkId) {
+    const id = session.blocks.find((b) => b.block === 'wod')?.movementId;
+    if (id && id !== `benchmark:${lock.wodBenchmarkId}`) return true;
+  }
+  return false;
 }
 
 /**
