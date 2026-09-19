@@ -3080,7 +3080,15 @@ export function generateDailySession(
   const responseProfile = engineResponseProfile(
     computeResponseProfile(history, profile.prLog, date, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, profile.prs),
   );
-  const { week, reason: deloadReason } = resolveTrainingWeek(calendarWeek, acwrZone, goals, date, responseProfile.recovery.tier);
+  const { week, reason: deloadReason } = resolveTrainingWeek(
+    calendarWeek,
+    acwrZone,
+    goals,
+    date,
+    responseProfile.recovery.tier,
+    history,
+    responseProfile.rpe.reliability,
+  );
   const isTaper = isTaperActive(goals, date);
   const testDayFocus = resolveTestDayFocus(week);
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);

@@ -358,7 +358,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 39;
+export const SESSION_GEN_VERSION = 40;
 
 export interface DailySession {
   date: string;
@@ -368,7 +368,7 @@ export interface DailySession {
   /** Sello de `SESSION_GEN_VERSION` con el que se genero — lo pone `saveCachedSession`. Ausente en sesiones cacheadas antes de introducir el sello (se tratan como version 0). */
   genVersion?: number;
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */
-  deloadReason?: 'fatiga' | 'taper';
+  deloadReason?: 'fatiga' | 'taper' | 'rpe-alto';
   deloadNote?: string;
   /**
    * Resumen "por que tu sesion es asi hoy" — mismos fragmentos ya visibles dentro de cada bloque
