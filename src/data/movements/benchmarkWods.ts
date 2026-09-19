@@ -1185,9 +1185,10 @@ export const benchmarkWorkouts: BenchmarkWorkout[] = [
     id: 'machete',
     name: "Machete",
     category: 'custom',
-    format: "For time [25 min de tope], rondas crecientes de \"Macho Man\"",
+    format:
+      "For time [15 min de tope]: 1 ronda de Macho Man + 50 double-unders; 2 rondas de Macho Man + 50 double-unders; 3 rondas de Macho Man + 50 double-unders. 1 ronda de Macho Man = 3 power cleans + 3 front squats + 3 push jerks (barra 60/40 kg)",
     movements: ['double-under', 'power-clean', 'front-squat', 'push-jerk'],
-    timeCapMinutes: 25,
+    timeCapMinutes: 15,
     scoreType: 'time',
     tags: ['comptrain', 'muy-largo', 'oly'],
   },
