@@ -72,7 +72,7 @@ import {
   type WodFormatKind,
   type WodTimeDomain,
 } from './wodDomains';
-import { estimateWodTarget, type WodTarget } from './wodTargets';
+import { calibrateWodTarget, estimateWodTarget, getWodPerformance, type WodTarget } from './wodTargets';
 import {
   computeAcwr,
   computePatternFatigue,
@@ -425,7 +425,7 @@ function wodQuantCue(kind: WodFormatKind, td: WodTimeDomain): string {
 /** Proyecta un `WodTarget` a la forma inline que guarda el bloque (sin la frase, que ya va en `notes`). */
 function wodTargetField(t: WodTarget | null): SessionBlockResult['wodTarget'] | undefined {
   if (!t) return undefined;
-  return { scoreType: t.scoreType, unit: t.unit, low: t.low, high: t.high, display: t.display };
+  return { scoreType: t.scoreType, unit: t.unit, low: t.low, high: t.high, display: t.display, calibration: t.calibration };
 }
 
 /** Que tag de cooldown.ts encaja mejor con cada patron de fuerza del dia (ver buildCooldownBlock). */
@@ -1911,6 +1911,13 @@ function buildWodBlock(
   // lift de WOD (p.ej. un objetivo de gimnasticos), preferChance queda a 0 y no cambia nada.
   const wodLiftPref = goalPreference(goals, (m) => m.id in WOD_BARBELL_LOAD_PERCENT, history);
 
+  // El objetivo de tiempo/rondas/reps se calibra con lo que el atleta ya ha rendido en Rx frente a la
+  // estimacion base del motor (ver `getWodPerformance`) — el liston deja de ser el de un atleta medio.
+  const estimateTarget: typeof estimateWodTarget = (input) => {
+    const base = estimateWodTarget(input);
+    return base ? calibrateWodTarget(base, getWodPerformance(history, input.kind)) : base;
+  };
+
   // Trifecta clasica de CrossFit: 1 gimnastico + 1 con carga + 1 monoestructural cuando es posible.
   const gymnasticsPool = pool.filter((m) => getWodDomain(m.id) === 'gymnastics');
   const weightedPool = pool.filter((m) => getWodDomain(m.id) === 'weighted');
@@ -1956,7 +1963,7 @@ function buildWodBlock(
         const tiers = CARDIO_CHIPPER_TIERS.map((f) => Math.round((base.amount * f) / 10) * 10);
         return { movementId: m.id, reps: `${tiers.join('-')} ${unitLabel(base.unit)}` };
       });
-      const ccTarget = estimateWodTarget({ kind: 'cardioChipper', entries: chipperEntries, timeDomain });
+      const ccTarget = estimateTarget({ kind: 'cardioChipper', entries: chipperEntries, timeDomain });
       const ccNotes = ccTarget ? `${notes} ${ccTarget.note}` : notes;
       const field = wodTargetField(ccTarget);
       return chipperEntries.map((e) => ({
@@ -1978,7 +1985,7 @@ function buildWodBlock(
     mains.forEach((m) => usedForComplex.add(m.id));
     const filler = pickVaried(monoPool, usedForComplex);
     if (mains.length === 3 && filler) {
-      const bcTarget = estimateWodTarget({
+      const bcTarget = estimateTarget({
         kind: 'barbellComplex',
         entries: [...mains, filler].map((m) => ({ movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '8-10' })),
         timeDomain,
@@ -2010,7 +2017,7 @@ function buildWodBlock(
       const fixed = pickVaried(gymnasticsPool, usedForRisingLoad);
       const prKey = resolveStrengthPRKey(barbell) ?? resolveOlyPRKey(barbell);
       if (fixed && prKey) {
-        const rlTarget = estimateWodTarget({
+        const rlTarget = estimateTarget({
           kind: 'risingLoadInterval',
           entries: [barbell, fixed].map((m) => ({ movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '5-8' })),
           timeDomain,
@@ -2043,7 +2050,7 @@ function buildWodBlock(
       if (filler) {
         const steps = isAscending ? ASCENDING_LADDER_FILLER_STEPS : DESCENDING_LADDER_FILLER_STEPS;
         const loadKg = wodMovementLoadKg(main, prs, bodyweightKg, loadFactor);
-        const lfTarget = estimateWodTarget({
+        const lfTarget = estimateTarget({
           kind: chosenFormat.kind,
           entries: [
             { movementId: main.id, reps: String(steps[0]) },
@@ -2075,9 +2082,15 @@ function buildWodBlock(
     'ascendingLadderFiller',
   ]);
   if (FALLBACK_PRONE_KINDS.has(chosenFormat.kind)) {
-    chosenFormat = { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' };
-    notes = `${WOD_FORMAT_RATIONALE.forTime}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}${wodLoadNote}`;
-    if (kindOut) kindOut.kind = 'forTime';
+    // Formato generico de reemplazo: el primero de la lista que no haya salido en los ultimos WODs
+    // (respeta la memoria de formato tambien aqui); forTime si todos han salido.
+    const forTimeFormat = regularFormats.find((f) => f.kind === 'forTime')!;
+    chosenFormat =
+      (['forTime', 'amrap', 'interval', 'emom'] as const)
+        .map((k) => regularFormats.find((f) => f.kind === k))
+        .find((f) => f && !recentFormatKinds.has(f.kind)) ?? forTimeFormat;
+    notes = `${WOD_FORMAT_RATIONALE[chosenFormat.kind]}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}${wodLoadNote}`;
+    if (kindOut) kindOut.kind = chosenFormat.kind;
   }
 
   const picks: Movement[] = [];
@@ -2164,7 +2177,7 @@ function buildWodBlock(
 
   // Objetivo orientativo del WOD (tiempo / rondas / reps) — ver `wodTargets.ts`. Se añade a la nota
   // y se guarda estructurado en cada entrada para poder juzgar el resultado al completar la sesión.
-  const wodTarget = estimateWodTarget({
+  const wodTarget = estimateTarget({
     kind: chosenFormat.kind,
     entries: picks.map((m) => ({ movementId: m.id, reps: ladderReps ?? WOD_PRESCRIPTION[m.id] ?? '12-15' })),
     timeDomain,
@@ -3837,6 +3850,21 @@ export function toHistoryEntry(
   const wodMovementIds = session.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
   const strengthMovement = session.blocks.find((b) => b.block === 'strength');
   const olyMovement = session.blocks.find((b) => b.block === 'oly' && !b.subgroup);
+  // Banda BASE del objetivo del WOD (sin el ajuste de calibracion), para medir despues cuanto rinde el
+  // atleta frente a la estimacion del motor (ver `getWodPerformance`).
+  // El formato se lee del primer bloque de WOD (los objetivos cualitativos —interval, emom— no tienen
+  // banda numerica pero su formato tambien alimenta la memoria de formato); la banda, del que la tenga.
+  const wodKindBlock = session.blocks.find((b) => b.block === 'wod');
+  const wodTargetBlock = session.blocks.find((b) => b.block === 'wod' && b.wodTarget && b.wodTarget.high > 0);
+  // Un WOD editado a mano ya no es el que el motor estimo: su resultado no informa de la calibracion.
+  const wodBase: SessionHistoryEntry['wodTargetBase'] =
+    wodTargetBlock?.wodTarget && wodTargetBlock.wodKind && !session.editedByAthlete
+      ? {
+          kind: wodTargetBlock.wodKind,
+          unit: wodTargetBlock.wodTarget.unit,
+          mid: (wodTargetBlock.wodTarget.low + wodTargetBlock.wodTarget.high) / 2 / (wodTargetBlock.wodTarget.calibration ?? 1),
+        }
+      : undefined;
   return {
     date: session.date,
     mesocycleWeek: session.mesocycleWeek,
@@ -3850,6 +3878,7 @@ export function toHistoryEntry(
     strengthPattern: strengthMovement ? getMovementById(strengthMovement.movementId)?.pattern : undefined,
     olyFamily: olyMovement ? (olyMovement.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
     energySystem: session.energySystem,
-    wodFormatKind: session.blocks.find((b) => b.block === 'wod')?.wodKind,
+    wodFormatKind: wodKindBlock?.wodKind,
+    wodTargetBase: wodBase,
   };
 }

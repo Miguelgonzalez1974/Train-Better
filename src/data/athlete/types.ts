@@ -343,6 +343,8 @@ export interface SessionBlockResult {
     low: number;
     high: number;
     display: string;
+    /** Factor con el que el motor reescalo su estimacion base segun los WODs anteriores del atleta (ausente = sin ajuste). El historial lo usa para recuperar la estimacion base. */
+    calibration?: number;
   };
 }
 
@@ -356,7 +358,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 37;
+export const SESSION_GEN_VERSION = 38;
 
 export interface DailySession {
   date: string;
@@ -467,6 +469,13 @@ export interface SessionHistoryEntry {
    * en entradas anteriores a esta feature.
    */
   wodFormatKind?: string;
+  /**
+   * Punto medio de la banda BASE (sin calibrar) del objetivo del WOD de ese dia, con su formato y
+   * unidad — junto a `wodResult` permite medir cuanto rinde el atleta respecto a la estimacion del
+   * motor y calibrarla (ver `getWodPerformance`). Ausente en benchmarks, objetivos cualitativos y
+   * entradas anteriores a esta feature.
+   */
+  wodTargetBase?: { kind: string; unit: 'seconds' | 'rounds' | 'reps'; mid: number };
 }
 
 export const DEFAULT_PROFILE: AthleteProfile = {

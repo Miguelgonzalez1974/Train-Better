@@ -566,6 +566,42 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(seen.size, 'la semana no reparte los tres dominios').toBe(3);
   });
 
+  it('calibracion del objetivo del WOD: con resultados Rx mas flojos que lo estimado el objetivo se relaja, y el historial guarda la estimacion base (no oscila)', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    // 4 WODs Rx antiguos (fuera de la ventana de ACWR) donde el atleta tardo 20:00 frente a una base de 10:00.
+    const past: SessionHistoryEntry[] = Array.from({ length: 4 }, (_, i) => ({
+      date: `2025-11-${String(10 + i).padStart(2, '0')}`,
+      mesocycleWeek: 1,
+      movementIds: [],
+      rxOrScaled: 'rx',
+      rpe: 7,
+      durationMin: 60,
+      wodResult: { scoreType: 'time', value: '20:00' },
+      wodTargetBase: { kind: 'forTime', unit: 'seconds', mid: 600 },
+    }));
+
+    let compared = 0;
+    for (const d of consecutiveDates(START, 42)) {
+      const base = generateSessionForDate(profile, [], d, profile.goals);
+      const cal = generateSessionForDate(profile, past, d, profile.goals);
+      const wb = base.blocks.find((b) => b.block === 'wod' && b.wodTarget && b.wodTarget.high > 0);
+      const wc = cal.blocks.find((b) => b.block === 'wod' && b.wodTarget && b.wodTarget.high > 0);
+      if (!wb?.wodTarget || !wc?.wodTarget || wb.movementId !== wc.movementId) continue;
+      compared++;
+      expect(wc.wodTarget.calibration, `${base.date}: sin calibracion`).toBeDefined();
+      if (wb.wodTarget.unit === 'seconds') expect(wc.wodTarget.high).toBeGreaterThan(wb.wodTarget.high);
+      else expect(wc.wodTarget.high).toBeLessThanOrEqual(wb.wodTarget.high);
+      expect(wc.notes ?? '').toMatch(/Ajustado a tus últimos WODs/);
+
+      if (wb.wodTarget.unit === 'seconds') {
+        const baseMid = toHistoryEntry(base, 'rx', 7, 60).wodTargetBase!.mid;
+        const calMid = toHistoryEntry(cal, 'rx', 7, 60).wodTargetBase!.mid;
+        expect(Math.abs(calMid - baseMid) / baseMid, `${base.date}: la base guardada oscila`).toBeLessThan(0.03);
+      }
+    }
+    expect(compared, 'ningun WOD con objetivo numerico comparable').toBeGreaterThan(3);
+  });
+
   it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {
     const bad: string[] = [];
     for (const [key, partners] of Object.entries(WOD_PAIR_AFFINITY)) {

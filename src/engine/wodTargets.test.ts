@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { estimateWodTarget, parseWodResultValue, describeWodResultVsTarget } from './wodTargets';
+import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parseWodResultValue, describeWodResultVsTarget } from './wodTargets';
 import type { WodTimeDomain } from './wodDomains';
+import type { SessionHistoryEntry, WodResult } from '../data/athlete/types';
 
 const TD: WodTimeDomain = { rounds: 5, amrapMin: 15, emomMin: 14 };
 
@@ -119,6 +120,104 @@ describe('estimateWodTarget', () => {
       timeDomain: { ...TD, rounds: 8 },
     })!;
     expect(long.low).toBeGreaterThan(short.high);
+  });
+});
+
+function wodEntry(
+  kind: string,
+  unit: 'seconds' | 'rounds' | 'reps',
+  mid: number,
+  result: WodResult,
+  rxOrScaled: 'rx' | 'scaled' = 'rx',
+): SessionHistoryEntry {
+  return {
+    date: '2026-01-01',
+    mesocycleWeek: 1,
+    movementIds: [],
+    rxOrScaled,
+    rpe: 7,
+    durationMin: 60,
+    wodResult: result,
+    wodTargetBase: { kind, unit, mid },
+  };
+}
+
+describe('getWodPerformance / calibrateWodTarget', () => {
+  const slower = (n: number) =>
+    Array.from({ length: n }, () => wodEntry('forTime', 'seconds', 600, { scoreType: 'time', value: '12:00' }));
+
+  it('sin muestras suficientes no ajusta nada', () => {
+    expect(getWodPerformance([], 'forTime')).toBeNull();
+    expect(getWodPerformance(slower(2), 'forTime')).toBeNull();
+  });
+
+  it('si el atleta tarda un 20% mas que la estimacion base, rinde <1 (ajuste tibio por pocas muestras)', () => {
+    const perf = getWodPerformance(slower(4), 'forTime')!;
+    // 600 s estimados vs 720 reales -> perf 0.833; con 4 muestras se aplica 4/7 del desvio.
+    expect(perf).toBeCloseTo(1 + (1 / 1.2 - 1) * (4 / 7), 3);
+    expect(perf).toBeLessThan(1);
+    expect(perf).toBeGreaterThan(0.75);
+  });
+
+  it('mas muestras = ajuste mas firme, y nunca pasa de los topes', () => {
+    expect(getWodPerformance(slower(6), 'forTime')!).toBeLessThan(getWodPerformance(slower(3), 'forTime')!);
+    const absurd = Array.from({ length: 6 }, () => wodEntry('forTime', 'seconds', 600, { scoreType: 'time', value: '60:00' }));
+    expect(getWodPerformance(absurd, 'forTime')).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it('los WODs escalados no cuentan', () => {
+    const scaled = Array.from({ length: 5 }, () =>
+      wodEntry('forTime', 'seconds', 600, { scoreType: 'time', value: '12:00' }, 'scaled'),
+    );
+    expect(getWodPerformance(scaled, 'forTime')).toBeNull();
+  });
+
+  it('rendimiento en rondas y en tiempo comparten escala (>1 = mejor que lo estimado)', () => {
+    const stronger = [
+      wodEntry('amrap', 'rounds', 5, { scoreType: 'rounds+reps', value: '6+0' }),
+      wodEntry('amrap', 'rounds', 5, { scoreType: 'rounds+reps', value: '6+0' }),
+      wodEntry('forTime', 'seconds', 600, { scoreType: 'time', value: '8:20' }),
+    ];
+    // Formato sin muestras propias suficientes -> se usan las de cualquier formato.
+    expect(getWodPerformance(stronger, 'emom')!).toBeGreaterThan(1);
+  });
+
+  it('un desvio pequeno (<4%) no se toca', () => {
+    const close = Array.from({ length: 5 }, () => wodEntry('forTime', 'seconds', 600, { scoreType: 'time', value: '10:10' }));
+    expect(getWodPerformance(close, 'forTime')).toBeNull();
+  });
+
+  it('calibrateWodTarget reescala la banda, deja constancia y no toca los cualitativos', () => {
+    const base = estimateWodTarget({
+      kind: 'forTime',
+      entries: [
+        { movementId: 'thruster', reps: '15', loadKg: 43 },
+        { movementId: 'kipping-pull-up', reps: '15' },
+      ],
+      timeDomain: TD,
+    })!;
+    const slowAthlete = calibrateWodTarget(base, 0.85);
+    expect(slowAthlete.low).toBeGreaterThan(base.low);
+    expect(slowAthlete.high).toBeGreaterThan(base.high);
+    expect(slowAthlete.calibration).toBeCloseTo(1 / 0.85, 5);
+    expect(slowAthlete.note).toMatch(/Ajustado a tus últimos WODs/);
+    // La banda base se recupera del punto medio y el factor guardado.
+    const baseMid = (base.low + base.high) / 2;
+    expect((slowAthlete.low + slowAthlete.high) / 2 / slowAthlete.calibration!).toBeCloseTo(baseMid, -1);
+
+    const amrap = estimateWodTarget({
+      kind: 'amrap',
+      entries: [
+        { movementId: 'burpee', reps: '10' },
+        { movementId: 'air-squat', reps: '15' },
+      ],
+      timeDomain: TD,
+    })!;
+    expect(calibrateWodTarget(amrap, 1.2).high).toBeGreaterThanOrEqual(amrap.high);
+
+    const qual = estimateWodTarget({ kind: 'emom', entries: [{ movementId: 'burpee', reps: '8' }], timeDomain: TD })!;
+    expect(calibrateWodTarget(qual, 0.8)).toBe(qual);
+    expect(calibrateWodTarget(base, null)).toBe(base);
   });
 });
 

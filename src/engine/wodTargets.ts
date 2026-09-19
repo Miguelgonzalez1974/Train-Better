@@ -9,7 +9,7 @@
  * cifra concreta contra la que medirse y al coach una referencia para juzgar el resultado.
  */
 
-import type { WodScoreType, WodResult } from '../data/athlete/types';
+import type { SessionHistoryEntry, WodScoreType, WodResult } from '../data/athlete/types';
 import type { WodFormatKind, WodTimeDomain } from './wodDomains';
 
 /** Segundos por repetición, a ritmo de metcon (no de serie fresca) para un atleta en forma media. */
@@ -107,6 +107,8 @@ export interface WodTarget {
   display: string;
   /** Frase para la nota del WOD. */
   note: string;
+  /** Factor con el que `calibrateWodTarget` reescalo la estimacion base (ausente = sin ajuste). */
+  calibration?: number;
 }
 
 interface ParsedToken {
@@ -361,6 +363,96 @@ export function estimateWodTarget(input: {
     default:
       return null;
   }
+}
+
+/** Con menos muestras que esto el motor no se fia: sigue con la estimacion base. */
+const MIN_CALIBRATION_SAMPLES = 3;
+/** Cuantos resultados recientes del mismo formato (y globales) se miran. */
+const CALIBRATION_WINDOW_KIND = 6;
+const CALIBRATION_WINDOW_ALL = 8;
+/** Con n muestras el ajuste se aplica en proporcion n/(n+SHRINK): pocas muestras = ajuste tibio. */
+const CALIBRATION_SHRINK = 3;
+const PERF_MIN = 0.75;
+const PERF_MAX = 1.3;
+/** Por debajo de este desvio la estimacion base ya acierta: no se toca (evita ruido). */
+const CALIBRATION_DEADBAND = 0.04;
+
+function median(xs: number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Rendimiento del atleta respecto a la estimacion BASE del motor: >1 = rinde mas de lo estimado
+ * (menos tiempo, mas rondas/reps), <1 = menos. Sale de sus WODs anteriores hechos en Rx que guardaron
+ * la banda base (`wodTargetBase`) y el resultado. Usa los del mismo formato si hay suficientes; si no,
+ * los de cualquier formato. `null` si no hay datos fiables o el ajuste es despreciable. Solo Rx: un
+ * WOD escalado se hizo justo para caer en el rango, asi que no informa de cuanto rinde el atleta.
+ */
+export function getWodPerformance(history: SessionHistoryEntry[], kind: string): number | null {
+  const samples: { kind: string; perf: number }[] = [];
+  for (const e of history) {
+    const base = e.wodTargetBase;
+    if (!e.wodResult || !base || base.mid <= 0 || e.rxOrScaled !== 'rx') continue;
+    const expectedUnit = e.wodResult.scoreType === 'time' ? 'seconds' : e.wodResult.scoreType === 'rounds+reps' ? 'rounds' : 'reps';
+    if (base.unit !== expectedUnit) continue;
+    const actual = parseWodResultValue(e.wodResult);
+    if (actual == null || actual <= 0) continue;
+    const ratio = clamp(actual / base.mid, 0.4, 2.5);
+    samples.push({ kind: base.kind, perf: base.unit === 'seconds' ? 1 / ratio : ratio });
+  }
+  const sameKind = samples.filter((s) => s.kind === kind).slice(-CALIBRATION_WINDOW_KIND);
+  const pool = sameKind.length >= MIN_CALIBRATION_SAMPLES ? sameKind : samples.slice(-CALIBRATION_WINDOW_ALL);
+  if (pool.length < MIN_CALIBRATION_SAMPLES) return null;
+  const n = pool.length;
+  const shrunk = 1 + (median(pool.map((s) => s.perf)) - 1) * (n / (n + CALIBRATION_SHRINK));
+  const perf = clamp(shrunk, PERF_MIN, PERF_MAX);
+  return Math.abs(perf - 1) < CALIBRATION_DEADBAND ? null : perf;
+}
+
+/**
+ * Reescala un objetivo del motor segun el rendimiento real del atleta (`getWodPerformance`). Los
+ * objetivos cualitativos (sin banda numerica) no se tocan. `calibration` queda guardado en el objetivo
+ * para que el historial pueda recuperar la estimacion BASE (si no, el siguiente ajuste se calcularia
+ * sobre un objetivo ya ajustado y oscilaria).
+ */
+export function calibrateWodTarget(t: WodTarget, perf: number | null): WodTarget {
+  if (perf == null || (t.low === 0 && t.high === 0)) return t;
+  const factor = t.unit === 'seconds' ? 1 / perf : perf;
+  let low: number;
+  let high: number;
+  let display: string;
+  if (t.unit === 'seconds') {
+    display = timeBandDisplay(t.low * factor, t.high * factor);
+    low = Math.round(t.low * factor);
+    high = Math.round(t.high * factor);
+  } else if (t.unit === 'rounds') {
+    low = Math.max(1, Math.round(t.low * factor));
+    high = Math.max(low, Math.round(t.high * factor));
+    display = low === high ? `~${low} rondas` : `~${low}-${high} rondas`;
+  } else {
+    low = Math.max(5, Math.round((t.low * factor) / 5) * 5);
+    high = Math.max(low, Math.round((t.high * factor) / 5) * 5);
+    display = `~${low}-${high} reps`;
+  }
+  const pct = Math.round(Math.abs(perf - 1) * 100);
+  const verdict =
+    t.unit === 'seconds'
+      ? perf > 1
+        ? `sueles tardar ~${pct}% menos que la estimación base`
+        : `sueles tardar ~${pct}% más que la estimación base`
+      : perf > 1
+        ? `sueles hacer ~${pct}% más que la estimación base`
+        : `sueles hacer ~${pct}% menos que la estimación base`;
+  return {
+    ...t,
+    low,
+    high,
+    display,
+    calibration: factor,
+    note: `Objetivo orientativo: ${display}. Ajustado a tus últimos WODs en Rx (${verdict}).${MODEST_TAIL}`,
+  };
 }
 
 /** Pasa el `value` de un `WodResult` a un número comparable: segundos, rondas (decimal) o reps. */
