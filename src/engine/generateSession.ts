@@ -1652,6 +1652,21 @@ const INTERFERENCE_GROUPS: MovementPattern[][] = [
   ['hinge'],
 ];
 
+/**
+ * `true` si el movimiento se prescribe en repeticiones. Los que van en metros o calorias (remo, carrera,
+ * bici, acarreos, lanzadera) o "por lado" no valen como movimiento principal de una escalera de reps:
+ * "21-15-9 suitcase carries" no significa nada. Ver `WOD_PRESCRIPTION`.
+ */
+function isRepBasedMovement(m: Movement): boolean {
+  return !/\d\s*(m\b|cal\b)|por lado/i.test(WOD_PRESCRIPTION[m.id] ?? '');
+}
+
+/** El pool solo con movimientos en reps si queda alguno; si no, el pool entero (mejor eso que no poder armar el WOD). */
+export function preferRepBased(pool: Movement[]): Movement[] {
+  const reps = pool.filter(isRepBasedMovement);
+  return reps.length > 0 ? reps : pool;
+}
+
 /** Patrones (grupos enteros) que los movimientos de un bloque ya cargan hoy — para que otro bloque los esquive. */
 function interferingPatterns(blocks: SessionBlockResult[]): Set<MovementPattern> {
   const out = new Set<MovementPattern>();
@@ -2031,7 +2046,11 @@ function buildWodBlock(
 
   if (chosenFormat.kind === 'barbellComplex') {
     const usedForComplex = new Set(recentIds);
-    const mains = pickManyVaried(weightedPool, 3, usedForComplex);
+    // "Triada de barra": los tres tienen que ser de barra con carga por PR (WOD_BARBELL_LOAD_PERCENT). El
+    // dominio "con carga" tambien incluye mancuernas, kettlebells y acarreos, que no son barra y ademas
+    // saldrian sin peso — la nota y la etiqueta prometen una cosa y el WOD seria otra.
+    const barbellPool = weightedPool.filter((m) => m.id in WOD_BARBELL_LOAD_PERCENT);
+    const mains = pickManyVaried(barbellPool, 3, usedForComplex);
     mains.forEach((m) => usedForComplex.add(m.id));
     const filler = pickVaried(monoPool, usedForComplex);
     if (mains.length === 3 && filler) {
@@ -2088,7 +2107,7 @@ function buildWodBlock(
 
   if (chosenFormat.kind === 'descendingLadderFiller' || chosenFormat.kind === 'ascendingLadderFiller') {
     const isAscending = chosenFormat.kind === 'ascendingLadderFiller';
-    const mainPool = rng() < 0.5 ? weightedPool : gymnasticsPool;
+    const mainPool = preferRepBased(rng() < 0.5 ? weightedPool : gymnasticsPool);
     const usedForLadder = new Set(recentIds);
     const main = pickVariedWithPreference(mainPool, usedForLadder, wodLiftPref.movementId, wodLiftPref.preferChance);
     if (main) {
@@ -2178,8 +2197,9 @@ function buildWodBlock(
     // Pareja clasica barra + gimnastico (Fran = thruster+pull-up, Diane = deadlift+HSPU, Elizabeth =
     // clean+dip; "Climb the Ladder" sigue el mismo patron en su version ascendente) — nunca dos
     // movimientos con carga ni dos gimnasticos en este formato en concreto.
-    pickFrom(weightedPool, wodLiftPref.movementId, wodLiftPref.preferChance);
-    pickFrom(gymnasticsPool);
+    // Y los dos se cuentan en repeticiones: una escalera "21-15-9" no vale para un acarreo o un remo.
+    pickFrom(preferRepBased(weightedPool), wodLiftPref.movementId, wodLiftPref.preferChance);
+    pickFrom(preferRepBased(gymnasticsPool));
   } else if (leadDomain === 'weighted' || leadDomain === 'gymnastics') {
     // Dominio planificado para hoy: manda en los movimientos no monoestructurales (2 de 3), el otro
     // dominio entra solo si sobran huecos (chipper de 5).
@@ -2992,7 +3012,7 @@ function buildMaintenanceWodBlock(
 
   if (chosenFormat.kind === 'descendingLadderFiller' || chosenFormat.kind === 'ascendingLadderFiller') {
     const isAscending = chosenFormat.kind === 'ascendingLadderFiller';
-    const mainPool = rng() < 0.5 ? weightedPool : gymnasticsPool;
+    const mainPool = preferRepBased(rng() < 0.5 ? weightedPool : gymnasticsPool);
     const usedForLadder = new Set(recentIds);
     const main = pickVaried(mainPool, usedForLadder);
     if (main) {
