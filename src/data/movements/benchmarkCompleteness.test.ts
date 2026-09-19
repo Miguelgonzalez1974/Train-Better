@@ -66,7 +66,7 @@ describe('benchmarkHasExplicitScheme', () => {
   });
 
   it('los WODs de CompTrain ya rellenados con prescripcion verificada cuentan como completos', () => {
-    for (const id of ['nintendo', 'death-race', 'downfall', 'marston', 'holleyman', 'two-seater']) {
+    for (const id of ['nintendo', 'death-race', 'downfall', 'marston', 'holleyman', 'two-seater', 'heartless']) {
       const w = benchmarkWorkouts.find((x) => x.id === id);
       expect(w, `${id} no existe`).toBeTruthy();
       expect(benchmarkHasExplicitScheme(w!), `${id} sigue incompleto`).toBe(true);
