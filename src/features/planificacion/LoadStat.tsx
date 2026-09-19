@@ -3,6 +3,7 @@ import { ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { PersonalRecords, PrLogEntry, VariantPersonalRecords, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
+import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { fmtKgValue } from '../../lib/format';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { findTopWorkSet } from '../../engine/setFeedback';
@@ -49,7 +50,7 @@ export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadS
     return (
       <div className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5">
         <span className={numClass + ' text-white'}>{fmtKgValue(kg)}</span>
-        <span className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">kg</span>
+        <span className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">{loadUnitLabel(movementId, block)}</span>
       </div>
     );
   }

@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } 
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { parseWorkingReps } from '../../engine/setFeedback';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { noteHead } from './noteText';
@@ -179,7 +180,11 @@ export function FocusMode({
                         {resolveName(e.entry.movementId)}
                       </span>
                       {e.entry.reps && <span className="text-xs text-neutral-500">{e.entry.reps}</span>}
-                      {e.entry.loadKg ? <span className="text-xs text-neutral-500">· {e.entry.loadKg} kg</span> : null}
+                      {e.entry.loadKg ? (
+                        <span className="text-xs text-neutral-500">
+                          · {e.entry.loadKg} {loadUnitLabel(e.entry.movementId, e.entry.block)}
+                        </span>
+                      ) : null}
                     </span>
                     {e.entry.notes && (
                       <span className="mt-1 block text-xs leading-relaxed text-neutral-500">{noteHead(e.entry.notes).head}</span>
@@ -385,7 +390,7 @@ export function FocusMode({
               </span>
               <span className="shrink-0 text-sm text-neutral-400">
                 {e.entry.reps}
-                {e.entry.loadKg ? ` · ${e.entry.loadKg} kg` : ''}
+                {e.entry.loadKg ? ` · ${e.entry.loadKg} ${loadUnitLabel(e.entry.movementId, e.entry.block)}` : ''}
               </span>
             </li>
           ))}

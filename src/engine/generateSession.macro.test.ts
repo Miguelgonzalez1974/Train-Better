@@ -10,6 +10,7 @@ import {
   WOD_SYNONYM_GROUPS,
 } from './generateSession';
 import { getWodLoadFactor, WOD_LOAD_FLOOR } from './autoregulation';
+import { hasAccessoryLoadModel } from './accessoryLoads';
 import { getWodDomain, WOD_PAIR_AFFINITY } from './wodDomains';
 import { toLocalIsoDate } from './periodization';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../data/athlete/types';
@@ -697,6 +698,41 @@ describe('generateSessionForDate — macrociclo', () => {
     }
     expect(loadReason).toBeGreaterThan(0);
     expect(calibReason).toBeGreaterThan(0);
+  });
+
+  it('accesorio con carga sugerida: los movimientos con peso la llevan (finita, positiva), los de peso corporal no, y se recorta con fatiga', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    let loaded = 0;
+    let lowered = 0;
+    for (const d of consecutiveDates(START, 42)) {
+      const dateIso = toLocalIsoDate(d);
+      const tired: AthleteProfile = {
+        ...profile,
+        readinessLog: [{ date: dateIso, sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' }],
+      };
+      const fresh = generateSessionForDate(profile, [], d, profile.goals);
+      const low = generateSessionForDate(tired, [], d, profile.goals);
+      const accFresh = fresh.blocks.filter((b) => b.block === 'accessory' && b.accessoryRole);
+      const accLow = low.blocks.filter((b) => b.block === 'accessory' && b.accessoryRole);
+      for (const b of accFresh) {
+        if (hasAccessoryLoadModel(b.movementId)) {
+          expect(b.loadKg, `${fresh.date}: ${b.movementId} sin carga`).toBeGreaterThan(0);
+          expect(Number.isFinite(b.loadKg!)).toBe(true);
+          loaded++;
+        } else {
+          expect(b.loadKg, `${fresh.date}: ${b.movementId} no deberia llevar carga`).toBeUndefined();
+        }
+      }
+      accFresh.forEach((b, i) => {
+        const other = accLow[i];
+        if (other && other.movementId === b.movementId && b.loadKg && other.loadKg) {
+          expect(other.loadKg).toBeLessThanOrEqual(b.loadKg);
+          if (other.loadKg < b.loadKg) lowered++;
+        }
+      });
+    }
+    expect(loaded, 'ningun accesorio con carga en 6 semanas').toBeGreaterThan(0);
+    expect(lowered, 'la fatiga nunca recorto una carga de accesorio').toBeGreaterThan(0);
   });
 
   it('el core no repite ningun movimiento del WOD del mismo dia', () => {

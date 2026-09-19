@@ -74,6 +74,7 @@ import {
 } from './wodDomains';
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, type WodTarget } from './wodTargets';
 import { historyStamp, lastHistoryDate } from '../data/athlete/historyStamp';
+import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
 import {
   computeAcwr,
   computePatternFatigue,
@@ -2298,6 +2299,8 @@ function buildAccessoryBlock(
   /** Movimiento bloqueado por rol, decidido al planificar la semana (ver `planWeekLocks`). Un rol sin
    *  entrada aquí, o cuyo movimiento ya no es válido hoy (patrón evitado por dolor), se decide normal. */
   lockedByRole?: Partial<Record<AccessoryRole, string>>,
+  /** Datos para sugerir la carga de los accesorios con peso (ver `suggestAccessoryLoadKg`); sin ellos el bloque solo prescribe series y reps. */
+  loadCtx?: Pick<AccessoryLoadContext, 'prs' | 'bodyweightKg' | 'loadFactor'>,
 ): SessionBlockResult[] {
   // 3 series es el base; la dosis del dia lo mueve entre 2 y 4.
   const accSets = Math.min(4, Math.max(2, Math.round(3 * dose.strengthSets)));
@@ -2340,10 +2343,17 @@ function buildAccessoryBlock(
     }
     if (members.length === 0) return;
     const format = `Superserie ${String.fromCharCode(65 + i)}`;
-    const notes = `${p.label}. ${p.rationale} ${scheme.note} Alterna ambos movimientos con el mínimo descanso; descansa al completar la pareja.`;
-    for (const { movement: m, role } of members) {
-      out.push({ block: 'accessory', movementId: m.id, sets: accSets, reps: scheme.reps, format, notes, accessoryRole: role });
-    }
+    // Carga sugerida de los que llevan peso (PR de fuerza / peso corporal); undefined para peso corporal.
+    const loads = members.map(({ movement: m }) =>
+      loadCtx ? suggestAccessoryLoadKg(m.id, { ...loadCtx, week, doseLoad: dose.strengthLoad }) : undefined,
+    );
+    const loadNote = loads.some((l) => l !== undefined)
+      ? ' Carga sugerida orientativa desde tus PRs: ajústala a que las últimas repeticiones te dejen la reserva indicada.'
+      : '';
+    const notes = `${p.label}. ${p.rationale} ${scheme.note} Alterna ambos movimientos con el mínimo descanso; descansa al completar la pareja.${loadNote}`;
+    members.forEach(({ movement: m, role }, k) => {
+      out.push({ block: 'accessory', movementId: m.id, sets: accSets, reps: scheme.reps, loadKg: loads[k], format, notes, accessoryRole: role });
+    });
   });
 
   if (out.length === 0) {
@@ -3286,6 +3296,7 @@ export function generateDailySession(
         leastTrainedFamily(microPlan.strengthPattern),
         armsToday ? 1 : 2,
         weekLock?.accessoryMovements,
+        { prs: profile.prs, bodyweightKg: latestBodyweightKg(profile.bodyweightLog), loadFactor: wodLoadFactor },
       )
     : [];
   const wodKindOut: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
@@ -3394,6 +3405,9 @@ export function generateDailySession(
     accessoryWork.length > 0
       ? `El accesorio complementa lo que menos has trabajado esta semana: ${STRENGTH_FAMILY_LABEL[leastTrainedFamily(microPlan.strengthPattern)]}.`
       : undefined;
+  const accessoryLoadReason = accessoryWork.some((b) => b.loadKg !== undefined)
+    ? 'Las cargas del accesorio son una guía calculada desde tus PRs y tu peso corporal — ajústalas a que te dejen la reserva indicada.'
+    : undefined;
   const weakPointAccessoryReason = accessoryWork.some((b) => b.notes?.includes('Rol reforzado hoy'))
     ? 'Accesorio reforzado en tu punto débil: ese patrón va flojo en tu historial de PRs.'
     : undefined;
@@ -3414,6 +3428,7 @@ export function generateDailySession(
         wodTargetForReason ? calibrationReason(wodTargetForReason) : undefined,
         accessoryFamilyReason,
         weakPointAccessoryReason,
+        accessoryLoadReason,
       ),
     ),
   );
