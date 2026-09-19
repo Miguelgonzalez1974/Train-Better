@@ -1626,6 +1626,28 @@ function wodMovementLoadKg(
   return undefined;
 }
 
+/**
+ * Grupos de patrones que compiten por los mismos musculos/agarre: tiron (vertical + horizontal),
+ * empuje (horizontal + vertical), pierna (sentadilla, zancada, salto) y bisagra.
+ */
+const INTERFERENCE_GROUPS: MovementPattern[][] = [
+  ['verticalPull', 'horizontalPull'],
+  ['horizontalPush', 'verticalPush'],
+  ['squat', 'lunge', 'jump'],
+  ['hinge'],
+];
+
+/** Patrones (grupos enteros) que los movimientos de un bloque ya cargan hoy — para que otro bloque los esquive. */
+function interferingPatterns(blocks: SessionBlockResult[]): Set<MovementPattern> {
+  const out = new Set<MovementPattern>();
+  for (const b of blocks) {
+    const pattern = getMovementById(b.movementId)?.pattern;
+    const group = pattern ? INTERFERENCE_GROUPS.find((g) => g.includes(pattern)) : undefined;
+    group?.forEach((p) => out.add(p));
+  }
+  return out;
+}
+
 function buildWodBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -1659,6 +1681,9 @@ function buildWodBlock(
   kindOut?: { kind?: WodFormatKind },
   /** Dominio que manda hoy segun el plan de la semana (`MicrocyclePlan.wodDomain`); null sin macro. */
   plannedDomain?: WodDomain | null,
+  /** Patrones que el accesorio de hoy ya va a cargar (ver `interferingPatterns`): el WOD los evita
+   *  si le quedan alternativas, para no encadenar el mismo tiron/empuje/pierna en dos bloques. */
+  softAvoidPatterns?: Set<MovementPattern>,
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1919,9 +1944,19 @@ function buildWodBlock(
   };
 
   // Trifecta clasica de CrossFit: 1 gimnastico + 1 con carga + 1 monoestructural cuando es posible.
-  const gymnasticsPool = pool.filter((m) => getWodDomain(m.id) === 'gymnastics');
-  const weightedPool = pool.filter((m) => getWodDomain(m.id) === 'weighted');
-  const monoPool = pool.filter((m) => getWodDomain(m.id) === 'monostructural');
+  // Interferencia entre bloques: si el accesorio de hoy ya carga un tiron/empuje/pierna, el WOD lo
+  // evita mientras le queden alternativas (>=3 por dominio; si no, se queda el pool entero).
+  let overlapAvoided = false;
+  const avoidOverlap = (domainPool: Movement[]): Movement[] => {
+    if (!softAvoidPatterns || softAvoidPatterns.size === 0) return domainPool;
+    const free = domainPool.filter((m) => !softAvoidPatterns.has(m.pattern));
+    if (free.length === domainPool.length || free.length < Math.min(3, domainPool.length)) return domainPool;
+    overlapAvoided = true;
+    return free;
+  };
+  const gymnasticsPool = avoidOverlap(pool.filter((m) => getWodDomain(m.id) === 'gymnastics'));
+  const weightedPool = avoidOverlap(pool.filter((m) => getWodDomain(m.id) === 'weighted'));
+  const monoPool = avoidOverlap(pool.filter((m) => getWodDomain(m.id) === 'monostructural'));
   // Orden de relleno segun fase del macrociclo: en acumulacion/intensificacion (semana 1-2) hay mas
   // margen para tolerar volumen de barra, asi que "con carga" se prueba primero; en pico/descarga
   // (semana 3-4) se prueba al final — mismo criterio conservador que ya usa el resto del motor esas
@@ -2193,7 +2228,11 @@ function buildWodBlock(
   // impedir el segundo movimiento del dominio que manda).
   const leadHonored = leadDomain !== null && picks.filter((m) => getWodDomain(m.id) === leadDomain).length >= 2;
   const leadNote = leadDomain && leadHonored ? ` Foco de la semana: ${WOD_LEAD_LABEL[leadDomain]}.` : '';
-  const notesWithTarget = `${notes}${leadNote}${bwLoadNote}${wodTarget ? ` ${wodTarget.note}` : ''}`;
+  const overlapNote =
+    overlapAvoided && softAvoidPatterns && picks.every((m) => !softAvoidPatterns.has(m.pattern))
+      ? ' El WOD esquiva el patrón que ya carga tu accesorio de hoy, para no acumular el mismo tirón/empuje/pierna en dos bloques.'
+      : '';
+  const notesWithTarget = `${notes}${leadNote}${overlapNote}${bwLoadNote}${wodTarget ? ` ${wodTarget.note}` : ''}`;
   const targetField = wodTargetField(wodTarget);
 
   return picks.map((m, i) => ({
@@ -3208,6 +3247,23 @@ export function generateDailySession(
     ),
     Math.min(strengthRampFactor, olyRampFactor),
   );
+  // El accesorio se decide ANTES que el WOD: no depende de el, y asi el WOD (que si es flexible; el
+  // accesorio suele venir bloqueado por la semana) puede evitar solapar con el tiron/empuje/pierna que
+  // el accesorio ya va a cargar. No debe repetir el movimiento que haya salido como A2 de fuerza.
+  const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
+  const accessoryWork = accessoryToday
+    ? buildAccessoryBlock(
+        trainedStrengthPattern,
+        accessoryExclude,
+        avoidedPatterns,
+        dayDose,
+        week,
+        history,
+        leastTrainedFamily(microPlan.strengthPattern),
+        armsToday ? 1 : 2,
+        weekLock?.accessoryMovements,
+      )
+    : [];
   const wodKindOut: { kind?: WodFormatKind } = {};
   const wodBlockRaw = buildWodBlock(
     dayPlan,
@@ -3229,28 +3285,20 @@ export function generateDailySession(
     wodLoadFactor,
     wodKindOut,
     plannedDomain,
+    interferingPatterns(accessoryWork),
   );
   const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
-  // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
-  const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
-  const accessoryWork = accessoryToday
-    ? buildAccessoryBlock(
-        trainedStrengthPattern,
-        accessoryExclude,
-        avoidedPatterns,
-        dayDose,
-        week,
-        history,
-        leastTrainedFamily(microPlan.strengthPattern),
-        armsToday ? 1 : 2,
-        weekLock?.accessoryMovements,
-      )
-    : [];
   const armsWork = armsToday ? buildArmsBlock(avoidedPatterns) : [];
   const coreWork = coreToday
     ? buildCoreBlock(
         trainedStrengthPattern,
-        new Set([...accessoryExclude, ...accessoryWork.map((b) => b.movementId), ...armsWork.map((b) => b.movementId)]),
+        // El core tampoco repite ningun movimiento que ya haya salido hoy en el WOD (toes-to-bar, sit-ups…).
+        new Set([
+          ...accessoryExclude,
+          ...accessoryWork.map((b) => b.movementId),
+          ...armsWork.map((b) => b.movementId),
+          ...wodBlock.map((b) => b.movementId),
+        ]),
         avoidedPatterns,
       )
     : [];

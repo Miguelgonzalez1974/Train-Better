@@ -602,6 +602,53 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(compared, 'ningun WOD con objetivo numerico comparable').toBeGreaterThan(3);
   });
 
+  it('interferencia entre bloques: el WOD no repite el tiron/empuje/pierna que ya carga el accesorio de hoy (sin la regla solapa ~22% de los dias)', () => {
+    const groups = [
+      ['verticalPull', 'horizontalPull'],
+      ['horizontalPush', 'verticalPush'],
+      ['squat', 'lunge', 'jump'],
+      ['hinge'],
+    ];
+    const groupOf = (id: string) => {
+      const p = getMovementById(id)?.pattern;
+      return groups.findIndex((g) => p && g.includes(p));
+    };
+    let days = 0;
+    let noted = 0;
+    const overlaps: string[] = [];
+    for (const trainingDaysPerWeek of [4, 5, 6] as const) {
+      const profile = makeProfile({ trainingDaysPerWeek });
+      for (const d of consecutiveDates(START, 168)) {
+        const s = generateSessionForDate(profile, [], d, profile.goals);
+        const wod = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
+        const acc = s.blocks.filter((b) => b.block === 'accessory' && b.accessoryRole);
+        if (wod.length === 0 || acc.length === 0) continue;
+        days++;
+        if ((wod[0].notes ?? '').includes('esquiva el patrón')) noted++;
+        const accGroups = new Set(acc.map((b) => groupOf(b.movementId)).filter((g) => g >= 0));
+        if (wod.some((b) => accGroups.has(groupOf(b.movementId)))) {
+          overlaps.push(`${s.date}: wod=${wod.map((b) => b.movementId).join(',')} acc=${acc.map((b) => b.movementId).join(',')}`);
+        }
+      }
+    }
+    expect(days, 'muestra demasiado pequeña').toBeGreaterThan(60);
+    expect(overlaps, 'WOD y accesorio solapan patron').toEqual([]);
+    expect(noted, 'la regla nunca llego a actuar').toBeGreaterThan(0);
+  });
+
+  it('el core no repite ningun movimiento del WOD del mismo dia', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const clashes: string[] = [];
+    for (const d of consecutiveDates(START, 140)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const wodIds = new Set(s.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId));
+      for (const b of s.blocks.filter((x) => x.block === 'accessory')) {
+        if (wodIds.has(b.movementId)) clashes.push(`${s.date}: ${b.movementId}`);
+      }
+    }
+    expect(clashes).toEqual([]);
+  });
+
   it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {
     const bad: string[] = [];
     for (const [key, partners] of Object.entries(WOD_PAIR_AFFINITY)) {
@@ -760,9 +807,12 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
   });
 
   it('aparecen los formatos nuevos: "al máximo" (puntúa reps) y cardio chipper (base aeróbica)', () => {
-    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    // Varios calendarios semanales: los formatos raros salen de un sorteo sembrado por fecha, y con un
+    // solo perfil un cambio inocuo del orden de generacion puede dejar 0 apariciones por puro azar.
     let maxReps = 0;
     let cardioChipper = 0;
+    for (const trainingDaysPerWeek of [4, 5, 6] as const) {
+    const profile = makeProfile({ trainingDaysPerWeek });
     for (const d of consecutiveDates(START, 168)) {
       const s = generateSessionForDate(profile, [], d, profile.goals);
       const wod = s.blocks.filter((b) => b.block === 'wod');
@@ -783,6 +833,7 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
         const ids = wod.map((b) => b.movementId);
         expect(ids.includes('single-under') && ids.includes('double-under')).toBe(false);
       }
+    }
     }
     expect(maxReps, 'ningún WOD "al máximo" en 24 semanas').toBeGreaterThan(0);
     expect(cardioChipper, 'ningún cardio chipper en 24 semanas').toBeGreaterThan(0);
