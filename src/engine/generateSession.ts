@@ -73,6 +73,7 @@ import {
   type WodTimeDomain,
 } from './wodDomains';
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, type WodTarget } from './wodTargets';
+import { historyStamp, lastHistoryDate } from '../data/athlete/historyStamp';
 import {
   computeAcwr,
   computePatternFatigue,
@@ -3823,12 +3824,27 @@ export function isCachedSessionOrphaned(session: DailySession, profile: AthleteP
  * elegidas a mano (`swapLabel`), corregidas a mano (`editedByAthlete`) y de mantenimiento (no
  * periodizadas) nunca son "viejas".
  */
-export function isCachedSessionStale(session: DailySession, lock?: WeeklyLock): boolean {
+export function isCachedSessionStale(session: DailySession, lock?: WeeklyLock, history?: readonly { date: string }[]): boolean {
   if (session.source === 'custom' || session.swapLabel || session.editedByAthlete) return false;
   const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
   if (!periodized) return false;
   if ((session.genVersion ?? 0) < SESSION_GEN_VERSION) return true;
+  if (history && cachedSessionPredatesHistory(session, history)) return true;
   return lock ? cachedSessionDisagreesWithLock(session, lock) : false;
+}
+
+/**
+ * True si el historial cambio desde que se genero la sesion cacheada (se registro una sesion, o una
+ * retroactiva) y el dia AUN no esta entrenado (su fecha es posterior a la ultima sesion registrada):
+ * la cacheada ya no refleja lo que el coach sabe — ACWR, RPE reciente, descarga, calibracion del
+ * objetivo... — asi que se regenera. Los movimientos de fuerza/oly/accesorio/test siguen fijos por el
+ * bloqueo semanal; lo que se adapta es lo que debe adaptarse. Sin huella (cacheada anterior a ella) no
+ * se puede saber, y no se considera vieja por esto.
+ */
+function cachedSessionPredatesHistory(session: DailySession, history: readonly { date: string }[]): boolean {
+  if (session.genHistoryStamp === undefined) return false;
+  if (session.date <= lastHistoryDate(history)) return false;
+  return session.genHistoryStamp !== historyStamp(history);
 }
 
 type WeeklyLock = NonNullable<AthleteProfile['weeklyLocks']>[string];

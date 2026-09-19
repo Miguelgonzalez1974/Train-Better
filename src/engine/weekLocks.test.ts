@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generateSessionForDate, isCachedSessionStale, toHistoryEntry } from './generateSession';
 import { resolveWeekLocks } from './weekLocks';
 import { toLocalIsoDate } from './periodization';
+import { historyStamp } from '../data/athlete/historyStamp';
 import { makeProfile, consecutiveDates } from './__fixtures';
 import { SESSION_GEN_VERSION, type AthleteProfile, type DailySession, type SessionHistoryEntry } from '../data/athlete/types';
 
@@ -17,6 +18,56 @@ function weekWithMissedTuesday() {
   const history: SessionHistoryEntry[] = [toHistoryEntry(monday, 'rx', 7, 60)];
   return { base, planned, history };
 }
+
+describe('cache vs historial: un dia futuro cacheado se regenera cuando el historial cambia', () => {
+  const entryOn = (date: string): SessionHistoryEntry => ({
+    date,
+    mesocycleWeek: 1,
+    movementIds: [],
+    rxOrScaled: 'rx',
+    rpe: 9,
+    durationMin: 60,
+  });
+  const base = makeProfile({ trainingDaysPerWeek: 6 });
+  const cachedFor = (history: SessionHistoryEntry[]): DailySession => ({
+    ...generateSessionForDate(base, history, WED, base.goals),
+    genVersion: SESSION_GEN_VERSION,
+    genHistoryStamp: historyStamp(history),
+  });
+
+  it('historyStamp cambia con la fecha de la ultima sesion y con el numero de sesiones', () => {
+    expect(historyStamp([])).toBe('#0');
+    expect(historyStamp([entryOn('2026-01-05')])).toBe('2026-01-05#1');
+    expect(historyStamp([entryOn('2026-01-05'), entryOn('2026-01-06')])).toBe('2026-01-06#2');
+  });
+
+  it('con el mismo historial no esta vieja; al registrar una sesion anterior al dia, si', () => {
+    const before = [entryOn(iso(MON))];
+    const session = cachedFor(before);
+    expect(isCachedSessionStale(session, undefined, before)).toBe(false);
+    expect(isCachedSessionStale(session, undefined, [...before, entryOn(iso(TUE))])).toBe(true);
+  });
+
+  it('una sesion retroactiva (fecha anterior a la ultima) tambien la deja vieja', () => {
+    const before = [entryOn(iso(TUE))];
+    const session = cachedFor(before);
+    expect(isCachedSessionStale(session, undefined, [entryOn(iso(MON)), ...before])).toBe(true);
+  });
+
+  it('un dia ya entrenado o anterior a la ultima sesion registrada no se regenera por esto', () => {
+    const session = { ...cachedFor([]), genHistoryStamp: '#0' };
+    expect(isCachedSessionStale(session, undefined, [entryOn(iso(WED))])).toBe(false);
+    expect(isCachedSessionStale(session, undefined, [entryOn(iso(FRI))])).toBe(false);
+  });
+
+  it('editada a mano o sin huella (cacheada antigua) nunca se considera vieja por esto', () => {
+    const hist = [entryOn(iso(MON))];
+    const session = cachedFor([]);
+    expect(isCachedSessionStale({ ...session, editedByAthlete: true }, undefined, hist)).toBe(false);
+    const { genHistoryStamp: _omit, ...noStamp } = session;
+    expect(isCachedSessionStale(noStamp as DailySession, undefined, hist)).toBe(false);
+  });
+});
 
 describe('resolveWeekLocks', () => {
   it('planifica la semana entera y estampa plannedOn', () => {

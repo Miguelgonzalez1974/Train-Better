@@ -121,7 +121,7 @@ function loadTodaySession(
   if (cached) {
     if (isCachedSessionOrphaned(cached, profile, todayIso)) {
       athleteRepository.deleteCachedSession(todayIso);
-    } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso])) {
+    } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso], history)) {
       return cached;
     } else if (history.some((h) => h.date === todayIso)) {
       const adopted = adoptAdditiveEngineFields(cached, profile, history, new Date(), goals);
@@ -473,7 +473,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         format: 'Tu WOD',
         notes: note,
       };
-      const next: DailySession = { ...session, blocks: [...session.blocks, wodEntry] };
+      const next: DailySession = { ...session, blocks: [...session.blocks, wodEntry], editedByAthlete: true };
       athleteRepository.saveCachedSession(next);
       setSession(next);
       setShowCustomEditor(false);
@@ -524,6 +524,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       ...session,
       blocks: [...session.blocks, ...wodBlocks],
       wodTag: type === 'macro' ? 'de tu macrociclo' : undefined,
+      editedByAthlete: true,
     };
     athleteRepository.saveCachedSession(next);
     setSession(next);

@@ -71,7 +71,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     if (
       cached &&
       !isCachedSessionOrphaned(cached, profile, dateIso) &&
-      !isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[dateIso])
+      !isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[dateIso], history)
     ) {
       return cached;
     }

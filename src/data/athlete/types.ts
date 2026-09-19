@@ -358,7 +358,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 40;
+export const SESSION_GEN_VERSION = 41;
 
 export interface DailySession {
   date: string;
@@ -378,6 +378,13 @@ export interface DailySession {
    * mismos textos que ya se concatenan en `SessionBlockResult.notes`.
    */
   coachReasons?: string[];
+  /**
+   * Huella del historial (`historyStamp`) con el que se genero esta sesion — la pone `saveCachedSession`
+   * la primera vez que se cachea y no se toca despues. Si el historial cambia (se registra una sesion) y
+   * el dia aun no se ha entrenado, la cacheada esta vieja (`isCachedSessionStale`) y se regenera con lo
+   * que el coach sabe ahora. Ausente en cacheadas anteriores a esta huella (no se consideran viejas por esto).
+   */
+  genHistoryStamp?: string;
   /** 'custom' cuando el atleta escribio su propia sesion en vez de usar la generada — `blocks` va vacio y el contenido vive en customTitle/customNote. */
   source?: 'generated' | 'custom';
   customTitle?: string;

@@ -1,6 +1,8 @@
 import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
 
 const PROFILE_KEY = 'train-better:profile';
+import { historyStamp } from './historyStamp';
+
 const HISTORY_KEY = 'train-better:history';
 /** @deprecated Solo se lee para migrar el objetivo unico legado a `profile.goals`. */
 const LEGACY_GOAL_KEY = 'train-better:goal';
@@ -236,7 +238,10 @@ export const localAthleteRepository: AthleteRepository = {
     const profile = localAthleteRepository.getProfile();
     const cache = { ...(profile.sessionCache ?? {}) };
     // Sella con la version del motor con la que se genero — ver `SESSION_GEN_VERSION`.
-    cache[session.date] = { ...session, genVersion: SESSION_GEN_VERSION };
+    // Y con la huella del historial del momento — solo la primera vez: una sesion que ya la trae
+    // (releida de la cache y vuelta a guardar) conserva la suya, no se "rejuvenece" con historial nuevo.
+    const genHistoryStamp = session.genHistoryStamp ?? historyStamp(readJson<SessionHistoryEntry[]>(HISTORY_KEY, []));
+    cache[session.date] = { ...session, genVersion: SESSION_GEN_VERSION, genHistoryStamp };
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, sessionCache: pruneSessionCache(cache) }));
   },
   deleteCachedSession(dateIso) {
