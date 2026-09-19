@@ -14,7 +14,7 @@ const STRUCTURAL_NUMBER = /\b\d+\s*(?:min|minutos|rondas?|bloques?)\b/gi;
  * la fuente real (nunca se inventan cifras aqui, solo se clasifica el texto ya existente).
  */
 export function benchmarkHasExplicitScheme(wod: BenchmarkWorkout): boolean {
-  if (wod.scoreType === 'load') return true;
+  if (wod.reviewed || wod.scoreType === 'load') return true;
   if (wod.movements.length <= 1) return true;
   if (LADDER.test(wod.format)) return true;
 

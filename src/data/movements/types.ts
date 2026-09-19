@@ -49,6 +49,8 @@ export interface BenchmarkWorkout {
   /** ids de Movement, o texto libre para elementos externos (ej. "run 1 mile") */
   movements: string[];
   timeCapMinutes?: number;
+  /** El `format` se ha revisado a mano y describe el WOD entero aunque `benchmarkHasExplicitScheme` no lo detecte (p.ej. bloques cronometrados "1:00 de cada movimiento"). */
+  reviewed?: boolean;
   scoreType: 'time' | 'reps' | 'load' | 'rounds+reps';
   tags: string[];
 }

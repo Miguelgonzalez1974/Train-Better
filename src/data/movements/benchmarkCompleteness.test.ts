@@ -58,6 +58,26 @@ describe('benchmarkHasExplicitScheme', () => {
     ).toBe(false);
   });
 
+  it('todos los benchmarks reales (girl/hero/open) traen su prescripcion completa: ninguno vuelve a salir sin reps', () => {
+    const incomplete = benchmarkWorkouts
+      .filter((w) => w.category !== 'custom' && !benchmarkHasExplicitScheme(w))
+      .map((w) => `${w.id}: ${w.format}`);
+    expect(incomplete).toEqual([]);
+  });
+
+  it('los WODs de CompTrain ya rellenados con prescripcion verificada cuentan como completos', () => {
+    for (const id of ['nintendo', 'death-race', 'downfall', 'marston', 'holleyman', 'two-seater']) {
+      const w = benchmarkWorkouts.find((x) => x.id === id);
+      expect(w, `${id} no existe`).toBeTruthy();
+      expect(benchmarkHasExplicitScheme(w!), `${id} sigue incompleto`).toBe(true);
+    }
+  });
+
+  it('un formato revisado a mano (reviewed) cuenta como completo aunque el detector no lo vea', () => {
+    expect(benchmarkHasExplicitScheme(wod({ format: '5 rondas: 1:00 de cada movimiento', reviewed: true }))).toBe(true);
+    expect(benchmarkHasExplicitScheme(wod({ format: '5 rondas: 1:00 de cada movimiento' }))).toBe(false);
+  });
+
   it('el catalogo real no se queda sin benchmarks reales (girl/hero/open) completos', () => {
     const realComplete = benchmarkWorkouts.filter((w) => w.category !== 'custom' && benchmarkHasExplicitScheme(w));
     expect(realComplete.length).toBeGreaterThan(0);
