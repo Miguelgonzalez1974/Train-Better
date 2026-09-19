@@ -327,6 +327,8 @@ export interface SessionBlockResult {
   repStyle?: 'touch-and-go';
   /** Rol que cubre esta entrada dentro del superset de accesorio (ver `AccessoryRole` en generateSession.ts) — permite bloquear el movimiento de ese rol al planificar la semana. Solo bloque accessory, ausente en el fallback de pool agotado. */
   accessoryRole?: 'unilateralLeg' | 'plyo' | 'posterior' | 'hPush' | 'vPush' | 'hPull' | 'vPull';
+  /** Tipo de formato del WOD generado (`WodFormatKind` del motor, string para no acoplar la capa de datos) — lo lee `toHistoryEntry` para la memoria de formato. Solo bloque wod generado (no benchmark). */
+  wodKind?: string;
   /**
    * Objetivo orientativo del WOD estimado por el motor (`src/engine/wodTargets.ts`) — banda de
    * tiempo / rondas / reps. Solo bloque 'wod' generado (no benchmark). `low === 0 && high === 0`
@@ -352,7 +354,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 35;
+export const SESSION_GEN_VERSION = 36;
 
 export interface DailySession {
   date: string;
@@ -457,6 +459,12 @@ export interface SessionHistoryEntry {
    * datos con el motor). Ausente en entradas anteriores a esta feature y en dias de benchmark.
    */
   energySystem?: 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
+  /**
+   * Tipo de formato del WOD generado ese dia (`WodFormatKind` del motor, como string para no acoplar
+   * la capa de datos) — memoria para no repetir formato dos dias seguidos. Ausente en benchmarks y
+   * en entradas anteriores a esta feature.
+   */
+  wodFormatKind?: string;
 }
 
 export const DEFAULT_PROFILE: AthleteProfile = {

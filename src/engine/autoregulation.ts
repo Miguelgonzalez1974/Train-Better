@@ -107,3 +107,19 @@ function rawRpeAutoregFactor(history: SessionHistoryEntry[], referenceDate: Date
 export function combineAutoregFactors(acwrFactor: number, rpeFactor: number, readinessFactor = 1, responseBias = 1): number {
   return Math.max(AUTOREG_FLOOR, Math.min(AUTOREG_CEILING, acwrFactor * rpeFactor * readinessFactor * responseBias));
 }
+
+/** Suelo del factor de carga del WOD: un metcon a un 80% del Rx sigue siendo un metcon; por debajo pierde el estimulo. */
+export const WOD_LOAD_FLOOR = 0.8;
+
+/**
+ * Factor de carga del WOD (0.8-1). Mismas señales que fuerza/oly (ACWR, RPE de ayer, check-in, sesgo
+ * del perfil de respuesta, rampa de vuelta), pero SOLO hacia abajo: en un metcon el Rx es el techo — un
+ * dia bueno se traduce en mas ritmo, no en mas peso de barra. Asi un WOD con thrusters o cleans ya no
+ * pide lo mismo un dia de fatiga acumulada que uno fresco.
+ */
+export function getWodLoadFactor(
+  combined: number,
+  rampFactor = 1,
+): number {
+  return Math.max(WOD_LOAD_FLOOR, Math.min(1, combined * rampFactor));
+}

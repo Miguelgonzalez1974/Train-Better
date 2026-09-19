@@ -81,7 +81,7 @@ import {
   type AcwrZone,
   type PatternFatigue,
 } from './loadMetrics';
-import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor } from './autoregulation';
+import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor, getWodLoadFactor } from './autoregulation';
 import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
 import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR, resolveVariantPRKey } from './prResolution';
@@ -1377,6 +1377,8 @@ function buildOlyBlock(
  * sesiones: un contador absoluto se desincroniza en cuanto empiezan a expirar entradas antiguas.
  */
 const RETEST_INTERVAL = 6;
+/** Cuantos de los ultimos WODs generados (con formato registrado) se excluyen del sorteo de formato. */
+const WOD_FORMAT_MEMORY = 2;
 
 function formatIsoDateShort(iso: string): string {
   return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(new Date(`${iso}T00:00:00`));
@@ -1534,10 +1536,11 @@ function buildBarbellComplexEntries(
   title: string,
   notes: string,
   wodTarget?: SessionBlockResult['wodTarget'],
+  loadFactor = 1,
 ): SessionBlockResult[] {
   const entries: SessionBlockResult[] = [];
   for (const m of mains) {
-    const loadKg = wodMovementLoadKg(m, prs, bodyweightKg);
+    const loadKg = wodMovementLoadKg(m, prs, bodyweightKg, loadFactor);
     entries.push({ block: 'wod', movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '8-10', loadKg, format, title, notes, wodTarget });
     entries.push({ block: 'wod', movementId: filler.id, reps: WOD_PRESCRIPTION[filler.id] ?? '20-25', format, title, notes, wodTarget });
   }
@@ -1596,15 +1599,21 @@ function roundKettlebell(kg: number): number {
  * si el movimiento no tiene PR propio, una fracción del peso corporal (`WOD_RX_BW_FRACTION`) cuando
  * hay un pesaje registrado. `undefined` si no aplica ninguna (bodyweight/funcional, o sin peso corporal).
  */
-function wodMovementLoadKg(m: Movement, prs: PersonalRecords, bodyweightKg: number | null): number | undefined {
+function wodMovementLoadKg(
+  m: Movement,
+  prs: PersonalRecords,
+  bodyweightKg: number | null,
+  /** Factor de autorregulacion del dia (ver `getWodLoadFactor`); 1 = Rx sin recorte. */
+  loadFactor = 1,
+): number | undefined {
   const pct = WOD_BARBELL_LOAD_PERCENT[m.id];
   if (pct) {
     const prKey = resolveStrengthPRKey(m) ?? resolveOlyPRKey(m);
-    if (prKey) return roundToNearestPlate(prs[prKey] * pct);
+    if (prKey) return roundToNearestPlate(prs[prKey] * pct * loadFactor);
   }
   const bw = WOD_RX_BW_FRACTION[m.id];
   if (bw && bodyweightKg && bodyweightKg > 0) {
-    const raw = bodyweightKg * bw.fraction;
+    const raw = bodyweightKg * bw.fraction * loadFactor;
     return bw.round === 'kb' ? roundKettlebell(raw) : roundToNearestPlate(raw);
   }
   return undefined;
@@ -1635,6 +1644,12 @@ function buildWodBlock(
    *  `planWeekLocks`) — si no resuelve a un WOD real del catalogo, se decide normal. Solo aplica a
    *  dias de benchmark; el WOD "normal" nunca se bloquea. */
   lockedBenchmarkId?: string,
+  /** Factor de carga del dia (0.8-1, ver `getWodLoadFactor`) — recorta las cargas del WOD generado
+   *  cuando hay fatiga acumulada / poca energia; los benchmarks se sirven siempre en su Rx oficial. */
+  loadFactor = 1,
+  /** Salida: el `WodFormatKind` final del WOD generado (no benchmark) — el llamador lo estampa en el
+   *  bloque para que el historial recuerde que formato se hizo (variedad entre dias). */
+  kindOut?: { kind?: WodFormatKind },
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1790,7 +1805,16 @@ function buildWodBlock(
   // Semana pico: formatos cortos e intensos, sin chipper largo ni escalera de acumulacion de volumen.
   // Rampa de vuelta: mismo criterio que la semana pico, por la razon contraria — nada de formatos
   // largos de alto volumen mientras el atleta esta cogiendo ritmo de nuevo.
-  const isChipperDay = !isPeakWeek && !wodRampActive && !lowInterferenceWod && rng() < 0.15;
+  // Memoria de formato: los ultimos WODS_FORMAT_MEMORY formatos hechos se descartan del sorteo (un
+  // coach real no te pone dos AMRAP seguidos). Si no queda ninguno libre se sortea sobre todos.
+  const recentFormatKinds = new Set(
+    history
+      .filter((e) => e.wodFormatKind)
+      .slice(-WOD_FORMAT_MEMORY)
+      .map((e) => e.wodFormatKind as WodFormatKind),
+  );
+  const isChipperDay =
+    !isPeakWeek && !wodRampActive && !lowInterferenceWod && !recentFormatKinds.has('chipper') && rng() < 0.15;
   const regularFormats: { label: string; kind: WodFormatKind }[] = [
     { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' },
     { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
@@ -1820,11 +1844,14 @@ function buildWodBlock(
   // Sesgo de formato por sistema energetico: los formatos que la fase favorece pesan ~3x, sin
   // excluir el resto (misma filosofia que pickVariedWithPreference). Opera dentro de la lista ya
   // filtrada por pico/rampa, asi que nunca reintroduce un formato descartado.
-  const preferredFormats = regularFormats.filter((f) => energy.preferFormats.includes(f.kind));
-  const formatPool = preferredFormats.length > 0 ? [...regularFormats, ...preferredFormats, ...preferredFormats] : regularFormats;
+  const freshFormats = regularFormats.filter((f) => !recentFormatKinds.has(f.kind));
+  const candidateFormats = freshFormats.length > 0 ? freshFormats : regularFormats;
+  const preferredFormats = candidateFormats.filter((f) => energy.preferFormats.includes(f.kind));
+  const formatPool = preferredFormats.length > 0 ? [...candidateFormats, ...preferredFormats, ...preferredFormats] : candidateFormats;
   let chosenFormat = isChipperDay
     ? { label: 'Chipper — 1 ronda completa', kind: 'chipper' as WodFormatKind }
     : formatPool[Math.floor(rng() * formatPool.length)];
+  if (kindOut) kindOut.kind = chosenFormat.kind;
   // Escalera compartida, ascendente o descendente — misma pareja de movimientos, misma cifra de
   // reps para los dos, solo cambia si cuenta hacia arriba o hacia abajo (Fran/Diane/Elizabeth son
   // descendentes; "Climb the Ladder" es la version ascendente del mismo patron).
@@ -1874,7 +1901,11 @@ function buildWodBlock(
   // energético del día. El énfasis del día y el "por qué" del sistema energético van a `coachReasons`.
   const quantCue = wodQuantCue(chosenFormat.kind, timeDomain);
   const howToAttack = quantCue || WOD_FORMAT_RATIONALE[chosenFormat.kind];
-  let notes = `${howToAttack}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}`;
+  const wodLoadNote =
+    loadFactor < 0.98
+      ? ` Cargas del WOD ~${Math.round((1 - loadFactor) * 100)}% por debajo del Rx habitual hoy (fatiga acumulada / poca energía) — mejor mover ligero y rápido que pesado y roto.`
+      : '';
+  let notes = `${howToAttack}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}${wodLoadNote}`;
 
   if (chosenFormat.kind === 'cardioChipper') {
     // 3 bloques descendentes de puro monoestructural. Se eligen 2-3 monos con base conocida,
@@ -1933,6 +1964,7 @@ function buildWodBlock(
         title,
         bcTarget ? `${notes} ${bcTarget.note}` : notes,
         wodTargetField(bcTarget),
+        loadFactor,
       );
     }
     // No hay suficiente variedad de movimientos con carga distintos hoy (pool filtrado muy corto) —
@@ -1959,7 +1991,7 @@ function buildWodBlock(
           barbell,
           fixed,
           WOD_BARBELL_LOAD_PERCENT[barbell.id],
-          prs[prKey],
+          prs[prKey] * loadFactor,
           chosenFormat.label,
           title,
           rlTarget ? `${notes} ${rlTarget.note}` : notes,
@@ -1982,7 +2014,7 @@ function buildWodBlock(
         : pickVaried(monoPool, usedForLadder);
       if (filler) {
         const steps = isAscending ? ASCENDING_LADDER_FILLER_STEPS : DESCENDING_LADDER_FILLER_STEPS;
-        const loadKg = wodMovementLoadKg(main, prs, bodyweightKg);
+        const loadKg = wodMovementLoadKg(main, prs, bodyweightKg, loadFactor);
         const lfTarget = estimateWodTarget({
           kind: chosenFormat.kind,
           entries: [
@@ -2016,7 +2048,8 @@ function buildWodBlock(
   ]);
   if (FALLBACK_PRONE_KINDS.has(chosenFormat.kind)) {
     chosenFormat = { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' };
-    notes = `${WOD_FORMAT_RATIONALE.forTime}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}`;
+    notes = `${WOD_FORMAT_RATIONALE.forTime}${effortNote} Ritmo: ${energy.paceCue}.${wodRampNote}${wodLoadNote}`;
+    if (kindOut) kindOut.kind = 'forTime';
   }
 
   const picks: Movement[] = [];
@@ -2093,7 +2126,7 @@ function buildWodBlock(
     timeDomain,
     ladderScheme: ladderReps,
   });
-  const loads = picks.map((m) => wodMovementLoadKg(m, prs, bodyweightKg));
+  const loads = picks.map((m) => wodMovementLoadKg(m, prs, bodyweightKg, loadFactor));
   // Si algún movimiento lleva carga derivada del PESO CORPORAL (no de un PR), avísalo: es una guía, no un absoluto.
   const usesBwLoad = picks.some((m, i) => loads[i] != null && !WOD_BARBELL_LOAD_PERCENT[m.id]);
   const bwLoadNote = usesBwLoad
@@ -3103,7 +3136,18 @@ export function generateDailySession(
     weekLock?.olyMovementId,
   );
 
-  const wodBlock = buildWodBlock(
+  // Autorregulacion del WOD: mismas señales que fuerza/oly, solo hacia abajo (ver getWodLoadFactor).
+  const wodLoadFactor = getWodLoadFactor(
+    combineAutoregFactors(
+      getAutoregFactor(acwrZone),
+      getRpeAutoregFactor(history, date, responseProfile.rpe.reliability).factor,
+      getReadinessFactor(readinessCheck).factor,
+      clampResponseBias(responseProfile.rpe.bias),
+    ),
+    Math.min(strengthRampFactor, olyRampFactor),
+  );
+  const wodKindOut: { kind?: WodFormatKind } = {};
+  const wodBlockRaw = buildWodBlock(
     dayPlan,
     week,
     profile.trainingDaysPerWeek,
@@ -3120,7 +3164,10 @@ export function generateDailySession(
     wodDose,
     latestBodyweightKg(profile.bodyweightLog),
     weekLock?.wodBenchmarkId,
+    wodLoadFactor,
+    wodKindOut,
   );
+  const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
   // El accesorio no debe repetir el movimiento que ya haya salido como A2 de la superserie de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
   const accessoryWork = accessoryToday
@@ -3701,5 +3748,6 @@ export function toHistoryEntry(
     strengthPattern: strengthMovement ? getMovementById(strengthMovement.movementId)?.pattern : undefined,
     olyFamily: olyMovement ? (olyMovement.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
     energySystem: session.energySystem,
+    wodFormatKind: session.blocks.find((b) => b.block === 'wod')?.wodKind,
   };
 }

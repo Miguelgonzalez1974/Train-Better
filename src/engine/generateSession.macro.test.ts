@@ -6,8 +6,10 @@ import {
   isCachedSessionOrphaned,
   isCachedSessionStale,
   planWeekLocks,
+  toHistoryEntry,
   WOD_SYNONYM_GROUPS,
 } from './generateSession';
+import { getWodLoadFactor, WOD_LOAD_FLOOR } from './autoregulation';
 import { WOD_PAIR_AFFINITY } from './wodDomains';
 import { toLocalIsoDate } from './periodization';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../data/athlete/types';
@@ -495,6 +497,52 @@ describe('generateSessionForDate — macrociclo', () => {
       expect(wodB).toBe(`benchmark:${lock.wodBenchmarkId}`);
     }
     expect(checkedAny, 'ningun dia de la semana salio como dia de test').toBe(true);
+  });
+
+  it('getWodLoadFactor: solo baja (nunca sube el Rx) y respeta el suelo', () => {
+    expect(getWodLoadFactor(1.05)).toBe(1);
+    expect(getWodLoadFactor(1)).toBe(1);
+    expect(getWodLoadFactor(0.9)).toBeCloseTo(0.9);
+    expect(getWodLoadFactor(0.7)).toBe(WOD_LOAD_FLOOR);
+    expect(getWodLoadFactor(0.95, 0.8)).toBe(WOD_LOAD_FLOOR);
+  });
+
+  it('WOD autorregulado: con un check-in de poca energia las cargas del WOD nunca suben y en algun dia bajan', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 6 });
+    let lowered = 0;
+    for (const d of consecutiveDates(START, 14)) {
+      const dateIso = toLocalIsoDate(d);
+      const tired: AthleteProfile = {
+        ...profile,
+        readinessLog: [{ date: dateIso, sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' }],
+      };
+      const neutral = generateSessionForDate(profile, [], d, profile.goals).blocks.filter((b) => b.block === 'wod');
+      const low = generateSessionForDate(tired, [], d, profile.goals).blocks.filter((b) => b.block === 'wod');
+      if (neutral.length !== low.length) continue;
+      neutral.forEach((n, i) => {
+        if (n.movementId !== low[i].movementId || n.loadKg == null || low[i].loadKg == null) return;
+        expect(low[i].loadKg!).toBeLessThanOrEqual(n.loadKg);
+        if (low[i].loadKg! < n.loadKg) lowered++;
+      });
+    }
+    expect(lowered, 'ninguna carga de WOD bajo con el check-in malo').toBeGreaterThan(0);
+  });
+
+  it('memoria de formato: un formato de WOD no reaparece dentro de los 2 WODs siguientes', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    let history: SessionHistoryEntry[] = [];
+    const kinds: string[] = [];
+    for (const d of consecutiveDates(START, 70)) {
+      const s = generateSessionForDate(profile, history, d, profile.goals);
+      if (s.isRestDay) continue;
+      history = [...history, toHistoryEntry(s, 'rx', 7, 60)];
+      const kind = s.blocks.find((b) => b.block === 'wod')?.wodKind;
+      if (kind) kinds.push(kind);
+    }
+    expect(kinds.length).toBeGreaterThan(20);
+    // Sin memoria salen ~6 de 38; con ella 0 (se tolera 1 por el reset a forTime cuando un formato especial no se llega a construir).
+    const inWindow = kinds.filter((k, i) => (i > 0 && k === kinds[i - 1]) || (i > 1 && k === kinds[i - 2])).length;
+    expect(inWindow, `formatos repetidos dentro de la ventana: ${inWindow}/${kinds.length}`).toBeLessThanOrEqual(1);
   });
 
   it('la tabla de afinidad de WOD solo referencia movimientos reales', () => {
