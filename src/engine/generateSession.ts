@@ -423,6 +423,19 @@ function wodQuantCue(kind: WodFormatKind, td: WodTimeDomain): string {
   }
 }
 
+/** Frase corta para el resumen del dia cuando el objetivo del WOD se ajusto a los resultados del atleta. */
+function calibrationReason(t: NonNullable<SessionBlockResult['wodTarget']>): string | undefined {
+  if (t.calibration === undefined) return undefined;
+  const pct = Math.round(Math.abs(t.calibration - 1) * 100);
+  if (pct === 0) return undefined;
+  // En tiempo, un objetivo mas largo es mas holgado; en rondas/reps, uno mas bajo.
+  const easier = t.unit === 'seconds' ? t.calibration > 1 : t.calibration < 1;
+  return `El objetivo del WOD está calibrado con tus últimos WODs en Rx: ~${pct}% ${easier ? 'más holgado' : 'más exigente'} que la estimación base del motor.`;
+}
+
+/** Nombre en español de la familia de fuerza que el accesorio complementa. */
+const STRENGTH_FAMILY_LABEL: Record<StrengthFamily, string> = { lower: 'tren inferior', push: 'empuje', pull: 'tirón' };
+
 /** Proyecta un `WodTarget` a la forma inline que guarda el bloque (sin la frase, que ya va en `notes`). */
 function wodTargetField(t: WodTarget | null): SessionBlockResult['wodTarget'] | undefined {
   if (!t) return undefined;
@@ -1679,7 +1692,7 @@ function buildWodBlock(
   loadFactor = 1,
   /** Salida: el `WodFormatKind` final del WOD generado (no benchmark) — el llamador lo estampa en el
    *  bloque para que el historial recuerde que formato se hizo (variedad entre dias). */
-  kindOut?: { kind?: WodFormatKind },
+  kindOut?: { kind?: WodFormatKind; reasons?: string[] },
   /** Dominio que manda hoy segun el plan de la semana (`MicrocyclePlan.wodDomain`); null sin macro. */
   plannedDomain?: WodDomain | null,
   /** Patrones que el accesorio de hoy ya va a cargar (ver `interferingPatterns`): el WOD los evita
@@ -2233,6 +2246,8 @@ function buildWodBlock(
     overlapAvoided && softAvoidPatterns && picks.every((m) => !softAvoidPatterns.has(m.pattern))
       ? ' El WOD esquiva el patrón que ya carga tu accesorio de hoy, para no acumular el mismo tirón/empuje/pierna en dos bloques.'
       : '';
+  // Los mismos textos van tambien al resumen "por que tu sesion es asi hoy" (ver `collectReasons`).
+  if (kindOut?.reasons) kindOut.reasons.push(...collectReasons(leadNote, overlapNote));
   const notesWithTarget = `${notes}${leadNote}${overlapNote}${bwLoadNote}${wodTarget ? ` ${wodTarget.note}` : ''}`;
   const targetField = wodTargetField(wodTarget);
 
@@ -3273,7 +3288,7 @@ export function generateDailySession(
         weekLock?.accessoryMovements,
       )
     : [];
-  const wodKindOut: { kind?: WodFormatKind } = {};
+  const wodKindOut: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
   const wodBlockRaw = buildWodBlock(
     dayPlan,
     week,
@@ -3351,6 +3366,37 @@ export function generateDailySession(
       : dayIntensity === 'baja'
         ? 'Día suave de la semana — menos volumen para asimilar.'
         : undefined;
+  // El sistema energetico del dia solo se atribuye cuando el WOD es de verdad el WOD rotativo — en
+  // un dia de benchmark (dia 0, o testeo extra de pico/objetivo) el estimulo lo manda el benchmark,
+  // no la rotacion de fase, asi que no cuenta para el reparto de dominios del Dashboard.
+  const wodIsBenchmark = wodBlock.some((b) => b.movementId.startsWith('benchmark:'));
+
+  // Decisiones del coach que se adaptan a ti hoy y que antes solo se intuian dentro de las notas.
+  // Semana planificada: solo se anuncia si el bloqueo se aplico de verdad (un movimiento contraindicado
+  // por un aviso de dolor se decide normal y no cuenta).
+  const lockedNames = [
+    weekLock?.strengthMovementId && strengthBlock.some((b) => b.block === 'strength' && b.movementId === weekLock.strengthMovementId)
+      ? getMovementById(weekLock.strengthMovementId)?.name
+      : undefined,
+    weekLock?.olyMovementId && olyBlock.some((b) => b.block === 'oly' && b.movementId === weekLock.olyMovementId)
+      ? getMovementById(weekLock.olyMovementId)?.name
+      : undefined,
+  ].filter((n): n is string => Boolean(n));
+  const lockReason = lockedNames.length
+    ? `Tu semana está planificada: ${lockedNames.join(' y ')} lo fijó el coach al planificarla — el movimiento no cambia, solo la carga según cómo estés.`
+    : undefined;
+  const wodLoadReason =
+    !wodIsBenchmark && wodLoadFactor < 0.98
+      ? `Cargas del WOD ~${Math.round((1 - wodLoadFactor) * 100)}% por debajo del Rx habitual hoy (fatiga acumulada / poca energía): mejor mover ligero y rápido que pesado y roto.`
+      : undefined;
+  const wodTargetForReason = wodBlock.find((b) => b.wodTarget?.calibration !== undefined)?.wodTarget;
+  const accessoryFamilyReason =
+    accessoryWork.length > 0
+      ? `El accesorio complementa lo que menos has trabajado esta semana: ${STRENGTH_FAMILY_LABEL[leastTrainedFamily(microPlan.strengthPattern)]}.`
+      : undefined;
+  const weakPointAccessoryReason = accessoryWork.some((b) => b.notes?.includes('Rol reforzado hoy'))
+    ? 'Accesorio reforzado en tu punto débil: ese patrón va flojo en tu historial de PRs.'
+    : undefined;
   const coachReasons = Array.from(
     new Set(
       collectReasons(
@@ -3360,16 +3406,17 @@ export function generateDailySession(
         progressionNote,
         intensityNote,
         energyReason,
+        lockReason,
         ...strengthReasons,
         ...olyReasons,
+        ...(wodKindOut.reasons ?? []),
+        wodLoadReason,
+        wodTargetForReason ? calibrationReason(wodTargetForReason) : undefined,
+        accessoryFamilyReason,
+        weakPointAccessoryReason,
       ),
     ),
   );
-
-  // El sistema energetico del dia solo se atribuye cuando el WOD es de verdad el WOD rotativo — en
-  // un dia de benchmark (dia 0, o testeo extra de pico/objetivo) el estimulo lo manda el benchmark,
-  // no la rotacion de fase, asi que no cuenta para el reparto de dominios del Dashboard.
-  const wodIsBenchmark = wodBlock.some((b) => b.movementId.startsWith('benchmark:'));
 
   return {
     date: dateIso,

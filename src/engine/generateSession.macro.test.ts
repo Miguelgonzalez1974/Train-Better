@@ -636,6 +636,69 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(noted, 'la regla nunca llego a actuar').toBeGreaterThan(0);
   });
 
+  it('resumen "por que tu sesion es asi hoy": recoge las decisiones nuevas del coach, sin duplicados', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const monday = consecutiveDates(START, 1)[0];
+    const locked: AthleteProfile = { ...profile, weeklyLocks: planWeekLocks(profile, [], monday, profile.goals) };
+    const seen = { lock: 0, focus: 0, overlap: 0, accessory: 0 };
+    for (const d of consecutiveDates(START, 70)) {
+      const s = generateSessionForDate(locked, [], d, profile.goals);
+      const reasons = s.coachReasons ?? [];
+      expect(new Set(reasons).size, `${s.date}: motivos duplicados`).toBe(reasons.length);
+      const wodNote = s.blocks.find((b) => b.block === 'wod')?.notes ?? '';
+      // Cada frase visible en el WOD que explica una decision tambien esta en el resumen.
+      if (wodNote.includes('Foco de la semana')) {
+        seen.focus++;
+        expect(reasons.some((r) => r.startsWith('Foco de la semana')), `${s.date}: falta el foco`).toBe(true);
+      }
+      if (wodNote.includes('esquiva el patrón')) {
+        seen.overlap++;
+        expect(reasons.some((r) => r.includes('esquiva el patrón')), `${s.date}: falta la esquiva`).toBe(true);
+      }
+      if (reasons.some((r) => r.startsWith('Tu semana está planificada'))) seen.lock++;
+      if (s.blocks.some((b) => b.block === 'accessory' && b.accessoryRole)) {
+        seen.accessory++;
+        expect(reasons.some((r) => r.startsWith('El accesorio complementa')), `${s.date}: falta el accesorio`).toBe(true);
+      }
+    }
+    for (const [k, v] of Object.entries(seen)) expect(v, `nunca aparecio el motivo "${k}"`).toBeGreaterThan(0);
+  });
+
+  it('el resumen explica el recorte de cargas del WOD (check-in malo) y la calibracion del objetivo', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const past: SessionHistoryEntry[] = Array.from({ length: 4 }, (_, i) => ({
+      date: `2025-11-${String(10 + i).padStart(2, '0')}`,
+      mesocycleWeek: 1,
+      movementIds: [],
+      rxOrScaled: 'rx',
+      rpe: 7,
+      durationMin: 60,
+      wodResult: { scoreType: 'time', value: '20:00' },
+      wodTargetBase: { kind: 'forTime', unit: 'seconds', mid: 600 },
+    }));
+    let loadReason = 0;
+    let calibReason = 0;
+    for (const d of consecutiveDates(START, 28)) {
+      const dateIso = toLocalIsoDate(d);
+      const tired: AthleteProfile = {
+        ...profile,
+        readinessLog: [{ date: dateIso, sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' }],
+      };
+      const s = generateSessionForDate(tired, past, d, profile.goals);
+      const reasons = s.coachReasons ?? [];
+      const wod = s.blocks.find((b) => b.block === 'wod');
+      if (!wod || wod.movementId.startsWith('benchmark:')) continue;
+      expect(reasons.some((r) => r.startsWith('Cargas del WOD')), `${s.date}: falta el recorte`).toBe(true);
+      loadReason++;
+      if (wod.wodTarget?.calibration !== undefined) {
+        calibReason++;
+        expect(reasons.some((r) => r.includes('calibrado con tus últimos WODs')), `${s.date}: falta la calibracion`).toBe(true);
+      }
+    }
+    expect(loadReason).toBeGreaterThan(0);
+    expect(calibReason).toBeGreaterThan(0);
+  });
+
   it('el core no repite ningun movimiento del WOD del mismo dia', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 5 });
     const clashes: string[] = [];
