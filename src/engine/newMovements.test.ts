@@ -124,6 +124,40 @@ describe('movimientos de WOD anadidos para la biblioteca real', () => {
   });
 });
 
+describe('core: categoria de extension (GHD hip extension era el movimiento mas usado en PushJerk)', () => {
+  const EXTENSION = ['ghd-hip-extension', 'back-extension'];
+
+  it('sale en una parte razonable de los circuitos de core, sin monopolizar y sin repetirse dentro de un circuito', () => {
+    let circuits = 0;
+    let withExtension = 0;
+    const bad: string[] = [];
+    for (const n of [4, 5, 6] as const) {
+      for (const id of ['a', 'b', 'c']) {
+        const profile = makeProfile({ trainingDaysPerWeek: n, macrocycles: [makeMacro({ id })] });
+        for (const d of consecutiveDates('2026-01-05', 140)) {
+          const s = generateSessionForDate(profile, [], d, profile.goals);
+          const core = s.blocks.filter((b) => b.block === 'accessory' && b.format === 'Core · 3 rondas');
+          if (core.length === 0) continue;
+          circuits++;
+          const ext = core.filter((b) => EXTENSION.includes(b.movementId));
+          if (ext.length > 0) withExtension++;
+          if (ext.length > 1) bad.push(`${s.date}: mas de una extension en el mismo circuito`);
+          if (new Set(core.map((b) => b.movementId)).size !== core.length) bad.push(`${s.date}: movimiento repetido en el circuito`);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+    expect(circuits).toBeGreaterThan(100);
+    const share = withExtension / circuits;
+    expect(share, `extension en ${withExtension}/${circuits} circuitos`).toBeGreaterThan(0.1);
+    expect(share, `extension en ${withExtension}/${circuits} circuitos`).toBeLessThan(0.6);
+  });
+
+  it('existen en el catalogo y son de cadera/tronco (hinge), asi que el filtro de dolor los aparta solo', () => {
+    for (const id of EXTENSION) expect(getMovementById(id)?.pattern, id).toBe('hinge');
+  });
+});
+
 describe('afinidades de WOD (PushJerk 2025-26)', () => {
   it('las 14 parejas nuevas estan en los dos sentidos y todos los ids existen', () => {
     const bad: string[] = [];

@@ -240,9 +240,12 @@ const WEAK_POINT_ACCESSORY_ROLE: Record<string, AccessoryRole> = {
 };
 
 /** Categorías del circuito de core — se rota entre ellas para que no sea siempre lo mismo. */
-type CoreCategory = 'antiExtension' | 'antiRotation' | 'flexion' | 'carry';
+type CoreCategory = 'antiExtension' | 'antiRotation' | 'flexion' | 'carry' | 'extension';
 
 const CORE_POOL: Record<CoreCategory, string[]> = {
+  // Extension de tronco/cadera (cadena posterior del tronco): en 500 bloques de core de PushJerk desde
+  // 2022, el GHD hip extension es el movimiento mas usado. Sin carga externa, para el circuito de reps.
+  extension: ['ghd-hip-extension', 'back-extension'],
   antiExtension: ['weighted-plank', 'dead-bug', 'ab-wheel-rollout', 'plank', 'hollow-hold', 'hollow-rock', 'handstand-hold', 'superman-hold'],
   antiRotation: ['pallof-press', 'side-plank-hold', 'russian-twist'],
   flexion: ['toes-to-bar', 'ghd-situp', 'v-up', 'abmat-situp', 'hanging-leg-raise', 'lying-leg-raise', 'flutter-kick', 'mountain-climbers', 'ball-slam', 'l-sit'],
@@ -254,6 +257,7 @@ const CORE_REPS: Record<CoreCategory, string> = {
   antiRotation: '10-12/lado',
   flexion: '12-15',
   carry: '30-40 m',
+  extension: '12-15',
 };
 
 /**
@@ -279,9 +283,9 @@ const CORE_INTERVAL_IDS = [
 
 /** Orden de categorías de core segun el patron de fuerza del dia (lo primero pesa mas en la seleccion). */
 const CORE_PRIORITY_BY_FAMILY: Record<StrengthFamily, CoreCategory[]> = {
-  lower: ['antiExtension', 'carry', 'antiRotation', 'flexion'],
-  push: ['antiRotation', 'flexion', 'antiExtension', 'carry'],
-  pull: ['flexion', 'antiRotation', 'carry', 'antiExtension'],
+  lower: ['antiExtension', 'carry', 'antiRotation', 'flexion', 'extension'],
+  push: ['antiRotation', 'flexion', 'extension', 'antiExtension', 'carry'],
+  pull: ['flexion', 'extension', 'antiRotation', 'carry', 'antiExtension'],
 };
 
 /**
@@ -2574,8 +2578,9 @@ function buildCoreCircuitBlock(
 ): SessionBlockResult[] {
   const family = strengthFamilyOf(strengthPattern);
   const order = CORE_PRIORITY_BY_FAMILY[family];
-  // Las 2 primeras categorias por prioridad del dia + 1 rotatoria de las 2 restantes.
-  const categories: CoreCategory[] = [order[0], order[1], rng() < 0.5 ? order[2] : order[3]];
+  // Las 2 primeras categorias por prioridad del dia + 1 rotatoria de las restantes.
+  const rest = order.slice(2);
+  const categories: CoreCategory[] = [order[0], order[1], rest[Math.floor(rng() * rest.length)]];
 
   const used = new Set(recentIds);
   const picks: { movement: Movement; category: CoreCategory }[] = [];
