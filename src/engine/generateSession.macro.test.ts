@@ -509,7 +509,9 @@ describe('generateSessionForDate — macrociclo', () => {
   });
 
   it('WOD autorregulado: con un check-in de poca energia las cargas del WOD nunca suben y en algun dia bajan', () => {
-    const profile = makeProfile({ trainingDaysPerWeek: 6 });
+    // Con peso corporal registrado casi todos los movimientos de WOD llevan carga; sin el, la mayoria salen
+    // sin kilos y la comparacion depende de que caiga un dia con barra.
+    const profile = makeProfile({ trainingDaysPerWeek: 6, bodyweightLog: [{ date: '2026-01-01', kg: 82 }] });
     let lowered = 0;
     // Ventana amplia: con check-in malo el formato puede cambiar y entonces no hay pares comparables;
     // 14 dias dependia de la semilla (dejo de bastar al añadir un formato al sorteo).
@@ -902,6 +904,8 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
       const s = generateSessionForDate(profile, [], d, profile.goals);
       const wod = s.blocks.find((b) => b.block === 'wod');
       if (!wod || s.isRestDay || wod.movementId.startsWith('benchmark:')) continue;
+      // Un WOD real de la biblioteca lleva su texto original (y el objetivo publicado si la fuente lo da), no una estimacion del motor.
+      if (wod.wodLibraryId) continue;
       if (!/Objetivo orientativo/.test(wod.notes ?? '')) missing.push(`${s.date}: ${wod.format}`);
     }
     expect(missing).toEqual([]);

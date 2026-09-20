@@ -4,6 +4,7 @@ import { getWodDomain, WOD_BARBELL_LOAD_PERCENT, WOD_PRESCRIPTION } from './wodD
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import type { SessionBlockResult } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
+import { getLibraryWod } from '../data/library/libraryWods';
 
 /**
  * Los formatos especiales del WOD (triada de barra, escaleras con peaje, intervalo de carga creciente,
@@ -64,6 +65,7 @@ const LABEL: Record<string, RegExp> = {
   ascendingLadderFiller: /^AMRAP \d+ min — escalera \+ peaje$/,
   cardioChipper: /^Cardio chipper/,
   sandwich: /^Sándwich — entrada \+ \d+ rondas \+ salida$/,
+  library: /^(For Time|AMRAP|EMOM|Al máximo) — WOD real: /,
   chipper: /^Chipper/,
   descendingLadder: /For Time$/,
   ascendingLadder: /For Time$/,
@@ -207,6 +209,45 @@ describe('WOD generado — coherencia de cada formato', () => {
       if (!/Objetivo orientativo/.test(e[0].notes ?? '')) bad.push(`sin objetivo: ${where(w)}`);
     }
     expect(bad).toEqual([]);
+  });
+
+  it('WOD real de la biblioteca: coincide con su original (movimientos y cantidades), sin cargas Rx en lb, y se puntua como su formato', () => {
+    const list = of('library');
+    expect(list.length, 'nunca salio un WOD real').toBeGreaterThan(0);
+    const bad: string[] = [];
+    for (const w of list) {
+      const id = w.entries[0].wodLibraryId;
+      const lib = id ? getLibraryWod(id) : undefined;
+      if (!lib) {
+        bad.push(`id de biblioteca desconocido (${id}): ${where(w)}`);
+        continue;
+      }
+      if (w.entries.length !== lib.lines.length) bad.push(`numero de lineas distinto: ${where(w)}`);
+      lib.lines.forEach(([mid, reps], i) => {
+        if (w.entries[i]?.movementId !== mid || w.entries[i]?.reps !== reps) bad.push(`linea ${i} no coincide con el original: ${where(w)}`);
+        if (!getMovementById(mid)) bad.push(`id inexistente ${mid}: ${where(w)}`);
+      });
+      if (!(w.entries[0].notes ?? '').includes(lib.original)) bad.push(`la nota no lleva el texto original: ${where(w)}`);
+      if (new Set(w.entries.map((e) => e.wodLibraryId)).size !== 1) bad.push(`id de biblioteca mezclado: ${where(w)}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('WOD real: no se repite dentro de la ventana de historial', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [makeMacro({ id: 'w1' })] });
+    let checked = 0;
+    for (const d of consecutiveDates('2026-01-05', 200)) {
+      const first = generateSessionForDate(profile, [], d, profile.goals).blocks.find((b) => b.block === 'wod')?.wodLibraryId;
+      if (!first) continue;
+      const history = [
+        { date: '2025-12-30', mesocycleWeek: 1 as const, movementIds: [], rxOrScaled: 'rx' as const, rpe: 7, durationMin: 60, wodLibraryId: first },
+      ];
+      const again = generateSessionForDate(profile, history, d, profile.goals).blocks.find((b) => b.block === 'wod')?.wodLibraryId;
+      // Con ese WOD ya en el historial, o sale otro WOD real o el motor cae a un formato generado — nunca el mismo.
+      expect(again, `${d.toISOString()} repite ${first}`).not.toBe(first);
+      checked++;
+    }
+    expect(checked, 'nunca salio un WOD real para comprobar').toBeGreaterThan(0);
   });
 
   it('chipper: 5 movimientos distintos', () => {

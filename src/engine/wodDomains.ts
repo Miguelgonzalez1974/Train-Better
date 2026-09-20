@@ -377,7 +377,8 @@ export type WodFormatKind =
   | 'barbellComplex'
   | 'maxReps'
   | 'cardioChipper'
-  | 'sandwich';
+  | 'sandwich'
+  | 'library';
 
 // ---- Periodizacion del acondicionamiento (sistema energetico por fase) ----
 
@@ -423,7 +424,7 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
     system: 'umbral',
     label: 'Umbral',
     monoFloor: 1,
-    preferFormats: ['forTime', 'interval', 'ladder', 'ascendingLadderFiller', 'sandwich'],
+    preferFormats: ['forTime', 'interval', 'ladder', 'ascendingLadderFiller', 'sandwich', 'library'],
     durationScale: 1.0,
     paceCue: 'cómodo-duro: rápido pero sin colapsar',
     note: 'Hoy: umbral — duración media a ritmo "cómodo-duro", justo por debajo del lactato.',
@@ -432,7 +433,7 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
     system: 'potencia',
     label: 'Potencia anaeróbica',
     monoFloor: 1,
-    preferFormats: ['forTime', 'emom', 'risingLoadInterval', 'risingInterval'],
+    preferFormats: ['forTime', 'emom', 'risingLoadInterval', 'risingInterval', 'library'],
     durationScale: 0.9,
     paceCue: 'máximo esfuerzo en piezas cortas',
     note: 'Hoy: potencia anaeróbica — pieza corta y máxima, estilo competición.',

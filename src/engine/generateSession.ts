@@ -73,6 +73,7 @@ import {
   type WodTimeDomain,
 } from './wodDomains';
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, type WodTarget } from './wodTargets';
+import { libraryWods, type LibraryWod } from '../data/library/libraryWods';
 import { historyStamp, lastHistoryDate } from '../data/athlete/historyStamp';
 import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
 import {
@@ -350,7 +351,19 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   maxReps: 'Puntúa por repeticiones totales — en cada ventana muévete a un ritmo que puedas repetir en la siguiente, no salgas a sprint y te apagues.',
   cardioChipper: 'Puro motor: 3 bloques que van a menos. Sal conservador en el primer bloque — es el más largo — y aprieta cuando veas el final.',
   sandwich: 'Entrada y salida son el mismo cardio, con las rondas en medio — no esprintes la entrada: la salida te pilla con piernas y agarre cargados.',
+  library: 'WOD real de la programación de PushJerk: respeta la estructura original y ajusta el ritmo al RPE de hoy, no al de la pizarra.',
 };
+
+/** Prefijo de formato de un WOD de la biblioteca — el mismo que usa `inferScoreTypeFromFormat` para pedir el resultado correcto. */
+function libraryFormatLabel(w: LibraryWod): string {
+  const prefix = w.scoreType === 'time' ? 'For Time' : w.scoreType === 'rounds+reps' ? 'AMRAP' : /EMOM|E\d+MOM|every/i.test(w.header) ? 'EMOM' : 'Al máximo';
+  return `${prefix} — WOD real: ${w.header}`;
+}
+
+/** Cuántos WODs recientes de la biblioteca se descartan del sorteo (con ~1.000 disponibles, no se repite en años). */
+const LIBRARY_RECENT_WINDOW = 120;
+/** Máximo de líneas de movimiento de un WOD de la biblioteca para servirlo como WOD del día. */
+const LIBRARY_MAX_LINES = 6;
 
 /**
  * Grupos de movimientos de WOD que son casi el mismo ejercicio. En cuanto uno del grupo entra en el
@@ -1897,6 +1910,14 @@ function buildWodBlock(
       ? []
       : [
           { label: `Sándwich — entrada + ${timeDomain.rounds} rondas + salida`, kind: 'sandwich' as WodFormatKind },
+          // Triple presencia en el sorteo: es una sola familia pero con ~1.000 WODs distintos detras. Nunca en recuperacion.
+          ...(energy.system === 'recuperacion'
+            ? []
+            : [
+                { label: 'WOD real (biblioteca PushJerk)', kind: 'library' as WodFormatKind },
+                { label: 'WOD real (biblioteca PushJerk)', kind: 'library' as WodFormatKind },
+                { label: 'WOD real (biblioteca PushJerk)', kind: 'library' as WodFormatKind },
+              ]),
           { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
           { label: 'For Time', kind: 'descendingLadder' as WodFormatKind },
           { label: 'For Time', kind: 'ascendingLadder' as WodFormatKind },
@@ -2077,6 +2098,62 @@ function buildWodBlock(
     // cae al reparto normal de abajo en vez de forzar una triada incompleta.
   }
 
+  if (chosenFormat.kind === 'library') {
+    // WOD real de la biblioteca: se sirven sus movimientos y cantidades tal cual, con las cargas del
+    // coach (PR / peso corporal / autorregulacion) en vez de las Rx en lb del texto original.
+    const usedLibrary = new Set(
+      history
+        .slice(-LIBRARY_RECENT_WINDOW)
+        .map((e) => e.wodLibraryId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const candidates = libraryWods.filter((w) => {
+      if (usedLibrary.has(w.id) || w.lines.length > LIBRARY_MAX_LINES) return false;
+      return w.lines.every(([id]) => {
+        const m = getMovementById(id);
+        return m !== undefined && !excludePatterns.has(m.pattern);
+      });
+    });
+    // Interferencia con el accesorio de hoy: mismo criterio que `avoidOverlap` — se evita el patron que ya
+    // carga el accesorio mientras queden alternativas.
+    const overlapsAccessory = (w: LibraryWod) =>
+      softAvoidPatterns !== undefined && w.lines.some(([id]) => softAvoidPatterns.has(getMovementById(id)!.pattern));
+    const freeCandidates = candidates.filter((w) => !overlapsAccessory(w));
+    const eligible = freeCandidates.length >= 3 ? freeCandidates : candidates;
+    if (eligible.length > 0) {
+      const scored = eligible.map((w) => {
+        const moves = w.lines.map(([id]) => getMovementById(id)!);
+        const monoCount = moves.filter((m) => getWodDomain(m.id) === 'monostructural').length;
+        const leadOk = leadDomain ? moves.filter((m) => getWodDomain(m.id) === leadDomain).length >= 2 : false;
+        const noOverlap = !softAvoidPatterns || moves.every((m) => !softAvoidPatterns.has(m.pattern));
+        return { w, weight: 1 + (leadOk ? 2 : 0) + (noOverlap ? 1 : 0) + (monoCount >= energy.monoFloor ? 1 : 0), leadOk, noOverlap };
+      });
+      let roll = rng() * scored.reduce((s, c) => s + c.weight, 0);
+      const pick = scored.find((c) => (roll -= c.weight) < 0) ?? scored[scored.length - 1];
+      const w = pick.w;
+      const format = libraryFormatLabel(w);
+      const goalNote = w.goal ? ` Objetivo publicado por la fuente: ${w.goal}` : '';
+      const libNotes =
+        `${notes} WOD real de PushJerk (${w.date}). Las cargas de cada movimiento son las que calcula el coach para ti; las del texto original son Rx de PushJerk en lb.` +
+        `${goalNote} Estructura original:\n${w.original}`;
+      if (kindOut?.reasons) {
+        kindOut.reasons.push(`Hoy toca un WOD real de la programación de PushJerk (${w.date}), no uno generado.`);
+        if (pick.leadOk && leadDomain) kindOut.reasons.push(`Encaja con el foco de la semana: ${WOD_LEAD_LABEL[leadDomain]}.`);
+      }
+      return w.lines.map(([id, reps]) => ({
+        block: 'wod' as const,
+        movementId: id,
+        reps,
+        loadKg: wodMovementLoadKg(getMovementById(id)!, prs, bodyweightKg, loadFactor),
+        format,
+        title: `PushJerk ${w.date}`,
+        notes: libNotes,
+        wodLibraryId: w.id,
+      }));
+    }
+    // Sin WOD real compatible hoy (dolor / patrones excluidos / todos recientes) — cae al reparto normal.
+  }
+
   if (chosenFormat.kind === 'sandwich') {
     // Entrada + N rondas de pareja barra/gimnastico + salida: el mismo cardio abre y cierra el WOD.
     // Cantidad de entrada = mitad del primer tramo del cardio chipper (misma tabla de bases).
@@ -2197,6 +2274,7 @@ function buildWodBlock(
     'descendingLadderFiller',
     'ascendingLadderFiller',
     'sandwich',
+    'library',
   ]);
   if (FALLBACK_PRONE_KINDS.has(chosenFormat.kind)) {
     // Formato generico de reemplazo: el primero de la lista que no haya salido en los ultimos WODs
@@ -4097,6 +4175,7 @@ export function toHistoryEntry(
     olyFamily: olyMovement ? (olyMovement.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
     energySystem: session.energySystem,
     wodFormatKind: wodKindBlock?.wodKind,
+    wodLibraryId: wodKindBlock?.wodLibraryId,
     wodTargetBase: wodBase,
   };
 }
