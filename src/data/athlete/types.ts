@@ -279,6 +279,8 @@ export interface AthleteProfile {
       >;
       /** Id (sin el prefijo "benchmark:") del WOD de referencia bloqueado para este día, si ese día salió como día de test al planificar la semana. */
       wodBenchmarkId?: string;
+      /** El día salió como día de doble WOD (solo acondicionamiento) al planificar la semana. Un día del hueco de doble WOD con bloqueo pero sin esta marca se planificó como día normal y no cambia después. Ver `doubleWodSlot`. */
+      doubleWod?: boolean;
       /** Fecha ISO en que se decidio este bloqueo — permite saber si un dia perdido de la semana ocurrio DESPUES de planificar (y hay que re-planificar los dias que quedan). */
       plannedOn?: string;
     }
@@ -403,6 +405,8 @@ export interface DailySession {
   dayEmphasis?: 'fuerza' | 'metcon';
   /** Día de doble WOD (solo acondicionamiento, sin fuerza ni oly): dos piezas con 5-10 min de descanso; las entradas de WOD llevan `wodPart` 1 y 2. Ver `doubleWodSlot`. */
   doubleWod?: boolean;
+  /** El bloqueo semanal planificó doble WOD para este día pero hoy no se pudo (descarga, ACWR alto, poca disponibilidad, test, taper…): es un día normal a propósito, no un desacuerdo con el bloqueo. */
+  doubleWodSkipped?: boolean;
   /** Sistema energetico del WOD de hoy (rotacion de dominios del microciclo) — solo con macrociclo activo y en dias no-benchmark. Ver `EnergySystem` en wodDomains.ts. */
   energySystem?: 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
   /** Intensidad relativa de hoy dentro de la onda dura/media/suave de la semana — ausente cuando es 'media' (el caso neutro). Ver `DayIntensity` en weekPlan.ts. */

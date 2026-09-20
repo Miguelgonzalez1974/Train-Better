@@ -3581,8 +3581,12 @@ export function generateDailySession(
     goalForcedPattern: strengthGoal?.movementId ? getMovementById(strengthGoal.movementId)?.pattern ?? null : null,
     goalForcedFamily: olyGoal?.movementId ? (olyGoal.movementId.includes('snatch') ? 'snatch' : 'clean') : null,
   });
-  const plannedPattern = microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
-  const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
+  // El hueco del doble WOD no tiene patron ni familia planificados (el microciclo lo saco de los dias de
+  // fuerza): si hoy acaba siendo un dia normal —planificado sin doble, o vetado por seguridad—, fuerza y
+  // oly deciden por su cuenta (ciclo natural + hueco semanal) en vez de heredar el relleno del plan.
+  const isDoubleSlotToday = dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, week);
+  const plannedPattern = isDoubleSlotToday ? null : microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
+  const plannedFamily = isDoubleSlotToday ? null : microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
   const plannedOlyCombined = microPlan.olyCombined[dayPlan.trainingDayIndex] ?? false;
   const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
   const plannedDomain = microPlan.wodDomain[dayPlan.trainingDayIndex] ?? null;
@@ -3666,20 +3670,24 @@ export function generateDailySession(
     Math.min(strengthRampFactor, olyRampFactor),
   );
 
-  // Dia de doble WOD (ver `doubleWodSlot`): solo acondicionamiento, dos piezas. Solo si hoy es el dia
-  // planificado y el atleta esta para ello — sin descarga, ACWR alto, poca disponibilidad, test,
-  // taper ni rampa de vuelta, y no en la primera semana del macrociclo (que va siempre completa). Si
-  // no, el dia es el normal (fuerza + WOD).
-  if (
-    dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, week) &&
+  // Dia de doble WOD (ver `doubleWodSlot`): solo acondicionamiento, dos piezas.
+  //  - Hoy tiene que ser posible: sin descarga, ACWR alto, poca disponibilidad, test, taper ni rampa de
+  //    vuelta, y no en la primera semana del macrociclo (que va siempre completa). Este veto de
+  //    seguridad manda SIEMPRE, tambien sobre el bloqueo: si no se cumple, el dia es el normal.
+  //  - Con la semana planificada manda el bloqueo: solo es doble el dia que se planifico como doble, y un
+  //    dia planificado como normal no pasa a doble despues (nada cambia a mitad de semana). Sin bloqueo
+  //    para esta fecha (vista previa, semana aun sin planificar) decide el estado de hoy.
+  const doubleAllowedToday =
+    isDoubleSlotToday &&
     !testDayFocus &&
     !isTaper &&
     !wodRampActive &&
     !deloadReason &&
     acwrZone !== 'alta' &&
     !getReadinessFactor(readinessCheck).isLow &&
-    weeksSinceStart(macro.startDate, date) > 0
-  ) {
+    weeksSinceStart(macro.startDate, date) > 0;
+  const doublePlanned = weekLock ? weekLock.doubleWod === true : true;
+  if (doubleAllowedToday && doublePlanned) {
     return buildDoubleWodDay({
       dateIso,
       week,
@@ -3911,6 +3919,8 @@ export function generateDailySession(
     deloadReason,
     deloadNote,
     dayEmphasis: dayEmphasis === 'mixto' ? undefined : dayEmphasis,
+    // Planificado como doble pero hoy no se pudo (veto de seguridad): dia normal a proposito.
+    ...(weekLock?.doubleWod ? { doubleWodSkipped: true } : {}),
     coachReasons: coachReasons.length > 0 ? coachReasons : undefined,
     energySystem: wodIsBenchmark ? undefined : plannedEnergy ?? undefined,
     dayIntensity: dayIntensity === 'media' ? undefined : dayIntensity,
@@ -4296,8 +4306,11 @@ export function planWeekLocks(
     const wodBenchmarkId = wodBenchmarkMovementId?.startsWith('benchmark:')
       ? wodBenchmarkMovementId.replace('benchmark:', '')
       : undefined;
-    if (strengthMovementId || olyMovementId || accessoryMovements || wodBenchmarkId) {
-      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, plannedOn: options?.plannedOn };
+    // Un dia de doble WOD (solo acondicionamiento) no lleva ni fuerza ni oly: se bloquea igualmente para
+    // que ese dia no cambie de estructura (doble <-> normal) al regenerarse.
+    const doubleWod = session.doubleWod ? true : undefined;
+    if (strengthMovementId || olyMovementId || accessoryMovements || wodBenchmarkId || doubleWod) {
+      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, doubleWod, plannedOn: options?.plannedOn };
     }
     workingHistory = [...workingHistory, toHistoryEntry(session, 'rx', 7, 60)];
   }
@@ -4388,6 +4401,14 @@ type WeeklyLock = NonNullable<AthleteProfile['weeklyLocks']>[string];
  * movimientos principales (fuerza/oly/benchmark), que son lo que el bloqueo fija.
  */
 function cachedSessionDisagreesWithLock(session: DailySession, lock: WeeklyLock): boolean {
+  // Estructura del dia: doble vs normal. Un dia planificado como doble que hoy salio normal por un veto de
+  // seguridad (`doubleWodSkipped`) NO es un desacuerdo; uno cacheado como doble cuando el bloqueo lo
+  // planifico normal (o al reves, sin veto) si.
+  if (lock.doubleWod) {
+    if (!session.doubleWod && !session.doubleWodSkipped) return true;
+  } else if (session.doubleWod) {
+    return true;
+  }
   if (lock.strengthMovementId) {
     const id = session.blocks.find((b) => b.block === 'strength')?.movementId;
     if (id && id !== lock.strengthMovementId) return true;
