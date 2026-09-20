@@ -477,19 +477,37 @@ const COOLDOWN_TAG_BY_PATTERN: Partial<Record<MovementPattern, string>> = {
   olyLift: 'especifico-oly',
 };
 
-type StrengthSchemeStyle = 'straightSets' | 'ascendingLadder' | 'volumeSets';
+type StrengthSchemeStyle = 'straightSets' | 'ascendingLadder' | 'volumeSets' | 'emom';
 
 const STRENGTH_SCHEME_LABEL: Record<StrengthSchemeStyle, string> = {
   straightSets: 'Series rectas',
   ascendingLadder: 'Rampa ascendente',
   volumeSets: 'Volumen de acumulación',
+  emom: 'E2MOM 10 min — carga creciente',
 };
 
 const STRENGTH_SCHEME_NOTE: Record<StrengthSchemeStyle, string> = {
   straightSets: '',
   ascendingLadder: 'Las primeras series son de aproximación — sube la carga en cada una hasta la serie final, la que de verdad cuenta.',
   volumeSets: 'Serie de volumen a intensidad moderada para construir base de trabajo — prioriza completar todas las repeticiones sin fallar.',
+  emom: '',
 };
+
+/**
+ * Estilo "E2MOM de carga creciente" (patron muy frecuente en la programacion real de PushJerk, p.ej.
+ * "10 min E2MOM: 4 bench press + 2 strict pull-ups; empieza en ~55% y sube 5% cada ronda"): cada 2 min,
+ * un levantamiento principal con la carga subiendo cada ronda y un companero antagonista sin carga.
+ * Solo empuje y sentadilla (el companero clasico es tiron vertical / flexion) y solo semanas 1-2.
+ */
+const STRENGTH_EMOM_PARTNER: Partial<Record<MovementPattern, { id: string; reps: string }>> = {
+  horizontalPush: { id: 'strict-pull-up', reps: '3-5' },
+  verticalPush: { id: 'strict-pull-up', reps: '3-5' },
+  squat: { id: 'push-up', reps: '8-10' },
+};
+const STRENGTH_EMOM_ROUNDS = 5;
+const STRENGTH_EMOM_STEP = 0.05;
+/** Reps del levantamiento principal en el E2MOM por semana del meso (mismo orden que el esquema base: semana 2 mas pesada, menos reps). */
+const STRENGTH_EMOM_REPS: Record<1 | 2, number> = { 1: 4, 2: 3 };
 
 /** Un coach no entrena la fuerza siempre igual: rota el estilo de la sesion en vez de series rectas todos los dias. */
 /**
@@ -498,9 +516,11 @@ const STRENGTH_SCHEME_NOTE: Record<StrengthSchemeStyle, string> = {
  * respuesta razonable a una meseta. Sigue siendo probabilistico: el lift no queda condenado a
  * volumen ligero perpetuo, sigue viendo dias de intensidad.
  */
-function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4, preferVolume = false): StrengthSchemeStyle {
+function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4, preferVolume = false, allowEmom = false): StrengthSchemeStyle {
   if (week === 4) return rng() < 0.5 ? 'straightSets' : 'volumeSets';
   const roll = rng();
+  // E2MOM: ~15% de los dias donde aplica (empuje/sentadilla en semanas 1-2, con companero disponible).
+  if (allowEmom && roll >= 0.85) return 'emom';
   if (preferVolume) {
     if (roll < 0.35) return 'straightSets';
     if (roll < 0.55) return 'ascendingLadder';
@@ -877,12 +897,17 @@ function buildStrengthBlock(
   const scheme = STRENGTH_WEEK_SCHEMES[week];
   // Dosis del dia sobre las series: nunca menos de 2 ni mas de 2 por encima del esquema base.
   const setsFor = (base: number): number => Math.min(base + 2, Math.max(2, Math.round(base * dose.strengthSets)));
-  const style = pickStrengthSchemeStyle(week, todayLiftStalled);
+  // E2MOM solo con companero antagonista disponible (sin dolor en su patron) y un PR de referencia.
+  const emomPartner = STRENGTH_EMOM_PARTNER[pattern];
+  const emomPartnerMovement = emomPartner ? getMovementById(emomPartner.id) : undefined;
+  const allowEmom =
+    week <= 2 && currentPR > 0 && emomPartnerMovement !== undefined && !avoidedPatterns.has(emomPartnerMovement.pattern);
+  const style = pickStrengthSchemeStyle(week, todayLiftStalled, allowEmom);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
   // La rampa ascendente ya construye hacia una serie casi maxima — ningun documento real prescribe
   // tempo lento justo ahi, asi que solo straightSets/volumeSets son candidatas.
   const tempo =
-    style === 'ascendingLadder'
+    style === 'ascendingLadder' || style === 'emom'
       ? undefined
       : pickTempoForDay({
           week,
@@ -897,6 +922,28 @@ function buildStrengthBlock(
   // corporal, perfil de respuesta) va SOLO a `coachReasons` — ver el resumen "Avisos del coach".
   const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${setFeelNote}${painTag}${reintroNote}${fatigueNote}${rampNote}${tempoNote}`;
   const reasons = collectReasons(responseTag, setFeelNote, bwNote, weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
+
+  if (style === 'emom' && emomPartner && emomPartnerMovement && (week === 1 || week === 2)) {
+    const reps = STRENGTH_EMOM_REPS[week];
+    const startPercent = scheme.percent - STRENGTH_EMOM_STEP * (STRENGTH_EMOM_ROUNDS - 1) * 0.75;
+    const factors = autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor;
+    const loads = Array.from({ length: STRENGTH_EMOM_ROUNDS }, (_, i) =>
+      roundToNearestPlate(currentPR * (startPercent + STRENGTH_EMOM_STEP * i) * factors),
+    );
+    const format = STRENGTH_SCHEME_LABEL.emom;
+    const emomNotes =
+      `${scheme.coachNote} Cada 2 min durante 10 min (${STRENGTH_EMOM_ROUNDS} rondas): ${reps} reps de ${movement.name} + ${emomPartner.reps} de ${emomPartnerMovement.name}; ` +
+      `descansa lo que sobre del intervalo. La carga sube cada ronda: ${loads.map((l, i) => `R${i + 1} ${l} kg`).join(' · ')}. ` +
+      `Si una ronda te obliga a ir al fallo, repite el peso de la anterior en vez de subir.${goalTag}${setFeelNote}${painTag}${reintroNote}${fatigueNote}${rampNote}`;
+    return {
+      blocks: [
+        { block: 'strength', movementId: movement.id, format, sets: STRENGTH_EMOM_ROUNDS, reps: String(reps), loadKg: loads[loads.length - 1], notes: emomNotes },
+        { block: 'strength', movementId: emomPartnerMovement.id, format, sets: STRENGTH_EMOM_ROUNDS, reps: emomPartner.reps, notes: `Compañero del E2MOM: ${emomPartner.reps} reps en cada ronda, mismo intervalo que el levantamiento principal.` },
+      ],
+      pattern,
+      reasons,
+    };
+  }
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
