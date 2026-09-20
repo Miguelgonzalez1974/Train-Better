@@ -423,6 +423,18 @@ export const accessoryMovements: Movement[] = [
     tags: ['core'],
   },
   {
+    id: 'lying-leg-raise',
+    name: 'Lying Leg Raise',
+    blocks: ['accessory'],
+    pattern: 'core',
+    equipment: [],
+    primaryMuscles: ['recto abdominal', 'flexores de cadera'],
+    standard:
+      'Tumbado boca arriba con la zona lumbar pegada al suelo, subir las piernas extendidas hasta la vertical y bajarlas con control sin arquear la espalda. 10-15 repeticiones.',
+    scaling: { easier: ['dead-bug'], harder: ['hanging-leg-raise'] },
+    tags: ['core'],
+  },
+  {
     id: 'weighted-plank',
     name: 'Weighted Plank',
     blocks: ['accessory'],

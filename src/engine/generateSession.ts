@@ -244,7 +244,7 @@ type CoreCategory = 'antiExtension' | 'antiRotation' | 'flexion' | 'carry';
 const CORE_POOL: Record<CoreCategory, string[]> = {
   antiExtension: ['weighted-plank', 'dead-bug', 'ab-wheel-rollout', 'plank', 'hollow-hold', 'hollow-rock', 'handstand-hold', 'superman-hold'],
   antiRotation: ['pallof-press', 'side-plank-hold', 'russian-twist'],
-  flexion: ['toes-to-bar', 'ghd-situp', 'v-up', 'abmat-situp', 'hanging-leg-raise', 'flutter-kick', 'mountain-climbers', 'ball-slam', 'l-sit'],
+  flexion: ['toes-to-bar', 'ghd-situp', 'v-up', 'abmat-situp', 'hanging-leg-raise', 'lying-leg-raise', 'flutter-kick', 'mountain-climbers', 'ball-slam', 'l-sit'],
   carry: ['farmers-carry', 'suitcase-carry'],
 };
 
@@ -2760,6 +2760,21 @@ interface WodRampInfo {
 }
 
 /**
+ * Etiqueta del calentamiento especifico segun el patron de fuerza de hoy. Las etiquetas del catalogo
+ * son `especifico-squat` / `-hinge` / `-push` / `-oly`, no `especifico-<patron>` a secas: sin este mapa
+ * un dia de press (horizontalPush / verticalPush) o de olimpico (olyLift) no encontraba ningun
+ * calentamiento especifico y solo recibia el generico.
+ */
+export const WARMUP_TAG_BY_PATTERN: Partial<Record<MovementPattern, string>> = {
+  squat: 'especifico-squat',
+  lunge: 'especifico-squat',
+  hinge: 'especifico-hinge',
+  horizontalPush: 'especifico-push',
+  verticalPush: 'especifico-push',
+  olyLift: 'especifico-oly',
+};
+
+/**
  * Calentamiento por fases: (1) Activacion fija (hombro/escapula + gluteo/cadera), y (2) Especifico
  * del WOD. Cuando llegan los movimientos reales del WOD (`wodRamp`), el especifico deja de ser
  * estiramientos sueltos y pasa a ser una rampa progresiva con esos mismos movimientos, terminando en
@@ -2801,7 +2816,8 @@ function buildWarmupBlock(
       `Sube el pulso 2 min y haz 3 rondas ascendentes con estos movimientos: técnica ligera → ritmo de trabajo → ${lastRound}.`,
     );
   } else {
-    const specificPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes(`especifico-${strengthPattern}`));
+    const specificTag = WARMUP_TAG_BY_PATTERN[strengthPattern] ?? `especifico-${strengthPattern}`;
+    const specificPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes(specificTag));
     const specificPick = pickVaried(specificPool, new Set([...recentIds, ...generalPicks.map((m) => m.id)]));
     paraWod = toEntries(
       specificPick ? [...generalPicks, specificPick] : generalPicks,
