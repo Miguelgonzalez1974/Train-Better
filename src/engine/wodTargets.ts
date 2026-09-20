@@ -226,6 +226,49 @@ function qualitative(scoreType: WodScoreType, note: string): WodTarget {
   return { scoreType, unit: scoreType === 'time' ? 'seconds' : 'reps', low: 0, high: 0, display: '', note };
 }
 
+/**
+ * Objetivo PUBLICADO por la fuente de un WOD real ("Goal: 10-12 min.", "complete 5 rounds.") como
+ * `WodTarget`. Solo formas inequivocas: tiempo total ("14 min", "10-12 min") en un WOD por tiempo, y
+ * rondas ("5 rounds", "8-10 rounds") en un AMRAP. Todo lo demas ("< 6 min", "round of 18", "400 reps"…)
+ * devuelve null — mejor sin objetivo que leerlo mal. La cifra no se toca: banda exacta de la fuente.
+ */
+export function parsePublishedGoal(goal: string | undefined, scoreType: WodScoreType): WodTarget | null {
+  const g = (goal ?? '').trim();
+  if (scoreType === 'time') {
+    const m = g.match(/^(\d+)(?:\s*-\s*(\d+))?\s*min\.?$/i);
+    if (!m) return null;
+    const low = Number(m[1]) * 60;
+    const high = Number(m[2] ?? m[1]) * 60;
+    if (high < low || low <= 0) return null;
+    const display = low === high ? `${m[1]} min` : `${m[1]}–${m[2]} min`;
+    return {
+      scoreType: 'time',
+      unit: 'seconds',
+      low,
+      high,
+      display,
+      note: `Objetivo publicado por la fuente: ${display}. Con tus cargas y tu día, manda el RPE de hoy.`,
+    };
+  }
+  if (scoreType === 'rounds+reps') {
+    const m = g.match(/^(?:complete\s+)?(\d+)(?:\s*-\s*(\d+))?\s*rounds?\.?$/i);
+    if (!m) return null;
+    const low = Number(m[1]);
+    const high = Number(m[2] ?? m[1]);
+    if (high < low || low <= 0) return null;
+    const display = low === high ? `${low} rondas` : `${low}-${high} rondas`;
+    return {
+      scoreType: 'rounds+reps',
+      unit: 'rounds',
+      low,
+      high,
+      display,
+      note: `Objetivo publicado por la fuente: ${display}. Con tus cargas y tu día, manda el RPE de hoy.`,
+    };
+  }
+  return null;
+}
+
 export function estimateWodTarget(input: {
   kind: WodFormatKind;
   entries: WodTargetEntry[];

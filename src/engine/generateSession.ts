@@ -72,7 +72,7 @@ import {
   type WodFormatKind,
   type WodTimeDomain,
 } from './wodDomains';
-import { calibrateWodTarget, estimateWodTarget, getWodPerformance, type WodTarget } from './wodTargets';
+import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parsePublishedGoal, type WodTarget } from './wodTargets';
 import { libraryWods, type LibraryWod } from '../data/library/libraryWods';
 import { historyStamp, lastHistoryDate } from '../data/athlete/historyStamp';
 import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
@@ -2148,7 +2148,10 @@ function buildWodBlock(
       const pick = scored.find((c) => (roll -= c.weight) < 0) ?? scored[scored.length - 1];
       const w = pick.w;
       const format = libraryFormatLabel(w);
-      const goalNote = w.goal ? ` Objetivo publicado por la fuente: ${w.goal}` : '';
+      // Objetivo publicado leido sin ambiguedad -> se guarda estructurado (para juzgar el resultado);
+      // si no, la frase original de la fuente va tal cual en la nota.
+      const published = parsePublishedGoal(w.goal, w.scoreType);
+      const goalNote = published ? ` ${published.note}` : w.goal ? ` Objetivo publicado por la fuente: ${w.goal}` : '';
       const libNotes =
         `${notes} WOD real de PushJerk (${w.date}). Las cargas de cada movimiento son las que calcula el coach para ti; las del texto original son Rx de PushJerk en lb.` +
         `${goalNote} Estructura original:\n${w.original}`;
@@ -2164,6 +2167,7 @@ function buildWodBlock(
         format,
         title: `PushJerk ${w.date}`,
         notes: libNotes,
+        wodTarget: wodTargetField(published),
         wodLibraryId: w.id,
       }));
     }

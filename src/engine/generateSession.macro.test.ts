@@ -594,6 +594,8 @@ describe('generateSessionForDate — macrociclo', () => {
       const wb = base.blocks.find((b) => b.block === 'wod' && b.wodTarget && b.wodTarget.high > 0);
       const wc = cal.blocks.find((b) => b.block === 'wod' && b.wodTarget && b.wodTarget.high > 0);
       if (!wb?.wodTarget || !wc?.wodTarget || wb.movementId !== wc.movementId) continue;
+      // El objetivo de un WOD real es el publicado por la fuente: no es una estimacion del motor, no se calibra.
+      if (wb.wodLibraryId || wc.wodLibraryId) continue;
       compared++;
       expect(wc.wodTarget.calibration, `${base.date}: sin calibracion`).toBeDefined();
       if (wb.wodTarget.unit === 'seconds') expect(wc.wodTarget.high).toBeGreaterThan(wb.wodTarget.high);

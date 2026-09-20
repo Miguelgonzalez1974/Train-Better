@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parseWodResultValue, describeWodResultVsTarget } from './wodTargets';
+import { calibrateWodTarget, estimateWodTarget, parsePublishedGoal, getWodPerformance, parseWodResultValue, describeWodResultVsTarget } from './wodTargets';
 import type { WodTimeDomain } from './wodDomains';
 import type { SessionHistoryEntry, WodResult } from '../data/athlete/types';
 
@@ -121,6 +121,21 @@ describe('estimateWodTarget', () => {
       timeDomain: { ...TD, rounds: 4 },
     })!;
     expect(base.low).toBeGreaterThan(roundsOnly.low);
+  });
+
+  it('objetivo publicado: solo formas inequivocas, con la cifra exacta de la fuente', () => {
+    const t = parsePublishedGoal('10-12 min.', 'time')!;
+    expect([t.low, t.high, t.unit]).toEqual([600, 720, 'seconds']);
+    expect(parsePublishedGoal('14 min.', 'time')).toMatchObject({ low: 840, high: 840 });
+    expect(parsePublishedGoal('complete 5 rounds.', 'rounds+reps')).toMatchObject({ low: 5, high: 5, unit: 'rounds' });
+    expect(parsePublishedGoal('8-10 rounds.', 'rounds+reps')).toMatchObject({ low: 8, high: 10 });
+    // Ambiguos o de otro tipo de puntuacion -> nada, mejor que leerlo mal.
+    for (const g of ['< 6 min.', 'Under 30 min.', 'round of 18.', '400 reps.', '14 min (avg. 2:20/round).', '5 rounds.']) {
+      expect(parsePublishedGoal(g, 'time'), g).toBeNull();
+    }
+    expect(parsePublishedGoal('14 min.', 'rounds+reps')).toBeNull();
+    expect(parsePublishedGoal('5 rounds.', 'reps')).toBeNull();
+    expect(parsePublishedGoal(undefined, 'time')).toBeNull();
   });
 
   it('es determinista y puro: misma entrada -> misma salida', () => {

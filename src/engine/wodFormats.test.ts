@@ -4,6 +4,7 @@ import { getWodDomain, WOD_BARBELL_LOAD_PERCENT, WOD_PRESCRIPTION } from './wodD
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import type { SessionBlockResult } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
+import { parsePublishedGoal } from './wodTargets';
 import { getLibraryWod } from '../data/library/libraryWods';
 
 /**
@@ -229,6 +230,9 @@ describe('WOD generado — coherencia de cada formato', () => {
       });
       if (!(w.entries[0].notes ?? '').includes(lib.original)) bad.push(`la nota no lleva el texto original: ${where(w)}`);
       if (new Set(w.entries.map((e) => e.wodLibraryId)).size !== 1) bad.push(`id de biblioteca mezclado: ${where(w)}`);
+      const pub = parsePublishedGoal(lib.goal, lib.scoreType);
+      const t = w.entries[0].wodTarget;
+      if (pub ? t?.low !== pub.low || t?.high !== pub.high : t !== undefined) bad.push(`objetivo publicado mal reflejado: ${where(w)}`);
     }
     expect(bad).toEqual([]);
   });
