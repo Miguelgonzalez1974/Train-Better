@@ -504,6 +504,16 @@ const STRENGTH_EMOM_PARTNER: Partial<Record<MovementPattern, { id: string; reps:
   verticalPush: { id: 'strict-pull-up', reps: '3-5' },
   squat: { id: 'push-up', reps: '8-10' },
 };
+/** Solo las versiones "normales": una rampa de carga no tiene sentido sobre pausas, tempos, cajas ni variantes de accesorio. */
+const STRENGTH_EMOM_LIFTS = new Set([
+  'back-squat',
+  'front-squat',
+  'bench-press',
+  'close-grip-bench-press',
+  'incline-bench-press',
+  'strict-press',
+  'push-press',
+]);
 const STRENGTH_EMOM_ROUNDS = 5;
 const STRENGTH_EMOM_STEP = 0.05;
 /** Reps del levantamiento principal en el E2MOM por semana del meso (mismo orden que el esquema base: semana 2 mas pesada, menos reps). */
@@ -519,8 +529,9 @@ const STRENGTH_EMOM_REPS: Record<1 | 2, number> = { 1: 4, 2: 3 };
 function pickStrengthSchemeStyle(week: 1 | 2 | 3 | 4, preferVolume = false, allowEmom = false): StrengthSchemeStyle {
   if (week === 4) return rng() < 0.5 ? 'straightSets' : 'volumeSets';
   const roll = rng();
-  // E2MOM: ~15% de los dias donde aplica (empuje/sentadilla en semanas 1-2, con companero disponible).
-  if (allowEmom && roll >= 0.85) return 'emom';
+  // E2MOM: ~25% de los dias donde aplica (levantamiento estandar de empuje/sentadilla en semanas 1-2, con
+  // companero disponible). Sube respecto al reparto libre porque el filtro de variantes lo deja en pocos dias.
+  if (allowEmom && roll >= 0.75) return 'emom';
   if (preferVolume) {
     if (roll < 0.35) return 'straightSets';
     if (roll < 0.55) return 'ascendingLadder';
@@ -901,7 +912,11 @@ function buildStrengthBlock(
   const emomPartner = STRENGTH_EMOM_PARTNER[pattern];
   const emomPartnerMovement = emomPartner ? getMovementById(emomPartner.id) : undefined;
   const allowEmom =
-    week <= 2 && currentPR > 0 && emomPartnerMovement !== undefined && !avoidedPatterns.has(emomPartnerMovement.pattern);
+    week <= 2 &&
+    currentPR > 0 &&
+    STRENGTH_EMOM_LIFTS.has(movement.id) &&
+    emomPartnerMovement !== undefined &&
+    !avoidedPatterns.has(emomPartnerMovement.pattern);
   const style = pickStrengthSchemeStyle(week, todayLiftStalled, allowEmom);
   const styleNote = STRENGTH_SCHEME_NOTE[style];
   // La rampa ascendente ya construye hacia una serie casi maxima — ningun documento real prescribe

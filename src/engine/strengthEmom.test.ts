@@ -43,6 +43,7 @@ describe('fuerza: estilo E2MOM de carga creciente', () => {
         continue;
       }
       const [main, partner] = strength;
+      if (/pause|tempo|box|spoto|floor|z-press|seated|dumbbell/.test(main.movementId)) bad.push(`${s.date}: variante no apta ${main.movementId}`);
       const pattern = getMovementById(main.movementId)?.pattern ?? '';
       if (!(pattern in PARTNER)) bad.push(`${s.date}: patron ${pattern}`);
       else if (partner.movementId !== PARTNER[pattern]) bad.push(`${s.date}: companero ${partner.movementId} para ${pattern}`);
