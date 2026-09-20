@@ -31,6 +31,9 @@ function sample(): Sample[] {
   return out;
 }
 
+// Estado con el que arranca el motor (encendido): cada bloque de tests fija el que necesita y lo restaura.
+const INITIAL = isDoubleWodEnabled();
+
 describe('dia de doble WOD (6 dias)', () => {
   let all: Sample[] = [];
   let doubles: Sample[] = [];
@@ -40,7 +43,7 @@ describe('dia de doble WOD (6 dias)', () => {
     all = sample();
     doubles = all.filter((s) => s.session.doubleWod);
   });
-  afterAll(() => setDoubleWodEnabled(false));
+  afterAll(() => setDoubleWodEnabled(INITIAL));
 
   it('hay dobles, como mucho uno por semana, siempre en viernes, y nunca en descarga', () => {
     expect(doubles.length, 'nunca salio un doble').toBeGreaterThan(30);
@@ -169,7 +172,7 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
   };
 
   beforeAll(() => setDoubleWodEnabled(true));
-  afterAll(() => setDoubleWodEnabled(false));
+  afterAll(() => setDoubleWodEnabled(INITIAL));
 
   it('al planificar la semana, el viernes se bloquea como doble (sin fuerza ni oly) y el resto como dias normales', () => {
     const locks = plannedProfile().weeklyLocks ?? {};
@@ -266,7 +269,16 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
   });
 });
 
-describe('doble WOD apagado (estado por defecto)', () => {
+describe('interruptor del doble WOD', () => {
+  it('el motor arranca con el doble encendido', () => {
+    expect(INITIAL).toBe(true);
+  });
+});
+
+describe('doble WOD apagado', () => {
+  beforeAll(() => setDoubleWodEnabled(false));
+  afterAll(() => setDoubleWodEnabled(INITIAL));
+
   it('no genera ningun doble y la planificacion no cambia', () => {
     expect(isDoubleWodEnabled()).toBe(false);
     expect(expectedStrengthSessionsPerWeek(6)).toBe(5);

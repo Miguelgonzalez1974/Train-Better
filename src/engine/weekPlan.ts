@@ -256,14 +256,13 @@ export function planWodDomains(n: 3 | 4 | 5 | 6, energySystem: EnergySystem[]): 
 }
 
 /** `trainingDayIndex` de los slots que de verdad haran bloque de fuerza esta semana. */
-function strengthDoingSlots(n: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4): number[] {
+function strengthDoingSlots(n: 3 | 4 | 5 | 6, doubleIdx: number): number[] {
   // Todos los días de entreno llevan fuerza + oly (los 4 principales cada día). El único día sin
   // bloque de fuerza es el de recuperación activa de mitad de semana en el calendario de 6 días.
   // Antes se excluían los días de "solo metcon" de la fase pico; ahora esos días siguen haciendo
   // fuerza y oly pero en técnico-ligero (ver `technicalLight` en generateSession).
-  // Tampoco el dia de doble WOD (solo acondicionamiento), cuando esta activo.
+  // Tampoco el dia de doble WOD (solo acondicionamiento), cuando esta semana lo tiene (`doubleIdx` >= 0).
   const recoveryIdx = n === 6 ? 3 : -1;
-  const doubleIdx = doubleWodSlot(n, phase);
   const slots: number[] = [];
   for (let idx = 0; idx < n; idx++) {
     if (idx === recoveryIdx || idx === doubleIdx) continue;
@@ -355,6 +354,8 @@ export function buildMicrocyclePlan(input: {
   goalForcedPattern: MovementPattern | null;
   /** Familia de un objetivo de oly intensivo, si lo hay. */
   goalForcedFamily: OlyFamily | null;
+  /** Esta semana lleva un dia de doble WOD (sin fuerza ni oly): el hueco se saca de los dias de fuerza. Un dia normal que cae en ese hueco (semana sin doble) reparte fuerza como cualquier otro. */
+  doubleWodActive?: boolean;
 }): MicrocyclePlan {
   const { macroId, weekNumber, phase, trainingDaysPerWeek: n, responseProfile, avoidedPatterns, goalForcedFamily } = input;
   // El patron del objetivo solo cuenta si es uno de los 4 que el bloque de fuerza cicla — un objetivo
@@ -363,7 +364,7 @@ export function buildMicrocyclePlan(input: {
     input.goalForcedPattern && isStrengthPattern(input.goalForcedPattern) ? input.goalForcedPattern : null;
   const rand = mulberry32(hashSeed(`${macroId}:${weekNumber}`));
 
-  const strengthSlots = strengthDoingSlots(n, phase);
+  const strengthSlots = strengthDoingSlots(n, input.doubleWodActive ? doubleWodSlot(n, phase) : -1);
   const allocated = allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand);
 
   // Patron por trainingDayIndex: el planificado para los slots de fuerza, y el del ciclo natural

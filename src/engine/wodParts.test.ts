@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { generateSessionForDate, toHistoryEntry } from './generateSession';
-import { setDoubleWodEnabled } from './periodization';
+import { isDoubleWodEnabled, setDoubleWodEnabled } from './periodization';
 import { buildWodRecapLines, buildWodResult, EMPTY_WOD_FORM, getWodParts, getWodScoreType, isMeaningfulWodResult, wodResultsOf } from './wodScoring';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import { mergeHistory } from '../data/athlete/mergeProfile';
@@ -21,6 +21,7 @@ function doubleSessions(): DailySession[] {
   return out;
 }
 
+const INITIAL = isDoubleWodEnabled();
 const time: WodResult = { scoreType: 'time', value: '9:30' };
 const rounds: WodResult = { scoreType: 'rounds+reps', value: '6+4' };
 
@@ -34,7 +35,7 @@ describe('WOD por partes', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [makeMacro({ id: 'a' })] });
     normal = generateSessionForDate(profile, [], consecutiveDates('2026-01-13', 1)[0], profile.goals);
   });
-  afterAll(() => setDoubleWodEnabled(false));
+  afterAll(() => setDoubleWodEnabled(INITIAL));
 
   it('un dia normal tiene una sola parte y su tipo de puntuacion no cambia', () => {
     expect(getWodParts(normal)).toEqual([1]);

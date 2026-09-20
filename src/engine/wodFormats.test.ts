@@ -32,9 +32,14 @@ function collectWods(macroIds: string[], trainingDays: (4 | 5 | 6)[], days = 140
       const profile = makeProfile({ trainingDaysPerWeek: n, macrocycles: [makeMacro({ id })] });
       for (const d of consecutiveDates('2026-01-05', days)) {
         const s = generateSessionForDate(profile, [], d, profile.goals);
-        const entries = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
-        if (entries.length === 0) continue;
-        out.push({ date: s.date, kind: entries[0].wodKind ?? 'none', format: entries[0].format ?? '', entries });
+        const all = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
+        if (all.length === 0) continue;
+        // Un dia de doble WOD trae dos WODs en el mismo bloque: cada parte se valida como un WOD por separado.
+        for (const part of [1, 2] as const) {
+          const entries = all.filter((b) => (b.wodPart ?? 1) === part);
+          if (entries.length === 0) continue;
+          out.push({ date: s.date, kind: entries[0].wodKind ?? 'none', format: entries[0].format ?? '', entries });
+        }
       }
     }
   }

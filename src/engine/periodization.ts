@@ -255,7 +255,7 @@ export function expectedStrengthSessionsPerWeek(trainingDaysPerWeek: 3 | 4 | 5 |
  * PushJerk). Solo en el calendario de 6 dias, en el `trainingDayIndex` 4 (viernes, tras el jueves de
  * recuperacion), y nunca en semana de descarga. Apagado hasta que la interfaz sepa mostrar dos WODs.
  */
-let doubleWodEnabled = false;
+let doubleWodEnabled = true;
 export function isDoubleWodEnabled(): boolean {
   return doubleWodEnabled;
 }
@@ -266,6 +266,14 @@ const DOUBLE_WOD_SLOT_6_DAYS = 4;
 /** `trainingDayIndex` del dia de doble WOD para esta semana de meso, o -1 si no hay. */
 export function doubleWodSlot(trainingDaysPerWeek: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4): number {
   return doubleWodEnabled && trainingDaysPerWeek === 6 && phase !== 4 ? DOUBLE_WOD_SLOT_6_DAYS : -1;
+}
+/** Fecha ISO del dia de doble WOD de la semana (lunes a domingo) que contiene `date`, o null si esa semana no tiene hueco. */
+export function doubleWodSlotDate(date: Date, trainingDaysPerWeek: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4): string | null {
+  const slot = doubleWodSlot(trainingDaysPerWeek, phase);
+  if (slot < 0) return null;
+  const d = new Date(date);
+  d.setDate(d.getDate() - getWeekdayIndex(d) + TRAINING_DAY_TEMPLATES[trainingDaysPerWeek][slot]);
+  return toLocalIsoDate(d);
 }
 
 export type DayEmphasis = 'mixto' | 'fuerza' | 'metcon';

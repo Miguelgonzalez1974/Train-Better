@@ -41,6 +41,7 @@ import {
   type DayPlan,
   type PhaseProgress,
   doubleWodSlot,
+  doubleWodSlotDate,
   type OlyFamily,
 } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
@@ -3559,7 +3560,22 @@ export function generateDailySession(
     responseProfile.rpe.reliability,
   );
   const isTaper = isTaperActive(goals, date);
-  const testDayFocus = resolveTestDayFocus(week);
+  // ¿Esta semana lleva dia de doble WOD? Es una decision de SEMANA, la misma para todos sus dias: si la
+  // semana esta planificada manda el bloqueo del dia del hueco (doble o normal); sin bloqueo (vista previa,
+  // semana aun sin planificar) se asume que si, salvo la primera semana del macrociclo, que va completa.
+  // El microciclo saca el hueco de los dias de fuerza solo si la semana de verdad lo tiene: una semana sin
+  // doble reparte fuerza y oly en todos sus dias, como siempre.
+  const doubleSlotIso = doubleWodSlotDate(date, profile.trainingDaysPerWeek, week);
+  const doubleSlotLock = doubleSlotIso ? profile.weeklyLocks?.[doubleSlotIso] : undefined;
+  const weekHasDouble =
+    doubleSlotIso !== null &&
+    weeksSinceStart(macro.startDate, new Date(`${doubleSlotIso}T12:00:00`)) > 0 &&
+    (doubleSlotLock ? doubleSlotLock.doubleWod === true : true);
+  const isDoubleSlotToday = weekHasDouble && dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, week);
+  // La tirada de "dia de test" se hace siempre (mismo consumo del RNG), pero el hueco del doble nunca es dia
+  // de test: la semana ya lo planifico como acondicionamiento y un test de maximos ahi la descuadraria.
+  const rolledTestDayFocus = resolveTestDayFocus(week);
+  const testDayFocus = isDoubleSlotToday ? null : rolledTestDayFocus;
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
@@ -3580,6 +3596,7 @@ export function generateDailySession(
   const strengthGoal = pickPriorityGoal(goals, (g) => (g.type === 'elevar-fuerza' || g.type === 'subir-pr') && Boolean(g.movementId));
   const olyGoal = pickPriorityGoal(goals, (g) => (g.type === 'mejorar-potencia' || g.type === 'subir-pr') && Boolean(g.movementId));
   const microPlan = buildMicrocyclePlan({
+    doubleWodActive: weekHasDouble,
     macroId: macro.id,
     weekNumber: weeksSinceStart(macro.startDate, date) + 1,
     phase: week,
@@ -3592,7 +3609,6 @@ export function generateDailySession(
   // El hueco del doble WOD no tiene patron ni familia planificados (el microciclo lo saco de los dias de
   // fuerza): si hoy acaba siendo un dia normal —planificado sin doble, o vetado por seguridad—, fuerza y
   // oly deciden por su cuenta (ciclo natural + hueco semanal) en vez de heredar el relleno del plan.
-  const isDoubleSlotToday = dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, week);
   const plannedPattern = isDoubleSlotToday ? null : microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
   const plannedFamily = isDoubleSlotToday ? null : microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
   const plannedOlyCombined = microPlan.olyCombined[dayPlan.trainingDayIndex] ?? false;
