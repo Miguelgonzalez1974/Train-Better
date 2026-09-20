@@ -7,6 +7,7 @@ import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { parseWorkingReps } from '../../engine/setFeedback';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { noteHead } from './noteText';
+import { groupWodByPart } from './wodPartGroups';
 import { BLOCK_ORDER } from './DaySessionBlocks';
 import { MovementProgressModal } from './MovementProgressModal';
 import type { MovementProgressData } from './LoadStat';
@@ -101,12 +102,19 @@ export function FocusMode({
   onExit,
   onFinish,
 }: FocusModeProps) {
+  // Un paso por bloque; el WOD de un dia de doble WOD se parte en dos pasos (parte 1 y parte 2), cada uno
+  // con sus movimientos, para que el atleta los haga y cronometre por separado.
   const groups = useMemo(
     () =>
-      BLOCK_ORDER.map((block) => ({
-        block,
-        entries: session.blocks.map((entry, index) => ({ entry, index })).filter((e) => e.entry.block === block),
-      })).filter((g) => g.entries.length > 0),
+      BLOCK_ORDER.flatMap((block): { block: Block; part: 1 | 2 | null; entries: Indexed[] }[] => {
+        const entries = session.blocks.map((entry, index) => ({ entry, index })).filter((e) => e.entry.block === block);
+        if (entries.length === 0) return [];
+        if (block !== 'wod') return [{ block, part: null, entries }];
+        return groupWodByPart(
+          entries.map((e) => e.entry),
+          entries.map((e) => e.index),
+        ).map((g) => ({ block, part: g.part, entries: g.entries.map((entry, k) => ({ entry, index: g.indices![k] })) }));
+      }),
     [session],
   );
 
@@ -421,7 +429,7 @@ export function FocusMode({
         <div className="flex flex-1 gap-1">
           {groups.map((g, gi) => (
             <span
-              key={g.block}
+              key={`${g.block}-${g.part ?? 0}`}
               className={`h-1.5 flex-1 rounded-full ${gi < i ? 'bg-brand-neon' : gi === i ? 'bg-brand-gold' : 'bg-white/10'}`}
             />
           ))}
@@ -429,7 +437,15 @@ export function FocusMode({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-40 pt-6">
-        <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${BLOCK_ACCENT[group.block]}`}>{BLOCK_LABEL[group.block]}</p>
+        <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${BLOCK_ACCENT[group.block]}`}>
+          {BLOCK_LABEL[group.block]}
+          {group.part ? ` · Parte ${group.part} de 2` : ''}
+        </p>
+        {group.part === 2 && (
+          <p className="mt-3 flex items-center gap-1.5 rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-neutral-300">
+            <Timer size={13} strokeWidth={2.5} /> Descansa 5-10 min antes de empezar la parte 2.
+          </p>
+        )}
         <div className="mt-4">{body}</div>
       </div>
 

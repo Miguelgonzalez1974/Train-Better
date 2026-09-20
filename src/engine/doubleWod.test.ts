@@ -84,7 +84,10 @@ describe('dia de doble WOD (6 dias)', () => {
       if (wod.some((x) => x.movementId.startsWith('benchmark:'))) bad.push(`${s.date}: benchmark en doble`);
       if (a[0].format === b[0].format) bad.push(`${s.date}: mismo formato en las dos partes`);
       if (a[0].wodKind === 'library' || a[0].wodKind === 'chipper' || a[0].wodKind === 'cardioChipper') bad.push(`${s.date}: parte 1 no puede ser ${a[0].wodKind}`);
-      if (!/parte 1 de 2/.test(a[0].title ?? '') || !/parte 2 de 2/.test(b[0].title ?? '')) bad.push(`${s.date}: titulos sin parte`);
+      // La pantalla ya rotula "Parte N de 2": el titulo es solo el nombre del WOD, y distinto en cada parte.
+      if (!a[0].title || !b[0].title || a[0].title === b[0].title) bad.push(`${s.date}: titulos ausentes o iguales`);
+      if (/parte \d de 2/i.test(`${a[0].title} ${b[0].title}`)) bad.push(`${s.date}: la parte va dentro del titulo`);
+      if (!/^Parte 1 de 2/.test(a[0].notes ?? '') || !/^Parte 2 de 2/.test(b[0].notes ?? '')) bad.push(`${s.date}: notas sin la parte`);
     }
     expect(bad).toEqual([]);
   });

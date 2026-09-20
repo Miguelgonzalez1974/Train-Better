@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, type LucideIcon } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, Timer, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -17,6 +17,7 @@ import { findLastSessionTopSet } from '../../engine/movementProgress';
 import { Modal } from '../shell/Modal';
 import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
+import { groupWodByPart } from './wodPartGroups';
 
 type Accent = 'orange' | 'gold' | 'neutral';
 
@@ -337,15 +338,39 @@ function BenchmarkWodCard({
   );
 }
 
+/** Etiqueta de una parte de un día de doble WOD ("Parte 1 de 2"). */
+function WodPartLabel({ part }: { part: 1 | 2 }) {
+  return (
+    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-brand-gold">Parte {part} de 2</p>
+  );
+}
+
+/** Descanso indicado entre las dos partes de un día de doble WOD (5-10 min, como en la programación original). */
+function WodRestDivider() {
+  return (
+    <div className="my-3 flex items-center gap-3" role="separator" aria-label="Descanso entre las dos partes">
+      <span className="h-px flex-1 bg-white/10" />
+      <span className="flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-neutral-300">
+        <Timer size={12} strokeWidth={2.5} aria-hidden />
+        Descansa 5-10 min
+      </span>
+      <span className="h-px flex-1 bg-white/10" />
+    </div>
+  );
+}
+
 /** Bloque wod generado a medida: una unica tarjeta con el formato y los movimientos numerados en orden. */
 function CustomWodCard({
   entries,
   entryIndices,
   onUpdateEntry,
+  part,
 }: {
   entries: SessionBlockResult[];
   entryIndices?: number[];
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
+  /** Parte del día de doble WOD a la que pertenece esta tarjeta; ausente en un día de un solo WOD. */
+  part?: 1 | 2 | null;
 }) {
   const title = entries[0]?.title;
   const format = entries[0]?.format;
@@ -354,6 +379,7 @@ function CustomWodCard({
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
+      {part ? <WodPartLabel part={part} /> : null}
       {title && <p className={`mb-1 ${NAME_HEADLINE}`}>"{title}"</p>}
       {format && <FormatBadge format={format} />}
       {/* Pizarra: un movimiento por línea, reps y carga alineados a la derecha con cifra tabular. */}
@@ -927,6 +953,8 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
   const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
   const isBenchmarkWod = block === 'wod' && results[0].movementId.startsWith('benchmark:');
+  // Un dia de doble WOD trae dos partes en el mismo bloque: se pintan como dos tarjetas con el descanso en medio.
+  const wodGroups = block === 'wod' ? groupWodByPart(results, entryIndices) : [];
 
   return (
     <div className={`relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`}>
@@ -939,17 +967,47 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
         </p>
 
         {editable && onUpdateEntry && entryIndices ? (
-          <EditableBlockEntries
-            block={block}
-            entries={results}
-            entryIndices={entryIndices}
-            onUpdateEntry={onUpdateEntry}
-            onAddEntry={onAddEntry}
-            onRemoveEntry={onRemoveEntry}
-          />
+          wodGroups.length > 1 ? (
+            // Dia de doble WOD en edicion: cada parte se edita por separado (los movimientos que se anadan o
+            // quiten quedan dentro de su parte).
+            <div className="flex flex-col">
+              {wodGroups.map((g) => (
+                <Fragment key={g.part}>
+                  {g.part === 2 && <WodRestDivider />}
+                  {g.part ? <WodPartLabel part={g.part} /> : null}
+                  <EditableBlockEntries
+                    block={block}
+                    entries={g.entries}
+                    entryIndices={g.indices!}
+                    onUpdateEntry={onUpdateEntry}
+                    onAddEntry={onAddEntry}
+                    onRemoveEntry={onRemoveEntry}
+                  />
+                </Fragment>
+              ))}
+            </div>
+          ) : (
+            <EditableBlockEntries
+              block={block}
+              entries={results}
+              entryIndices={entryIndices}
+              onUpdateEntry={onUpdateEntry}
+              onAddEntry={onAddEntry}
+              onRemoveEntry={onRemoveEntry}
+            />
+          )
         ) : block === 'wod' ? (
           isBenchmarkWod ? (
             <BenchmarkWodCard entry={results[0]} index={entryIndices?.[0]} onUpdateEntry={onUpdateEntry} />
+          ) : wodGroups.length > 1 ? (
+            <div className="flex flex-col">
+              {wodGroups.map((g) => (
+                <Fragment key={g.part}>
+                  {g.part === 2 && <WodRestDivider />}
+                  <CustomWodCard entries={g.entries} entryIndices={g.indices} onUpdateEntry={onUpdateEntry} part={g.part} />
+                </Fragment>
+              ))}
+            </div>
           ) : (
             <CustomWodCard entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
           )

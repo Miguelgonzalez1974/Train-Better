@@ -8,6 +8,7 @@ import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '..
 import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ensureWeekLocked } from './weeklyLock';
+import { wodResultsOf } from '../../engine/wodScoring';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -177,11 +178,11 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                       {entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado'}
                     </span>
                     <span className="text-neutral-500">RPE {entry.rpe}</span>
-                    {entry.wodResult && (
-                      <span className="rounded-md bg-brand-orange/15 px-2 py-0.5 text-xs font-semibold text-brand-orange">
-                        WOD: {entry.wodResult.value}
+                    {wodResultsOf(entry).map(({ part, result }) => (
+                      <span key={part} className="rounded-md bg-brand-orange/15 px-2 py-0.5 text-xs font-semibold text-brand-orange">
+                        {entry.wodResult2 ? `WOD parte ${part}` : 'WOD'}: {result.value}
                       </span>
-                    )}
+                    ))}
                   </div>
                   <p className="text-neutral-300">{entry.movementIds.map(resolveMovementName).join(' · ')}</p>
                   {onDeleteHistoryEntry && (

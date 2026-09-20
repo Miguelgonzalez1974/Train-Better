@@ -14,6 +14,7 @@ import type {
   WorkSetEntry,
   VariantPersonalRecords,
   WodResult,
+  WodScoreType,
 } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
@@ -36,7 +37,14 @@ import {
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { ensureWeekLocked } from './weeklyLock';
 import { MESOCYCLE_PHASE, roundToNearestPlate } from '../../engine/oneRepMaxTables';
-import { getTestDayBlock, getWodScoreType } from '../../engine/wodScoring';
+import {
+  buildWodResult,
+  EMPTY_WOD_FORM,
+  getTestDayBlock,
+  getWodParts,
+  getWodScoreType,
+  type WodResultForm,
+} from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { getReadinessCheckForDate } from '../../engine/readiness';
@@ -56,6 +64,7 @@ import { SessionSummaryCard } from './SessionSummaryCard';
 import { NutritionTip } from './NutritionTip';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
+import { WodResultField } from './WodResultField';
 import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -161,12 +170,8 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [spinning, setSpinning] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
-  const [wodMinutes, setWodMinutes] = useState(0);
-  const [wodSeconds, setWodSeconds] = useState(0);
-  const [wodRounds, setWodRounds] = useState(0);
-  const [wodExtraReps, setWodExtraReps] = useState(0);
-  const [wodReps, setWodReps] = useState(0);
-  const [wodLoad, setWodLoad] = useState(0);
+  // Resultado del WOD por parte: la 1 es el unico WOD de un dia normal (o la primera pieza de un dia de doble WOD).
+  const [wodForms, setWodForms] = useState<Record<1 | 2, WodResultForm>>({ 1: EMPTY_WOD_FORM, 2: EMPTY_WOD_FORM });
   const [testedLoadKg, setTestedLoadKg] = useState(0);
   const [prUpdateMessage, setPrUpdateMessage] = useState<string | null>(null);
   const [e1rmSuggestions, setE1rmSuggestions] = useState<E1rmSuggestion[]>([]);
@@ -232,7 +237,12 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
   const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && !todayReadiness && !readinessDismissed);
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
-  const wodScoreType = useMemo(() => (session ? getWodScoreType(session) : null), [session]);
+  // Partes de WOD de hoy (1 en un dia normal, 2 en un dia de doble WOD) y como se puntua cada una.
+  const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
+  const wodScoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(
+    () => ({ 1: session ? getWodScoreType(session, 1) : null, 2: session ? getWodScoreType(session, 2) : null }),
+    [session],
+  );
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
@@ -531,14 +541,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     setShowAddWodPicker(false);
   }
 
-  function buildWodResult(): WodResult | undefined {
-    if (!wodScoreType) return undefined;
-    if (wodScoreType === 'time') return { scoreType: 'time', value: `${wodMinutes}:${String(wodSeconds).padStart(2, '0')}` };
-    if (wodScoreType === 'rounds+reps') {
-      return { scoreType: 'rounds+reps', value: wodExtraReps > 0 ? `${wodRounds}+${wodExtraReps}` : `${wodRounds}` };
-    }
-    if (wodScoreType === 'reps') return { scoreType: 'reps', value: `${wodReps} reps` };
-    return { scoreType: 'load', value: `${wodLoad} kg` };
+  function buildPartResult(part: 1 | 2): WodResult | undefined {
+    const scoreType = wodScoreTypes[part];
+    return scoreType ? buildWodResult(scoreType, wodForms[part]) : undefined;
   }
 
   /**
@@ -604,8 +609,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         rxOrScaled,
         rpe,
         durationMin,
-        buildWodResult(),
+        buildPartResult(1),
         testDayBlock && testedLoadKg > 0 ? testedLoadKg : undefined,
+        wodParts.includes(2) ? buildPartResult(2) : undefined,
       ),
     );
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
@@ -989,83 +995,26 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
       {showCompletePanel && !alreadyCompletedToday && (
         <div className="flex flex-col gap-4 card border-brand-gold/30 p-4">
-          {wodScoreType && (
-            <div>
-              <p className="mb-2 text-sm font-medium text-neutral-300">
-                Resultado del WOD
-                {(() => {
-                  const t = session?.blocks.find((b) => b.block === 'wod' && b.wodTarget)?.wodTarget;
-                  return t?.display ? <span className="ml-2 font-normal text-neutral-500">objetivo {t.display}</span> : null;
-                })()}
-              </p>
-              {wodScoreType === 'time' && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    value={wodMinutes}
-                    onChange={(e) => setWodMinutes(Number(e.target.value))}
-                    className={numberInputClass}
-                  />
-                  <span className="text-neutral-500">min</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={59}
-                    value={wodSeconds}
-                    onChange={(e) => setWodSeconds(Number(e.target.value))}
-                    className={numberInputClass}
-                  />
-                  <span className="text-neutral-500">seg</span>
-                </div>
-              )}
-              {wodScoreType === 'rounds+reps' && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    value={wodRounds}
-                    onChange={(e) => setWodRounds(Number(e.target.value))}
-                    className={numberInputClass}
-                  />
-                  <span className="text-neutral-500">rondas +</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={wodExtraReps}
-                    onChange={(e) => setWodExtraReps(Number(e.target.value))}
-                    className={numberInputClass}
-                  />
-                  <span className="text-neutral-500">reps</span>
-                </div>
-              )}
-              {wodScoreType === 'reps' && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    value={wodReps}
-                    onChange={(e) => setWodReps(Number(e.target.value))}
-                    className={numberInputClass}
-                  />
-                  <span className="text-neutral-500">reps totales</span>
-                </div>
-              )}
-              {wodScoreType === 'load' && (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    step={2.5}
-                    value={wodLoad}
-                    onChange={(e) => setWodLoad(Number(e.target.value))}
-                    className={numberInputClass}
-                  />
-                  <span className="text-neutral-500">kg</span>
-                </div>
-              )}
-            </div>
-          )}
+          {wodParts.map((part) => {
+            const scoreType = wodScoreTypes[part];
+            if (!scoreType) return null;
+            const isDouble = wodParts.length > 1;
+            // Objetivo de esta parte (la estimacion del motor, o el publicado si es un WOD real).
+            const target = session?.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget;
+            return (
+              <div key={part}>
+                <p className="mb-2 text-sm font-medium text-neutral-300">
+                  {isDouble ? `Resultado del WOD — parte ${part} de 2` : 'Resultado del WOD'}
+                  {target?.display ? <span className="ml-2 font-normal text-neutral-500">objetivo {target.display}</span> : null}
+                </p>
+                <WodResultField
+                  scoreType={scoreType}
+                  form={wodForms[part]}
+                  onChange={(patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
+                />
+              </div>
+            );
+          })}
 
           {testDayBlock && testDayMovement && (
             <div>

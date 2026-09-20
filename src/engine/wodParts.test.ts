@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { generateSessionForDate, toHistoryEntry } from './generateSession';
 import { setDoubleWodEnabled } from './periodization';
-import { getWodParts, getWodScoreType, isMeaningfulWodResult, wodResultsOf } from './wodScoring';
+import { buildWodRecapLines, buildWodResult, EMPTY_WOD_FORM, getWodParts, getWodScoreType, isMeaningfulWodResult, wodResultsOf } from './wodScoring';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import { mergeHistory } from '../data/athlete/mergeProfile';
 import { getLibraryWod } from '../data/library/libraryWods';
@@ -93,6 +93,34 @@ describe('WOD por partes', () => {
     expect('wodResult2' in toHistoryEntry(withTarget!, 'rx', 8, 70, time)).toBe(false);
     // Un dia normal no cambia.
     expect('wodResult2' in toHistoryEntry(normal, 'rx', 8, 70, time)).toBe(false);
+  });
+
+  it('formulario -> resultado: tiempo, rondas + reps, reps y carga con el formato de siempre', () => {
+    const f = { ...EMPTY_WOD_FORM };
+    expect(buildWodResult('time', { ...f, minutes: 9, seconds: 5 })).toEqual({ scoreType: 'time', value: '9:05' });
+    expect(buildWodResult('time', f).value).toBe('0:00');
+    expect(buildWodResult('rounds+reps', { ...f, rounds: 6, extraReps: 4 })).toEqual({ scoreType: 'rounds+reps', value: '6+4' });
+    expect(buildWodResult('rounds+reps', { ...f, rounds: 6 }).value).toBe('6');
+    expect(buildWodResult('reps', { ...f, reps: 185 })).toEqual({ scoreType: 'reps', value: '185 reps' });
+    expect(buildWodResult('load', { ...f, load: 70 })).toEqual({ scoreType: 'load', value: '70 kg' });
+    // Un formulario sin tocar nunca cuenta como resultado.
+    for (const t of ['time', 'rounds+reps', 'reps'] as const) expect(isMeaningfulWodResult(buildWodResult(t, f)) && t !== 'reps', t).toBe(false);
+  });
+
+  it('resumen post-sesion: un dia normal conserva sus lineas; un doble da una por parte con su resultado y su objetivo', () => {
+    const single = buildWodRecapLines(normal, toHistoryEntry(normal, 'rx', 8, 60, time));
+    expect(single.map((l) => l.label)).toContain('WOD');
+    expect(single.some((l) => /parte/.test(l.label))).toBe(false);
+
+    const d = doubles.find((s) => s.blocks.some((b) => b.wodPart === 1 && b.wodTarget && b.wodTarget.high > 0))!;
+    const lines = buildWodRecapLines(d, toHistoryEntry(d, 'rx', 8, 70, time, undefined, rounds));
+    expect(lines.map((l) => l.label)).toEqual(expect.arrayContaining(['WOD · parte 1', 'WOD · parte 2']));
+    expect(lines.find((l) => l.label === 'WOD · parte 1')!.detail).toContain('9:30');
+    expect(lines.find((l) => l.label === 'WOD · parte 2')!.detail).toContain('6+4');
+    // Sin resultado anotado, solo el nombre (sin " — ").
+    const bare = buildWodRecapLines(d, toHistoryEntry(d, 'rx', 8, 70));
+    expect(bare.every((l) => !l.detail.includes(' — '))).toBe(true);
+    expect(bare.filter((l) => l.label.startsWith('WOD')).length).toBe(2);
   });
 
   it('al sincronizar dos dispositivos gana la entrada con mas informacion, contando el resultado de la parte 2', () => {

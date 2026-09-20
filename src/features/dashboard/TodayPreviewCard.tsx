@@ -14,6 +14,13 @@ import type { AthleteProfile, DailySession, SessionHistoryEntry } from '../../da
 /** "Back Squat · WOD 12 min AMRAP" — el titular de dos golpes de vista de la sesion de hoy, no el detalle entero (para eso esta Planificacion). */
 function buildPreviewLine(session: DailySession): string {
   if (session.source === 'custom') return session.customTitle || 'Sesión propia';
+  // Dia de doble WOD: sin fuerza ni oly, el titular son las dos piezas.
+  if (session.doubleWod) {
+    const titles = session.blocks
+      .filter((b) => b.block === 'wod' && b.wodPart !== undefined)
+      .reduce<string[]>((acc, b) => (b.title && !acc.includes(b.title) ? [...acc, b.title] : acc), []);
+    return `Doble WOD${titles.length > 0 ? ` · ${titles.map((t) => `"${t}"`).join(' + ')}` : ''}`;
+  }
   const strength = session.blocks.find((b) => b.block === 'strength' && !b.subgroup);
   const oly = [...session.blocks].reverse().find((b) => b.block === 'oly' && !b.subgroup);
   const main = strength ?? oly;

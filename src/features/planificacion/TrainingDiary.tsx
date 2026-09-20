@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, NotebookPen, Trash2 } from 'lucide-react';
 import type { SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { resolveMovementDisplayName } from '../../data/movements';
 import { getWeekdayIndex } from '../../engine/periodization';
+import { wodResultsOf } from '../../engine/wodScoring';
 import { getMonthlyStats } from '../dashboard/stats';
 import { Modal } from '../shell/Modal';
 import { EmptyState } from '../shell/EmptyState';
@@ -84,11 +85,12 @@ function DiaryRow({ entry, sets, onDelete }: { entry: SessionHistoryEntry; sets:
               {entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado'}
             </span>
             <span className="text-[11px] text-neutral-500">RPE {entry.rpe}</span>
-            {entry.wodResult && !/^0([:+]0+)?$/.test(entry.wodResult.value.trim()) && (
-              <span className="rounded-md bg-brand-orange/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-orange">
-                {entry.wodResult.value}
+            {wodResultsOf(entry).map(({ part, result }) => (
+              <span key={part} className="rounded-md bg-brand-orange/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-orange">
+                {entry.wodResult2 ? `P${part} ` : ''}
+                {result.value}
               </span>
-            )}
+            ))}
           </div>
           {!open && <p className="mt-1 truncate text-xs text-neutral-500">{preview}</p>}
         </div>

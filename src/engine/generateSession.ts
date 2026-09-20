@@ -2717,6 +2717,7 @@ function buildCoreCircuitBlock(
   strengthPattern: MovementPattern,
   recentIds: Set<string>,
   avoidedPatterns: Set<MovementPattern>,
+  notesOverride?: string,
 ): SessionBlockResult[] {
   const family = strengthFamilyOf(strengthPattern);
   const order = CORE_PRIORITY_BY_FAMILY[family];
@@ -2740,9 +2741,10 @@ function buildCoreCircuitBlock(
   if (picks.length === 0) return [];
 
   const notes =
-    family === 'lower'
+    notesOverride ??
+    (family === 'lower'
       ? 'Circuito de core para tolerar carga axial tras el trabajo de pierna de hoy — 3 rondas, poco descanso entre ejercicios.'
-      : 'Circuito de core de anti-rotación y control tras el trabajo de empuje/oly de hoy — 3 rondas, poco descanso entre ejercicios.';
+      : 'Circuito de core de anti-rotación y control tras el trabajo de empuje/oly de hoy — 3 rondas, poco descanso entre ejercicios.');
   return picks.map(({ movement, category }) => ({
     block: 'accessory',
     movementId: movement.id,
@@ -2762,12 +2764,14 @@ function buildCoreBlock(
   strengthPattern: MovementPattern,
   recentIds: Set<string>,
   avoidedPatterns: Set<MovementPattern>,
+  /** Texto propio del circuito (un dia sin fuerza no puede decir "tras el trabajo de empuje/oly de hoy"). */
+  circuitNotes?: string,
 ): SessionBlockResult[] {
   if (rng() < 0.4) {
     const interval = buildCoreIntervalBlock(recentIds, avoidedPatterns);
     if (interval.length > 0) return interval;
   }
-  return buildCoreCircuitBlock(strengthPattern, recentIds, avoidedPatterns);
+  return buildCoreCircuitBlock(strengthPattern, recentIds, avoidedPatterns, circuitNotes);
 }
 
 /**
@@ -3419,7 +3423,6 @@ function buildDoubleWodDay(ctx: {
     ...b,
     wodKind: kindOutA.kind,
     wodPart: 1 as const,
-    title: `${b.title ?? 'WOD'} · parte 1 de 2`,
     notes: `Parte 1 de 2 — pieza corta e intensa; luego 5-10 min de descanso antes de la parte 2. ${b.notes ?? ''}`.trim(),
   }));
 
@@ -3437,7 +3440,6 @@ function buildDoubleWodDay(ctx: {
       profile.prs,
       bodyweightKg,
       ctx.wodLoadFactor,
-      `PushJerk ${libB.date} · parte 2 de 2`,
     ).map((b) => ({ ...b, wodKind: 'library', wodPart: 2 as const }));
     reasons.push(`La parte 2 es un WOD real de PushJerk (${libB.date}) elegido para complementar a la parte 1: otro dominio y sin repetir patrones.`);
   } else {
@@ -3452,7 +3454,6 @@ function buildDoubleWodDay(ctx: {
       ...b,
       wodKind: kindOutB.kind,
       wodPart: 2 as const,
-      title: `${b.title ?? 'WOD'} · parte 2 de 2`,
       notes: `Parte 2 de 2 — tras 5-10 min de descanso. ${b.notes ?? ''}`.trim(),
     }));
     reasons.push('La parte 2 es un WOD generado de formato distinto a la parte 1 (no había un WOD real compatible).');
@@ -3462,7 +3463,14 @@ function buildDoubleWodDay(ctx: {
   const wodIds = wodBlocks.map((b) => b.movementId);
   const leadPattern = getMovementById(partA[0]?.movementId ?? '')?.pattern ?? ctx.dayPlan.strengthPattern;
   const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) });
-  const coreBlock = ctx.coreToday ? buildCoreBlock(leadPattern, new Set([...recentIds, ...wodIds]), avoidedPatterns) : [];
+  const coreBlock = ctx.coreToday
+    ? buildCoreBlock(
+        leadPattern,
+        new Set([...recentIds, ...wodIds]),
+        avoidedPatterns,
+        'Circuito de core para cerrar el día de doble WOD — 3 rondas, poco descanso entre ejercicios.',
+      )
+    : [];
   const cooldownBlock = buildCooldownBlock(leadPattern, recentIds);
 
   return {

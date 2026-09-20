@@ -1,8 +1,8 @@
 import { Flame, CalendarCheck2, TrendingUp, PartyPopper } from 'lucide-react';
 import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
-import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { getMovementById } from '../../data/movements';
 import { fmtKg, fmtNumber } from '../../lib/format';
-import { describeWodResultVsTarget } from '../../engine/wodTargets';
+import { buildWodRecapLines } from '../../engine/wodScoring';
 import { NutritionTip } from './NutritionTip';
 import type { E1rmSuggestion } from './Planificacion';
 
@@ -28,12 +28,6 @@ function workSummary(workLog: WorkSetEntry[], movementId: string, prescribedSets
   const kgLabel = kgs.length === 0 ? '' : min === max ? ` · ${fmtKg(max)}` : ` · ${fmtNumber(min)}–${fmtKg(max)}`;
   const total = prescribedSets > 0 ? `${sets.length}/${prescribedSets}` : String(sets.length);
   return `${total} series${kgLabel}`;
-}
-
-function resolveWodDisplayName(movementId: string): string | null {
-  if (!movementId.startsWith('benchmark:')) return getMovementById(movementId)?.name ?? null;
-  const id = movementId.replace('benchmark:', '');
-  return benchmarkWorkouts.find((w) => w.id === id)?.name ?? id;
 }
 
 /**
@@ -79,29 +73,8 @@ function buildRecapLines(
     }
   }
 
-  const wodBlocks = session.blocks.filter((b) => b.block === 'wod');
-  if (wodBlocks.length > 0) {
-    const isBenchmark = wodBlocks[0].movementId.startsWith('benchmark:');
-    let name: string | null;
-    if (isBenchmark) {
-      name = resolveWodDisplayName(wodBlocks[0].movementId);
-    } else {
-      const ids = entry.wodMovementIds?.length ? entry.wodMovementIds : wodBlocks.map((b) => b.movementId);
-      const names = ids.map((id) => getMovementById(id)?.name).filter((n): n is string => Boolean(n));
-      name = names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3}` : names.join(', ') || null;
-    }
-    if (name) {
-      const meaningful = entry.wodResult && !/^0([:+]0+)?$/.test(entry.wodResult.value.trim());
-      lines.push({ label: 'WOD', detail: meaningful ? `${name} — ${entry.wodResult!.value}` : name });
-
-      // Objetivo orientativo del motor vs. lo que hiciste (solo WOD generado con banda numérica).
-      const targeted = wodBlocks.find((b) => b.wodTarget && (b.wodTarget.low > 0 || b.wodTarget.high > 0));
-      if (meaningful && targeted?.wodTarget) {
-        const verdict = describeWodResultVsTarget(entry.wodResult!, { ...targeted.wodTarget, note: '' });
-        if (verdict) lines.push({ label: 'Objetivo', detail: `${targeted.wodTarget.display} · ${verdict}` });
-      }
-    }
-  }
+  // WOD(s) del dia: nombre, resultado y objetivo (una linea por parte en un dia de doble WOD).
+  lines.push(...buildWodRecapLines(session, entry));
 
   return lines;
 }
