@@ -331,6 +331,8 @@ export interface SessionBlockResult {
   accessoryRole?: 'unilateralLeg' | 'plyo' | 'posterior' | 'hPush' | 'vPush' | 'hPull' | 'vPull';
   /** Tipo de formato del WOD generado (`WodFormatKind` del motor, string para no acoplar la capa de datos) — lo lee `toHistoryEntry` para la memoria de formato. Solo bloque wod generado (no benchmark). */
   wodKind?: string;
+  /** Parte del día de doble WOD a la que pertenece esta entrada (1 = pieza corta del generador, 2 = WOD real de la biblioteca). Ausente en un día de un solo WOD. */
+  wodPart?: 1 | 2;
   /** Id del WOD real de la biblioteca (`src/data/library`) que sirve este bloque — permite no repetirlo en el historial. Solo WOD de tipo "library". */
   wodLibraryId?: string;
   /**
@@ -399,6 +401,8 @@ export interface DailySession {
    * Ver `resolveDayEmphasis` en periodization.ts.
    */
   dayEmphasis?: 'fuerza' | 'metcon';
+  /** Día de doble WOD (solo acondicionamiento, sin fuerza ni oly): dos piezas con 5-10 min de descanso; las entradas de WOD llevan `wodPart` 1 y 2. Ver `doubleWodSlot`. */
+  doubleWod?: boolean;
   /** Sistema energetico del WOD de hoy (rotacion de dominios del microciclo) — solo con macrociclo activo y en dias no-benchmark. Ver `EnergySystem` en wodDomains.ts. */
   energySystem?: 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
   /** Intensidad relativa de hoy dentro de la onda dura/media/suave de la semana — ausente cuando es 'media' (el caso neutro). Ver `DayIntensity` en weekPlan.ts. */

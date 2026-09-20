@@ -246,7 +246,26 @@ export function isEmphasisDay(trainingDayIndex: number): boolean {
  * de patrones) debe usar esto, no el numero de dias de entreno a secas.
  */
 export function expectedStrengthSessionsPerWeek(trainingDaysPerWeek: 3 | 4 | 5 | 6): number {
-  return trainingDaysPerWeek === 6 ? 5 : trainingDaysPerWeek;
+  if (trainingDaysPerWeek === 6) return isDoubleWodEnabled() ? 4 : 5;
+  return trainingDaysPerWeek;
+}
+
+/**
+ * Dia de doble WOD (dos piezas de acondicionamiento, sin fuerza ni oly — como los martes/viernes de
+ * PushJerk). Solo en el calendario de 6 dias, en el `trainingDayIndex` 4 (viernes, tras el jueves de
+ * recuperacion), y nunca en semana de descarga. Apagado hasta que la interfaz sepa mostrar dos WODs.
+ */
+let doubleWodEnabled = false;
+export function isDoubleWodEnabled(): boolean {
+  return doubleWodEnabled;
+}
+export function setDoubleWodEnabled(enabled: boolean): void {
+  doubleWodEnabled = enabled;
+}
+const DOUBLE_WOD_SLOT_6_DAYS = 4;
+/** `trainingDayIndex` del dia de doble WOD para esta semana de meso, o -1 si no hay. */
+export function doubleWodSlot(trainingDaysPerWeek: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4): number {
+  return doubleWodEnabled && trainingDaysPerWeek === 6 && phase !== 4 ? DOUBLE_WOD_SLOT_6_DAYS : -1;
 }
 
 export type DayEmphasis = 'mixto' | 'fuerza' | 'metcon';

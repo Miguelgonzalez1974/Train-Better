@@ -39,6 +39,8 @@ import {
   toLocalIsoDate,
   weeksSinceStart,
   type DayPlan,
+  type PhaseProgress,
+  doubleWodSlot,
   type OlyFamily,
 } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
@@ -362,6 +364,94 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
 function libraryFormatLabel(w: LibraryWod): string {
   const prefix = w.scoreType === 'time' ? 'For Time' : w.scoreType === 'rounds+reps' ? 'AMRAP' : /EMOM|E\d+MOM|every/i.test(w.header) ? 'EMOM' : 'Al máximo';
   return `${prefix} — WOD real: ${w.header}`;
+}
+
+/**
+ * Entradas de bloque de un WOD de la biblioteca: los movimientos y cantidades del original con las cargas
+ * del coach (PR / peso corporal / autorregulacion) en vez de las Rx en lb. El objetivo publicado, si se lee
+ * sin ambiguedad, va estructurado (para juzgar el resultado); si no, la frase original va tal cual en la nota.
+ */
+function serveLibraryWod(
+  w: LibraryWod,
+  baseNotes: string,
+  prs: PersonalRecords,
+  bodyweightKg: number | null,
+  loadFactor: number,
+  title = `PushJerk ${w.date}`,
+): SessionBlockResult[] {
+  const format = libraryFormatLabel(w);
+  const published = parsePublishedGoal(w.goal, w.scoreType);
+  const goalNote = published ? ` ${published.note}` : w.goal ? ` Objetivo publicado por la fuente: ${w.goal}` : '';
+  const notes =
+    `${baseNotes} WOD real de PushJerk (${w.date}). Las cargas de cada movimiento son las que calcula el coach para ti; las del texto original son Rx de PushJerk en lb.` +
+    `${goalNote} Estructura original:\n${w.original}`;
+  return w.lines.map(([id, reps]) => ({
+    block: 'wod' as const,
+    movementId: id,
+    reps,
+    loadKg: wodMovementLoadKg(getMovementById(id)!, prs, bodyweightKg, loadFactor),
+    format,
+    title,
+    notes,
+    wodTarget: wodTargetField(published),
+    wodLibraryId: w.id,
+  }));
+}
+
+/** Minutos que dura un WOD de la biblioteca segun su cabecera ("12 min AMRAP") o su objetivo publicado ("10-12 min"); null si no se sabe. */
+function libraryMinutes(w: LibraryWod): number | null {
+  const amrap = w.header.match(/^(\d+)\s*min/i);
+  if (amrap) return Number(amrap[1]);
+  const goal = parsePublishedGoal(w.goal, w.scoreType);
+  return goal && goal.unit === 'seconds' ? goal.high / 60 : null;
+}
+
+/**
+ * Parte 2 de un dia de doble WOD: un WOD real que complementa a la parte 1 — otro dominio (barra,
+ * gimnasticos o cardio), ningun movimiento ni patron compartido, formato de puntuacion distinto y de
+ * duracion parecida a la de la parte 1 (~12 min como en PushJerk). Si el filtro estricto deja el pool
+ * vacio se relaja por pasos (primero el dominio, luego el patron, luego la duracion); solo el movimiento
+ * repetido es innegociable. `null` si la biblioteca no tiene nada compatible.
+ */
+function pickLibraryPartB(
+  partA: SessionBlockResult[],
+  history: SessionHistoryEntry[],
+  excludePatterns: Set<MovementPattern>,
+): LibraryWod | null {
+  const aIds = new Set(partA.map((b) => b.movementId));
+  const aPatterns = new Set([...aIds].map((id) => getMovementById(id)?.pattern).filter((p): p is MovementPattern => Boolean(p)));
+  const aDomain = dominantWodDomain([...aIds]);
+  const aFormat = partA[0]?.format ?? '';
+  const aScore = aFormat.startsWith('AMRAP') ? 'rounds+reps' : aFormat.startsWith('For Time') || /^\d/.test(aFormat) ? 'time' : 'reps';
+  const used = new Set(history.slice(-LIBRARY_RECENT_WINDOW).map((e) => e.wodLibraryId).filter((id): id is string => Boolean(id)));
+  const base = libraryWods.filter((w) => {
+    if (used.has(w.id) || w.lines.length > 5) return false;
+    return w.lines.every(([id]) => {
+      const m = getMovementById(id);
+      return m !== undefined && !excludePatterns.has(m.pattern) && !aIds.has(id);
+    });
+  });
+  const sharesPattern = (w: LibraryWod) => w.lines.some(([id]) => aPatterns.has(getMovementById(id)!.pattern));
+  const sameDomain = (w: LibraryWod) => dominantWodDomain(w.lines.map(([id]) => id)) === aDomain;
+  const okDuration = (w: LibraryWod) => {
+    const min = libraryMinutes(w);
+    return min === null || (min >= 8 && min <= 16);
+  };
+  const tiers: ((w: LibraryWod) => boolean)[] = [
+    (w) => !sameDomain(w) && !sharesPattern(w) && okDuration(w),
+    (w) => !sharesPattern(w) && okDuration(w),
+    (w) => okDuration(w),
+    () => true,
+  ];
+  for (const ok of tiers) {
+    const pool = base.filter(ok);
+    if (pool.length === 0) continue;
+    // Prefiere otro tipo de puntuacion que la parte 1 (rondas por tiempo + AMRAP, escalera + AMRAP…).
+    const weighted = pool.map((w) => ({ w, weight: w.scoreType !== aScore ? 3 : 1 }));
+    let roll = rng() * weighted.reduce((s, c) => s + c.weight, 0);
+    return (weighted.find((c) => (roll -= c.weight) < 0) ?? weighted[weighted.length - 1]).w;
+  }
+  return null;
 }
 
 /** Peso del formato "WOD real" en el sorteo de formatos (cada uno de los demas pesa 1): es una familia con ~1.300 WODs distintos detras. */
@@ -1802,6 +1892,8 @@ function buildWodBlock(
   /** Patrones que el accesorio de hoy ya va a cargar (ver `interferingPatterns`): el WOD los evita
    *  si le quedan alternativas, para no encadenar el mismo tiron/empuje/pierna en dos bloques. */
   softAvoidPatterns?: Set<MovementPattern>,
+  /** Ajustes para la parte 1 de un dia de doble WOD (ver `buildDoubleWodDay`): sin benchmark y sin los formatos indicados (largos, o el WOD real que ya sera la parte 2). */
+  opts?: { noBenchmark?: boolean; excludeKinds?: readonly WodFormatKind[] },
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1838,7 +1930,7 @@ function buildWodBlock(
   const effort = WOD_EFFORT_BY_WEEK[week];
   const effortNote = ` Esfuerzo de hoy: RPE ~${effort.rpe} — ${effort.intent}.`;
 
-  if (!wodRampActive && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal)) {
+  if (!wodRampActive && !opts?.noBenchmark && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal)) {
     // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
     // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
     const retestCandidate = !isTaper ? findRetestCandidate(history) : null;
@@ -1966,8 +2058,13 @@ function buildWodBlock(
       .map((e) => e.wodFormatKind as WodFormatKind),
   );
   const isChipperDay =
-    !isPeakWeek && !wodRampActive && !lowInterferenceWod && !recentFormatKinds.has('chipper') && rng() < 0.15;
-  const regularFormats: { label: string; kind: WodFormatKind }[] = [
+    !isPeakWeek &&
+    !wodRampActive &&
+    !lowInterferenceWod &&
+    !recentFormatKinds.has('chipper') &&
+    !opts?.excludeKinds?.includes('chipper') &&
+    rng() < 0.15;
+  const regularFormatsAll: { label: string; kind: WodFormatKind }[] = [
     { label: `For Time (${timeDomain.rounds} rondas)`, kind: 'forTime' },
     { label: `AMRAP ${timeDomain.amrapMin} min`, kind: 'amrap' },
     { label: `EMOM ${timeDomain.emomMin} min (movimientos alternos)`, kind: 'emom' },
@@ -2000,6 +2097,7 @@ function buildWodBlock(
           { label: `${timeDomain.rounds} Rondas — Tríada de barra`, kind: 'barbellComplex' as WodFormatKind },
         ]),
   ];
+  const regularFormats = opts?.excludeKinds ? regularFormatsAll.filter((f) => !opts.excludeKinds!.includes(f.kind)) : regularFormatsAll;
   // Sesgo de formato por sistema energetico: los formatos que la fase favorece pesan ~3x, sin
   // excluir el resto (misma filosofia que pickVariedWithPreference). Opera dentro de la lista ya
   // filtrada por pico/rampa, asi que nunca reintroduce un formato descartado.
@@ -2213,29 +2311,11 @@ function buildWodBlock(
       let roll = rng() * scored.reduce((s, c) => s + c.weight, 0);
       const pick = scored.find((c) => (roll -= c.weight) < 0) ?? scored[scored.length - 1];
       const w = pick.w;
-      const format = libraryFormatLabel(w);
-      // Objetivo publicado leido sin ambiguedad -> se guarda estructurado (para juzgar el resultado);
-      // si no, la frase original de la fuente va tal cual en la nota.
-      const published = parsePublishedGoal(w.goal, w.scoreType);
-      const goalNote = published ? ` ${published.note}` : w.goal ? ` Objetivo publicado por la fuente: ${w.goal}` : '';
-      const libNotes =
-        `${notes} WOD real de PushJerk (${w.date}). Las cargas de cada movimiento son las que calcula el coach para ti; las del texto original son Rx de PushJerk en lb.` +
-        `${goalNote} Estructura original:\n${w.original}`;
       if (kindOut?.reasons) {
         kindOut.reasons.push(`Hoy toca un WOD real de la programación de PushJerk (${w.date}), no uno generado.`);
         if (pick.leadOk && leadDomain) kindOut.reasons.push(`Encaja con el foco de la semana: ${WOD_LEAD_LABEL[leadDomain]}.`);
       }
-      return w.lines.map(([id, reps]) => ({
-        block: 'wod' as const,
-        movementId: id,
-        reps,
-        loadKg: wodMovementLoadKg(getMovementById(id)!, prs, bodyweightKg, loadFactor),
-        format,
-        title: `PushJerk ${w.date}`,
-        notes: libNotes,
-        wodTarget: wodTargetField(published),
-        wodLibraryId: w.id,
-      }));
+      return serveLibraryWod(w, notes, prs, bodyweightKg, loadFactor);
     }
     // Sin WOD real compatible hoy (dolor / patrones excluidos / todos recientes) — cae al reparto normal.
   }
@@ -3294,6 +3374,112 @@ function buildCooldownBlock(strengthPattern: MovementPattern, recentIds: Set<str
   return picks.map((m) => ({ block: 'cooldown', movementId: m.id }));
 }
 
+/**
+ * Dia de doble WOD (ver `doubleWodSlot`): solo acondicionamiento, sin fuerza, oly, accesorios ni skill.
+ *  - Parte 1: pieza corta e intensa del generador normal (sin benchmark, sin chipper ni WOD real).
+ *  - Parte 2: WOD real de la biblioteca elegido para complementar a la 1 (`pickLibraryPartB`); si no hay
+ *    nada compatible, otro WOD generado de formato distinto.
+ * Entre las dos, 5-10 min de descanso (como indica PushJerk). El core del dia, si toca, va al final.
+ */
+function buildDoubleWodDay(ctx: {
+  dateIso: string;
+  week: 1 | 2 | 3 | 4;
+  phaseProgress: PhaseProgress;
+  profile: AthleteProfile;
+  goals: Goal[];
+  history: SessionHistoryEntry[];
+  recentIds: Set<string>;
+  excludePatterns: Set<MovementPattern>;
+  avoidedPatterns: Set<MovementPattern>;
+  dayPlan: DayPlan;
+  responseProfile: ResponseProfile;
+  plannedEnergy: EnergySystem | null;
+  plannedDomain: WodDomain | null;
+  dayDose: DayDose;
+  wodLoadFactor: number;
+  coreToday: boolean;
+}): DailySession {
+  const { week, profile, history, recentIds, excludePatterns, avoidedPatterns } = ctx;
+  const bodyweightKg = latestBodyweightKg(profile.bodyweightLog);
+  // La parte 1 es corta e intensa: sistema energetico de umbral o potencia (nunca base aerobica larga).
+  const energyA: EnergySystem | null =
+    ctx.plannedEnergy === 'base-aerobica' || ctx.plannedEnergy === 'recuperacion' ? 'umbral' : ctx.plannedEnergy;
+  const doseA: DayDose = { ...ctx.dayDose, wodVolume: clampDose(ctx.dayDose.wodVolume * 0.85, 0.6, 1.2) };
+  const SHORT_ONLY: readonly WodFormatKind[] = ['library', 'chipper', 'cardioChipper'];
+
+  const kindOutA: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
+  const rawA = buildWodBlock(
+    ctx.dayPlan, week, profile.trainingDaysPerWeek, recentIds, excludePatterns, ctx.goals, false, history, false,
+    profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutA,
+    ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: SHORT_ONLY },
+  );
+  const effort = WOD_EFFORT_BY_WEEK[week];
+  const effortNote = ` Esfuerzo de hoy: RPE ~${effort.rpe} — ${effort.intent}.`;
+  const partA: SessionBlockResult[] = rawA.map((b) => ({
+    ...b,
+    wodKind: kindOutA.kind,
+    wodPart: 1 as const,
+    title: `${b.title ?? 'WOD'} · parte 1 de 2`,
+    notes: `Parte 1 de 2 — pieza corta e intensa; luego 5-10 min de descanso antes de la parte 2. ${b.notes ?? ''}`.trim(),
+  }));
+
+  // Parte 2: WOD real que complementa a la parte 1.
+  const libB = pickLibraryPartB(partA, history, excludePatterns);
+  let partB: SessionBlockResult[];
+  const reasons: string[] = [
+    'Hoy toca doble WOD: dos piezas de acondicionamiento con 5-10 min de descanso entre ellas, y sin fuerza ni oly.',
+    ...(kindOutA.reasons ?? []),
+  ];
+  if (libB) {
+    partB = serveLibraryWod(
+      libB,
+      `Parte 2 de 2 — tras 5-10 min de descanso; ${WOD_FORMAT_RATIONALE.library}${effortNote}`,
+      profile.prs,
+      bodyweightKg,
+      ctx.wodLoadFactor,
+      `PushJerk ${libB.date} · parte 2 de 2`,
+    ).map((b) => ({ ...b, wodKind: 'library', wodPart: 2 as const }));
+    reasons.push(`La parte 2 es un WOD real de PushJerk (${libB.date}) elegido para complementar a la parte 1: otro dominio y sin repetir patrones.`);
+  } else {
+    const kindOutB: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
+    const idsA = new Set([...recentIds, ...partA.map((b) => b.movementId)]);
+    const rawB = buildWodBlock(
+      ctx.dayPlan, week, profile.trainingDaysPerWeek, idsA, excludePatterns, ctx.goals, false, history, false,
+      profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutB,
+      ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: [...SHORT_ONLY, ...(kindOutA.kind ? [kindOutA.kind] : [])] },
+    );
+    partB = rawB.map((b) => ({
+      ...b,
+      wodKind: kindOutB.kind,
+      wodPart: 2 as const,
+      title: `${b.title ?? 'WOD'} · parte 2 de 2`,
+      notes: `Parte 2 de 2 — tras 5-10 min de descanso. ${b.notes ?? ''}`.trim(),
+    }));
+    reasons.push('La parte 2 es un WOD generado de formato distinto a la parte 1 (no había un WOD real compatible).');
+  }
+
+  const wodBlocks = [...partA, ...partB];
+  const wodIds = wodBlocks.map((b) => b.movementId);
+  const leadPattern = getMovementById(partA[0]?.movementId ?? '')?.pattern ?? ctx.dayPlan.strengthPattern;
+  const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) });
+  const coreBlock = ctx.coreToday ? buildCoreBlock(leadPattern, new Set([...recentIds, ...wodIds]), avoidedPatterns) : [];
+  const cooldownBlock = buildCooldownBlock(leadPattern, recentIds);
+
+  return {
+    date: ctx.dateIso,
+    mesocycleWeek: week,
+    isRestDay: false,
+    blocks: [...warmupBlock, ...wodBlocks, ...coreBlock, ...cooldownBlock],
+    doubleWod: true,
+    dayEmphasis: 'metcon',
+    coachReasons: Array.from(new Set(reasons)),
+    energySystem: energyA ?? undefined,
+    dayIntensity: ctx.dayDose.dayIntensity === 'media' ? undefined : ctx.dayDose.dayIntensity,
+    phaseWeekInPhase: ctx.phaseProgress.weekInPhase,
+    phaseLengthWeeks: ctx.phaseProgress.phaseLengthWeeks,
+  };
+}
+
 export function generateDailySession(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
@@ -3469,6 +3655,51 @@ export function generateDailySession(
   // buildStrengthBlock/buildOlyBlock deciden como siempre.
   const weekLock = profile.weeklyLocks?.[dateIso];
 
+  // Autorregulacion del WOD: mismas señales que fuerza/oly, solo hacia abajo (ver getWodLoadFactor).
+  const wodLoadFactor = getWodLoadFactor(
+    combineAutoregFactors(
+      getAutoregFactor(acwrZone),
+      getRpeAutoregFactor(history, date, responseProfile.rpe.reliability).factor,
+      getReadinessFactor(readinessCheck).factor,
+      clampResponseBias(responseProfile.rpe.bias),
+    ),
+    Math.min(strengthRampFactor, olyRampFactor),
+  );
+
+  // Dia de doble WOD (ver `doubleWodSlot`): solo acondicionamiento, dos piezas. Solo si hoy es el dia
+  // planificado y el atleta esta para ello — sin descarga, ACWR alto, poca disponibilidad, test,
+  // taper ni rampa de vuelta, y no en la primera semana del macrociclo (que va siempre completa). Si
+  // no, el dia es el normal (fuerza + WOD).
+  if (
+    dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, week) &&
+    !testDayFocus &&
+    !isTaper &&
+    !wodRampActive &&
+    !deloadReason &&
+    acwrZone !== 'alta' &&
+    !getReadinessFactor(readinessCheck).isLow &&
+    weeksSinceStart(macro.startDate, date) > 0
+  ) {
+    return buildDoubleWodDay({
+      dateIso,
+      week,
+      phaseProgress,
+      profile,
+      goals,
+      history,
+      recentIds,
+      excludePatterns: new Set([...avoidedPatterns, ...fatiguedPatterns]),
+      avoidedPatterns,
+      dayPlan,
+      responseProfile,
+      plannedEnergy,
+      plannedDomain,
+      dayDose,
+      wodLoadFactor,
+      coreToday,
+    });
+  }
+
   const strengthResult = buildStrengthBlock(
     dayPlan,
     week,
@@ -3520,16 +3751,6 @@ export function generateDailySession(
     weekLock?.olyMovementId,
   );
 
-  // Autorregulacion del WOD: mismas señales que fuerza/oly, solo hacia abajo (ver getWodLoadFactor).
-  const wodLoadFactor = getWodLoadFactor(
-    combineAutoregFactors(
-      getAutoregFactor(acwrZone),
-      getRpeAutoregFactor(history, date, responseProfile.rpe.reliability).factor,
-      getReadinessFactor(readinessCheck).factor,
-      clampResponseBias(responseProfile.rpe.bias),
-    ),
-    Math.min(strengthRampFactor, olyRampFactor),
-  );
   // El accesorio se decide ANTES que el WOD: no depende de el, y asi el WOD (que si es flexible; el
   // accesorio suele venir bloqueado por la semana) puede evitar solapar con el tiron/empuje/pierna que
   // el accesorio ya va a cargar. No debe repetir el movimiento que haya salido como A2 de fuerza.
@@ -4262,7 +4483,8 @@ export function toHistoryEntry(
     olyFamily: olyMovement ? (olyMovement.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
     energySystem: session.energySystem,
     wodFormatKind: wodKindBlock?.wodKind,
-    wodLibraryId: wodKindBlock?.wodLibraryId,
+    // En un dia de doble WOD el WOD real es la parte 2, no el primer bloque.
+    wodLibraryId: session.blocks.find((b) => b.block === 'wod' && b.wodLibraryId)?.wodLibraryId,
     wodTargetBase: wodBase,
   };
 }
