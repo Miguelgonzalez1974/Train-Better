@@ -4471,6 +4471,8 @@ export function toHistoryEntry(
   durationMin: number,
   wodResult?: WodResult,
   testLoadKg?: number,
+  /** Resultado de la parte 2 de un dia de doble WOD. */
+  wodResult2?: WodResult,
 ): SessionHistoryEntry {
   const wodMovementIds = session.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
   const strengthMovement = session.blocks.find((b) => b.block === 'strength');
@@ -4480,7 +4482,9 @@ export function toHistoryEntry(
   // El formato se lee del primer bloque de WOD (los objetivos cualitativos —interval, emom— no tienen
   // banda numerica pero su formato tambien alimenta la memoria de formato); la banda, del que la tenga.
   const wodKindBlock = session.blocks.find((b) => b.block === 'wod');
-  const wodTargetBlock = session.blocks.find((b) => b.block === 'wod' && b.wodTarget && b.wodTarget.high > 0);
+  // `wodResult` es el de la parte 1 (o del unico WOD): la banda base con la que se compara tiene que ser
+  // la suya, no la objetivo publicado de la parte 2 (un WOD real, que no se calibra).
+  const wodTargetBlock = session.blocks.find((b) => b.block === 'wod' && b.wodPart !== 2 && b.wodTarget && b.wodTarget.high > 0);
   // Un WOD editado a mano ya no es el que el motor estimo: su resultado no informa de la calibracion.
   const wodBase: SessionHistoryEntry['wodTargetBase'] =
     wodTargetBlock?.wodTarget && wodTargetBlock.wodKind && !session.editedByAthlete
@@ -4498,6 +4502,7 @@ export function toHistoryEntry(
     rpe,
     durationMin,
     wodResult,
+    ...(wodResult2 ? { wodResult2 } : {}),
     testLoadKg,
     wodMovementIds: wodMovementIds.length > 0 ? wodMovementIds : undefined,
     strengthPattern: strengthMovement ? getMovementById(strengthMovement.movementId)?.pattern : undefined,

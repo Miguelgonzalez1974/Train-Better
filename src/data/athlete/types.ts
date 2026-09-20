@@ -450,6 +450,8 @@ export interface SessionHistoryEntry {
   durationMin: number;
   /** Resultado real del WOD de esa sesion, si se registro */
   wodResult?: WodResult;
+  /** Resultado de la parte 2 de un día de doble WOD (`wodResult` guarda el de la parte 1). Ausente en un día de un solo WOD. */
+  wodResult2?: WodResult;
   /** Carga real levantada en un dia de test 1RM (fuerza u oly), si la sesion incluia uno */
   testLoadKg?: number;
   /**

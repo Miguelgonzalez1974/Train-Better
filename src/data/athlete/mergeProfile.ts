@@ -51,7 +51,8 @@ function mergeStringSet(a: string[] | undefined, b: string[] | undefined, limit:
 
 /** En una entrada de historial de un mismo dia, gana la que trae mas informacion (testLoadKg / wodResult rellenados despues). */
 function pickRicherHistory(remote: SessionHistoryEntry, local: SessionHistoryEntry): SessionHistoryEntry {
-  const score = (e: SessionHistoryEntry) => (e.testLoadKg != null ? 1 : 0) + (e.wodResult != null ? 1 : 0) + (e.wodMovementIds != null ? 1 : 0);
+  const score = (e: SessionHistoryEntry) =>
+    (e.testLoadKg != null ? 1 : 0) + (e.wodResult != null ? 1 : 0) + (e.wodResult2 != null ? 1 : 0) + (e.wodMovementIds != null ? 1 : 0);
   return score(local) >= score(remote) ? local : remote;
 }
 

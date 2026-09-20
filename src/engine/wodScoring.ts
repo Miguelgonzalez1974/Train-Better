@@ -1,5 +1,5 @@
 import { benchmarkWorkouts } from '../data/movements';
-import type { DailySession, SessionBlockResult, WodScoreType } from '../data/athlete/types';
+import type { DailySession, SessionBlockResult, SessionHistoryEntry, WodResult, WodScoreType } from '../data/athlete/types';
 
 function inferScoreTypeFromFormat(format: string): WodScoreType {
   if (format.startsWith('For Time')) return 'time';
@@ -19,9 +19,33 @@ function inferScoreTypeFromFormat(format: string): WodScoreType {
   return 'time';
 }
 
-/** Determina como debe puntuarse el WOD de la sesion (benchmark o custom) para pedir el input correcto. */
-export function getWodScoreType(session: DailySession): WodScoreType | null {
-  const wodEntries = session.blocks.filter((b) => b.block === 'wod');
+/** Partes de WOD que tiene la sesion: [1] un WOD normal, [1, 2] un dia de doble WOD, [] sin WOD. */
+export function getWodParts(session: DailySession): (1 | 2)[] {
+  const wod = session.blocks.filter((b) => b.block === 'wod');
+  if (wod.length === 0) return [];
+  return wod.some((b) => b.wodPart === 2) ? [1, 2] : [1];
+}
+
+/** Un resultado de WOD "0:00" / "0+0" / "0" es un formulario sin rellenar, no una marca. */
+export function isMeaningfulWodResult(result: WodResult | undefined): result is WodResult {
+  return Boolean(result) && !/^0([:+]0+)?$/.test(result!.value.trim());
+}
+
+/** Resultados de WOD anotados en una entrada del historial, por parte y solo los rellenados (0, 1 o 2). */
+export function wodResultsOf(entry: SessionHistoryEntry): { part: 1 | 2; result: WodResult }[] {
+  const out: { part: 1 | 2; result: WodResult }[] = [];
+  if (isMeaningfulWodResult(entry.wodResult)) out.push({ part: 1, result: entry.wodResult });
+  if (isMeaningfulWodResult(entry.wodResult2)) out.push({ part: 2, result: entry.wodResult2 });
+  return out;
+}
+
+/**
+ * Determina como debe puntuarse el WOD de la sesion (benchmark o custom) para pedir el input correcto.
+ * En un dia de doble WOD cada parte se puntua aparte (`part`); en un dia normal solo existe la parte 1.
+ */
+export function getWodScoreType(session: DailySession, part: 1 | 2 = 1): WodScoreType | null {
+  const all = session.blocks.filter((b) => b.block === 'wod');
+  const wodEntries = all.some((b) => b.wodPart !== undefined) ? all.filter((b) => (b.wodPart ?? 1) === part) : part === 1 ? all : [];
   if (wodEntries.length === 0) return null;
 
   const benchmarkEntry = wodEntries.find((b) => b.movementId.startsWith('benchmark:'));
