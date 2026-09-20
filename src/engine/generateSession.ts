@@ -382,6 +382,12 @@ export const WOD_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['toes-to-bar', 'knees-to-elbow'],
   ['burpee', 'bar-facing-burpee', 'burpee-to-target', 'lateral-burpee'],
   ['thruster', 'dumbbell-thruster'],
+  ['clean', 'power-clean', 'hang-clean', 'hang-power-clean', 'hang-squat-clean'],
+  ['snatch', 'power-snatch', 'hang-snatch', 'hang-power-snatch', 'hang-squat-snatch'],
+  ['clean-and-jerk', 'power-clean-and-jerk'],
+  ['dumbbell-snatch', 'dumbbell-power-snatch', 'kettlebell-snatch'],
+  ['push-up', 'hand-release-push-up'],
+  ['deadlift', 'dumbbell-deadlift'],
 ];
 
 /** Ids del mismo grupo de sinónimos que alguno de `pickedIds` (sin incluir los ya elegidos). */
@@ -2073,8 +2079,18 @@ function buildWodBlock(
     // dominio "con carga" tambien incluye mancuernas, kettlebells y acarreos, que no son barra y ademas
     // saldrian sin peso — la nota y la etiqueta prometen una cosa y el WOD seria otra.
     const barbellPool = weightedPool.filter((m) => m.id in WOD_BARBELL_LOAD_PERCENT);
-    const mains = pickManyVaried(barbellPool, 3, usedForComplex);
-    mains.forEach((m) => usedForComplex.add(m.id));
+    // Uno a uno, bloqueando cuasi-sinonimos: tres variantes del mismo clean no son una triada.
+    const mains: Movement[] = [];
+    for (let i = 0; i < 3; i++) {
+      const blocked = wodSynonymBlockedIds(mains.map((m) => m.id));
+      const pick = pickVaried(
+        barbellPool.filter((m) => !mains.includes(m) && !blocked.has(m.id)),
+        usedForComplex,
+      );
+      if (!pick) break;
+      mains.push(pick);
+      usedForComplex.add(pick.id);
+    }
     const filler = pickVaried(monoPool, usedForComplex);
     if (mains.length === 3 && filler) {
       const bcTarget = estimateTarget({

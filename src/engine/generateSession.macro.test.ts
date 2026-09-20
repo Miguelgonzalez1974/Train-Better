@@ -63,6 +63,8 @@ describe('generateSessionForDate — macrociclo', () => {
     const violations: string[] = [];
     for (const d of consecutiveDates(START, 42)) {
       const s = generateSessionForDate(profile, [], d, profile.goals);
+      // Un WOD real de la biblioteca es programacion de otro coach, tal cual: puede mezclar variantes.
+      if (s.blocks.some((b) => b.block === 'wod' && b.wodLibraryId)) continue;
       // Un formato multironda lista un movimiento por ronda a proposito -> comparamos ids distintos.
       const wodIds = new Set(
         s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:')).map((b) => b.movementId),
@@ -923,7 +925,8 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
       const wod = s.blocks.filter((b) => b.block === 'wod');
       if (wod.length === 0 || wod[0].movementId.startsWith('benchmark:')) continue;
       const fmt = wod[0].format ?? '';
-      if (fmt.startsWith('Al máximo')) {
+      // Los WODs reales de la biblioteca tambien puntuan "Al máximo", pero sin estimacion del motor.
+      if (fmt.startsWith('Al máximo') && !wod[0].wodLibraryId) {
         maxReps++;
         expect(wod[0].wodTarget?.scoreType, `${s.date} maxReps sin objetivo de reps`).toBe('reps');
         expect(wod[0].notes).toMatch(/Objetivo orientativo: ~\d+-\d+ reps/);

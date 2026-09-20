@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { generateSessionForDate, WARMUP_TAG_BY_PATTERN } from './generateSession';
-import { WOD_PAIR_AFFINITY } from './wodDomains';
+import { WOD_PAIR_AFFINITY, WOD_PRESCRIPTION, WOD_BARBELL_LOAD_PERCENT, WOD_RX_BW_FRACTION, getWodDomain } from './wodDomains';
+import { resolveOlyPRKey } from './prResolution';
+import { libraryWods } from '../data/library/libraryWods';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import { getMovementById, getMovementsByBlock } from '../data/movements';
 
@@ -76,6 +78,49 @@ describe('catalogo ampliado (PushJerk 2025-26)', () => {
     }
     const unused = ALL_NEW.filter((id) => !seen.has(id));
     expect(unused.length, `sin usar: ${unused.join(', ')}`).toBeLessThanOrEqual(3);
+  });
+});
+
+const NEW_WOD_MOVEMENTS = [
+  'hang-power-clean', 'hang-squat-clean', 'hang-power-snatch', 'hang-squat-snatch', 'power-clean-and-jerk',
+  'dumbbell-power-snatch', 'kettlebell-snatch', 'dumbbell-deadlift', 'cluster', 'hand-release-push-up',
+];
+const NEW_BARBELL = ['hang-power-clean', 'hang-squat-clean', 'hang-power-snatch', 'hang-squat-snatch', 'power-clean-and-jerk'];
+
+describe('movimientos de WOD anadidos para la biblioteca real', () => {
+  it('existen, con estandar, escalados validos y prescripcion como su hermano', () => {
+    const bad: string[] = [];
+    for (const id of NEW_WOD_MOVEMENTS) {
+      const m = getMovementById(id);
+      if (!m) {
+        bad.push(`${id}: no existe`);
+        continue;
+      }
+      if (m.standard.length < 40) bad.push(`${id}: estandar corto`);
+      if (!m.blocks.includes('wod')) bad.push(`${id}: no es de WOD`);
+      if (!WOD_PRESCRIPTION[id]) bad.push(`${id}: sin prescripcion`);
+      for (const s of [...m.scaling.easier, ...m.scaling.harder]) if (!getMovementById(s)) bad.push(`${id}: escalado ${s} no existe`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('las variantes de barra llevan carga por PR (mismo % que su hermano) y las de mancuerna/kettlebell por peso corporal', () => {
+    for (const id of NEW_BARBELL) {
+      const m = getMovementById(id)!;
+      expect(WOD_BARBELL_LOAD_PERCENT[id], id).toBeGreaterThan(0);
+      expect(resolveOlyPRKey(m), `${id} sin PR`).toBeTruthy();
+      expect(m.blocks, `${id} no debe entrar en la programacion de oly`).not.toContain('oly');
+    }
+    for (const id of ['dumbbell-power-snatch', 'kettlebell-snatch', 'dumbbell-deadlift', 'cluster']) {
+      expect(WOD_RX_BW_FRACTION[id], id).toBeTruthy();
+      expect(getWodDomain(id), id).toBe('weighted');
+    }
+    expect(getWodDomain('hand-release-push-up')).toBe('gymnastics');
+  });
+
+  it('la biblioteca los usa (todos aparecen al menos en un WOD real)', () => {
+    const used = new Set(libraryWods.flatMap((w) => w.lines.map(([id]) => id)));
+    expect(NEW_WOD_MOVEMENTS.filter((id) => !used.has(id))).toEqual([]);
   });
 });
 

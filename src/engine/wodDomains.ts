@@ -38,6 +38,7 @@ export const GYMNASTICS_IDS = [
   'burpee-to-target',
   'lateral-burpee',
   'ring-row',
+  'hand-release-push-up',
 ];
 
 export const MONOSTRUCTURAL_IDS = ['run', 'row', 'air-bike', 'ski-erg', 'double-under', 'single-under', 'shuttle-run'];
@@ -64,6 +65,10 @@ export const WEIGHTED_IDS = [
   'kettlebell-front-squat',
   'kettlebell-goblet-squat',
   'suitcase-carry',
+  'dumbbell-power-snatch',
+  'kettlebell-snatch',
+  'dumbbell-deadlift',
+  'cluster',
 ];
 
 export type WodDomain = 'gymnastics' | 'monostructural' | 'weighted';
@@ -176,6 +181,18 @@ export const WOD_PRESCRIPTION: Record<string, string> = {
   'kettlebell-goblet-squat': '12-15',
   'suitcase-carry': '40m por lado',
 
+  // --- Variantes anadidas para la biblioteca de WODs reales: misma prescripcion que su movimiento hermano ---
+  'hand-release-push-up': '12-20',
+  'dumbbell-power-snatch': '8-12',
+  'kettlebell-snatch': '8-12',
+  'dumbbell-deadlift': '10-15',
+  cluster: '5-8',
+  'hang-power-clean': '6-9',
+  'hang-squat-clean': '5-8',
+  'hang-power-snatch': '6-9',
+  'hang-squat-snatch': '5-8',
+  'power-clean-and-jerk': '5-8',
+
   // --- Barra pesada / olimpico como movimiento de WOD (no solo de fuerza/oly dedicado) ---
   'back-squat': '8-10',
   'front-squat': '8-10',
@@ -212,6 +229,12 @@ export const WOD_BARBELL_LOAD_PERCENT: Record<string, number> = {
   'power-clean': 0.6,
   'hang-clean': 0.6,
   'clean-and-jerk': 0.5,
+  // Variantes: mismo porcentaje que su hermano (hang power = hang-clean/hang-snatch; hang squat = clean/snatch).
+  'hang-power-clean': 0.6,
+  'hang-squat-clean': 0.55,
+  'hang-power-snatch': 0.6,
+  'hang-squat-snatch': 0.55,
+  'power-clean-and-jerk': 0.5,
 };
 
 /**
@@ -238,6 +261,11 @@ export const WOD_RX_BW_FRACTION: Record<string, { fraction: number; round: 'plat
   'dumbbell-push-jerk': { fraction: 0.28, round: 'plate' },
   'devils-press': { fraction: 0.26, round: 'plate' },
   'man-maker': { fraction: 0.26, round: 'plate' },
+  // Variantes: misma fraccion que su hermano (dumbbell snatch / kettlebell swing / thruster).
+  'dumbbell-power-snatch': { fraction: 0.28, round: 'plate' },
+  'dumbbell-deadlift': { fraction: 0.28, round: 'plate' },
+  'kettlebell-snatch': { fraction: 0.3, round: 'kb' },
+  cluster: { fraction: 0.52, round: 'plate' },
 };
 
 /** Tamaños de kettlebell reales (kg) para redondear una carga RX relativa al peso corporal. */
