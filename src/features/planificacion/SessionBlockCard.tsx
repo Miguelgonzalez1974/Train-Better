@@ -116,7 +116,7 @@ function CoachNote({ text, defaultOpen = false }: { text: string; defaultOpen?: 
   return (
     <div className="mt-2 flex items-start gap-1.5">
       <Brain size={12} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-neon" />
-      <p className="text-xs leading-relaxed text-neutral-400">
+      <p className="whitespace-pre-line text-xs leading-relaxed text-neutral-400">
         {open ? text : head}
         {hasMore && (
           <button

@@ -61,7 +61,7 @@ function FocusNote({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const { head, hasMore } = noteHead(text);
   return (
-    <span className="mt-1 block text-xs leading-relaxed text-neutral-500">
+    <span className="mt-1 block whitespace-pre-line text-xs leading-relaxed text-neutral-500">
       {open ? text : head}
       {hasMore && (
         <button
