@@ -364,6 +364,8 @@ function libraryFormatLabel(w: LibraryWod): string {
   return `${prefix} — WOD real: ${w.header}`;
 }
 
+/** Peso del formato "WOD real" en el sorteo de formatos (cada uno de los demas pesa 1): es una familia con ~1.300 WODs distintos detras. */
+const LIBRARY_FORMAT_WEIGHT = 5;
 /** Cuántos WODs recientes de la biblioteca se descartan del sorteo (con ~1.000 disponibles, no se repite en años). */
 const LIBRARY_RECENT_WINDOW = 120;
 /** Máximo de líneas de movimiento de un WOD de la biblioteca para servirlo como WOD del día. */
@@ -1982,13 +1984,11 @@ function buildWodBlock(
       ? []
       : [
           { label: `Sándwich — entrada + ${timeDomain.rounds} rondas + salida`, kind: 'sandwich' as WodFormatKind },
-          // Triple presencia en el sorteo: es una sola familia pero con ~1.000 WODs distintos detras. Nunca en recuperacion.
+          // Varias entradas en el sorteo (ver LIBRARY_FORMAT_WEIGHT). Nunca en recuperacion.
           ...(energy.system === 'recuperacion'
             ? []
             : [
-                { label: 'WOD real (biblioteca PushJerk)', kind: 'library' as WodFormatKind },
-                { label: 'WOD real (biblioteca PushJerk)', kind: 'library' as WodFormatKind },
-                { label: 'WOD real (biblioteca PushJerk)', kind: 'library' as WodFormatKind },
+                ...Array.from({ length: LIBRARY_FORMAT_WEIGHT }, () => ({ label: 'WOD real (biblioteca PushJerk)', kind: 'library' as WodFormatKind })),
               ]),
           { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
           { label: 'For Time', kind: 'descendingLadder' as WodFormatKind },
