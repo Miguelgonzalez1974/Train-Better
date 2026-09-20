@@ -95,6 +95,34 @@ describe('estimateWodTarget', () => {
     expect(long.low).toBeGreaterThan(short.high);
   });
 
+  it('sandwich -> tiempo = entrada + salida + rondas x pareja: más rondas o más entrada suben el objetivo', () => {
+    const mk = (buyIn: string, rounds: number) =>
+      estimateWodTarget({
+        kind: 'sandwich',
+        entries: [
+          { movementId: 'double-under', reps: buyIn },
+          { movementId: 'toes-to-bar', reps: '10' },
+          { movementId: 'power-snatch', reps: '10' },
+          { movementId: 'double-under', reps: buyIn },
+        ],
+        timeDomain: { ...TD, rounds },
+      })!;
+    const base = mk('100', 4);
+    expect(base.scoreType).toBe('time');
+    expect(mk('100', 7).low).toBeGreaterThan(base.high);
+    expect(mk('200', 4).low).toBeGreaterThan(base.low);
+    // La entrada y la salida cuentan: sin ellas (rondas solas) saldria bastante menos.
+    const roundsOnly = estimateWodTarget({
+      kind: 'forTime',
+      entries: [
+        { movementId: 'toes-to-bar', reps: '10' },
+        { movementId: 'power-snatch', reps: '10' },
+      ],
+      timeDomain: { ...TD, rounds: 4 },
+    })!;
+    expect(base.low).toBeGreaterThan(roundsOnly.low);
+  });
+
   it('es determinista y puro: misma entrada -> misma salida', () => {
     const input = {
       kind: 'forTime' as const,

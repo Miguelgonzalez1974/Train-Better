@@ -280,6 +280,18 @@ export function estimateWodTarget(input: {
     return timeTarget(total * overhead(total, n), 0.12);
   }
 
+  // Sandwich: la primera y la ultima entrada son la entrada/salida (mismo cardio, una vez cada una);
+  // las de en medio forman la ronda, que se repite `rounds` veces.
+  if (kind === 'sandwich' && n >= 3) {
+    const [buyIn, ...rest] = entries;
+    const cashOut = rest.pop()!;
+    const total =
+      movementSeconds(buyIn.movementId, parseToken(buyIn.reps)) +
+      movementSeconds(cashOut.movementId, parseToken(cashOut.reps)) +
+      roundSeconds(rest) * timeDomain.rounds;
+    return timeTarget(total * overhead(total, rest.length + 1));
+  }
+
   const oneRound = roundSeconds(entries);
 
   switch (kind) {

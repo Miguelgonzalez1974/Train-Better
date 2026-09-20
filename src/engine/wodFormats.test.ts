@@ -63,6 +63,7 @@ const LABEL: Record<string, RegExp> = {
   descendingLadderFiller: /^\d+(-\d+)+ \+ peaje$/,
   ascendingLadderFiller: /^AMRAP \d+ min — escalera \+ peaje$/,
   cardioChipper: /^Cardio chipper/,
+  sandwich: /^Sándwich — entrada \+ \d+ rondas \+ salida$/,
   chipper: /^Chipper/,
   descendingLadder: /For Time$/,
   ascendingLadder: /For Time$/,
@@ -181,6 +182,29 @@ describe('WOD generado — coherencia de cada formato', () => {
         if (n.length !== 3 || !(n[0] > n[1] && n[1] > n[2])) bad.push(`tramos mal (${e.reps}): ${where(w)}`);
         if (getWodDomain(e.movementId) !== 'monostructural') bad.push(`${e.movementId} no es cardio: ${where(w)}`);
       }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('sandwich: mismo cardio en la entrada y la salida, y en medio una pareja de dos movimientos distintos con reps', () => {
+    const list = of('sandwich');
+    expect(list.length, 'nunca salio un sandwich').toBeGreaterThan(0);
+    const bad: string[] = [];
+    for (const w of list) {
+      const e = w.entries;
+      if (e.length !== 4) {
+        bad.push(`no tiene 4 entradas: ${where(w)}`);
+        continue;
+      }
+      if (e[0].movementId !== e[3].movementId || e[0].reps !== e[3].reps) bad.push(`entrada y salida distintas: ${where(w)}`);
+      if (getWodDomain(e[0].movementId) !== 'monostructural') bad.push(`la entrada no es cardio: ${where(w)}`);
+      if (new Set(e.map((x) => x.movementId)).size !== 3) bad.push(`la pareja repite movimiento o cardio: ${where(w)}`);
+      for (const mid of [e[1], e[2]]) {
+        if (isDistanceOrCal(mid.movementId)) bad.push(`ronda con metros/calorias (${mid.movementId}): ${where(w)}`);
+        if (getWodDomain(mid.movementId) === 'monostructural') bad.push(`la ronda lleva cardio: ${where(w)}`);
+      }
+      if (!/\d+ (m|cal)$|^\d+$/.test(e[0].reps ?? '')) bad.push(`cantidad de entrada rara (${e[0].reps}): ${where(w)}`);
+      if (!/Objetivo orientativo/.test(e[0].notes ?? '')) bad.push(`sin objetivo: ${where(w)}`);
     }
     expect(bad).toEqual([]);
   });

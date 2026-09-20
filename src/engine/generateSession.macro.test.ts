@@ -511,7 +511,9 @@ describe('generateSessionForDate — macrociclo', () => {
   it('WOD autorregulado: con un check-in de poca energia las cargas del WOD nunca suben y en algun dia bajan', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 6 });
     let lowered = 0;
-    for (const d of consecutiveDates(START, 14)) {
+    // Ventana amplia: con check-in malo el formato puede cambiar y entonces no hay pares comparables;
+    // 14 dias dependia de la semilla (dejo de bastar al añadir un formato al sorteo).
+    for (const d of consecutiveDates(START, 42)) {
       const dateIso = toLocalIsoDate(d);
       const tired: AthleteProfile = {
         ...profile,

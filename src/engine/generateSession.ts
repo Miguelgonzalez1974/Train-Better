@@ -349,6 +349,7 @@ const WOD_FORMAT_RATIONALE: Record<WodFormatKind, string> = {
   barbellComplex: 'Tres movimientos de barra seguidos — reparte el esfuerzo entre los tres, no vacíes el depósito en el primero.',
   maxReps: 'Puntúa por repeticiones totales — en cada ventana muévete a un ritmo que puedas repetir en la siguiente, no salgas a sprint y te apagues.',
   cardioChipper: 'Puro motor: 3 bloques que van a menos. Sal conservador en el primer bloque — es el más largo — y aprieta cuando veas el final.',
+  sandwich: 'Entrada y salida son el mismo cardio, con las rondas en medio — no esprintes la entrada: la salida te pilla con piernas y agarre cargados.',
 };
 
 /**
@@ -1895,6 +1896,7 @@ function buildWodBlock(
     ...(isPeakWeek || wodRampActive || lowInterferenceWod
       ? []
       : [
+          { label: `Sándwich — entrada + ${timeDomain.rounds} rondas + salida`, kind: 'sandwich' as WodFormatKind },
           { label: `Escalera ascendente · ${timeDomain.rounds} rondas (+3 reps/ronda)`, kind: 'ladder' as WodFormatKind },
           { label: 'For Time', kind: 'descendingLadder' as WodFormatKind },
           { label: 'For Time', kind: 'ascendingLadder' as WodFormatKind },
@@ -2075,6 +2077,51 @@ function buildWodBlock(
     // cae al reparto normal de abajo en vez de forzar una triada incompleta.
   }
 
+  if (chosenFormat.kind === 'sandwich') {
+    // Entrada + N rondas de pareja barra/gimnastico + salida: el mismo cardio abre y cierra el WOD.
+    // Cantidad de entrada = mitad del primer tramo del cardio chipper (misma tabla de bases).
+    const usedForSandwich = new Set(recentIds);
+    const cardioPool = monoPool.filter((m) => m.id in CARDIO_CHIPPER_BASE);
+    const main = pickVariedWithPreference(preferRepBased(weightedPool), usedForSandwich, wodLiftPref.movementId, wodLiftPref.preferChance);
+    if (main) {
+      usedForSandwich.add(main.id);
+      const gymPool = preferRepBased(gymnasticsPool).filter((m) => !wodSynonymBlockedIds([main.id]).has(m.id));
+      const gymPref = bestAffinityPartner([main.id], gymPool);
+      const partner = gymPref ? pickVariedWithPreference(gymPool, usedForSandwich, gymPref, 0.5) : pickVaried(gymPool, usedForSandwich);
+      if (partner) {
+        usedForSandwich.add(partner.id);
+        const cardioPref = bestAffinityPartner([main.id, partner.id], cardioPool);
+        const cardio = cardioPref ? pickVariedWithPreference(cardioPool, usedForSandwich, cardioPref, 0.5) : pickVaried(cardioPool, usedForSandwich);
+        if (cardio) {
+          const base = CARDIO_CHIPPER_BASE[cardio.id];
+          const amount = Math.max(10, Math.round((base.amount * CARDIO_CHIPPER_TIERS[2]) / 10) * 10);
+          const cardioReps = base.unit === 'm' ? `${amount} m` : base.unit === 'cal' ? `${amount} cal` : String(amount);
+          const middle = [main, partner];
+          const swEntries = [
+            { movementId: cardio.id, reps: cardioReps },
+            ...middle.map((m) => ({ movementId: m.id, reps: WOD_PRESCRIPTION[m.id] ?? '12-15' })),
+            { movementId: cardio.id, reps: cardioReps },
+          ];
+          const swTarget = estimateTarget({ kind: 'sandwich', entries: swEntries, timeDomain });
+          const swNotes = swTarget ? `${notes} ${swTarget.note}` : notes;
+          const field = wodTargetField(swTarget);
+          const loads = new Map(middle.map((m) => [m.id, wodMovementLoadKg(m, prs, bodyweightKg, loadFactor)]));
+          return swEntries.map((e, i) => ({
+            block: 'wod' as const,
+            movementId: e.movementId,
+            reps: e.reps,
+            loadKg: i === 0 || i === swEntries.length - 1 ? undefined : loads.get(e.movementId),
+            format: chosenFormat.label,
+            title,
+            notes: swNotes,
+            wodTarget: field,
+          }));
+        }
+      }
+    }
+    // Sin pareja o cardio con base hoy (pool corto tras excluir patrones) — cae al reparto normal.
+  }
+
   if (chosenFormat.kind === 'risingLoadInterval') {
     // Solo movimientos con PR real detras (WOD_BARBELL_LOAD_PERCENT) — subir peso cada ronda no
     // tiene sentido sobre un movimiento sin una referencia de carga propia.
@@ -2149,6 +2196,7 @@ function buildWodBlock(
     'risingLoadInterval',
     'descendingLadderFiller',
     'ascendingLadderFiller',
+    'sandwich',
   ]);
   if (FALLBACK_PRONE_KINDS.has(chosenFormat.kind)) {
     // Formato generico de reemplazo: el primero de la lista que no haya salido en los ultimos WODs

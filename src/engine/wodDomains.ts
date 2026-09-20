@@ -376,7 +376,8 @@ export type WodFormatKind =
   | 'ascendingLadderFiller'
   | 'barbellComplex'
   | 'maxReps'
-  | 'cardioChipper';
+  | 'cardioChipper'
+  | 'sandwich';
 
 // ---- Periodizacion del acondicionamiento (sistema energetico por fase) ----
 
@@ -422,7 +423,7 @@ const ENERGY_SYSTEM_PLANS: Record<EnergySystem, EnergySystemPlan> = {
     system: 'umbral',
     label: 'Umbral',
     monoFloor: 1,
-    preferFormats: ['forTime', 'interval', 'ladder', 'ascendingLadderFiller'],
+    preferFormats: ['forTime', 'interval', 'ladder', 'ascendingLadderFiller', 'sandwich'],
     durationScale: 1.0,
     paceCue: 'cómodo-duro: rápido pero sin colapsar',
     note: 'Hoy: umbral — duración media a ritmo "cómodo-duro", justo por debajo del lactato.',
