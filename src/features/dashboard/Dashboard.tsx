@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Scale, Target } from 'lucide-react';
+import { Apple, BarChart3, Scale, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -23,6 +23,7 @@ import { computeImbalances } from '../../engine/imbalances';
 import { ResponseProfileCard } from './ResponseProfileCard';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { Modal } from '../shell/Modal';
+import { NutritionModal } from './NutritionModal';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -37,6 +38,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showVolume, setShowVolume] = useState(false);
   const [showBodyweight, setShowBodyweight] = useState(false);
+  const [showNutrition, setShowNutrition] = useState(false);
 
   // Cada gauge abre (o cierra, si ya estaba abierta) su propia tarjeta de detalle — sin un "Más
   // detalle" intermedio que bucear. El de carga expande el gauge completo de ACWR ahí mismo; el
@@ -191,6 +193,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
             <Scale size={17} strokeWidth={2.25} />
           </button>
           <button
+            onClick={() => setShowNutrition(true)}
+            title="Nutrición deportiva"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <Apple size={17} strokeWidth={2.25} />
+          </button>
+          <button
             onClick={() => setShowVolume(true)}
             title="Volumen por día"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
@@ -223,6 +232,18 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       </div>
 
       {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
+      {showNutrition && (
+        <NutritionModal
+          profile={profile}
+          history={history}
+          bodyweightLog={bodyweightLog}
+          onClose={() => setShowNutrition(false)}
+          onOpenBodyweight={() => {
+            setShowNutrition(false);
+            setShowBodyweight(true);
+          }}
+        />
+      )}
       {showBodyweight && (
         <Modal open onClose={() => setShowBodyweight(false)} title="Peso corporal">
           <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} embedded />
