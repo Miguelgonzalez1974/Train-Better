@@ -132,18 +132,27 @@ const PAIN_PATTERN_KEYWORDS: Partial<Record<MovementPattern, RegExp>> = {
 export function benchmarkConflictsWithPain(
   wod: { movements: string[]; format: string },
   avoided: Set<MovementPattern>,
-  patternOf: (movementId: string) => MovementPattern | undefined,
+  movementOf: (movementId: string) => { pattern: MovementPattern; alsoPatterns?: MovementPattern[] } | undefined,
 ): boolean {
   if (avoided.size === 0) return false;
   for (const id of wod.movements) {
-    const p = patternOf(id);
-    if (p && avoided.has(p)) return true;
+    const m = movementOf(id);
+    if (m && avoidsMovement(avoided, m)) return true;
   }
   for (const p of avoided) {
     const re = PAIN_PATTERN_KEYWORDS[p];
-    if (re && re.test(`${wod.movements.filter((m) => !patternOf(m)).join(' ')} ${wod.format}`)) return true;
+    if (re && re.test(`${wod.movements.filter((m) => !movementOf(m)).join(' ')} ${wod.format}`)) return true;
   }
   return false;
+}
+
+/**
+ * True si un movimiento carga alguno de los patrones que evitan los avisos activos: su patron principal o
+ * cualquiera de los secundarios (`alsoPatterns`: un devil's press es halterofilia y tambien un burpee con salto).
+ */
+export function avoidsMovement(avoided: Set<MovementPattern>, m: { pattern: MovementPattern; alsoPatterns?: MovementPattern[] }): boolean {
+  if (avoided.size === 0) return false;
+  return avoided.has(m.pattern) || (m.alsoPatterns?.some((p) => avoided.has(p)) ?? false);
 }
 
 /**
@@ -153,7 +162,7 @@ export function benchmarkConflictsWithPain(
  * bloquear la sesion", y con la rodilla mal salian step-ups, box jumps y jumping lunges como accesorio (sus
  * roles de accesorio solo tienen movimientos de rodilla). Quien llama ya maneja el pool vacio.
  */
-export function filterAvoidingPain<T extends { pattern: MovementPattern }>(pool: T[], avoided: Set<MovementPattern>): T[] {
+export function filterAvoidingPain<T extends { pattern: MovementPattern; alsoPatterns?: MovementPattern[] }>(pool: T[], avoided: Set<MovementPattern>): T[] {
   if (avoided.size === 0) return pool;
-  return pool.filter((m) => !avoided.has(m.pattern));
+  return pool.filter((m) => !avoidsMovement(avoided, m));
 }

@@ -127,6 +127,7 @@ import {
   resolveMayhemTecnicaDay,
 } from './mayhemProgram';
 import {
+  avoidsMovement,
   benchmarkConflictsWithPain,
   filterAvoidingPain,
   getActivePainFlags,
@@ -427,6 +428,7 @@ function pickLibraryPartB(
   partA: SessionBlockResult[],
   history: SessionHistoryEntry[],
   excludePatterns: Set<MovementPattern>,
+  painAvoided: Set<MovementPattern> = new Set(),
 ): LibraryWod | null {
   const aIds = new Set(partA.map((b) => b.movementId));
   const aPatterns = new Set([...aIds].map((id) => getMovementById(id)?.pattern).filter((p): p is MovementPattern => Boolean(p)));
@@ -438,7 +440,7 @@ function pickLibraryPartB(
     if (used.has(w.id) || w.lines.length > 5) return false;
     return w.lines.every(([id]) => {
       const m = getMovementById(id);
-      return m !== undefined && !excludePatterns.has(m.pattern) && !aIds.has(id);
+      return m !== undefined && !excludePatterns.has(m.pattern) && !avoidsMovement(painAvoided, m) && !aIds.has(id);
     });
   });
   const sharesPattern = (w: LibraryWod) => w.lines.some(([id]) => aPatterns.has(getMovementById(id)!.pattern));
@@ -844,7 +846,7 @@ function buildStrengthBlock(
   // si existe y su patron no esta evitado por un aviso de dolor nuevo desde que se bloqueo la semana
   // — nunca se fuerza un movimiento contraindicado, ese dia se decide como si no hubiera bloqueo.
   const lockedMovement = lockedMovementId ? getMovementById(lockedMovementId) : undefined;
-  const lockedValid = Boolean(lockedMovement && !avoidedPatterns.has(lockedMovement.pattern));
+  const lockedValid = Boolean(lockedMovement && !avoidsMovement(avoidedPatterns, lockedMovement));
 
   let pattern: MovementPattern;
   let movement: Movement;
@@ -1918,6 +1920,10 @@ function buildWodBlock(
     painAvoided?: Set<MovementPattern>;
   },
 ): SessionBlockResult[] {
+  // Patrones que evitan los avisos de molestia activos — SOLO los del aviso, no los de interferencia con la fuerza de
+  // hoy (`excludePatterns` los mezcla): un movimiento se descarta por un aviso tambien por sus patrones secundarios
+  // (`alsoPatterns`), pero la interferencia sigue siendo por patron principal.
+  const painAvoided = opts?.painAvoided ?? new Set<MovementPattern>();
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
   // barra ni intervalos de carga creciente), mas monoestructural, y el patron con carga al final
@@ -1959,9 +1965,7 @@ function buildWodBlock(
     // Aviso de molestia: un benchmark es una pieza unica de formato fijo, asi que si lleva algo que el aviso
     // evita (comba, carrera, saltos, sentadillas con rodilla...) no se sirve — ni el bloqueado, ni el retest, ni
     // el sembrado —: se elige otro, y si ninguno vale, hoy es un WOD generado que ya respeta el aviso.
-    const painAvoided = opts?.painAvoided ?? new Set<MovementPattern>();
-    const patternOfId = (id: string) => getMovementById(id)?.pattern;
-    const isUsable = (w: BenchmarkWorkout) => !benchmarkConflictsWithPain(w, painAvoided, patternOfId);
+    const isUsable = (w: BenchmarkWorkout) => !benchmarkConflictsWithPain(w, painAvoided, getMovementById);
     const rawRetest = !isTaper ? findRetestCandidate(history) : null;
     const retestCandidate = rawRetest && isUsable(rawRetest.wod) ? rawRetest : null;
     const isRetestDue = retestCandidate ? benchmarkDaysSince(history, retestCandidate.prevDate) >= RETEST_INTERVAL : false;
@@ -2058,7 +2062,7 @@ function buildWodBlock(
     }
   }
 
-  const filtered = getMovementsByBlock('wod').filter((m) => !excludePatterns.has(m.pattern));
+  const filtered = getMovementsByBlock('wod').filter((m) => !excludePatterns.has(m.pattern) && !avoidsMovement(painAvoided, m));
   const pool = filtered.length >= 3 ? filtered : getMovementsByBlock('wod');
 
   const baseDomain = WOD_TIME_DOMAIN[week];
@@ -2326,7 +2330,7 @@ function buildWodBlock(
       if (usedLibrary.has(w.id) || w.lines.length > LIBRARY_MAX_LINES) return false;
       return w.lines.every(([id]) => {
         const m = getMovementById(id);
-        return m !== undefined && !excludePatterns.has(m.pattern);
+        return m !== undefined && !excludePatterns.has(m.pattern) && !avoidsMovement(painAvoided, m);
       });
     });
     // Interferencia con el accesorio de hoy: mismo criterio que `avoidOverlap` — se evita el patron que ya
@@ -2680,7 +2684,7 @@ function buildAccessoryBlock(
       const lockedId = lockedByRole?.[role];
       const lockedMovement = lockedId ? getMovementById(lockedId) : undefined;
       const pick =
-        lockedMovement && !avoidedPatterns.has(lockedMovement.pattern)
+        lockedMovement && !avoidsMovement(avoidedPatterns, lockedMovement)
           ? lockedMovement
           : pickAccessoryRoleMovement(role, used, avoidedPatterns);
       if (pick) {
@@ -3410,10 +3414,18 @@ function buildMaintenanceWodBlock(
 }
 
 /** Como buildWarmupBlock: 1 estiramiento especifico del patron de hoy + 2 mas variados del pool general/recuperacion. */
-function buildCooldownBlock(strengthPattern: MovementPattern, recentIds: Set<string>): SessionBlockResult[] {
+function buildCooldownBlock(
+  strengthPattern: MovementPattern,
+  recentIds: Set<string>,
+  /** Patrones que evitan los avisos de molestia activos: la vuelta a la calma tampoco lleva, p.ej., un estiramiento en sentadilla profunda con la rodilla mal. */
+  avoidedPatterns: Set<MovementPattern> = new Set(),
+): SessionBlockResult[] {
   const tag = COOLDOWN_TAG_BY_PATTERN[strengthPattern];
-  const specificPool = tag ? getMovementsByBlock('cooldown').filter((m) => m.tags.includes(tag)) : [];
-  const generalPool = getMovementsByBlock('cooldown').filter((m) => m.tags.includes('general') || m.tags.includes('recuperacion'));
+  const specificPool = filterAvoidingPain(tag ? getMovementsByBlock('cooldown').filter((m) => m.tags.includes(tag)) : [], avoidedPatterns);
+  const generalPool = filterAvoidingPain(
+    getMovementsByBlock('cooldown').filter((m) => m.tags.includes('general') || m.tags.includes('recuperacion')),
+    avoidedPatterns,
+  );
 
   const specificPick = pickVaried(specificPool, recentIds);
   const usedIds = specificPick ? new Set([...recentIds, specificPick.id]) : recentIds;
@@ -3461,7 +3473,7 @@ function buildDoubleWodDay(ctx: {
   const rawA = buildWodBlock(
     ctx.dayPlan, week, profile.trainingDaysPerWeek, recentIds, excludePatterns, ctx.goals, false, history, false,
     profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutA,
-    ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: SHORT_ONLY },
+    ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: SHORT_ONLY, painAvoided: ctx.avoidedPatterns },
   );
   const effort = WOD_EFFORT_BY_WEEK[week];
   const effortNote = ` Esfuerzo de hoy: RPE ~${effort.rpe} — ${effort.intent}.`;
@@ -3473,7 +3485,7 @@ function buildDoubleWodDay(ctx: {
   }));
 
   // Parte 2: WOD real que complementa a la parte 1.
-  const libB = pickLibraryPartB(partA, history, excludePatterns);
+  const libB = pickLibraryPartB(partA, history, excludePatterns, ctx.avoidedPatterns);
   let partB: SessionBlockResult[];
   const activePain = getActivePainFlags(profile.painFlags, ctx.dateIso);
   const reasons: string[] = [
@@ -3500,7 +3512,7 @@ function buildDoubleWodDay(ctx: {
     const rawB = buildWodBlock(
       ctx.dayPlan, week, profile.trainingDaysPerWeek, idsA, excludePatterns, ctx.goals, false, history, false,
       profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutB,
-      ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: [...SHORT_ONLY, ...(kindOutA.kind ? [kindOutA.kind] : [])] },
+      ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: [...SHORT_ONLY, ...(kindOutA.kind ? [kindOutA.kind] : [])], painAvoided: ctx.avoidedPatterns },
     );
     partB = rawB.map((b) => ({
       ...b,
@@ -3523,7 +3535,7 @@ function buildDoubleWodDay(ctx: {
         'Circuito de core para cerrar el día de doble WOD — 3 rondas, poco descanso entre ejercicios.',
       )
     : [];
-  const cooldownBlock = buildCooldownBlock(leadPattern, recentIds);
+  const cooldownBlock = buildCooldownBlock(leadPattern, recentIds, avoidedPatterns);
 
   return {
     date: ctx.dateIso,
@@ -3575,7 +3587,7 @@ export function generateDailySession(
     // El día de recuperación activa (calendario de 6) lleva además el remate de brazos: bajo SNC,
     // aislado, sin robar sitio a los días principales.
     const armsBlock = buildArmsBlock(avoidedPatterns);
-    const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
+    const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds, avoidedPatterns);
 
     return {
       date: dateIso,
@@ -3907,7 +3919,7 @@ export function generateDailySession(
     weighted: wodBlock.some((b) => (b.loadKg ?? 0) > 0),
   };
   const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds, wodRamp, avoidedPatterns);
-  const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
+  const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds, avoidedPatterns);
 
   // Mismos fragmentos ya visibles en cada bloque, deduplicados (fuerza y oly casi siempre comparten
   // el mismo texto de autorregulacion/rampa, ya que salen de la misma senal) — resumen "por que hoy
@@ -4033,7 +4045,7 @@ function buildMaintenanceStyleBlocks(
     ? buildRecoveryWodBlock(recentIds, avoidedPatterns)
     : buildMaintenanceWodBlock(recentIds, avoidedPatterns, wodRampActive);
   const skillBlock = isRecovery ? buildRecoverySkillBlock(recentIds, avoidedPatterns) : buildSkillBlock(history, [], avoidedPatterns);
-  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds);
+  const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds, avoidedPatterns);
   return [...warmupBlock, ...wodBlock, ...skillBlock, ...cooldownBlock];
 }
 

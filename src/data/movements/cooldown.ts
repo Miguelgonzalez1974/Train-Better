@@ -195,6 +195,7 @@ export const cooldownMovements: Movement[] = [
     name: 'Sumo Squat Rocking Stretch',
     blocks: ['cooldown'],
     pattern: 'mobility',
+    alsoPatterns: ['squat'],
     equipment: [],
     primaryMuscles: ['aductores', 'cadera'],
     standard: 'Postura sumo amplia, mecer el peso lentamente de un lado a otro flexionando la rodilla del lado de carga.',

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateSessionForDate, isCachedSessionStale } from './generateSession';
-import { PAIN_AREA_PATTERNS } from './painFlags';
+import { avoidsMovement, PAIN_AREA_PATTERNS } from './painFlags';
 import { painStamp } from '../data/athlete/historyStamp';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import { benchmarkWorkouts, getMovementById } from '../data/movements';
@@ -50,16 +50,34 @@ describe('aviso de molestia en la rodilla', () => {
     expect(ids.has('run')).toBe(true);
   });
 
-  it('ningun bloque de ninguna sesion lleva un movimiento que la rodilla evita (WOD, calentamiento, accesorio, core, skill, fuerza, oly)', () => {
+  it('ningun bloque de ninguna sesion lleva un movimiento que la rodilla evita (WOD, calentamiento, accesorio, core, skill, vuelta a la calma; fuerza y oly por su patron)', () => {
     const bad: string[] = [];
     for (const s of withPain) {
       for (const b of s.blocks) {
         if (b.movementId.startsWith('benchmark:')) continue;
-        const p = getMovementById(b.movementId)?.pattern;
-        if (p && AVOIDED.has(p)) bad.push(`${s.date} [${b.block}] ${b.movementId} (${p})`);
+        const m = getMovementById(b.movementId);
+        if (!m) continue;
+        // Fuerza y oly deciden su levantamiento por su propio patron principal; el resto tambien mira los patrones
+        // secundarios (un devil's press es un burpee con salto, un hang squat clean recibe en sentadilla...).
+        const hit = b.block === 'strength' || b.block === 'oly' ? AVOIDED.has(m.pattern) : avoidsMovement(AVOIDED, m);
+        if (hit) bad.push(`${s.date} [${b.block}] ${b.movementId} (${m.pattern}${m.alsoPatterns ? '+' + m.alsoPatterns.join('+') : ''})`);
       }
     }
     expect(bad.slice(0, 12)).toEqual([]);
+  });
+
+  it('los movimientos con salto o sentadilla escondidos bajo otro patron tambien los evita la rodilla: devils press, man maker, jumping pull-up, squat clean/snatch en WOD, mountain climbers y las sentadillas de movilidad', () => {
+    for (const id of ['devils-press', 'man-maker', 'jumping-pull-up', 'hang-squat-clean', 'hang-squat-snatch', 'cluster', 'mountain-climbers', 'goblet-squat-hold', 'spiderman-lunge', 'sumo-squat-rocking-stretch']) {
+      const m = getMovementById(id);
+      expect(m, id).toBeTruthy();
+      expect(avoidsMovement(AVOIDED, m!), id).toBe(true);
+    }
+    // Y siguen sin evitarse cuando el aviso es de otra zona: hombro no evita un jumping pull-up de salto... si el de tiron vertical.
+    expect(avoidsMovement(new Set<MovementPattern>(['horizontalPush']), getMovementById('devils-press')!)).toBe(false);
+    expect(avoidsMovement(new Set<MovementPattern>(['olyLift']), getMovementById('devils-press')!)).toBe(true);
+    // Los de fuerza normales no cambian.
+    expect(avoidsMovement(AVOIDED, getMovementById('row')!)).toBe(false);
+    expect(avoidsMovement(AVOIDED, getMovementById('power-clean')!)).toBe(false);
   });
 
   it('un WOD de referencia con un aviso activo no lleva nada de rodilla ni en sus ids ni en el texto de su formato', () => {

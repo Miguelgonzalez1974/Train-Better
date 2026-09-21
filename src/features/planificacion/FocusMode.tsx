@@ -391,12 +391,12 @@ export function FocusMode({
         {first.format && <p className="text-sm font-semibold text-brand-orange">{first.format}</p>}
         <ul className="flex flex-col divide-y divide-white/5">
           {entries.map((e) => (
-            <li key={e.index} className="flex items-center justify-between gap-3 py-2.5">
-              <span className="text-base text-white">
+            <li key={e.index} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2.5">
+              <span className="min-w-[8rem] flex-1 text-base text-white">
                 {resolveName(e.entry.movementId)}
                 {e.entry.scaledFrom ? <span className="ml-1.5 text-[10px] text-neutral-500">← {e.entry.scaledFrom}</span> : null}
               </span>
-              <span className="shrink-0 text-sm text-neutral-400">
+              <span className="ml-auto max-w-full text-right text-sm text-neutral-400 [overflow-wrap:anywhere]">
                 {e.entry.reps}
                 {e.entry.loadKg ? ` · ${e.entry.loadKg} ${loadUnitLabel(e.entry.movementId, e.entry.block)}` : ''}
               </span>

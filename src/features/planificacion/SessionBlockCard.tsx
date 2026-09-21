@@ -389,15 +389,19 @@ function CustomWodCard({
           // (antes se saltaba la fila sin avisar y el WOD parecia tener menos movimientos de los que tenia).
           const movement = getMovementById(entry.movementId) ?? { name: entry.movementId };
           return (
-            <div key={`${entry.movementId}-${idx}`} className="flex items-baseline gap-3 py-2">
+            // La fila puede partirse en dos lineas (`flex-wrap`): el nombre ocupa su linea con un ancho minimo y las
+            // repeticiones bajan a la de abajo, alineadas a la derecha, cuando no caben juntas. Con una escalera larga
+            // ("3-6-9-12-15-12-9-6-3") las reps ocupaban casi toda la fila y el nombre se quedaba sin sitio: "Power
+            // Clean" salia con una letra por linea.
+            <div key={`${entry.movementId}-${idx}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
               <span className="num w-4 shrink-0 text-[11px] text-neutral-600">{idx + 1}</span>
-              <div className="min-w-0 flex-1">
-                {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. Se parte en dos lineas. */}
+              <div className="min-w-[8rem] flex-1">
+                {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. */}
                 <p className={`${NAME_STEP} break-words`}>{movement.name}</p>
                 {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
               </div>
               {entry.reps && (
-                <span className="num shrink-0 text-sm text-neutral-300">
+                <span className="num ml-auto max-w-full text-right text-sm text-neutral-300 [overflow-wrap:anywhere]">
                   {entry.reps}
                   {entry.loadKg ? <span className="text-neutral-500"> · {fmtKg(entry.loadKg)}</span> : ''}
                 </span>

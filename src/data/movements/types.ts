@@ -26,6 +26,12 @@ export type MovementPattern =
   | 'mobility';
 
 export interface Movement {
+  /**
+   * Otros patrones que el movimiento carga de verdad, ademas de `pattern`, para los avisos de molestia: un
+   * devil's press es halterofilia (hombro, lumbar) Y un burpee con salto (rodilla); un hang squat clean recibe
+   * en sentadilla. Solo afecta a lo que un aviso activo evita (ver `avoidsMovement` en painFlags.ts).
+   */
+  alsoPatterns?: MovementPattern[];
   id: string;
   name: string;
   blocks: Block[];
