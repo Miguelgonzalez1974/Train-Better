@@ -315,7 +315,7 @@ function BenchmarkWodCard({
           return (
             <div key={`${movementId}-${idx}`} className="flex items-center gap-3 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">{displayMovement.name}</p>
+                <p className="break-words text-sm font-semibold text-white">{displayMovement.name}</p>
                 {swappedTo && (
                   <p className="mt-0.5 text-[10px] text-brand-gold">en vez de {getMovementById(movementId)?.name}</p>
                 )}
@@ -385,13 +385,15 @@ function CustomWodCard({
       {/* Pizarra: un movimiento por línea, reps y carga alineados a la derecha con cifra tabular. */}
       <div className="flex flex-col divide-y divide-white/5 border-y border-white/5">
         {entries.map((entry, idx) => {
-          const movement = getMovementById(entry.movementId);
-          if (!movement) return null;
+          // Un movimiento que ya no esta en el catalogo se muestra con su id en vez de desaparecer de la lista
+          // (antes se saltaba la fila sin avisar y el WOD parecia tener menos movimientos de los que tenia).
+          const movement = getMovementById(entry.movementId) ?? { name: entry.movementId };
           return (
             <div key={`${entry.movementId}-${idx}`} className="flex items-baseline gap-3 py-2">
               <span className="num w-4 shrink-0 text-[11px] text-neutral-600">{idx + 1}</span>
               <div className="min-w-0 flex-1">
-                <p className={`${NAME_STEP} truncate`}>{movement.name}</p>
+                {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. Se parte en dos lineas. */}
+                <p className={`${NAME_STEP} break-words`}>{movement.name}</p>
                 {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
               </div>
               {entry.reps && (

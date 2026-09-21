@@ -18,6 +18,8 @@ export type MovementPattern =
   | 'carry'
   | 'core'
   | 'jump'
+  /** Trabajo ciclico de impacto en las piernas: correr, comba, lanzadera, saltos de calentamiento. Rodillas y tobillos lo notan aunque no sea una sentadilla. */
+  | 'impact'
   | 'olyLift'
   | 'gymnastics'
   | 'monostructural'

@@ -42,6 +42,7 @@ import {
   type PhaseProgress,
   doubleWodSlot,
   doubleWodSlotDate,
+  isDoubleWodEnabled,
   type OlyFamily,
 } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
@@ -77,7 +78,7 @@ import {
 } from './wodDomains';
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parsePublishedGoal, type WodTarget } from './wodTargets';
 import { libraryWods, type LibraryWod } from '../data/library/libraryWods';
-import { historyStamp, lastHistoryDate } from '../data/athlete/historyStamp';
+import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
 import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
 import {
   computeAcwr,
@@ -125,7 +126,15 @@ import {
   resolveMayhemPicoDay,
   resolveMayhemTecnicaDay,
 } from './mayhemProgram';
-import { filterAvoidingPain, getAvoidedPatterns, getPainReintroFactor, getPainReintroPatterns } from './painFlags';
+import {
+  benchmarkConflictsWithPain,
+  filterAvoidingPain,
+  getActivePainFlags,
+  getAvoidedPatterns,
+  getPainReintroFactor,
+  getPainReintroPatterns,
+  PAIN_AREA_LABEL,
+} from './painFlags';
 import { getRampFactor, isWodRampActive } from './intensityRamp';
 
 export { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
@@ -454,6 +463,14 @@ function pickLibraryPartB(
   }
   return null;
 }
+
+/**
+ * `true` solo mientras `planWeekLocks` simula un dia para decidir la ESTRUCTURA de la semana (que dia es doble).
+ * Esas sesiones simuladas se encadenan con entradas de historial neutras (RPE 7, 60 min) que no son reales: el
+ * estado que derivan (ACWR alto, descarga) es un artefacto, asi que no debe vetar el doble al planificar. El
+ * veto de seguridad real se aplica cuando el dia se genera de verdad. Todo es sincrono, sin reentrada.
+ */
+let planningPass = false;
 
 /** Peso del formato "WOD real" en el sorteo de formatos (cada uno de los demas pesa 1): es una familia con ~1.300 WODs distintos detras. */
 const LIBRARY_FORMAT_WEIGHT = 5;
@@ -1827,7 +1844,7 @@ function wodMovementLoadKg(
 const INTERFERENCE_GROUPS: MovementPattern[][] = [
   ['verticalPull', 'horizontalPull'],
   ['horizontalPush', 'verticalPush'],
-  ['squat', 'lunge', 'jump'],
+  ['squat', 'lunge', 'jump', 'impact'],
   ['hinge'],
 ];
 
@@ -1887,14 +1904,19 @@ function buildWodBlock(
   loadFactor = 1,
   /** Salida: el `WodFormatKind` final del WOD generado (no benchmark) — el llamador lo estampa en el
    *  bloque para que el historial recuerde que formato se hizo (variedad entre dias). */
-  kindOut?: { kind?: WodFormatKind; reasons?: string[] },
+  kindOut?: { kind?: WodFormatKind; reasons?: string[]; lockSkipped?: boolean },
   /** Dominio que manda hoy segun el plan de la semana (`MicrocyclePlan.wodDomain`); null sin macro. */
   plannedDomain?: WodDomain | null,
   /** Patrones que el accesorio de hoy ya va a cargar (ver `interferingPatterns`): el WOD los evita
    *  si le quedan alternativas, para no encadenar el mismo tiron/empuje/pierna en dos bloques. */
   softAvoidPatterns?: Set<MovementPattern>,
   /** Ajustes para la parte 1 de un dia de doble WOD (ver `buildDoubleWodDay`): sin benchmark y sin los formatos indicados (largos, o el WOD real que ya sera la parte 2). */
-  opts?: { noBenchmark?: boolean; excludeKinds?: readonly WodFormatKind[] },
+  opts?: {
+    noBenchmark?: boolean;
+    excludeKinds?: readonly WodFormatKind[];
+    /** Patrones que evitan los avisos de molestia activos (sin los de interferencia con la fuerza de hoy): un WOD de referencia que los lleve no se sirve. */
+    painAvoided?: Set<MovementPattern>;
+  },
 ): SessionBlockResult[] {
   // Dia de fuerza: el WOD no debe competir con el trabajo pesado de barra que ya se ha hecho —
   // formatos ciclicos de duracion acotada (nada de escaleras al fallo, chippers, complejos de
@@ -1934,12 +1956,21 @@ function buildWodBlock(
   if (!wodRampActive && !opts?.noBenchmark && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal)) {
     // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
     // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
-    const retestCandidate = !isTaper ? findRetestCandidate(history) : null;
+    // Aviso de molestia: un benchmark es una pieza unica de formato fijo, asi que si lleva algo que el aviso
+    // evita (comba, carrera, saltos, sentadillas con rodilla...) no se sirve — ni el bloqueado, ni el retest, ni
+    // el sembrado —: se elige otro, y si ninguno vale, hoy es un WOD generado que ya respeta el aviso.
+    const painAvoided = opts?.painAvoided ?? new Set<MovementPattern>();
+    const patternOfId = (id: string) => getMovementById(id)?.pattern;
+    const isUsable = (w: BenchmarkWorkout) => !benchmarkConflictsWithPain(w, painAvoided, patternOfId);
+    const rawRetest = !isTaper ? findRetestCandidate(history) : null;
+    const retestCandidate = rawRetest && isUsable(rawRetest.wod) ? rawRetest : null;
     const isRetestDue = retestCandidate ? benchmarkDaysSince(history, retestCandidate.prevDate) >= RETEST_INTERVAL : false;
 
     // Dia de test bloqueado al planificar la semana: se sirve el mismo benchmark siempre, sin pasar
     // por la cascada de retest/siembra/pick libre — igual que un movimiento de fuerza/oly bloqueado.
-    const lockedWod = lockedBenchmarkId ? benchmarkWorkouts.find((w) => w.id === lockedBenchmarkId) : undefined;
+    const rawLocked = lockedBenchmarkId ? benchmarkWorkouts.find((w) => w.id === lockedBenchmarkId) : undefined;
+    const lockedWod = rawLocked && isUsable(rawLocked) ? rawLocked : undefined;
+    if (rawLocked && !lockedWod && kindOut) kindOut.lockSkipped = true;
     if (lockedWod) {
       if (retestCandidate && retestCandidate.wod.id === lockedWod.id) {
         const { prevDate, prevResult } = retestCandidate;
@@ -1990,12 +2021,12 @@ function buildWodBlock(
       const dueForSeed = benchmarkDayCount > 0 && benchmarkDayCount % RETEST_INTERVAL === 0;
       if (dueForSeed) {
         const realPool = benchmarkWorkouts.filter(
-          (w) => w.category !== 'custom' && benchmarkHasExplicitScheme(w) && !recentBenchmarkIds.has(w.id)
+          (w) => w.category !== 'custom' && benchmarkHasExplicitScheme(w) && !recentBenchmarkIds.has(w.id) && isUsable(w)
         );
         const seedPool =
           realPool.length > 0
             ? realPool
-            : benchmarkWorkouts.filter((w) => w.category !== 'custom' && benchmarkHasExplicitScheme(w));
+            : benchmarkWorkouts.filter((w) => w.category !== 'custom' && benchmarkHasExplicitScheme(w) && isUsable(w));
         if (seedPool.length > 0) {
           const wod = pickSmartBenchmark(seedPool, week, getLastBenchmarkDomain(history));
           return [
@@ -2010,18 +2041,21 @@ function buildWodBlock(
       }
     }
 
-    const completeBenchmarks = benchmarkWorkouts.filter(benchmarkHasExplicitScheme);
+    const completeBenchmarks = benchmarkWorkouts.filter((w) => benchmarkHasExplicitScheme(w) && isUsable(w));
     const freshBenchmarks = completeBenchmarks.filter((w) => !recentBenchmarkIds.has(w.id));
-    const pool = freshBenchmarks.length > 0 ? freshBenchmarks : completeBenchmarks.length > 0 ? completeBenchmarks : benchmarkWorkouts;
-    const wod = pickSmartBenchmark(pool, week, getLastBenchmarkDomain(history));
-    return [
-      {
-        block: 'wod',
-        movementId: `benchmark:${wod.id}`,
-        format: wod.format,
-        notes: `${wod.name} — ${wod.format}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
-      },
-    ];
+    const pool = freshBenchmarks.length > 0 ? freshBenchmarks : completeBenchmarks;
+    // Con un aviso activo puede no quedar ningun benchmark valido (hoy no hay); sin aviso `pool` nunca esta vacio.
+    if (pool.length > 0) {
+      const wod = pickSmartBenchmark(pool, week, getLastBenchmarkDomain(history));
+      return [
+        {
+          block: 'wod',
+          movementId: `benchmark:${wod.id}`,
+          format: wod.format,
+          notes: `${wod.name} — ${wod.format}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
+        },
+      ];
+    }
   }
 
   const filtered = getMovementsByBlock('wod').filter((m) => !excludePatterns.has(m.pattern));
@@ -3084,8 +3118,13 @@ function buildWarmupBlock(
   strengthPattern: MovementPattern,
   recentIds: Set<string>,
   wodRamp?: WodRampInfo | null,
+  /** Patrones que evitan los avisos de molestia activos: el calentamiento tampoco lleva saltos, comba ni carrera con la rodilla mal. */
+  avoidedPatterns: Set<MovementPattern> = new Set(),
 ): SessionBlockResult[] {
-  const generalPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes('general'));
+  const generalPool = filterAvoidingPain(
+    getMovementsByBlock('warmup').filter((m) => m.tags.includes('general')),
+    avoidedPatterns,
+  );
   const generalPicks = pickManyVaried(generalPool, 2, recentIds);
 
   const toEntries = (movs: (Movement | undefined)[], subgroup: string, notes: string): SessionBlockResult[] =>
@@ -3104,7 +3143,10 @@ function buildWarmupBlock(
   let paraWod: SessionBlockResult[];
   if (rampIds.length > 0) {
     const pulse = pickVaried(
-      WARMUP_PULSE_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+      filterAvoidingPain(
+        WARMUP_PULSE_IDS.map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+        avoidedPatterns,
+      ),
       new Set([...recentIds, ...rampIds]),
     );
     const lastRound = wodRamp?.weighted ? 'una ronda al peso y ritmo del WOD' : 'una ronda al ritmo del WOD';
@@ -3115,7 +3157,10 @@ function buildWarmupBlock(
     );
   } else {
     const specificTag = WARMUP_TAG_BY_PATTERN[strengthPattern] ?? `especifico-${strengthPattern}`;
-    const specificPool = getMovementsByBlock('warmup').filter((m) => m.tags.includes(specificTag));
+    const specificPool = filterAvoidingPain(
+      getMovementsByBlock('warmup').filter((m) => m.tags.includes(specificTag)),
+      avoidedPatterns,
+    );
     const specificPick = pickVaried(specificPool, new Set([...recentIds, ...generalPicks.map((m) => m.id)]));
     paraWod = toEntries(
       specificPick ? [...generalPicks, specificPick] : generalPicks,
@@ -3430,9 +3475,15 @@ function buildDoubleWodDay(ctx: {
   // Parte 2: WOD real que complementa a la parte 1.
   const libB = pickLibraryPartB(partA, history, excludePatterns);
   let partB: SessionBlockResult[];
+  const activePain = getActivePainFlags(profile.painFlags, ctx.dateIso);
   const reasons: string[] = [
     'Hoy toca doble WOD: dos piezas de acondicionamiento con 5-10 min de descanso entre ellas, y sin fuerza ni oly.',
     ...(kindOutA.reasons ?? []),
+    ...(activePain.length > 0
+      ? [
+          `Tienes un aviso de molestia activo (${[...new Set(activePain.map((f) => PAIN_AREA_LABEL[f.area].toLowerCase()))].join(', ')}): el WOD y el calentamiento evitan los movimientos de esa zona.`,
+        ]
+      : []),
   ];
   if (libB) {
     partB = serveLibraryWod(
@@ -3463,7 +3514,7 @@ function buildDoubleWodDay(ctx: {
   const wodBlocks = [...partA, ...partB];
   const wodIds = wodBlocks.map((b) => b.movementId);
   const leadPattern = getMovementById(partA[0]?.movementId ?? '')?.pattern ?? ctx.dayPlan.strengthPattern;
-  const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) });
+  const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) }, avoidedPatterns);
   const coreBlock = ctx.coreToday
     ? buildCoreBlock(
         leadPattern,
@@ -3518,7 +3569,7 @@ export function generateDailySession(
   const painReintro = getPainReintroPatterns(profile.painFlags, dateIso);
 
   if (dayPlan.isRecoveryDay) {
-    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
+    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, null, avoidedPatterns);
     const recoveryWodBlock = buildRecoveryWodBlock(recentIds, avoidedPatterns);
     const recoverySkillBlock = buildRecoverySkillBlock(recentIds, avoidedPatterns);
     // El día de recuperación activa (calendario de 6) lleva además el remate de brazos: bajo SNC,
@@ -3565,13 +3616,22 @@ export function generateDailySession(
   // semana aun sin planificar) se asume que si, salvo la primera semana del macrociclo, que va completa.
   // El microciclo saca el hueco de los dias de fuerza solo si la semana de verdad lo tiene: una semana sin
   // doble reparte fuerza y oly en todos sus dias, como siempre.
-  const doubleSlotIso = doubleWodSlotDate(date, profile.trainingDaysPerWeek, week);
+  // El hueco se decide con la semana de CALENDARIO del macro, no con la resuelta: una descarga forzada por la
+  // carga (ACWR alto, RPE alto) no quita el hueco de la planificacion — la vetara, en su caso, el dia real.
+  // Un bloqueo del dia del hueco solo cuenta si lleva la marca `doubleDecided` (lo planifico un motor que ya
+  // conocia el doble); uno anterior, sin marca, no decide nada y el dia se resuelve con el estado de hoy.
+  const doubleSlotIso = doubleWodSlotDate(date, profile.trainingDaysPerWeek, calendarWeek);
   const doubleSlotLock = doubleSlotIso ? profile.weeklyLocks?.[doubleSlotIso] : undefined;
+  // Con la semana en descarga FORZADA ahora mismo (`week` 4 sin ser la 4 del calendario) el dia real no es doble,
+  // asi que el microciclo reparte la fuerza en todos sus dias como en cualquier descarga (sin el hueco); al
+  // PLANIFICAR (`planningPass`) esa descarga es un artefacto de la simulacion y no cuenta.
+  const forcedDeloadNow = !planningPass && week === 4 && calendarWeek !== 4;
   const weekHasDouble =
     doubleSlotIso !== null &&
+    !forcedDeloadNow &&
     weeksSinceStart(macro.startDate, new Date(`${doubleSlotIso}T12:00:00`)) > 0 &&
-    (doubleSlotLock ? doubleSlotLock.doubleWod === true : true);
-  const isDoubleSlotToday = weekHasDouble && dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, week);
+    (doubleSlotLock?.doubleDecided ? doubleSlotLock.doubleWod === true : true);
+  const isDoubleSlotToday = weekHasDouble && dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, calendarWeek);
   // La tirada de "dia de test" se hace siempre (mismo consumo del RNG), pero el hueco del doble nunca es dia
   // de test: la semana ya lo planifico como acondicionamiento y un test de maximos ahi la descuadraria.
   const rolledTestDayFocus = resolveTestDayFocus(week);
@@ -3701,16 +3761,13 @@ export function generateDailySession(
   //  - Con la semana planificada manda el bloqueo: solo es doble el dia que se planifico como doble, y un
   //    dia planificado como normal no pasa a doble despues (nada cambia a mitad de semana). Sin bloqueo
   //    para esta fecha (vista previa, semana aun sin planificar) decide el estado de hoy.
-  const doubleAllowedToday =
-    isDoubleSlotToday &&
-    !testDayFocus &&
-    !isTaper &&
-    !wodRampActive &&
-    !deloadReason &&
-    acwrZone !== 'alta' &&
-    !getReadinessFactor(readinessCheck).isLow &&
-    weeksSinceStart(macro.startDate, date) > 0;
-  const doublePlanned = weekLock ? weekLock.doubleWod === true : true;
+  // Al PLANIFICAR la semana (`planningPass`) solo cuenta lo estructural: las sesiones de los dias anteriores son
+  // simuladas (RPE 7, 60 min) y su carga aguda inventada dispararia un ACWR alto que no existe — el veto por
+  // estado real (descarga, ACWR, disponibilidad) se aplica el dia de verdad, no al decidir la estructura.
+  const doubleStructuralOk = isDoubleSlotToday && !testDayFocus && !isTaper && !wodRampActive && weeksSinceStart(macro.startDate, date) > 0;
+  const doubleSafeToday = !deloadReason && acwrZone !== 'alta' && !getReadinessFactor(readinessCheck).isLow;
+  const doubleAllowedToday = doubleStructuralOk && (planningPass || doubleSafeToday);
+  const doublePlanned = weekLock?.doubleDecided ? weekLock.doubleWod === true : true;
   if (doubleAllowedToday && doublePlanned) {
     return buildDoubleWodDay({
       dateIso,
@@ -3801,7 +3858,7 @@ export function generateDailySession(
         { prs: profile.prs, bodyweightKg: latestBodyweightKg(profile.bodyweightLog), loadFactor: wodLoadFactor },
       )
     : [];
-  const wodKindOut: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
+  const wodKindOut: { kind?: WodFormatKind; reasons?: string[]; lockSkipped?: boolean } = { reasons: [] };
   const wodBlockRaw = buildWodBlock(
     dayPlan,
     week,
@@ -3823,6 +3880,7 @@ export function generateDailySession(
     wodKindOut,
     plannedDomain,
     interferingPatterns(accessoryWork),
+    { painAvoided: avoidedPatterns },
   );
   const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
   const armsWork = armsToday ? buildArmsBlock(avoidedPatterns) : [];
@@ -3848,7 +3906,7 @@ export function generateDailySession(
     movementIds: wodBlock.filter((b) => !b.movementId.startsWith('benchmark:')).map((b) => b.movementId),
     weighted: wodBlock.some((b) => (b.loadKg ?? 0) > 0),
   };
-  const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds, wodRamp);
+  const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds, wodRamp, avoidedPatterns);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds);
 
   // Mismos fragmentos ya visibles en cada bloque, deduplicados (fuerza y oly casi siempre comparten
@@ -3902,6 +3960,11 @@ export function generateDailySession(
     !wodIsBenchmark && wodLoadFactor < 0.98
       ? `Cargas del WOD ~${Math.round((1 - wodLoadFactor) * 100)}% por debajo del Rx habitual hoy (fatiga acumulada / poca energía): mejor mover ligero y rápido que pesado y roto.`
       : undefined;
+  const activePainFlags = getActivePainFlags(profile.painFlags, dateIso);
+  const painWodReason =
+    activePainFlags.length > 0
+      ? `Tienes un aviso de molestia activo (${[...new Set(activePainFlags.map((f) => PAIN_AREA_LABEL[f.area].toLowerCase()))].join(', ')}): el WOD y el calentamiento evitan los movimientos de esa zona.`
+      : undefined;
   const wodTargetForReason = wodBlock.find((b) => b.wodTarget?.calibration !== undefined)?.wodTarget;
   const accessoryFamilyReason =
     accessoryWork.length > 0
@@ -3926,6 +3989,7 @@ export function generateDailySession(
         ...strengthReasons,
         ...olyReasons,
         ...(wodKindOut.reasons ?? []),
+        painWodReason,
         wodLoadReason,
         wodTargetForReason ? calibrationReason(wodTargetForReason) : undefined,
         accessoryFamilyReason,
@@ -3945,6 +4009,8 @@ export function generateDailySession(
     dayEmphasis: dayEmphasis === 'mixto' ? undefined : dayEmphasis,
     // Planificado como doble pero hoy no se pudo (veto de seguridad): dia normal a proposito.
     ...(weekLock?.doubleWod ? { doubleWodSkipped: true } : {}),
+    // El benchmark bloqueado para hoy choca con un aviso de molestia y se sirvio otro WOD: no es un desacuerdo con el bloqueo.
+    ...(wodKindOut.lockSkipped ? { wodLockSkipped: true } : {}),
     coachReasons: coachReasons.length > 0 ? coachReasons : undefined,
     energySystem: wodIsBenchmark ? undefined : plannedEnergy ?? undefined,
     dayIntensity: dayIntensity === 'media' ? undefined : dayIntensity,
@@ -3962,7 +4028,7 @@ function buildMaintenanceStyleBlocks(
   avoidedPatterns: Set<MovementPattern>,
   wodRampActive: boolean,
 ): SessionBlockResult[] {
-  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds);
+  const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, null, avoidedPatterns);
   const wodBlock = isRecovery
     ? buildRecoveryWodBlock(recentIds, avoidedPatterns)
     : buildMaintenanceWodBlock(recentIds, avoidedPatterns, wodRampActive);
@@ -4312,7 +4378,14 @@ export function planWeekLocks(
       if (!workingHistory.some((h) => h.date === dateIso)) workingHistory = [...workingHistory, toHistoryEntry(fixed, 'rx', 7, 60)];
       continue;
     }
-    const session = generateSessionForDate(planProfile, workingHistory, day, goals);
+    // Simulacion de planificacion: ver `planningPass` (el veto por estado real no aplica al decidir la estructura).
+    planningPass = true;
+    let session: DailySession;
+    try {
+      session = generateSessionForDate(planProfile, workingHistory, day, goals);
+    } finally {
+      planningPass = false;
+    }
     const strengthMovementId = session.blocks.find((b) => b.block === 'strength')?.movementId;
     // El primer tecnico del complejo de oly ("2-3" reps) no es el levantamiento principal — se salta
     // para no bloquear el dia a un movimiento de calentamiento en vez del lift de verdad.
@@ -4334,7 +4407,7 @@ export function planWeekLocks(
     // que ese dia no cambie de estructura (doble <-> normal) al regenerarse.
     const doubleWod = session.doubleWod ? true : undefined;
     if (strengthMovementId || olyMovementId || accessoryMovements || wodBenchmarkId || doubleWod) {
-      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, doubleWod, plannedOn: options?.plannedOn };
+      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, doubleWod, doubleDecided: isDoubleWodEnabled() ? true : undefined, plannedOn: options?.plannedOn };
     }
     workingHistory = [...workingHistory, toHistoryEntry(session, 'rx', 7, 60)];
   }
@@ -4393,11 +4466,18 @@ export function isCachedSessionOrphaned(session: DailySession, profile: AthleteP
  * elegidas a mano (`swapLabel`), corregidas a mano (`editedByAthlete`) y de mantenimiento (no
  * periodizadas) nunca son "viejas".
  */
-export function isCachedSessionStale(session: DailySession, lock?: WeeklyLock, history?: readonly { date: string }[]): boolean {
+export function isCachedSessionStale(
+  session: DailySession,
+  lock?: WeeklyLock,
+  history?: readonly { date: string }[],
+  /** Avisos de molestia actuales: si los que afectan a la fecha de la sesion ya no son los de cuando se genero, se regenera. */
+  painFlags?: readonly PainFlag[],
+): boolean {
   if (session.source === 'custom' || session.swapLabel || session.editedByAthlete) return false;
   const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
   if (!periodized) return false;
   if ((session.genVersion ?? 0) < SESSION_GEN_VERSION) return true;
+  if (painFlags !== undefined && session.genPainStamp !== undefined && session.genPainStamp !== painStamp(painFlags, session.date)) return true;
   if (history && cachedSessionPredatesHistory(session, history)) return true;
   return lock ? cachedSessionDisagreesWithLock(session, lock) : false;
 }
@@ -4428,10 +4508,13 @@ function cachedSessionDisagreesWithLock(session: DailySession, lock: WeeklyLock)
   // Estructura del dia: doble vs normal. Un dia planificado como doble que hoy salio normal por un veto de
   // seguridad (`doubleWodSkipped`) NO es un desacuerdo; uno cacheado como doble cuando el bloqueo lo
   // planifico normal (o al reves, sin veto) si.
-  if (lock.doubleWod) {
-    if (!session.doubleWod && !session.doubleWodSkipped) return true;
-  } else if (session.doubleWod) {
-    return true;
+  // Solo si el bloqueo decidio la estructura (`doubleDecided`): uno anterior al doble no opina.
+  if (lock.doubleDecided) {
+    if (lock.doubleWod) {
+      if (!session.doubleWod && !session.doubleWodSkipped) return true;
+    } else if (session.doubleWod) {
+      return true;
+    }
   }
   if (lock.strengthMovementId) {
     const id = session.blocks.find((b) => b.block === 'strength')?.movementId;
@@ -4441,7 +4524,7 @@ function cachedSessionDisagreesWithLock(session: DailySession, lock: WeeklyLock)
     const id = session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
     if (id && id !== lock.olyMovementId) return true;
   }
-  if (lock.wodBenchmarkId) {
+  if (lock.wodBenchmarkId && !session.wodLockSkipped) {
     const id = session.blocks.find((b) => b.block === 'wod')?.movementId;
     if (id && id !== `benchmark:${lock.wodBenchmarkId}`) return true;
   }

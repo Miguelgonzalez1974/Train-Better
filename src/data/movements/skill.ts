@@ -72,7 +72,7 @@ export const skillMovements: Movement[] = [
     id: 'double-under-practice',
     name: 'Double Under Practice',
     blocks: ['skill'],
-    pattern: 'monostructural',
+    pattern: 'impact',
     equipment: ['comba'],
     primaryMuscles: ['pantorrillas', 'coordinacion'],
     standard: 'Series cortas enfocadas en timing de muneca y salto para consolidar el double under.',

@@ -13,7 +13,8 @@ export const PAIN_AREA_LABEL: Record<PainArea, string> = {
 export const PAIN_AREA_PATTERNS: Record<PainArea, MovementPattern[]> = {
   hombro: ['verticalPush', 'verticalPull', 'olyLift'],
   'cadera-lumbar': ['hinge', 'squat', 'olyLift', 'carry'],
-  rodilla: ['squat', 'lunge', 'jump'],
+  // Rodilla: sentadillas y zancadas, saltos (cajon, burpees) e impacto ciclico (correr, comba, lanzadera).
+  rodilla: ['squat', 'lunge', 'jump', 'impact'],
   'codo-muneca': ['horizontalPush', 'gymnastics'],
 };
 
@@ -107,9 +108,52 @@ export function getAvoidedPatterns(painFlags: PainFlag[] | undefined, todayIso: 
   return new Set(patterns);
 }
 
-/** Filtra un pool de movimientos evitando los patrones marcados — si el filtro lo deja vacio, cae al pool completo (nunca bloquea la sesion). */
+/**
+ * Palabras que delatan un patron dentro del TEXTO de un WOD de referencia (Fran, Grace, "Cindy"...): sus
+ * listas de movimientos son ids del catalogo o texto libre ("run 1 mile"), y no siempre traen todos los del
+ * formato. Solo los patrones que un aviso de molestia puede evitar y que se reconocen sin ambiguedad.
+ */
+const PAIN_PATTERN_KEYWORDS: Partial<Record<MovementPattern, RegExp>> = {
+  squat: /squat|thruster|wall[- ]?ball|pistol|cluster/i,
+  lunge: /lunge|step[- ]?up|sled push/i,
+  jump: /jump|burpee|box\b|skater|hop/i,
+  impact: /double[- ]?under|single[- ]?under|\bdu\b|jump rope|skipping|\brun\b|running|sprint|shuttle|\bmile\b|\b\d+\s?m run\b/i,
+  hinge: /deadlift|good[- ]?morning|kettlebell swing|\bkb swing|swing|hip thrust/i,
+  verticalPush: /handstand push|hspu|shoulder press|push press|push jerk|strict press|jerk/i,
+  olyLift: /snatch|clean|jerk/i,
+  carry: /carry|farmer|yoke|suitcase/i,
+};
+
+/**
+ * True si un WOD de referencia lleva algun movimiento que un aviso de molestia activo evita: por los ids
+ * de su lista de movimientos (patron del catalogo) o por las palabras de su formato. Un benchmark es una
+ * pieza unica con formato fijo: si choca con el aviso no se escala movimiento a movimiento, se elige otro.
+ */
+export function benchmarkConflictsWithPain(
+  wod: { movements: string[]; format: string },
+  avoided: Set<MovementPattern>,
+  patternOf: (movementId: string) => MovementPattern | undefined,
+): boolean {
+  if (avoided.size === 0) return false;
+  for (const id of wod.movements) {
+    const p = patternOf(id);
+    if (p && avoided.has(p)) return true;
+  }
+  for (const p of avoided) {
+    const re = PAIN_PATTERN_KEYWORDS[p];
+    if (re && re.test(`${wod.movements.filter((m) => !patternOf(m)).join(' ')} ${wod.format}`)) return true;
+  }
+  return false;
+}
+
+/**
+ * Filtra un pool de movimientos evitando los patrones marcados. Si el filtro lo deja vacio, devuelve VACIO: con un
+ * aviso de molestia activo es mejor no programar ese elemento (un accesorio, un calentamiento, un corte de la
+ * recuperacion...) que caer al pool completo y programar justo lo que duele. Antes caia al pool completo "para no
+ * bloquear la sesion", y con la rodilla mal salian step-ups, box jumps y jumping lunges como accesorio (sus
+ * roles de accesorio solo tienen movimientos de rodilla). Quien llama ya maneja el pool vacio.
+ */
 export function filterAvoidingPain<T extends { pattern: MovementPattern }>(pool: T[], avoided: Set<MovementPattern>): T[] {
   if (avoided.size === 0) return pool;
-  const filtered = pool.filter((m) => !avoided.has(m.pattern));
-  return filtered.length > 0 ? filtered : pool;
+  return pool.filter((m) => !avoided.has(m.pattern));
 }

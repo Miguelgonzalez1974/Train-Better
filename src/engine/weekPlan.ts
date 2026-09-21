@@ -364,7 +364,8 @@ export function buildMicrocyclePlan(input: {
     input.goalForcedPattern && isStrengthPattern(input.goalForcedPattern) ? input.goalForcedPattern : null;
   const rand = mulberry32(hashSeed(`${macroId}:${weekNumber}`));
 
-  const strengthSlots = strengthDoingSlots(n, input.doubleWodActive ? doubleWodSlot(n, phase) : -1);
+  // El llamador ya decidio si esta semana lleva doble (`doubleWodActive`); aqui solo se resuelve en que dia cae.
+  const strengthSlots = strengthDoingSlots(n, input.doubleWodActive ? doubleWodSlot(n, 1) : -1);
   const allocated = allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand);
 
   // Patron por trainingDayIndex: el planificado para los slots de fuerza, y el del ciclo natural

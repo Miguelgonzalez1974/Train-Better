@@ -154,8 +154,7 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
   const goalsOf = (p: ReturnType<typeof makeProfile>) => p.goals;
   const baseProfile = () => makeProfile({ trainingDaysPerWeek: 6, bodyweightLog: [{ date: '2026-01-01', kg: 82 }] });
   const entry = (date: string, rpe = 7, durationMin = 60): SessionHistoryEntry => ({ date, mesocycleWeek: 2, movementIds: [], rxOrScaled: 'rx', rpe, durationMin });
-  // Un atleta que ya entrena: 4 semanas previas de 5 sesiones a la semana (RPE 7, 60 min). Sin base cronica,
-  // las 4 sesiones "simuladas" de lunes a jueves disparan un ACWR alto y la semana se planifica en descarga.
+  // Un atleta que ya entrena: 4 semanas previas de 5 sesiones a la semana (RPE 7, 60 min).
   const chronic = (): SessionHistoryEntry[] => {
     const out: SessionHistoryEntry[] = [];
     for (let back = 28; back >= 1; back--) {
@@ -201,20 +200,67 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
     }
   });
 
-  it('un viernes planificado como normal (semana bloqueada con el doble apagado) no pasa a doble despues', () => {
-    setDoubleWodEnabled(false);
+  it('un viernes planificado como normal por un motor que ya conocia el doble (bloqueo decidido) no pasa a doble despues, y la cache doble queda vieja', () => {
     const p = baseProfile();
-    const oldPlan = resolveWeekLocks(p, chronic(), goalsOf(p), iso(MON), MON);
-    setDoubleWodEnabled(true);
-    expect(oldPlan.weeklyLocks?.[iso(FRI)]?.doubleWod).toBeUndefined();
-    const s = generateSessionForDate(oldPlan, chronic(), FRI, goalsOf(p));
+    const decidedNormal = {
+      ...p,
+      weeklyLocks: { [iso(FRI)]: { strengthMovementId: 'back-squat', doubleDecided: true, plannedOn: iso(MON) } },
+    };
+    const lock = decidedNormal.weeklyLocks[iso(FRI)];
+    const s = generateSessionForDate(decidedNormal, chronic(), FRI, goalsOf(p));
     expect(s.doubleWod).toBeUndefined();
     expect(s.doubleWodSkipped).toBeUndefined();
     expect(s.blocks.some((b) => b.block === 'strength')).toBe(true);
-    // Y una sesion doble cacheada antes de esa planificacion se considera vieja: la cache no contradice al bloqueo.
     const cachedDouble: DailySession = { ...generateSessionForDate(baseProfile(), chronic(), FRI, goalsOf(p)), genVersion: SESSION_GEN_VERSION };
     expect(cachedDouble.doubleWod).toBe(true);
-    expect(isCachedSessionStale(cachedDouble, oldPlan.weeklyLocks?.[iso(FRI)])).toBe(true);
+    expect(isCachedSessionStale(cachedDouble, lock)).toBe(true);
+  });
+
+  it('un bloqueo anterior al doble (sin marca "decidido") no decide la estructura: el viernes se resuelve con el estado de hoy y la cache no lo toma por desacuerdo', () => {
+    // Semana bloqueada por una version que aun no conocia el doble: planificada con el interruptor apagado.
+    setDoubleWodEnabled(false);
+    const p = baseProfile();
+    const legacy = resolveWeekLocks(p, chronic(), goalsOf(p), iso(MON), MON);
+    setDoubleWodEnabled(true);
+    const lock = legacy.weeklyLocks?.[iso(FRI)];
+    expect(lock?.strengthMovementId, 'el viernes viejo llevaba fuerza').toBeTruthy();
+    expect(lock?.doubleDecided).toBeUndefined();
+    const s = generateSessionForDate(legacy, chronic(), FRI, goalsOf(p));
+    expect(s.doubleWod).toBe(true);
+    expect(isCachedSessionStale({ ...s, genVersion: SESSION_GEN_VERSION }, lock)).toBe(false);
+    // Los demas dias de esa semana conservan su fuerza bloqueada.
+    for (const d of [days[0], TUE, WED, SAT]) expect(legacy.weeklyLocks?.[iso(d)]?.strengthMovementId, iso(d)).toBeTruthy();
+  });
+
+  it('el plan no depende de la carga simulada: con historial vacio (sin base cronica) el viernes tambien se planifica como doble, y el veto por estado real llega el dia de verdad', () => {
+    const p = baseProfile();
+    const planned = resolveWeekLocks(p, [], goalsOf(p), iso(MON), MON);
+    expect(planned.weeklyLocks?.[iso(FRI)]?.doubleWod).toBe(true);
+    expect(planned.weeklyLocks?.[iso(FRI)]?.doubleDecided).toBe(true);
+    // Ese viernes, con una semana real de sobrecarga (RPE 9 seguido), se vetea igual.
+    const past = (offset: number) => {
+      const d = new Date(FRI);
+      d.setDate(d.getDate() - offset);
+      return entry(iso(d), 9, 60);
+    };
+    const hard = [28, 26, 24, 22, 20, 18, 16, 14, 12].map((o) => ({ ...past(o), rpe: 8, durationMin: 90 })).concat([past(6), past(3), past(1)]);
+    const s = generateSessionForDate(planned, hard, FRI, goalsOf(p));
+    expect(s.doubleWod).toBeUndefined();
+    expect(s.doubleWodSkipped).toBe(true);
+  });
+
+  it('en una descarga forzada la semana no lleva hueco de doble en el microciclo: los 5 dias reparten fuerza como en cualquier descarga', () => {
+    const p = baseProfile();
+    const past = (offset: number, rpe: number, durationMin: number) => {
+      const d = new Date(FRI);
+      d.setDate(d.getDate() - offset);
+      return entry(iso(d), rpe, durationMin);
+    };
+    const hard = [28, 26, 24, 22, 20, 18, 16, 14, 12].map((o) => past(o, 8, 90)).concat([past(6, 9, 60), past(3, 9, 60), past(1, 9, 60)]);
+    const s = generateSessionForDate(p, hard, FRI, goalsOf(p));
+    expect(s.mesocycleWeek).toBe(4);
+    expect(s.doubleWod).toBeUndefined();
+    expect(s.blocks.some((b) => b.block === 'strength')).toBe(true);
   });
 
   it('veto de seguridad: planificado como doble pero con sobrecarga hoy (descarga) sale normal, marcado como omitido, y no cuenta como desacuerdo con el bloqueo', () => {

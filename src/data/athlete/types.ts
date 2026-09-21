@@ -281,6 +281,8 @@ export interface AthleteProfile {
       wodBenchmarkId?: string;
       /** El día salió como día de doble WOD (solo acondicionamiento) al planificar la semana. Un día del hueco de doble WOD con bloqueo pero sin esta marca se planificó como día normal y no cambia después. Ver `doubleWodSlot`. */
       doubleWod?: boolean;
+      /** El bloqueo lo planificó un motor que ya conocía el día de doble WOD, así que la ausencia de `doubleWod` significa "día normal" a propósito. Un bloqueo anterior (sin esta marca) no decide la estructura del día: se resuelve con el estado de ese día. */
+      doubleDecided?: boolean;
       /** Fecha ISO en que se decidio este bloqueo — permite saber si un dia perdido de la semana ocurrio DESPUES de planificar (y hay que re-planificar los dias que quedan). */
       plannedOn?: string;
     }
@@ -364,7 +366,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 58;
+export const SESSION_GEN_VERSION = 59;
 
 export interface DailySession {
   date: string;
@@ -391,6 +393,8 @@ export interface DailySession {
    * que el coach sabe ahora. Ausente en cacheadas anteriores a esta huella (no se consideran viejas por esto).
    */
   genHistoryStamp?: string;
+  /** Huella de los avisos de molestia vigentes para la fecha de la sesión cuando se generó (`painStamp`): si cambia (se marca, quita o caduca un aviso) la sesión cacheada se regenera. Ausente en cacheadas anteriores. */
+  genPainStamp?: string;
   /** 'custom' cuando el atleta escribio su propia sesion en vez de usar la generada — `blocks` va vacio y el contenido vive en customTitle/customNote. */
   source?: 'generated' | 'custom';
   customTitle?: string;
@@ -407,6 +411,8 @@ export interface DailySession {
   doubleWod?: boolean;
   /** El bloqueo semanal planificó doble WOD para este día pero hoy no se pudo (descarga, ACWR alto, poca disponibilidad, test, taper…): es un día normal a propósito, no un desacuerdo con el bloqueo. */
   doubleWodSkipped?: boolean;
+  /** El WOD de referencia bloqueado para hoy choca con un aviso de molestia activo y se sirvió otro: la sesión no contradice al bloqueo a propósito. */
+  wodLockSkipped?: boolean;
   /** Sistema energetico del WOD de hoy (rotacion de dominios del microciclo) — solo con macrociclo activo y en dias no-benchmark. Ver `EnergySystem` en wodDomains.ts. */
   energySystem?: 'base-aerobica' | 'umbral' | 'potencia' | 'recuperacion';
   /** Intensidad relativa de hoy dentro de la onda dura/media/suave de la semana — ausente cuando es 'media' (el caso neutro). Ver `DayIntensity` en weekPlan.ts. */

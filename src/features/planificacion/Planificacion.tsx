@@ -130,7 +130,7 @@ function loadTodaySession(
   if (cached) {
     if (isCachedSessionOrphaned(cached, profile, todayIso)) {
       athleteRepository.deleteCachedSession(todayIso);
-    } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso], history)) {
+    } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso], history, lockedProfile.painFlags)) {
       return cached;
     } else if (history.some((h) => h.date === todayIso)) {
       const adopted = adoptAdditiveEngineFields(cached, profile, history, new Date(), goals);
