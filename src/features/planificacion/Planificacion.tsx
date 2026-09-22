@@ -57,6 +57,7 @@ import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
+import { complexLettersByIndex } from './SessionBlockCard';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { RpeCheckIn } from './RpeCheckIn';
@@ -278,6 +279,10 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     () => new Map(adjustableSetBlocks.map((b) => [b.index, b])),
     [adjustableSetBlocks],
   );
+
+  /** index de bloque -> letra (A, B, C...) que ese levantamiento lleva en la tarjeta de arriba — para
+   * que el check-in de RPE de abajo se reconozca sin tener que leer el nombre. */
+  const complexLetters = useMemo(() => (session ? complexLettersByIndex(session.blocks) : new Map<number, string>()), [session]);
 
   /**
    * Clave de PR y % del 1RM del levantamiento valorado. La clave se resuelve igual que en el motor
@@ -1142,6 +1147,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
                       loggedRpe={b.loggedRpe}
                       estimated1rm={b.estimated1rm}
                       onRate={(rpe) => handleRateSet(b.index, rpe)}
+                      letter={complexLetters.get(b.index)}
                     />
                   ));
                 }

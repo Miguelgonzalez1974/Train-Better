@@ -59,6 +59,25 @@ function complexHeroIdx(complex: SessionBlockResult[]): number {
   return best;
 }
 
+/**
+ * Letra (A, B, C...) que le toca a cada entrada de fuerza/oly dentro de su complejo — la misma que
+ * pinta `ComplexCard`, así el check-in de RPE de más abajo puede usar la misma letra y no hace falta
+ * leer el nombre para saber a qué movimiento de la tarjeta pertenece. Solo lleva letra el día que
+ * `ComplexCard` es quien pinta el bloque (más de una entrada, sea complejo o complejo + preparación);
+ * un solo levantamiento sin preparación lo pinta `EntryRow` sin letra, y aquí tampoco lleva. Las
+ * entradas con `subgroup` (preparación) no cuentan para la letra, igual que en `ComplexCard`.
+ */
+export function complexLettersByIndex(blocks: SessionBlockResult[]): Map<number, string> {
+  const result = new Map<number, string>();
+  for (const targetBlock of ['strength', 'oly'] as const) {
+    const all = blocks.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.block === targetBlock);
+    if (all.length <= 1) continue;
+    const complex = all.filter(({ entry }) => !entry.subgroup);
+    complex.forEach(({ index }, n) => result.set(index, String.fromCharCode(65 + n)));
+  }
+  return result;
+}
+
 function StatBox({ value, label }: { value: string | number; label: string }) {
   return (
     <div className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5">
@@ -520,6 +539,9 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
   const complex = entries.filter((e) => !e.subgroup);
   const prepNote = prep.find((e) => e.notes)?.notes;
   const [prepOpen, setPrepOpen] = useState(false);
+  // Las dos entradas de un E2MOM emparejado comparten el mismo `format` (la superserie normal nunca
+  // repite formato en la segunda entrada) — se pintan juntas en vez de como dos tarjetas A/B.
+  const isPairedFormat = complex.length === 2 && Boolean(complex[0].format) && complex[0].format === complex[1].format;
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
@@ -564,59 +586,104 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
         )}
 
         <div className={prep.length > 0 ? 'flex flex-col gap-3 border-t border-white/5 pt-3' : 'flex flex-col gap-3'}>
-          {complex.map((entry, idx) => {
-            const movement = getMovementById(entry.movementId);
-            if (!movement) return null;
-            // La carga protagonista: en fuerza es el levantamiento principal (A); en oly, la entrada
-            // con más carga que no sea el primer técnico ("2-3").
-            const isHero =
-              entry.block === 'strength'
-                ? idx === 0
-                : idx === complexHeroIdx(complex);
-            return (
-              <div key={`${entry.movementId}-${idx}`} className={idx > 0 ? 'border-t border-white/5 pt-3' : ''}>
-                <div className="flex items-baseline gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                    {String.fromCharCode(65 + idx)}
-                  </span>
-                  <p className={NAME_MAIN}>{movement.name}</p>
-                </div>
-                {entry.format && (
-                  <div className="ml-7 mt-1">
-                    <FormatBadge format={entry.format} />
+          {isPairedFormat ? (
+            <PairedFormatEntry entries={complex} progress={progress} />
+          ) : (
+            complex.map((entry, idx) => {
+              const movement = getMovementById(entry.movementId);
+              if (!movement) return null;
+              // La carga protagonista: en fuerza es el levantamiento principal (A); en oly, la entrada
+              // con más carga que no sea el primer técnico ("2-3").
+              const isHero = entry.block === 'strength' ? idx === 0 : idx === complexHeroIdx(complex);
+              return (
+                <div key={`${entry.movementId}-${idx}`} className={idx > 0 ? 'border-t border-white/5 pt-3' : ''}>
+                  <div className="flex items-baseline gap-2">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                      {String.fromCharCode(65 + idx)}
+                    </span>
+                    <p className={NAME_MAIN}>{movement.name}</p>
                   </div>
-                )}
+                  {entry.format && (
+                    <div className="ml-7 mt-1">
+                      <FormatBadge format={entry.format} />
+                    </div>
+                  )}
 
-                {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
-                  <div className="ml-7 mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {entry.sets && <StatBox value={entry.sets} label="series" />}
-                    {entry.reps && <StatBox value={entry.reps} label="reps" />}
-                    {entry.loadKg ? (
-                      <LoadStat
-                        kg={entry.loadKg}
-                        movementId={entry.movementId}
-                        block={entry.block}
-                        progress={progress}
-                        size={isHero ? 'lg' : 'sm'}
-                      />
-                    ) : null}
-                    {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
-                    {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
+                  {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
+                    <div className="ml-7 mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {entry.sets && <StatBox value={entry.sets} label="series" />}
+                      {entry.reps && <StatBox value={entry.reps} label="reps" />}
+                      {entry.loadKg ? (
+                        <LoadStat
+                          kg={entry.loadKg}
+                          movementId={entry.movementId}
+                          block={entry.block}
+                          progress={progress}
+                          size={isHero ? 'lg' : 'sm'}
+                        />
+                      ) : null}
+                      {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
+                      {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
+                    </div>
+                  )}
+                  <div className="ml-7">
+                    <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
                   </div>
-                )}
-                <div className="ml-7">
-                  <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
-                </div>
 
-                {/* La explicación de este levantamiento (volumen/intensidad/técnica) vive en la pestaña
-                    Task de toda la sesión, no aquí — antes salía siempre abierta y era la que más
-                    scroll daba. */}
-                <StandardHint standard={movement.standard} className="ml-7" />
-              </div>
-            );
-          })}
+                  {/* La explicación de este levantamiento (volumen/intensidad/técnica) vive en la pestaña
+                      Task de toda la sesión, no aquí — antes salía siempre abierta y era la que más
+                      scroll daba. */}
+                  <StandardHint standard={movement.standard} className="ml-7" />
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Las dos entradas de un complejo con exactamente el mismo `format` (hoy solo pasa en el E2MOM
+ * emparejado: el levantamiento principal + su compañero al mismo intervalo — la superserie normal
+ * nunca lleva formato en la segunda entrada) se juntan en una sola cabecera con un único badge de
+ * formato, en vez de dos tarjetas A/B que repiten el mismo texto. Debajo, cada movimiento en su
+ * propia fila con series/reps/carga — sin letra, ya está claro por el nombre.
+ */
+function PairedFormatEntry({ entries, progress }: { entries: SessionBlockResult[]; progress?: MovementProgressData }) {
+  const movements = entries.map((e) => getMovementById(e.movementId));
+  if (movements.some((m) => !m)) return null;
+
+  return (
+    <div>
+      <p className={NAME_MAIN}>{movements.map((m) => m!.name).join(' + ')}</p>
+      {entries[0].format && (
+        <div className="mt-1">
+          <FormatBadge format={entries[0].format} />
+        </div>
+      )}
+      <div className="mt-2 flex flex-col divide-y divide-white/5">
+        {entries.map((entry, idx) => {
+          const movement = movements[idx]!;
+          return (
+            <div key={entry.movementId} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
+              <p className={NAME_STEP}>{movement.name}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-neutral-500">
+                  {entry.sets && `${entry.sets} series`}
+                  {entry.sets && entry.reps && ' · '}
+                  {entry.reps && repsLabel(entry.reps)}
+                </span>
+                {entry.loadKg ? (
+                  <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <LastTimeHint movementId={entries[0].movementId} block={entries[0].block} progress={progress} />
     </div>
   );
 }

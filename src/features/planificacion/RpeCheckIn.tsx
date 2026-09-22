@@ -9,6 +9,19 @@ interface RpeCheckInProps {
   loggedRpe: number | null;
   estimated1rm?: number;
   onRate: (rpe: number) => void;
+  /** Misma letra (A, B, C...) que este levantamiento lleva en la tarjeta de fuerza/oly de arriba
+   * (`complexLettersByIndex`) — para saber a qué movimiento pertenece sin tener que leer el nombre.
+   * Ausente si ese día el bloque no se pintó con letras (un solo levantamiento sin superserie). */
+  letter?: string;
+}
+
+/** Letra en un círculo — misma pinta que la de `ComplexCard`, para que se reconozcan de un vistazo. */
+function LetterBadge({ letter }: { letter: string }) {
+  return (
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+      {letter}
+    </span>
+  );
 }
 
 const shell = 'rounded-xl border border-brand-border bg-brand-surfaceMuted/40 p-3.5';
@@ -22,7 +35,7 @@ const shell = 'rounded-xl border border-brand-border bg-brand-surfaceMuted/40 p-
  * derivada de una sensación cualitativa. El RPE sigue alimentando `estimateE1RMFromRpe` y
  * `responseProfile` igual que antes.
  */
-export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRate }: RpeCheckInProps) {
+export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRate, letter }: RpeCheckInProps) {
   const [editing, setEditing] = useState(false);
 
   if (loggedRpe != null && !editing) {
@@ -30,8 +43,9 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
       <div className={shell}>
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-[11px] text-neutral-300">
+            {letter && <LetterBadge letter={letter} />}
             <TrendingUp size={12} strokeWidth={2.5} className="shrink-0 text-brand-neon" />
-            {topSet.kg} kg × {topSet.reps} @ RPE {loggedRpe}
+            <span className="font-semibold text-white">{movementName}</span>: {topSet.kg} kg × {topSet.reps} @ RPE {loggedRpe}
             {estimated1rm ? (
               <>
                 {' '}→ 1RM est. <span className="font-bold text-white">{estimated1rm} kg</span>
@@ -52,7 +66,8 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
 
   return (
     <div className={shell}>
-      <p className="mb-2.5 text-xs font-semibold text-neutral-200">
+      <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold text-neutral-200">
+        {letter && <LetterBadge letter={letter} />}
         {movementName}: {topSet.kg} kg × {topSet.reps} — ¿a qué RPE?
       </p>
       <div className="flex flex-wrap gap-1.5">
