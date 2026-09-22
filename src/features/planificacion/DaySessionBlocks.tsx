@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { NotebookPen, Brain } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult } from '../../data/athlete/types';
-import { SessionBlockCard } from './SessionBlockCard';
+import { SessionBlockCard, type RpeFeedback } from './SessionBlockCard';
 import { buildTaskSections, SessionTaskView } from './SessionTaskView';
 import type { MovementProgressData } from './LoadStat';
 
@@ -14,14 +14,25 @@ interface DaySessionBlocksProps {
   onUpdateEntry?: (index: number, patch: Partial<SessionBlockResult>) => void;
   onAddEntry?: (newEntry: SessionBlockResult, afterIndex: number) => void;
   onRemoveEntry?: (index: number) => void;
-  /** Contenido opcional bajo un bloque concreto — usado para la valoración de series de fuerza/oly, justo donde el atleta actúa. */
-  renderBlockFooter?: (block: Block, entryIndices: number[]) => ReactNode;
   /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de una serie de fuerza/oly). */
   progress?: MovementProgressData;
+  /** Percepción de esfuerzo de fuerza/oly ya registrada hoy en modo entreno, por índice global de
+   * `session.blocks` — `SessionBlockCard` la pinta debajo del levantamiento al que pertenece. */
+  setFeedbackByIndex?: Map<number, RpeFeedback>;
+  onRateSet?: (index: number, rpe: number) => void;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
-export function DaySessionBlocks({ session, editable, onUpdateEntry, onAddEntry, onRemoveEntry, renderBlockFooter, progress }: DaySessionBlocksProps) {
+export function DaySessionBlocks({
+  session,
+  editable,
+  onUpdateEntry,
+  onAddEntry,
+  onRemoveEntry,
+  progress,
+  setFeedbackByIndex,
+  onRateSet,
+}: DaySessionBlocksProps) {
   // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
   // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
   const [tab, setTab] = useState<'session' | 'task'>('session');
@@ -76,25 +87,22 @@ export function DaySessionBlocks({ session, editable, onUpdateEntry, onAddEntry,
       {showingTask ? (
         <SessionTaskView sections={taskSections} />
       ) : (
-        blocksWithResults.map(({ block, results, entryIndices }, index) => {
-          const footer = renderBlockFooter?.(block, entryIndices);
-          return (
-            <div key={block}>
-              <SessionBlockCard
-                block={block}
-                results={results}
-                entryIndices={entryIndices}
-                isLast={index === blocksWithResults.length - 1 && !footer}
-                editable={editable}
-                onUpdateEntry={onUpdateEntry}
-                onAddEntry={onAddEntry}
-                onRemoveEntry={onRemoveEntry}
-                progress={progress}
-              />
-              {footer && <div className="mb-3 mt-1 flex flex-col gap-2 pl-1">{footer}</div>}
-            </div>
-          );
-        })
+        blocksWithResults.map(({ block, results, entryIndices }, index) => (
+          <SessionBlockCard
+            key={block}
+            block={block}
+            results={results}
+            entryIndices={entryIndices}
+            isLast={index === blocksWithResults.length - 1}
+            editable={editable}
+            onUpdateEntry={onUpdateEntry}
+            onAddEntry={onAddEntry}
+            onRemoveEntry={onRemoveEntry}
+            progress={progress}
+            setFeedbackByIndex={setFeedbackByIndex}
+            onRateSet={onRateSet}
+          />
+        ))
       )}
     </div>
   );

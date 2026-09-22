@@ -18,8 +18,17 @@ import { Modal } from '../shell/Modal';
 import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
+import { RpeCheckIn } from './RpeCheckIn';
 
 type Accent = 'orange' | 'gold' | 'neutral';
+
+/** Percepción de esfuerzo de una serie de fuerza/oly ya registrada hoy en modo entreno — lo justo
+ * para pintar `RpeCheckIn` debajo de su movimiento, sin repetir el nombre (ya está justo encima). */
+export interface RpeFeedback {
+  topSet: { kg: number; reps: number };
+  loggedRpe: number | null;
+  estimated1rm?: number;
+}
 
 export const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
   orange: { icon: 'text-brand-orange', bar: 'bg-brand-orange/50' },
@@ -57,25 +66,6 @@ function complexHeroIdx(complex: SessionBlockResult[]): number {
     }
   });
   return best;
-}
-
-/**
- * Letra (A, B, C...) que le toca a cada entrada de fuerza/oly dentro de su complejo — la misma que
- * pinta `ComplexCard`, así el check-in de RPE de más abajo puede usar la misma letra y no hace falta
- * leer el nombre para saber a qué movimiento de la tarjeta pertenece. Solo lleva letra el día que
- * `ComplexCard` es quien pinta el bloque (más de una entrada, sea complejo o complejo + preparación);
- * un solo levantamiento sin preparación lo pinta `EntryRow` sin letra, y aquí tampoco lleva. Las
- * entradas con `subgroup` (preparación) no cuentan para la letra, igual que en `ComplexCard`.
- */
-export function complexLettersByIndex(blocks: SessionBlockResult[]): Map<number, string> {
-  const result = new Map<number, string>();
-  for (const targetBlock of ['strength', 'oly'] as const) {
-    const all = blocks.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.block === targetBlock);
-    if (all.length <= 1) continue;
-    const complex = all.filter(({ entry }) => !entry.subgroup);
-    complex.forEach(({ index }, n) => result.set(index, String.fromCharCode(65 + n)));
-  }
-  return result;
 }
 
 function StatBox({ value, label }: { value: string | number; label: string }) {
@@ -532,11 +522,26 @@ function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
  * Bloque con pasos A/B en una sola tarjeta, no dos sueltas: el complejo de oly (primer técnico +
  * levantamiento principal) y la superserie de fuerza (levantamiento principal + A2 antagonista).
  */
-function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; progress?: MovementProgressData }) {
+function ComplexCard({
+  entries,
+  entryIndices,
+  progress,
+  setFeedbackByIndex,
+  onRateSet,
+}: {
+  entries: SessionBlockResult[];
+  entryIndices?: number[];
+  progress?: MovementProgressData;
+  setFeedbackByIndex?: Map<number, RpeFeedback>;
+  onRateSet?: (index: number, rpe: number) => void;
+}) {
   // Las entradas con `subgroup` (ej. "Calentamiento de barra" del bloque de Oly) son preparación —
   // van plegadas por defecto para que la tarjeta muestre solo el complejo de trabajo (A/B).
   const prep = entries.filter((e) => e.subgroup);
   const complex = entries.filter((e) => !e.subgroup);
+  // Mismo filtro que `complex`, pero conservando el índice global de `session.blocks` de cada uno —
+  // hace falta para encontrar su percepción de esfuerzo (`setFeedbackByIndex` va por ese índice).
+  const complexIndices = entries.map((e, i) => ({ entry: e, index: entryIndices?.[i] })).filter((x) => !x.entry.subgroup).map((x) => x.index);
   const prepNote = prep.find((e) => e.notes)?.notes;
   const [prepOpen, setPrepOpen] = useState(false);
   // Las dos entradas de un E2MOM emparejado comparten el mismo `format` (la superserie normal nunca
@@ -587,7 +592,13 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
 
         <div className={prep.length > 0 ? 'flex flex-col gap-3 border-t border-white/5 pt-3' : 'flex flex-col gap-3'}>
           {isPairedFormat ? (
-            <PairedFormatEntry entries={complex} progress={progress} />
+            <PairedFormatEntry
+              entries={complex}
+              entryIndices={complexIndices}
+              progress={progress}
+              setFeedbackByIndex={setFeedbackByIndex}
+              onRateSet={onRateSet}
+            />
           ) : (
             complex.map((entry, idx) => {
               const movement = getMovementById(entry.movementId);
@@ -595,6 +606,8 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
               // La carga protagonista: en fuerza es el levantamiento principal (A); en oly, la entrada
               // con más carga que no sea el primer técnico ("2-3").
               const isHero = entry.block === 'strength' ? idx === 0 : idx === complexHeroIdx(complex);
+              const feedbackIndex = complexIndices[idx];
+              const feedback = feedbackIndex !== undefined ? setFeedbackByIndex?.get(feedbackIndex) : undefined;
               return (
                 <div key={`${entry.movementId}-${idx}`} className={idx > 0 ? 'border-t border-white/5 pt-3' : ''}>
                   <div className="flex items-baseline gap-2">
@@ -630,6 +643,17 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
                     <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
                   </div>
 
+                  {feedback && onRateSet && feedbackIndex !== undefined && (
+                    <div className="ml-7 mt-2">
+                      <RpeCheckIn
+                        topSet={feedback.topSet}
+                        loggedRpe={feedback.loggedRpe}
+                        estimated1rm={feedback.estimated1rm}
+                        onRate={(rpe) => onRateSet(feedbackIndex, rpe)}
+                      />
+                    </div>
+                  )}
+
                   {/* La explicación de este levantamiento (volumen/intensidad/técnica) vive en la pestaña
                       Task de toda la sesión, no aquí — antes salía siempre abierta y era la que más
                       scroll daba. */}
@@ -651,7 +675,19 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
  * formato, en vez de dos tarjetas A/B que repiten el mismo texto. Debajo, cada movimiento en su
  * propia fila con series/reps/carga — sin letra, ya está claro por el nombre.
  */
-function PairedFormatEntry({ entries, progress }: { entries: SessionBlockResult[]; progress?: MovementProgressData }) {
+function PairedFormatEntry({
+  entries,
+  entryIndices,
+  progress,
+  setFeedbackByIndex,
+  onRateSet,
+}: {
+  entries: SessionBlockResult[];
+  entryIndices?: (number | undefined)[];
+  progress?: MovementProgressData;
+  setFeedbackByIndex?: Map<number, RpeFeedback>;
+  onRateSet?: (index: number, rpe: number) => void;
+}) {
   const movements = entries.map((e) => getMovementById(e.movementId));
   if (movements.some((m) => !m)) return null;
 
@@ -666,19 +702,33 @@ function PairedFormatEntry({ entries, progress }: { entries: SessionBlockResult[
       <div className="mt-2 flex flex-col divide-y divide-white/5">
         {entries.map((entry, idx) => {
           const movement = movements[idx]!;
+          const feedbackIndex = entryIndices?.[idx];
+          const feedback = feedbackIndex !== undefined ? setFeedbackByIndex?.get(feedbackIndex) : undefined;
           return (
-            <div key={entry.movementId} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
-              <p className={NAME_STEP}>{movement.name}</p>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-neutral-500">
-                  {entry.sets && `${entry.sets} series`}
-                  {entry.sets && entry.reps && ' · '}
-                  {entry.reps && repsLabel(entry.reps)}
-                </span>
-                {entry.loadKg ? (
-                  <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
-                ) : null}
+            <div key={entry.movementId} className="py-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <p className={NAME_STEP}>{movement.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-neutral-500">
+                    {entry.sets && `${entry.sets} series`}
+                    {entry.sets && entry.reps && ' · '}
+                    {entry.reps && repsLabel(entry.reps)}
+                  </span>
+                  {entry.loadKg ? (
+                    <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                  ) : null}
+                </div>
               </div>
+              {feedback && onRateSet && feedbackIndex !== undefined && (
+                <div className="mt-2">
+                  <RpeCheckIn
+                    topSet={feedback.topSet}
+                    loggedRpe={feedback.loggedRpe}
+                    estimated1rm={feedback.estimated1rm}
+                    onRate={(rpe) => onRateSet(feedbackIndex, rpe)}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
@@ -742,11 +792,24 @@ function AccessoryGroupCard({ entries }: { entries: SessionBlockResult[] }) {
   );
 }
 
-function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: MovementProgressData }) {
+function EntryRow({
+  entry,
+  index,
+  progress,
+  setFeedbackByIndex,
+  onRateSet,
+}: {
+  entry: SessionBlockResult;
+  index?: number;
+  progress?: MovementProgressData;
+  setFeedbackByIndex?: Map<number, RpeFeedback>;
+  onRateSet?: (index: number, rpe: number) => void;
+}) {
   const movement = getMovementById(entry.movementId);
   if (!movement) return null;
 
   const isMainLift = entry.block === 'strength' || entry.block === 'oly';
+  const feedback = index !== undefined ? setFeedbackByIndex?.get(index) : undefined;
   // Esta tarjeta sirve fuerza/oly de un solo levantamiento, skill y el accesorio sin format — los tres
   // bloques que la pestaña Task de la sesión ya cubre, así que su nota ya no sale aquí.
   return (
@@ -772,6 +835,16 @@ function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: M
         </div>
       )}
       <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
+      {feedback && onRateSet && index !== undefined && (
+        <div className="mt-2">
+          <RpeCheckIn
+            topSet={feedback.topSet}
+            loggedRpe={feedback.loggedRpe}
+            estimated1rm={feedback.estimated1rm}
+            onRate={(rpe) => onRateSet(index, rpe)}
+          />
+        </div>
+      )}
       <StandardHint standard={movement.standard} />
     </div>
   );
@@ -1019,9 +1092,25 @@ interface SessionBlockCardProps {
   onRemoveEntry?: (index: number) => void;
   /** Datos del atleta para el popup de progresión del movimiento (solo lectura fuera del modo edición). */
   progress?: MovementProgressData;
+  /** Percepción de esfuerzo de fuerza/oly ya registrada hoy en modo entreno, por índice global de
+   * `session.blocks` — se pinta debajo de su levantamiento (no en modo edición). */
+  setFeedbackByIndex?: Map<number, RpeFeedback>;
+  onRateSet?: (index: number, rpe: number) => void;
 }
 
-export function SessionBlockCard({ block, results, isLast, entryIndices, editable, onUpdateEntry, onAddEntry, onRemoveEntry, progress }: SessionBlockCardProps) {
+export function SessionBlockCard({
+  block,
+  results,
+  isLast,
+  entryIndices,
+  editable,
+  onUpdateEntry,
+  onAddEntry,
+  onRemoveEntry,
+  progress,
+  setFeedbackByIndex,
+  onRateSet,
+}: SessionBlockCardProps) {
   if (results.length === 0) return null;
   const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
@@ -1089,7 +1178,13 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
         ) : block === 'warmup' ? (
           <WarmupRoutineCard entries={results} />
         ) : (block === 'oly' || block === 'strength') && results.length > 1 ? (
-          <ComplexCard entries={results} progress={progress} />
+          <ComplexCard
+            entries={results}
+            entryIndices={entryIndices}
+            progress={progress}
+            setFeedbackByIndex={setFeedbackByIndex}
+            onRateSet={onRateSet}
+          />
         ) : block === 'accessory' && results[0]?.format ? (
           <AccessoryGroupCard entries={results} />
         ) : (
@@ -1100,7 +1195,14 @@ export function SessionBlockCard({ block, results, isLast, entryIndices, editabl
                   <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{group.subgroup}</p>
                 )}
                 {group.items.map((entry, idx) => (
-                  <EntryRow key={`${entry.movementId}-${idx}`} entry={entry} progress={progress} />
+                  <EntryRow
+                    key={`${entry.movementId}-${idx}`}
+                    entry={entry}
+                    index={entryIndices?.[results.indexOf(entry)]}
+                    progress={progress}
+                    setFeedbackByIndex={setFeedbackByIndex}
+                    onRateSet={onRateSet}
+                  />
                 ))}
               </div>
             ))}

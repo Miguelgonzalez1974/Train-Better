@@ -57,10 +57,8 @@ import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
-import { complexLettersByIndex } from './SessionBlockCard';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
-import { RpeCheckIn } from './RpeCheckIn';
 import { SessionSummaryCard } from './SessionSummaryCard';
 import { NutritionTip } from './NutritionTip';
 import { FocusMode } from './FocusMode';
@@ -274,15 +272,22 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       });
   }, [session, setFeedbackLog, todayWorkLog]);
 
-  /** index de bloque -> props de su check-in de RPE, para renderizarlo inline bajo la tarjeta de fuerza/oly. */
+  /** index de bloque -> props de su check-in de RPE, para el modo enfocado (`FocusMode` sí necesita
+   * `movementName`: ahí la ficha vive en una lista de varios levantamientos, no pegada a su nombre). */
   const setFeedbackByIndex = useMemo(
     () => new Map(adjustableSetBlocks.map((b) => [b.index, b])),
     [adjustableSetBlocks],
   );
 
-  /** index de bloque -> letra (A, B, C...) que ese levantamiento lleva en la tarjeta de arriba — para
-   * que el check-in de RPE de abajo se reconozca sin tener que leer el nombre. */
-  const complexLetters = useMemo(() => (session ? complexLettersByIndex(session.blocks) : new Map<number, string>()), [session]);
+  /** Misma percepción de esfuerzo, recortada para `SessionBlockCard`: ahí el check-in ya vive debajo
+   * de su levantamiento, así que `index`/`movementName` no hacen falta. */
+  const sessionCardFeedbackByIndex = useMemo(
+    () =>
+      new Map(
+        adjustableSetBlocks.map((b) => [b.index, { topSet: b.topSet, loggedRpe: b.loggedRpe, estimated1rm: b.estimated1rm }]),
+      ),
+    [adjustableSetBlocks],
+  );
 
   /**
    * Clave de PR y % del 1RM del levantamiento valorado. La clave se resuelve igual que en el motor
@@ -1130,28 +1135,10 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           onAddEntry={handleAddEntry}
           onRemoveEntry={handleRemoveEntry}
           progress={movementProgress}
-          renderBlockFooter={
-            editMode || showCompletePanel
-              ? undefined
-              : (block, entryIndices) => {
-                  if (block !== 'strength' && block !== 'oly') return null;
-                  const panels = entryIndices
-                    .map((i) => setFeedbackByIndex.get(i))
-                    .filter((p): p is NonNullable<typeof p> => Boolean(p));
-                  if (panels.length === 0) return null;
-                  return panels.map((b) => (
-                    <RpeCheckIn
-                      key={b.index}
-                      movementName={b.movementName}
-                      topSet={b.topSet}
-                      loggedRpe={b.loggedRpe}
-                      estimated1rm={b.estimated1rm}
-                      onRate={(rpe) => handleRateSet(b.index, rpe)}
-                      letter={complexLetters.get(b.index)}
-                    />
-                  ));
-                }
-          }
+          // Sin check-in de RPE en edición ni con el panel de "completar" abierto — ahí el foco es
+          // otro, no valorar series ya hechas.
+          setFeedbackByIndex={editMode || showCompletePanel ? undefined : sessionCardFeedbackByIndex}
+          onRateSet={editMode || showCompletePanel ? undefined : handleRateSet}
         />
       )}
 

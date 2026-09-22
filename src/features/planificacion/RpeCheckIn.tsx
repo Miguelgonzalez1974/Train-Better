@@ -3,28 +3,25 @@ import { Brain, Pencil, TrendingUp } from 'lucide-react';
 import { SET_FEEL_LABEL, RPE_CHECKIN_OPTIONS, feelFromRpe } from '../../engine/setFeedback';
 
 interface RpeCheckInProps {
-  movementName: string;
+  /** Solo hace falta cuando la tarjeta no vive ya pegada al nombre del movimiento (ej. modo enfocado,
+   * donde esta ficha aparece dentro de una lista de varios levantamientos). En la tarjeta de sesión
+   * normal se omite: la caja ya está debajo del movimiento al que pertenece, repetir el nombre sobra. */
+  movementName?: string;
   /** Serie más pesada ya registrada hoy (workLog del modo enfocado) — de aquí sale el peso, no se teclea. */
   topSet: { kg: number; reps: number };
   loggedRpe: number | null;
   estimated1rm?: number;
   onRate: (rpe: number) => void;
-  /** Misma letra (A, B, C...) que este levantamiento lleva en la tarjeta de fuerza/oly de arriba
-   * (`complexLettersByIndex`) — para saber a qué movimiento pertenece sin tener que leer el nombre.
-   * Ausente si ese día el bloque no se pintó con letras (un solo levantamiento sin superserie). */
-  letter?: string;
 }
 
-/** Letra en un círculo — misma pinta que la de `ComplexCard`, para que se reconozcan de un vistazo. */
-function LetterBadge({ letter }: { letter: string }) {
-  return (
-    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-      {letter}
-    </span>
-  );
-}
-
-const shell = 'rounded-xl border border-brand-border bg-brand-surfaceMuted/40 p-3.5';
+/**
+ * Pendiente de valorar = acento dorado; ya valorada = acento verde ("hecho", el mismo verde que usa
+ * el resto de la app). Degradado muy suave (8%/6% de opacidad, se apaga a transparente) — un matiz,
+ * no un efecto marcado, para que la tarjeta se note "aparte" sin desentonar con el resto de la app,
+ * que va plana en todo lo demás.
+ */
+const shellPending = 'rounded-xl border-l-2 border-brand-gold/50 bg-gradient-to-br from-brand-gold/[0.08] via-brand-gold/[0.02] to-transparent p-3.5';
+const shellDone = 'rounded-xl border-l-2 border-brand-neon/40 bg-gradient-to-br from-brand-neon/[0.07] via-brand-neon/[0.02] to-transparent p-3.5';
 
 /**
  * Calibra el coach para este levantamiento con un solo dato: el RPE de la serie más pesada que el
@@ -35,17 +32,17 @@ const shell = 'rounded-xl border border-brand-border bg-brand-surfaceMuted/40 p-
  * derivada de una sensación cualitativa. El RPE sigue alimentando `estimateE1RMFromRpe` y
  * `responseProfile` igual que antes.
  */
-export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRate, letter }: RpeCheckInProps) {
+export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRate }: RpeCheckInProps) {
   const [editing, setEditing] = useState(false);
 
   if (loggedRpe != null && !editing) {
     return (
-      <div className={shell}>
+      <div className={shellDone}>
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-[11px] text-neutral-300">
-            {letter && <LetterBadge letter={letter} />}
             <TrendingUp size={12} strokeWidth={2.5} className="shrink-0 text-brand-neon" />
-            <span className="font-semibold text-white">{movementName}</span>: {topSet.kg} kg × {topSet.reps} @ RPE {loggedRpe}
+            {movementName && <span className="font-semibold text-white">{movementName}: </span>}
+            {topSet.kg} kg × {topSet.reps} @ RPE {loggedRpe}
             {estimated1rm ? (
               <>
                 {' '}→ 1RM est. <span className="font-bold text-white">{estimated1rm} kg</span>
@@ -65,10 +62,10 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
   }
 
   return (
-    <div className={shell}>
-      <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold text-neutral-200">
-        {letter && <LetterBadge letter={letter} />}
-        {movementName}: {topSet.kg} kg × {topSet.reps} — ¿a qué RPE?
+    <div className={shellPending}>
+      <p className="mb-2.5 text-xs font-semibold text-neutral-200">
+        {movementName && `${movementName}: `}
+        {topSet.kg} kg × {topSet.reps} — ¿a qué RPE?
       </p>
       <div className="flex flex-wrap gap-1.5">
         {RPE_CHECKIN_OPTIONS.map((rpe) => (
