@@ -668,7 +668,7 @@ function AccessoryGroupCard({ entries }: { entries: SessionBlockResult[] }) {
               );
             })}
           </div>
-          {group.notes && <CoachNote text={group.notes} />}
+          {/* La explicación del circuito (incluido el core) vive en la pestaña Task de la sesión. */}
         </div>
       ))}
     </div>
@@ -680,6 +680,8 @@ function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: M
   if (!movement) return null;
 
   const isMainLift = entry.block === 'strength' || entry.block === 'oly';
+  // Esta tarjeta sirve fuerza/oly de un solo levantamiento, skill y el accesorio sin format — los tres
+  // bloques que la pestaña Task de la sesión ya cubre, así que su nota ya no sale aquí.
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       {entry.format && <FormatBadge format={entry.format} />}
@@ -703,10 +705,6 @@ function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: M
         </div>
       )}
       <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
-
-      {/* En fuerza/oly la explicación vive en la pestaña Task de toda la sesión (salía siempre
-          abierta aquí y era la que más scroll daba); en el resto de bloques se queda donde estaba. */}
-      {entry.notes && !isMainLift && <CoachNote text={entry.notes} />}
       <StandardHint standard={movement.standard} />
     </div>
   );

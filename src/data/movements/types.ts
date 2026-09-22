@@ -41,11 +41,18 @@ export interface Movement {
   /** Descripcion general del estandar de ejecucion (rango de movimiento, criterios de rep valida) */
   standard: string;
   /**
-   * Por que esta este movimiento en la sesion (que prepara, que evita) — no como se ejecuta, eso es
-   * `standard`. Hoy solo se usa en la pestaña "Task" del calentamiento (`WarmupRoutineCard`); opcional
-   * porque el resto de bloques no lo necesitan.
+   * Por que esta este movimiento en el calentamiento (que prepara, que evita) — no como se ejecuta,
+   * eso es `standard`. Usado por la pestaña "Task" de la sesion (`SessionTaskView`) para los
+   * movimientos del bloque warmup; opcional porque el resto de bloques no lo necesitan.
    */
   why?: string;
+  /**
+   * Por que esta este movimiento en la vuelta a la calma (que suelta, por que ayuda a recuperar) —
+   * mismo uso que `why` pero para el bloque cooldown. Un movimiento que aparece en los dos bloques
+   * (ej. estiramientos que tambien sirven de calentamiento) puede llevar ambos campos con texto
+   * distinto, porque el motivo cambia segun si es antes o despues del esfuerzo.
+   */
+  cooldownWhy?: string;
   scaling: {
     easier: string[];
     harder: string[];

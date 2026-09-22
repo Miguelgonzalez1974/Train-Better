@@ -288,6 +288,7 @@ export const wodMovements: Movement[] = [
     primaryMuscles: ['piernas', 'espalda', 'sistema cardiovascular'],
     standard: 'Distancia, calorias o tiempo especificado; secuencia de tirada piernas-cadera-brazos.',
     why: 'Sube el pulso a ritmo suave antes del esfuerzo fuerte, para llegar al WOD con el sistema cardiovascular ya encendido.',
+    cooldownWhy: 'Baja el ritmo suave sobre el remo despues del esfuerzo, para bajar el pulso antes de estirar.',
     scaling: { easier: [], harder: [] },
     tags: ['cardio'],
   },

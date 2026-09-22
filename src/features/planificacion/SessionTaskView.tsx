@@ -16,12 +16,14 @@ export interface TaskSection {
 }
 
 /**
- * Construye el contenido de la pestaña Task a partir de la sesión: solo los bloques cuya nota del
- * coach salía SIEMPRE abierta en la tarjeta normal — calentamiento (el porqué de cada movimiento),
- * fuerza/oly (el levantamiento de trabajo) y WOD (ritmo/objetivo) — que eran los que de verdad daban
- * scroll. Se sacan de ahí y se juntan aquí, un bloque debajo de otro, en el mismo orden que la sesión
- * (`BLOCK_ORDER`). El resto de notas (preparación con barra, accesorio, calentamiento por subgrupo)
- * ya salían cerradas por defecto ("ver más") y se quedan donde estaban — no se duplican aquí.
+ * Construye el contenido de la pestaña Task a partir de la sesión: calentamiento (el porqué de cada
+ * movimiento), fuerza/oly (el levantamiento de trabajo), WOD (ritmo/objetivo), accesorio (incluido el
+ * core) y skill. En fuerza/oly/WOD la nota salía SIEMPRE abierta en la tarjeta normal — eran las que
+ * más scroll daban; en accesorio y skill ya salía cerrada ("ver más"), pero también se saca de ahí
+ * para que "Sesión" quede solo con números y toda la explicación viva en un único sitio. Cooldown no
+ * tenía nota del coach hasta ahora — usa el `cooldownWhy` fijo de cada movimiento, igual que
+ * calentamiento usa `why`. Todo en el mismo orden que la sesión (`BLOCK_ORDER`). La preparación con
+ * barra (Burgener) y el calentamiento por subgrupo siguen con su nota donde estaban — no se duplican.
  */
 export function buildTaskSections(session: DailySession): TaskSection[] {
   const sections: TaskSection[] = [];
@@ -64,6 +66,41 @@ export function buildTaskSections(session: DailySession): TaskSection[] {
             : (e.title ?? 'WOD');
           return { name: e.wodPart ? `${base} · Parte ${e.wodPart}` : base, why: e.notes };
         });
+      if (items.length > 0) sections.push({ block, items });
+      continue;
+    }
+
+    if (block === 'accessory') {
+      // Igual que en el WOD: la nota se repite en cada movimiento del mismo superset/circuito (ej.
+      // los 2 movimientos de un core en intervalo) — solo la primera entrada de cada tramo consecutivo
+      // con el mismo `format`, igual que agrupa `AccessoryGroupCard`.
+      const items: TaskItem[] = [];
+      let lastFormat: string | undefined = undefined;
+      let isFirstOfGroup = true;
+      for (const e of entries) {
+        isFirstOfGroup = e.format !== lastFormat;
+        lastFormat = e.format;
+        if (isFirstOfGroup && e.notes) {
+          items.push({ name: e.format ?? getMovementById(e.movementId)?.name ?? e.movementId, why: e.notes });
+        }
+      }
+      if (items.length > 0) sections.push({ block, items });
+      continue;
+    }
+
+    if (block === 'skill') {
+      const items = entries
+        .filter((e): e is SessionBlockResult & { notes: string } => Boolean(e.notes))
+        .map((e) => ({ name: getMovementById(e.movementId)?.name ?? e.movementId, why: e.notes }));
+      if (items.length > 0) sections.push({ block, items });
+      continue;
+    }
+
+    if (block === 'cooldown') {
+      const items = entries
+        .map((e) => getMovementById(e.movementId))
+        .filter((m): m is NonNullable<typeof m> => Boolean(m))
+        .map((movement) => ({ name: movement.name, why: movement.cooldownWhy ?? 'Ayuda a recuperar después del esfuerzo de hoy.' }));
       if (items.length > 0) sections.push({ block, items });
     }
   }
