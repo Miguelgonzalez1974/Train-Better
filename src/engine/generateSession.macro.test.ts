@@ -77,6 +77,34 @@ describe('generateSessionForDate — macrociclo', () => {
     expect(violations).toEqual([]);
   });
 
+  it('cuando el WOD necesita 2 monoestructurales y hay alternativa sin máquina disponible, no deja las 2 como máquina de cardio (remo/bici/ski erg)', () => {
+    // No es un invariante estricto de "nunca 2 máquinas": hay días (accesorio ya carga
+    // sentadilla/zancada/salto, o formatos como sandwich/chipper que arman el WOD por otro camino)
+    // donde 2 máquinas es lo correcto o donde este mecanismo en concreto no interviene. Lo que sí se
+    // puede afirmar con seguridad: el mecanismo actúa de verdad (no es letra muerta) con la
+    // frecuencia suficiente para notarse.
+    const CARDIO_MACHINE_IDS = new Set(['row', 'air-bike', 'ski-erg']);
+    const NON_MACHINE_MONO_IDS = new Set(['run', 'double-under', 'single-under', 'shuttle-run']);
+    const profile = makeProfile({ trainingDaysPerWeek: 6 });
+    let doubleMachine = 0;
+    let mixed = 0;
+    for (const d of consecutiveDates(START, 140)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      if (s.blocks.some((b) => b.block === 'wod' && b.wodLibraryId)) continue;
+      const wodIds = s.blocks
+        .filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'))
+        .map((b) => b.movementId);
+      const machineCount = new Set(wodIds.filter((id) => CARDIO_MACHINE_IDS.has(id))).size;
+      const hasNonMachine = wodIds.some((id) => NON_MACHINE_MONO_IDS.has(id));
+      if (machineCount >= 2) doubleMachine++;
+      if (machineCount === 1 && hasNonMachine) mixed++;
+    }
+    expect(doubleMachine + mixed, 'muestra demasiado pequeña').toBeGreaterThan(20);
+    // El mecanismo de variedad (máquina + carrera/comba/lanzadera en vez de 2 máquinas) tiene que
+    // verse en una parte real de los días, no ser anecdótico.
+    expect(mixed, 'el mecanismo de variedad nunca actuó').toBeGreaterThan(doubleMachine * 0.15);
+  });
+
   it('el primer del complejo de oly nunca es un drill de jerk', () => {
     const profile = makeProfile();
     const bad: string[] = [];

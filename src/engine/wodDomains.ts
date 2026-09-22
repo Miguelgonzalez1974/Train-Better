@@ -43,6 +43,11 @@ export const GYMNASTICS_IDS = [
 
 export const MONOSTRUCTURAL_IDS = ['run', 'row', 'air-bike', 'ski-erg', 'double-under', 'single-under', 'shuttle-run'];
 
+/** De los monoestructurales, las máquinas de cardio de pie/sentado (remo, bici, ski erg) — se sienten
+ * tan parecidas entre sí (empujar con brazos y piernas desde una máquina) que un WOD con dos a la vez
+ * se nota como el mismo estímulo repetido, no como variedad real. Ver su uso en `generateSession.ts`. */
+export const CARDIO_MACHINE_IDS = new Set(['row', 'air-bike', 'ski-erg']);
+
 export const WEIGHTED_IDS = [
   'wall-ball',
   'thruster',

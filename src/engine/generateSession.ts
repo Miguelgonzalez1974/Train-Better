@@ -64,6 +64,7 @@ import {
   RISING_LOAD_INTERVAL_STEPS,
   CARDIO_CHIPPER_BASE,
   CARDIO_CHIPPER_TIERS,
+  CARDIO_MACHINE_IDS,
   KETTLEBELL_SIZES_KG,
   WOD_BARBELL_LOAD_PERCENT,
   WOD_EFFORT_BY_WEEK,
@@ -2570,6 +2571,21 @@ function buildWodBlock(
       if (picks.length === before) break;
       fillIndex++;
     }
+  }
+
+  // Si las dos monoestructurales elegidas son máquinas de cardio (remo, bici, ski erg), se sienten
+  // como el mismo estímulo — de pie/sentado empujando con brazos y piernas — más que variedad de
+  // verdad. Se cambia la segunda por una alternativa sin máquina (carrera, comba, lanzadera) que siga
+  // libre dentro del `monoPool` ya filtrado (respeta molestias/solape con el accesorio de hoy); si no
+  // hay ninguna (p.ej. una molestia de impacto ya las descarta todas y solo quedan máquinas), se deja
+  // como está — mejor eso que forzar la búsqueda fuera del pool filtrado y perder esas protecciones.
+  const machinePicks = picks.filter((p) => CARDIO_MACHINE_IDS.has(p.id));
+  if (machinePicks.length >= 2) {
+    const toReplace = machinePicks[1];
+    const blockedForSwap = wodSynonymBlockedIds(picks.filter((p) => p !== toReplace).map((p) => p.id));
+    const isSwapCandidate = (m: Movement) => !CARDIO_MACHINE_IDS.has(m.id) && !picks.some((p) => p.id === m.id) && !blockedForSwap.has(m.id);
+    const alt = monoPool.find((m) => isSwapCandidate(m) && !usedIds.has(m.id)) ?? monoPool.find(isSwapCandidate);
+    if (alt) picks[picks.indexOf(toReplace)] = alt;
   }
 
   const ladderSchemes = chosenFormat.kind === 'ascendingLadder' ? ASCENDING_LADDER_SCHEMES : DESCENDING_LADDER_SCHEMES;
