@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
-import { NotebookPen } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { NotebookPen, Brain } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult } from '../../data/athlete/types';
 import { SessionBlockCard } from './SessionBlockCard';
+import { buildTaskSections, SessionTaskView } from './SessionTaskView';
 import type { MovementProgressData } from './LoadStat';
 
 export const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
@@ -21,6 +22,11 @@ interface DaySessionBlocksProps {
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
 export function DaySessionBlocks({ session, editable, onUpdateEntry, onAddEntry, onRemoveEntry, renderBlockFooter, progress }: DaySessionBlocksProps) {
+  // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
+  // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
+  const [tab, setTab] = useState<'session' | 'task'>('session');
+  useEffect(() => setTab('session'), [session.date]);
+
   if (session.source === 'custom') {
     return (
       <div className="card flex flex-col gap-2 p-4">
@@ -39,27 +45,57 @@ export function DaySessionBlocks({ session, editable, onUpdateEntry, onAddEntry,
     return { block, results: withIndex.map((w) => w.entry), entryIndices: withIndex.map((w) => w.index) };
   }).filter((group) => group.results.length > 0);
 
+  // Task no tiene sentido en edición (ahí se necesitan los bloques para poder tocarlos) ni si hoy no
+  // hay ninguna nota de las que se sacaron de la tarjeta — en ese caso ni se muestra el interruptor.
+  const taskSections = editable ? [] : buildTaskSections(session);
+  const showingTask = tab === 'task' && taskSections.length > 0;
+
   return (
     <div className="card flex flex-col p-4">
-      {blocksWithResults.map(({ block, results, entryIndices }, index) => {
-        const footer = renderBlockFooter?.(block, entryIndices);
-        return (
-          <div key={block}>
-            <SessionBlockCard
-              block={block}
-              results={results}
-              entryIndices={entryIndices}
-              isLast={index === blocksWithResults.length - 1 && !footer}
-              editable={editable}
-              onUpdateEntry={onUpdateEntry}
-              onAddEntry={onAddEntry}
-              onRemoveEntry={onRemoveEntry}
-              progress={progress}
-            />
-            {footer && <div className="mb-3 mt-1 flex flex-col gap-2 pl-1">{footer}</div>}
-          </div>
-        );
-      })}
+      {!editable && taskSections.length > 0 && (
+        <div className="mb-3 flex gap-0.5 rounded-lg bg-white/5 p-0.5">
+          <button
+            onClick={() => setTab('session')}
+            className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+              tab === 'session' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            Sesión
+          </button>
+          <button
+            onClick={() => setTab('task')}
+            className={`flex flex-1 items-center justify-center gap-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+              tab === 'task' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Brain size={12} strokeWidth={2.5} />
+            Task
+          </button>
+        </div>
+      )}
+      {showingTask ? (
+        <SessionTaskView sections={taskSections} />
+      ) : (
+        blocksWithResults.map(({ block, results, entryIndices }, index) => {
+          const footer = renderBlockFooter?.(block, entryIndices);
+          return (
+            <div key={block}>
+              <SessionBlockCard
+                block={block}
+                results={results}
+                entryIndices={entryIndices}
+                isLast={index === blocksWithResults.length - 1 && !footer}
+                editable={editable}
+                onUpdateEntry={onUpdateEntry}
+                onAddEntry={onAddEntry}
+                onRemoveEntry={onRemoveEntry}
+                progress={progress}
+              />
+              {footer && <div className="mb-3 mt-1 flex flex-col gap-2 pl-1">{footer}</div>}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }

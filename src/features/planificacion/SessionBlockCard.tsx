@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronLeft, ChevronRight, Plus, Trash2, Search, Timer, type LucideIcon } from 'lucide-react';
-import type { Block, Movement } from '../../data/movements/types';
+import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, Timer, type LucideIcon } from 'lucide-react';
+import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
   getMovementsByBlock,
@@ -21,7 +21,7 @@ import { groupWodByPart } from './wodPartGroups';
 
 type Accent = 'orange' | 'gold' | 'neutral';
 
-const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
+export const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
   orange: { icon: 'text-brand-orange', bar: 'bg-brand-orange/50' },
   gold: { icon: 'text-brand-gold', bar: 'bg-brand-gold/45' },
   neutral: { icon: 'text-neutral-400', bar: 'bg-white/15' },
@@ -30,7 +30,7 @@ const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
 /** Catalogo de WOD de referencia ordenado una sola vez (600+ entradas) — para el selector de "cambiar el WOD de hoy por otro benchmark" en modo edicion. */
 const sortedBenchmarkWorkouts = [...benchmarkWorkouts].sort((a, b) => a.name.localeCompare(b.name));
 
-const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent: Accent }> = {
+export const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent: Accent }> = {
   warmup: { label: 'Calentamiento', Icon: Flame, accent: 'gold' },
   strength: { label: 'Fuerza', Icon: Dumbbell, accent: 'orange' },
   wod: { label: 'WOD', Icon: Zap, accent: 'gold' },
@@ -374,7 +374,6 @@ function CustomWodCard({
 }) {
   const title = entries[0]?.title;
   const format = entries[0]?.format;
-  const notes = entries[0]?.notes;
   const target = entries[0]?.wodTarget;
 
   return (
@@ -419,7 +418,8 @@ function CustomWodCard({
           Objetivo {target.display}
         </p>
       )}
-      {notes && <CoachNote text={notes} defaultOpen />}
+      {/* La nota de ritmo/objetivo del WOD vive en la pestaña Task de toda la sesión — antes salía
+          siempre abierta aquí y era la que más scroll daba. */}
     </div>
   );
 }
@@ -432,102 +432,53 @@ const WARMUP_TAB_LABEL: Record<string, string> = {
 
 /**
  * Bloque warm up: el calentamiento trae 2-3 mini-rutinas cortas (activación general, específico del
- * WOD y, en días de programa de fuerza con oly, la barra Burgener) como subgrupos separados, más una
- * pestaña fija "Task" (icono de cerebro) con el porqué de cada movimiento del día — no cómo se hace
- * (eso ya está en "cómo se hace"), sino qué prepara o qué evita. Un movimiento a la vez con flechas,
- * en vez de una lista larga con scroll.
+ * WOD y, en días de programa de fuerza con oly, la barra Burgener) como subgrupos separados. En vez
+ * de apilarlas todas (tarjeta larga), una pestaña por subgrupo — solo se ve una a la vez. El porqué de
+ * cada movimiento (`Movement.why`) vive en la pestaña Task de toda la sesión (`SessionTaskView`), no
+ * aquí — así no se duplica.
  */
 function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
   const groups = groupBySubgroup(entries);
-  const [tab, setTab] = useState<number | 'why'>(0);
-  const [whyStep, setWhyStep] = useState(0);
-  const active = typeof tab === 'number' ? (groups[tab] ?? groups[0]) : undefined;
-
-  const whyList = entries
-    .map((entry) => ({ entry, movement: getMovementById(entry.movementId) }))
-    .filter((x): x is { entry: SessionBlockResult; movement: Movement } => Boolean(x.movement));
-  const whyIdx = Math.min(whyStep, Math.max(0, whyList.length - 1));
-  const whyCurrent = whyList[whyIdx];
+  const [activeIdx, setActiveIdx] = useState(0);
+  const active = groups[activeIdx] ?? groups[0];
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
-      <div className="mb-3 flex gap-0.5 rounded-lg bg-white/5 p-0.5">
-        {groups.map((group, gi) => (
-          <button
-            key={gi}
-            onClick={() => setTab(gi)}
-            className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
-              tab === gi ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            {(group.subgroup && WARMUP_TAB_LABEL[group.subgroup]) ?? group.subgroup ?? 'Calentamiento'}
-          </button>
-        ))}
-        <button
-          onClick={() => setTab('why')}
-          className={`flex flex-1 items-center justify-center gap-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
-            tab === 'why' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <Brain size={12} strokeWidth={2.5} />
-          Task
-        </button>
-      </div>
-
-      {tab === 'why' ? (
-        whyCurrent ? (
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setWhyStep((s) => Math.max(0, s - 1))}
-                disabled={whyIdx === 0}
-                aria-label="Movimiento anterior"
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-colors hover:bg-white/10 disabled:opacity-30"
-              >
-                <ChevronLeft size={14} strokeWidth={2.5} />
-              </button>
-              <span className="text-[11px] text-neutral-500">
-                {whyIdx + 1} de {whyList.length}
-              </span>
-              <button
-                onClick={() => setWhyStep((s) => Math.min(whyList.length - 1, s + 1))}
-                disabled={whyIdx === whyList.length - 1}
-                aria-label="Siguiente movimiento"
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-colors hover:bg-white/10 disabled:opacity-30"
-              >
-                <ChevronRight size={14} strokeWidth={2.5} />
-              </button>
-            </div>
-            <p className={NAME_STEP}>{whyCurrent.movement.name}</p>
-            <p className="text-sm leading-relaxed text-neutral-300">
-              {whyCurrent.movement.why ?? 'Prepara el cuerpo para lo que toca hoy.'}
-            </p>
-          </div>
-        ) : (
-          <p className="text-xs text-neutral-500">Sin movimientos que explicar hoy.</p>
-        )
-      ) : (
-        active && (
-          <div className="flex flex-col gap-2">
-            {active.items.map((entry, idx) => {
-              const movement = getMovementById(entry.movementId);
-              if (!movement) return null;
-              return (
-                <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                    {idx + 1}
-                  </span>
-                  <div>
-                    <p className={NAME_STEP}>{movement.name}</p>
-                    <StandardHint standard={movement.standard} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )
+      {groups.length > 1 && (
+        <div className="mb-3 flex gap-0.5 rounded-lg bg-white/5 p-0.5">
+          {groups.map((group, gi) => (
+            <button
+              key={gi}
+              onClick={() => setActiveIdx(gi)}
+              className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+                gi === activeIdx ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              {(group.subgroup && WARMUP_TAB_LABEL[group.subgroup]) ?? group.subgroup ?? 'Calentamiento'}
+            </button>
+          ))}
+        </div>
       )}
-      {tab !== 'why' && active?.items[0]?.notes && <CoachNote text={active.items[0].notes} />}
+      {active && (
+        <div className="flex flex-col gap-2">
+          {active.items.map((entry, idx) => {
+            const movement = getMovementById(entry.movementId);
+            if (!movement) return null;
+            return (
+              <div key={`${entry.movementId}-${idx}`} className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                  {idx + 1}
+                </span>
+                <div>
+                  <p className={NAME_STEP}>{movement.name}</p>
+                  <StandardHint standard={movement.standard} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {active?.items[0]?.notes && <CoachNote text={active.items[0].notes} />}
     </div>
   );
 }
@@ -657,11 +608,9 @@ function ComplexCard({ entries, progress }: { entries: SessionBlockResult[]; pro
                   <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
                 </div>
 
-                {entry.notes && (
-                  <div className="ml-7">
-                    <CoachNote text={entry.notes} defaultOpen={isHero} />
-                  </div>
-                )}
+                {/* La explicación de este levantamiento (volumen/intensidad/técnica) vive en la pestaña
+                    Task de toda la sesión, no aquí — antes salía siempre abierta y era la que más
+                    scroll daba. */}
                 <StandardHint standard={movement.standard} className="ml-7" />
               </div>
             );
@@ -755,7 +704,9 @@ function EntryRow({ entry, progress }: { entry: SessionBlockResult; progress?: M
       )}
       <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
 
-      {entry.notes && <CoachNote text={entry.notes} defaultOpen={isMainLift} />}
+      {/* En fuerza/oly la explicación vive en la pestaña Task de toda la sesión (salía siempre
+          abierta aquí y era la que más scroll daba); en el resto de bloques se queda donde estaba. */}
+      {entry.notes && !isMainLift && <CoachNote text={entry.notes} />}
       <StandardHint standard={movement.standard} />
     </div>
   );
