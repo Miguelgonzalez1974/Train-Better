@@ -53,6 +53,7 @@ export const cooldownMovements: Movement[] = [
     equipment: ['foam roller (opcional)'],
     primaryMuscles: ['columna toracica'],
     standard: 'Extension y rotacion controlada de la columna toracica en apoyo cuadrupedo o sobre foam roller.',
+    why: 'Mueve la columna toracica antes del trabajo por encima de la cabeza, para que ese rango no lo tenga que ceder el hombro o la zona lumbar.',
     scaling: { easier: [], harder: [] },
     tags: ['general'],
   },
@@ -353,6 +354,7 @@ export const cooldownMovements: Movement[] = [
     primaryMuscles: ['abdominales', 'isquiotibiales'],
     standard:
       'Tumbado boca arriba con los brazos por encima de la cabeza, incorporarse en un sit-up y continuar hacia las piernas extendidas alcanzando los pies, y volver con control. 8-10 repeticiones.',
+    why: 'Combina core e isquiotibiales en un solo movimiento, para activar ambos a la vez antes del trabajo de hoy.',
     scaling: { easier: [], harder: [] },
     tags: ['general'],
   },
@@ -365,6 +367,7 @@ export const cooldownMovements: Movement[] = [
     primaryMuscles: ['abdominales', 'aductores'],
     standard:
       'Tumbado boca arriba con los brazos por encima de la cabeza, incorporarse en un sit-up y abrir las piernas en V para inclinar el torso entre ellas, y volver con control. 8-10 repeticiones.',
+    why: 'Combina core y aductores en un solo movimiento, para activar ambos a la vez antes del trabajo de hoy.',
     scaling: { easier: [], harder: [] },
     tags: ['general'],
   },

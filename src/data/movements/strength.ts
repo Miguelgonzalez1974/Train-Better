@@ -179,6 +179,7 @@ export const strengthMovements: Movement[] = [
     equipment: ['barbell'],
     primaryMuscles: ['isquiotibiales', 'gluteos'],
     standard: 'Rodillas con flexion minima, la barra baja pegada a las piernas hasta sentir estiramiento en isquios, sin tocar el suelo entre reps.',
+    why: 'Activa la cadena posterior con bisagra de cadera y poco peso, antes de que el peso muerto o el clean de hoy le sumen carga.',
     scaling: { easier: [], harder: ['deadlift'] },
     progressionOf: 'deadlift',
     tags: ['barbell', 'bilateral'],

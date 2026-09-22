@@ -40,6 +40,12 @@ export interface Movement {
   primaryMuscles: string[];
   /** Descripcion general del estandar de ejecucion (rango de movimiento, criterios de rep valida) */
   standard: string;
+  /**
+   * Por que esta este movimiento en la sesion (que prepara, que evita) — no como se ejecuta, eso es
+   * `standard`. Hoy solo se usa en la pestaña "Task" del calentamiento (`WarmupRoutineCard`); opcional
+   * porque el resto de bloques no lo necesitan.
+   */
+  why?: string;
   scaling: {
     easier: string[];
     harder: string[];

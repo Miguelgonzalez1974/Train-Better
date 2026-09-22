@@ -6,8 +6,10 @@ const PRE_START_SECONDS = 10;
 const TABATA_DEFAULT_WORK = 20;
 const TABATA_DEFAULT_REST = 10;
 const TABATA_DEFAULT_ROUNDS = 8;
+const EMOM_DEFAULT_INTERVAL = 60;
+const EMOM_DEFAULT_ROUNDS = 10;
 
-type TimerMode = 'rest' | 'workout' | 'tabata';
+type TimerMode = 'rest' | 'workout' | 'emom' | 'tabata';
 
 function mmss(total: number): string {
   const s = Math.max(0, Math.round(total));
@@ -192,16 +194,20 @@ function TabataConfigRow({
 }
 
 /**
- * Reloj flotante del entreno — un único botón en la esquina con tres pestañas:
+ * Reloj flotante del entreno — un único botón en la esquina, agrandado (84px cerrado) para que se
+ * lea desde lejos del móvil, con cuatro pestañas:
  * - **Descanso**: cuenta atrás entre series (presets 60/90/120/180 s, ajuste ±15, pitido + vibración
  *   al llegar a 0).
- * - **Entreno**: cronómetro ascendente para cronometrar el bloque entero (AMRAP, EMOM, For Time),
- *   con contador de rondas manual y la pantalla encendida mientras corre.
+ * - **Entreno**: cronómetro ascendente para cronometrar el bloque entero (AMRAP, For Time), con
+ *   contador de rondas manual y la pantalla encendida mientras corre.
+ * - **EMOM**: un solo intervalo que se repite (60 s por defecto, ajustable) con contador de "minuto
+ *   X de N" — a diferencia de Tabata no alterna trabajo/descanso, avisa una vez por intervalo y el
+ *   descanso es lo que sobre del minuto.
  * - **Tabata**: trabajo/descanso automático con rondas (20/10×8 por defecto, ajustable), cambia de
  *   fase sola con pitido + vibración, también con pantalla activa.
- * Entreno y Tabata arrancan con una cuenta atrás de preparación de `PRE_START_SECONDS` — tiempo para
- * colocarte antes de que el crono empiece de verdad; se puede saltar tocando la pantalla. Solo se
- * muestra en el arranque en frío, no al reanudar tras una pausa.
+ * Entreno, EMOM y Tabata arrancan con una cuenta atrás de preparación de `PRE_START_SECONDS` — tiempo
+ * para colocarte antes de que el crono empiece de verdad; se puede saltar tocando la pantalla. Solo
+ * se muestra en el arranque en frío, no al reanudar tras una pausa.
  * Vive mientras haya una sesión activa en Planificación; el estado se pierde al salir de la
  * pestaña, aceptable para un reloj que solo importa durante el entreno de hoy.
  */
@@ -319,8 +325,78 @@ export function TrainingTimer() {
     } catch {
       /* sin persistencia, no pasa nada */
     }
-    if (on && (workoutRunning || tabataRunning)) wakeLock.request();
+    if (on && (workoutRunning || emomRunning || tabataRunning)) wakeLock.request();
     else if (!on) wakeLock.release();
+  };
+
+  // EMOM — un solo intervalo que se repite, sin fase de descanso separada (el descanso es lo que
+  // sobra del minuto una vez hecho el trabajo).
+  const [emomInterval, setEmomInterval] = useState(EMOM_DEFAULT_INTERVAL);
+  const [emomTotalRounds, setEmomTotalRounds] = useState(EMOM_DEFAULT_ROUNDS);
+  const [emomRound, setEmomRound] = useState(0); // 0 = aun no arrancado
+  const [emomRemaining, setEmomRemaining] = useState(EMOM_DEFAULT_INTERVAL);
+  const [emomRunning, setEmomRunning] = useState(false);
+  const [emomDone, setEmomDone] = useState(false);
+  const emomEndRef = useRef<number | null>(null);
+  const emomRafRef = useRef<number | null>(null);
+  const emomRoundRef = useRef(0);
+
+  const emomTick = useCallback(() => {
+    if (emomEndRef.current == null) return;
+    const left = (emomEndRef.current - Date.now()) / 1000;
+    if (left > 0) {
+      setEmomRemaining(left);
+      emomRafRef.current = window.setTimeout(emomTick, 200);
+      return;
+    }
+    if (emomRoundRef.current >= emomTotalRounds) {
+      setEmomRemaining(0);
+      setEmomRunning(false);
+      setEmomDone(true);
+      emomEndRef.current = null;
+      beep(660, 700);
+      navigator.vibrate?.([200, 100, 200, 100, 200]);
+      wakeLock.release();
+      return;
+    }
+    const nextRound = emomRoundRef.current + 1;
+    emomRoundRef.current = nextRound;
+    setEmomRound(nextRound);
+    setEmomRemaining(emomInterval);
+    emomEndRef.current = Date.now() + emomInterval * 1000;
+    beep();
+    navigator.vibrate?.(120);
+    emomRafRef.current = window.setTimeout(emomTick, 200);
+    // wakeLock.release (no el objeto wakeLock entero) por el mismo motivo que en tabataTick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emomTotalRounds, emomInterval, wakeLock.release]);
+
+  useEffect(() => {
+    if (emomRunning) {
+      emomEndRef.current = Date.now() + emomRemaining * 1000;
+      emomRafRef.current = window.setTimeout(emomTick, 200);
+    }
+    return () => {
+      if (emomRafRef.current != null) window.clearTimeout(emomRafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emomRunning, emomTick]);
+
+  const toggleEmom = () => {
+    if (emomDone || emomRound === 0) return startWithPreStart('emom');
+    const next = !emomRunning;
+    setEmomRunning(next);
+    if (next && screenLockOn) wakeLock.request();
+    else wakeLock.release();
+  };
+  const resetEmom = () => {
+    setEmomRunning(false);
+    setEmomDone(false);
+    setEmomRound(0);
+    emomRoundRef.current = 0;
+    setEmomRemaining(emomInterval);
+    emomEndRef.current = null;
+    wakeLock.release();
   };
 
   // Tabata — trabajo/descanso automático con rondas.
@@ -415,19 +491,27 @@ export function TrainingTimer() {
   // Si el móvil se bloquea y vuelve a mitad de entreno, reengancha la pantalla activa.
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'visible' && (workoutRunning || tabataRunning) && screenLockOn) wakeLock.request();
+      if (document.visibilityState === 'visible' && (workoutRunning || emomRunning || tabataRunning) && screenLockOn)
+        wakeLock.request();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workoutRunning, tabataRunning, screenLockOn]);
+  }, [workoutRunning, emomRunning, tabataRunning, screenLockOn]);
 
-  // Cuenta atrás de preparación (Entreno/Tabata) — arranque en frío solamente, nunca al reanudar.
-  const [preStartFor, setPreStartFor] = useState<'workout' | 'tabata' | null>(null);
+  // Cuenta atrás de preparación (Entreno/EMOM/Tabata) — arranque en frío solamente, nunca al reanudar.
+  const [preStartFor, setPreStartFor] = useState<'workout' | 'emom' | 'tabata' | null>(null);
   const [preStartRemaining, setPreStartRemaining] = useState(PRE_START_SECONDS);
 
   function reallyStartWorkout() {
     setWorkoutRunning(true);
+  }
+  function reallyStartEmom() {
+    emomRoundRef.current = 1;
+    setEmomDone(false);
+    setEmomRound(1);
+    setEmomRemaining(emomInterval);
+    setEmomRunning(true);
   }
   function reallyStartTabata() {
     tabataPhaseRef.current = 'work';
@@ -438,11 +522,12 @@ export function TrainingTimer() {
     setTabataRemaining(tabataWork);
     setTabataRunning(true);
   }
-  function beginReal(forMode: 'workout' | 'tabata') {
+  function beginReal(forMode: 'workout' | 'emom' | 'tabata') {
     if (forMode === 'workout') reallyStartWorkout();
+    else if (forMode === 'emom') reallyStartEmom();
     else reallyStartTabata();
   }
-  function startWithPreStart(forMode: 'workout' | 'tabata') {
+  function startWithPreStart(forMode: 'workout' | 'emom' | 'tabata') {
     if (screenLockOn) wakeLock.request();
     setPreStartFor(forMode);
     setPreStartRemaining(PRE_START_SECONDS);
@@ -490,7 +575,7 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo(preStartFor)}
           aria-label="Cuenta atrás de inicio"
-          className="fixed bottom-24 right-4 z-40 flex h-16 min-w-16 items-center justify-center gap-1.5 rounded-full bg-brand-orange px-3.5 text-base font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+          className="fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
         >
           {preStartRemaining}
         </button>
@@ -501,7 +586,7 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo('rest')}
           aria-label="Cronómetro de descanso"
-          className={`fixed bottom-24 right-4 z-40 flex h-16 min-w-16 items-center justify-center gap-1.5 rounded-full px-3.5 text-base font-bold shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full px-4 text-xl font-bold shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             done ? 'animate-pulse bg-brand-orange text-black' : 'bg-brand-gold text-black'
           }`}
         >
@@ -514,9 +599,22 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo('workout')}
           aria-label="Reloj de entreno"
-          className="fixed bottom-24 right-4 z-40 flex h-16 min-w-16 items-center justify-center gap-1.5 rounded-full bg-brand-neon px-3.5 text-base font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+          className="fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full bg-brand-neon px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
         >
           {mmss(workoutElapsed)}
+        </button>
+      );
+    }
+    if (emomRunning || emomDone) {
+      return (
+        <button
+          onClick={() => openTo('emom')}
+          aria-label="Reloj EMOM"
+          className={`fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+            emomDone ? 'animate-pulse bg-brand-orange' : 'bg-brand-gold'
+          }`}
+        >
+          {emomDone ? 'Listo' : mmss(emomRemaining)}
         </button>
       );
     }
@@ -525,7 +623,7 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo('tabata')}
           aria-label="Reloj Tabata"
-          className={`fixed bottom-24 right-4 z-40 flex h-16 min-w-16 items-center justify-center gap-1.5 rounded-full px-3.5 text-base font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             tabataDone ? 'animate-pulse bg-brand-orange' : tabataPhase === 'work' ? 'bg-brand-orange' : 'bg-brand-gold'
           }`}
         >
@@ -537,20 +635,20 @@ export function TrainingTimer() {
       <button
         onClick={() => setExpanded(true)}
         aria-label="Reloj de entreno"
-        className="fixed bottom-24 right-4 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-brand-surface text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
+        className="fixed bottom-24 right-4 z-40 flex h-20 w-20 items-center justify-center rounded-full bg-brand-surface text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
       >
-        <Timer size={22} strokeWidth={2.25} />
+        <Timer size={28} strokeWidth={2.25} />
       </button>
     );
   }
 
   return (
-    <div className="fixed bottom-24 right-4 z-40 w-72 rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6">
+    <div className="fixed bottom-24 right-4 z-40 w-80 rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex flex-1 gap-0.5 rounded-lg bg-white/5 p-0.5">
           <button
             onClick={() => setMode('rest')}
-            className={`flex-1 rounded-md py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
               mode === 'rest' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -558,15 +656,23 @@ export function TrainingTimer() {
           </button>
           <button
             onClick={() => setMode('workout')}
-            className={`flex-1 rounded-md py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
               mode === 'workout' ? 'bg-brand-neon text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
             Entreno
           </button>
           <button
+            onClick={() => setMode('emom')}
+            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+              mode === 'emom' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            EMOM
+          </button>
+          <button
             onClick={() => setMode('tabata')}
-            className={`flex-1 rounded-md py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
               mode === 'tabata' ? 'bg-brand-orange text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -666,6 +772,48 @@ export function TrainingTimer() {
               {workoutRunning ? 'Pausa' : workoutElapsed > 0 ? 'Reanudar' : 'Empezar'}
             </button>
             <button onClick={resetWorkout} className="rounded-lg bg-white/5 px-2 py-2 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
+              <RotateCcw size={15} strokeWidth={2.25} />
+            </button>
+          </div>
+        </>
+      ) : mode === 'emom' ? (
+        <>
+          {emomRound === 0 && !emomDone ? (
+            <>
+              <p className="text-center text-sm font-semibold text-neutral-400">
+                {emomTotalRounds} rondas · cada {emomInterval}s
+              </p>
+              <div className="my-2.5 flex flex-col gap-1.5">
+                <TabataConfigRow label="Intervalo" value={emomInterval} suffix="s" step={5} min={10} onChange={setEmomInterval} />
+                <TabataConfigRow label="Rondas" value={emomTotalRounds} suffix="" step={1} min={1} onChange={setEmomTotalRounds} />
+              </div>
+            </>
+          ) : (
+            <>
+              <p className={`text-center text-xs font-bold uppercase tracking-wide ${emomDone ? 'text-brand-orange' : 'text-brand-gold'}`}>
+                {emomDone ? '¡EMOM completo!' : `Minuto ${emomRound} de ${emomTotalRounds}`}
+              </p>
+              <p className={`text-center text-5xl font-bold tabular-nums ${emomDone ? 'text-brand-orange' : 'text-white'}`}>
+                {emomDone ? `${emomTotalRounds}/${emomTotalRounds}` : mmss(emomRemaining)}
+              </p>
+              <p className="mb-1 mt-1 text-center text-[11px] text-neutral-500">
+                {emomDone ? 'Bien hecho.' : 'Termina el trabajo y descansa lo que quede del minuto.'}
+              </p>
+            </>
+          )}
+
+          <ScreenLockToggle screenLockOn={screenLockOn} supported={wakeLock.supported} onChange={setScreenLock} />
+          <WakeLockStatusLine supported={wakeLock.supported} screenLockOn={screenLockOn} running={emomRunning} held={wakeLock.held} />
+
+          <div className="mt-2.5 flex items-center gap-1.5">
+            <button
+              onClick={toggleEmom}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-gold py-2 text-sm font-bold text-black transition-colors duration-200 hover:opacity-90"
+            >
+              {emomRunning ? <Pause size={15} strokeWidth={2.5} /> : <Play size={15} strokeWidth={2.5} />}
+              {emomRunning ? 'Pausa' : emomDone ? 'Otra vez' : emomRound > 0 ? 'Reanudar' : 'Empezar'}
+            </button>
+            <button onClick={resetEmom} className="rounded-lg bg-white/5 px-2 py-2 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
               <RotateCcw size={15} strokeWidth={2.25} />
             </button>
           </div>
