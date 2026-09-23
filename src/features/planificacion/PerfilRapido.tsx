@@ -168,6 +168,7 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
       <p className="text-xs text-neutral-600">
         Tus macrociclos y objetivos se gestionan ahora en la pestaña "Objetivos".
       </p>
+      <p className="text-[11px] text-neutral-600">Versión de la app: {__BUILD_ID__}</p>
 
       <div className="flex items-center justify-between gap-3">
         <button
