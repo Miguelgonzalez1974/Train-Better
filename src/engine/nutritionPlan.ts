@@ -169,10 +169,21 @@ export interface NutritionGlance {
 }
 
 /** Lo esencial del dia de un vistazo: cantidades y el momento clave segun la hora. Mismas cifras que `nutritionForDay`/`mealTimingPlan`. */
-export function nutritionGlance(dayType: NutritionDayType, slot: TrainingSlot, weightKg: number, isDouble: boolean): NutritionGlance {
+export function nutritionGlance(
+  dayType: NutritionDayType,
+  slot: TrainingSlot,
+  weightKg: number,
+  isDouble: boolean,
+  /** El entreno de hoy ya está hecho: la línea pasa de "antes" a "después". */
+  done = false,
+): NutritionGlance {
   const nutrition = nutritionForDay(dayType, weightKg);
   const carbBefore = round5(1 * weightKg);
   let keyLine: string;
+  if (done && dayType !== 'descanso') {
+    keyLine = `Ya entrenaste — en las 2 h siguientes una comida con ~${nutrition.proteinPerMealG} g de proteína y carbohidrato; cierra ahí lo que te falte de tu rango de hoy.`;
+    return { nutrition, keyLine };
+  }
   if (dayType === 'descanso') {
     keyLine = 'Sin entreno: reparte la proteína en 3-5 tomas y deja el carbohidrato en el punto bajo de tu rango.';
   } else if (slot === 'manana') {

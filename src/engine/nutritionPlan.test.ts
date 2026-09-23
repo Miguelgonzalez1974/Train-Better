@@ -130,6 +130,9 @@ describe('resumen del dia', () => {
     expect(nutritionGlance('normal', 'manana', 82, false).keyLine).toMatch(/mañana/);
     expect(nutritionGlance('normal', 'tarde', 82, false).keyLine).toMatch(/tarde/);
     expect(nutritionGlance('alto', 'tarde', 82, true).keyLine).toMatch(/solo agua/);
+    // Ya entrenado: la linea habla de "despues"; un dia de descanso no cambia.
+    expect(nutritionGlance('normal', 'tarde', 82, false, true).keyLine).toMatch(/Ya entrenaste/);
+    expect(nutritionGlance('descanso', 'tarde', 82, false, true).keyLine).toMatch(/Sin entreno/);
   });
 });
 

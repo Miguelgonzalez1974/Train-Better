@@ -31,12 +31,12 @@ const DAY_TYPE_DOT: Record<NutritionDayType, string> = {
  * que ese plan (`nutritionGlance`). El horario sale del día de la semana (sábado por la mañana, el resto por
  * la tarde — `defaultTrainingSlot`). Sin peso registrado no se puede calcular y no se muestra.
  */
-export function NutritionGlance({ session, weightKg }: { session: DailySession; weightKg: number }) {
+export function NutritionGlance({ session, weightKg, done = false }: { session: DailySession; weightKg: number; done?: boolean }) {
   const glance = useMemo(() => {
     const dayType = classifyNutritionDay(session);
     const slot = defaultTrainingSlot(getWeekdayIndex(new Date(`${session.date}T12:00:00`)));
-    return { dayType, ...nutritionGlance(dayType, slot, weightKg, Boolean(session.doubleWod)) };
-  }, [session, weightKg]);
+    return { dayType, ...nutritionGlance(dayType, slot, weightKg, Boolean(session.doubleWod), done) };
+  }, [session, weightKg, done]);
   const { nutrition, keyLine, dayType } = glance;
 
   return (

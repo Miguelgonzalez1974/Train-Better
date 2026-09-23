@@ -990,12 +990,20 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
         )}
       </div>
 
-      {!session.isRestDay && !alreadyCompletedToday && (
+      {/* Semáforo nutricional del día — también el día ya completado (la línea pasa a "después") y en descanso.
+          Con peso registrado sustituye al consejo genérico; sin peso no se puede calcular y queda el de siempre
+          (solo antes de entrenar: el de después ya va dentro del resumen de la sesión). */}
+      {latestWeightKg ? (
         <div className="mt-3">
-          {/* Con peso registrado, el semáforo del día sustituye al consejo genérico (sus cifras y la línea
-              del momento clave ya lo cubren); sin peso no se puede calcular y queda el consejo de siempre. */}
-          {latestWeightKg ? <NutritionGlance session={session} weightKg={latestWeightKg} /> : <NutritionTip session={session} variant="pre" />}
+          <NutritionGlance session={session} weightKg={latestWeightKg} done={alreadyCompletedToday} />
         </div>
+      ) : (
+        !session.isRestDay &&
+        !alreadyCompletedToday && (
+          <div className="mt-3">
+            <NutritionTip session={session} variant="pre" />
+          </div>
+        )
       )}
 
       {alreadyCompletedToday && todayHistoryEntry && (
