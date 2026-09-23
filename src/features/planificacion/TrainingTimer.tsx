@@ -150,6 +150,18 @@ function WakeLockStatusLine({
   );
 }
 
+/** Etiqueta sobre el círculo del reloj cerrado con las rondas ("R3", "3/10") — se ven sin abrir el panel. Solo muestra, no actúa: un toque accidental no debe sumar una ronda. */
+function RoundBadge({ text, borderClass }: { text: string; borderClass: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`absolute -right-1 -top-1 flex h-8 min-w-8 items-center justify-center rounded-full border-2 bg-brand-surface px-1.5 text-base font-bold text-white shadow-md ${borderClass}`}
+    >
+      {text}
+    </span>
+  );
+}
+
 /** Fila de ajuste ±paso para la configuración del Tabata (trabajo/descanso/rondas). */
 function TabataConfigRow({
   label,
@@ -598,10 +610,11 @@ export function TrainingTimer() {
       return (
         <button
           onClick={() => openTo('workout')}
-          aria-label="Reloj de entreno"
+          aria-label={`Reloj de entreno${rounds > 0 ? `, ronda ${rounds}` : ''}`}
           className="fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full bg-brand-neon px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
         >
           {mmss(workoutElapsed)}
+          {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-neon" />}
         </button>
       );
     }
@@ -615,6 +628,9 @@ export function TrainingTimer() {
           }`}
         >
           {emomDone ? 'Listo' : mmss(emomRemaining)}
+          {!emomDone && emomRound > 0 && (
+            <RoundBadge text={`${emomRound}/${emomTotalRounds}`} borderClass="border-brand-gold" />
+          )}
         </button>
       );
     }
@@ -628,6 +644,12 @@ export function TrainingTimer() {
           }`}
         >
           {tabataDone ? 'Listo' : mmss(tabataRemaining)}
+          {!tabataDone && tabataRound > 0 && (
+            <RoundBadge
+              text={`${tabataRound}/${tabataTotalRounds}`}
+              borderClass={tabataPhase === 'work' ? 'border-brand-orange' : 'border-brand-gold'}
+            />
+          )}
         </button>
       );
     }
@@ -638,6 +660,7 @@ export function TrainingTimer() {
         className="fixed bottom-24 right-4 z-40 flex h-20 w-20 items-center justify-center rounded-full bg-brand-surface text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
       >
         <Timer size={28} strokeWidth={2.25} />
+        {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-border" />}
       </button>
     );
   }
@@ -742,25 +765,28 @@ export function TrainingTimer() {
           <ScreenLockToggle screenLockOn={screenLockOn} supported={wakeLock.supported} onChange={setScreenLock} />
           <WakeLockStatusLine supported={wakeLock.supported} screenLockOn={screenLockOn} running={workoutRunning} held={wakeLock.held} />
 
-          <div className="my-2.5 flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Rondas</span>
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={() => setRounds((r) => Math.max(0, r - 1))}
-                aria-label="Restar ronda"
-                className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10"
-              >
-                <Minus size={12} strokeWidth={2.5} />
-              </button>
-              <span className="w-4 text-center text-sm font-bold tabular-nums text-white">{rounds}</span>
-              <button
-                onClick={() => setRounds((r) => r + 1)}
-                aria-label="Sumar ronda"
-                className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10"
-              >
-                <Plus size={12} strokeWidth={2.5} />
-              </button>
+          {/* Contador de rondas pensado para tocarlo en pleno WOD: cifra enorme y un "+1" grande (no hace
+              falta apuntar); el "−" queda pequeño y aparte, solo para corregir un toque de más. */}
+          <div className="my-2.5 flex gap-2">
+            <button
+              onClick={() => setRounds((r) => Math.max(0, r - 1))}
+              aria-label="Restar ronda"
+              className="flex w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400 transition-colors hover:bg-white/10 active:bg-white/15"
+            >
+              <Minus size={18} strokeWidth={2.5} />
+            </button>
+            <div className="flex flex-1 flex-col items-center justify-center rounded-xl bg-white/5 py-2" aria-live="polite">
+              <span className="text-6xl font-bold leading-none tabular-nums text-white">{rounds}</span>
+              <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">rondas</span>
             </div>
+            <button
+              onClick={() => setRounds((r) => r + 1)}
+              aria-label="Sumar ronda"
+              className="flex min-h-[4.5rem] flex-[1.3] flex-col items-center justify-center rounded-xl bg-brand-neon/15 text-brand-neon transition-colors hover:bg-brand-neon/25 active:bg-brand-neon/35"
+            >
+              <span className="text-3xl font-bold leading-none">+1</span>
+              <span className="mt-1 text-[10px] font-medium opacity-80">al acabar ronda</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -790,7 +816,7 @@ export function TrainingTimer() {
             </>
           ) : (
             <>
-              <p className={`text-center text-xs font-bold uppercase tracking-wide ${emomDone ? 'text-brand-orange' : 'text-brand-gold'}`}>
+              <p className={`text-center text-xl font-bold uppercase tracking-wide ${emomDone ? 'text-brand-orange' : 'text-brand-gold'}`}>
                 {emomDone ? '¡EMOM completo!' : `Minuto ${emomRound} de ${emomTotalRounds}`}
               </p>
               <p className={`text-center text-5xl font-bold tabular-nums ${emomDone ? 'text-brand-orange' : 'text-white'}`}>
@@ -839,7 +865,7 @@ export function TrainingTimer() {
               <p className={`text-center text-5xl font-bold tabular-nums ${tabataDone ? 'text-brand-orange' : 'text-white'}`}>
                 {tabataDone ? `${tabataTotalRounds}/${tabataTotalRounds}` : mmss(tabataRemaining)}
               </p>
-              <p className="mb-1 mt-1 text-center text-[11px] text-neutral-500">
+              <p className="mb-1 mt-1 text-center text-xl font-bold text-neutral-200">
                 {tabataDone ? 'Bien hecho.' : `Ronda ${tabataRound} de ${tabataTotalRounds}`}
               </p>
             </>
