@@ -3,14 +3,21 @@ import {
   analyzeWeightTrend,
   CARBS_G_PER_KG,
   classifyNutritionDay,
+  defaultTrainingSlot,
+  FIST_CARB_G,
   FOOD_REFERENCE,
+  formatServing,
+  handGuide,
   mealTimingPlan,
   NUTRITION_SOURCES,
   nutritionForDay,
+  nutritionGlance,
+  PALM_PROTEIN_G,
   PROTEIN_G_PER_KG,
   round5,
   SUPPLEMENTS,
   type NutritionDayType,
+  type TrainingSlot,
 } from './nutritionPlan';
 import { generateSessionForDate } from './generateSession';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
@@ -101,6 +108,64 @@ describe('plan alrededor del entreno', () => {
     expect(dbl).toMatch(/Entre las dos partes/);
     const normal = mealTimingPlan('tarde', 'normal', 80, false).find((s) => s.when === 'Durante')!.what;
     expect(normal).toMatch(/no hace falta/);
+  });
+});
+
+describe('horario por defecto', () => {
+  it('el sabado entrena por la mañana y el resto de dias por la tarde', () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map(defaultTrainingSlot)).toEqual(['tarde', 'tarde', 'tarde', 'tarde', 'tarde', 'manana', 'tarde']);
+  });
+});
+
+describe('resumen del dia', () => {
+  it('da las mismas cantidades que el plan completo y una linea segun el dia y la hora', () => {
+    for (const t of TYPES) {
+      for (const slot of ['manana', 'tarde'] as TrainingSlot[]) {
+        const g = nutritionGlance(t, slot, 82, false);
+        expect(g.nutrition).toEqual(nutritionForDay(t, 82));
+        expect(g.keyLine.length).toBeGreaterThan(20);
+      }
+    }
+    expect(nutritionGlance('descanso', 'tarde', 82, false).keyLine).toMatch(/Sin entreno/);
+    expect(nutritionGlance('normal', 'manana', 82, false).keyLine).toMatch(/mañana/);
+    expect(nutritionGlance('normal', 'tarde', 82, false).keyLine).toMatch(/tarde/);
+    expect(nutritionGlance('alto', 'tarde', 82, true).keyLine).toMatch(/solo agua/);
+  });
+});
+
+describe('guia por manos', () => {
+  it('las palmas y los puños del dia suman lo que pide el plan (±20 %), en cualquier peso, dia y horario', () => {
+    for (const kg of [60, 82, 95]) {
+      for (const t of TYPES) {
+        for (const slot of ['manana', 'tarde'] as TrainingSlot[]) {
+          const n = nutritionForDay(t, kg);
+          const meals = handGuide(t, slot, kg);
+          expect(meals).toHaveLength(4);
+          const mid = (r: { lo: number; hi: number }) => (r.lo + r.hi) / 2;
+          const protein = meals.reduce((s, m) => s + mid(m.palms), 0) * PALM_PROTEIN_G;
+          const carbs = meals.reduce((s, m) => s + mid(m.fists), 0) * FIST_CARB_G;
+          const pMid = (n.proteinG.min + n.proteinG.max) / 2;
+          const cMid = (n.carbsG.min + n.carbsG.max) / 2;
+          expect(Math.abs(protein - pMid) / pMid, `${kg} kg ${t} ${slot} proteina`).toBeLessThan(0.2);
+          expect(Math.abs(carbs - cMid) / cMid, `${kg} kg ${t} ${slot} carbohidrato`).toBeLessThan(0.2);
+        }
+      }
+    }
+  });
+
+  it('el dia de carga alta pide mas puños que el de descanso, y la toma de justo antes no lleva grasa', () => {
+    const fists = (t: NutritionDayType) => handGuide(t, 'tarde', 82).reduce((s, m) => s + (m.fists.lo + m.fists.hi) / 2, 0);
+    expect(fists('alto')).toBeGreaterThan(fists('normal'));
+    expect(fists('normal')).toBeGreaterThan(fists('descanso'));
+    expect(handGuide('normal', 'tarde', 82).find((m) => m.tag === '1-2 h antes')!.thumb).toBe(false);
+    expect(handGuide('normal', 'manana', 82).find((m) => m.tag === '1-2 h antes')!.thumb).toBe(false);
+  });
+
+  it('formatServing escribe la racion en español', () => {
+    expect(formatServing({ lo: 0.5, hi: 0.5 }, 'palma', 'palmas')).toBe('½ palma');
+    expect(formatServing({ lo: 1, hi: 1 }, 'palma', 'palmas')).toBe('1 palma');
+    expect(formatServing({ lo: 1, hi: 2 }, 'palma', 'palmas')).toBe('1-2 palmas');
+    expect(formatServing({ lo: 3, hi: 3 }, 'puño', 'puños')).toBe('3 puños');
   });
 });
 

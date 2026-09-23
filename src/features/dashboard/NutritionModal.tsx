@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Scale } from 'lucide-react';
+import { ChevronDown, ChevronRight, Grab, Hand, Scale, ThumbsUp } from 'lucide-react';
 import type { AthleteProfile, BodyweightEntry, DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { generateSessionForDate } from '../../engine/generateSession';
 import { resolveWeekLocks } from '../../engine/weekLocks';
@@ -8,12 +8,17 @@ import { getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import {
   analyzeWeightTrend,
   classifyNutritionDay,
+  defaultTrainingSlot,
+  FIST_CARB_G,
   FOOD_REFERENCE,
+  formatServing,
+  handGuide,
   mealTimingPlan,
   NUTRITION_DAY_LABEL,
   NUTRITION_DISCLAIMER,
   NUTRITION_SOURCES,
   nutritionForDay,
+  PALM_PROTEIN_G,
   SUPPLEMENTS,
   TRAINING_SLOT_LABEL,
   VEGETABLES_ADVICE,
@@ -21,26 +26,12 @@ import {
   type TrainingSlot,
   type WeightTrendStatus,
 } from '../../engine/nutritionPlan';
+import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
 import { Modal } from '../shell/Modal';
 
-const SLOT_KEY = 'train-better:nutrition-slot';
 const DAY_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
-/** Horario de entreno recordado en este dispositivo (solo una comodidad de pantalla); por defecto la tarde (4 de tus 6 dias). */
-function readSlot(): TrainingSlot {
-  try {
-    return localStorage.getItem(SLOT_KEY) === 'manana' ? 'manana' : 'tarde';
-  } catch {
-    return 'tarde';
-  }
-}
-
-const DAY_TYPE_STYLE: Record<NutritionDayType, string> = {
-  descanso: 'bg-white/5 text-neutral-400',
-  ligero: 'bg-emerald-500/15 text-emerald-300',
-  normal: 'bg-brand-gold/15 text-brand-gold',
-  alto: 'bg-brand-orange/20 text-brand-orange',
-};
+const HAND_TABS: NutritionDayType[] = ['descanso', 'ligero', 'normal', 'alto'];
+const HAND_TAB_LABEL: Record<NutritionDayType, string> = { descanso: 'Descanso', ligero: 'Ligero', normal: 'Normal', alto: 'Alto' };
 
 const TREND_STYLE: Record<WeightTrendStatus, string> = {
   'sin-datos': 'text-neutral-400',
@@ -72,6 +63,64 @@ function Section({ title, children, defaultOpen = false }: { title: string; chil
   );
 }
 
+/**
+ * Guía por manos: palmas de proteína, puños de carbohidrato y pulgares de grasa por comida, según el tipo de
+ * día y la hora del entreno — para comer sin gramos ni báscula. Las cifras salen del mismo plan (`handGuide`);
+ * la equivalencia de la mano es APROXIMADA y se le dice al atleta.
+ */
+function HandGuide({
+  slot,
+  kg,
+  activeType,
+  onChange,
+}: {
+  slot: TrainingSlot;
+  kg: number;
+  activeType: NutritionDayType;
+  onChange: (t: NutritionDayType) => void;
+}) {
+  const meals = handGuide(activeType, slot, kg);
+  return (
+    <div>
+      <p className="mb-2 text-sm font-semibold text-white">Guía por manos</p>
+      <div className="mb-2 flex gap-0.5 rounded-lg bg-white/5 p-0.5" role="tablist" aria-label="Tipo de día">
+        {HAND_TABS.map((t) => (
+          <button
+            key={t}
+            role="tab"
+            aria-selected={activeType === t}
+            onClick={() => onChange(t)}
+            className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+              activeType === t ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            {HAND_TAB_LABEL[t]}
+          </button>
+        ))}
+      </div>
+      <ul className="flex flex-col divide-y divide-white/5 rounded-xl bg-brand-surfaceMuted/60 px-3">
+        {meals.map((m) => (
+          <li key={m.name} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
+            <div className="w-24 shrink-0">
+              <p className="text-sm font-semibold text-white">{m.name}</p>
+              {m.tag && <p className="text-[11px] text-neutral-500">{m.tag}</p>}
+            </div>
+            <div className="flex flex-wrap gap-1.5 text-xs text-neutral-200">
+              <span className="flex items-center gap-1 rounded-md bg-red-400/10 px-2 py-1"><Hand size={13} className="text-red-300" aria-hidden="true" />{formatServing(m.palms, 'palma', 'palmas')}</span>
+              <span className="flex items-center gap-1 rounded-md bg-brand-gold/10 px-2 py-1"><Grab size={13} className="text-brand-gold" aria-hidden="true" />{formatServing(m.fists, 'puño', 'puños')}</span>
+              {m.thumb && <span className="flex items-center gap-1 rounded-md bg-emerald-400/10 px-2 py-1"><ThumbsUp size={13} className="text-emerald-300" aria-hidden="true" />1 pulgar</span>}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[11px] leading-relaxed text-neutral-500">
+        Palma = proteína (pollo, pescado, 2 huevos, un yogur; ≈ {PALM_PROTEIN_G} g). Puño = carbohidrato cocinado (arroz, pasta, patata, pan, fruta;
+        ≈ {FIST_CARB_G} g). Pulgar = grasa (aceite, frutos secos); no en la toma de justo antes de entrenar. Es aproximado: tu mano es tu medida.
+      </p>
+    </div>
+  );
+}
+
 interface NutritionModalProps {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
@@ -86,7 +135,8 @@ interface NutritionModalProps {
  * tendencia del peso registrado y contenido de apoyo. Solo lee — nunca escribe en el perfil.
  */
 export function NutritionModal({ profile, history, bodyweightLog, onClose, onOpenBodyweight }: NutritionModalProps) {
-  const [slot, setSlot] = useState<TrainingSlot>(readSlot);
+  // Horario por defecto según el día (sábado por la mañana, el resto por la tarde); el selector lo cambia a mano.
+  const [slot, setSlot] = useState<TrainingSlot>(() => defaultTrainingSlot(getWeekdayIndex(new Date())));
   const todayIso = toLocalIsoDate(new Date());
   const latest = useMemo(() => [...bodyweightLog].sort((a, b) => a.date.localeCompare(b.date)).pop(), [bodyweightLog]);
 
@@ -109,14 +159,7 @@ export function NutritionModal({ profile, history, bodyweightLog, onClose, onOpe
   const highStrain = useMemo(() => computeAcwr(history).zone === 'alta' || Boolean(today.session.deloadReason), [history, today]);
   const trend = useMemo(() => analyzeWeightTrend(bodyweightLog, todayIso, { highStrain }), [bodyweightLog, todayIso, highStrain]);
 
-  function chooseSlot(next: TrainingSlot) {
-    setSlot(next);
-    try {
-      localStorage.setItem(SLOT_KEY, next);
-    } catch {
-      /* la preferencia es solo una comodidad: si no se puede guardar, se usa en esta sesion */
-    }
-  }
+  const [handTab, setHandTab] = useState<NutritionDayType | null>(null);
 
   if (!latest) {
     return (
@@ -186,11 +229,11 @@ export function NutritionModal({ profile, history, bodyweightLog, onClose, onOpe
               {(['manana', 'tarde'] as TrainingSlot[]).map((s) => (
                 <button
                   key={s}
-                  onClick={() => chooseSlot(s)}
+                  onClick={() => setSlot(s)}
                   aria-pressed={slot === s}
                   className={`px-2.5 py-1.5 font-semibold transition-colors ${slot === s ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-white'}`}
                 >
-                  {s === 'manana' ? '9:00' : '17:00'}
+                  {s === 'manana' ? '10:00' : '16-17 h'}
                 </button>
               ))}
             </div>
@@ -205,6 +248,9 @@ export function NutritionModal({ profile, history, bodyweightLog, onClose, onOpe
             ))}
           </ol>
         </div>
+
+        {/* Guía por manos */}
+        <HandGuide slot={slot} kg={kg} activeType={handTab ?? today.type} onChange={setHandTab} />
 
         {/* Esta semana */}
         <div>

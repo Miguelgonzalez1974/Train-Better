@@ -61,6 +61,7 @@ import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
 import { NutritionTip } from './NutritionTip';
+import { NutritionGlance } from './NutritionGlance';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { WodResultField } from './WodResultField';
@@ -281,6 +282,12 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
   /** Misma percepción de esfuerzo, recortada para `SessionBlockCard`: ahí el check-in ya vive debajo
    * de su levantamiento, así que `index`/`movementName` no hacen falta. */
+  /** Peso más reciente del perfil — para el semáforo nutricional del día (sin peso no se muestra). */
+  const latestWeightKg = useMemo(
+    () => [...(profile.bodyweightLog ?? [])].sort((a, b) => a.date.localeCompare(b.date)).pop()?.kg ?? null,
+    [profile.bodyweightLog],
+  );
+
   const sessionCardFeedbackByIndex = useMemo(
     () =>
       new Map(
@@ -985,7 +992,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
       {!session.isRestDay && !alreadyCompletedToday && (
         <div className="mt-3">
-          <NutritionTip session={session} variant="pre" />
+          {/* Con peso registrado, el semáforo del día sustituye al consejo genérico (sus cifras y la línea
+              del momento clave ya lo cubren); sin peso no se puede calcular y queda el consejo de siempre. */}
+          {latestWeightKg ? <NutritionGlance session={session} weightKg={latestWeightKg} /> : <NutritionTip session={session} variant="pre" />}
         </div>
       )}
 

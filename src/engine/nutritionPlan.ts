@@ -104,7 +104,16 @@ export function nutritionForDay(dayType: NutritionDayType, weightKg: number): Da
 
 export type TrainingSlot = 'manana' | 'tarde';
 
-export const TRAINING_SLOT_LABEL: Record<TrainingSlot, string> = { manana: 'Por la mañana (9:00)', tarde: 'Por la tarde (17:00)' };
+export const TRAINING_SLOT_LABEL: Record<TrainingSlot, string> = { manana: 'Por la mañana (10:00)', tarde: 'Por la tarde (16:00-17:00)' };
+
+/**
+ * Horario habitual del atleta (indice de dia con lunes = 0): sabado a las 10:00, el resto de los dias por la
+ * tarde (16:00 o 17:00 — con la regla "3-4 h antes / 1-2 h antes" esa hora de diferencia no cambia el plan).
+ * Es la opcion por defecto; el selector del plan permite cambiarla a mano.
+ */
+export function defaultTrainingSlot(weekdayIndex: number): TrainingSlot {
+  return weekdayIndex === 5 ? 'manana' : 'tarde';
+}
 
 export interface MealStep {
   when: string;
@@ -135,7 +144,7 @@ export function mealTimingPlan(slot: TrainingSlot, dayType: NutritionDayType, we
 
   if (slot === 'manana') {
     return [
-      { when: 'Antes (1-2 h antes, ~7:00-8:00)', what: `Desayuno ligero con ~${carbBefore} g de carbohidrato (avena, tostada, fruta) y una toma de proteína (huevos, yogur, jamón). Bebe ${drinkBefore} de agua en las 2-4 h previas. Si solo tienes 30-60 min: algo pequeño y fácil, como un plátano.` },
+      { when: 'Antes (1-2 h antes, ~8:00-9:00)', what: `Desayuno ligero con ~${carbBefore} g de carbohidrato (avena, tostada, fruta) y una toma de proteína (huevos, yogur, jamón). Bebe ${drinkBefore} de agua en las 2-4 h previas. Si solo tienes 30-60 min: algo pequeño y fácil, como un plátano.` },
       { when: 'Durante', what: during },
       { when: 'Después (en las 2 h siguientes)', what: `Una comida con ~${proteinServing} g de proteína (carne, pescado, huevos, lácteos, legumbres) y carbohidrato (arroz, patata, pan, fruta). Aquí va buena parte del carbohidrato del día.` },
       { when: 'Resto del día', what: 'Reparte el resto de la proteína en 3-5 tomas y cierra el carbohidrato de tu rango. Como entrenas temprano, el carbohidrato pesa más en el desayuno y la comida.' },
@@ -143,12 +152,115 @@ export function mealTimingPlan(slot: TrainingSlot, dayType: NutritionDayType, we
     ];
   }
   return [
-    { when: 'Comida (3-4 h antes, ~13:00-14:00)', what: `Comida completa con carbohidrato (arroz, pasta, patata) y proteína. Es la comida que sostiene el entreno de las 17:00.` },
-    { when: 'Justo antes (1-2 h antes, ~15:30-16:00)', what: `Si tienes hambre o entrenas fuerte, algo ligero de carbohidrato (fruta, tostada; hasta ~${carbBefore} g). Bebe ${drinkBefore} de agua en las 2-4 h previas.` },
+    { when: 'Comida (3-4 h antes, ~12:30-13:30)', what: `Comida completa con carbohidrato (arroz, pasta, patata) y proteína. Es la comida que sostiene el entreno de la tarde.` },
+    { when: 'Justo antes (1-2 h antes, ~14:30-15:30)', what: `Si tienes hambre o entrenas fuerte, algo ligero de carbohidrato (fruta, tostada; hasta ~${carbBefore} g). Bebe ${drinkBefore} de agua en las 2-4 h previas.` },
     { when: 'Durante', what: during },
-    { when: 'Después (en las 2 h siguientes, ~19:00)', what: `Cena con ~${proteinServing} g de proteína y carbohidrato (arroz, patata, pan). Como el siguiente entreno suele quedar a más de 8 h, no hace falta forzar la recarga.` },
-    { when: 'Cafeína', what: `${caffeine} Con entreno a las 17:00, la última dosis efectiva es a media tarde.` },
+    { when: 'Después (en las 2 h siguientes, ~18:30-19:30)', what: `Cena con ~${proteinServing} g de proteína y carbohidrato (arroz, patata, pan). Como el siguiente entreno suele quedar a más de 8 h, no hace falta forzar la recarga.` },
+    { when: 'Cafeína', what: `${caffeine} Con entreno a las 16:00-17:00, la última dosis efectiva es a primera hora de la tarde.` },
   ];
+}
+
+// ---------- Resumen del dia (tarjeta de hoy) ----------
+
+export interface NutritionGlance {
+  nutrition: DayNutrition;
+  /** Una sola linea con lo mas importante del dia alrededor del entreno. */
+  keyLine: string;
+}
+
+/** Lo esencial del dia de un vistazo: cantidades y el momento clave segun la hora. Mismas cifras que `nutritionForDay`/`mealTimingPlan`. */
+export function nutritionGlance(dayType: NutritionDayType, slot: TrainingSlot, weightKg: number, isDouble: boolean): NutritionGlance {
+  const nutrition = nutritionForDay(dayType, weightKg);
+  const carbBefore = round5(1 * weightKg);
+  let keyLine: string;
+  if (dayType === 'descanso') {
+    keyLine = 'Sin entreno: reparte la proteína en 3-5 tomas y deja el carbohidrato en el punto bajo de tu rango.';
+  } else if (slot === 'manana') {
+    keyLine = `Entrenas por la mañana — desayuno ligero 1-2 h antes (~${carbBefore} g de carbohidrato) y una buena comida después.`;
+  } else {
+    keyLine = `Entrenas por la tarde — comida completa con carbohidrato 3-4 h antes y algo ligero 1-2 h antes (hasta ~${carbBefore} g).`;
+  }
+  if (isDouble && dayType !== 'descanso') keyLine += ' Entre las dos partes, solo agua.';
+  return { nutrition, keyLine };
+}
+
+// ---------- Guia por manos ----------
+
+/**
+ * Equivalencias de la mano — APROXIMADAS (la mano de cada uno es distinta): una palma de proteina cocinada
+ * ≈ 27 g de proteina (punto medio de la pechuga de 100 g ≈ 30 g y la lata de atun ≈ 25 g de `FOOD_REFERENCE`);
+ * un puño de carbohidrato cocinado ≈ 35 g (≈ 120-125 g de arroz o pasta cocidos, a ≈ 28-30 g por 100 g). No salen
+ * de un posicionamiento: son una traduccion practica de las cantidades del plan, y asi se le dice al atleta.
+ */
+export const PALM_PROTEIN_G = 27;
+export const FIST_CARB_G = 35;
+
+export interface HandMeal {
+  name: string;
+  /** Cuando cae respecto al entreno (vacio en los dias sin entreno). */
+  tag: string;
+  /** Palmas de proteina y puños de carbohidrato, en medios (0.5 = media). */
+  palms: { lo: number; hi: number };
+  fists: { lo: number; hi: number };
+  /** Un pulgar de grasa — no se suma en la toma de justo antes de entrenar. */
+  thumb: boolean;
+}
+
+interface MealShape {
+  name: string;
+  tag: string;
+  protein: number;
+  carbs: number;
+  thumb: boolean;
+}
+
+// Reparto del dia en 4 comidas (suma 1 en cada columna). La toma de antes de entrenar es pequeña en proteina
+// y sin grasa (digiere mas lento); el grueso del carbohidrato cae alrededor del entreno.
+const SHAPES: Record<'descanso' | TrainingSlot, MealShape[]> = {
+  descanso: [
+    { name: 'Desayuno', tag: '', protein: 0.25, carbs: 0.25, thumb: true },
+    { name: 'Comida', tag: '', protein: 0.3, carbs: 0.3, thumb: true },
+    { name: 'Merienda', tag: '', protein: 0.15, carbs: 0.15, thumb: false },
+    { name: 'Cena', tag: '', protein: 0.3, carbs: 0.3, thumb: true },
+  ],
+  tarde: [
+    { name: 'Desayuno', tag: '', protein: 0.25, carbs: 0.22, thumb: true },
+    { name: 'Comida', tag: '3-4 h antes', protein: 0.3, carbs: 0.3, thumb: true },
+    { name: 'Merienda', tag: '1-2 h antes', protein: 0.1, carbs: 0.13, thumb: false },
+    { name: 'Cena', tag: 'post-entreno', protein: 0.35, carbs: 0.35, thumb: true },
+  ],
+  manana: [
+    { name: 'Desayuno', tag: '1-2 h antes', protein: 0.15, carbs: 0.18, thumb: false },
+    { name: 'Comida', tag: 'post-entreno', protein: 0.35, carbs: 0.32, thumb: true },
+    { name: 'Merienda', tag: '', protein: 0.15, carbs: 0.15, thumb: false },
+    { name: 'Cena', tag: '', protein: 0.35, carbs: 0.35, thumb: true },
+  ],
+};
+
+/** Redondea a medios y devuelve el rango entero mas cercano ("2-3" si cae en medio), sin bajar de media unidad. */
+function halves(x: number): { lo: number; hi: number } {
+  const v = Math.max(0.5, Math.round(x * 2) / 2);
+  if (Number.isInteger(v) || v === 0.5) return { lo: v, hi: v };
+  return { lo: Math.floor(v), hi: Math.ceil(v) };
+}
+
+/** Raciones por comida en palmas/puños/pulgares, calculadas desde las mismas cantidades del dia (`nutritionForDay`). */
+export function handGuide(dayType: NutritionDayType, slot: TrainingSlot, weightKg: number): HandMeal[] {
+  const n = nutritionForDay(dayType, weightKg);
+  const proteinMid = (n.proteinG.min + n.proteinG.max) / 2;
+  const carbsMid = (n.carbsG.min + n.carbsG.max) / 2;
+  return SHAPES[dayType === 'descanso' ? 'descanso' : slot].map((m) => {
+    const palms = halves((proteinMid * m.protein) / PALM_PROTEIN_G);
+    const fists = halves((carbsMid * m.carbs) / FIST_CARB_G);
+    return { name: m.name, tag: m.tag, palms, fists, thumb: m.thumb };
+  });
+}
+
+/** "1 palma", "2 palmas", "1-2 palmas", "½ palma" — para pintar una racion en español. */
+export function formatServing(range: { lo: number; hi: number }, singular: string, plural: string): string {
+  const fmt = (v: number) => (v === 0.5 ? '½' : String(v));
+  const text = range.lo === range.hi ? fmt(range.lo) : `${fmt(range.lo)}-${fmt(range.hi)}`;
+  return `${text} ${range.hi <= 1 ? singular : plural}`;
 }
 
 // ---------- Tendencia del peso ----------
