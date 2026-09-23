@@ -170,4 +170,33 @@ describe('WOD de referencia bloqueado que choca con el aviso', () => {
     const other = { ...s, wodLockSkipped: undefined, genVersion: SESSION_GEN_VERSION };
     expect(isCachedSessionStale(other, lock)).toBe(true);
   });
+
+  it('skill: ni con el aviso activo ni en la primera semana de vuelta progresiva sale un pistol (o comba) con objetivo de pistol', () => {
+    // El skill es peso corporal: en la vuelta progresiva no hay kg que recortar, asi que sus patrones se
+    // siguen evitando la primera semana tras caducar el aviso (antes salia el pistol al dia siguiente).
+    const goals = [
+      { id: 'g1', type: 'mejorar-gimnasticos', movementId: 'pistol-squat', targetDate: '2026-12-01', emphasis: 'moderado', createdAt: '2026-08-01' },
+    ] as never;
+    const flag: PainFlag = { id: 'k', area: 'rodilla', createdDate: '2026-09-10', until: '2026-09-20' };
+    const profile = makeProfile({
+      trainingDaysPerWeek: 6,
+      macrocycles: [makeMacro({ id: 'a', startDate: '2026-09-14', endDate: '2027-03-01' })],
+      painFlags: [flag],
+      goals,
+    });
+    const bad: string[] = [];
+    let skillDays = 0;
+    // Del 15/9 (aviso activo) al 26/9 (6 dias tras caducar: aun en la primera semana de vuelta).
+    for (const d of consecutiveDates('2026-09-15', 12)) {
+      const s = generateSessionForDate(profile, [], d, profile.goals);
+      const skill = s.blocks.filter((b) => b.block === 'skill');
+      if (skill.length > 0) skillDays++;
+      for (const b of skill) {
+        const m = getMovementById(b.movementId);
+        if (m && (avoidsMovement(AVOIDED, m) || /pistol/.test(b.movementId))) bad.push(`${s.date}: ${b.movementId}`);
+      }
+    }
+    expect(skillDays, 'nunca salio skill').toBeGreaterThan(0);
+    expect(bad).toEqual([]);
+  });
 });

@@ -2958,6 +2958,9 @@ function resolveSkillProgression(
   return { index, total, rungPhase, driver };
 }
 
+/** Factor de la vuelta progresiva por debajo del cual el skill de peso corporal sigue evitando el patron (ver `generateDailySession`). */
+const SKILL_REINTRO_MIN_FACTOR = 0.8;
+
 function buildSkillBlock(
   history: SessionHistoryEntry[],
   goals: Goal[],
@@ -2981,7 +2984,7 @@ function buildSkillBlock(
       const anchorMovement = getMovementById(anchor.movementId);
 
       // El escalon de hoy toca un patron con aviso de molestia -> cae a la rotacion normal de abajo.
-      if (anchorMovement && !avoidedPatterns.has(anchorMovement.pattern)) {
+      if (anchorMovement && !avoidsMovement(avoidedPatterns, anchorMovement)) {
         const rb = SKILL_RUNG_BLOCKS[rungPhase];
         const driverNote =
           driver === 'sesiones'
@@ -3020,7 +3023,7 @@ function buildSkillBlock(
         }
         const usable = rotation.filter((c) => {
           const m = getMovementById(c.movementId);
-          return Boolean(m) && !avoidedPatterns.has(m!.pattern);
+          return Boolean(m) && !avoidsMovement(avoidedPatterns, m!);
         });
 
         const entries: SessionBlockResult[] = [
@@ -3926,7 +3929,12 @@ export function generateDailySession(
       )
     : [];
   const accessoryBlock = [...accessoryWork, ...armsWork, ...coreWork];
-  const skillBlock = skillToday ? buildSkillBlock(history, goals, avoidedPatterns, date) : [];
+  // Skill = peso corporal: no hay kg que recortar en la vuelta progresiva, asi que en su primera semana
+  // (factor < 0.8) los patrones que vuelven se siguen evitando — un pistol o una comba al dia siguiente de
+  // caducar el aviso de rodilla no es una "carga al 60%".
+  const skillAvoided = new Set<MovementPattern>(avoidedPatterns);
+  for (const [pattern, factor] of painReintro) if (factor < SKILL_REINTRO_MIN_FACTOR) skillAvoided.add(pattern);
+  const skillBlock = skillToday ? buildSkillBlock(history, goals, skillAvoided, date) : [];
   // El especifico del WOD se calienta con los movimientos reales de hoy (rampa progresiva), no con
   // estiramientos genericos — ver `buildWarmupBlock`. En dia de benchmark el WOD es una pieza unica
   // conocida, asi que no hay rampa y cae al calentamiento clasico.
