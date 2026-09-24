@@ -6,6 +6,7 @@ import type { TabId } from './features/shell/navItems';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Objetivos } from './features/objetivos/Objetivos';
 import { Planificacion } from './features/planificacion/Planificacion';
+import { Nutricion } from './features/nutricion/Nutricion';
 import { Login } from './features/auth/Login';
 import { useSession } from './features/auth/useSession';
 import { isSupabaseConfigured } from './lib/supabaseClient';
@@ -68,6 +69,7 @@ export default function App() {
           />
         )}
         {activeTab === 'planificacion' && <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} />}
+        {activeTab === 'nutricion' && <Nutricion />}
         {activeTab === 'objetivos' && <Objetivos />}
       </main>
       <BottomNav active={activeTab} onChange={setActiveTab} />
