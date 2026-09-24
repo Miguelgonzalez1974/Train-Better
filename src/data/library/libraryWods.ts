@@ -1,4 +1,5 @@
 import raw from './pushjerkWods.json';
+import { usesExcludedMovement } from '../movements/excluded';
 
 /**
  * Biblioteca de WODs reales (programación de PushJerk, 2014-2026) para el coach. Cada WOD conserva su
@@ -22,9 +23,13 @@ export interface LibraryWod {
   original: string;
 }
 
-export const libraryWods: LibraryWod[] = raw as LibraryWod[];
+const allLibraryWods = raw as LibraryWod[];
 
-const byId = new Map(libraryWods.map((w) => [w.id, w]));
+/** WODs programables: sin los que llevan un movimiento excluido por el atleta (pistol — ver `data/movements/excluded.ts`). */
+export const libraryWods: LibraryWod[] = allLibraryWods.filter((w) => !usesExcludedMovement(w.lines.map(([id]) => id), w.original));
+
+// La búsqueda por id conserva todos: una sesión ya guardada que citase un WOD descartado sigue resolviéndose.
+const byId = new Map(allLibraryWods.map((w) => [w.id, w]));
 
 export function getLibraryWod(id: string): LibraryWod | undefined {
   return byId.get(id);

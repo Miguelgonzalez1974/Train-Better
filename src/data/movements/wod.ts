@@ -175,17 +175,6 @@ export const wodMovements: Movement[] = [
     tags: ['bodyweight', 'gimnasia'],
   },
   {
-    id: 'pistol-squat',
-    name: 'Pistol Squat',
-    blocks: ['wod', 'skill'],
-    pattern: 'squat',
-    equipment: [],
-    primaryMuscles: ['cuadriceps', 'gluteos', 'equilibrio'],
-    standard: 'Sentadilla a una pierna con la pierna libre extendida al frente, cadera por debajo de la rodilla y extension completa al subir.',
-    scaling: { easier: ['box-pistol', 'assisted-pistol'], harder: [] },
-    tags: ['bodyweight', 'gimnasia', 'unilateral'],
-  },
-  {
     id: 'box-jump',
     name: 'Box Jump',
     blocks: ['wod'],
@@ -240,7 +229,7 @@ export const wodMovements: Movement[] = [
     primaryMuscles: ['cuadriceps', 'gluteos'],
     standard: 'Sentadilla a peso corporal con el pliegue de cadera bajando por debajo de la rodilla y extension completa arriba.',
     why: 'Repite el patron de sentadilla sin peso, para grabar la posicion antes de que el WOD o la fuerza le sumen carga.',
-    scaling: { easier: ['box-squat'], harder: ['pistol-squat'] },
+    scaling: { easier: ['box-squat'], harder: [] },
     tags: ['bodyweight', 'benchmark'],
   },
   {

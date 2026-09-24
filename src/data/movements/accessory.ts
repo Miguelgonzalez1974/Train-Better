@@ -53,7 +53,7 @@ export const accessoryMovements: Movement[] = [
     equipment: ['caja o banco bajo (opcional)'],
     primaryMuscles: ['cuadriceps', 'gluteos', 'equilibrio'],
     standard: 'Sentadilla a una pierna alcanzando a tocar el suelo o una diana baja detras del cuerpo con la mano contraria, sin apoyar la pierna libre.',
-    scaling: { easier: ['step-up'], harder: ['pistol-squat'] },
+    scaling: { easier: ['step-up'], harder: [] },
     tags: ['unilateral', 'equilibrio'],
   },
   {

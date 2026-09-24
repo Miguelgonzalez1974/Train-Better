@@ -28,7 +28,6 @@ const REP_SECONDS: Record<string, number> = {
   'ring-muscle-up': 6,
   'wall-walk': 8,
   'rope-climb': 12,
-  'pistol-squat': 2.4,
   'box-jump': 2.3,
   'box-jump-over': 2.6,
   burpee: 3.8,

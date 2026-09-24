@@ -109,15 +109,6 @@ export const SKILL_PROGRESSIONS: SkillProgression[] = [
     ],
   },
   {
-    targetMovementId: 'pistol-squat',
-    targetName: 'Pistol (sentadilla a una pierna)',
-    steps: [
-      { movementId: 'box-pistol-squat', cue: 'Baja a un cajón alto a una pierna y sube sin impulso; baja el cajón con el tiempo.' },
-      { movementId: 'pistol-squat-progression', cue: 'Pistol asistido (banda o rig): rango completo y control abajo.' },
-      { movementId: 'pistol-squat', cue: 'Pistol libre: talón pegado, pierna libre extendida, sin rebote abajo.' },
-    ],
-  },
-  {
     targetMovementId: 'double-under',
     targetName: 'Double under',
     steps: [

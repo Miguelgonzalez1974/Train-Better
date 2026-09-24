@@ -1,5 +1,7 @@
 import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
 
+import { isExcludedMovement } from '../movements/excluded';
+
 const PROFILE_KEY = 'train-better:profile';
 import { historyStamp, painStamp } from './historyStamp';
 
@@ -118,6 +120,13 @@ function migrateProfile(raw: AthleteProfile & { mesocycleStartDate?: string }): 
   // dentro del perfil una sola vez para no perder lo que ya hubiera cacheado este dispositivo.
   if (!raw.sessionCache) {
     profile.sessionCache = pruneSessionCache(readJson<Record<string, DailySession>>(LEGACY_SESSION_CACHE_KEY, {}));
+  }
+
+  // Un objetivo de gimnásticos sobre un movimiento excluido (pistol) ya no tiene progresión que programar: se quita
+  // para que no quede un objetivo huérfano en Objetivos. `mergeProfile` puede volver a traerlo de otro dispositivo; se
+  // limpia otra vez al leer.
+  if (profile.goals?.some((g) => g.movementId && isExcludedMovement(g.movementId))) {
+    profile.goals = profile.goals.filter((g) => !(g.movementId && isExcludedMovement(g.movementId)));
   }
 
   return profile;

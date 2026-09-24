@@ -7,6 +7,7 @@ import {
   olyMovements,
   skillMovements,
 } from '../data/movements';
+import { usesExcludedMovement } from '../data/movements/excluded';
 import { getSkillProgressionFor, skillProgressionStepAt, type SkillProgression } from '../data/movements/skillProgressions';
 import { benchmarkHasExplicitScheme } from '../data/movements/benchmarkCompleteness';
 import type {
@@ -1641,7 +1642,8 @@ function findRetestCandidate(
     const benchmarkId = entry.movementIds.find((id) => id.startsWith('benchmark:'))?.replace('benchmark:', '');
     if (!benchmarkId) continue;
     const wod = benchmarkWorkouts.find((w) => w.id === benchmarkId);
-    if (!wod || wod.category === 'custom') continue;
+    // Un benchmark con un movimiento excluido (pistol) no se vuelve a servir, así que tampoco cuenta como retest pendiente.
+    if (!wod || wod.category === 'custom' || usesExcludedMovement(wod.movements, wod.format)) continue;
     lastAttempt.set(benchmarkId, { date: entry.date, result: entry.wodResult });
   }
   if (lastAttempt.size === 0) return null;
@@ -1966,7 +1968,7 @@ function buildWodBlock(
     // Aviso de molestia: un benchmark es una pieza unica de formato fijo, asi que si lleva algo que el aviso
     // evita (comba, carrera, saltos, sentadillas con rodilla...) no se sirve — ni el bloqueado, ni el retest, ni
     // el sembrado —: se elige otro, y si ninguno vale, hoy es un WOD generado que ya respeta el aviso.
-    const isUsable = (w: BenchmarkWorkout) => !benchmarkConflictsWithPain(w, painAvoided, getMovementById);
+    const isUsable = (w: BenchmarkWorkout) => !usesExcludedMovement(w.movements, w.format) && !benchmarkConflictsWithPain(w, painAvoided, getMovementById);
     const rawRetest = !isTaper ? findRetestCandidate(history) : null;
     const retestCandidate = rawRetest && isUsable(rawRetest.wod) ? rawRetest : null;
     const isRetestDue = retestCandidate ? benchmarkDaysSince(history, retestCandidate.prevDate) >= RETEST_INTERVAL : false;
@@ -3241,7 +3243,6 @@ function strengthProgramCore(
 const RECOVERY_SKILL_IDS = [
   'handstand-walk-progression',
   'l-sit-progression',
-  'pistol-squat-progression',
   'double-under-practice',
   'rope-climb-technique',
 ];

@@ -112,10 +112,6 @@ export const SCALING_GUIDE: Record<string, ScalingOption[]> = {
     { label: 'Burpees — la mitad de reps', movementId: 'burpee', perRepRatio: 0.5 },
   ],
   'burpee-box-jump-over': [{ label: 'Burpees (mismas reps)', movementId: 'burpee' }],
-  'pistol-squat': [
-    { label: 'Air Squats — 2 por cada pistol', movementId: 'air-squat', perRepRatio: 2 },
-    { label: 'Air Squats (mismas reps)', movementId: 'air-squat' },
-  ],
   'legless-rope-climb': [
     { label: 'Rope Climb con piernas (mismas reps)', movementId: 'rope-climb' },
     { label: '4-5 Strict Knees-to-Elbows', movementId: 'knees-to-elbow', reps: '4-5' },
