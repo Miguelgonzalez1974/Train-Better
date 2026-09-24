@@ -192,6 +192,21 @@ export interface ReadinessCheck {
   motivation: MotivationLevel;
 }
 
+/**
+ * Preferencias del módulo de nutrición (menús del día/semana). Todo opcional: sin ellas se usa el catálogo
+ * entero y el horario por defecto. Ver `src/engine/mealPlan.ts`.
+ */
+export interface NutritionPrefs {
+  /** Ids del catálogo (`data/nutrition/foods.ts`) que el atleta no quiere ver en sus menús. */
+  excludedFoodIds?: string[];
+  /** Cambios de alimento hechos a mano: clave `fecha|comida|hueco` → id del alimento elegido. */
+  swaps?: Record<string, string>;
+  /** Comidas marcadas como hechas, por fecha ISO (índices 0-4 en el orden del día). */
+  doneMeals?: Record<string, number[]>;
+  /** Hora de entreno por día de la semana (lunes = "0"). Sin valor: sábado 10:00, el resto 16:00. */
+  trainingHours?: Record<string, number>;
+}
+
 export interface AthleteProfile {
   prs: PersonalRecords;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
@@ -261,6 +276,8 @@ export interface AthleteProfile {
    * dispositivo que genera el día "gana" y el otro la hereda al sincronizar en vez de generar la suya.
    */
   sessionCache?: Record<string, DailySession>;
+  /** Preferencias del módulo de nutrición — ver [[NutritionPrefs]]. */
+  nutritionPrefs?: NutritionPrefs;
   /**
    * Movimiento de fuerza/oly (y, si aplica, accesorio por rol / benchmark del día de test) bloqueado
    * para ese día, por fecha ISO — decidido una vez al planificar la semana (ver `planWeekLocks` en

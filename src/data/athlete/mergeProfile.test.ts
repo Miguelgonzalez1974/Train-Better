@@ -236,6 +236,37 @@ describe('mergeProfile — config: gana el local', () => {
     const merged = mergeProfile(remote, local);
     expect(merged.weeklyLocks?.['2026-03-02']?.strengthMovementId).toBe('front-squat');
   });
+
+  it('nutritionPrefs: une los cambios de alimento y las comidas hechas; los excluidos y las horas del local mandan', () => {
+    const remote = {
+      ...base(),
+      nutritionPrefs: {
+        excludedFoodIds: ['salmon'],
+        swaps: { '2026-03-02|cena|carb': 'arroz' },
+        doneMeals: { '2026-03-02': [0, 1] },
+        trainingHours: { '0': 17 },
+      },
+    };
+    const local = {
+      ...base(),
+      nutritionPrefs: {
+        excludedFoodIds: ['salmon', 'skyr'],
+        swaps: { '2026-03-03|comida|carb': 'pasta' },
+        doneMeals: { '2026-03-02': [0] },
+        trainingHours: { '1': 16 },
+      },
+    };
+    const merged = mergeProfile(remote, local).nutritionPrefs;
+    expect(merged?.excludedFoodIds).toEqual(['salmon', 'skyr']);
+    expect(merged?.swaps).toEqual({ '2026-03-02|cena|carb': 'arroz', '2026-03-03|comida|carb': 'pasta' });
+    expect(merged?.doneMeals?.['2026-03-02']).toEqual([0]);
+    expect(merged?.trainingHours).toEqual({ '0': 17, '1': 16 });
+  });
+
+  it('nutritionPrefs: un dispositivo sin preferencias hereda las remotas', () => {
+    const remote = { ...base(), nutritionPrefs: { excludedFoodIds: ['skyr'] } };
+    expect(mergeProfile(remote, base()).nutritionPrefs?.excludedFoodIds).toEqual(['skyr']);
+  });
 });
 
 describe('mergeHistory', () => {

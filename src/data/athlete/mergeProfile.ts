@@ -25,6 +25,29 @@ const TRAINING_DATES_LOG_LIMIT = 400;
 /** ~8-9 semanas de bloqueos (7 fechas cada una) — mas que de sobra, ver `pruneByProximityToToday`. */
 const WEEKLY_LOCKS_LIMIT = 60;
 
+const NUTRITION_SWAPS_LIMIT = 200;
+const NUTRITION_DONE_DAYS_LIMIT = 30;
+
+/** Se queda con las `limit` claves mas recientes de un objeto cuyas claves empiezan por una fecha ISO. */
+function keepLatestKeys<T>(obj: Record<string, T>, limit: number): Record<string, T> {
+  const keys = Object.keys(obj).sort();
+  return Object.fromEntries(keys.slice(-limit).map((k) => [k, obj[k]]));
+}
+
+/**
+ * Preferencias de nutricion: la lista de alimentos excluidos y el horario son config (gana el local si lo
+ * tiene); los cambios de alimento y las comidas hechas se unen por clave/fecha, gana el local en la misma.
+ */
+function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: AthleteProfile['nutritionPrefs']): AthleteProfile['nutritionPrefs'] {
+  if (!remote && !local) return undefined;
+  return {
+    excludedFoodIds: local?.excludedFoodIds ?? remote?.excludedFoodIds,
+    trainingHours: { ...(remote?.trainingHours ?? {}), ...(local?.trainingHours ?? {}) },
+    swaps: keepLatestKeys({ ...(remote?.swaps ?? {}), ...(local?.swaps ?? {}) }, NUTRITION_SWAPS_LIMIT),
+    doneMeals: keepLatestKeys({ ...(remote?.doneMeals ?? {}), ...(local?.doneMeals ?? {}) }, NUTRITION_DONE_DAYS_LIMIT),
+  };
+}
+
 /** Une dos listas por una clave; en colision gana `pick` (por defecto, la de `b` = local). Ordena por `sortKey` y recorta a `limit` (los mas recientes). */
 function mergeByKey<T>(
   a: T[] | undefined,
@@ -211,6 +234,7 @@ export function mergeProfile(
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
     // Union por fecha, gana el local en la misma fecha (es una decision de planificacion deliberada,
     // igual criterio que el resto de campos "de config") — recortado igual que sessionCache.
+    nutritionPrefs: mergeNutritionPrefs(remote.nutritionPrefs, local.nutritionPrefs),
     weeklyLocks: pruneByProximityToToday({ ...(remote.weeklyLocks ?? {}), ...(local.weeklyLocks ?? {}) }, WEEKLY_LOCKS_LIMIT),
   };
 }
