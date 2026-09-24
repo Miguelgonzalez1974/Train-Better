@@ -1,10 +1,13 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Check, Grab, Hand, Repeat } from 'lucide-react';
 import { poolForRole, previewSwap, type MealPlanInput, type PlannedItem, type PlannedMeal } from '../../engine/mealPlan';
 import { formatServing } from '../../engine/nutritionPlan';
 
 const KIND_LABEL: Record<PlannedItem['kind'], string> = {
   protein: 'Proteína',
+  protein2: 'Proteína',
+  drink: 'Bebida',
+  extra: 'Extra',
   carb: 'Hidrato',
   fruit: 'Fruta',
   veg: 'Verdura',
@@ -62,7 +65,7 @@ export function MealCard({ meal, done, onToggleDone, input, excludedFoodIds, onS
               >
                 <span className="flex-1">
                   <span className="block text-sm text-neutral-100">{item.name}</span>
-                  <span className="block text-[11px] text-neutral-500">{KIND_LABEL[item.kind]}</span>
+                  <span className="block text-[11px] text-neutral-500">{item.dish ? 'Plato' : KIND_LABEL[item.kind]}</span>
                 </span>
                 <span className="num text-sm font-semibold text-white">{item.quantity}</span>
                 {canSwap && <Repeat size={14} className={`shrink-0 ${open ? 'text-brand-gold' : 'text-neutral-600'}`} aria-label="Cambiar alimento" />}
@@ -127,3 +130,4 @@ export function MealCard({ meal, done, onToggleDone, input, excludedFoodIds, onS
     </section>
   );
 }
+

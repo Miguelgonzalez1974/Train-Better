@@ -35,7 +35,10 @@ describe('planDayMeals', () => {
       const comida = plan.meals.find((m) => m.key === 'comida')!;
       const cena = plan.meals.find((m) => m.key === 'cena')!;
       for (const kind of ['protein', 'carb'] as const) {
-        expect(comida.items.find((i) => i.kind === kind)!.foodId).not.toBe(cena.items.find((i) => i.kind === kind)!.foodId);
+        const a = comida.items.find((i) => i.kind === kind);
+        const b = cena.items.find((i) => i.kind === kind);
+        // Con un plato hecho la toma puede no llevar hidrato aparte.
+        if (a && b) expect(a.foodId).not.toBe(b.foodId);
       }
     }
   });
@@ -115,9 +118,83 @@ describe('buildShoppingList', () => {
     const groups = buildShoppingList(plans);
     expect(groups.length).toBeGreaterThan(3);
     for (const g of groups) expect(g.lines.length).toBeGreaterThan(0);
-    const expected = plans.reduce((s, p) => s + p.meals.flatMap((m) => m.items).filter((i) => i.foodId === 'aceite').reduce((a, i) => a + i.grams, 0), 0);
+    const items = plans.flatMap((p) => p.meals.flatMap((m) => m.items));
+    // Aceite suelto + el de las recetas de los platos (la tortilla lleva aceite).
+    const expected = items.reduce((s, i) => {
+      if (i.foodId === 'aceite') return s + i.grams;
+      const oil = getFood(i.foodId)?.recipe?.find((r) => r.foodId === 'aceite');
+      return s + (oil ? (i.grams * oil.per100) / 100 : 0);
+    }, 0);
     const aceite = groups.flatMap((g) => g.lines).find((l) => l.foodId === 'aceite');
-    expect(aceite?.grams).toBe(expected);
+    expect(aceite?.grams).toBeCloseTo(expected, 5);
+  });
+
+  it('un plato hecho se desglosa en ingredientes en la lista de la compra', () => {
+    const day = Array.from({ length: 60 }, (_, i) => planDayMeals(base({ date: `2026-11-${String((i % 28) + 1).padStart(2, '0')}` }))).find((p) =>
+      p.meals.some((m) => m.items.some((i) => i.dish)),
+    );
+    expect(day).toBeDefined();
+    const groups = buildShoppingList([day!]);
+    const names = groups.flatMap((g) => g.lines).map((l) => l.foodId);
+    expect(names).not.toContain('tortilla-patata');
+    expect(names).not.toContain('pizza-casera');
   });
 });
+
+describe('alimentos nuevos', () => {
+  const week = (start: number, over: Partial<MealPlanInput> = {}) =>
+    Array.from({ length: 28 }, (_, i) => planDayMeals(base({ date: `2026-10-${String(((start + i) % 28) + 1).padStart(2, '0')}`, ...over })));
+
+  it('los platos hechos (tortilla, pizza) salen de vez en cuando, no a diario, y la toma sigue cuadrando', () => {
+    const plans = week(0);
+    const dishDays = plans.filter((p) => p.meals.some((m) => m.items.some((i) => i.dish)));
+    expect(dishDays.length).toBeGreaterThan(0);
+    expect(dishDays.length).toBeLessThan(10);
+    for (const p of dishDays) {
+      const pMid = (p.target.proteinG.min + p.target.proteinG.max) / 2;
+      expect(Math.abs(p.totals.protein - pMid) / pMid).toBeLessThan(0.3);
+      // Nunca dos platos el mismo dia.
+      expect(p.meals.flatMap((m) => m.items).filter((i) => i.dish)).toHaveLength(1);
+    }
+  });
+
+  it('un plato elegido a mano ocupa el hueco de proteina y se puede quitar', () => {
+    const swapped = planDayMeals(base({ prefs: { swaps: { [swapKey('2026-09-28', 'cena', 'protein')]: 'tortilla-patata' } } }));
+    const cena = swapped.meals.find((m) => m.key === 'cena')!;
+    expect(cena.items[0]).toMatchObject({ foodId: 'tortilla-patata', dish: true, grams: 200 });
+    // Sin aceite suelto: el plato ya lo lleva.
+    expect(cena.items.some((i) => i.kind === 'fat')).toBe(false);
+    const back = planDayMeals(base({ prefs: { swaps: { [swapKey('2026-09-28', 'cena', 'protein')]: 'pollo' } } }));
+    expect(back.meals.find((m) => m.key === 'cena')!.items.some((i) => i.dish)).toBe(false);
+  });
+
+  it('excluir el plato (o el huevo por etiqueta) lo saca de los menus', () => {
+    const excluded = FOODS.filter((f) => f.tags?.includes('huevo') || f.tags?.includes('gluten')).map((f) => f.id);
+    for (const p of week(0, { prefs: { excludedFoodIds: excluded } })) {
+      for (const i of p.meals.flatMap((m) => m.items)) expect(['tortilla-patata', 'pizza-casera', 'huevos']).not.toContain(i.foodId);
+    }
+  });
+
+  it('frutos secos o chocolate van en la media manana, salvo si es la toma previa al entreno', () => {
+    const normal = planDayMeals(base({ trainingHour: 16 })).meals.find((m) => m.key === 'mediaManana')!;
+    expect(normal.items.some((i) => i.kind === 'extra')).toBe(true);
+    const pre = planDayMeals(base({ trainingHour: 10 })).meals.find((m) => m.key === 'mediaManana')!;
+    expect(pre.items.some((i) => i.kind === 'extra')).toBe(false);
+  });
+
+  it('el desayuno lleva bebida (cafe, leche desnatada o cafe con leche) y la leche cuenta en ml', () => {
+    const drinks = new Set(week(0).map((p) => p.meals[0].items.find((i) => i.kind === 'drink')?.foodId));
+    expect([...drinks].sort()).toEqual(['cafe', 'cafe-leche', 'leche']);
+    const milk = planDayMeals(base({ prefs: { swaps: { [swapKey('2026-09-28', 'desayuno', 'drink')]: 'leche' } } })).meals[0].items.find((i) => i.kind === 'drink')!;
+    expect(milk.quantity).toBe('250 ml');
+  });
+
+  it('queso cottage, pan Wasa y pina estan disponibles como alternativas', () => {
+    const plan = planDayMeals(base({ prefs: { swaps: { [swapKey('2026-09-28', 'desayuno', 'protein')]: 'cottage', [swapKey('2026-09-28', 'desayuno', 'carb')]: 'wasa', [swapKey('2026-09-28', 'desayuno', 'fruit')]: 'pina' } } }));
+    const ids = plan.meals[0].items.map((i) => i.foodId);
+    expect(ids).toEqual(expect.arrayContaining(['cottage', 'wasa', 'pina']));
+    expect(plan.meals[0].items.find((i) => i.foodId === 'wasa')!.quantity).toMatch(/tostadas/);
+  });
+});
+
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import { FOODS, FOOD_TAG_LABEL, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, type FoodRole, type FoodTag } from '../../data/nutrition/foods';
 import { defaultTrainingHour, poolForRole, TRAINING_HOUR_OPTIONS } from '../../engine/mealPlan';
@@ -131,7 +131,7 @@ export function AjustesView({ shared, bodyweightLog, onBodyweightChange }: Ajust
         {open && (
           <div className="mt-3 flex flex-col gap-3">
             {SHOPPING_CATEGORY_ORDER.map((cat) => {
-              const foods = FOODS.filter((f) => f.category === cat);
+              const foods = FOODS.filter((f) => f.category === cat && f.roles.length > 0);
               if (foods.length === 0) return null;
               return (
                 <div key={cat}>
@@ -162,3 +162,4 @@ export function AjustesView({ shared, bodyweightLog, onBodyweightChange }: Ajust
     </div>
   );
 }
+

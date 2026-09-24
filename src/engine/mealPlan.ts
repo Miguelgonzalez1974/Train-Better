@@ -1,4 +1,4 @@
-import { FOODS, foodsForRole, getFood, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, type Food, type FoodRole, type ShoppingCategory } from '../data/nutrition/foods';
+﻿import { FOODS, foodsForRole, getFood, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, type Food, type FoodRole, type ShoppingCategory } from '../data/nutrition/foods';
 import { FIST_CARB_G, nutritionForDay, PALM_PROTEIN_G, type DayNutrition, type NutritionDayType } from './nutritionPlan';
 
 /**
@@ -21,7 +21,7 @@ export const MEAL_LABEL: Record<MealKey, string> = {
   cena: 'Cena',
 };
 
-export type SlotKind = 'protein' | 'carb' | 'fruit' | 'veg' | 'fat';
+export type SlotKind = 'protein' | 'protein2' | 'carb' | 'fruit' | 'veg' | 'fat' | 'drink' | 'extra';
 
 export const TRAINING_HOUR_OPTIONS = [10, 16, 17] as const;
 
@@ -97,9 +97,15 @@ function slotsFor(meal: MealKey, pre: boolean): SlotDef[] {
   const fruit: SlotDef = { kind: 'fruit', role: pre ? 'fruitPre' : 'fruit' };
   switch (meal) {
     case 'desayuno':
-      return [{ kind: 'protein', role: 'proteinBreakfast' }, { kind: 'carb', role: 'carbBreakfast' }, fruit];
+      return [
+        { kind: 'protein', role: 'proteinBreakfast' },
+        { kind: 'carb', role: 'carbBreakfast' },
+        fruit,
+        { kind: 'drink', role: 'drink' },
+      ];
     case 'mediaManana':
-      return [{ kind: 'protein', role: 'proteinLight' }, fruit];
+      // Frutos secos o chocolate solo si la toma no es previa al entreno: la grasa digiere despacio.
+      return [{ kind: 'protein', role: 'proteinLight' }, fruit, ...(pre ? [] : [{ kind: 'extra', role: 'extra' } as SlotDef])];
     case 'merienda':
       return [{ kind: 'protein', role: 'proteinSnack' }, { kind: 'carb', role: 'carbSnack' }, fruit];
     case 'comida':
@@ -112,6 +118,14 @@ function slotsFor(meal: MealKey, pre: boolean): SlotDef[] {
       ];
   }
 }
+
+/** Comida con un plato hecho (tortilla, pizza): el plato lleva la ración fija y la toma se completa con proteína, hidrato y verdura si hace falta. */
+const DISH_SLOTS: SlotDef[] = [
+  { kind: 'protein', role: 'proteinMain' },
+  { kind: 'protein2', role: 'proteinSnack' },
+  { kind: 'carb', role: 'carbSnack' },
+  { kind: 'veg', role: 'veg' },
+];
 
 /** Cada cuántos días cambia el alimento de una comida: comida y cena rotan cada 2 días (se cocina en tanda para el táper). */
 const ROTATION_STEP: Record<MealKey, number> = { desayuno: 1, mediaManana: 1, comida: 2, merienda: 1, cena: 2 };
@@ -155,6 +169,8 @@ export interface PlannedItem {
   /** Cantidad lista para leer: "2 huevos", "120 g", "1 cucharada (10 ml)". */
   quantity: string;
   swapKey: string;
+  /** Plato hecho (tortilla, pizza) en lugar de una proteína suelta. */
+  dish?: boolean;
 }
 
 export interface PlannedMeal {
@@ -216,6 +232,7 @@ function toPortion(food: Food, grams: number): { grams: number; units?: number }
 function quantityText(food: Food, grams: number, units?: number): string {
   if (food.id === 'aceite') return '1 cucharada (10 ml)';
   if (food.unit && units != null) return `${units} ${units === 1 ? food.unit.singular : food.unit.plural}`;
+  if (food.liquid) return `${grams} ml`;
   return `${grams} g`;
 }
 
@@ -242,20 +259,46 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
 
   // Alimentos ya elegidos hoy por tipo de hueco: la rotación no repite proteína, hidrato ni fruta entre comidas del mismo día.
   const usedToday: Record<string, Set<string>> = { protein: new Set(), carb: new Set(), fruit: new Set() };
+
+  // Plato hecho (tortilla, pizza): sale por rotación (la cena una vez por semana, la comida cada dos) o si el atleta lo elige a mano.
+  let dishUsed = false;
+  function pickDish(meal: MealKey): Food | undefined {
+    if (meal !== 'comida' && meal !== 'cena') return undefined;
+    const chosenByAthlete = swaps[swapKey(date, meal, 'protein')];
+    if (chosenByAthlete) {
+      const f = getFood(chosenByAthlete);
+      return f?.dish && !excluded.has(f.id) ? f : undefined;
+    }
+    if (dishUsed) return undefined;
+    const dishes = poolForRole('proteinMain', excluded).filter((f) => f.dish);
+    if (dishes.length === 0) return undefined;
+    const period = meal === 'cena' ? 7 : 14;
+    if ((dayNum + seedOf(`${meal}dish`)) % period !== 0) return undefined;
+    return dishes[Math.floor(dayNum / period) % dishes.length];
+  }
+
   const meals: PlannedMeal[] = MEAL_ORDER.map((meal, mi) => {
     const timing = timings[meal];
-    const slots = slotsFor(meal, timing.pre);
+    const dishFood = pickDish(meal);
+    const slots = dishFood ? DISH_SLOTS : slotsFor(meal, timing.pre);
 
     // 1) Elegir el alimento de cada hueco: el cambio manual si lo hay, o la rotación del día.
     const foods = new Map<SlotKind, Food>();
     for (const slot of slots) {
-      const pool = poolForRole(slot.role, excluded);
+      if (dishFood && slot.kind === 'protein') {
+        foods.set('protein', dishFood);
+        usedToday.protein.add(dishFood.id);
+        dishUsed = true;
+        continue;
+      }
+      // Los platos hechos no entran en la rotación normal de proteína: solo por `pickDish`.
+      const pool = poolForRole(slot.role, excluded).filter((f) => !(slot.kind === 'protein' && f.dish));
       if (pool.length === 0) continue;
       const swapped = getFood(swaps[swapKey(date, meal, slot.kind)] ?? '');
       let food: Food | undefined = swapped && swapped.roles.includes(slot.role) && !excluded.has(swapped.id) ? swapped : undefined;
       if (!food) {
         const seed = seedOf(`${meal}${slot.kind}`);
-        const used = usedToday[slot.kind];
+        const used = usedToday[slot.kind === 'protein2' ? 'protein' : slot.kind];
         const start = (Math.floor(dayNum / ROTATION_STEP[meal]) + seed) % pool.length;
         food = pool[start];
         for (let step = 0; used && step < pool.length; step++) {
@@ -267,7 +310,7 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
         }
       }
       foods.set(slot.kind, food);
-      usedToday[slot.kind]?.add(food.id);
+      usedToday[slot.kind === 'protein2' ? 'protein' : slot.kind]?.add(food.id);
     }
 
     // 2) Cantidades: primero lo fijo (fruta, verdura, aceite), luego el hidrato hasta el objetivo de la toma, y la proteína al final.
@@ -276,7 +319,7 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
     const portions = new Map<SlotKind, { grams: number; units?: number }>();
     let p = 0;
     let c = 0;
-    for (const kind of ['fruit', 'veg', 'fat'] as SlotKind[]) {
+    for (const kind of ['fruit', 'veg', 'fat', 'drink', 'extra'] as SlotKind[]) {
       const food = foods.get(kind);
       if (!food) continue;
       const portion = fixedPortion(food);
@@ -285,7 +328,19 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       p += m.p;
       c += m.c;
     }
+    if (dishFood) {
+      const portion = { grams: dishFood.serving ?? 200 };
+      portions.set('protein', portion);
+      const m = macrosOf(dishFood, portion.grams);
+      p += m.p;
+      c += m.c;
+    }
     let carb = foods.get('carb');
+    // Con plato hecho, el hidrato de acompañamiento (pan) solo va si el plato deja la toma corta.
+    if (carb && dishFood && cTarget - c < 15) {
+      foods.delete('carb');
+      carb = undefined;
+    }
     if (carb) {
       let portion = toPortion(carb, ((cTarget - c) / carb.per100.c) * 100);
       // Un hidrato "flojo" (legumbre en bote) puede quedarse corto aun en su ración máxima: si el atleta no lo
@@ -310,10 +365,13 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       p += m.p;
       c += m.c;
     }
-    const protein = foods.get('protein');
+    // Con plato hecho, la proteína "de complemento" (lata de atún, lonchas...) solo va si la toma queda corta.
+    const proteinKind: SlotKind = dishFood ? 'protein2' : 'protein';
+    if (dishFood && pTarget - p < 8) foods.delete('protein2');
+    const protein = foods.get(proteinKind);
     if (protein) {
       const portion = toPortion(protein, ((pTarget - p) / protein.per100.p) * 100);
-      portions.set('protein', portion);
+      portions.set(proteinKind, portion);
       const m = macrosOf(protein, portion.grams);
       p += m.p;
       c += m.c;
@@ -333,6 +391,7 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
           units: portion.units,
           quantity: quantityText(food, portion.grams, portion.units),
           swapKey: swapKey(date, meal, slot.kind),
+          dish: food.dish || undefined,
         },
       ];
     });
@@ -399,6 +458,7 @@ function formatPurchase(food: Food, grams: number): string {
     return `${n} ${n === 1 ? food.unit.singular : food.unit.plural}`;
   }
   if (food.id === 'aceite') return `${Math.round(grams)} ml`;
+  if (food.liquid) return grams >= 1000 ? `${(Math.ceil(grams / 100) / 10).toFixed(1).replace('.', ',')} L` : `${Math.ceil(grams / 50) * 50} ml`;
   if (grams >= 1000) return `${(Math.ceil(grams / 100) / 10).toFixed(1).replace('.', ',')} kg`;
   return `${Math.ceil(grams / 50) * 50} g`;
 }
@@ -408,7 +468,12 @@ export function buildShoppingList(plans: DayMealPlan[]): ShoppingGroup[] {
   const totals = new Map<string, number>();
   for (const plan of plans) {
     for (const meal of plan.meals) {
-      for (const item of meal.items) totals.set(item.foodId, (totals.get(item.foodId) ?? 0) + item.grams);
+      for (const item of meal.items) {
+        const recipe = getFood(item.foodId)?.recipe;
+        // Un plato hecho se compra por ingredientes (tortilla = huevos + patata + cebolla + aceite).
+        const parts = recipe ? recipe.map((r) => ({ id: r.foodId, grams: (item.grams * r.per100) / 100 })) : [{ id: item.foodId, grams: item.grams }];
+        for (const part of parts) totals.set(part.id, (totals.get(part.id) ?? 0) + part.grams);
+      }
     }
   }
   const groups: ShoppingGroup[] = [];
@@ -427,3 +492,4 @@ export function shoppingListText(groups: ShoppingGroup[], title: string): string
   const body = groups.map((g) => `${g.label}\n${g.lines.map((l) => `- ${l.name}: ${l.text}`).join('\n')}`).join('\n\n');
   return `${title}\n\n${body}`;
 }
+
