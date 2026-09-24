@@ -142,6 +142,40 @@ describe('buildShoppingList', () => {
 });
 
 describe('alimentos nuevos', () => {
+  it('las raciones de pan Wasa y tortitas de arroz son razonables (nunca mas de 5) en cualquier peso, dia y hora', () => {
+    for (const dayType of DAY_TYPES) {
+      for (const weightKg of [60, 80, 100]) {
+        for (let d = 1; d <= 28; d++) {
+          const plan = planDayMeals(base({ date: `2026-10-${String(d).padStart(2, '0')}`, dayType, weightKg }));
+          for (const item of plan.meals.flatMap((m) => m.items)) {
+            if (item.foodId === 'wasa' || item.foodId === 'tortitas') expect(item.units).toBeLessThanOrEqual(5);
+          }
+        }
+      }
+    }
+  });
+
+  it('langostinos, sardinas, clara de huevo, tiras de pollo, pan de centeno, cremas de cacahuete, kefir y datiles entran como opciones', () => {
+    const swaps = {
+      [swapKey('2026-09-28', 'comida', 'protein')]: 'langostinos',
+      [swapKey('2026-09-28', 'cena', 'protein')]: 'sardinas',
+      [swapKey('2026-09-28', 'desayuno', 'protein')]: 'clara-huevo',
+      [swapKey('2026-09-28', 'desayuno', 'carb')]: 'centeno',
+      [swapKey('2026-09-28', 'desayuno', 'drink')]: 'kefir',
+      [swapKey('2026-09-28', 'mediaManana', 'extra')]: 'crema-cacahuete',
+      [swapKey('2026-09-28', 'merienda', 'fruit')]: 'datiles',
+      [swapKey('2026-09-28', 'merienda', 'protein')]: 'pollo-tiras',
+    };
+    const plan = planDayMeals(base({ prefs: { swaps } }));
+    const items = plan.meals.flatMap((m) => m.items);
+    for (const id of ['langostinos', 'sardinas', 'clara-huevo', 'centeno', 'kefir', 'crema-cacahuete', 'datiles', 'pollo-tiras']) {
+      expect(items.map((i) => i.foodId)).toContain(id);
+    }
+    expect(items.find((i) => i.foodId === 'datiles')!.quantity).toBe('2 dátiles');
+    expect(items.find((i) => i.foodId === 'clara-huevo')!.quantity).toMatch(/ ml$/);
+    expect(items.find((i) => i.foodId === 'sardinas')!.quantity).toMatch(/latas?$/);
+  });
+
   const week = (start: number, over: Partial<MealPlanInput> = {}) =>
     Array.from({ length: 28 }, (_, i) => planDayMeals(base({ date: `2026-10-${String(((start + i) % 28) + 1).padStart(2, '0')}`, ...over })));
 
@@ -184,7 +218,7 @@ describe('alimentos nuevos', () => {
 
   it('el desayuno lleva bebida (cafe, leche desnatada o cafe con leche) y la leche cuenta en ml', () => {
     const drinks = new Set(week(0).map((p) => p.meals[0].items.find((i) => i.kind === 'drink')?.foodId));
-    expect([...drinks].sort()).toEqual(['cafe', 'cafe-leche', 'leche']);
+    expect([...drinks].sort()).toEqual(['cafe', 'cafe-leche', 'kefir', 'leche']);
     const milk = planDayMeals(base({ prefs: { swaps: { [swapKey('2026-09-28', 'desayuno', 'drink')]: 'leche' } } })).meals[0].items.find((i) => i.kind === 'drink')!;
     expect(milk.quantity).toBe('250 ml');
   });
@@ -196,5 +230,6 @@ describe('alimentos nuevos', () => {
     expect(plan.meals[0].items.find((i) => i.foodId === 'wasa')!.quantity).toMatch(/tostadas/);
   });
 });
+
 
 

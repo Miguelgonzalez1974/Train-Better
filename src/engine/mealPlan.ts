@@ -21,7 +21,7 @@ export const MEAL_LABEL: Record<MealKey, string> = {
   cena: 'Cena',
 };
 
-export type SlotKind = 'protein' | 'protein2' | 'carb' | 'fruit' | 'veg' | 'fat' | 'drink' | 'extra';
+export type SlotKind = 'protein' | 'protein2' | 'carb' | 'carb2' | 'fruit' | 'veg' | 'fat' | 'drink' | 'extra';
 
 export const TRAINING_HOUR_OPTIONS = [10, 16, 17] as const;
 
@@ -242,7 +242,10 @@ function halfSteps(x: number): number {
 
 /** Alimento fijo (fruta, verdura, aceite): una pieza o la ración del catálogo. */
 function fixedPortion(food: Food): { grams: number; units?: number } {
-  if (food.unit) return { grams: food.unit.grams, units: 1 };
+  if (food.unit) {
+    const units = food.servingUnits ?? 1;
+    return { grams: food.unit.grams * units, units };
+  }
   return { grams: food.serving ?? 100 };
 }
 
@@ -279,6 +282,14 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
 
   const meals: PlannedMeal[] = MEAL_ORDER.map((meal, mi) => {
     const timing = timings[meal];
+    /** Segundo alimento de un hueco (el elegido a mano, o el siguiente de la rotación que no se haya usado hoy). */
+    const secondFood = (role: FoodRole, used: Set<string>, primaryId: string, kind: SlotKind): Food | undefined => {
+      const requested = getFood(swaps[swapKey(date, meal, kind)] ?? '');
+      if (requested && requested.roles.includes(role) && !excluded.has(requested.id) && requested.id !== primaryId) return requested;
+      const pool = poolForRole(role, excluded).filter((f) => f.id !== primaryId && !used.has(f.id) && !f.dish);
+      if (pool.length === 0) return undefined;
+      return pool[(Math.floor(dayNum / ROTATION_STEP[meal]) + seedOf(`${meal}${kind}`)) % pool.length];
+    };
     const dishFood = pickDish(meal);
     const slots = dishFood ? DISH_SLOTS : slotsFor(meal, timing.pre);
 
@@ -329,7 +340,8 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       c += m.c;
     }
     if (dishFood) {
-      const portion = { grams: dishFood.serving ?? 200 };
+      // El plato lleva su ración (serving) como máximo y se reduce si la toma ya se cubre con menos (pizza en un día ligero).
+      const portion = toPortion(dishFood, ((cTarget - c) / Math.max(1, dishFood.per100.c)) * 100);
       portions.set('protein', portion);
       const m = macrosOf(dishFood, portion.grams);
       p += m.p;
@@ -364,6 +376,20 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       const m = macrosOf(carb, portion.grams);
       p += m.p;
       c += m.c;
+      // Si el hidrato llegó a su ración máxima y la toma sigue corta, se suma un segundo (p. ej. pan tras las tortitas)
+      // en vez de inflar el primero: 8 tortitas o 9 tostadas no son una ración.
+      if (carbSlot && cTarget - c >= 20) {
+        const second = secondFood(carbSlot.role, usedToday.carb, carb.id, 'carb2');
+        if (second) {
+          const extraPortion = toPortion(second, ((cTarget - c) / second.per100.c) * 100);
+          foods.set('carb2', second);
+          portions.set('carb2', extraPortion);
+          usedToday.carb.add(second.id);
+          const m2 = macrosOf(second, extraPortion.grams);
+          p += m2.p;
+          c += m2.c;
+        }
+      }
     }
     // Con plato hecho, la proteína "de complemento" (lata de atún, lonchas...) solo va si la toma queda corta.
     const proteinKind: SlotKind = dishFood ? 'protein2' : 'protein';
@@ -375,9 +401,31 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       const m = macrosOf(protein, portion.grams);
       p += m.p;
       c += m.c;
+      // Igual con la proteína: si la principal llegó a su ración máxima y falta bastante, se suma una segunda.
+      const proteinSlot = slots.find((s) => s.kind === 'protein');
+      if (!dishFood && proteinSlot && pTarget - p >= 10) {
+        const second = secondFood(proteinSlot.role, usedToday.protein, protein.id, 'protein2');
+        if (second) {
+          const extraPortion = toPortion(second, ((pTarget - p) / second.per100.p) * 100);
+          foods.set('protein2', second);
+          portions.set('protein2', extraPortion);
+          usedToday.protein.add(second.id);
+          const m2 = macrosOf(second, extraPortion.grams);
+          p += m2.p;
+          c += m2.c;
+        }
+      }
     }
 
-    const items: PlannedItem[] = slots.flatMap((slot) => {
+    // Los segundos alimentos (hidrato o proteína) se muestran justo detrás del principal.
+    const outSlots: SlotDef[] = slots.flatMap((s) => {
+      const list: SlotDef[] = [s];
+      if (s.kind === 'carb' && foods.has('carb2')) list.push({ kind: 'carb2', role: s.role });
+      if (s.kind === 'protein' && !dishFood && foods.has('protein2')) list.push({ kind: 'protein2', role: s.role });
+      return list;
+    });
+
+    const items: PlannedItem[] = outSlots.flatMap((slot) => {
       const food = foods.get(slot.kind);
       const portion = portions.get(slot.kind);
       if (!food || !portion) return [];
@@ -492,4 +540,6 @@ export function shoppingListText(groups: ShoppingGroup[], title: string): string
   const body = groups.map((g) => `${g.label}\n${g.lines.map((l) => `- ${l.name}: ${l.text}`).join('\n')}`).join('\n\n');
   return `${title}\n\n${body}`;
 }
+
+
 

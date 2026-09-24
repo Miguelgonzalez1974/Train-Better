@@ -9,6 +9,7 @@ const KIND_LABEL: Record<PlannedItem['kind'], string> = {
   drink: 'Bebida',
   extra: 'Extra',
   carb: 'Hidrato',
+  carb2: 'Hidrato',
   fruit: 'Fruta',
   veg: 'Verdura',
   fat: 'Grasa',
@@ -130,4 +131,5 @@ export function MealCard({ meal, done, onToggleDone, input, excludedFoodIds, onS
     </section>
   );
 }
+
 

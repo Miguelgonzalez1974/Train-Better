@@ -56,6 +56,8 @@ export interface Food {
   unit?: { grams: number; singular: string; plural: string };
   /** Ración fija (verdura, fruta, aceite): el motor no la ajusta, solo la pone. En gramos; por defecto, la pieza. */
   serving?: number;
+  /** Si el alimento se cuenta por piezas y la ración fija es más de una (dátiles: 2). */
+  servingUnits?: number;
   /** Rango razonable de gramos cuando es el alimento que el motor dimensiona (proteína o hidrato principal de la toma). */
   range?: [number, number];
   tags?: FoodTag[];
@@ -87,6 +89,36 @@ export const FOODS: Food[] = [
     range: [56, 170],
     tags: ['pescado'],
   },
+  { id: 'langostinos', name: 'Langostinos', roles: ['proteinMain'], category: 'proteinas', per100: { p: 20, c: 0.5, f: 0.6 }, range: [100, 300], tags: ['pescado'] },
+  {
+    id: 'sardinas',
+    name: 'Sardinas en aceite (lata)',
+    roles: ['proteinMain', 'proteinSnack'],
+    category: 'proteinas',
+    per100: { p: 24, c: 0, f: 11 },
+    unit: { grams: 85, singular: 'lata', plural: 'latas' },
+    range: [85, 170],
+    tags: ['pescado'],
+  },
+  {
+    id: 'pollo-tiras',
+    name: 'Tiras de pechuga de pollo (ya cocinadas)',
+    roles: ['proteinMain', 'proteinSnack'],
+    category: 'proteinas',
+    per100: { p: 24, c: 1, f: 1.5 },
+    range: [80, 220],
+    tags: ['carne'],
+  },
+  {
+    id: 'clara-huevo',
+    name: 'Clara de huevo',
+    roles: ['proteinBreakfast', 'proteinSnack'],
+    category: 'lacteos',
+    per100: { p: 10.9, c: 0.7, f: 0.2 },
+    range: [100, 300],
+    liquid: true,
+    tags: ['huevo'],
+  },
   {
     id: 'huevos',
     name: 'Huevos',
@@ -99,8 +131,8 @@ export const FOODS: Food[] = [
   },
 
   // ---- proteína de desayuno, media mañana y merienda ----
-  { id: 'skyr', name: 'Skyr o yogur proteico', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 11, c: 4, f: 0.2 }, range: [100, 450], tags: ['lacteo'] },
-  { id: 'queso-batido', name: 'Queso fresco batido 0 %', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 8, c: 4, f: 0.2 }, range: [100, 450], tags: ['lacteo'] },
+  { id: 'skyr', name: 'Skyr o yogur proteico', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 11, c: 4, f: 0.2 }, range: [100, 300], tags: ['lacteo'] },
+  { id: 'queso-batido', name: 'Queso fresco batido 0 %', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 8, c: 4, f: 0.2 }, range: [100, 300], tags: ['lacteo'] },
   { id: 'pavo-fiambre', name: 'Pavo o jamón cocido en lonchas', roles: ['proteinBreakfast', 'proteinSnack'], category: 'proteinas', per100: { p: 17, c: 1, f: 2 }, range: [30, 100], tags: ['carne'] },
   { id: 'cottage', name: 'Queso cottage', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 11, c: 3.5, f: 4 }, range: [100, 250], tags: ['lacteo'] },
   {
@@ -125,8 +157,8 @@ export const FOODS: Food[] = [
   { id: 'garbanzos', name: 'Garbanzos cocidos (bote)', roles: ['carbMain'], category: 'hidratos', per100: { p: 9, c: 27, f: 2.6 }, range: [120, 250] },
 
   // ---- hidrato de desayuno y merienda ----
-  { id: 'avena', name: 'Copos de avena', roles: ['carbBreakfast'], category: 'hidratos', per100: { p: 13, c: 66, f: 7 }, range: [30, 170] },
-  { id: 'pan', name: 'Pan integral', roles: ['carbBreakfast', 'carbSnack'], category: 'hidratos', per100: { p: 12, c: 42, f: 3 }, range: [30, 200], tags: ['gluten'] },
+  { id: 'avena', name: 'Copos de avena', roles: ['carbBreakfast'], category: 'hidratos', per100: { p: 13, c: 66, f: 7 }, range: [30, 120] },
+  { id: 'pan', name: 'Pan integral', roles: ['carbBreakfast', 'carbSnack'], category: 'hidratos', per100: { p: 12, c: 42, f: 3 }, range: [30, 120], tags: ['gluten'] },
   {
     id: 'wasa',
     name: 'Pan Wasa',
@@ -134,7 +166,16 @@ export const FOODS: Food[] = [
     category: 'hidratos',
     per100: { p: 10, c: 64, f: 2 },
     unit: { grams: 10, singular: 'tostada', plural: 'tostadas' },
-    range: [20, 120],
+    range: [20, 50],
+    tags: ['gluten'],
+  },
+  {
+    id: 'centeno',
+    name: 'Pan de centeno',
+    roles: ['carbBreakfast', 'carbSnack'],
+    category: 'hidratos',
+    per100: { p: 8.5, c: 48, f: 1.7 },
+    range: [30, 120],
     tags: ['gluten'],
   },
   {
@@ -144,7 +185,7 @@ export const FOODS: Food[] = [
     category: 'hidratos',
     per100: { p: 8, c: 80, f: 3 },
     unit: { grams: 9, singular: 'tortita', plural: 'tortitas' },
-    range: [18, 117],
+    range: [18, 45],
   },
 
   // ---- fruta (una pieza) ----
@@ -152,6 +193,15 @@ export const FOODS: Food[] = [
   { id: 'manzana', name: 'Manzana', roles: ['fruit'], category: 'fruta', per100: { p: 0.3, c: 14, f: 0.2 }, unit: { grams: 180, singular: 'manzana', plural: 'manzanas' } },
   { id: 'naranja', name: 'Naranja o mandarinas', roles: ['fruit'], category: 'fruta', per100: { p: 0.9, c: 12, f: 0.1 }, unit: { grams: 200, singular: 'naranja', plural: 'naranjas' } },
   { id: 'kiwi', name: 'Kiwi', roles: ['fruit'], category: 'fruta', per100: { p: 1.1, c: 15, f: 0.5 }, unit: { grams: 75, singular: 'kiwi', plural: 'kiwis' } },
+  {
+    id: 'datiles',
+    name: 'Dátiles',
+    roles: ['fruit', 'fruitPre'],
+    category: 'fruta',
+    per100: { p: 1.8, c: 75, f: 0.2 },
+    unit: { grams: 24, singular: 'dátil', plural: 'dátiles' },
+    servingUnits: 2,
+  },
   { id: 'pina', name: 'Piña', roles: ['fruit'], category: 'fruta', per100: { p: 0.5, c: 13, f: 0.1 }, serving: 150 },
   { id: 'uvas', name: 'Uvas', roles: ['fruit', 'fruitPre'], category: 'fruta', per100: { p: 0.7, c: 17, f: 0.2 }, serving: 150 },
 
@@ -171,10 +221,13 @@ export const FOODS: Food[] = [
   // ---- bebida del desayuno (líquidos: `grams` = ml) ----
   { id: 'cafe', name: 'Café solo', roles: ['drink'], category: 'despensa', per100: { p: 0, c: 0, f: 0 }, unit: { grams: 7, singular: 'taza', plural: 'tazas' } },
   { id: 'leche', name: 'Leche desnatada', roles: ['drink'], category: 'lacteos', per100: { p: 3.4, c: 5, f: 0.1 }, serving: 250, liquid: true, tags: ['lacteo'] },
+  { id: 'kefir', name: 'Kéfir', roles: ['drink'], category: 'lacteos', per100: { p: 3.4, c: 4.5, f: 1 }, serving: 250, liquid: true, tags: ['lacteo'] },
   { id: 'cafe-leche', name: 'Café con leche desnatada', roles: ['drink'], category: 'lacteos', per100: { p: 3.4, c: 5, f: 0.1 }, serving: 200, liquid: true, tags: ['lacteo'] },
 
   // ---- extra de la media mañana (ración pequeña; no se pone en la toma previa al entreno, la grasa digiere despacio) ----
   { id: 'frutos-secos', name: 'Frutos secos al natural', roles: ['extra'], category: 'despensa', per100: { p: 20, c: 12, f: 52 }, serving: 20 },
+  { id: 'crema-cacahuete', name: 'Crema de cacahuete', roles: ['extra'], category: 'despensa', per100: { p: 25, c: 20, f: 50 }, serving: 15 },
+  { id: 'cacahuete-polvo', name: 'Cacahuete en polvo', roles: ['extra'], category: 'despensa', per100: { p: 50, c: 25, f: 12 }, serving: 20 },
   { id: 'chocolate-negro', name: 'Chocolate negro (70 % o más)', roles: ['extra'], category: 'despensa', per100: { p: 8, c: 46, f: 43 }, serving: 15 },
 
   // ---- platos hechos: ración fija; el motor completa la toma con hidrato y proteína si hace falta ----
@@ -185,6 +238,7 @@ export const FOODS: Food[] = [
     category: 'proteinas',
     per100: { p: 6, c: 11, f: 8 },
     serving: 200,
+    range: [120, 200],
     dish: true,
     tags: ['huevo'],
     recipe: [
@@ -201,6 +255,7 @@ export const FOODS: Food[] = [
     category: 'proteinas',
     per100: { p: 10, c: 30, f: 8 },
     serving: 300,
+    range: [150, 300],
     dish: true,
     tags: ['gluten', 'lacteo'],
     recipe: [
@@ -228,6 +283,9 @@ export function getFood(id: string): Food | undefined {
 export function foodsForRole(role: FoodRole): Food[] {
   return FOODS.filter((f) => f.roles.includes(role));
 }
+
+
+
 
 
 
