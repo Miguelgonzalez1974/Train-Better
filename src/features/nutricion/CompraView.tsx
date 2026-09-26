@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, Copy, Square, CheckSquare } from 'lucide-react';
 import { buildShoppingList, shoppingListText } from '../../engine/mealPlan';
+import { SHOPPING_CATEGORY_LABEL, STAPLES } from '../../data/nutrition/foods';
 import { getWeekdayIndex } from '../../engine/periodization';
 import { addDays, mondayOf, parseIso, planFor, WEEKDAY_SHORT } from './nutritionData';
 import type { NutritionShared } from './shared';
@@ -40,7 +41,13 @@ export function CompraView({ shared }: { shared: NutritionShared }) {
       const d = week.get(iso);
       return d ? [planFor(prefs, iso, d.type, weightKg)] : [];
     });
-    return buildShoppingList(plans);
+    const list = buildShoppingList(plans);
+    // Básicos de despensa que el atleta activó en Ajustes: van siempre, dentro de Despensa.
+    const staples = STAPLES.filter((s) => prefs.staples?.includes(s.id)).map((s) => ({ foodId: `staple:${s.id}`, name: s.name, grams: 0, text: s.text }));
+    if (staples.length === 0) return list;
+    const pantry = list.find((g) => g.category === 'despensa');
+    if (pantry) return list.map((g) => (g === pantry ? { ...g, lines: [...g.lines, ...staples] } : g));
+    return [...list, { category: 'despensa' as const, label: SHOPPING_CATEGORY_LABEL.despensa, lines: staples }];
   }, [getWeek, todayIso, isos, prefs, weightKg]);
 
   const key = storageKey(isos[0] ?? todayIso, isos[isos.length - 1] ?? todayIso);

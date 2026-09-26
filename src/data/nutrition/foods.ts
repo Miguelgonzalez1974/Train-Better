@@ -19,7 +19,8 @@ export type FoodRole =
   | 'veg'
   | 'fat'
   | 'drink' // bebida del desayuno
-  | 'extra'; // frutos secos o chocolate, en la media mañana
+  | 'extra' // frutos secos, chocolate o gelatina, en la media mañana
+  | 'spread'; // para untar en el pan o las tostadas
 
 export type ShoppingCategory = 'proteinas' | 'lacteos' | 'hidratos' | 'fruta' | 'verdura' | 'despensa';
 
@@ -69,6 +70,8 @@ export interface Food {
   dish?: boolean;
   /** Ingredientes del plato, en gramos por 100 g de plato — para que la lista de la compra los desglose. */
   recipe?: { foodId: string; per100: number }[];
+  /** Pan, tostadas, tortitas: admiten algo para untar (mermelada, crema de cacahuete). */
+  spreadable?: boolean;
 }
 
 export const FOODS: Food[] = [
@@ -77,7 +80,7 @@ export const FOODS: Food[] = [
   { id: 'pavo', name: 'Pechuga de pavo', roles: ['proteinMain'], category: 'proteinas', per100: { p: 24, c: 0, f: 1.5 }, range: [80, 260], tags: ['carne'] },
   { id: 'ternera', name: 'Ternera magra', roles: ['proteinMain'], category: 'proteinas', per100: { p: 21, c: 0, f: 4 }, range: [80, 260], tags: ['carne'] },
   { id: 'lomo-cerdo', name: 'Lomo de cerdo', roles: ['proteinMain'], category: 'proteinas', per100: { p: 21, c: 0, f: 4 }, range: [80, 260], tags: ['carne'] },
-  { id: 'merluza', name: 'Merluza o bacalao', roles: ['proteinMain'], category: 'proteinas', per100: { p: 17, c: 0, f: 1.5 }, range: [100, 320], tags: ['pescado'] },
+  { id: 'merluza', name: 'Merluza o bacalao (fresco o congelado)', roles: ['proteinMain'], category: 'proteinas', per100: { p: 17, c: 0, f: 1.5 }, range: [100, 320], tags: ['pescado'] },
   { id: 'salmon', name: 'Salmón', roles: ['proteinMain'], category: 'proteinas', per100: { p: 20, c: 0, f: 13 }, range: [90, 260], tags: ['pescado'] },
   {
     id: 'atun',
@@ -134,6 +137,12 @@ export const FOODS: Food[] = [
   { id: 'skyr', name: 'Skyr o yogur proteico', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 11, c: 4, f: 0.2 }, range: [100, 300], tags: ['lacteo'] },
   { id: 'queso-batido', name: 'Queso fresco batido 0 %', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 8, c: 4, f: 0.2 }, range: [100, 300], tags: ['lacteo'] },
   { id: 'pavo-fiambre', name: 'Pavo o jamón cocido en lonchas', roles: ['proteinBreakfast', 'proteinSnack'], category: 'proteinas', per100: { p: 17, c: 1, f: 2 }, range: [30, 100], tags: ['carne'] },
+  { id: 'jamon-serrano', name: 'Jamón serrano', roles: ['proteinBreakfast', 'proteinSnack'], category: 'proteinas', per100: { p: 30, c: 0, f: 12 }, range: [30, 80], tags: ['carne'] },
+  { id: 'queso-cabra', name: 'Queso de cabra', roles: ['proteinBreakfast', 'proteinSnack'], category: 'lacteos', per100: { p: 18, c: 1, f: 21 }, range: [30, 80], tags: ['lacteo'] },
+  { id: 'cheddar', name: 'Queso cheddar', roles: ['proteinBreakfast', 'proteinSnack'], category: 'lacteos', per100: { p: 25, c: 1.3, f: 33 }, range: [20, 60], tags: ['lacteo'] },
+  { id: 'anchoas', name: 'Anchoas en aceite', roles: ['proteinSnack'], category: 'proteinas', per100: { p: 25, c: 0, f: 10 }, range: [30, 60], tags: ['pescado'] },
+  // El bacon es muy graso para el objetivo de perder grasa: solo sale si el atleta lo elige al cambiar de alimento.
+  { id: 'bacon', name: 'Bacon en lonchas', roles: ['proteinBreakfast'], category: 'proteinas', per100: { p: 15, c: 1, f: 30 }, range: [20, 60], tags: ['carne'], manualOnly: true },
   { id: 'cottage', name: 'Queso cottage', roles: ['proteinBreakfast', 'proteinLight', 'proteinSnack'], category: 'lacteos', per100: { p: 11, c: 3.5, f: 4 }, range: [100, 250], tags: ['lacteo'] },
   {
     id: 'proteina-polvo',
@@ -155,10 +164,20 @@ export const FOODS: Food[] = [
   { id: 'cuscus', name: 'Cuscús', roles: ['carbMain'], category: 'hidratos', per100: { p: 13, c: 77, f: 0.6 }, range: [40, 180], tags: ['gluten'] },
   { id: 'lentejas', name: 'Lentejas cocidas (bote)', roles: ['carbMain'], category: 'hidratos', per100: { p: 9, c: 20, f: 0.4 }, range: [150, 300] },
   { id: 'garbanzos', name: 'Garbanzos cocidos (bote)', roles: ['carbMain'], category: 'hidratos', per100: { p: 9, c: 27, f: 2.6 }, range: [120, 250] },
+  { id: 'noquis', name: 'Ñoquis de patata', roles: ['carbMain'], category: 'hidratos', per100: { p: 3.5, c: 33, f: 0.5 }, range: [150, 400], tags: ['gluten'] },
+  {
+    id: 'mazorca',
+    name: 'Mazorca de maíz (cocida)',
+    roles: ['carbMain'],
+    category: 'hidratos',
+    per100: { p: 3.2, c: 19, f: 1.5 },
+    unit: { grams: 150, singular: 'mazorca', plural: 'mazorcas' },
+    range: [150, 450],
+  },
 
   // ---- hidrato de desayuno y merienda ----
   { id: 'avena', name: 'Copos de avena', roles: ['carbBreakfast'], category: 'hidratos', per100: { p: 13, c: 66, f: 7 }, range: [30, 120] },
-  { id: 'pan', name: 'Pan integral', roles: ['carbBreakfast', 'carbSnack'], category: 'hidratos', per100: { p: 12, c: 42, f: 3 }, range: [30, 120], tags: ['gluten'] },
+  { id: 'pan', name: 'Pan integral', roles: ['carbBreakfast', 'carbSnack'], category: 'hidratos', per100: { p: 12, c: 42, f: 3 }, range: [30, 120], tags: ['gluten'], spreadable: true },
   {
     id: 'wasa',
     name: 'Pan Wasa',
@@ -168,6 +187,7 @@ export const FOODS: Food[] = [
     unit: { grams: 10, singular: 'tostada', plural: 'tostadas' },
     range: [20, 50],
     tags: ['gluten'],
+    spreadable: true,
   },
   {
     id: 'centeno',
@@ -176,6 +196,28 @@ export const FOODS: Food[] = [
     category: 'hidratos',
     per100: { p: 8.5, c: 48, f: 1.7 },
     range: [30, 120],
+    tags: ['gluten'],
+    spreadable: true,
+  },
+  {
+    id: 'bimbo',
+    name: 'Pan de molde integral (Bimbo)',
+    roles: ['carbBreakfast', 'carbSnack'],
+    category: 'hidratos',
+    per100: { p: 9, c: 42, f: 4 },
+    unit: { grams: 25, singular: 'rebanada', plural: 'rebanadas' },
+    range: [25, 100],
+    tags: ['gluten'],
+    spreadable: true,
+  },
+  {
+    id: 'galletas',
+    name: 'Galletas integrales',
+    roles: ['carbBreakfast', 'carbSnack'],
+    category: 'hidratos',
+    per100: { p: 7, c: 68, f: 12 },
+    unit: { grams: 7, singular: 'galleta', plural: 'galletas' },
+    range: [14, 42],
     tags: ['gluten'],
   },
   {
@@ -186,6 +228,7 @@ export const FOODS: Food[] = [
     per100: { p: 8, c: 80, f: 3 },
     unit: { grams: 9, singular: 'tortita', plural: 'tortitas' },
     range: [18, 45],
+    spreadable: true,
   },
 
   // ---- fruta (una pieza) ----
@@ -202,6 +245,7 @@ export const FOODS: Food[] = [
     unit: { grams: 24, singular: 'dátil', plural: 'dátiles' },
     servingUnits: 2,
   },
+  { id: 'arandanos-secos', name: 'Arándanos deshidratados (Dia)', roles: ['fruit', 'fruitPre'], category: 'fruta', per100: { p: 0.2, c: 80, f: 1 }, serving: 30 },
   { id: 'pina', name: 'Piña', roles: ['fruit'], category: 'fruta', per100: { p: 0.5, c: 13, f: 0.1 }, serving: 150 },
   { id: 'uvas', name: 'Uvas', roles: ['fruit', 'fruitPre'], category: 'fruta', per100: { p: 0.7, c: 17, f: 0.2 }, serving: 150 },
 
@@ -222,13 +266,18 @@ export const FOODS: Food[] = [
   { id: 'cafe', name: 'Café solo', roles: ['drink'], category: 'despensa', per100: { p: 0, c: 0, f: 0 }, unit: { grams: 7, singular: 'taza', plural: 'tazas' } },
   { id: 'leche', name: 'Leche desnatada', roles: ['drink'], category: 'lacteos', per100: { p: 3.4, c: 5, f: 0.1 }, serving: 250, liquid: true, tags: ['lacteo'] },
   { id: 'kefir', name: 'Kéfir', roles: ['drink'], category: 'lacteos', per100: { p: 3.4, c: 4.5, f: 1 }, serving: 250, liquid: true, tags: ['lacteo'] },
+  { id: 'infusion', name: 'Infusión (sin azúcar)', roles: ['drink'], category: 'despensa', per100: { p: 0, c: 0, f: 0 }, unit: { grams: 2, singular: 'infusión', plural: 'infusiones' } },
   { id: 'cafe-leche', name: 'Café con leche desnatada', roles: ['drink'], category: 'lacteos', per100: { p: 3.4, c: 5, f: 0.1 }, serving: 200, liquid: true, tags: ['lacteo'] },
 
   // ---- extra de la media mañana (ración pequeña; no se pone en la toma previa al entreno, la grasa digiere despacio) ----
   { id: 'frutos-secos', name: 'Frutos secos al natural', roles: ['extra'], category: 'despensa', per100: { p: 20, c: 12, f: 52 }, serving: 20 },
-  { id: 'crema-cacahuete', name: 'Crema de cacahuete', roles: ['extra'], category: 'despensa', per100: { p: 25, c: 20, f: 50 }, serving: 15 },
+  { id: 'crema-cacahuete', name: 'Crema de cacahuete', roles: ['extra', 'spread'], category: 'despensa', per100: { p: 25, c: 20, f: 50 }, serving: 15 },
   { id: 'cacahuete-polvo', name: 'Cacahuete en polvo', roles: ['extra'], category: 'despensa', per100: { p: 50, c: 25, f: 12 }, serving: 20 },
   { id: 'chocolate-negro', name: 'Chocolate negro (70 % o más)', roles: ['extra'], category: 'despensa', per100: { p: 8, c: 46, f: 43 }, serving: 15 },
+  { id: 'gelatina', name: 'Gelatina sin azúcar', roles: ['extra'], category: 'despensa', per100: { p: 1.5, c: 0.5, f: 0 }, serving: 125 },
+
+  // ---- para untar en el pan, las tostadas o las tortitas (solo si el hidrato de la toma lo admite) ----
+  { id: 'mermelada-light', name: 'Mermelada baja en azúcar', roles: ['spread'], category: 'despensa', per100: { p: 0.3, c: 30, f: 0 }, serving: 20 },
 
   // ---- platos hechos: ración fija; el motor completa la toma con hidrato y proteína si hace falta ----
   {
@@ -273,6 +322,12 @@ export const FOODS: Food[] = [
   { id: 'mozzarella', name: 'Mozzarella', roles: [], category: 'lacteos', per100: { p: 20, c: 2, f: 18 }, tags: ['lacteo'] },
 ];
 
+/**
+ * Básicos de despensa que no entran en los menús (no llevan macros que contar) pero el atleta quiere en su lista de
+ * la compra: se activan en Ajustes y salen siempre en la sección Despensa.
+ */
+export const STAPLES: { id: string; name: string; text: string }[] = [{ id: 'sacarina', name: 'Sacarina (edulcorante)', text: 'reponer si falta' }];
+
 const BY_ID = new Map(FOODS.map((f) => [f.id, f]));
 
 export function getFood(id: string): Food | undefined {
@@ -283,6 +338,7 @@ export function getFood(id: string): Food | undefined {
 export function foodsForRole(role: FoodRole): Food[] {
   return FOODS.filter((f) => f.roles.includes(role));
 }
+
 
 
 

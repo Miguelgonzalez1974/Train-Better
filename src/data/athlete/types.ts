@@ -205,6 +205,8 @@ export interface NutritionPrefs {
   doneMeals?: Record<string, number[]>;
   /** Hora de entreno por día de la semana (lunes = "0"). Sin valor: sábado 10:00, el resto 16:00. */
   trainingHours?: Record<string, number>;
+  /** Básicos de despensa (ver `STAPLES` en data/nutrition/foods.ts) que el atleta quiere siempre en la lista de la compra. */
+  staples?: string[];
 }
 
 export interface AthleteProfile {

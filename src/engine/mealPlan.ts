@@ -21,7 +21,7 @@ export const MEAL_LABEL: Record<MealKey, string> = {
   cena: 'Cena',
 };
 
-export type SlotKind = 'protein' | 'protein2' | 'carb' | 'carb2' | 'fruit' | 'veg' | 'fat' | 'drink' | 'extra';
+export type SlotKind = 'protein' | 'protein2' | 'carb' | 'carb2' | 'fruit' | 'veg' | 'fat' | 'drink' | 'extra' | 'spread';
 
 export const TRAINING_HOUR_OPTIONS = [10, 16, 17] as const;
 
@@ -324,13 +324,27 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       usedToday[slot.kind === 'protein2' ? 'protein' : slot.kind]?.add(food.id);
     }
 
+    // Pan, tostadas o tortitas en el desayuno o la merienda: algo para untar (mermelada, crema de cacahuete).
+    const breadCarb = foods.get('carb');
+    if (breadCarb?.spreadable && (meal === 'desayuno' || meal === 'merienda')) {
+      const requested = getFood(swaps[swapKey(date, meal, 'spread')] ?? '');
+      const spreads = poolForRole('spread', excluded);
+      const spread =
+        requested && requested.roles.includes('spread') && !excluded.has(requested.id)
+          ? requested
+          : spreads.length > 0
+            ? spreads[(Math.floor(dayNum / ROTATION_STEP[meal]) + seedOf(`${meal}spread`)) % spreads.length]
+            : undefined;
+      if (spread) foods.set('spread', spread);
+    }
+
     // 2) Cantidades: primero lo fijo (fruta, verdura, aceite), luego el hidrato hasta el objetivo de la toma, y la proteína al final.
     const pTarget = proteinMid * shape.p[mi];
     const cTarget = carbsMid * shape.c[mi];
     const portions = new Map<SlotKind, { grams: number; units?: number }>();
     let p = 0;
     let c = 0;
-    for (const kind of ['fruit', 'veg', 'fat', 'drink', 'extra'] as SlotKind[]) {
+    for (const kind of ['fruit', 'veg', 'fat', 'drink', 'extra', 'spread'] as SlotKind[]) {
       const food = foods.get(kind);
       if (!food) continue;
       const portion = fixedPortion(food);
@@ -421,6 +435,7 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
     const outSlots: SlotDef[] = slots.flatMap((s) => {
       const list: SlotDef[] = [s];
       if (s.kind === 'carb' && foods.has('carb2')) list.push({ kind: 'carb2', role: s.role });
+      if (s.kind === 'carb' && foods.has('spread')) list.push({ kind: 'spread', role: 'spread' });
       if (s.kind === 'protein' && !dishFood && foods.has('protein2')) list.push({ kind: 'protein2', role: s.role });
       return list;
     });
@@ -540,6 +555,7 @@ export function shoppingListText(groups: ShoppingGroup[], title: string): string
   const body = groups.map((g) => `${g.label}\n${g.lines.map((l) => `- ${l.name}: ${l.text}`).join('\n')}`).join('\n\n');
   return `${title}\n\n${body}`;
 }
+
 
 
 

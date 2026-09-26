@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import { TriangleAlert } from 'lucide-react';
-import { FOODS, FOOD_TAG_LABEL, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, type FoodRole, type FoodTag } from '../../data/nutrition/foods';
+import { FOODS, FOOD_TAG_LABEL, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, STAPLES, type FoodRole, type FoodTag } from '../../data/nutrition/foods';
 import { defaultTrainingHour, poolForRole, TRAINING_HOUR_OPTIONS } from '../../engine/mealPlan';
 import { BodyweightCard } from '../dashboard/BodyweightCard';
 import { WEEKDAY_LONG } from './nutritionData';
@@ -90,6 +90,33 @@ export function AjustesView({ shared, bodyweightLog, onBodyweightChange }: Ajust
                   ))}
                 </select>
               </label>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="card p-3.5">
+        <p className="mb-1 text-sm font-semibold text-white">Básicos de despensa</p>
+        <p className="mb-3 text-xs text-neutral-500">Cosas que usas pero no llevan cantidad en el menú. Las que actives salen siempre en tu lista de la compra.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {STAPLES.map((s) => {
+            const on = prefs.staples?.includes(s.id) ?? false;
+            return (
+              <button
+                key={s.id}
+                onClick={() =>
+                  updatePrefs((p) => {
+                    const current = p.staples ?? [];
+                    return { ...p, staples: on ? current.filter((id) => id !== s.id) : [...current, s.id] };
+                  })
+                }
+                aria-pressed={on}
+                className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  on ? 'border-brand-gold bg-brand-gold/15 text-brand-gold' : 'border-brand-border text-neutral-400 hover:text-white'
+                }`}
+              >
+                {s.name}
+              </button>
             );
           })}
         </div>

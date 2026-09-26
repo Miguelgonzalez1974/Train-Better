@@ -218,7 +218,7 @@ describe('alimentos nuevos', () => {
 
   it('el desayuno lleva bebida (cafe, leche desnatada o cafe con leche) y la leche cuenta en ml', () => {
     const drinks = new Set(week(0).map((p) => p.meals[0].items.find((i) => i.kind === 'drink')?.foodId));
-    expect([...drinks].sort()).toEqual(['cafe', 'cafe-leche', 'kefir', 'leche']);
+    expect([...drinks].sort()).toEqual(['cafe', 'cafe-leche', 'infusion', 'kefir', 'leche']);
     const milk = planDayMeals(base({ prefs: { swaps: { [swapKey('2026-09-28', 'desayuno', 'drink')]: 'leche' } } })).meals[0].items.find((i) => i.kind === 'drink')!;
     expect(milk.quantity).toBe('250 ml');
   });
@@ -229,7 +229,58 @@ describe('alimentos nuevos', () => {
     expect(ids).toEqual(expect.arrayContaining(['cottage', 'wasa', 'pina']));
     expect(plan.meals[0].items.find((i) => i.foodId === 'wasa')!.quantity).toMatch(/tostadas/);
   });
+
+  it('jamon serrano, queso de cabra, cheddar, anchoas, nonquis, mazorca, galletas, pan de molde, arandanos, gelatina e infusion entran como opciones', () => {
+    const d = '2026-09-28';
+    const swaps = {
+      [swapKey(d, 'desayuno', 'protein')]: 'jamon-serrano',
+      [swapKey(d, 'desayuno', 'carb')]: 'bimbo',
+      [swapKey(d, 'desayuno', 'fruit')]: 'arandanos-secos',
+      [swapKey(d, 'desayuno', 'drink')]: 'infusion',
+      [swapKey(d, 'mediaManana', 'extra')]: 'gelatina',
+      [swapKey(d, 'merienda', 'protein')]: 'anchoas',
+      [swapKey(d, 'merienda', 'carb')]: 'galletas',
+      [swapKey(d, 'comida', 'carb')]: 'mazorca',
+      [swapKey(d, 'cena', 'carb')]: 'noquis',
+      [swapKey(d, 'cena', 'protein')]: 'merluza',
+    };
+    const ids = planDayMeals(base({ prefs: { swaps } })).meals.flatMap((m) => m.items.map((i) => i.foodId));
+    for (const id of ['jamon-serrano', 'bimbo', 'arandanos-secos', 'infusion', 'gelatina', 'anchoas', 'galletas', 'mazorca', 'noquis', 'merluza']) expect(ids).toContain(id);
+    // Otros con su propia comprobacion.
+    const cheese = planDayMeals(base({ prefs: { swaps: { [swapKey(d, 'desayuno', 'protein')]: 'cheddar' } } })).meals[0].items.find((i) => i.foodId === 'cheddar');
+    const goat = planDayMeals(base({ prefs: { swaps: { [swapKey(d, 'desayuno', 'protein')]: 'queso-cabra' } } })).meals[0].items.find((i) => i.foodId === 'queso-cabra');
+    expect(cheese && cheese.grams).toBeLessThanOrEqual(60);
+    expect(goat && goat.grams).toBeLessThanOrEqual(80);
+  });
+
+  it('el bacon solo sale si se elige a mano, no en la rotacion', () => {
+    for (const p of week(0)) for (const i of p.meals.flatMap((m) => m.items)) expect(i.foodId).not.toBe('bacon');
+    const swapped = planDayMeals(base({ prefs: { swaps: { [swapKey('2026-09-28', 'desayuno', 'protein')]: 'bacon' } } }));
+    expect(swapped.meals[0].items.some((i) => i.foodId === 'bacon')).toBe(true);
+  });
+
+  it('con pan, tostadas o tortitas el desayuno y la merienda llevan algo para untar; con avena, no', () => {
+    const d = '2026-09-28';
+    const withBread = planDayMeals(base({ prefs: { swaps: { [swapKey(d, 'desayuno', 'carb')]: 'pan' } } })).meals[0];
+    expect(withBread.items.some((i) => i.kind === 'spread')).toBe(true);
+    const withOats = planDayMeals(base({ prefs: { swaps: { [swapKey(d, 'desayuno', 'carb')]: 'avena' } } })).meals[0];
+    expect(withOats.items.some((i) => i.kind === 'spread')).toBe(false);
+    const jam = planDayMeals(base({ prefs: { swaps: { [swapKey(d, 'desayuno', 'carb')]: 'pan', [swapKey(d, 'desayuno', 'spread')]: 'mermelada-light' } } })).meals[0].items.find((i) => i.kind === 'spread')!;
+    expect(jam.foodId).toBe('mermelada-light');
+    expect(jam.quantity).toBe('20 g');
+  });
+
+  it('galletas y pan de molde nunca pasan de una racion razonable (6 galletas, 4 rebanadas)', () => {
+    for (const dayType of DAY_TYPES) {
+      for (const weightKg of [60, 80, 100]) {
+        for (let d = 1; d <= 28; d++) {
+          const plan = planDayMeals(base({ date: `2026-10-${String(d).padStart(2, '0')}`, dayType, weightKg }));
+          for (const i of plan.meals.flatMap((m) => m.items)) {
+            if (i.foodId === 'galletas') expect(i.units).toBeLessThanOrEqual(6);
+            if (i.foodId === 'bimbo') expect(i.units).toBeLessThanOrEqual(4);
+          }
+        }
+      }
+    }
+  });
 });
-
-
-

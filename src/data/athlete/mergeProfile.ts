@@ -42,6 +42,7 @@ function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: At
   if (!remote && !local) return undefined;
   return {
     excludedFoodIds: local?.excludedFoodIds ?? remote?.excludedFoodIds,
+    staples: local?.staples ?? remote?.staples,
     trainingHours: { ...(remote?.trainingHours ?? {}), ...(local?.trainingHours ?? {}) },
     swaps: keepLatestKeys({ ...(remote?.swaps ?? {}), ...(local?.swaps ?? {}) }, NUTRITION_SWAPS_LIMIT),
     doneMeals: keepLatestKeys({ ...(remote?.doneMeals ?? {}), ...(local?.doneMeals ?? {}) }, NUTRITION_DONE_DAYS_LIMIT),
