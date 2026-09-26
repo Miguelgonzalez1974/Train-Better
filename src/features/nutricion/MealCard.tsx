@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Check, Grab, Hand, Repeat } from 'lucide-react';
+import { Check, Grab, Hand, PencilLine, Repeat } from 'lucide-react';
 import { poolForRole, previewSwap, type MealPlanInput, type PlannedItem, type PlannedMeal } from '../../engine/mealPlan';
 import { formatServing } from '../../engine/nutritionPlan';
 
@@ -34,20 +34,29 @@ interface MealCardProps {
   input: MealPlanInput;
   excludedFoodIds: string[];
   onSwap: (swapKey: string, foodId: string) => void;
+  /** Abre la comida para montarla a mano (elegir alimentos hasta cubrir la toma). */
+  onBuild: () => void;
 }
 
 /**
  * Una comida del día: hora, etiqueta respecto al entreno, alimentos con su cantidad y cuánto aporta.
  * Tocar un alimento abre las alternativas del mismo hueco, ya con la cantidad recalculada.
  */
-export function MealCard({ meal, done, onToggleDone, input, excludedFoodIds, onSwap }: MealCardProps) {
+export function MealCard({ meal, done, onToggleDone, input, excludedFoodIds, onSwap, onBuild }: MealCardProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const tagStyle = meal.pre ? PRE_STYLE : (TAG_STYLE[meal.tag] ?? 'bg-white/5 text-neutral-400');
 
   return (
     <section className={`card p-3.5 transition-opacity duration-200 ${done ? 'opacity-60' : ''}`}>
       <div className="flex items-center gap-2">
-        <p className="flex-1 text-sm font-semibold text-white">{meal.label}</p>
+        <p className="flex flex-1 items-center gap-1.5 text-sm font-semibold text-white">
+          {meal.label}
+          {meal.custom && (
+            <span className="flex items-center gap-1 rounded-md bg-brand-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-gold">
+              <PencilLine size={10} aria-hidden="true" /> A tu manera
+            </span>
+          )}
+        </p>
         {meal.tag && <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${tagStyle}`}>{meal.tag}</span>}
         <span className="num text-xs text-neutral-500">{meal.time}</span>
       </div>
@@ -56,7 +65,8 @@ export function MealCard({ meal, done, onToggleDone, input, excludedFoodIds, onS
         {meal.items.map((item) => {
           const open = openKey === item.swapKey;
           const options = poolForRole(item.role, excludedFoodIds, true);
-          const canSwap = options.length > 1;
+          // Una comida montada a mano se edita en su propia ventana, no con los cambios de alimento de la sugerencia.
+          const canSwap = !meal.custom && options.length > 1;
           return (
             <li key={item.swapKey} className="py-1.5">
               <button
@@ -117,6 +127,15 @@ export function MealCard({ meal, done, onToggleDone, input, excludedFoodIds, onS
             {formatServing(handRange(meal.fists), 'puño', 'puños')}
           </span>
         </p>
+        <button
+          type="button"
+          onClick={onBuild}
+          aria-label={`Montar ${meal.label.toLowerCase()} a mi manera`}
+          title="Montar a mi manera"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors hover:border-brand-gold hover:text-brand-gold"
+        >
+          <PencilLine size={14} />
+        </button>
         <button
           type="button"
           onClick={onToggleDone}

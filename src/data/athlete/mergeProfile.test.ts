@@ -263,6 +263,31 @@ describe('mergeProfile — config: gana el local', () => {
     expect(merged?.trainingHours).toEqual({ '0': 17, '1': 16 });
   });
 
+  it('nutritionPrefs: las comidas montadas a mano se unen por fecha (gana el local) y un dia vaciado a proposito no revive', () => {
+    const remote = {
+      ...base(),
+      nutritionPrefs: {
+        customMeals: {
+          '2026-10-06': { desayuno: [{ foodId: 'skyr', grams: 200 }] },
+          '2026-10-07': { cena: [{ foodId: 'pollo', grams: 150 }] },
+        },
+      },
+    };
+    const local = {
+      ...base(),
+      nutritionPrefs: {
+        customMeals: {
+          '2026-10-06': { desayuno: [{ foodId: 'avena', grams: 60 }] },
+          // El atleta volvio al menu automatico de este dia: queda un objeto vacio, que gana al remoto.
+          '2026-10-07': {},
+        },
+      },
+    };
+    const merged = mergeProfile(remote, local).nutritionPrefs?.customMeals;
+    expect(merged?.['2026-10-06']?.desayuno).toEqual([{ foodId: 'avena', grams: 60 }]);
+    expect(merged?.['2026-10-07']).toEqual({});
+  });
+
   it('nutritionPrefs: un dispositivo sin preferencias hereda las remotas', () => {
     const remote = { ...base(), nutritionPrefs: { excludedFoodIds: ['skyr'] } };
     expect(mergeProfile(remote, base()).nutritionPrefs?.excludedFoodIds).toEqual(['skyr']);

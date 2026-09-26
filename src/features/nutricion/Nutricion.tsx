@@ -5,16 +5,18 @@ import { toLocalIsoDate } from '../../engine/periodization';
 import { BodyweightCard } from '../dashboard/BodyweightCard';
 import { NutritionModal } from '../dashboard/NutritionModal';
 import { AjustesView } from './AjustesView';
+import { CalendarioView } from './CalendarioView';
 import { CompraView } from './CompraView';
 import { HoyView } from './HoyView';
 import { computeWeekDays, mondayOf, type WeekDay } from './nutritionData';
 import { SemanaView } from './SemanaView';
 import type { NutritionShared } from './shared';
 
-type SubTab = 'hoy' | 'semana' | 'compra' | 'ajustes';
+type SubTab = 'hoy' | 'mes' | 'semana' | 'compra' | 'ajustes';
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'hoy', label: 'Hoy' },
+  { id: 'mes', label: 'Mes' },
   { id: 'semana', label: 'Semana' },
   { id: 'compra', label: 'Compra' },
   { id: 'ajustes', label: 'Ajustes' },
@@ -92,6 +94,7 @@ export function Nutricion() {
       ) : (
         <>
           {tab === 'hoy' && <HoyView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} onOpenGuide={() => setShowGuide(true)} />}
+          {tab === 'mes' && <CalendarioView shared={shared} />}
           {tab === 'semana' && (
             <SemanaView
               shared={shared}

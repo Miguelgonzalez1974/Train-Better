@@ -179,6 +179,10 @@ export interface PlannedMeal {
   time: string;
   tag: string;
   pre: boolean;
+  /** Lo que esta toma debería aportar (proteína e hidratos) según el tipo de día — la referencia para montarla a mano. */
+  target: { protein: number; carbs: number };
+  /** La montó el atleta a mano (no es la sugerencia automática). */
+  custom?: boolean;
   items: PlannedItem[];
   protein: number;
   carbs: number;
@@ -261,7 +265,7 @@ export function poolForRole(role: FoodRole, excluded: Set<string> | string[] = [
   return foodsForRole(role).filter((f) => !ex.has(f.id) && (includeManual || !f.manualOnly));
 }
 
-function macrosOf(food: Food, grams: number): { p: number; c: number } {
+export function macrosOf(food: Food, grams: number): { p: number; c: number } {
   return { p: (food.per100.p * grams) / 100, c: (food.per100.c * grams) / 100 };
 }
 
@@ -280,19 +284,19 @@ function toPortion(food: Food, grams: number): { grams: number; units?: number }
   return { grams: Math.max(5, Math.round(g / 5) * 5) };
 }
 
-function quantityText(food: Food, grams: number, units?: number): string {
+export function quantityText(food: Food, grams: number, units?: number): string {
   if (food.id === 'aceite') return '1 cucharada (10 ml)';
   if (food.unit && units != null) return `${units} ${units === 1 ? food.unit.singular : food.unit.plural}`;
   if (food.liquid) return `${grams} ml`;
   return `${grams} g`;
 }
 
-function halfSteps(x: number): number {
+export function halfSteps(x: number): number {
   return Math.max(0.5, Math.round(x * 2) / 2);
 }
 
 /** Alimento fijo (fruta, verdura, aceite): una pieza o la ración del catálogo. */
-function fixedPortion(food: Food): { grams: number; units?: number } {
+export function fixedPortion(food: Food): { grams: number; units?: number } {
   if (food.unit) {
     const units = food.servingUnits ?? 1;
     return { grams: food.unit.grams * units, units };
@@ -537,6 +541,7 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       time: timing.time,
       tag: timing.tag,
       pre: timing.pre,
+      target: { protein: Math.round(pTarget), carbs: Math.round(cTarget) },
       items,
       protein: Math.round(p),
       carbs: Math.round(c),
@@ -627,6 +632,7 @@ export function shoppingListText(groups: ShoppingGroup[], title: string): string
   const body = groups.map((g) => `${g.label}\n${g.lines.map((l) => `- ${l.name}: ${l.text}`).join('\n')}`).join('\n\n');
   return `${title}\n\n${body}`;
 }
+
 
 
 

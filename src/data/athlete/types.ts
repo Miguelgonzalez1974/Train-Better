@@ -207,6 +207,17 @@ export interface NutritionPrefs {
   trainingHours?: Record<string, number>;
   /** Básicos de despensa (ver `STAPLES` en data/nutrition/foods.ts) que el atleta quiere siempre en la lista de la compra. */
   staples?: string[];
+  /**
+   * Comidas que el atleta montó a mano, por fecha y comida: sustituyen a la sugerencia automática de esa comida
+   * (ver `src/engine/mealBuilder.ts`). Quitar la entrada devuelve la sugerencia automática.
+   */
+  customMeals?: Record<string, Partial<Record<'desayuno' | 'mediaManana' | 'comida' | 'merienda' | 'cena', CustomMealItem[]>>>;
+}
+
+/** Un alimento de una comida montada a mano: id del catálogo y gramos (o ml). */
+export interface CustomMealItem {
+  foodId: string;
+  grams: number;
 }
 
 export interface AthleteProfile {

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, Droplet } from 'lucide-react';
-import { TRAINING_HOUR_OPTIONS, type MealPlanInput } from '../../engine/mealPlan';
+import { MEAL_LABEL, TRAINING_HOUR_OPTIONS, type MealKey, type MealPlanInput } from '../../engine/mealPlan';
+import { Modal } from '../shell/Modal';
+import { MealBuilderPanel } from './MealBuilderPanel';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
 import { MealCard } from './MealCard';
@@ -24,6 +26,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
   const { prefs, weightKg, todayIso, updatePrefs, getWeek } = shared;
   const day = getWeek(iso).find((d) => d.iso === iso);
   const [typeOverride, setTypeOverride] = useState<NutritionDayType | null>(null);
+  const [buildMeal, setBuildMeal] = useState<MealKey | null>(null);
   useEffect(() => setTypeOverride(null), [iso]);
 
   const dayType = typeOverride ?? day?.type ?? 'normal';
@@ -143,8 +146,23 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
 
       {/* Comidas */}
       {plan.meals.map((meal, i) => (
-        <MealCard key={meal.key} meal={meal} done={done.includes(i)} onToggleDone={() => toggleDone(i)} input={input} excludedFoodIds={excluded} onSwap={swap} />
+        <MealCard
+          key={meal.key}
+          meal={meal}
+          done={done.includes(i)}
+          onToggleDone={() => toggleDone(i)}
+          input={input}
+          excludedFoodIds={excluded}
+          onSwap={swap}
+          onBuild={() => setBuildMeal(meal.key)}
+        />
       ))}
+
+      {buildMeal && (
+        <Modal open onClose={() => setBuildMeal(null)} title={`${MEAL_LABEL[buildMeal]} · ${dayLabel(iso, todayIso)}`}>
+          <MealBuilderPanel shared={shared} iso={iso} dayType={dayType} mealKey={buildMeal} />
+        </Modal>
+      )}
 
       {/* Agua */}
       {dayType !== 'descanso' && (

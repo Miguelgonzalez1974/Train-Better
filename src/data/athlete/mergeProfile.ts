@@ -27,6 +27,7 @@ const WEEKLY_LOCKS_LIMIT = 60;
 
 const NUTRITION_SWAPS_LIMIT = 200;
 const NUTRITION_DONE_DAYS_LIMIT = 30;
+const NUTRITION_CUSTOM_DAYS_LIMIT = 60;
 
 /** Se queda con las `limit` claves mas recientes de un objeto cuyas claves empiezan por una fecha ISO. */
 function keepLatestKeys<T>(obj: Record<string, T>, limit: number): Record<string, T> {
@@ -46,6 +47,8 @@ function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: At
     trainingHours: { ...(remote?.trainingHours ?? {}), ...(local?.trainingHours ?? {}) },
     swaps: keepLatestKeys({ ...(remote?.swaps ?? {}), ...(local?.swaps ?? {}) }, NUTRITION_SWAPS_LIMIT),
     doneMeals: keepLatestKeys({ ...(remote?.doneMeals ?? {}), ...(local?.doneMeals ?? {}) }, NUTRITION_DONE_DAYS_LIMIT),
+    // Por fecha: gana el local (el día entero que el atleta acaba de tocar); las demás fechas de ambos dispositivos se conservan.
+    customMeals: keepLatestKeys({ ...(remote?.customMeals ?? {}), ...(local?.customMeals ?? {}) }, NUTRITION_CUSTOM_DAYS_LIMIT),
   };
 }
 
