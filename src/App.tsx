@@ -68,7 +68,9 @@ export default function App() {
             onNavigateToObjetivos={() => setActiveTab('objetivos')}
           />
         )}
-        {activeTab === 'planificacion' && <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} />}
+        {activeTab === 'planificacion' && (
+          <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} onNavigateToNutricion={() => setActiveTab('nutricion')} />
+        )}
         {activeTab === 'nutricion' && <Nutricion />}
         {activeTab === 'objetivos' && <Objetivos />}
       </main>

@@ -60,8 +60,7 @@ import { DaySessionBlocks } from './DaySessionBlocks';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
-import { NutritionTip } from './NutritionTip';
-import { NutritionGlance } from './NutritionGlance';
+import { NutritionDayButton } from './NutritionDayButton';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { WodResultField } from './WodResultField';
@@ -148,9 +147,10 @@ function loadTodaySession(
 
 interface PlanificacionProps {
   onNavigateToObjetivos: () => void;
+  onNavigateToNutricion: () => void;
 }
 
-export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
+export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: PlanificacionProps) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const goals = profile.goals;
@@ -803,6 +803,17 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
                 profile={profile}
                 history={history}
                 goals={goals}
+                trailing={
+                  session ? (
+                    <NutritionDayButton
+                      session={session}
+                      weightKg={latestWeightKg}
+                      prefs={profile.nutritionPrefs}
+                      trainedToday={alreadyCompletedToday}
+                      onOpenNutrition={onNavigateToNutricion}
+                    />
+                  ) : undefined
+                }
                 onDeleteHistoryEntry={(date) => {
                   athleteRepository.deleteHistoryEntry(date);
                   setHistory(athleteRepository.getHistory());
@@ -989,22 +1000,6 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
           </div>
         )}
       </div>
-
-      {/* Semáforo nutricional del día — también el día ya completado (la línea pasa a "después") y en descanso.
-          Con peso registrado sustituye al consejo genérico; sin peso no se puede calcular y queda el de siempre
-          (solo antes de entrenar: el de después ya va dentro del resumen de la sesión). */}
-      {latestWeightKg ? (
-        <div className="mt-3">
-          <NutritionGlance session={session} weightKg={latestWeightKg} done={alreadyCompletedToday} />
-        </div>
-      ) : (
-        !session.isRestDay &&
-        !alreadyCompletedToday && (
-          <div className="mt-3">
-            <NutritionTip session={session} variant="pre" />
-          </div>
-        )
-      )}
 
       {alreadyCompletedToday && todayHistoryEntry && (
         <SessionSummaryCard

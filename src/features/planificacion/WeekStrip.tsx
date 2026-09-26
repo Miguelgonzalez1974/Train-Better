@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
@@ -38,9 +38,11 @@ interface WeekStripProps {
   today?: Date;
   /** Borra el registro de un dia pasado (por si se anoto por error) — el padre es quien posee `history`, asi que refresca su propio estado. */
   onDeleteHistoryEntry?: (date: string) => void;
+  /** Botón fijo a la derecha de los siete días (el icono de nutrición de hoy). */
+  trailing?: ReactNode;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, trailing }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -116,7 +118,8 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
         </button>
       </div>
 
-      <div className="flex justify-between gap-1">
+      <div className="flex items-stretch gap-1.5">
+      <div className="flex min-w-0 flex-1 justify-between gap-1">
         {DAY_LABELS.map((label, index) => {
           const plan = getDayPlan(index, trainingDaysPerWeek);
           const dateIso = toLocalIsoDate(weekDates[index]);
@@ -155,6 +158,8 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
             </button>
           );
         })}
+      </div>
+      {trailing}
       </div>
 
       {expanded !== null &&

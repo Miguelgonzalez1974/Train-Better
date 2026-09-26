@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, Droplet } from 'lucide-react';
 import { MEAL_LABEL, TRAINING_HOUR_OPTIONS, type MealKey, type MealPlanInput } from '../../engine/mealPlan';
 import { Modal } from '../shell/Modal';
+import { computeDayFlow } from '../../engine/dayFlow';
+import { DayFlow } from './DayFlow';
 import { MealBuilderPanel } from './MealBuilderPanel';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
@@ -36,9 +38,21 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
   const input: MealPlanInput = { date: iso, dayType, weightKg, trainingHour: hour, prefs: { excludedFoodIds: excluded, swaps: prefs.swaps } };
 
   const done = prefs.doneMeals?.[iso] ?? [];
-  const doneMeals = plan.meals.filter((_, i) => done.includes(i));
-  const doneProtein = doneMeals.reduce((s, m) => s + m.protein, 0);
-  const doneCarbs = doneMeals.reduce((s, m) => s + m.carbs, 0);
+
+  // "Ahora" solo tiene sentido en el día de hoy; se refresca cada minuto.
+  const isToday = iso === todayIso;
+  const [nowHour, setNowHour] = useState(() => new Date().getHours() + new Date().getMinutes() / 60);
+  useEffect(() => {
+    if (!isToday) return;
+    const tick = () => setNowHour(new Date().getHours() + new Date().getMinutes() / 60);
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, [isToday]);
+  const flow = useMemo(
+    () => computeDayFlow(plan, done, { trainingHour: dayType === 'descanso' ? null : hour, nowHour: isToday ? nowHour : null }),
+    [plan, done, dayType, hour, isToday, nowHour],
+  );
 
   function toggleDone(index: number) {
     updatePrefs((p) => {
@@ -55,9 +69,6 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
   function setHour(h: number) {
     updatePrefs((p) => ({ ...p, trainingHours: { ...(p.trainingHours ?? {}), [String(day?.weekdayIndex ?? 0)]: h } }));
   }
-
-  const pTotal = plan.totals.protein;
-  const cTotal = plan.totals.carbs;
 
   return (
     <div className="flex flex-col gap-3">
@@ -122,26 +133,10 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
         {typeOverride && <p className="text-[11px] text-neutral-500">Has cambiado el tipo de día a mano; el entreno planificado dice «{DAY_TYPE_SHORT[day?.type ?? 'normal']}».</p>}
       </div>
 
-      {/* Objetivo del día */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="card px-3.5 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Proteína</p>
-          <p className="num text-xl font-bold text-white">
-            {doneProtein} <span className="text-sm font-normal text-neutral-500">/ {pTotal} g</span>
-          </p>
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-red-400/80 transition-all duration-300" style={{ width: `${Math.min(100, (doneProtein / Math.max(1, pTotal)) * 100)}%` }} />
-          </div>
-        </div>
-        <div className="card px-3.5 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Hidratos</p>
-          <p className="num text-xl font-bold text-white">
-            {doneCarbs} <span className="text-sm font-normal text-neutral-500">/ {cTotal} g</span>
-          </p>
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-brand-gold transition-all duration-300" style={{ width: `${Math.min(100, (doneCarbs / Math.max(1, cTotal)) * 100)}%` }} />
-          </div>
-        </div>
+      {/* Línea del día: lo hecho frente a lo previsto, con las comidas en su hora y el entreno como corte */}
+      <div className="card p-3.5">
+        <p className="mb-2.5 text-sm font-semibold text-white">Tu día</p>
+        <DayFlow flow={flow} />
       </div>
 
       {/* Comidas */}
