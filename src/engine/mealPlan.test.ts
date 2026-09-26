@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { FOODS, getFood } from '../data/nutrition/foods';
+import { FOODS, getFood, TRIAL_WEEKS } from '../data/nutrition/foods';
 import { buildShoppingList, mealTimings, planDayMeals, previewSwap, swapKey, type MealPlanInput } from './mealPlan';
 import type { NutritionDayType } from './nutritionPlan';
 
@@ -282,5 +282,38 @@ describe('alimentos nuevos', () => {
         }
       }
     }
+  });
+
+  it('la semana de prueba del 28 de septiembre incluye cada alimento nuevo al menos una vez, sea cual sea el peso', () => {
+    const trial = TRIAL_WEEKS.find((w) => w.monday === '2026-09-28')!;
+    for (const weightKg of [65, 80, 95]) {
+      const seen = new Set<string>();
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(Date.UTC(2026, 8, 28 + i)).toISOString().slice(0, 10);
+        // Lunes a viernes, dia de entreno normal a las 16:00; sabado a las 10:00; domingo de descanso.
+        const plan = planDayMeals(base({ date, weightKg, dayType: i === 6 ? 'descanso' : 'normal', trainingHour: i === 5 ? 10 : 16 }));
+        for (const item of plan.meals.flatMap((m) => m.items)) seen.add(item.foodId);
+      }
+      const missing = trial.foodIds.filter((id) => !seen.has(id));
+      expect(missing, `peso ${weightKg}`).toEqual([]);
+    }
+  });
+
+  it('en la semana de prueba lo que el atleta excluye o cambia a mano manda sobre la prueba', () => {
+    const excluded = ['langostinos', 'noquis', 'kefir', 'gelatina'];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(Date.UTC(2026, 8, 28 + i)).toISOString().slice(0, 10);
+      const plan = planDayMeals(base({ date, prefs: { excludedFoodIds: excluded } }));
+      for (const item of plan.meals.flatMap((m) => m.items)) expect(excluded).not.toContain(item.foodId);
+    }
+    const swaps = { [swapKey('2026-09-28', 'desayuno', 'protein')]: 'skyr' };
+    expect(planDayMeals(base({ date: '2026-09-28', prefs: { swaps } })).meals[0].items.find((i) => i.kind === 'protein')!.foodId).toBe('skyr');
+  });
+
+  it('fuera de la semana de prueba manda la rotacion normal: no salen todos los alimentos de prueba', () => {
+    const week = Array.from({ length: 7 }, (_, i) => planDayMeals(base({ date: new Date(Date.UTC(2026, 9, 12 + i)).toISOString().slice(0, 10) })));
+    const trialIds = new Set(TRIAL_WEEKS[0].foodIds);
+    const used = new Set(week.flatMap((p) => p.meals.flatMap((m) => m.items.map((i) => i.foodId))).filter((id) => trialIds.has(id)));
+    expect(used.size).toBeLessThan(trialIds.size);
   });
 });

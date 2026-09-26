@@ -1,4 +1,4 @@
-﻿import { FOODS, foodsForRole, getFood, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, type Food, type FoodRole, type ShoppingCategory } from '../data/nutrition/foods';
+﻿import { FOODS, foodsForRole, getFood, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, TRIAL_WEEKS, type Food, type FoodRole, type ShoppingCategory } from '../data/nutrition/foods';
 import { FIST_CARB_G, nutritionForDay, PALM_PROTEIN_G, type DayNutrition, type NutritionDayType } from './nutritionPlan';
 
 /**
@@ -197,6 +197,57 @@ export interface DayMealPlan {
   totals: { protein: number; carbs: number };
 }
 
+// ---------- Semana de prueba ----------
+
+/** En qué comidas y huecos puede caer un alimento según sus roles (orden de preferencia). */
+function trialSlotsFor(food: Food): { meal: MealKey; kind: SlotKind }[] {
+  const out: { meal: MealKey; kind: SlotKind }[] = [];
+  const has = (r: FoodRole) => food.roles.includes(r);
+  if (has('proteinBreakfast')) out.push({ meal: 'desayuno', kind: 'protein' });
+  if (has('proteinLight')) out.push({ meal: 'mediaManana', kind: 'protein' });
+  if (has('proteinMain')) out.push({ meal: 'comida', kind: 'protein' }, { meal: 'cena', kind: 'protein' });
+  if (has('proteinSnack')) out.push({ meal: 'merienda', kind: 'protein' });
+  if (has('carbMain')) out.push({ meal: 'comida', kind: 'carb' }, { meal: 'cena', kind: 'carb' });
+  if (has('carbBreakfast')) out.push({ meal: 'desayuno', kind: 'carb' });
+  if (has('carbSnack')) out.push({ meal: 'merienda', kind: 'carb' });
+  if (has('fruit') || has('fruitPre')) out.push({ meal: 'mediaManana', kind: 'fruit' }, { meal: 'desayuno', kind: 'fruit' });
+  if (has('drink')) out.push({ meal: 'desayuno', kind: 'drink' });
+  if (has('extra')) out.push({ meal: 'mediaManana', kind: 'extra' });
+  if (has('spread')) out.push({ meal: 'desayuno', kind: 'spread' }, { meal: 'merienda', kind: 'spread' });
+  return out;
+}
+
+/**
+ * Reparto de la semana de prueba (`TRIAL_WEEKS`): a cada alimento de la lista se le asigna un día y una comida donde
+ * encaja, sin que dos compartan hueco el mismo día. Devuelve `fecha|comida|hueco` → id. Vacío fuera de esas semanas.
+ * El sábado se evita para los extras (la media mañana es toma previa al entreno con la hora habitual y no lleva extra).
+ */
+function trialSchedule(date: string): Map<string, string> {
+  const schedule = new Map<string, string>();
+  const dayNum = dayNumber(date);
+  const weekday = (new Date(dayNum * 86_400_000).getUTCDay() + 6) % 7;
+  const mondayNum = dayNum - weekday;
+  const week = TRIAL_WEEKS.find((w) => dayNumber(w.monday) === mondayNum);
+  if (!week) return schedule;
+  const isoOf = (n: number) => new Date(n * 86_400_000).toISOString().slice(0, 10);
+  week.foodIds.forEach((id, k) => {
+    const food = getFood(id);
+    if (!food) return;
+    const options = trialSlotsFor(food);
+    if (options.length === 0) return;
+    for (let dayOff = 0; dayOff < 7; dayOff++) {
+      const day = (k + dayOff) % 7;
+      const candidates = options.map((_, i) => options[(k + i) % options.length]);
+      const slot = candidates.find((c) => !schedule.has(swapKey(isoOf(mondayNum + day), c.meal, c.kind)) && !(c.kind === 'extra' && day === 5));
+      if (slot) {
+        schedule.set(swapKey(isoOf(mondayNum + day), slot.meal, slot.kind), id);
+        return;
+      }
+    }
+  });
+  return schedule;
+}
+
 function excludedSet(prefs?: MealPrefs): Set<string> {
   return new Set(prefs?.excludedFoodIds ?? []);
 }
@@ -259,6 +310,13 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
   const shape = shapeFor(dayType, trainingHour);
   const timings = mealTimings(dayType, trainingHour);
   const dayNum = dayNumber(date);
+  const trial = trialSchedule(date);
+  /** Alimento de prueba de un hueco de hoy, si la semana es de prueba, el atleta no lo ha cambiado a mano y no lo ha excluido. */
+  const trialFood = (meal: MealKey, kind: SlotKind): Food | undefined => {
+    const key = swapKey(date, meal, kind);
+    const f = getFood(trial.get(key) ?? '');
+    return f && !swaps[key] && !excluded.has(f.id) ? f : undefined;
+  };
 
   // Alimentos ya elegidos hoy por tipo de hueco: la rotación no repite proteína, hidrato ni fruta entre comidas del mismo día.
   const usedToday: Record<string, Set<string>> = { protein: new Set(), carb: new Set(), fruit: new Set() };
@@ -273,6 +331,8 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       return f?.dish && !excluded.has(f.id) ? f : undefined;
     }
     if (dishUsed) return undefined;
+    // Un alimento de prueba en el hueco de proteína manda sobre el plato hecho de esa comida.
+    if (trialFood(meal, 'protein')) return undefined;
     const dishes = poolForRole('proteinMain', excluded).filter((f) => f.dish);
     if (dishes.length === 0) return undefined;
     const period = meal === 'cena' ? 7 : 14;
@@ -303,10 +363,14 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
         continue;
       }
       // Los platos hechos no entran en la rotación normal de proteína: solo por `pickDish`.
-      const pool = poolForRole(slot.role, excluded).filter((f) => !(slot.kind === 'protein' && f.dish));
+      const pool = poolForRole(slot.role, excluded).filter((f) => !(slot.kind === 'protein' && f.dish) && !(dishFood && slot.kind === 'carb' && !f.bread));
       if (pool.length === 0) continue;
       const swapped = getFood(swaps[swapKey(date, meal, slot.kind)] ?? '');
       let food: Food | undefined = swapped && swapped.roles.includes(slot.role) && !excluded.has(swapped.id) ? swapped : undefined;
+      if (!food) {
+        const trialPick = trialFood(meal, slot.kind);
+        if (trialPick && trialPick.roles.includes(slot.role)) food = trialPick;
+      }
       if (!food) {
         const seed = seedOf(`${meal}${slot.kind}`);
         const used = usedToday[slot.kind === 'protein2' ? 'protein' : slot.kind];
@@ -325,9 +389,16 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
     }
 
     // Pan, tostadas o tortitas en el desayuno o la merienda: algo para untar (mermelada, crema de cacahuete).
+    // Semana de prueba con algo para untar en este hueco: se pone un hidrato que lo admita (si no lo elige el atleta).
+    const trialSpread = meal === 'desayuno' || meal === 'merienda' ? trialFood(meal, 'spread') : undefined;
+    const carbSlotDef = slots.find((s) => s.kind === 'carb');
+    if (trialSpread && carbSlotDef && !foods.get('carb')?.spreadable && !swaps[swapKey(date, meal, 'carb')]) {
+      const bread = poolForRole(carbSlotDef.role, excluded).find((f) => f.spreadable);
+      if (bread) foods.set('carb', bread);
+    }
     const breadCarb = foods.get('carb');
     if (breadCarb?.spreadable && (meal === 'desayuno' || meal === 'merienda')) {
-      const requested = getFood(swaps[swapKey(date, meal, 'spread')] ?? '');
+      const requested = trialSpread ?? getFood(swaps[swapKey(date, meal, 'spread')] ?? '');
       const spreads = poolForRole('spread', excluded);
       const spread =
         requested && requested.roles.includes('spread') && !excluded.has(requested.id)
@@ -372,7 +443,8 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       // Un hidrato "flojo" (legumbre en bote) puede quedarse corto aun en su ración máxima: si el atleta no lo
       // eligió a mano, se prueba con otro del mismo hueco para no dejar la toma sin llegar.
       const carbSlot = slots.find((s) => s.kind === 'carb');
-      const manual = Boolean(swaps[swapKey(date, meal, 'carb')]);
+      // Una elección manual o un alimento de la semana de prueba no se sustituye aunque se quede corto.
+      const manual = Boolean(swaps[swapKey(date, meal, 'carb')]) || Boolean(trialFood(meal, 'carb'));
       if (!manual && carbSlot && macrosOf(carb, portion.grams).c < (cTarget - c) * 0.85) {
         const better = poolForRole(carbSlot.role, excluded)
           .filter((f) => f.id !== carb!.id && !usedToday.carb.has(f.id))
@@ -392,7 +464,7 @@ export function planDayMeals(input: MealPlanInput): DayMealPlan {
       c += m.c;
       // Si el hidrato llegó a su ración máxima y la toma sigue corta, se suma un segundo (p. ej. pan tras las tortitas)
       // en vez de inflar el primero: 8 tortitas o 9 tostadas no son una ración.
-      if (carbSlot && cTarget - c >= 20) {
+      if (carbSlot && !dishFood && cTarget - c >= 20) {
         const second = secondFood(carbSlot.role, usedToday.carb, carb.id, 'carb2');
         if (second) {
           const extraPortion = toPortion(second, ((cTarget - c) / second.per100.c) * 100);
@@ -555,6 +627,7 @@ export function shoppingListText(groups: ShoppingGroup[], title: string): string
   const body = groups.map((g) => `${g.label}\n${g.lines.map((l) => `- ${l.name}: ${l.text}`).join('\n')}`).join('\n\n');
   return `${title}\n\n${body}`;
 }
+
 
 
 

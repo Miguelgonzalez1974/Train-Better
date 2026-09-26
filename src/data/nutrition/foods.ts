@@ -72,6 +72,8 @@ export interface Food {
   recipe?: { foodId: string; per100: number }[];
   /** Pan, tostadas, tortitas: admiten algo para untar (mermelada, crema de cacahuete). */
   spreadable?: boolean;
+  /** Pan de verdad (integral, centeno, de molde): es el hidrato que acompaña a un plato hecho. */
+  bread?: boolean;
 }
 
 export const FOODS: Food[] = [
@@ -177,7 +179,7 @@ export const FOODS: Food[] = [
 
   // ---- hidrato de desayuno y merienda ----
   { id: 'avena', name: 'Copos de avena', roles: ['carbBreakfast'], category: 'hidratos', per100: { p: 13, c: 66, f: 7 }, range: [30, 120] },
-  { id: 'pan', name: 'Pan integral', roles: ['carbBreakfast', 'carbSnack'], category: 'hidratos', per100: { p: 12, c: 42, f: 3 }, range: [30, 120], tags: ['gluten'], spreadable: true },
+  { id: 'pan', name: 'Pan integral', roles: ['carbBreakfast', 'carbSnack'], category: 'hidratos', per100: { p: 12, c: 42, f: 3 }, range: [30, 120], tags: ['gluten'], spreadable: true, bread: true },
   {
     id: 'wasa',
     name: 'Pan Wasa',
@@ -198,6 +200,7 @@ export const FOODS: Food[] = [
     range: [30, 120],
     tags: ['gluten'],
     spreadable: true,
+    bread: true,
   },
   {
     id: 'bimbo',
@@ -209,6 +212,7 @@ export const FOODS: Food[] = [
     range: [25, 100],
     tags: ['gluten'],
     spreadable: true,
+    bread: true,
   },
   {
     id: 'galletas',
@@ -323,6 +327,22 @@ export const FOODS: Food[] = [
 ];
 
 /**
+ * Semanas de prueba: durante esa semana (lunes ISO) el menú incluye cada alimento de la lista al menos una vez, repartidos
+ * por los días y las comidas donde encajan, en vez de esperar a que la rotación normal los saque. Sirve para probar los
+ * alimentos recién añadidos. Fuera de esas semanas manda la rotación de siempre. Lo que el atleta haya cambiado a mano o
+ * excluido manda sobre la prueba.
+ */
+export const TRIAL_WEEKS: { monday: string; foodIds: string[] }[] = [
+  {
+    monday: '2026-09-28',
+    foodIds: [
+      'langostinos', 'sardinas', 'pollo-tiras', 'clara-huevo', 'centeno', 'crema-cacahuete', 'cacahuete-polvo', 'kefir', 'datiles',
+      'arandanos-secos', 'gelatina', 'infusion', 'jamon-serrano', 'queso-cabra', 'cheddar', 'anchoas', 'noquis', 'mazorca', 'galletas', 'bimbo', 'mermelada-light',
+    ],
+  },
+];
+
+/**
  * Básicos de despensa que no entran en los menús (no llevan macros que contar) pero el atleta quiere en su lista de
  * la compra: se activan en Ajustes y salen siempre en la sección Despensa.
  */
@@ -338,6 +358,7 @@ export function getFood(id: string): Food | undefined {
 export function foodsForRole(role: FoodRole): Food[] {
   return FOODS.filter((f) => f.roles.includes(role));
 }
+
 
 
 
