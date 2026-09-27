@@ -126,6 +126,9 @@ export function autoGrams(food: Food, items: CustomMealItem[], target: { protein
 
 export type MealState = 'ok' | 'low' | 'over';
 
+/** Etiqueta corta del estado, para una insignia visual en vez de una frase. */
+export const MEAL_STATE_LABEL: Record<MealState, string> = { ok: 'Cubierta', low: 'Falta', over: 'Te pasas' };
+
 export interface MealStatus {
   state: MealState;
   /** Gramos que faltan (positivo) o sobran (negativo) de cada macro respecto al objetivo de la toma. */

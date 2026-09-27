@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, CircleAlert, CircleCheck, Minus, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
+import { Check, CircleAlert, CircleCheck, Minus, Plus, RotateCcw, Search, Trash2, Utensils, X } from 'lucide-react';
 import { FOODS, getFood } from '../../data/nutrition/foods';
 import type { CustomMealItem } from '../../data/athlete/types';
 import {
@@ -9,6 +9,7 @@ import {
   builderGroup,
   foodBounds,
   materialize,
+  MEAL_STATE_LABEL,
   mealStatus,
   snapGrams,
   totalsOf,
@@ -40,13 +41,13 @@ interface MealBuilderProps {
 }
 
 /**
- * Montar una comida a mano: arriba lo que aporta frente al objetivo de la toma (anillos y un aviso), en medio los
- * alimentos elegidos con su cantidad, y abajo el selector para añadir más. Al añadir un alimento entra ya con la
- * cantidad que cubre lo que falta. Ver `engine/mealBuilder.ts`.
+ * Montar una comida a mano: una tarjeta limpia. Se abre vacía (salvo que el atleta ya la hubiera montado antes) para
+ * que elija los alimentos uno a uno; con cada uno los anillos de proteína e hidratos suben, hasta cubrir la toma. Ver
+ * `engine/mealBuilder.ts`.
  */
 export function MealBuilder({ meal, excludedFoodIds, done, onChange, onAuto, onToggleDone }: MealBuilderProps) {
-  const [items, setItems] = useState<CustomMealItem[]>(() => materialize(meal));
-  const [group, setGroup] = useState<BuilderGroup>(() => (materialize(meal).length === 0 ? 'Proteína' : 'Hidrato'));
+  const [items, setItems] = useState<CustomMealItem[]>(() => (meal.custom ? materialize(meal) : []));
+  const [group, setGroup] = useState<BuilderGroup>('Proteína');
   const [query, setQuery] = useState('');
 
   const target = meal.target;
@@ -90,11 +91,12 @@ export function MealBuilder({ meal, excludedFoodIds, done, onChange, onAuto, onT
           <MacroRing label="Proteína" value={totals.protein} target={target.protein} strokeClass="stroke-red-400" />
           <MacroRing label="Hidratos" value={totals.carbs} target={target.carbs} strokeClass="stroke-brand-gold" />
         </div>
-        <p className={`mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${box}`} role="status">
-          <Icon size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          {status.text}
+        <p className="mt-2.5 flex justify-center" role="status" aria-label={status.text}>
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${box}`}>
+            <Icon size={13} aria-hidden="true" /> {MEAL_STATE_LABEL[status.state]}
+          </span>
         </p>
-        <p className="mt-2 text-[11px] text-neutral-500">
+        <p className="mt-2 text-center text-[11px] text-neutral-500">
           {formatServing(handRange(Math.max(0.5, Math.round((totals.protein / 27) * 2) / 2)), 'palma', 'palmas')} de proteína ·{' '}
           {formatServing(handRange(Math.max(0.5, Math.round((totals.carbs / 35) * 2) / 2)), 'puño', 'puños')} de hidrato
         </p>
@@ -103,7 +105,13 @@ export function MealBuilder({ meal, excludedFoodIds, done, onChange, onAuto, onT
       {/* Alimentos elegidos */}
       <div className="rounded-xl border border-brand-border bg-brand-surfaceMuted/60 px-3.5 py-1">
         {items.length === 0 ? (
-          <p className="py-4 text-center text-sm text-neutral-500">Aún no hay alimentos. Elige abajo y se rellena con lo que falta.</p>
+          <div className="flex flex-col items-center gap-2 py-7 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-neutral-500">
+              <Utensils size={19} aria-hidden="true" />
+            </span>
+            <p className="text-sm font-medium text-neutral-300">Elige tu primer alimento</p>
+            <p className="max-w-[15rem] text-xs text-neutral-600">Cada uno que añadas entra con la cantidad que cubre lo que falta de esta comida.</p>
+          </div>
         ) : (
           <ul className="divide-y divide-white/5">
             {items.map((it, index) => {
@@ -216,9 +224,10 @@ export function MealBuilder({ meal, excludedFoodIds, done, onChange, onAuto, onT
       <div className="flex gap-2">
         <button
           onClick={onAuto}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors hover:text-white"
+          disabled={!meal.custom && items.length === 0}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <RotateCcw size={13} aria-hidden="true" /> {meal.custom ? 'Volver a la sugerencia' : 'Restaurar sugerencia'}
+          <RotateCcw size={13} aria-hidden="true" /> Menú automático
         </button>
         <button
           onClick={() => commit([])}

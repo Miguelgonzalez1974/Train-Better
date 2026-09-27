@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
   Goal,
+  NutritionPrefs,
   PainArea,
   PersonalRecords,
   ReadinessCheck,
@@ -287,6 +288,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     () => [...(profile.bodyweightLog ?? [])].sort((a, b) => a.date.localeCompare(b.date)).pop()?.kg ?? null,
     [profile.bodyweightLog],
   );
+
+  /** Guarda un cambio de preferencias de nutrición (releyendo el perfil por si otra pestaña o el sincronizador lo tocaron mientras tanto). */
+  const updateNutritionPrefs = useCallback((update: (p: NutritionPrefs) => NutritionPrefs) => {
+    const fresh = athleteRepository.getProfile();
+    const next = update(fresh.nutritionPrefs ?? {});
+    athleteRepository.saveProfile({ ...fresh, nutritionPrefs: next });
+    setProfile((prev) => ({ ...prev, nutritionPrefs: next }));
+  }, []);
 
   const sessionCardFeedbackByIndex = useMemo(
     () =>
@@ -811,6 +820,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                       prefs={profile.nutritionPrefs}
                       trainedToday={alreadyCompletedToday}
                       onOpenNutrition={onNavigateToNutricion}
+                      updatePrefs={updateNutritionPrefs}
                     />
                   ) : undefined
                 }

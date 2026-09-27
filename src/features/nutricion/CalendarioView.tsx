@@ -285,7 +285,7 @@ export function CalendarioView({ shared }: { shared: NutritionShared }) {
                 </button>
                 <span className="text-sm font-semibold text-white">{MEAL_LABEL[openMeal]}</span>
               </div>
-              <MealBuilderPanel shared={shared} iso={openIso} dayType={openType} mealKey={openMeal} />
+              <MealBuilderPanel prefs={prefs} weightKg={weightKg} updatePrefs={updatePrefs} iso={openIso} dayType={openType} mealKey={openMeal} />
             </div>
           ) : (
             <DayPanel

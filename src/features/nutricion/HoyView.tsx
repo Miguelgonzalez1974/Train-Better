@@ -136,7 +136,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
       {/* Línea del día: lo hecho frente a lo previsto, con las comidas en su hora y el entreno como corte */}
       <div className="card p-3.5">
         <p className="mb-2.5 text-sm font-semibold text-white">Tu día</p>
-        <DayFlow flow={flow} />
+        <DayFlow flow={flow} onOpenMeal={setBuildMeal} />
       </div>
 
       {/* Comidas */}
@@ -155,7 +155,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
 
       {buildMeal && (
         <Modal open onClose={() => setBuildMeal(null)} title={`${MEAL_LABEL[buildMeal]} · ${dayLabel(iso, todayIso)}`}>
-          <MealBuilderPanel shared={shared} iso={iso} dayType={dayType} mealKey={buildMeal} />
+          <MealBuilderPanel prefs={prefs} weightKg={weightKg} updatePrefs={updatePrefs} iso={iso} dayType={dayType} mealKey={buildMeal} />
         </Modal>
       )}
 

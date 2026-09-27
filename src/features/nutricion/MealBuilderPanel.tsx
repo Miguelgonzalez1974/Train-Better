@@ -1,24 +1,26 @@
 import { useMemo, useState } from 'react';
+import type { NutritionPrefs } from '../../data/athlete/types';
 import { MEAL_ORDER, type MealKey } from '../../engine/mealPlan';
 import type { NutritionDayType } from '../../engine/nutritionPlan';
 import { MealBuilder } from './MealBuilder';
 import { planFor, withCustomMeal, withoutCustomMeal } from './nutritionData';
-import type { NutritionShared } from './shared';
 
 interface MealBuilderPanelProps {
-  shared: NutritionShared;
+  prefs: NutritionPrefs;
+  weightKg: number;
+  updatePrefs: (update: (prefs: NutritionPrefs) => NutritionPrefs) => void;
   iso: string;
   dayType: NutritionDayType;
   mealKey: MealKey;
 }
 
 /**
- * Una comida montada a mano de un día concreto, conectada a las preferencias del atleta: lee la comida del plan (con
- * lo que ya hubiera montado), guarda cada cambio y permite volver a la sugerencia automática o marcarla como hecha.
- * La usan la pestaña Hoy y el calendario dentro de una ventana.
+ * Una comida montada a mano de un día concreto: lee la comida del plan (con lo que ya hubiera montado), guarda cada
+ * cambio y permite volver a la sugerencia automática o marcarla como hecha. Solo necesita las preferencias de
+ * nutrición y el peso, así que se usa desde cualquier sitio de la app que ya los tenga — la pestaña Nutrición, el
+ * calendario y el icono de nutrición de Planificación.
  */
-export function MealBuilderPanel({ shared, iso, dayType, mealKey }: MealBuilderPanelProps) {
-  const { prefs, weightKg, updatePrefs } = shared;
+export function MealBuilderPanel({ prefs, weightKg, updatePrefs, iso, dayType, mealKey }: MealBuilderPanelProps) {
   const [resetCount, setResetCount] = useState(0);
   const plan = useMemo(() => planFor(prefs, iso, dayType, weightKg), [prefs, iso, dayType, weightKg]);
   const meal = plan.meals.find((m) => m.key === mealKey);
