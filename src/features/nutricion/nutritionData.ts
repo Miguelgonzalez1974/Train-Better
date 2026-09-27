@@ -55,15 +55,20 @@ export function trainingHourFor(prefs: NutritionPrefs | undefined, iso: string):
   return prefs?.trainingHours?.[String(idx)] ?? defaultTrainingHour(idx);
 }
 
-/** Menú de un día: la sugerencia automática con las comidas que el atleta montó a mano ya aplicadas. */
-export function planFor(prefs: NutritionPrefs | undefined, iso: string, dayType: NutritionDayType, weightKg: number, trainingHour?: number): DayMealPlan {
-  const plan = planDayMeals({
+/** El menú automático de un día, SIN aplicar lo que el atleta haya montado a mano — para comparar contra ello. */
+export function autoPlanFor(prefs: NutritionPrefs | undefined, iso: string, dayType: NutritionDayType, weightKg: number, trainingHour?: number): DayMealPlan {
+  return planDayMeals({
     date: iso,
     dayType,
     weightKg,
     trainingHour: trainingHour ?? trainingHourFor(prefs, iso),
     prefs: { excludedFoodIds: prefs?.excludedFoodIds, swaps: prefs?.swaps },
   });
+}
+
+/** Menú de un día: la sugerencia automática con las comidas que el atleta montó a mano ya aplicadas. */
+export function planFor(prefs: NutritionPrefs | undefined, iso: string, dayType: NutritionDayType, weightKg: number, trainingHour?: number): DayMealPlan {
+  const plan = autoPlanFor(prefs, iso, dayType, weightKg, trainingHour);
   return applyCustomMeals(plan, prefs?.customMeals?.[iso]);
 }
 

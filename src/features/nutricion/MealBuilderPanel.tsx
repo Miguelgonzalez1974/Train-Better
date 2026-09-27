@@ -3,7 +3,7 @@ import type { NutritionPrefs } from '../../data/athlete/types';
 import { MEAL_ORDER, type MealKey } from '../../engine/mealPlan';
 import type { NutritionDayType } from '../../engine/nutritionPlan';
 import { MealBuilder } from './MealBuilder';
-import { planFor, withCustomMeal, withoutCustomMeal } from './nutritionData';
+import { autoPlanFor, planFor, withCustomMeal, withoutCustomMeal } from './nutritionData';
 
 interface MealBuilderPanelProps {
   prefs: NutritionPrefs;
@@ -24,8 +24,11 @@ export function MealBuilderPanel({ prefs, weightKg, updatePrefs, iso, dayType, m
   const [resetCount, setResetCount] = useState(0);
   const plan = useMemo(() => planFor(prefs, iso, dayType, weightKg), [prefs, iso, dayType, weightKg]);
   const meal = plan.meals.find((m) => m.key === mealKey);
+  // El menú automático "de verdad" (sin lo montado a mano) — para la pestaña Automático, que compara contra él.
+  const autoPlan = useMemo(() => autoPlanFor(prefs, iso, dayType, weightKg), [prefs, iso, dayType, weightKg]);
+  const autoMeal = autoPlan.meals.find((m) => m.key === mealKey);
   const excluded = useMemo(() => prefs.excludedFoodIds ?? [], [prefs.excludedFoodIds]);
-  if (!meal) return null;
+  if (!meal || !autoMeal) return null;
 
   const mealIndex = MEAL_ORDER.indexOf(mealKey);
   const done = prefs.doneMeals?.[iso]?.includes(mealIndex) ?? false;
@@ -34,6 +37,7 @@ export function MealBuilderPanel({ prefs, weightKg, updatePrefs, iso, dayType, m
     <MealBuilder
       key={`${iso}|${mealKey}|${resetCount}`}
       meal={meal}
+      autoMeal={autoMeal}
       excludedFoodIds={excluded}
       done={done}
       onChange={(items) => updatePrefs((p) => withCustomMeal(p, iso, mealKey, items))}
