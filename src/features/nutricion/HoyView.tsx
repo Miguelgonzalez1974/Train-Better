@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, Droplet } from 'lucide-react';
-import { MEAL_LABEL, TRAINING_HOUR_OPTIONS, type MealKey, type MealPlanInput } from '../../engine/mealPlan';
+import { MEAL_LABEL, TRAINING_HOUR_OPTIONS, type MealKey } from '../../engine/mealPlan';
 import { Modal } from '../shell/Modal';
 import { computeDayFlow } from '../../engine/dayFlow';
 import { DayFlow } from './DayFlow';
 import { MealBuilderPanel } from './MealBuilderPanel';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
-import { MealCard } from './MealCard';
 import { addDays, dayLabel, planFor, trainingHourFor } from './nutritionData';
 import type { NutritionShared } from './shared';
 
@@ -33,9 +32,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
 
   const dayType = typeOverride ?? day?.type ?? 'normal';
   const hour = trainingHourFor(prefs, iso);
-  const excluded = useMemo(() => prefs.excludedFoodIds ?? [], [prefs.excludedFoodIds]);
   const plan = useMemo(() => planFor(prefs, iso, dayType, weightKg, hour), [prefs, iso, dayType, weightKg, hour]);
-  const input: MealPlanInput = { date: iso, dayType, weightKg, trainingHour: hour, prefs: { excludedFoodIds: excluded, swaps: prefs.swaps } };
 
   const done = prefs.doneMeals?.[iso] ?? [];
 
@@ -53,18 +50,6 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
     () => computeDayFlow(plan, done, { trainingHour: dayType === 'descanso' ? null : hour, nowHour: isToday ? nowHour : null }),
     [plan, done, dayType, hour, isToday, nowHour],
   );
-
-  function toggleDone(index: number) {
-    updatePrefs((p) => {
-      const current = p.doneMeals?.[iso] ?? [];
-      const next = current.includes(index) ? current.filter((i) => i !== index) : [...current, index].sort();
-      return { ...p, doneMeals: { ...(p.doneMeals ?? {}), [iso]: next } };
-    });
-  }
-
-  function swap(key: string, foodId: string) {
-    updatePrefs((p) => ({ ...p, swaps: { ...(p.swaps ?? {}), [key]: foodId } }));
-  }
 
   function setHour(h: number) {
     updatePrefs((p) => ({ ...p, trainingHours: { ...(p.trainingHours ?? {}), [String(day?.weekdayIndex ?? 0)]: h } }));
@@ -133,25 +118,13 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
         {typeOverride && <p className="text-[11px] text-neutral-500">Has cambiado el tipo de día a mano; el entreno planificado dice «{DAY_TYPE_SHORT[day?.type ?? 'normal']}».</p>}
       </div>
 
-      {/* Línea del día: lo hecho frente a lo previsto, con las comidas en su hora y el entreno como corte */}
+      {/* Línea del día: lo hecho frente a lo previsto, con las comidas en su hora y el entreno como corte.
+          Es la única vista de las comidas — no hay tarjetas fijas debajo; tocar un punto o una barra abre esa
+          comida (automática o a mano) en el panel de abajo. */}
       <div className="card p-3.5">
         <p className="mb-2.5 text-sm font-semibold text-white">Tu día</p>
         <DayFlow flow={flow} onOpenMeal={setBuildMeal} />
       </div>
-
-      {/* Comidas */}
-      {plan.meals.map((meal, i) => (
-        <MealCard
-          key={meal.key}
-          meal={meal}
-          done={done.includes(i)}
-          onToggleDone={() => toggleDone(i)}
-          input={input}
-          excludedFoodIds={excluded}
-          onSwap={swap}
-          onBuild={() => setBuildMeal(meal.key)}
-        />
-      ))}
 
       {buildMeal && (
         <Modal open onClose={() => setBuildMeal(null)} title={`${MEAL_LABEL[buildMeal]} · ${dayLabel(iso, todayIso)}`}>
