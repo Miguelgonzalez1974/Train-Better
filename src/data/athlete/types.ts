@@ -212,6 +212,33 @@ export interface NutritionPrefs {
    * (ver `src/engine/mealBuilder.ts`). Quitar la entrada devuelve la sugerencia automática.
    */
   customMeals?: Record<string, Partial<Record<'desayuno' | 'mediaManana' | 'comida' | 'merienda' | 'cena', CustomMealItem[]>>>;
+  /** Alimentos que el atleta ha dado de alta él mismo (ver [[CustomFood]]) — solo proteína e hidratos por 100 g. */
+  customFoods?: CustomFood[];
+  /**
+   * Alimentos añadidos fuera de las 5 comidas del día ("me lo como ahora"), por fecha ISO — ver [[ExtraFoodEntry]].
+   * Siempre cuentan como ya tomados: no hay un estado "pendiente" para un antojo.
+   */
+  extraFoods?: Record<string, ExtraFoodEntry[]>;
+}
+
+/** Grupo de un alimento propio — el mismo criterio que el selector al montar una comida (`BuilderGroup` en engine/mealBuilder.ts). */
+export type CustomFoodGroup = 'Proteína' | 'Hidrato' | 'Fruta' | 'Verdura' | 'Bebida' | 'Extra';
+
+/** Un alimento creado por el atleta: solo proteína e hidratos por 100 g, más el grupo donde debe aparecer al elegirlo. */
+export interface CustomFood {
+  id: string;
+  name: string;
+  proteinPer100: number;
+  carbsPer100: number;
+  group: CustomFoodGroup;
+}
+
+/** Un alimento (o varios) añadido fuera de las 5 comidas, a una hora concreta. */
+export interface ExtraFoodEntry {
+  id: string;
+  /** Hora en horas decimales (13.5 = 13:30). */
+  hour: number;
+  items: CustomMealItem[];
 }
 
 /** Un alimento de una comida montada a mano: id del catálogo y gramos (o ml). */

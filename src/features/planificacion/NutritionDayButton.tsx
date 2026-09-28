@@ -5,8 +5,9 @@ import { computeDayFlow } from '../../engine/dayFlow';
 import { MEAL_LABEL, type MealKey } from '../../engine/mealPlan';
 import { classifyNutritionDay, NUTRITION_DAY_LABEL } from '../../engine/nutritionPlan';
 import { DayFlow } from '../nutricion/DayFlow';
+import { ExtraFoodPanel } from '../nutricion/ExtraFoodPanel';
 import { MealBuilderPanel } from '../nutricion/MealBuilderPanel';
-import { planFor, trainingHourFor } from '../nutricion/nutritionData';
+import { extraInputsFor, planFor, trainingHourFor, withoutExtra } from '../nutricion/nutritionData';
 import { Modal } from '../shell/Modal';
 import { DAY_TYPE_DOT, DAY_TYPE_STYLE } from './NutritionGlance';
 
@@ -36,6 +37,7 @@ const nowAsHour = () => {
 export function NutritionDayButton({ session, weightKg, prefs, trainedToday, onOpenNutrition, updatePrefs }: NutritionDayButtonProps) {
   const [open, setOpen] = useState(false);
   const [openMeal, setOpenMeal] = useState<MealKey | null>(null);
+  const [addingExtra, setAddingExtra] = useState(false);
   const [nowHour, setNowHour] = useState(nowAsHour);
   const dayType = classifyNutritionDay(session);
 
@@ -52,21 +54,23 @@ export function NutritionDayButton({ session, weightKg, prefs, trainedToday, onO
     () => (weightKg ? planFor(prefs, session.date, dayType, weightKg, trainingHour) : null),
     [weightKg, prefs, session.date, dayType, trainingHour],
   );
+  const extras = useMemo(() => extraInputsFor(prefs, session.date), [prefs, session.date]);
   const flow = useMemo(
     () =>
       plan
-        ? computeDayFlow(plan, prefs?.doneMeals?.[session.date] ?? [], {
+        ? computeDayFlow(plan, prefs?.doneMeals?.[session.date] ?? [], extras, {
             trainingHour: dayType === 'descanso' ? null : trainingHour,
             nowHour,
             trained: trainedToday,
           })
         : null,
-    [plan, prefs, session.date, dayType, trainingHour, nowHour, trainedToday],
+    [plan, prefs, session.date, extras, dayType, trainingHour, nowHour, trainedToday],
   );
 
   function close() {
     setOpen(false);
     setOpenMeal(null);
+    setAddingExtra(false);
   }
 
   return (
@@ -82,7 +86,7 @@ export function NutritionDayButton({ session, weightKg, prefs, trainedToday, onO
       </button>
 
       {open && (
-        <Modal open onClose={close} title={openMeal ? MEAL_LABEL[openMeal] : 'Nutrición de hoy'}>
+        <Modal open onClose={close} title={openMeal ? MEAL_LABEL[openMeal] : addingExtra ? 'Añadir ahora' : 'Nutrición de hoy'}>
           {!weightKg || !plan || !flow ? (
             <div className="flex flex-col gap-3 text-sm text-neutral-300">
               <p>Las cantidades se calculan por kilo de peso corporal, así que primero necesito tu peso.</p>
@@ -102,6 +106,13 @@ export function NutritionDayButton({ session, weightKg, prefs, trainedToday, onO
                 <ArrowLeft size={14} aria-hidden="true" /> Hoy
               </button>
               <MealBuilderPanel prefs={prefs ?? {}} weightKg={weightKg} updatePrefs={updatePrefs} iso={session.date} dayType={dayType} mealKey={openMeal} />
+            </div>
+          ) : addingExtra ? (
+            <div className="flex flex-col gap-3">
+              <button onClick={() => setAddingExtra(false)} className="flex items-center gap-1.5 self-start text-xs font-semibold text-brand-gold">
+                <ArrowLeft size={14} aria-hidden="true" /> Hoy
+              </button>
+              <ExtraFoodPanel prefs={prefs ?? {}} updatePrefs={updatePrefs} iso={session.date} defaultHour={nowHour} onDone={() => setAddingExtra(false)} />
             </div>
           ) : (
             <div className="flex flex-col gap-3.5">
@@ -128,7 +139,12 @@ export function NutritionDayButton({ session, weightKg, prefs, trainedToday, onO
                 </div>
               </div>
 
-              <DayFlow flow={flow} onOpenMeal={setOpenMeal} />
+              <DayFlow
+                flow={flow}
+                onOpenMeal={setOpenMeal}
+                onAddExtra={() => setAddingExtra(true)}
+                onRemoveExtra={(id) => updatePrefs((p) => withoutExtra(p, session.date, id))}
+              />
 
               <button
                 onClick={() => {

@@ -39,6 +39,7 @@ export function MealBuilderPanel({ prefs, weightKg, updatePrefs, iso, dayType, m
       meal={meal}
       autoMeal={autoMeal}
       excludedFoodIds={excluded}
+      customFoods={prefs.customFoods ?? []}
       done={done}
       onChange={(items) => updatePrefs((p) => withCustomMeal(p, iso, mealKey, items))}
       onAuto={() => {

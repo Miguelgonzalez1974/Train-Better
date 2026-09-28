@@ -1,6 +1,8 @@
-import type { AthleteProfile, CustomMealItem, NutritionPrefs, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, CustomFood, CustomMealItem, ExtraFoodEntry, NutritionPrefs, SessionHistoryEntry } from '../../data/athlete/types';
+import { makeFoodResolver } from '../../engine/customFoods';
 import { generateSessionForDate } from '../../engine/generateSession';
-import { applyCustomMeals } from '../../engine/mealBuilder';
+import { applyCustomMeals, totalsOf } from '../../engine/mealBuilder';
+import type { ExtraInput } from '../../engine/dayFlow';
 import { defaultTrainingHour, planDayMeals, type DayMealPlan, type MealKey } from '../../engine/mealPlan';
 import { classifyNutritionDay, type NutritionDayType } from '../../engine/nutritionPlan';
 import { getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
@@ -69,7 +71,51 @@ export function autoPlanFor(prefs: NutritionPrefs | undefined, iso: string, dayT
 /** Menú de un día: la sugerencia automática con las comidas que el atleta montó a mano ya aplicadas. */
 export function planFor(prefs: NutritionPrefs | undefined, iso: string, dayType: NutritionDayType, weightKg: number, trainingHour?: number): DayMealPlan {
   const plan = autoPlanFor(prefs, iso, dayType, weightKg, trainingHour);
-  return applyCustomMeals(plan, prefs?.customMeals?.[iso]);
+  return applyCustomMeals(plan, prefs?.customMeals?.[iso], makeFoodResolver(prefs?.customFoods));
+}
+
+/** Los extras de un día (ver [[ExtraFoodEntry]]), ya con sus macros calculadas — listos para `computeDayFlow`. */
+export function extraInputsFor(prefs: NutritionPrefs | undefined, iso: string): ExtraInput[] {
+  const entries = prefs?.extraFoods?.[iso] ?? [];
+  if (entries.length === 0) return [];
+  const resolve = makeFoodResolver(prefs?.customFoods);
+  return entries.map((e) => {
+    const t = totalsOf(e.items, resolve);
+    const label = e.items.map((it) => resolve(it.foodId)?.name).filter((n): n is string => Boolean(n)).join(' + ') || 'Alimento';
+    return { id: e.id, label, hour: e.hour, protein: t.protein, carbs: t.carbs };
+  });
+}
+
+/** Añade un extra al día. */
+export function withExtra(prefs: NutritionPrefs, iso: string, entry: ExtraFoodEntry): NutritionPrefs {
+  const all = { ...(prefs.extraFoods ?? {}) };
+  all[iso] = [...(all[iso] ?? []), entry];
+  return { ...prefs, extraFoods: all };
+}
+
+/** Quita un extra del día por id. */
+export function withoutExtra(prefs: NutritionPrefs, iso: string, entryId: string): NutritionPrefs {
+  const all = { ...(prefs.extraFoods ?? {}) };
+  all[iso] = (all[iso] ?? []).filter((e) => e.id !== entryId);
+  return { ...prefs, extraFoods: all };
+}
+
+/** Preferencias con un alimento propio nuevo dado de alta. */
+export function withCustomFood(prefs: NutritionPrefs, food: CustomFood): NutritionPrefs {
+  return { ...prefs, customFoods: [...(prefs.customFoods ?? []), food] };
+}
+
+/** Preferencias sin un alimento propio (por id) — también lo quita de cualquier extra que lo usara, para no dejar referencias colgando. */
+export function withoutCustomFood(prefs: NutritionPrefs, foodId: string): NutritionPrefs {
+  const extraFoods = prefs.extraFoods
+    ? Object.fromEntries(
+        Object.entries(prefs.extraFoods).map(([iso, entries]) => [
+          iso,
+          entries.map((e) => ({ ...e, items: e.items.filter((it) => it.foodId !== foodId) })).filter((e) => e.items.length > 0),
+        ]),
+      )
+    : prefs.extraFoods;
+  return { ...prefs, customFoods: (prefs.customFoods ?? []).filter((f) => f.id !== foodId), extraFoods };
 }
 
 type CustomMap = NonNullable<NutritionPrefs['customMeals']>;

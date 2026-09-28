@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Check, CircleAlert, CircleCheck, Minus, Plus, RotateCcw, Search, Trash2, Utensils, X } from 'lucide-react';
-import { FOODS, getFood } from '../../data/nutrition/foods';
-import type { CustomMealItem } from '../../data/athlete/types';
+import { FOODS } from '../../data/nutrition/foods';
+import type { CustomFood, CustomMealItem } from '../../data/athlete/types';
+import { customFoodToCatalogFood } from '../../engine/customFoods';
 import {
   autoGrams,
   BUILDER_GROUPS,
@@ -36,6 +37,8 @@ interface MealBuilderProps {
   /** El menú automático "de verdad", sin lo montado a mano — lo que se ve en la pestaña Automático. */
   autoMeal: PlannedMeal;
   excludedFoodIds: string[];
+  /** Alimentos que el atleta ha dado de alta él mismo — disponibles para montar, no en el menú automático. */
+  customFoods: CustomFood[];
   done: boolean;
   /** Se llama con la lista completa cada vez que el atleta añade, quita o cambia una cantidad. */
   onChange: (items: CustomMealItem[]) => void;
@@ -51,17 +54,22 @@ interface MealBuilderProps {
  * mira: lo montado no se pierde hasta que se pulsa el botón de dentro de "Automático" que lo dice explícitamente.
  * Ver `engine/mealBuilder.ts`.
  */
-export function MealBuilder({ meal, autoMeal, excludedFoodIds, done, onChange, onAuto, onToggleDone }: MealBuilderProps) {
+export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done, onChange, onAuto, onToggleDone }: MealBuilderProps) {
   const [mode, setMode] = useState<Mode>(() => (meal.custom ? 'manual' : 'auto'));
   const [items, setItems] = useState<CustomMealItem[]>(() => (meal.custom ? materialize(meal) : []));
   const [group, setGroup] = useState<BuilderGroup>('Proteína');
   const [query, setQuery] = useState('');
 
+  // El catálogo de siempre más los alimentos propios del atleta — solo disponibles aquí, no en el menú automático.
+  const allFoods = useMemo(() => (customFoods.length === 0 ? FOODS : [...FOODS, ...customFoods.map(customFoodToCatalogFood)]), [customFoods]);
+  const foodMap = useMemo(() => new Map(allFoods.map((f) => [f.id, f])), [allFoods]);
+  const resolve = (id: string) => foodMap.get(id);
+
   const target = meal.target;
-  const totals = totalsOf(items);
-  const status = mealStatus(items, target);
+  const totals = totalsOf(items, resolve);
+  const status = mealStatus(items, target, resolve);
   const { box, Icon } = STATUS_STYLE[status.state];
-  const foodsByGroup = useMemo(() => builderFoods(FOODS, excludedFoodIds), [excludedFoodIds]);
+  const foodsByGroup = useMemo(() => builderFoods(allFoods, excludedFoodIds), [allFoods, excludedFoodIds]);
 
   function commit(next: CustomMealItem[]) {
     setItems(next);
@@ -69,14 +77,14 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, done, onChange, o
   }
 
   function add(foodId: string) {
-    const food = getFood(foodId);
+    const food = resolve(foodId);
     if (!food) return;
-    commit([...items, { foodId, grams: autoGrams(food, items, target) }]);
+    commit([...items, { foodId, grams: autoGrams(food, items, target, resolve) }]);
   }
 
   function step(index: number, dir: 1 | -1) {
     const it = items[index];
-    const food = getFood(it.foodId);
+    const food = resolve(it.foodId);
     if (!food) return;
     const b = foodBounds(food);
     const next = snapGrams(food, it.grams + dir * b.step);
@@ -175,7 +183,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, done, onChange, o
             ) : (
               <ul className="divide-y divide-white/5">
                 {items.map((it, index) => {
-                  const food = getFood(it.foodId);
+                  const food = resolve(it.foodId);
                   if (!food) return null;
                   const b = foodBounds(food);
                   const units = food.unit ? Math.max(1, Math.round(it.grams / food.unit.grams)) : undefined;

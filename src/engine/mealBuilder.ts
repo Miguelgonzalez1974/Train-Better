@@ -1,5 +1,6 @@
 import { getFood, type Food } from '../data/nutrition/foods';
 import type { CustomMealItem } from '../data/athlete/types';
+import type { FoodResolver } from './customFoods';
 import { FIST_CARB_G, PALM_PROTEIN_G } from './nutritionPlan';
 import {
   fixedPortion,
@@ -92,12 +93,12 @@ export function snapGrams(food: Food, grams: number): number {
   return Math.max(b.min, Math.min(b.max, Math.round(g / b.step) * b.step));
 }
 
-/** Proteína e hidratos que suman los alimentos (redondeados a gramos enteros). */
-export function totalsOf(items: CustomMealItem[]): { protein: number; carbs: number } {
+/** Proteína e hidratos que suman los alimentos (redondeados a gramos enteros). `resolve` incluye los alimentos propios del atleta si los hay. */
+export function totalsOf(items: CustomMealItem[], resolve: FoodResolver = getFood): { protein: number; carbs: number } {
   let p = 0;
   let c = 0;
   for (const i of items) {
-    const f = getFood(i.foodId);
+    const f = resolve(i.foodId);
     if (!f) continue;
     const m = macrosOf(f, i.grams);
     p += m.p;
@@ -111,11 +112,16 @@ export function totalsOf(items: CustomMealItem[]): { protein: number; carbs: num
  * para los de proteína, hidrato para los de hidrato), dentro de sus límites; fruta, verdura, bebida y extras entran
  * con su ración normal; un plato hecho, con su ración.
  */
-export function autoGrams(food: Food, items: CustomMealItem[], target: { protein: number; carbs: number }): number {
+export function autoGrams(
+  food: Food,
+  items: CustomMealItem[],
+  target: { protein: number; carbs: number },
+  resolve: FoodResolver = getFood,
+): number {
   const group = builderGroup(food);
   if (food.dish) return snapGrams(food, food.serving ?? foodBounds(food).max);
   if (group !== 'Proteína' && group !== 'Hidrato') return fixedPortion(food).grams;
-  const t = totalsOf(items);
+  const t = totalsOf(items, resolve);
   const remaining = group === 'Proteína' ? target.protein - t.protein : target.carbs - t.carbs;
   const per = group === 'Proteína' ? food.per100.p : food.per100.c;
   if (per <= 0) return fixedPortion(food).grams;
@@ -141,8 +147,8 @@ export interface MealStatus {
  * Cómo va la toma frente a su objetivo. Los umbrales son holgados a propósito (falta más de un 10 %, sobra más de un
  * 15 %): las cantidades de los alimentos son aproximadas y el aviso orienta, no bloquea.
  */
-export function mealStatus(items: CustomMealItem[], target: { protein: number; carbs: number }): MealStatus {
-  const t = totalsOf(items);
+export function mealStatus(items: CustomMealItem[], target: { protein: number; carbs: number }, resolve: FoodResolver = getFood): MealStatus {
+  const t = totalsOf(items, resolve);
   const proteinGap = target.protein - t.protein;
   const carbsGap = target.carbs - t.carbs;
   const overP = -proteinGap > Math.max(5, target.protein * 0.15);
@@ -165,8 +171,8 @@ export function materialize(meal: PlannedMeal): CustomMealItem[] {
   return meal.items.map((i) => ({ foodId: i.foodId, grams: i.grams }));
 }
 
-function buildItem(date: string, meal: MealKey, index: number, ci: CustomMealItem): PlannedItem | null {
-  const food = getFood(ci.foodId);
+function buildItem(date: string, meal: MealKey, index: number, ci: CustomMealItem, resolve: FoodResolver): PlannedItem | null {
+  const food = resolve(ci.foodId);
   if (!food) return null;
   const group = builderGroup(food);
   const units = food.unit ? Math.max(1, Math.round(ci.grams / food.unit.grams)) : undefined;
@@ -187,13 +193,17 @@ function buildItem(date: string, meal: MealKey, index: number, ci: CustomMealIte
  * Sustituye por lo que el atleta montó a mano las comidas que tengan entrada en `custom`, recalculando lo que aporta
  * cada una y los totales del día. Las demás comidas quedan como la sugerencia automática.
  */
-export function applyCustomMeals(plan: DayMealPlan, custom?: Partial<Record<MealKey, CustomMealItem[]>>): DayMealPlan {
+export function applyCustomMeals(
+  plan: DayMealPlan,
+  custom?: Partial<Record<MealKey, CustomMealItem[]>>,
+  resolve: FoodResolver = getFood,
+): DayMealPlan {
   if (!custom || MEAL_ORDER.every((k) => custom[k] === undefined)) return plan;
   const meals = plan.meals.map((meal) => {
     const list = custom[meal.key];
     if (!list) return meal;
-    const items = list.map((ci, i) => buildItem(plan.date, meal.key, i, ci)).filter((x): x is PlannedItem => x !== null);
-    const t = totalsOf(items.map((i) => ({ foodId: i.foodId, grams: i.grams })));
+    const items = list.map((ci, i) => buildItem(plan.date, meal.key, i, ci, resolve)).filter((x): x is PlannedItem => x !== null);
+    const t = totalsOf(items.map((i) => ({ foodId: i.foodId, grams: i.grams })), resolve);
     return {
       ...meal,
       items,
@@ -215,12 +225,17 @@ export function applyCustomMeals(plan: DayMealPlan, custom?: Partial<Record<Meal
  * Adapta las cantidades de una comida a otro objetivo (otro tipo de día): solo los hidratos de verdad (arroz, pan,
  * avena, patata...) se reescalan; la proteína es la misma todos los días. Cambios de menos de un 5 % no se tocan.
  */
-export function scaleMealItems(items: CustomMealItem[], from: { carbs: number }, to: { carbs: number }): CustomMealItem[] {
+export function scaleMealItems(
+  items: CustomMealItem[],
+  from: { carbs: number },
+  to: { carbs: number },
+  resolve: FoodResolver = getFood,
+): CustomMealItem[] {
   if (from.carbs <= 0 || to.carbs <= 0) return items;
   const k = to.carbs / from.carbs;
   if (Math.abs(k - 1) < 0.05) return items;
   return items.map((i) => {
-    const f = getFood(i.foodId);
+    const f = resolve(i.foodId);
     if (!f || builderGroup(f) !== 'Hidrato' || !f.range) return i;
     return { foodId: i.foodId, grams: snapGrams(f, i.grams * k) };
   });
@@ -230,13 +245,18 @@ export function scaleMealItems(items: CustomMealItem[], from: { carbs: number },
  * Comidas que se copian de un día a otro: las de `source` (con lo que el atleta haya montado o la sugerencia) adaptadas
  * al objetivo de cada toma del día de destino. `scope` = todo el día o una sola comida.
  */
-export function copyMeals(source: DayMealPlan, target: DayMealPlan, scope: 'all' | MealKey): Partial<Record<MealKey, CustomMealItem[]>> {
+export function copyMeals(
+  source: DayMealPlan,
+  target: DayMealPlan,
+  scope: 'all' | MealKey,
+  resolve: FoodResolver = getFood,
+): Partial<Record<MealKey, CustomMealItem[]>> {
   const out: Partial<Record<MealKey, CustomMealItem[]>> = {};
   for (const src of source.meals) {
     if (scope !== 'all' && scope !== src.key) continue;
     const dst = target.meals.find((m) => m.key === src.key);
     if (!dst) continue;
-    out[src.key] = scaleMealItems(materialize(src), src.target, dst.target);
+    out[src.key] = scaleMealItems(materialize(src), src.target, dst.target, resolve);
   }
   return out;
 }

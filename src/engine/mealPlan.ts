@@ -603,13 +603,17 @@ function formatPurchase(food: Food, grams: number): string {
   return `${Math.ceil(grams / 50) * 50} g`;
 }
 
-/** Suma los alimentos de varios días y los agrupa por sección del supermercado. */
-export function buildShoppingList(plans: DayMealPlan[]): ShoppingGroup[] {
+/**
+ * Suma los alimentos de varios días y los agrupa por sección del supermercado. `resolve` (ver `engine/customFoods.ts`)
+ * incluye los alimentos propios del atleta, que no están en `FOODS` — por eso el catálogo se recorre primero (mismo
+ * orden de siempre) y solo después se añaden, por categoría, los que no salían de ahí.
+ */
+export function buildShoppingList(plans: DayMealPlan[], resolve: (id: string) => Food | undefined = getFood): ShoppingGroup[] {
   const totals = new Map<string, number>();
   for (const plan of plans) {
     for (const meal of plan.meals) {
       for (const item of meal.items) {
-        const recipe = getFood(item.foodId)?.recipe;
+        const recipe = resolve(item.foodId)?.recipe;
         // Un plato hecho se compra por ingredientes (tortilla = huevos + patata + cebolla + aceite).
         const parts = recipe ? recipe.map((r) => ({ id: r.foodId, grams: (item.grams * r.per100) / 100 })) : [{ id: item.foodId, grams: item.grams }];
         for (const part of parts) totals.set(part.id, (totals.get(part.id) ?? 0) + part.grams);
@@ -622,6 +626,12 @@ export function buildShoppingList(plans: DayMealPlan[]): ShoppingGroup[] {
       const grams = totals.get(f.id) as number;
       return { foodId: f.id, name: f.name, grams, text: formatPurchase(f, grams) };
     });
+    for (const [id, grams] of totals) {
+      if (getFood(id)) continue; // ya cubierto arriba, en el orden del catálogo
+      const food = resolve(id);
+      if (!food || food.category !== category) continue;
+      lines.push({ foodId: id, name: food.name, grams, text: formatPurchase(food, grams) });
+    }
     if (lines.length > 0) groups.push({ category, label: SHOPPING_CATEGORY_LABEL[category], lines });
   }
   return groups;

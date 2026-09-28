@@ -1,4 +1,4 @@
-import type { AthleteProfile, DailySession, SessionHistoryEntry, WorkSetEntry } from './types';
+import type { AthleteProfile, DailySession, ExtraFoodEntry, SessionHistoryEntry, WorkSetEntry } from './types';
 
 /**
  * Fusion de dos estados del atleta (remoto y local) para la sincronizacion. Antes cada `pushRemote`
@@ -28,6 +28,9 @@ const WEEKLY_LOCKS_LIMIT = 60;
 const NUTRITION_SWAPS_LIMIT = 200;
 const NUTRITION_DONE_DAYS_LIMIT = 30;
 const NUTRITION_CUSTOM_DAYS_LIMIT = 60;
+const NUTRITION_CUSTOM_FOODS_LIMIT = 200;
+const NUTRITION_EXTRA_DAYS_LIMIT = 60;
+const NUTRITION_EXTRAS_PER_DAY_LIMIT = 50;
 
 /** Se queda con las `limit` claves mas recientes de un objeto cuyas claves empiezan por una fecha ISO. */
 function keepLatestKeys<T>(obj: Record<string, T>, limit: number): Record<string, T> {
@@ -35,9 +38,29 @@ function keepLatestKeys<T>(obj: Record<string, T>, limit: number): Record<string
   return Object.fromEntries(keys.slice(-limit).map((k) => [k, obj[k]]));
 }
 
+/** Extras (comida fuera de las 5 comidas) por fecha: se unen por id dentro de cada día, no "gana el local" entero — dos dispositivos pueden añadir extras distintos el mismo día y no queremos perder ninguno. */
+function mergeExtraFoods(
+  remote: Record<string, ExtraFoodEntry[]> | undefined,
+  local: Record<string, ExtraFoodEntry[]> | undefined,
+): Record<string, ExtraFoodEntry[]> {
+  const dates = new Set([...Object.keys(remote ?? {}), ...Object.keys(local ?? {})]);
+  const merged: Record<string, ExtraFoodEntry[]> = {};
+  for (const iso of dates) {
+    merged[iso] = mergeByKey(
+      remote?.[iso],
+      local?.[iso],
+      (e) => e.id,
+      (e) => String(Math.round(e.hour * 100)).padStart(6, '0'),
+      NUTRITION_EXTRAS_PER_DAY_LIMIT,
+    );
+  }
+  return keepLatestKeys(merged, NUTRITION_EXTRA_DAYS_LIMIT);
+}
+
 /**
  * Preferencias de nutricion: la lista de alimentos excluidos y el horario son config (gana el local si lo
  * tiene); los cambios de alimento y las comidas hechas se unen por clave/fecha, gana el local en la misma.
+ * Los alimentos propios se unen por id (gana el local si el mismo id cambió en los dos sitios).
  */
 function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: AthleteProfile['nutritionPrefs']): AthleteProfile['nutritionPrefs'] {
   if (!remote && !local) return undefined;
@@ -49,6 +72,8 @@ function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: At
     doneMeals: keepLatestKeys({ ...(remote?.doneMeals ?? {}), ...(local?.doneMeals ?? {}) }, NUTRITION_DONE_DAYS_LIMIT),
     // Por fecha: gana el local (el día entero que el atleta acaba de tocar); las demás fechas de ambos dispositivos se conservan.
     customMeals: keepLatestKeys({ ...(remote?.customMeals ?? {}), ...(local?.customMeals ?? {}) }, NUTRITION_CUSTOM_DAYS_LIMIT),
+    customFoods: mergeByKey(remote?.customFoods, local?.customFoods, (f) => f.id, (f) => f.id, NUTRITION_CUSTOM_FOODS_LIMIT),
+    extraFoods: mergeExtraFoods(remote?.extraFoods, local?.extraFoods),
   };
 }
 

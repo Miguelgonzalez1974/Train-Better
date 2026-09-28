@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Copy, PencilLine, RotateCcw, Undo2 } from 'lucide-react';
 import type { NutritionPrefs } from '../../data/athlete/types';
 import { copyMeals, materialize, mealStatus } from '../../engine/mealBuilder';
+import { makeFoodResolver } from '../../engine/customFoods';
 import { MEAL_LABEL, MEAL_ORDER, type MealKey } from '../../engine/mealPlan';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import { getWeekdayIndex } from '../../engine/periodization';
@@ -117,7 +118,7 @@ export function CalendarioView({ shared }: { shared: NutritionShared }) {
       const all = { ...(p.customMeals ?? {}) };
       for (const t of targets) {
         const dst = planFor({ ...p, customMeals: { ...all, [t]: {} } }, t, typeOf(t), weightKg);
-        all[t] = { ...(all[t] ?? {}), ...copyMeals(src, dst, scope) };
+        all[t] = { ...(all[t] ?? {}), ...copyMeals(src, dst, scope, makeFoodResolver(p.customFoods)) };
       }
       return { ...p, customMeals: all };
     });
@@ -340,7 +341,7 @@ function DayPanel({ shared, iso, dayType, onOpenMeal, onCopy, onAutoDay }: DayPa
       </div>
 
       {plan.meals.map((meal, index) => {
-        const status = mealStatus(materialize(meal), meal.target);
+        const status = mealStatus(materialize(meal), meal.target, makeFoodResolver(prefs.customFoods));
         const chip = STATE_CHIP[status.state];
         const done = doneList.includes(index);
         return (

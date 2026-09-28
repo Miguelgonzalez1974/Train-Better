@@ -3,7 +3,8 @@ import { MEAL_ORDER, type DayMealPlan, type MealKey } from './mealPlan';
 /**
  * "Línea del día": cuánta proteína y cuánto hidrato lleva el atleta a lo largo del día frente a lo previsto, con las
  * comidas en su hora y el entreno como punto de corte (antes / después). Lo previsto sale de las comidas del plan (con
- * lo que el atleta haya montado a mano); lo hecho, de las comidas que marcó. Es una lectura pura, sin efectos.
+ * lo que el atleta haya montado a mano); lo hecho, de las comidas que marcó, más los extras del día (comida fuera de
+ * las 5 comidas — siempre cuentan como ya tomados). Es una lectura pura, sin efectos.
  *
  * ORIENTATIVO como el resto del módulo: las horas son las del menú y los avisos orientan, no acusan.
  */
@@ -37,18 +38,34 @@ export interface FlowMeal {
   beforeTraining: boolean | null;
 }
 
+/** Un alimento (ya con sus macros calculadas) añadido fuera de las 5 comidas. */
+export interface ExtraInput {
+  id: string;
+  label: string;
+  hour: number;
+  protein: number;
+  carbs: number;
+}
+
+export interface FlowExtra extends ExtraInput {
+  beforeTraining: boolean | null;
+}
+
 export interface DayFlow {
   meals: FlowMeal[];
+  /** Alimentos añadidos fuera de las 5 comidas — siempre cuentan como hechos. */
+  extras: FlowExtra[];
   trainingHour: number | null;
   nowHour: number | null;
   status: FlowStatus;
   planned: Macros;
+  /** Lo hecho de las 5 comidas más todos los extras. */
   done: Macros;
-  /** Lo previsto y lo hecho antes del entreno (solo con entreno). */
+  /** Lo previsto y lo hecho antes del entreno (solo con entreno) — el hecho incluye los extras de antes. */
   before: { planned: Macros; done: Macros } | null;
-  /** Lo previsto después del entreno y lo que aún falta por tomar de ello (solo con entreno). */
+  /** Lo previsto después del entreno y lo que aún falta por tomar de ello — los extras de después ya cuentan como recuperación hecha. */
   after: { planned: Macros; remaining: Macros } | null;
-  /** Comidas que ya tocaban por la hora y no están hechas (solo antes del entreno). */
+  /** Comidas que ya tocaban por la hora y no están hechas (solo antes del entreno). Ajeno a los extras. */
   missed: Macros;
 }
 
@@ -67,6 +84,7 @@ const GRACE_HOURS = 0.5;
 export function computeDayFlow(
   plan: DayMealPlan,
   doneIndexes: number[],
+  extraInputs: ExtraInput[],
   opts: { trainingHour: number | null; nowHour: number | null; trained?: boolean },
 ): DayFlow {
   const { trainingHour, nowHour } = opts;
@@ -78,6 +96,10 @@ export function computeDayFlow(
     carbs: m.carbs,
     done: doneIndexes.includes(MEAL_ORDER.indexOf(m.key)),
     beforeTraining: trainingHour === null ? null : parseHour(m.time) < trainingHour,
+  }));
+  const extras: FlowExtra[] = extraInputs.map((e) => ({
+    ...e,
+    beforeTraining: trainingHour === null ? null : e.hour < trainingHour,
   }));
 
   let planned = zero();
@@ -99,6 +121,15 @@ export function computeDayFlow(
       if (!m.done) afterRemaining = add(afterRemaining, m);
     }
   }
+  // Los extras siempre cuentan como ya tomados: suman a "hecho" y, si caen antes del entreno, también a lo hecho de
+  // antes; si caen después, reducen lo que falta por recuperar (sin bajar de cero: comer de más no genera un "sobra").
+  for (const e of extras) {
+    done = add(done, e);
+    if (e.beforeTraining === true) beforeDone = add(beforeDone, e);
+    else if (e.beforeTraining === false) {
+      afterRemaining = { protein: Math.max(0, afterRemaining.protein - e.protein), carbs: Math.max(0, afterRemaining.carbs - e.carbs) };
+    }
+  }
 
   let status: FlowStatus;
   if (trainingHour === null) status = 'descanso';
@@ -109,6 +140,7 @@ export function computeDayFlow(
   // "Ya entrenó" sin conocer la hora (otro día): se trata como después.
   return {
     meals,
+    extras,
     trainingHour,
     nowHour,
     status,

@@ -4,10 +4,11 @@ import { MEAL_LABEL, TRAINING_HOUR_OPTIONS, type MealKey } from '../../engine/me
 import { Modal } from '../shell/Modal';
 import { computeDayFlow } from '../../engine/dayFlow';
 import { DayFlow } from './DayFlow';
+import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MealBuilderPanel } from './MealBuilderPanel';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
-import { addDays, dayLabel, planFor, trainingHourFor } from './nutritionData';
+import { addDays, dayLabel, extraInputsFor, planFor, trainingHourFor, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
 
 const DAY_TYPES: NutritionDayType[] = ['descanso', 'ligero', 'normal', 'alto'];
@@ -28,6 +29,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
   const day = getWeek(iso).find((d) => d.iso === iso);
   const [typeOverride, setTypeOverride] = useState<NutritionDayType | null>(null);
   const [buildMeal, setBuildMeal] = useState<MealKey | null>(null);
+  const [addingExtra, setAddingExtra] = useState(false);
   useEffect(() => setTypeOverride(null), [iso]);
 
   const dayType = typeOverride ?? day?.type ?? 'normal';
@@ -46,9 +48,10 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
     const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
   }, [isToday]);
+  const extras = useMemo(() => extraInputsFor(prefs, iso), [prefs, iso]);
   const flow = useMemo(
-    () => computeDayFlow(plan, done, { trainingHour: dayType === 'descanso' ? null : hour, nowHour: isToday ? nowHour : null }),
-    [plan, done, dayType, hour, isToday, nowHour],
+    () => computeDayFlow(plan, done, extras, { trainingHour: dayType === 'descanso' ? null : hour, nowHour: isToday ? nowHour : null }),
+    [plan, done, extras, dayType, hour, isToday, nowHour],
   );
 
   function setHour(h: number) {
@@ -123,12 +126,23 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
           comida (automática o a mano) en el panel de abajo. */}
       <div className="card p-3.5">
         <p className="mb-2.5 text-sm font-semibold text-white">Tu día</p>
-        <DayFlow flow={flow} onOpenMeal={setBuildMeal} />
+        <DayFlow
+          flow={flow}
+          onOpenMeal={setBuildMeal}
+          onAddExtra={() => setAddingExtra(true)}
+          onRemoveExtra={(id) => updatePrefs((p) => withoutExtra(p, iso, id))}
+        />
       </div>
 
       {buildMeal && (
         <Modal open onClose={() => setBuildMeal(null)} title={`${MEAL_LABEL[buildMeal]} · ${dayLabel(iso, todayIso)}`}>
           <MealBuilderPanel prefs={prefs} weightKg={weightKg} updatePrefs={updatePrefs} iso={iso} dayType={dayType} mealKey={buildMeal} />
+        </Modal>
+      )}
+
+      {addingExtra && (
+        <Modal open onClose={() => setAddingExtra(false)} title={`Añadir ahora · ${dayLabel(iso, todayIso)}`}>
+          <ExtraFoodPanel prefs={prefs} updatePrefs={updatePrefs} iso={iso} defaultHour={isToday ? nowHour : hour} onDone={() => setAddingExtra(false)} />
         </Modal>
       )}
 

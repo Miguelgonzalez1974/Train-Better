@@ -292,6 +292,38 @@ describe('mergeProfile — config: gana el local', () => {
     const remote = { ...base(), nutritionPrefs: { excludedFoodIds: ['skyr'] } };
     expect(mergeProfile(remote, base()).nutritionPrefs?.excludedFoodIds).toEqual(['skyr']);
   });
+
+  it('nutritionPrefs: los alimentos propios se unen por id, gana el local en el mismo id', () => {
+    const remote = { ...base(), nutritionPrefs: { customFoods: [{ id: 'c1', name: 'Barrita', proteinPer100: 15, carbsPer100: 55, group: 'Extra' as const }] } };
+    const local = {
+      ...base(),
+      nutritionPrefs: {
+        customFoods: [
+          { id: 'c1', name: 'Barrita (editada)', proteinPer100: 16, carbsPer100: 50, group: 'Extra' as const },
+          { id: 'c2', name: 'Batido', proteinPer100: 30, carbsPer100: 10, group: 'Proteína' as const },
+        ],
+      },
+    };
+    const merged = mergeProfile(remote, local).nutritionPrefs?.customFoods;
+    expect(merged).toHaveLength(2);
+    expect(merged?.find((f) => f.id === 'c1')?.name).toBe('Barrita (editada)');
+    expect(merged?.find((f) => f.id === 'c2')?.name).toBe('Batido');
+  });
+
+  it('nutritionPrefs: los extras del dia se unen por id dentro de cada fecha — no se pierde ninguno de los dos dispositivos', () => {
+    const remote = { ...base(), nutritionPrefs: { extraFoods: { '2026-10-06': [{ id: 'e1', hour: 10, items: [{ foodId: 'platano', grams: 120 }] }] } } };
+    const local = { ...base(), nutritionPrefs: { extraFoods: { '2026-10-06': [{ id: 'e2', hour: 19, items: [{ foodId: 'cafe', grams: 1 }] }] } } };
+    const merged = mergeProfile(remote, local).nutritionPrefs?.extraFoods?.['2026-10-06'];
+    expect(merged?.map((e) => e.id).sort()).toEqual(['e1', 'e2']);
+  });
+
+  it('nutritionPrefs: en el mismo extra (mismo id) gana el local', () => {
+    const remote = { ...base(), nutritionPrefs: { extraFoods: { '2026-10-06': [{ id: 'e1', hour: 10, items: [{ foodId: 'platano', grams: 120 }] }] } } };
+    const local = { ...base(), nutritionPrefs: { extraFoods: { '2026-10-06': [{ id: 'e1', hour: 10, items: [{ foodId: 'platano', grams: 240 }] }] } } };
+    const merged = mergeProfile(remote, local).nutritionPrefs?.extraFoods?.['2026-10-06'];
+    expect(merged).toHaveLength(1);
+    expect(merged?.[0].items[0].grams).toBe(240);
+  });
 });
 
 describe('mergeHistory', () => {
