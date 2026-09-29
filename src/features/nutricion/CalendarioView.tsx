@@ -1,15 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Copy, PencilLine, RotateCcw, Undo2 } from 'lucide-react';
 import type { NutritionPrefs } from '../../data/athlete/types';
-import { copyMeals, materialize, mealStatus } from '../../engine/mealBuilder';
+import { computeDayFlow } from '../../engine/dayFlow';
+import { copyMeals } from '../../engine/mealBuilder';
 import { makeFoodResolver } from '../../engine/customFoods';
 import { MEAL_LABEL, MEAL_ORDER, type MealKey } from '../../engine/mealPlan';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import { getWeekdayIndex } from '../../engine/periodization';
 import { Modal } from '../shell/Modal';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
+import { DayFlow } from './DayFlow';
+import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MealBuilderPanel } from './MealBuilderPanel';
-import { addDays, customMealCount, parseIso, planFor, WEEKDAY_LONG, weekIsos, withoutCustomMeal } from './nutritionData';
+import { addDays, customMealCount, extraInputsFor, parseIso, planFor, trainingHourFor, WEEKDAY_LONG, weekIsos, withoutCustomMeal, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -21,12 +24,6 @@ const DOT: Record<NutritionDayType, string> = {
   normal: 'bg-brand-gold',
   alto: 'bg-brand-orange',
 };
-
-const STATE_CHIP = {
-  ok: { text: 'Cubierta', cls: 'bg-emerald-500/15 text-emerald-300' },
-  low: { text: 'Falta', cls: 'bg-brand-gold/15 text-brand-gold' },
-  over: { text: 'Te pasas', cls: 'bg-brand-orange/15 text-brand-orange' },
-} as const;
 
 type Scope = 'all' | MealKey;
 
@@ -47,6 +44,18 @@ export function CalendarioView({ shared }: { shared: NutritionShared }) {
   const [ym, setYm] = useState<[number, number]>([start.getFullYear(), start.getMonth()]);
   const [openIso, setOpenIso] = useState<string | null>(null);
   const [openMeal, setOpenMeal] = useState<MealKey | null>(null);
+  const [addingExtra, setAddingExtra] = useState(false);
+
+  // "Ahora" solo tiene sentido si el día abierto es hoy; se refresca cada minuto.
+  const isOpenToday = openIso === todayIso;
+  const [nowHour, setNowHour] = useState(() => new Date().getHours() + new Date().getMinutes() / 60);
+  useEffect(() => {
+    if (!isOpenToday) return;
+    const tick = () => setNowHour(new Date().getHours() + new Date().getMinutes() / 60);
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, [isOpenToday]);
 
   const [copyMode, setCopyMode] = useState(false);
   const [copySrc, setCopySrc] = useState<string | null>(null);
@@ -98,6 +107,7 @@ export function CalendarioView({ shared }: { shared: NutritionShared }) {
     if (!copyMode) {
       setOpenIso(iso);
       setOpenMeal(null);
+      setAddingExtra(false);
       setUndo(null);
       return;
     }
@@ -282,18 +292,34 @@ export function CalendarioView({ shared }: { shared: NutritionShared }) {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
                 <button onClick={() => setOpenMeal(null)} className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
-                  <ArrowLeft size={14} aria-hidden="true" /> Las 5 comidas
+                  <ArrowLeft size={14} aria-hidden="true" /> Tu día
                 </button>
                 <span className="text-sm font-semibold text-white">{MEAL_LABEL[openMeal]}</span>
               </div>
               <MealBuilderPanel prefs={prefs} weightKg={weightKg} updatePrefs={updatePrefs} iso={openIso} dayType={openType} mealKey={openMeal} />
+            </div>
+          ) : addingExtra ? (
+            <div className="flex flex-col gap-3">
+              <button onClick={() => setAddingExtra(false)} className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
+                <ArrowLeft size={14} aria-hidden="true" /> Tu día
+              </button>
+              <ExtraFoodPanel
+                prefs={prefs}
+                updatePrefs={updatePrefs}
+                iso={openIso}
+                defaultHour={isOpenToday ? nowHour : trainingHourFor(prefs, openIso)}
+                onDone={() => setAddingExtra(false)}
+              />
             </div>
           ) : (
             <DayPanel
               shared={shared}
               iso={openIso}
               dayType={openType}
+              nowHour={isOpenToday ? nowHour : null}
               onOpenMeal={setOpenMeal}
+              onAddExtra={() => setAddingExtra(true)}
+              onRemoveExtra={(id) => updatePrefs((p) => withoutExtra(p, openIso, id))}
               onCopy={() => {
                 startCopy(openIso);
                 setOpenIso(null);
@@ -319,61 +345,36 @@ interface DayPanelProps {
   shared: NutritionShared;
   iso: string;
   dayType: NutritionDayType;
+  /** Hora actual si `iso` es hoy; si no, `null` (solo se muestra lo previsto y lo hecho). */
+  nowHour: number | null;
   onOpenMeal: (meal: MealKey) => void;
+  onAddExtra: () => void;
+  onRemoveExtra: (id: string) => void;
   onCopy: () => void;
   onAutoDay: () => void;
 }
 
-/** Las cinco comidas de un día con su estado frente al objetivo; tocar una la abre para montarla. */
-function DayPanel({ shared, iso, dayType, onOpenMeal, onCopy, onAutoDay }: DayPanelProps) {
+/** Línea del día de un día del calendario mensual — misma vista que "Tu día": tocar un punto la abre para montarla. */
+function DayPanel({ shared, iso, dayType, nowHour, onOpenMeal, onAddExtra, onRemoveExtra, onCopy, onAutoDay }: DayPanelProps) {
   const { prefs, weightKg } = shared;
-  const plan = useMemo(() => planFor(prefs, iso, dayType, weightKg), [prefs, iso, dayType, weightKg]);
+  const hour = trainingHourFor(prefs, iso);
+  const plan = useMemo(() => planFor(prefs, iso, dayType, weightKg, hour), [prefs, iso, dayType, weightKg, hour]);
   const doneList = prefs.doneMeals?.[iso] ?? [];
   const edited = customMealCount(prefs, iso) > 0;
+  const extras = useMemo(() => extraInputsFor(prefs, iso), [prefs, iso]);
+  const flow = useMemo(
+    () => computeDayFlow(plan, doneList, extras, { trainingHour: dayType === 'descanso' ? null : hour, nowHour }),
+    [plan, doneList, extras, dayType, hour, nowHour],
+  );
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${DAY_TYPE_STYLE[dayType]}`}>{NUTRITION_DAY_LABEL[dayType]}</span>
-        <span className="num text-[11px] text-neutral-500">
-          {plan.totals.protein} g prot · {plan.totals.carbs} g hidratos
-        </span>
+        <span className="text-[11px] text-neutral-500">para {String(weightKg).replace('.', ',')} kg</span>
       </div>
 
-      {plan.meals.map((meal, index) => {
-        const status = mealStatus(materialize(meal), meal.target, makeFoodResolver(prefs.customFoods));
-        const chip = STATE_CHIP[status.state];
-        const done = doneList.includes(index);
-        return (
-          <button
-            key={meal.key}
-            onClick={() => onOpenMeal(meal.key)}
-            className="flex items-center gap-3 rounded-xl border border-brand-border bg-brand-surfaceMuted/60 px-3.5 py-3 text-left transition-colors hover:border-brand-gold/60"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
-                <span className="text-sm font-semibold text-white">{meal.label}</span>
-                <span className="num text-[11px] text-neutral-500">{meal.time}</span>
-                {meal.custom && <PencilLine size={11} className="text-brand-gold" aria-label="Montada a mano" />}
-              </span>
-              <span className="mt-0.5 block truncate text-xs text-neutral-400">
-                {meal.items.length === 0 ? 'Vacía' : meal.items.map((i) => i.name.split(' (')[0]).slice(0, 3).join(' · ') + (meal.items.length > 3 ? ' …' : '')}
-              </span>
-              <span className="num mt-0.5 block text-[11px] text-neutral-500">
-                {meal.protein} / {meal.target.protein} g prot · {meal.carbs} / {meal.target.carbs} g hid.
-              </span>
-            </span>
-            {/* La sugerencia automática se muestra neutra (sus cantidades tienen límites de ración razonables y a veces no clavan el objetivo); el estado real solo aparece en lo montado a mano. */}
-            <span
-              className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${
-                done ? 'bg-emerald-500/15 text-emerald-300' : meal.custom ? chip.cls : 'bg-white/5 text-neutral-400'
-              }`}
-            >
-              {done ? 'Hecha' : meal.custom ? chip.text : 'Sugerida'}
-            </span>
-          </button>
-        );
-      })}
+      <DayFlow flow={flow} onOpenMeal={onOpenMeal} onAddExtra={onAddExtra} onRemoveExtra={onRemoveExtra} />
 
       <div className="mt-1 flex flex-col gap-2">
         <button onClick={onCopy} className="flex items-center justify-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors hover:text-white">
