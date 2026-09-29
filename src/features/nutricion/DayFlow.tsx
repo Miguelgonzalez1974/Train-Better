@@ -1,7 +1,8 @@
 import { Fragment } from 'react';
 import { Check, Dumbbell, Plus, X } from 'lucide-react';
-import type { DayFlow as DayFlowData, FlowExtra, FlowMeal } from '../../engine/dayFlow';
+import type { DayFlow as DayFlowData, FlowExtra } from '../../engine/dayFlow';
 import type { MealKey } from '../../engine/mealPlan';
+import { MacroRing } from './MacroRing';
 
 const AXIS_START = 7;
 const AXIS_END = 23;
@@ -14,71 +15,6 @@ function fmt(hour: number): string {
   return m === 60 ? `${String(h + 1).padStart(2, '0')}:00` : `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-const HATCH = 'repeating-linear-gradient(135deg, transparent 0 4px, rgba(255,255,255,0.07) 4px 8px)';
-
-const g = (n: number) => `${n} g`;
-
-interface MacroBarProps {
-  label: string;
-  meals: FlowMeal[];
-  value: (m: FlowMeal) => number;
-  extraValue: number;
-  doneTotal: number;
-  plannedTotal: number;
-  fillClass: string;
-  onOpenMeal: (meal: MealKey) => void;
-}
-
-/**
- * Una barra por macro, partida en un trozo por comida (del tamaño de lo que aporta): en color las hechas, con trama
- * las previas al entreno aún sin hacer. Cada trozo se toca para montar esa comida. Si hay extras del día, se añade un
- * trozo más al final (morado), sin tocar — su detalle está en la lista de extras, debajo.
- */
-function MacroBar({ label, meals, value, extraValue, doneTotal, plannedTotal, fillClass, onOpenMeal }: MacroBarProps) {
-  const total = plannedTotal + extraValue;
-  return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm font-semibold text-white">{label}</span>
-        <span className="num text-xs text-neutral-400">
-          <b className="text-white">{doneTotal}</b> / {plannedTotal} g
-        </span>
-      </div>
-      <div className="mt-1 flex h-6 gap-0.5">
-        {meals.map((m) => {
-          const v = value(m);
-          const pre = m.beforeTraining === true && !m.done;
-          return (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => onOpenMeal(m.key)}
-              title={`${m.label} · ${v} g${m.done ? ' · hecha' : ''}`}
-              aria-label={`${m.label}: ${v} g de ${label.toLowerCase()}${m.done ? ', hecha' : ''}. Tocar para montarla.`}
-              style={{ flex: `${Math.max(v, 1)} 1 0`, backgroundImage: pre ? HATCH : undefined }}
-              className={`flex min-w-0 items-center justify-center overflow-hidden rounded-md text-[10px] transition-colors duration-300 ${
-                m.done ? `${fillClass} font-semibold text-black/80` : 'border border-white/10 bg-white/[0.03] text-neutral-500 hover:border-brand-gold/50'
-              }`}
-            >
-              {plannedTotal > 0 && (v / plannedTotal) * 100 > 9 ? v : ''}
-            </button>
-          );
-        })}
-        {extraValue > 0 && (
-          <div
-            title={`Extras del día · ${extraValue} g`}
-            aria-label={`Extras del día: ${extraValue} g de ${label.toLowerCase()}`}
-            style={{ flex: `${extraValue} 1 0` }}
-            className="flex min-w-0 items-center justify-center overflow-hidden rounded-md bg-violet-400 text-[10px] font-semibold text-black/80"
-          >
-            {total > 0 && (extraValue / total) * 100 > 9 ? extraValue : ''}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 interface DayFlowProps {
   flow: DayFlowData;
   onOpenMeal: (meal: MealKey) => void;
@@ -87,18 +23,17 @@ interface DayFlowProps {
 }
 
 /**
- * "Línea del día" (ver `engine/dayFlow.ts`): las cinco comidas en su hora sobre un eje de 07:00 a 23:00, con el entreno
- * como línea de corte y "ahora" si es hoy; debajo, dos barras (proteína e hidratos) partidas por comida. Es solo
- * visual: sin frases de consejo. Tocar el punto de una comida, o su trozo de barra, la abre para montarla. Los
- * alimentos añadidos fuera de las 5 comidas salen como rombos en la línea y en una lista aparte, debajo.
+ * "Línea del día" (ver `engine/dayFlow.ts`): las cinco comidas en su hora sobre un eje de 07:00 a 23:00, con la hora
+ * de entreno como referencia y "ahora" si es hoy — tocar un punto la abre para montarla. Los alimentos añadidos
+ * fuera de las 5 comidas salen como rombos en la línea y en una lista aparte, debajo. Debajo de todo, dos donuts
+ * (proteína e hidratos) con lo que llevas frente al objetivo del día — incluye lo marcado hecho más los extras.
+ * Sin antes/después: con el donut ya se ve cómo vas, sin necesitar esa distinción.
  */
 export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlowProps) {
-  const { meals, extras, trainingHour, nowHour } = flow;
-  const extraProtein = extras.reduce((s, e) => s + e.protein, 0);
-  const extraCarbs = extras.reduce((s, e) => s + e.carbs, 0);
+  const { meals, extras, trainingHour, nowHour, done, planned } = flow;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {/* Eje del día */}
       <div>
         <div className="relative mx-3 h-[4.5rem]" aria-hidden="true">
@@ -156,69 +91,11 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
         </div>
       </div>
 
-      <MacroBar
-        label="Proteína"
-        meals={meals}
-        value={(m) => m.protein}
-        extraValue={extraProtein}
-        doneTotal={flow.done.protein}
-        plannedTotal={flow.planned.protein}
-        fillClass="bg-red-400"
-        onOpenMeal={onOpenMeal}
-      />
-      <MacroBar
-        label="Hidratos"
-        meals={meals}
-        value={(m) => m.carbs}
-        extraValue={extraCarbs}
-        doneTotal={flow.done.carbs}
-        plannedTotal={flow.planned.carbs}
-        fillClass="bg-brand-gold"
-        onOpenMeal={onOpenMeal}
-      />
-
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500">
-        <span className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" aria-hidden="true" /> hecha
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm border border-white/20" aria-hidden="true" /> prevista
-        </span>
-        {trainingHour !== null && (
-          <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-sm border border-white/20" style={{ backgroundImage: HATCH }} aria-hidden="true" /> previa al entreno
-          </span>
-        )}
-        {extras.length > 0 && (
-          <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rotate-45 rounded-[2px] bg-violet-400" aria-hidden="true" /> extra
-          </span>
-        )}
-      </p>
-
-      {/* Resumen antes / después */}
-      {flow.before && flow.after ? (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Antes de entrenar</p>
-            <p className="num mt-0.5 text-sm text-neutral-200">
-              <b className="text-white">{flow.before.done.carbs}</b> / {g(flow.before.planned.carbs)} hid.
-            </p>
-            <p className="num text-sm text-neutral-200">
-              <b className="text-white">{flow.before.done.protein}</b> / {g(flow.before.planned.protein)} prot.
-            </p>
-          </div>
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Después</p>
-            <p className="num mt-0.5 text-sm text-neutral-200">
-              quedan <b className="text-white">{g(flow.after.remaining.carbs)}</b> hid.
-            </p>
-            <p className="num text-sm text-neutral-200">
-              quedan <b className="text-white">{g(flow.after.remaining.protein)}</b> prot.
-            </p>
-          </div>
-        </div>
-      ) : null}
+      {/* Lo que llevas del día */}
+      <div className="flex items-center justify-around">
+        <MacroRing label="Proteína" value={done.protein} target={planned.protein} strokeClass="stroke-red-400" size={112} />
+        <MacroRing label="Hidratos" value={done.carbs} target={planned.carbs} strokeClass="stroke-brand-gold" size={112} />
+      </div>
 
       {extras.length > 0 && (
         <div className="flex flex-col divide-y divide-white/5 rounded-lg bg-white/[0.03]">
@@ -235,7 +112,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
         <Plus size={14} aria-hidden="true" /> Añadir un alimento ahora
       </button>
 
-      <p className="text-[11px] leading-relaxed text-neutral-600">Toca un punto o un trozo de barra para montar esa comida. Solo cuenta lo que marques como hecho.</p>
+      <p className="text-[11px] leading-relaxed text-neutral-600">Toca un punto para montar esa comida. Los donuts cuentan lo que marques como hecho, más los extras.</p>
     </div>
   );
 }
