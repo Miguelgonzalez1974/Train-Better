@@ -30,7 +30,10 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
         const extras = extraInputsFor(prefs, d.iso);
         const doneProtein = plan.meals.reduce((s, m, i) => s + (doneIdx.includes(i) ? m.protein : 0), 0) + extras.reduce((s, e) => s + e.protein, 0);
         const doneCarbs = plan.meals.reduce((s, m, i) => s + (doneIdx.includes(i) ? m.carbs : 0), 0) + extras.reduce((s, e) => s + e.carbs, 0);
-        return { ...d, plan, doneIdx, doneProtein, doneCarbs };
+        // Objetivo fijo del día (punto medio del rango) — no lo compuesto, que puede bajar si una comida se monta a mano con menos.
+        const objectiveProtein = Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2);
+        const objectiveCarbs = Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2);
+        return { ...d, plan, doneIdx, doneProtein, doneCarbs, objectiveProtein, objectiveCarbs };
       }),
     [getWeek, anchor, prefs, weightKg],
   );
@@ -72,8 +75,8 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
                 <span className="block text-[11px] text-neutral-500">{NUTRITION_DAY_LABEL[d.type]}</span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <MacroRing label="Proteína" value={d.doneProtein} target={d.plan.totals.protein} strokeClass="stroke-red-400" size={44} compact />
-                <MacroRing label="Hidratos" value={d.doneCarbs} target={d.plan.totals.carbs} strokeClass="stroke-brand-gold" size={44} compact />
+                <MacroRing label="Proteína" value={d.doneProtein} target={d.objectiveProtein} strokeClass="stroke-red-400" size={44} compact />
+                <MacroRing label="Hidratos" value={d.doneCarbs} target={d.objectiveCarbs} strokeClass="stroke-brand-gold" size={44} compact />
               </span>
             </button>
             {open && (

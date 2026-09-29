@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeDayFlow, parseHour, type ExtraInput } from './dayFlow';
+import { applyCustomMeals } from './mealBuilder';
 import { planDayMeals, type MealPlanInput } from './mealPlan';
 
 const base = (over: Partial<MealPlanInput> = {}): MealPlanInput => ({ date: '2026-10-06', dayType: 'normal', weightKg: 80, trainingHour: 16, ...over });
@@ -26,6 +27,21 @@ describe('computeDayFlow', () => {
     expect(flow.before!.planned.carbs + flow.after!.planned.carbs).toBe(flow.planned.carbs);
     expect(flow.after!.remaining.carbs).toBe(plan.meals[4].carbs);
     expect(flow.extras).toEqual([]);
+  });
+
+  it('el objetivo de los donuts es el punto medio del rango del dia, no lo que suma el plan compuesto', () => {
+    const flow = computeDayFlow(plan, [], EMPTY, { trainingHour: 16, nowHour: 12 });
+    expect(flow.objective.protein).toBe(Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2));
+    expect(flow.objective.carbs).toBe(Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2));
+  });
+
+  it('el objetivo NO baja si el atleta monta a mano una comida con menos de lo que tocaba (antes se pisaba con lo compuesto)', () => {
+    // Comida hecha solo de pollo: mucha menos proteina/hidratos que la sugerencia automatica de esa toma.
+    const short = applyCustomMeals(plan, { comida: [{ foodId: 'pollo', grams: 100 }] });
+    const flow = computeDayFlow(short, [], EMPTY, { trainingHour: 16, nowHour: 12 });
+    expect(flow.planned.carbs).toBeLessThan(plan.totals.carbs); // lo compuesto SI baja
+    expect(flow.objective.carbs).toBe(Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2)); // el objetivo NO
+    expect(flow.objective.protein).toBe(Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2));
   });
 
   it('antes del entreno: al dia si lo que ya tocaba esta hecho, atrasado si no', () => {

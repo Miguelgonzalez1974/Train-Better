@@ -30,7 +30,7 @@ interface DayFlowProps {
  * Sin antes/después: con el donut ya se ve cómo vas, sin necesitar esa distinción.
  */
 export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlowProps) {
-  const { meals, extras, trainingHour, nowHour, done, planned } = flow;
+  const { meals, extras, trainingHour, nowHour, done, objective } = flow;
 
   return (
     <div className="flex flex-col gap-4">
@@ -93,8 +93,8 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
 
       {/* Lo que llevas del día */}
       <div className="flex items-center justify-around">
-        <MacroRing label="Proteína" value={done.protein} target={planned.protein} strokeClass="stroke-red-400" size={112} />
-        <MacroRing label="Hidratos" value={done.carbs} target={planned.carbs} strokeClass="stroke-brand-gold" size={112} />
+        <MacroRing label="Proteína" value={done.protein} target={objective.protein} strokeClass="stroke-red-400" size={112} />
+        <MacroRing label="Hidratos" value={done.carbs} target={objective.carbs} strokeClass="stroke-brand-gold" size={112} />
       </div>
 
       {extras.length > 0 && (

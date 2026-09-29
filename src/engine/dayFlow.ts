@@ -58,6 +58,16 @@ export interface DayFlow {
   trainingHour: number | null;
   nowHour: number | null;
   status: FlowStatus;
+  /**
+   * El objetivo real del día (punto medio del rango que calcula `nutritionForDay` para el peso y el tipo de día) —
+   * fijo, no cambia si montas una comida a mano con menos de lo que tocaba. Es el que se muestra en los donuts.
+   */
+  objective: Macros;
+  /**
+   * Lo que suma el plan actual (automático, o con lo montado a mano ya aplicado) — puede ser menor que `objective`
+   * si una comida montada a mano se queda corta. Se usa para "qué tocaba" en el reparto antes/después, no como
+   * objetivo a mostrar.
+   */
   planned: Macros;
   /** Lo hecho de las 5 comidas más todos los extras. */
   done: Macros;
@@ -137,6 +147,11 @@ export function computeDayFlow(
   else if (nowHour === null) status = 'sin-hora';
   else status = missed.carbs >= Math.max(20, beforePlanned.carbs * 0.15) || missed.protein >= Math.max(12, beforePlanned.protein * 0.25) ? 'atrasado' : 'al-dia';
 
+  const objective: Macros = {
+    protein: Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2),
+    carbs: Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2),
+  };
+
   // "Ya entrenó" sin conocer la hora (otro día): se trata como después.
   return {
     meals,
@@ -144,6 +159,7 @@ export function computeDayFlow(
     trainingHour,
     nowHour,
     status,
+    objective,
     planned,
     done,
     before: trainingHour === null ? null : { planned: beforePlanned, done: beforeDone },
