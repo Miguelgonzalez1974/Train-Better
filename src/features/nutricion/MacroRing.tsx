@@ -4,13 +4,15 @@ interface MacroRingProps {
   target: number;
   /** Color del trazo cuando la toma aún no está cubierta (clase de Tailwind `stroke-*`). */
   strokeClass: string;
-  /** Diámetro en px. Por defecto 92 (dentro del constructor de una comida); la línea del día usa uno mayor. */
+  /** Diámetro en px. Por defecto 92 (dentro del constructor de una comida); la línea del día usa uno mayor, las listas compactas uno menor. */
   size?: number;
+  /** Oculta la etiqueta de abajo y el "de X g" — solo el número, para usarlo en listas compactas (fila de la semana). El significado sigue accesible por `aria-label`. */
+  compact?: boolean;
 }
 
 /** Anillo de progreso de un macro: verde al cubrirlo, naranja si se pasa. Se lee de un vistazo, con el número en el centro. */
-export function MacroRing({ label, value, target, strokeClass, size = 92 }: MacroRingProps) {
-  const stroke = size >= 110 ? 11 : 9;
+export function MacroRing({ label, value, target, strokeClass, size = 92, compact = false }: MacroRingProps) {
+  const stroke = size >= 110 ? 11 : size <= 56 ? 5 : 9;
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const ratio = target > 0 ? value / target : 0;
@@ -35,11 +37,11 @@ export function MacroRing({ label, value, target, strokeClass, size = 92 }: Macr
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`num font-bold leading-none text-white ${size >= 110 ? 'text-2xl' : 'text-xl'}`}>{value}</span>
-          <span className="mt-0.5 text-[10px] text-neutral-500">de {target} g</span>
+          <span className={`num font-bold leading-none text-white ${size >= 110 ? 'text-2xl' : compact ? 'text-[11px]' : 'text-xl'}`}>{value}</span>
+          {!compact && <span className="mt-0.5 text-[10px] text-neutral-500">de {target} g</span>}
         </div>
       </div>
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
+      {!compact && <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>}
     </div>
   );
 }

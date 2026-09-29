@@ -1,13 +1,32 @@
 import { useMemo, useState } from 'react';
-import { Check, Copy, Square, CheckSquare } from 'lucide-react';
+import { Apple, Beef, Carrot, Check, Copy, Egg, Package, Square, CheckSquare, Wheat } from 'lucide-react';
 import { buildShoppingList, shoppingListText } from '../../engine/mealPlan';
 import { makeFoodResolver } from '../../engine/customFoods';
-import { SHOPPING_CATEGORY_LABEL, STAPLES } from '../../data/nutrition/foods';
+import { SHOPPING_CATEGORY_LABEL, STAPLES, type ShoppingCategory } from '../../data/nutrition/foods';
 import { getWeekdayIndex } from '../../engine/periodization';
 import { addDays, mondayOf, parseIso, planFor, WEEKDAY_SHORT } from './nutritionData';
 import type { NutritionShared } from './shared';
 
 type Range = 'resto' | 'proxima';
+
+const CATEGORY_ICON: Record<ShoppingCategory, typeof Beef> = {
+  proteinas: Beef,
+  lacteos: Egg,
+  hidratos: Wheat,
+  fruta: Apple,
+  verdura: Carrot,
+  despensa: Package,
+};
+
+/** Un color por categoría, para que la sección se reconozca de un vistazo al recorrer el súper. */
+const CATEGORY_STYLE: Record<ShoppingCategory, string> = {
+  proteinas: 'bg-red-400/15 text-red-300',
+  lacteos: 'bg-sky-400/15 text-sky-300',
+  hidratos: 'bg-brand-gold/15 text-brand-gold',
+  fruta: 'bg-pink-400/15 text-pink-300',
+  verdura: 'bg-emerald-400/15 text-emerald-300',
+  despensa: 'bg-white/10 text-neutral-300',
+};
 
 const storageKey = (firstIso: string, lastIso: string) => `train-better:compra:${firstIso}:${lastIso}`;
 
@@ -98,33 +117,56 @@ export function CompraView({ shared }: { shared: NutritionShared }) {
           </button>
         ))}
       </div>
-      <p className="text-xs text-neutral-500">
-        {rangeText} · {checked.size} de {total} tachados
-      </p>
+      <div className="card p-3.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xs text-neutral-500">{rangeText}</span>
+          <span className="num text-sm font-semibold text-white">
+            {checked.size} <span className="font-normal text-neutral-500">/ {total}</span>
+          </span>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-emerald-400 transition-all duration-300"
+            style={{ width: `${total > 0 ? Math.min(100, (checked.size / total) * 100) : 0}%` }}
+          />
+        </div>
+      </div>
 
       {groups.length === 0 ? (
         <p className="card p-4 text-sm text-neutral-400">No hay menús para esos días.</p>
       ) : (
-        groups.map((g) => (
-          <section key={g.category} className="card p-3.5">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{g.label}</p>
-            <ul className="flex flex-col divide-y divide-white/5">
-              {g.lines.map((l) => {
-                const isChecked = checked.has(l.foodId);
-                const Box = isChecked ? CheckSquare : Square;
-                return (
-                  <li key={l.foodId}>
-                    <button onClick={() => toggle(l.foodId)} aria-pressed={isChecked} className="flex w-full items-center gap-2.5 py-2 text-left">
-                      <Box size={18} className={isChecked ? 'text-emerald-400' : 'text-neutral-600'} aria-hidden="true" />
-                      <span className={`flex-1 text-sm ${isChecked ? 'text-neutral-600 line-through' : 'text-neutral-100'}`}>{l.name}</span>
-                      <span className={`num text-sm font-semibold ${isChecked ? 'text-neutral-600' : 'text-white'}`}>{l.text}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))
+        groups.map((g) => {
+          const Icon = CATEGORY_ICON[g.category];
+          const doneInGroup = g.lines.filter((l) => checked.has(l.foodId)).length;
+          return (
+            <section key={g.category} className="card p-3.5">
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${CATEGORY_STYLE[g.category]}`}>
+                  <Icon size={15} aria-hidden="true" />
+                </span>
+                <p className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{g.label}</p>
+                <span className="num text-[11px] text-neutral-600">
+                  {doneInGroup}/{g.lines.length}
+                </span>
+              </div>
+              <ul className="flex flex-col divide-y divide-white/5">
+                {g.lines.map((l) => {
+                  const isChecked = checked.has(l.foodId);
+                  const Box = isChecked ? CheckSquare : Square;
+                  return (
+                    <li key={l.foodId}>
+                      <button onClick={() => toggle(l.foodId)} aria-pressed={isChecked} className="flex w-full items-center gap-2.5 py-2 text-left">
+                        <Box size={18} className={isChecked ? 'text-emerald-400' : 'text-neutral-600'} aria-hidden="true" />
+                        <span className={`flex-1 text-sm ${isChecked ? 'text-neutral-600 line-through' : 'text-neutral-100'}`}>{l.name}</span>
+                        <span className={`num text-sm font-semibold ${isChecked ? 'text-neutral-600' : 'text-white'}`}>{l.text}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })
       )}
 
       <button onClick={copy} className="flex items-center justify-center gap-2 rounded-lg bg-brand-orange px-4 py-2.5 text-sm font-semibold text-black hover:bg-brand-orange-dark">
