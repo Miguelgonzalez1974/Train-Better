@@ -368,6 +368,21 @@ function WodRestDivider() {
   );
 }
 
+/**
+ * `wodKind` cuyas entradas ya vienen en parejas movimiento-principal + movimiento-fijo REPETIDAS una
+ * vez por ronda real (no una sola pasada que el atleta repite de memoria) — cada pareja consecutiva es
+ * una ronda distinta con su propia cifra (peso que sube, o el peldaño de la escalera), así que la
+ * tarjeta puede etiquetarlas sin inventar una estructura que no está en los datos. `barbellComplex`
+ * queda fuera a propósito: sus 3 movimientos + peaje son UNA sola pasada que el atleta repite entera
+ * las veces que diga el formato — etiquetar esas parejas como "Ronda 1/2/3" diría "3 rondas" cuando en
+ * realidad son 6 o las que toquen ese día.
+ */
+const ROUND_LABEL_BY_KIND: Record<string, string> = {
+  risingLoadInterval: 'Ronda',
+  descendingLadderFiller: 'Escalón',
+  ascendingLadderFiller: 'Escalón',
+};
+
 /** Bloque wod generado a medida: una unica tarjeta con el formato y los movimientos numerados en orden. */
 function CustomWodCard({
   entries,
@@ -384,6 +399,8 @@ function CustomWodCard({
   const title = entries[0]?.title;
   const format = entries[0]?.format;
   const target = entries[0]?.wodTarget;
+  const roundLabel = entries[0]?.wodKind ? ROUND_LABEL_BY_KIND[entries[0].wodKind] : undefined;
+  const roundSize = 2; // par movimiento-principal + movimiento-fijo, ver `ROUND_LABEL_BY_KIND`.
 
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
@@ -397,27 +414,34 @@ function CustomWodCard({
           // (antes se saltaba la fila sin avisar y el WOD parecia tener menos movimientos de los que tenia).
           const movement = getMovementById(entry.movementId) ?? { name: entry.movementId };
           return (
-            // La fila puede partirse en dos lineas (`flex-wrap`): el nombre ocupa su linea con un ancho minimo y las
-            // repeticiones bajan a la de abajo, alineadas a la derecha, cuando no caben juntas. Con una escalera larga
-            // ("3-6-9-12-15-12-9-6-3") las reps ocupaban casi toda la fila y el nombre se quedaba sin sitio: "Power
-            // Clean" salia con una letra por linea.
-            <div key={`${entry.movementId}-${idx}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
-              <span className="num w-4 shrink-0 text-[11px] text-neutral-600">{idx + 1}</span>
-              <div className="min-w-[8rem] flex-1">
-                {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. */}
-                <p className={`${NAME_STEP} break-words`}>{movement.name}</p>
-                {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
+            <Fragment key={`${entry.movementId}-${idx}`}>
+              {roundLabel && idx % roundSize === 0 && (
+                <p className="pt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-600 first:pt-0">
+                  {roundLabel} {idx / roundSize + 1}
+                </p>
+              )}
+              {/* La fila puede partirse en dos lineas (`flex-wrap`): el nombre ocupa su linea con un ancho minimo y las
+              repeticiones bajan a la de abajo, alineadas a la derecha, cuando no caben juntas. Con una escalera larga
+              ("3-6-9-12-15-12-9-6-3") las reps ocupaban casi toda la fila y el nombre se quedaba sin sitio: "Power
+              Clean" salia con una letra por linea. */}
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
+                <span className="num w-4 shrink-0 text-[11px] text-neutral-600">{idx + 1}</span>
+                <div className="min-w-[8rem] flex-1">
+                  {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. */}
+                  <p className={`${NAME_STEP} break-words`}>{movement.name}</p>
+                  {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
+                </div>
+                {entry.reps && (
+                  <span className="num ml-auto max-w-full text-right text-sm text-neutral-300 [overflow-wrap:anywhere]">
+                    {entry.reps}
+                    {entry.loadKg ? <span className="text-neutral-500"> · {fmtKg(entry.loadKg)}</span> : ''}
+                  </span>
+                )}
+                {onUpdateEntry && entryIndices && (
+                  <ScalingPicker entry={entry} index={entryIndices[idx]} onUpdateEntry={onUpdateEntry} />
+                )}
               </div>
-              {entry.reps && (
-                <span className="num ml-auto max-w-full text-right text-sm text-neutral-300 [overflow-wrap:anywhere]">
-                  {entry.reps}
-                  {entry.loadKg ? <span className="text-neutral-500"> · {fmtKg(entry.loadKg)}</span> : ''}
-                </span>
-              )}
-              {onUpdateEntry && entryIndices && (
-                <ScalingPicker entry={entry} index={entryIndices[idx]} onUpdateEntry={onUpdateEntry} />
-              )}
-            </div>
+            </Fragment>
           );
         })}
       </div>

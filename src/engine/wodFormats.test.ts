@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateSessionForDate } from './generateSession';
-import { getWodDomain, WOD_BARBELL_LOAD_PERCENT, WOD_PRESCRIPTION } from './wodDomains';
+import { getWodDomain, WOD_BARBELL_LOAD_PERCENT, WOD_PRESCRIPTION, WOD_RX_BW_FRACTION } from './wodDomains';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import type { SessionBlockResult } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
@@ -142,6 +142,9 @@ describe('WOD generado — coherencia de cada formato', () => {
         if (!((barbell[i].loadKg ?? 0) > (barbell[i - 1].loadKg ?? 0))) bad.push(`la carga no sube en el escalon ${i}: ${where(w)}`);
       }
       if (new Set(fixed.map((f) => f.movementId)).size !== 1) bad.push(`el movimiento fijo cambia: ${where(w)}`);
+      // El movimiento fijo nunca lleva carga (por eso no se le calcula ni se le muestra peso) — si de
+      // verdad necesita barra/mancuerna/kettlebell, tiene que ir en el hueco de la barra, no en este.
+      if (getWodDomain(fixed[0].movementId) === 'weighted') bad.push(`el movimiento fijo necesita carga: ${where(w)}`);
     }
     expect(bad).toEqual([]);
   });
@@ -339,5 +342,12 @@ describe('WOD generado — coherencia de cada formato', () => {
   it('todos los formatos aparecen en la muestra (ninguno esta muerto)', () => {
     const missing = Object.keys(LABEL).filter((k) => of(k).length === 0);
     expect(missing).toEqual([]);
+  });
+});
+
+describe('clasificacion de dominio de movimientos con mancuerna/kettlebell', () => {
+  it('DB Thruster cuenta como "con carga" y tiene fraccion de peso corporal (antes caia por defecto en "gimnastico" y salia sin peso)', () => {
+    expect(getWodDomain('dumbbell-thruster')).toBe('weighted');
+    expect(WOD_RX_BW_FRACTION['dumbbell-thruster']).toBeDefined();
   });
 });

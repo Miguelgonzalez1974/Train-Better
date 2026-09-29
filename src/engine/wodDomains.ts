@@ -73,6 +73,7 @@ export const WEIGHTED_IDS = [
   'kettlebell-snatch',
   'dumbbell-deadlift',
   'cluster',
+  'dumbbell-thruster',
 ];
 
 export type WodDomain = 'gymnastics' | 'monostructural' | 'weighted';
@@ -269,6 +270,7 @@ export const WOD_RX_BW_FRACTION: Record<string, { fraction: number; round: 'plat
   'dumbbell-deadlift': { fraction: 0.28, round: 'plate' },
   'kettlebell-snatch': { fraction: 0.3, round: 'kb' },
   cluster: { fraction: 0.52, round: 'plate' },
+  'dumbbell-thruster': { fraction: 0.28, round: 'plate' },
 };
 
 /** Tamaños de kettlebell reales (kg) para redondear una carga RX relativa al peso corporal. */
