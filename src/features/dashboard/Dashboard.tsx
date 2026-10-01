@@ -11,6 +11,7 @@ import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, ACWR_ZONE_STROKE, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
 import { AcwrGauge } from './AcwrGauge';
 import { TodayPreviewCard } from './TodayPreviewCard';
+import { JourneyBanner } from './JourneyBanner';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
@@ -254,6 +255,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         El titular: que toca hoy, en una linea, sin tener que entrar a Planificacion para saberlo.
       */}
       <TodayPreviewCard profile={profile} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
+
+      {/*
+        MOCKUP: donde estas en el viaje (semana del macro/programa + objetivo mas cercano a su fecha),
+        en positivo, en vez de solo "que vigilar". Mismos datos que ya alimentaban el numerito del
+        icono de Objetivos.
+      */}
+      <JourneyBanner structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
 
       <AttentionBanner items={attentionItems} />
 
