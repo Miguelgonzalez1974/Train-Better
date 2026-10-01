@@ -182,7 +182,21 @@ describe('generateSessionForDate — macrociclo', () => {
     // (el entreno real sí puede corregirse por un choque real de últimos días, la vista previa no
     // tiene ese historial que mirar) — lo que nunca debe pasar en NINGUNO de los dos caminos es que
     // una familia se coma la vista, así que se comprueba eso en vez de la igualdad exacta.
-    const familyOf = (id: string | undefined) => (id ? (id.includes('snatch') ? 'S' : 'C') : '-');
+    // El viernes de doble WOD entrena las dos familias el mismo día (`buildFridayOlyBlock`, a petición
+    // del usuario), y el cierre "Day 5 de Mayhem" de un día normal (`olyCombined`) también toca las
+    // dos — ninguno de los dos "domina" snatch ni clean, así que ambos cuentan como neutros ('-') para
+    // la racha (`maxRun`, un día mixto no puede ser el enésimo seguido de una sola familia), pero SÍ
+    // cuentan como presencia de ambas para la cuota (`minorityShare`, el toque ligero de la familia
+    // minoritaria en un día mixto es exposición real, no debe descontarse). Mismo criterio de "mixto"
+    // que `dominantOlyFamily` en movementBalance.ts.
+    const presenceOfSession = (s: DailySession) => {
+      const olyIds = s.blocks.filter((b) => b.block === 'oly' && !b.subgroup).map((b) => b.movementId);
+      return { snatch: olyIds.some((id) => id.includes('snatch')), clean: olyIds.some((id) => id.includes('clean') || id.includes('jerk')) };
+    };
+    const familyOfSession = (s: DailySession) => {
+      const { snatch, clean } = presenceOfSession(s);
+      return snatch && clean ? '-' : snatch ? 'S' : clean ? 'C' : '-';
+    };
     const maxRun = (fams: string[]) => {
       let best = 1;
       let cur = 1;
@@ -196,14 +210,17 @@ describe('generateSessionForDate — macrociclo', () => {
     for (const goals of [[], [makeStrengthGoal('clean', 'intensivo')], [makeStrengthGoal('snatch', 'intensivo')]]) {
       const profile = makeProfile({ trainingDaysPerWeek: 6, goals });
       const dates = consecutiveDates(START, 56);
-      for (const [label, fams] of [
-        ['preview', sessionsOver(profile, dates).map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId).map(familyOf)],
-        ['real', simulateSessions(profile, dates).map((s) => s.blocks.find((b) => b.block === 'oly' && !b.subgroup)?.movementId).map(familyOf)],
+      for (const [label, sessions] of [
+        ['preview', sessionsOver(profile, dates)],
+        ['real', simulateSessions(profile, dates)],
       ] as const) {
+        const fams = sessions.map(familyOfSession);
         const ctx = `${label} ${JSON.stringify(goals)}: ${fams.join('')}`;
         expect(maxRun(fams), ctx).toBeLessThanOrEqual(2);
-        const real = fams.filter((f) => f !== '-');
-        const minorityShare = Math.min(real.filter((f) => f === 'S').length, real.filter((f) => f === 'C').length) / real.length;
+        const presence = sessions.map(presenceOfSession).filter((p) => p.snatch || p.clean);
+        const snatchDays = presence.filter((p) => p.snatch).length;
+        const cleanDays = presence.filter((p) => p.clean).length;
+        const minorityShare = Math.min(snatchDays, cleanDays) / presence.length;
         expect(minorityShare, ctx).toBeGreaterThan(0.2);
       }
     }

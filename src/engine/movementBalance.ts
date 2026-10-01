@@ -51,8 +51,17 @@ export function wasPatternRecentlyDominant(
   });
 }
 
-/** Familia de oly (snatch vs. clean/jerk) del levantamiento principal de un dia de historial. */
+/**
+ * Familia de oly (snatch vs. clean/jerk) del levantamiento principal de un dia de historial — `null`
+ * si el dia entrenó las dos (el viernes de doble WOD, ver `buildFridayOlyBlock`, o el cierre "Day 5 de
+ * Mayhem" de un día normal, ver `olyCombined`): ese día no "domina" ninguna familia, así que no debe
+ * sesgar el cortafuegos anti-repetición hacia evitar NINGUNA de las dos.
+ */
 function dominantOlyFamily(entry: SessionHistoryEntry): OlyFamily | null {
+  const olyIds = entry.movementIds.filter((id) => OLY_MOVEMENT_IDS.has(id));
+  const hasSnatch = olyIds.some((id) => id.includes('snatch'));
+  const hasClean = olyIds.some((id) => id.includes('clean') || id.includes('jerk'));
+  if (hasSnatch && hasClean) return null;
   // Señal explícita del bloque oly (nueva). Se prefiere al escaneo de `movementIds`, que puede
   // devolver la familia equivocada si el WOD de ese día programó un power-clean/clean-and-jerk
   // antes de que aparezca en la lista el movimiento del bloque oly de verdad.

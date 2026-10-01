@@ -3457,14 +3457,141 @@ function buildCooldownBlock(
 }
 
 /**
+ * Oly del viernes de doble WOD: simetrico entre familias, no "una a fondo + toque ligero de la otra"
+ * como el resto de la semana (`buildOlyBlock` con `combined: true`) — a peticion del usuario, para no
+ * perder frecuencia de ninguna familia el dia que mas carga condicion fisica. Siempre las mismas dos
+ * parejas: Squat Snatch + un accesorio de snatch, Clean & Jerk + un accesorio de clean. El accesorio
+ * sale del mismo pool de "primer tecnico" que usa cualquier otro dia de oly (hang/tiron/balance/drop...),
+ * con el mismo sesgo por semana del meso, asi que varia semana a semana igual que el resto del programa.
+ * Las cargas usan la MISMA formula que un dia de oly normal (PR * % de la semana del meso *
+ * autorregulacion * calibracion de respuesta * peso corporal * dosis del dia) — el coach decide el peso
+ * sabiendo el progreso real, no un numero fijo. Sin familia/combinado planificados por semana (ver
+ * `weekPlan.buildMicrocyclePlan`): este hueco no depende de esa alternancia, siempre toca lo mismo.
+ */
+function buildFridayOlyBlock(ctx: {
+  week: 1 | 2 | 3 | 4;
+  prs: PersonalRecords;
+  variantPrs: VariantPersonalRecords | undefined;
+  recentIds: Set<string>;
+  avoidedPatterns: Set<MovementPattern>;
+  acwrZone: AcwrZone;
+  olyRampFactor: number;
+  readinessCheck: ReadinessCheck | undefined;
+  painReintro: Map<MovementPattern, number>;
+  patternFatigue: Map<MovementPattern, PatternFatigue>;
+  responseProfile: ResponseProfile;
+  dose: DayDose;
+  history: SessionHistoryEntry[];
+  date: Date;
+}): { blocks: SessionBlockResult[]; reasons: string[] } {
+  if (ctx.avoidedPatterns.has('olyLift')) {
+    return { blocks: [], reasons: ['Oly saltado hoy — tienes un aviso de molestia activo que afecta a hombro o cadera.'] };
+  }
+  const { week, prs, variantPrs, recentIds, responseProfile, history, date } = ctx;
+
+  const responseBias = clampResponseBias(responseProfile.rpe.bias);
+  const rpeAutoreg = getRpeAutoregFactor(history, date, responseProfile.rpe.reliability);
+  const readiness = getReadinessFactor(ctx.readinessCheck);
+  const reintroFactor = getPainReintroFactor(ctx.painReintro, ['olyLift']);
+  const reintroNote = reintroFactor < 1 ? ' Reintroducción progresiva tras tu aviso de molestia — la carga olímpica vuelve poco a poco.' : '';
+  const fatigueFactor = getPatternFatigueFactor(ctx.patternFatigue, ['olyLift']);
+  const fatigueNote = fatigueFactor < 1 ? ' El trabajo olímpico lleva bastante carga esta semana — carga algo más baja para que hombro y cadera asimilen.' : '';
+  const autoregFactor =
+    combineAutoregFactors(getAutoregFactor(ctx.acwrZone), rpeAutoreg.factor, readiness.factor, responseBias) * ctx.olyRampFactor * reintroFactor * fatigueFactor;
+  const rampNote = ctx.olyRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
+  const bwFactor = bodyweightLoadFactor(responseProfile);
+  const bwNote = bwFactor < 1 ? ' Vienes perdiendo peso corporal — bajamos un poco la carga hasta que se estabilice.' : '';
+  const scheme = OLY_WEEK_SCHEMES[week];
+
+  function buildFamily(family: OlyFamily): SessionBlockResult[] {
+    const main = getMovementById(family === 'snatch' ? 'snatch' : 'clean-and-jerk');
+    if (!main) return [];
+
+    const liftKey = resolveOlyPRKey(main) ?? resolveVariantPRKey(main);
+    const loadCalibFactor = perLiftLoadFactor(responseProfile, liftKey);
+    const setFeelFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, liftKey);
+    const setFeelNote =
+      loadCalibFactor !== 1
+        ? ` Ajustado a tu 1RM estimado por las series reales que registraste (${loadCalibFactor > 1 ? 'ibas sobrado, subimos' : 'venías justo, bajamos'}).`
+        : setFeelFactor < 1
+          ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
+          : setFeelFactor > 1
+            ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
+            : '';
+    const mainLoadKg = roundToNearestPlate(
+      resolveOlyPR(main, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor * ctx.dose.strengthLoad,
+    );
+
+    // Calentamiento de barra propio para esta familia (grip y posiciones distintas de la otra) — misma
+    // estructura que cualquier otro dia de oly: Burgener con PVC, complejo de barra vacia, rampa hasta
+    // el primer peso de trabajo.
+    const barbellPrimer: SessionBlockResult[] = [
+      {
+        block: 'oly',
+        movementId: family === 'snatch' ? 'burgener-warmup-snatch' : 'burgener-warmup-clean',
+        subgroup: 'Calentamiento de barra',
+        reps: 'PVC · 3-5 reps/posición',
+        notes: `Ya vienes en caliente del WOD — aquí solo barra, sin movilidad. Burgener con PVC y complejo de barra vacía, y luego sube en 3-4 series hasta tu primer peso de trabajo (${mainLoadKg} kg). Prioriza posiciones y velocidad de codos, no la carga.`,
+      },
+      { block: 'oly', movementId: 'barbell-warmup-complex', subgroup: 'Calentamiento de barra', reps: '2-3 rondas' },
+      { block: 'oly', movementId: 'movement-specific-primer', subgroup: 'Calentamiento de barra', reps: '3-4 series ascendentes', loadKg: mainLoadKg },
+    ];
+
+    const mainEntry: SessionBlockResult = {
+      block: 'oly',
+      movementId: main.id,
+      sets: scheme.sets,
+      reps: String(scheme.reps),
+      loadKg: mainLoadKg,
+      notes: `${scheme.coachNote}${setFeelNote}${reintroNote}${fatigueNote}${rampNote}`.trim(),
+      ...(scheme.reps >= 2 ? { repStyle: 'touch-and-go' as const } : {}),
+    };
+
+    // Accesorio: mismo pool y sesgo por semana del meso que el "primer" de un dia de oly normal (hang,
+    // tiron, balance, drop...) — nunca el jerk suelto ni la propia barra completa.
+    const familyPool = getMovementsByBlock('oly').filter((m) =>
+      family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk'),
+    );
+    const accessoryCandidates = familyPool.filter((m) => m.id !== main.id && m.progressionOf && !/jerk/.test(m.id));
+    const weekAccessories = accessoryCandidates.filter((m) => OLY_PRIMER_WEEK_BIAS[week].test(m.id));
+    const accessoryPool = weekAccessories.length > 0 ? weekAccessories : accessoryCandidates;
+    const accessoryMovement = pickVaried(accessoryPool, recentIds);
+    if (!accessoryMovement) return [...barbellPrimer, mainEntry];
+
+    const accessoryLoadKg = roundToNearestPlate(
+      resolveOlyPR(accessoryMovement, prs, family, variantPrs) * scheme.percent * primerLoadFactor(accessoryMovement.id) * autoregFactor,
+    );
+    const accessoryEntry: SessionBlockResult = {
+      block: 'oly',
+      movementId: accessoryMovement.id,
+      sets: scheme.sets,
+      reps: '2-3',
+      loadKg: accessoryLoadKg,
+      notes: `Accesorio de ${family === 'snatch' ? 'snatch' : 'clean'} — prioriza posición, no peso.${OLY_PRIMER_PHASE_NOTE[week]}`,
+    };
+
+    return [...barbellPrimer, mainEntry, accessoryEntry];
+  }
+
+  const blocks = [...buildFamily('snatch'), ...buildFamily('clean')];
+  const reasons = collectReasons(
+    'Viernes: oly de las dos familias para no perder frecuencia — Squat Snatch y Clean & Jerk, cada uno con su accesorio.',
+    bwNote,
+    reintroNote,
+    fatigueNote,
+    rampNote,
+  );
+  return { blocks, reasons };
+}
+
+/**
  * Dia de doble WOD (ver `doubleWodSlot`): acondicionamiento (dos piezas) + oly, sin fuerza ni accesorios.
  *  - Parte 1: pieza corta e intensa del generador normal (sin benchmark, sin chipper ni WOD real).
  *  - Parte 2: WOD real de la biblioteca elegido para complementar a la 1 (`pickLibraryPartB`); si no hay
  *    nada compatible, otro WOD generado de formato distinto.
- *  - Oly, al final (ya en caliente del WOD, como cualquier otro dia): cierre de semana estilo "Day 5" de
- *    Mayhem — complejo completo de la familia planificada (`weekPlan.buildMicrocyclePlan` ya reserva
- *    este hueco como dia de oly combinado, ver `olyCombined`) + 3 singles ligeros (~72%) de la contraria,
- *    para tocar clean Y snatch el mismo dia.
+ *  - Oly, al final (ya en caliente del WOD, como cualquier otro dia): `buildFridayOlyBlock` — simetrico,
+ *    Squat Snatch + su accesorio y Clean & Jerk + su accesorio, para no perder frecuencia de ninguna
+ *    familia el dia que mas carga condicion fisica.
  * Entre las dos piezas de WOD, 5-10 min de descanso (como indica PushJerk). El core del dia, si toca, va al final.
  */
 function buildDoubleWodDay(ctx: {
@@ -3486,16 +3613,11 @@ function buildDoubleWodDay(ctx: {
   wodLoadFactor: number;
   coreToday: boolean;
   acwrZone: AcwrZone;
-  acwrColdStart: boolean;
   olyRampFactor: number;
   readinessCheck: ReadinessCheck | undefined;
-  imbalanceBias: ImbalanceBias;
   painReintro: Map<MovementPattern, number>;
   patternFatigue: Map<MovementPattern, PatternFatigue>;
   olyDose: DayDose;
-  olyMovementId: string | undefined;
-  plannedFamily: OlyFamily | null;
-  plannedOlyCombined: boolean;
 }): DailySession {
   const { week, profile, history, recentIds, excludePatterns, avoidedPatterns } = ctx;
   const bodyweightKg = latestBodyweightKg(profile.bodyweightLog);
@@ -3564,34 +3686,24 @@ function buildDoubleWodDay(ctx: {
   const leadPattern = getMovementById(partA[0]?.movementId ?? '')?.pattern ?? ctx.dayPlan.strengthPattern;
   const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) }, avoidedPatterns);
 
-  // Oly al cierre del dia, estilo "Day 5" de Mayhem: la familia principal es la que planifico
-  // `weekPlan.buildMicrocyclePlan` para este hueco (alternada con el resto de dias de oly de la semana,
-  // no decidida en aislamiento) y `combined: true` añade 3 singles ligeros de la familia contraria —
-  // asi el viernes toca clean Y snatch, no solo una.
-  const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
-    ctx.dayPlan,
+  // Oly al cierre del dia (ver `buildFridayOlyBlock`): simetrico, Squat Snatch + accesorio y Clean &
+  // Jerk + accesorio, sin depender del reparto semanal de familias.
+  const { blocks: olyBlock, reasons: olyReasons } = buildFridayOlyBlock({
     week,
-    profile.prs,
+    prs: profile.prs,
+    variantPrs: profile.variantPrs,
     recentIds,
-    ctx.goals,
-    ctx.acwrZone,
-    ctx.acwrColdStart,
-    false,
-    history,
     avoidedPatterns,
-    ctx.olyRampFactor,
-    profile.variantPrs,
-    ctx.readinessCheck,
-    ctx.date,
-    ctx.imbalanceBias,
-    ctx.painReintro,
-    ctx.patternFatigue,
-    ctx.responseProfile,
-    ctx.plannedFamily,
-    ctx.olyDose,
-    ctx.plannedOlyCombined,
-    ctx.olyMovementId,
-  );
+    acwrZone: ctx.acwrZone,
+    olyRampFactor: ctx.olyRampFactor,
+    readinessCheck: ctx.readinessCheck,
+    painReintro: ctx.painReintro,
+    patternFatigue: ctx.patternFatigue,
+    responseProfile: ctx.responseProfile,
+    dose: ctx.olyDose,
+    history,
+    date: ctx.date,
+  });
 
   const coreBlock = ctx.coreToday
     ? buildCoreBlock(
@@ -3744,13 +3856,12 @@ export function generateDailySession(
     goalForcedPattern: strengthGoal?.movementId ? getMovementById(strengthGoal.movementId)?.pattern ?? null : null,
     goalForcedFamily: olyGoal?.movementId ? (olyGoal.movementId.includes('snatch') ? 'snatch' : 'clean') : null,
   });
-  // El hueco del doble WOD no tiene patron de fuerza planificado (el microciclo lo saco de los dias de
-  // fuerza): si hoy acaba siendo un dia normal —planificado sin doble, o vetado por seguridad—, la
-  // fuerza decide por su cuenta (ciclo natural) en vez de heredar el relleno del plan. La familia de oly
-  // SI esta planificada tambien para el hueco del doble (ver `weekPlan.buildMicrocyclePlan`): ese dia
-  // lleva oly igual que cualquier otro, solo que combinando las dos familias.
+  // El hueco del doble WOD no tiene patron ni familia planificados (el microciclo lo saco de los dias de
+  // fuerza, y el viernes monta su propio oly simetrico — ver `buildFridayOlyBlock`): si hoy acaba siendo
+  // un dia normal —planificado sin doble, o vetado por seguridad—, fuerza y oly deciden por su cuenta
+  // (ciclo natural + hueco semanal) en vez de heredar el relleno del plan.
   const plannedPattern = isDoubleSlotToday ? null : microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
-  const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
+  const plannedFamily = isDoubleSlotToday ? null : microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
   const plannedOlyCombined = microPlan.olyCombined[dayPlan.trainingDayIndex] ?? false;
   const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
   const plannedDomain = microPlan.wodDomain[dayPlan.trainingDayIndex] ?? null;
@@ -3868,16 +3979,11 @@ export function generateDailySession(
       wodLoadFactor,
       coreToday,
       acwrZone,
-      acwrColdStart: acwrResult.coldStart,
       olyRampFactor,
       readinessCheck,
-      imbalanceBias,
       painReintro,
       patternFatigue,
-      plannedFamily,
-      plannedOlyCombined,
       olyDose: strengthOlyDose,
-      olyMovementId: weekLock?.olyMovementId,
     });
   }
 
@@ -4617,7 +4723,10 @@ function cachedSessionDisagreesWithLock(session: DailySession, lock: WeeklyLock)
     const id = session.blocks.find((b) => b.block === 'strength')?.movementId;
     if (id && id !== lock.strengthMovementId) return true;
   }
-  if (lock.olyMovementId) {
+  // El oly del viernes de doble WOD es fijo (Squat Snatch + Clean & Jerk, ver `buildFridayOlyBlock`),
+  // no un movimiento "elegido" que el bloqueo semanal pudiera fijar — un `olyMovementId` heredado de
+  // una planificacion anterior al doble (dia normal, una sola familia) no tiene nada que decir aqui.
+  if (lock.olyMovementId && !session.doubleWod) {
     const id = session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
     if (id && id !== lock.olyMovementId) return true;
   }
@@ -4681,6 +4790,11 @@ export function toHistoryEntry(
   const wodMovementIds = session.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
   const strengthMovement = session.blocks.find((b) => b.block === 'strength');
   const olyMovement = session.blocks.find((b) => b.block === 'oly' && !b.subgroup);
+  // Dia mixto (viernes de doble WOD, o cierre "Day 5 de Mayhem" de un dia normal): se entrenaron las
+  // dos familias, asi que ninguna "domina" — no se anota ninguna, para no sesgar el cortafuegos
+  // anti-repeticion (`dominantOlyFamily` en movementBalance.ts) hacia evitar la que de verdad se hizo.
+  const olyIds = session.blocks.filter((b) => b.block === 'oly' && !b.subgroup).map((b) => b.movementId);
+  const olyMixed = olyIds.some((id) => id.includes('snatch')) && olyIds.some((id) => id.includes('clean') || id.includes('jerk'));
   // Banda BASE del objetivo del WOD (sin el ajuste de calibracion), para medir despues cuanto rinde el
   // atleta frente a la estimacion del motor (ver `getWodPerformance`).
   // El formato se lee del primer bloque de WOD (los objetivos cualitativos —interval, emom— no tienen
@@ -4710,7 +4824,7 @@ export function toHistoryEntry(
     testLoadKg,
     wodMovementIds: wodMovementIds.length > 0 ? wodMovementIds : undefined,
     strengthPattern: strengthMovement ? getMovementById(strengthMovement.movementId)?.pattern : undefined,
-    olyFamily: olyMovement ? (olyMovement.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
+    olyFamily: olyMixed ? undefined : olyMovement ? (olyMovement.movementId.includes('snatch') ? 'snatch' : 'clean') : undefined,
     energySystem: session.energySystem,
     wodFormatKind: wodKindBlock?.wodKind,
     // En un dia de doble WOD el WOD real es la parte 2, no el primer bloque.

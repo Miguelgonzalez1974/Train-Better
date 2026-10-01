@@ -71,13 +71,17 @@ describe('dia de doble WOD (6 dias)', () => {
     expect(bad).toEqual([]);
   });
 
-  it('el oly del viernes toca las dos familias (estilo Day 5 de Mayhem): clean Y snatch el mismo dia', () => {
+  it('el oly del viernes es simetrico: Squat Snatch + un accesorio de snatch, Clean & Jerk + un accesorio de clean, con carga', () => {
     const bad: string[] = [];
     for (const { session: s } of doubles) {
-      const olyIds = s.blocks.filter((b) => b.block === 'oly').map((b) => b.movementId);
-      const hasSnatch = olyIds.some((id) => id.includes('snatch'));
-      const hasClean = olyIds.some((id) => id.includes('clean') || id.includes('jerk'));
-      if (!hasSnatch || !hasClean) bad.push(`${s.date}: solo una familia (snatch=${hasSnatch}, clean=${hasClean})`);
+      const working = s.blocks.filter((b) => b.block === 'oly' && !b.subgroup);
+      const snatchWorking = working.filter((b) => b.movementId.includes('snatch'));
+      const cleanWorking = working.filter((b) => b.movementId.includes('clean') || b.movementId.includes('jerk'));
+      if (snatchWorking.length !== 2) bad.push(`${s.date}: snatch trae ${snatchWorking.length} entradas, no 2`);
+      if (cleanWorking.length !== 2) bad.push(`${s.date}: clean trae ${cleanWorking.length} entradas, no 2`);
+      if (!snatchWorking.some((b) => b.movementId === 'snatch')) bad.push(`${s.date}: falta el Squat Snatch`);
+      if (!cleanWorking.some((b) => b.movementId === 'clean-and-jerk')) bad.push(`${s.date}: falta el Clean & Jerk`);
+      for (const b of working) if (!b.loadKg) bad.push(`${s.date}: ${b.movementId} sin carga`);
     }
     expect(bad).toEqual([]);
   });
