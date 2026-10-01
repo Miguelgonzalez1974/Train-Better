@@ -59,14 +59,25 @@ describe('dia de doble WOD (6 dias)', () => {
     expect(Math.max(...perWeek.values())).toBe(1);
   });
 
-  it('solo acondicionamiento: calentamiento, dos WODs, core opcional y vuelta a la calma; sin fuerza, oly, skill ni accesorios', () => {
+  it('solo acondicionamiento + oly al cierre: calentamiento, dos WODs, oly, core opcional y vuelta a la calma; sin fuerza, skill ni accesorios', () => {
     const bad: string[] = [];
     for (const { session: s } of doubles) {
       const kinds = new Set(s.blocks.map((b) => b.block));
-      for (const forbidden of ['strength', 'oly', 'skill']) if (kinds.has(forbidden as never)) bad.push(`${s.date}: lleva ${forbidden}`);
-      for (const needed of ['warmup', 'wod', 'cooldown']) if (!kinds.has(needed as never)) bad.push(`${s.date}: falta ${needed}`);
+      for (const forbidden of ['strength', 'skill']) if (kinds.has(forbidden as never)) bad.push(`${s.date}: lleva ${forbidden}`);
+      for (const needed of ['warmup', 'wod', 'oly', 'cooldown']) if (!kinds.has(needed as never)) bad.push(`${s.date}: falta ${needed}`);
       // el unico "accesorio" permitido es el core del dia
       for (const b of s.blocks.filter((x) => x.block === 'accessory')) if (!/^Core/.test(b.format ?? '')) bad.push(`${s.date}: accesorio no core ${b.movementId}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('el oly del viernes toca las dos familias (estilo Day 5 de Mayhem): clean Y snatch el mismo dia', () => {
+    const bad: string[] = [];
+    for (const { session: s } of doubles) {
+      const olyIds = s.blocks.filter((b) => b.block === 'oly').map((b) => b.movementId);
+      const hasSnatch = olyIds.some((id) => id.includes('snatch'));
+      const hasClean = olyIds.some((id) => id.includes('clean') || id.includes('jerk'));
+      if (!hasSnatch || !hasClean) bad.push(`${s.date}: solo una familia (snatch=${hasSnatch}, clean=${hasClean})`);
     }
     expect(bad).toEqual([]);
   });
@@ -173,11 +184,11 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
   beforeAll(() => setDoubleWodEnabled(true));
   afterAll(() => setDoubleWodEnabled(INITIAL));
 
-  it('al planificar la semana, el viernes se bloquea como doble (sin fuerza ni oly) y el resto como dias normales', () => {
+  it('al planificar la semana, el viernes se bloquea como doble (sin fuerza, pero con oly) y el resto como dias normales', () => {
     const locks = plannedProfile().weeklyLocks ?? {};
     expect(locks[iso(FRI)]?.doubleWod).toBe(true);
     expect(locks[iso(FRI)]?.strengthMovementId).toBeUndefined();
-    expect(locks[iso(FRI)]?.olyMovementId).toBeUndefined();
+    expect(locks[iso(FRI)]?.olyMovementId).toBeTruthy();
     for (const d of [days[0], TUE, WED, SAT]) {
       expect(locks[iso(d)]?.doubleWod, iso(d)).toBeUndefined();
       expect(locks[iso(d)]?.strengthMovementId, iso(d)).toBeTruthy();
@@ -196,7 +207,8 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
     for (const h of histories) {
       const s = generateSessionForDate(p, h, FRI, goalsOf(p));
       expect(s.doubleWod, `${h.length} sesiones previas`).toBe(true);
-      expect(s.blocks.some((b) => b.block === 'strength' || b.block === 'oly')).toBe(false);
+      expect(s.blocks.some((b) => b.block === 'strength'), `${h.length} sesiones previas`).toBe(false);
+      expect(s.blocks.some((b) => b.block === 'oly'), `${h.length} sesiones previas`).toBe(true);
     }
   });
 
@@ -290,8 +302,12 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
     expect(isCachedSessionStale(double, lock)).toBe(false);
     const { doubleWod: _d, ...asNormal } = double;
     const normal = { ...generateSessionForDate(baseProfile(), [], SAT, goalsOf(p)), date: iso(FRI), genVersion: SESSION_GEN_VERSION };
-    expect(isCachedSessionStale({ ...asNormal, blocks: normal.blocks } as DailySession, lock)).toBe(true);
-    expect(isCachedSessionStale({ ...asNormal, blocks: normal.blocks, doubleWodSkipped: true } as DailySession, lock)).toBe(false);
+    // Aqui solo interesa aislar el chequeo de la bandera doubleWod (el de fuerza/oly bloqueados ya
+    // tiene su propio test): se quitan esos bloques para que un movimiento de otro dia (sabado) no
+    // dispare un desacuerdo de bloqueo que no es lo que este test comprueba.
+    const normalBlocks = normal.blocks.filter((b) => b.block !== 'strength' && b.block !== 'oly');
+    expect(isCachedSessionStale({ ...asNormal, blocks: normalBlocks } as DailySession, lock)).toBe(true);
+    expect(isCachedSessionStale({ ...asNormal, blocks: normalBlocks, doubleWodSkipped: true } as DailySession, lock)).toBe(false);
   });
 
   it('tras un dia perdido la semana se re-planifica y el viernes sigue siendo doble', () => {

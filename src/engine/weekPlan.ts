@@ -365,7 +365,8 @@ export function buildMicrocyclePlan(input: {
   const rand = mulberry32(hashSeed(`${macroId}:${weekNumber}`));
 
   // El llamador ya decidio si esta semana lleva doble (`doubleWodActive`); aqui solo se resuelve en que dia cae.
-  const strengthSlots = strengthDoingSlots(n, input.doubleWodActive ? doubleWodSlot(n, 1) : -1);
+  const doubleIdx = input.doubleWodActive ? doubleWodSlot(n, 1) : -1;
+  const strengthSlots = strengthDoingSlots(n, doubleIdx);
   const allocated = allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand);
 
   // Patron por trainingDayIndex: el planificado para los slots de fuerza, y el del ciclo natural
@@ -378,20 +379,28 @@ export function buildMicrocyclePlan(input: {
     strengthPattern[slotIdx] = allocated[i];
   });
 
-  // Familias de oly: se alternan estrictamente a lo largo de los slots de fuerza a partir de un
-  // ancla. El ancla la fija un objetivo/estancamiento de oly; si no, alterna por semana para que el
-  // mismo dia no lleve siempre la misma.
+  // Familias de oly: se alternan estrictamente a lo largo de los dias de oly de la semana a partir de
+  // un ancla. El ancla la fija un objetivo/estancamiento de oly; si no, alterna por semana para que el
+  // mismo dia no lleve siempre la misma. El dia de doble WOD SI cuenta como dia de oly (lleva complejo
+  // completo de una familia + cierre ligero de la otra, ver `olyCombined` abajo) aunque no sea un slot
+  // de fuerza — se mezcla en orden de calendario para que la alternancia del resto de la semana no se
+  // rompa (si se ańadiera al final, el reparto real día a día dejaría de coincidir con esta secuencia).
+  const olySlots = doubleIdx >= 0 ? [...strengthSlots, doubleIdx].sort((a, b) => a - b) : strengthSlots;
   const anchorFam: OlyFamily = goalForcedFamily ?? stalledOlyFamily(responseProfile) ?? (weekNumber % 2 === 0 ? 'snatch' : 'clean');
   const other = (f: OlyFamily): OlyFamily => (f === 'snatch' ? 'clean' : 'snatch');
   const olyFamily: OlyFamily[] = Array.from({ length: n }, (_, idx) => (idx % 2 === 0 ? 'snatch' : 'clean'));
-  strengthSlots.forEach((slotIdx, i) => {
+  olySlots.forEach((slotIdx, i) => {
     olyFamily[slotIdx] = i % 2 === 0 ? anchorFam : other(anchorFam);
   });
 
-  // El último día de oly de la semana combina las dos familias (estilo Day 5 de Mayhem): cierra con
-  // un toque ligero de la familia contraria. Solo si la semana tuvo al menos 2 días de oly separados.
+  // El cierre "Day 5 de Mayhem" (complejo completo de una familia + 3 singles ligeros de la contraria)
+  // va SIEMPRE en el dia de doble WOD cuando la semana lo tiene — es la pieza que pidio el usuario para
+  // terminar la semana tocando clean Y snatch. Sin doble, sigue siendo el ultimo dia de oly de la
+  // semana (como hasta ahora), y solo si hubo al menos 2 dias de oly separados.
   const olyCombined: boolean[] = Array.from({ length: n }, () => false);
-  if (strengthSlots.length >= 2) {
+  if (doubleIdx >= 0) {
+    olyCombined[doubleIdx] = true;
+  } else if (strengthSlots.length >= 2) {
     olyCombined[strengthSlots[strengthSlots.length - 1]] = true;
   }
 

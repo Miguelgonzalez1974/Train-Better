@@ -3457,14 +3457,19 @@ function buildCooldownBlock(
 }
 
 /**
- * Dia de doble WOD (ver `doubleWodSlot`): solo acondicionamiento, sin fuerza, oly, accesorios ni skill.
+ * Dia de doble WOD (ver `doubleWodSlot`): acondicionamiento (dos piezas) + oly, sin fuerza ni accesorios.
  *  - Parte 1: pieza corta e intensa del generador normal (sin benchmark, sin chipper ni WOD real).
  *  - Parte 2: WOD real de la biblioteca elegido para complementar a la 1 (`pickLibraryPartB`); si no hay
  *    nada compatible, otro WOD generado de formato distinto.
- * Entre las dos, 5-10 min de descanso (como indica PushJerk). El core del dia, si toca, va al final.
+ *  - Oly, al final (ya en caliente del WOD, como cualquier otro dia): cierre de semana estilo "Day 5" de
+ *    Mayhem — complejo completo de la familia planificada (`weekPlan.buildMicrocyclePlan` ya reserva
+ *    este hueco como dia de oly combinado, ver `olyCombined`) + 3 singles ligeros (~72%) de la contraria,
+ *    para tocar clean Y snatch el mismo dia.
+ * Entre las dos piezas de WOD, 5-10 min de descanso (como indica PushJerk). El core del dia, si toca, va al final.
  */
 function buildDoubleWodDay(ctx: {
   dateIso: string;
+  date: Date;
   week: 1 | 2 | 3 | 4;
   phaseProgress: PhaseProgress;
   profile: AthleteProfile;
@@ -3480,6 +3485,17 @@ function buildDoubleWodDay(ctx: {
   dayDose: DayDose;
   wodLoadFactor: number;
   coreToday: boolean;
+  acwrZone: AcwrZone;
+  acwrColdStart: boolean;
+  olyRampFactor: number;
+  readinessCheck: ReadinessCheck | undefined;
+  imbalanceBias: ImbalanceBias;
+  painReintro: Map<MovementPattern, number>;
+  patternFatigue: Map<MovementPattern, PatternFatigue>;
+  olyDose: DayDose;
+  olyMovementId: string | undefined;
+  plannedFamily: OlyFamily | null;
+  plannedOlyCombined: boolean;
 }): DailySession {
   const { week, profile, history, recentIds, excludePatterns, avoidedPatterns } = ctx;
   const bodyweightKg = latestBodyweightKg(profile.bodyweightLog);
@@ -3547,6 +3563,36 @@ function buildDoubleWodDay(ctx: {
   const wodIds = wodBlocks.map((b) => b.movementId);
   const leadPattern = getMovementById(partA[0]?.movementId ?? '')?.pattern ?? ctx.dayPlan.strengthPattern;
   const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) }, avoidedPatterns);
+
+  // Oly al cierre del dia, estilo "Day 5" de Mayhem: la familia principal es la que planifico
+  // `weekPlan.buildMicrocyclePlan` para este hueco (alternada con el resto de dias de oly de la semana,
+  // no decidida en aislamiento) y `combined: true` añade 3 singles ligeros de la familia contraria —
+  // asi el viernes toca clean Y snatch, no solo una.
+  const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
+    ctx.dayPlan,
+    week,
+    profile.prs,
+    recentIds,
+    ctx.goals,
+    ctx.acwrZone,
+    ctx.acwrColdStart,
+    false,
+    history,
+    avoidedPatterns,
+    ctx.olyRampFactor,
+    profile.variantPrs,
+    ctx.readinessCheck,
+    ctx.date,
+    ctx.imbalanceBias,
+    ctx.painReintro,
+    ctx.patternFatigue,
+    ctx.responseProfile,
+    ctx.plannedFamily,
+    ctx.olyDose,
+    ctx.plannedOlyCombined,
+    ctx.olyMovementId,
+  );
+
   const coreBlock = ctx.coreToday
     ? buildCoreBlock(
         leadPattern,
@@ -3561,10 +3607,10 @@ function buildDoubleWodDay(ctx: {
     date: ctx.dateIso,
     mesocycleWeek: week,
     isRestDay: false,
-    blocks: [...warmupBlock, ...wodBlocks, ...coreBlock, ...cooldownBlock],
+    blocks: [...warmupBlock, ...wodBlocks, ...olyBlock, ...coreBlock, ...cooldownBlock],
     doubleWod: true,
     dayEmphasis: 'metcon',
-    coachReasons: Array.from(new Set(reasons)),
+    coachReasons: Array.from(new Set([...reasons, ...olyReasons])),
     energySystem: energyA ?? undefined,
     dayIntensity: ctx.dayDose.dayIntensity === 'media' ? undefined : ctx.dayDose.dayIntensity,
     phaseWeekInPhase: ctx.phaseProgress.weekInPhase,
@@ -3698,11 +3744,13 @@ export function generateDailySession(
     goalForcedPattern: strengthGoal?.movementId ? getMovementById(strengthGoal.movementId)?.pattern ?? null : null,
     goalForcedFamily: olyGoal?.movementId ? (olyGoal.movementId.includes('snatch') ? 'snatch' : 'clean') : null,
   });
-  // El hueco del doble WOD no tiene patron ni familia planificados (el microciclo lo saco de los dias de
-  // fuerza): si hoy acaba siendo un dia normal —planificado sin doble, o vetado por seguridad—, fuerza y
-  // oly deciden por su cuenta (ciclo natural + hueco semanal) en vez de heredar el relleno del plan.
+  // El hueco del doble WOD no tiene patron de fuerza planificado (el microciclo lo saco de los dias de
+  // fuerza): si hoy acaba siendo un dia normal —planificado sin doble, o vetado por seguridad—, la
+  // fuerza decide por su cuenta (ciclo natural) en vez de heredar el relleno del plan. La familia de oly
+  // SI esta planificada tambien para el hueco del doble (ver `weekPlan.buildMicrocyclePlan`): ese dia
+  // lleva oly igual que cualquier otro, solo que combinando las dos familias.
   const plannedPattern = isDoubleSlotToday ? null : microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
-  const plannedFamily = isDoubleSlotToday ? null : microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
+  const plannedFamily = microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
   const plannedOlyCombined = microPlan.olyCombined[dayPlan.trainingDayIndex] ?? false;
   const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
   const plannedDomain = microPlan.wodDomain[dayPlan.trainingDayIndex] ?? null;
@@ -3803,6 +3851,7 @@ export function generateDailySession(
   if (doubleAllowedToday && doublePlanned) {
     return buildDoubleWodDay({
       dateIso,
+      date,
       week,
       phaseProgress,
       profile,
@@ -3818,6 +3867,17 @@ export function generateDailySession(
       dayDose,
       wodLoadFactor,
       coreToday,
+      acwrZone,
+      acwrColdStart: acwrResult.coldStart,
+      olyRampFactor,
+      readinessCheck,
+      imbalanceBias,
+      painReintro,
+      patternFatigue,
+      plannedFamily,
+      plannedOlyCombined,
+      olyDose: strengthOlyDose,
+      olyMovementId: weekLock?.olyMovementId,
     });
   }
 
