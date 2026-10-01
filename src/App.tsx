@@ -1,18 +1,30 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Sidebar } from './features/shell/Sidebar';
 import { BottomNav } from './features/shell/BottomNav';
 import { SyncIndicator } from './features/shell/SyncIndicator';
 import type { TabId } from './features/shell/navItems';
-import { Dashboard } from './features/dashboard/Dashboard';
-import { Objetivos } from './features/objetivos/Objetivos';
-import { Planificacion } from './features/planificacion/Planificacion';
-import { Nutricion } from './features/nutricion/Nutricion';
 import { Login } from './features/auth/Login';
 import { useSession } from './features/auth/useSession';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { pullRemoteOrSeed } from './data/athlete/remoteSync';
 import { athleteRepository } from './data/athlete/athleteRepository';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard';
+
+// Cada pestaña carga en su propio trozo de JS, servido solo cuando el atleta la abre — Planificación y
+// Nutrición cargan de paso catálogos enormes (benchmarks/WODs de biblioteca, alimentos) que no hacen
+// falta para ver el Dashboard. `Suspense` más abajo cubre el instante de descarga con un indicador fijo.
+const Dashboard = lazy(() => import('./features/dashboard/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Objetivos = lazy(() => import('./features/objetivos/Objetivos').then((m) => ({ default: m.Objetivos })));
+const Planificacion = lazy(() => import('./features/planificacion/Planificacion').then((m) => ({ default: m.Planificacion })));
+const Nutricion = lazy(() => import('./features/nutricion/Nutricion').then((m) => ({ default: m.Nutricion })));
+
+function TabLoading() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/15 border-t-brand-gold" aria-label="Cargando" />
+    </div>
+  );
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('planificacion');
@@ -62,17 +74,19 @@ export default function App() {
       <SyncIndicator />
       <Sidebar active={activeTab} onChange={setActiveTab} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-6 lg:max-w-5xl">
-        {activeTab === 'dashboard' && (
-          <Dashboard
-            onNavigateToPlanificacion={() => setActiveTab('planificacion')}
-            onNavigateToObjetivos={() => setActiveTab('objetivos')}
-          />
-        )}
-        {activeTab === 'planificacion' && (
-          <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} onNavigateToNutricion={() => setActiveTab('nutricion')} />
-        )}
-        {activeTab === 'nutricion' && <Nutricion />}
-        {activeTab === 'objetivos' && <Objetivos />}
+        <Suspense fallback={<TabLoading />}>
+          {activeTab === 'dashboard' && (
+            <Dashboard
+              onNavigateToPlanificacion={() => setActiveTab('planificacion')}
+              onNavigateToObjetivos={() => setActiveTab('objetivos')}
+            />
+          )}
+          {activeTab === 'planificacion' && (
+            <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} onNavigateToNutricion={() => setActiveTab('nutricion')} />
+          )}
+          {activeTab === 'nutricion' && <Nutricion />}
+          {activeTab === 'objetivos' && <Objetivos />}
+        </Suspense>
       </main>
       <BottomNav active={activeTab} onChange={setActiveTab} />
     </div>
