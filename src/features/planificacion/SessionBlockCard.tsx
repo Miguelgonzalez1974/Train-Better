@@ -692,6 +692,73 @@ function ComplexCard({
   );
 }
 
+/** Familia de un movimiento de oly por su id — `null` para un paso de calentamiento genérico (barra
+ * vacía, rampa de carga) que no es de ninguna familia en concreto, solo pertenece a la que le toque
+ * según su posición (ver `familyRuns`). */
+function olyFamilyOf(movementId: string): 'snatch' | 'clean' | null {
+  if (movementId.includes('snatch')) return 'snatch';
+  if (movementId.includes('clean') || movementId.includes('jerk')) return 'clean';
+  return null;
+}
+
+/**
+ * Agrupa las entradas de oly en tramos consecutivos de la misma familia — un paso genérico (sin
+ * familia propia en su id) hereda la del tramo en curso, porque siempre aparece encajado entre el
+ * Burgener y el levantamiento de esa misma familia (ver `buildFridayOlyBlock`). No asume un reparto
+ * fijo de cuántas entradas lleva cada tramo — solo que son consecutivas.
+ */
+function familyRuns(
+  entries: SessionBlockResult[],
+  entryIndices?: number[],
+): { family: 'snatch' | 'clean'; items: SessionBlockResult[]; indices?: number[] }[] {
+  const runs: { family: 'snatch' | 'clean'; items: SessionBlockResult[]; indices: number[] }[] = [];
+  let current: 'snatch' | 'clean' | null = null;
+  entries.forEach((entry, i) => {
+    const detected = olyFamilyOf(entry.movementId);
+    if (detected) current = detected;
+    const family = current ?? 'snatch';
+    if (runs.length === 0 || runs[runs.length - 1].family !== family) runs.push({ family, items: [], indices: [] });
+    const run = runs[runs.length - 1];
+    run.items.push(entry);
+    if (entryIndices) run.indices.push(entryIndices[i]);
+  });
+  return runs.map((r) => ({ ...r, indices: entryIndices ? r.indices : undefined }));
+}
+
+const OLY_FAMILY_LABEL: Record<'snatch' | 'clean', string> = { snatch: 'Snatch', clean: 'Clean & Jerk' };
+
+/**
+ * Oly de un día que entrena las dos familias (viernes de doble WOD, ver `buildFridayOlyBlock`): en vez
+ * de volcar hasta 10 entradas de golpe (2 calentamientos de barra + 4 movimientos de trabajo
+ * entremezclados), se agrupan en dos tarjetas — una por familia, cada una con su propio calentamiento
+ * plegado — reutilizando `ComplexCard` tal cual para cada tramo.
+ */
+function GroupedOlyFamiliesCard({
+  entries,
+  entryIndices,
+  progress,
+  setFeedbackByIndex,
+  onRateSet,
+}: {
+  entries: SessionBlockResult[];
+  entryIndices?: number[];
+  progress?: MovementProgressData;
+  setFeedbackByIndex?: Map<number, RpeFeedback>;
+  onRateSet?: (index: number, rpe: number) => void;
+}) {
+  const runs = familyRuns(entries, entryIndices);
+  return (
+    <div className="flex flex-col gap-3">
+      {runs.map((run, i) => (
+        <div key={`${run.family}-${i}`}>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{OLY_FAMILY_LABEL[run.family]}</p>
+          <ComplexCard entries={run.items} entryIndices={run.indices} progress={progress} setFeedbackByIndex={setFeedbackByIndex} onRateSet={onRateSet} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Las dos entradas de un complejo con exactamente el mismo `format` (hoy solo pasa en el E2MOM
  * emparejado: el levantamiento principal + su compañero al mismo intervalo — la superserie normal
@@ -1141,18 +1208,52 @@ export function SessionBlockCard({
   const isBenchmarkWod = block === 'wod' && results[0].movementId.startsWith('benchmark:');
   // Un dia de doble WOD trae dos partes en el mismo bloque: se pintan como dos tarjetas con el descanso en medio.
   const wodGroups = block === 'wod' ? groupWodByPart(results, entryIndices) : [];
+  // Dia que entrena las dos familias de oly (viernes de doble WOD): al menos 2 movimientos de trabajo
+  // (sin subgroup) de cada familia, no solo el toque ligero de 1 del cierre "Day 5" de un día normal.
+  const olyFamiliesPresent =
+    block === 'oly'
+      ? results
+          .filter((e) => !e.subgroup)
+          .reduce(
+            (acc, e) => {
+              const fam = olyFamilyOf(e.movementId);
+              if (fam) acc[fam]++;
+              return acc;
+            },
+            { snatch: 0, clean: 0 },
+          )
+      : null;
+  const isTwoFamilyOlyDay = Boolean(olyFamiliesPresent && olyFamiliesPresent.snatch >= 2 && olyFamiliesPresent.clean >= 2);
+  // Calentamiento y vuelta a la calma son siempre los mismos pasos — el atleta ya los conoce. Se
+  // pliegan por defecto para que la pantalla abra directo en lo que SÍ cambia hoy (fuerza/WOD/oly), y
+  // el atleta los despliega solo si quiere repasarlos. No aplica en edición (ahí hacen falta visibles).
+  const collapsible = !editable && (block === 'warmup' || block === 'cooldown');
+  const [open, setOpen] = useState(false);
 
   return (
     <div className={`relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`}>
       <span className={`absolute bottom-1 left-0 top-0.5 w-[3px] ${accentClasses.bar}`} />
 
       <div>
-        <p className={`mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.12em] ${accentClasses.icon}`}>
-          <Icon size={13} strokeWidth={2.5} aria-hidden />
-          {label}
-        </p>
+        {collapsible ? (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className={`mb-2 flex w-full items-center gap-1.5 text-xs font-bold uppercase tracking-[0.12em] ${accentClasses.icon}`}
+          >
+            {open ? <ChevronDown size={13} strokeWidth={2.5} /> : <ChevronRight size={13} strokeWidth={2.5} />}
+            <Icon size={13} strokeWidth={2.5} aria-hidden />
+            {label}
+            <span className="font-normal normal-case text-neutral-600">· {results.length}</span>
+          </button>
+        ) : (
+          <p className={`mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.12em] ${accentClasses.icon}`}>
+            <Icon size={13} strokeWidth={2.5} aria-hidden />
+            {label}
+          </p>
+        )}
 
-        {editable && onUpdateEntry && entryIndices ? (
+        {(!collapsible || open) && (editable && onUpdateEntry && entryIndices ? (
           wodGroups.length > 1 ? (
             // Dia de doble WOD en edicion: cada parte se edita por separado (los movimientos que se anadan o
             // quiten quedan dentro de su parte).
@@ -1201,6 +1302,14 @@ export function SessionBlockCard({
           <CooldownRoutineCard entries={results} />
         ) : block === 'warmup' ? (
           <WarmupRoutineCard entries={results} />
+        ) : isTwoFamilyOlyDay ? (
+          <GroupedOlyFamiliesCard
+            entries={results}
+            entryIndices={entryIndices}
+            progress={progress}
+            setFeedbackByIndex={setFeedbackByIndex}
+            onRateSet={onRateSet}
+          />
         ) : (block === 'oly' || block === 'strength') && results.length > 1 ? (
           <ComplexCard
             entries={results}
@@ -1231,7 +1340,7 @@ export function SessionBlockCard({
               </div>
             ))}
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
