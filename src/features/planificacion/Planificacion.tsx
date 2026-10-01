@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play } from 'lucide-react';
+import type { Block } from '../../data/movements/types';
 import type {
   AthleteProfile,
   DailySession,
@@ -57,7 +58,8 @@ import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
-import { DaySessionBlocks } from './DaySessionBlocks';
+import { DaySessionBlocks, BLOCK_ORDER } from './DaySessionBlocks';
+import { BLOCK_META, ACCENT_CLASSES } from './SessionBlockCard';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
@@ -149,6 +151,35 @@ function loadTodaySession(
 interface PlanificacionProps {
   onNavigateToObjetivos: () => void;
   onNavigateToNutricion: () => void;
+}
+
+/** Bloques que no dan información (casi siempre presentes, no cambian la forma del día). */
+const DAY_SHAPE_SKIP = new Set<Block>(['warmup', 'cooldown']);
+
+/**
+ * MOCKUP — punto 1 de las mejoras visuales propuestas: la forma del día de un vistazo, antes de
+ * bajar bloque a bloque. Una fila de chips con el icono/color que ya usa cada bloque en la tarjeta
+ * normal (`BLOCK_META`), así no se inventa un lenguaje visual nuevo.
+ */
+function DayShapeChips({ session }: { session: DailySession }) {
+  const present = BLOCK_ORDER.filter((block) => !DAY_SHAPE_SKIP.has(block) && session.blocks.some((b) => b.block === block));
+  if (present.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {present.map((block) => {
+        const { label, Icon, accent } = BLOCK_META[block];
+        const accentClasses = ACCENT_CLASSES[accent];
+        const suffix = block === 'wod' && session.doubleWod ? ' ×2' : '';
+        return (
+          <span key={block} className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1 text-[11px] font-medium text-neutral-300">
+            <Icon size={11} strokeWidth={2.5} className={accentClasses.icon} aria-hidden="true" />
+            {label}
+            {suffix}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: PlanificacionProps) {
@@ -975,41 +1006,49 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                 Empezar sesión
               </button>
             )}
-            <button
-              onClick={() => {
-                setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-                setPrUpdateMessage(null);
-                setShowCompletePanel(true);
-              }}
-              disabled={alreadyCompletedToday}
-              className="w-full rounded-lg bg-brand-orange px-3 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:w-auto"
-            >
-              {alreadyCompletedToday ? 'Completado ✓' : 'Marcar como completado'}
-            </button>
-            {!alreadyCompletedToday && (
+            {/* MOCKUP: "Marcar como completado" y "Hice otra cosa" son casos puntuales (registro manual
+                / salirse del guion) frente a "Empezar sesión" — van en una fila secundaria, más
+                discretos, en vez de tres botones con el mismo peso visual apilados. */}
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <button
                 onClick={() => {
-                  setQuickRpe(7);
-                  setQuickDuration(60);
-                  setShowQuickLog(true);
+                  setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+                  setPrUpdateMessage(null);
+                  setShowCompletePanel(true);
                 }}
-                className="w-full rounded-lg border border-brand-border px-3 py-2 text-sm font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold sm:w-auto"
+                disabled={alreadyCompletedToday}
+                title="Marcar como completado"
+                className="flex-1 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
               >
-                Hice otra cosa (solo RPE)
+                {alreadyCompletedToday ? 'Completado ✓' : 'Completado'}
               </button>
-            )}
-            {alreadyCompletedToday && (
-              <button
-                onClick={handleUndoComplete}
-                title="Deshacer el registro de hoy"
-                className="self-center text-xs text-neutral-500 underline decoration-dotted transition-colors duration-200 hover:text-red-400"
-              >
-                Deshacer
-              </button>
-            )}
+              {!alreadyCompletedToday && (
+                <button
+                  onClick={() => {
+                    setQuickRpe(7);
+                    setQuickDuration(60);
+                    setShowQuickLog(true);
+                  }}
+                  title="Hice otra cosa (solo RPE)"
+                  className="flex-1 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold sm:flex-none"
+                >
+                  Otra cosa
+                </button>
+              )}
+              {alreadyCompletedToday && (
+                <button
+                  onClick={handleUndoComplete}
+                  title="Deshacer el registro de hoy"
+                  className="text-xs text-neutral-500 underline decoration-dotted transition-colors duration-200 hover:text-red-400"
+                >
+                  Deshacer
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
+      {!session.isRestDay && <DayShapeChips session={session} />}
 
       {alreadyCompletedToday && todayHistoryEntry && (
         <SessionSummaryCard
