@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, Timer, type LucideIcon } from 'lucide-react';
+import { Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, Timer, Trophy } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -15,12 +15,13 @@ import { fmtKg, fmtDay } from '../../lib/format';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { findLastSessionTopSet } from '../../engine/movementProgress';
 import { Modal } from '../shell/Modal';
+import { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
 import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
 import { RpeCheckIn } from './RpeCheckIn';
 
-type Accent = 'orange' | 'gold' | 'neutral';
+export { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
 
 /** Percepción de esfuerzo de una serie de fuerza/oly ya registrada hoy en modo entreno — lo justo
  * para pintar `RpeCheckIn` debajo de su movimiento, sin repetir el nombre (ya está justo encima). */
@@ -30,24 +31,8 @@ export interface RpeFeedback {
   estimated1rm?: number;
 }
 
-export const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
-  orange: { icon: 'text-brand-orange', bar: 'bg-brand-orange/50' },
-  gold: { icon: 'text-brand-gold', bar: 'bg-brand-gold/45' },
-  neutral: { icon: 'text-neutral-400', bar: 'bg-white/15' },
-};
-
 /** Catalogo de WOD de referencia ordenado una sola vez (600+ entradas) — para el selector de "cambiar el WOD de hoy por otro benchmark" en modo edicion. */
 const sortedBenchmarkWorkouts = [...benchmarkWorkouts].sort((a, b) => a.name.localeCompare(b.name));
-
-export const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent: Accent }> = {
-  warmup: { label: 'Calentamiento', Icon: Flame, accent: 'gold' },
-  strength: { label: 'Fuerza', Icon: Dumbbell, accent: 'orange' },
-  wod: { label: 'WOD', Icon: Zap, accent: 'gold' },
-  oly: { label: 'Oly', Icon: Trophy, accent: 'orange' },
-  accessory: { label: 'Accesorio', Icon: Layers, accent: 'gold' },
-  skill: { label: 'Skill', Icon: Star, accent: 'orange' },
-  cooldown: { label: 'Vuelta a la calma', Icon: Wind, accent: 'neutral' },
-};
 
 /** Jerarquía de nombres de movimiento — una sola escala en toda la tarjeta. */
 const NAME_HEADLINE = 'text-lg font-bold leading-tight text-white'; // título de WOD / benchmark

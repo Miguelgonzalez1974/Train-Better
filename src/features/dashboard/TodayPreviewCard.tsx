@@ -10,6 +10,8 @@ import {
 import { toLocalIsoDate } from '../../engine/periodization';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import type { AthleteProfile, DailySession, SessionHistoryEntry } from '../../data/athlete/types';
+import { DayShapeChips } from '../shell/blockMeta';
+import { estimateSessionMinutes } from '../../lib/sessionDuration';
 
 /** "Back Squat · WOD 12 min AMRAP" — el titular de dos golpes de vista de la sesion de hoy, no el detalle entero (para eso esta Planificacion). */
 function buildPreviewLine(session: DailySession): string {
@@ -122,6 +124,8 @@ export function TodayPreviewCard({
     );
   }
 
+  const durationMin = estimateSessionMinutes(session);
+
   return (
     <button
       onClick={onNavigateToPlanificacion}
@@ -131,8 +135,12 @@ export function TodayPreviewCard({
         <Flame size={18} strokeWidth={2.25} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-orange">Entrenamiento de hoy</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-orange">
+          Entrenamiento de hoy
+          {durationMin > 0 && <span className="font-normal normal-case text-brand-orange/70"> · ~{durationMin} min</span>}
+        </p>
         <p className="mt-0.5 truncate text-[15px] font-semibold text-white">{buildPreviewLine(session)}</p>
+        <DayShapeChips session={session} className="mt-1.5" />
       </div>
       <ArrowRight size={18} strokeWidth={2.5} className="shrink-0 text-brand-orange" />
     </button>
