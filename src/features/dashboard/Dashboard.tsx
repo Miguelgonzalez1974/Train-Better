@@ -11,13 +11,12 @@ import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, ACWR_ZONE_STROKE, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
 import { AcwrGauge } from './AcwrGauge';
 import { TodayPreviewCard } from './TodayPreviewCard';
-import { JourneyBanner } from './JourneyBanner';
+import { JourneyProgress } from './JourneyProgress';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { PersonalRecordsCard } from './PersonalRecordsCard';
-import { AttentionBanner, buildAttentionItems } from './AttentionBanner';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { ImbalancesCard } from './ImbalancesCard';
 import { computeImbalances } from '../../engine/imbalances';
@@ -66,7 +65,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const todayIso = toLocalIsoDate(new Date());
   const structureRow = useMemo(() => buildStructureRow(profile, todayIso), [profile, todayIso]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
-  const attentionItems = useMemo(() => buildAttentionItems(acwr, weakPoints), [acwr, weakPoints]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
   const conditioningBalance = useMemo(() => computeConditioningBalance(profile, history, new Date()), [profile, history]);
@@ -257,21 +255,21 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       <TodayPreviewCard profile={profile} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
 
       {/*
-        MOCKUP: donde estas en el viaje (semana del macro/programa + objetivo mas cercano a su fecha),
-        en positivo, en vez de solo "que vigilar". Mismos datos que ya alimentaban el numerito del
-        icono de Objetivos.
-      */}
-      <JourneyBanner structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
-
-      <AttentionBanner items={attentionItems} />
-
-      {/*
         Los 6 gauges: todo lo esencial de un vistazo, cada uno la puerta directa a su detalle. Fila 1
         = cómo vas ahora mismo (carga, constancia, dominios); fila 2 = qué tal progresas (patrones,
         desequilibrios, PRs). Debajo, solo la(s) tarjeta(s) cuyo gauge se ha tocado — nada se ve sin
         pedirlo antes.
       */}
-      <MetricsGauges row1={row1} row2={row2} onJumpTo={jumpTo} />
+      <MetricsGauges
+        row1={row1}
+        row2={row2}
+        onJumpTo={jumpTo}
+        header={
+          hasStructure ? (
+            <JourneyProgress structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
+          ) : undefined
+        }
+      />
       {acwrOpen && <AcwrGauge result={acwr} trend={acwrTrend} />}
 
       {heatmapOpen && (

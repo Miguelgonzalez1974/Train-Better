@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 
 export type GaugeTarget = 'acwr' | 'heatmap' | 'weak' | 'energy' | 'imbalances' | 'prs';
@@ -72,13 +73,17 @@ export function MetricsGauges({
   row1,
   row2,
   onJumpTo,
+  header,
 }: {
   row1: GaugeSpec[];
   row2: GaugeSpec[];
   onJumpTo: (target: GaugeTarget) => void;
+  /** Contenido opcional encima de los arcos, en la misma tarjeta (progreso del macro/objetivo). */
+  header?: ReactNode;
 }) {
   return (
     <div className="card flex flex-col gap-2 p-3">
+      {header && <div className="border-b border-white/5 pb-2.5">{header}</div>}
       <div className="flex items-stretch gap-0.5">
         {row1.map((spec) => (
           <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
