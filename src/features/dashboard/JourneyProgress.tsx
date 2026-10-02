@@ -15,47 +15,57 @@ function shortRemaining(row: ProgressRow): string {
   return m ? m[1] : 'vencido';
 }
 
+/** "Subir PR — Clean" → "Clean": junto al anillo el sitio es poco y el icono ya dice el tipo de objetivo. */
+function shortGoalLabel(row: ProgressRow): string {
+  const i = row.label.indexOf(' — ');
+  const name = i >= 0 ? row.label.slice(i + 3) : row.label;
+  return name.replace(/\s*\([^)]*\)/g, '').trim() || name;
+}
+
 /**
- * Macrociclo (o programa de fuerza) activo: una tira con un tramo por semana — las pasadas llenas, la de
- * hoy resaltada, las que quedan apagadas. Se ve en qué punto del bloque estás sin leer nada.
+ * Macrociclo (o programa de fuerza) activo: un anillo con el % del bloque y, debajo, la semana en la que
+ * estás y la fase. Es lo que da el contexto de todo lo demás, así que lleva el protagonismo visual.
  */
-function WeekStrip({ row }: { row: ProgressRow }) {
+function ProgramRing({ row }: { row: ProgressRow }) {
   const Icon = row.Icon;
   const m = row.sublabel.match(/Semana (\d+) de (\d+)(?: · (.+))?/);
   const week = m ? Number(m[1]) : 0;
   const total = m ? Number(m[2]) : 0;
   const phase = m?.[3];
+  const pct = Math.min(100, Math.max(0, row.pct));
+  const r = 27;
+  const c = 2 * Math.PI * r;
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <span
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
-          style={{ background: `${row.color}22`, color: row.color }}
-        >
-          <Icon size={13} strokeWidth={2.25} />
-        </span>
-        <p className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-white">{row.label}</p>
-        <span className="num shrink-0 text-xs text-neutral-500">{row.pct}%</span>
+    <div className="flex w-[88px] shrink-0 flex-col items-center gap-0.5 text-center" title={`${row.label} · ${row.sublabel}`}>
+      <div className="relative h-[68px] w-[68px]">
+        <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90" role="img" aria-label={`${row.label}: ${pct}%`}>
+          <circle cx="32" cy="32" r={r} fill="none" strokeWidth="6" className="stroke-white/[0.08]" />
+          <circle
+            cx="32"
+            cy="32"
+            r={r}
+            fill="none"
+            strokeWidth="6"
+            strokeLinecap="round"
+            stroke={row.color}
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - pct / 100)}
+            style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <Icon size={12} strokeWidth={2.25} style={{ color: row.color }} />
+          <span className="num text-[15px] font-bold leading-none text-white">{pct}%</span>
+        </div>
       </div>
       {total > 0 ? (
-        <>
-          <div className="flex h-1.5 gap-[2px]" role="img" aria-label={`Semana ${week} de ${total}`}>
-            {Array.from({ length: total }, (_, i) => (
-              <span
-                key={i}
-                className="min-w-0 flex-1 rounded-[2px]"
-                style={{ background: i < week - 1 ? row.color : i === week - 1 ? '#fff' : 'rgba(255,255,255,0.1)' }}
-              />
-            ))}
-          </div>
-          <p className="truncate text-[11px] leading-tight text-neutral-500">
-            Semana <span className="num font-semibold text-neutral-300">{week}</span> de {total}
-            {phase ? ` · ${phase}` : ''}
-          </p>
-        </>
+        <p className="num text-[11px] font-semibold leading-tight text-neutral-300">
+          Sem. {week}/{total}
+        </p>
       ) : (
-        <p className="truncate text-[11px] leading-tight text-neutral-500">{row.sublabel}</p>
+        <p className="w-full truncate text-[11px] leading-tight text-neutral-400">{row.label}</p>
       )}
+      {phase && <p className="w-full truncate text-[10px] leading-tight text-neutral-500">{phase}</p>}
     </div>
   );
 }
@@ -69,7 +79,9 @@ function GoalFillRow({ row }: { row: ProgressRow }) {
       <div className="absolute inset-y-0 left-0 transition-all duration-500" style={{ width: `${pct}%`, background: `${row.color}2e` }} />
       <div className="relative flex items-center gap-2 px-2.5 py-1.5">
         <Icon size={13} strokeWidth={2.25} className="shrink-0" style={{ color: row.color }} />
-        <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white">{row.label}</p>
+        <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white" title={row.label}>
+          {shortGoalLabel(row)}
+        </p>
         <span className="num shrink-0 text-xs font-bold text-white">{pct}%</span>
         <span className="num w-9 shrink-0 text-right text-[11px] text-neutral-400">{shortRemaining(row)}</span>
       </div>
@@ -99,11 +111,11 @@ export function JourneyProgress({
   return (
     <button
       onClick={onNavigateToObjetivos}
-      className="flex w-full flex-col gap-2.5 rounded-xl p-1 text-left transition-colors duration-200 hover:bg-white/[0.04]"
+      className="flex w-full items-center gap-3 rounded-xl p-1 text-left transition-colors duration-200 hover:bg-white/[0.04]"
     >
-      {structureRow && <WeekStrip row={structureRow} />}
+      {structureRow && <ProgramRing row={structureRow} />}
       {shown.length > 0 && (
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           {shown.map((row) => (
             <GoalFillRow key={row.id} row={row} />
           ))}
