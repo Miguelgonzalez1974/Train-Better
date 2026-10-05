@@ -66,12 +66,12 @@ import { SessionSummaryCard } from './SessionSummaryCard';
 import { NutritionDayButton } from './NutritionDayButton';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
-import { WodResultField } from './WodResultField';
+import { CompleteSessionPanel } from './CompleteSessionPanel';
+import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { Modal } from '../shell/Modal';
 
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 const DURATION_PRESETS = [30, 45, 60, 75, 90];
-const numberInputClass = 'w-16 rounded-lg border border-brand-border bg-brand-bg px-2 py-1.5 text-center text-sm text-white';
 
 const PAIN_AREAS: PainArea[] = ['hombro', 'cadera-lumbar', 'rodilla', 'codo-muneca'];
 const PAIN_DURATION_OPTIONS: { value: PainDuration; label: string }[] = [
@@ -249,6 +249,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   );
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
+  // Referencia para el cierre de sesión: lo que el coach calculó, a múltiplos de 5 y sin salirse de lo razonable.
+  const estimatedMin = useMemo(() => (session ? Math.min(120, Math.max(20, Math.round(estimateSessionMinutes(session) / 5) * 5)) : 60), [session]);
+  // Al abrir el cierre de sesión la duración arranca en la estimada: si fue lo normal, no hay que tocarla.
+  useEffect(() => {
+    if (showCompletePanel) setDurationMin(estimatedMin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCompletePanel]);
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
   /**
@@ -968,118 +975,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         />
       )}
 
-      {showCompletePanel && !alreadyCompletedToday && (
-        <div className="flex flex-col gap-4 card border-brand-gold/30 p-4">
-          {wodParts.map((part) => {
-            const scoreType = wodScoreTypes[part];
-            if (!scoreType) return null;
-            const isDouble = wodParts.length > 1;
-            // Objetivo de esta parte (la estimacion del motor, o el publicado si es un WOD real).
-            const target = session?.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget;
-            return (
-              <div key={part}>
-                <p className="mb-2 text-sm font-medium text-neutral-300">
-                  {isDouble ? `Resultado del WOD — parte ${part} de 2` : 'Resultado del WOD'}
-                  {target?.display ? <span className="ml-2 font-normal text-neutral-500">objetivo {target.display}</span> : null}
-                </p>
-                <WodResultField
-                  scoreType={scoreType}
-                  form={wodForms[part]}
-                  onChange={(patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
-                />
-              </div>
-            );
-          })}
-
-          {testDayBlock && testDayMovement && (
-            <div>
-              <p className="mb-2 text-sm font-medium text-neutral-300">
-                Test 1RM — {testDayMovement.name}
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  step={2.5}
-                  value={testedLoadKg}
-                  onChange={(e) => setTestedLoadKg(Number(e.target.value))}
-                  className={numberInputClass}
-                />
-                <span className="text-neutral-500">kg levantados</span>
-              </div>
-              <p className="mt-1 text-xs text-neutral-500">
-                Si supera tu marca actual, se actualiza tu PR y las próximas sesiones se calculan sobre el nuevo número.
-              </p>
-            </div>
-          )}
-
-          <div>
-            <p className="mb-2 text-sm font-medium text-neutral-300">¿Rx o escalado?</p>
-            <div className="flex gap-2">
-              {(['rx', 'scaled'] as RxOrScaled[]).map((option) => (
-                <button
-                  key={option}
-                  onClick={() => setRxOrScaled(option)}
-                  className={`rounded-lg px-4 py-1.5 text-sm font-semibold capitalize transition-all duration-200 ${
-                    rxOrScaled === option ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
-                  }`}
-                >
-                  {option === 'rx' ? 'Rx' : 'Escalado'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-sm font-medium text-neutral-300">RPE (esfuerzo percibido)</p>
-            <div className="flex flex-wrap gap-1.5">
-              {RPE_SCALE.map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setRpe(value)}
-                  className={`h-8 w-8 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    rpe === value ? 'bg-brand-orange text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-sm font-medium text-neutral-300">Duración de la sesión</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DURATION_PRESETS.map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setDurationMin(value)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-all duration-200 ${
-                    durationMin === value ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
-                  }`}
-                >
-                  {value} min
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleConfirmComplete}
-              className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark hover:shadow-lg hover:shadow-brand-orange/30"
-            >
-              Confirmar
-            </button>
-            <button
-              onClick={() => setShowCompletePanel(false)}
-              className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
 
       {session.isRestDay ? (
         <div className="card flex flex-col gap-3 p-4">
@@ -1109,6 +1004,28 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
 
       {/* Cierre de la sesión: va tras los bloques, donde se usa. Una vez completada, el estado vive
           en la cabecera ("Sesión completada") y deshacer en el menú "···". */}
+      {!session.isRestDay && !alreadyCompletedToday && showCompletePanel && (
+        <CompleteSessionPanel
+          wodParts={wodParts}
+          scoreTypes={wodScoreTypes}
+          targets={Object.fromEntries(
+            wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]),
+          )}
+          forms={wodForms}
+          onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
+          test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
+          rxOrScaled={rxOrScaled}
+          onRxOrScaled={setRxOrScaled}
+          rpe={rpe}
+          onRpe={setRpe}
+          durationMin={durationMin}
+          onDuration={setDurationMin}
+          estimatedMin={estimatedMin}
+          onConfirm={handleConfirmComplete}
+          onCancel={() => setShowCompletePanel(false)}
+        />
+      )}
+
       {!session.isRestDay && !alreadyCompletedToday && !showCompletePanel && (
         <div className="mb-14 flex flex-col gap-2 border-t border-white/5 pt-4">
           <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-neutral-500">¿Has terminado?</p>
