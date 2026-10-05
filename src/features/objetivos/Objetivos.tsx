@@ -49,6 +49,7 @@ import { SeasonPlannerModal } from './SeasonPlannerModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { buildGoalRows, buildStructureRow } from '../dashboard/progressOverview';
 import { JourneyProgress } from '../dashboard/JourneyProgress';
+import { SectionLabel } from '../shell/SectionLabel';
 
 /** A partir de aqui, un objetivo se trata como urgente — mismo umbral usado para destacarlo con el badge pulsante. */
 const URGENT_THRESHOLD_DAYS = 14;
@@ -300,7 +301,7 @@ export function Objetivos() {
           los objetivos. Se esconde mientras hay un formulario abierto para no estorbar. */}
       {!macroDraft && !goalDraft && !programDraft && !rampDraft && (structureRow || goalRows.length > 0) && (
         <div className="card p-3">
-          <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Activo ahora</p>
+          <SectionLabel className="mb-2 px-1">Plan activo</SectionLabel>
           <JourneyProgress structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={() => setActiveSection('objetivos')} />
           {activeProgram && activeMacro && (
             <p className="mt-2 flex items-start gap-1.5 border-t border-white/5 px-1 pt-2 text-[11px] leading-snug text-neutral-500">

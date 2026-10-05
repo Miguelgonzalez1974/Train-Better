@@ -12,6 +12,7 @@ import { MetricsGauges, ACWR_ZONE_STROKE, type GaugeSpec, type GaugeTarget } fro
 import { AcwrGauge } from './AcwrGauge';
 import { TodayPreviewCard } from './TodayPreviewCard';
 import { JourneyProgress } from './JourneyProgress';
+import { SectionLabel } from '../shell/SectionLabel';
 import { WeakPointsCard } from './WeakPointsCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
@@ -264,9 +265,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         row1={row1}
         row2={[]}
         onJumpTo={jumpTo}
+        title="Cómo vas"
         header={
           hasStructure ? (
-            <JourneyProgress structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
+            <>
+              <SectionLabel className="mb-3">Plan activo</SectionLabel>
+              <JourneyProgress structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
+            </>
           ) : undefined
         }
       />

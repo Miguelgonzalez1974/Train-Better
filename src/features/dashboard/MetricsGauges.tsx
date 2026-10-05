@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { SectionLabel } from '../shell/SectionLabel';
 import type { AcwrResult } from '../../engine/loadMetrics';
 
 export type GaugeTarget = 'acwr' | 'heatmap' | 'weak' | 'energy' | 'imbalances' | 'prs';
@@ -74,20 +75,26 @@ export function MetricsGauges({
   row2,
   onJumpTo,
   header,
+  title,
 }: {
   row1: GaugeSpec[];
   row2: GaugeSpec[];
   onJumpTo: (target: GaugeTarget) => void;
-  /** Contenido opcional encima de los arcos, en la misma tarjeta (progreso del macro/objetivo). */
+  /** Contenido opcional encima de los arcos (progreso del macro/objetivo). */
   header?: ReactNode;
+  /** Etiqueta de sección sobre la primera fila de arcos. */
+  title?: string;
 }) {
   return (
-    <div className="flex flex-col gap-7 px-1">
+    <div className="flex flex-col gap-7">
       {header && <div>{header}</div>}
-      <div className="flex items-stretch gap-0.5">
-        {row1.map((spec) => (
-          <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
-        ))}
+      <div>
+        {title && <SectionLabel className="mb-3">{title}</SectionLabel>}
+        <div className="flex items-stretch gap-0.5">
+          {row1.map((spec) => (
+            <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
+          ))}
+        </div>
       </div>
       {row2.length > 0 && (
         <div className="flex items-stretch gap-0.5">
