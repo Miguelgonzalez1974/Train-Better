@@ -76,7 +76,7 @@ export function Nutricion() {
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
             className={`flex-1 rounded-lg py-2 text-center text-xs font-semibold transition-colors duration-200 ${
-              tab === t.id ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+              tab === t.id ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'
             }`}
           >
             {t.label}

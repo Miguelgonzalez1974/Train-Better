@@ -47,7 +47,7 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
             role="tab"
             aria-selected={offset === i}
             onClick={() => setOffset(i as 0 | 1)}
-            className={`flex-1 rounded-md py-1.5 text-center text-xs font-semibold transition-colors ${offset === i ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'}`}
+            className={`flex-1 rounded-md py-1.5 text-center text-xs font-semibold transition-colors ${offset === i ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'}`}
           >
             {label}
           </button>
@@ -62,7 +62,7 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
         const Chevron = open ? ChevronDown : ChevronRight;
         const date = parseIso(d.iso);
         return (
-          <section key={d.iso} className={`card overflow-hidden ${d.iso === todayIso ? 'ring-1 ring-brand-gold/60' : ''} ${d.iso < todayIso ? 'opacity-60' : ''}`}>
+          <section key={d.iso} className={`overflow-hidden rounded-xl bg-white/[0.03] ${d.iso === todayIso ? 'ring-1 ring-white/30' : ''} ${d.iso < todayIso ? 'opacity-60' : ''}`}>
             <button onClick={() => setOpenIso(open ? null : d.iso)} aria-expanded={open} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
               <Chevron size={16} className="shrink-0 text-neutral-500" aria-hidden="true" />
               <span className="min-w-0 flex-1">
@@ -75,8 +75,8 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
                 <span className="block text-[11px] text-neutral-500">{NUTRITION_DAY_LABEL[d.type]}</span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <MacroRing label="Proteína" value={d.doneProtein} target={d.objectiveProtein} strokeClass="stroke-red-400" size={44} compact />
-                <MacroRing label="Hidratos" value={d.doneCarbs} target={d.objectiveCarbs} strokeClass="stroke-brand-gold" size={44} compact />
+                <MacroRing label="Proteína" value={d.doneProtein} target={d.objectiveProtein} size={44} compact />
+                <MacroRing label="Hidratos" value={d.doneCarbs} target={d.objectiveCarbs} size={44} compact />
               </span>
             </button>
             {open && (
@@ -98,7 +98,7 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
                           <p className="flex items-baseline gap-2">
                             <span className="font-semibold text-neutral-200">{m.label}</span>
                             <span className="num text-neutral-600">{m.time}</span>
-                            {m.tag && <span className="text-[11px] text-brand-gold">{m.tag}</span>}
+                            {m.tag && <span className="text-[11px] text-neutral-400">{m.tag}</span>}
                           </p>
                           <p className="text-neutral-400">{m.items.filter((i2) => i2.kind !== 'fat').map((i2) => `${i2.name} ${i2.quantity}`).join(' · ')}</p>
                         </span>
@@ -106,7 +106,7 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
                     );
                   })}
                 </ul>
-                <button onClick={() => onOpenDay(d.iso)} className="mt-3 text-xs font-semibold text-brand-gold underline decoration-dotted">
+                <button onClick={() => onOpenDay(d.iso)} className="mt-3 text-xs font-semibold text-neutral-300 underline decoration-dotted hover:text-white">
                   Abrir el día para marcar o cambiar alimentos
                 </button>
               </div>

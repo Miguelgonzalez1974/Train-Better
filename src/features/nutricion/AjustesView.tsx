@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { FOODS, FOOD_TAG_LABEL, SHOPPING_CATEGORY_LABEL, SHOPPING_CATEGORY_ORDER, STAPLES, type FoodRole, type FoodTag } from '../../data/nutrition/foods';
 import { defaultTrainingHour, poolForRole, TRAINING_HOUR_OPTIONS } from '../../engine/mealPlan';
@@ -129,7 +129,7 @@ export function AjustesView({ shared, bodyweightLog, onBodyweightChange }: Ajust
                 }
                 aria-pressed={on}
                 className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  on ? 'border-brand-gold bg-brand-gold/15 text-brand-gold' : 'border-brand-border text-neutral-400 hover:text-white'
+                  on ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
                 }`}
               >
                 {s.name}
@@ -188,7 +188,7 @@ export function AjustesView({ shared, bodyweightLog, onBodyweightChange }: Ajust
                 onClick={() => setNewFood((f) => ({ ...f, group: g }))}
                 aria-pressed={newFood.group === g}
                 className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  newFood.group === g ? 'border-brand-gold bg-brand-gold/15 text-brand-gold' : 'border-brand-border text-neutral-400 hover:text-white'
+                  newFood.group === g ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
                 }`}
               >
                 {g}

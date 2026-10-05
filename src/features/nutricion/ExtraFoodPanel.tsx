@@ -145,7 +145,7 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone }:
                 aria-selected={group === g}
                 onClick={() => setGroup(g)}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                  group === g ? 'border-brand-gold bg-brand-gold/15 text-brand-gold' : 'border-brand-border text-neutral-400 hover:text-white'
+                  group === g ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
                 }`}
               >
                 {g}

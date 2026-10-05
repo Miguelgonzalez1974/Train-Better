@@ -18,13 +18,13 @@ const CATEGORY_ICON: Record<ShoppingCategory, typeof Beef> = {
   despensa: Package,
 };
 
-/** Un color por categoría, para que la sección se reconozca de un vistazo al recorrer el súper. */
+/** Estilo minimalista: todas las categorías en el mismo gris — cada una se reconoce por su icono y su nombre. */
 const CATEGORY_STYLE: Record<ShoppingCategory, string> = {
-  proteinas: 'bg-red-400/15 text-red-300',
-  lacteos: 'bg-sky-400/15 text-sky-300',
-  hidratos: 'bg-brand-gold/15 text-brand-gold',
-  fruta: 'bg-pink-400/15 text-pink-300',
-  verdura: 'bg-emerald-400/15 text-emerald-300',
+  proteinas: 'bg-white/10 text-neutral-300',
+  lacteos: 'bg-white/10 text-neutral-300',
+  hidratos: 'bg-white/10 text-neutral-300',
+  fruta: 'bg-white/10 text-neutral-300',
+  verdura: 'bg-white/10 text-neutral-300',
   despensa: 'bg-white/10 text-neutral-300',
 };
 
@@ -111,7 +111,7 @@ export function CompraView({ shared }: { shared: NutritionShared }) {
             role="tab"
             aria-selected={range === value}
             onClick={() => setRange(value)}
-            className={`flex-1 rounded-md py-1.5 text-center text-xs font-semibold transition-colors ${range === value ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'}`}
+            className={`flex-1 rounded-md py-1.5 text-center text-xs font-semibold transition-colors ${range === value ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'}`}
           >
             {text}
           </button>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, Droplet } from 'lucide-react';
 import { MEAL_LABEL, TRAINING_HOUR_OPTIONS, type MealKey } from '../../engine/mealPlan';
 import { Modal } from '../shell/Modal';
+import { SectionLabel } from '../shell/SectionLabel';
 import { computeDayFlow } from '../../engine/dayFlow';
 import { DayFlow } from './DayFlow';
 import { ExtraFoodPanel } from './ExtraFoodPanel';
@@ -79,7 +80,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
       </div>
 
       {/* Tipo de día y hora */}
-      <div className="card flex flex-col gap-2.5 p-3.5">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${DAY_TYPE_STYLE[dayType]}`}>{NUTRITION_DAY_LABEL[dayType]}</span>
           <span className="text-[11px] text-neutral-500">para {String(weightKg).replace('.', ',')} kg</span>
@@ -92,7 +93,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
               aria-selected={dayType === t}
               onClick={() => setTypeOverride(t === day?.type ? null : t)}
               className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-                dayType === t ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+                dayType === t ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'
               }`}
             >
               {DAY_TYPE_SHORT[t]}
@@ -109,7 +110,7 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
                   onClick={() => setHour(h)}
                   aria-pressed={hour === h}
                   className={`num rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                    hour === h ? 'border-brand-gold bg-brand-gold/15 text-brand-gold' : 'border-brand-border text-neutral-400 hover:text-white'
+                    hour === h ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
                   }`}
                 >
                   {h}:00
@@ -124,8 +125,8 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
       {/* Línea del día: lo hecho frente a lo previsto, con las comidas en su hora y el entreno como corte.
           Es la única vista de las comidas — no hay tarjetas fijas debajo; tocar un punto o una barra abre esa
           comida (automática o a mano) en el panel de abajo. */}
-      <div className="card p-3.5">
-        <p className="mb-2.5 text-sm font-semibold text-white">Tu día</p>
+      <div>
+        <SectionLabel className="mb-3">Tu día</SectionLabel>
         <DayFlow
           flow={flow}
           onOpenMeal={setBuildMeal}
@@ -148,8 +149,8 @@ export function HoyView({ shared, iso, onChangeIso, onOpenGuide }: HoyViewProps)
 
       {/* Agua */}
       {dayType !== 'descanso' && (
-        <div className="card flex items-start gap-2.5 p-3.5 text-xs leading-relaxed text-neutral-400">
-          <Droplet size={16} className="mt-0.5 shrink-0 text-sky-300" aria-hidden="true" />
+        <div className="flex items-start gap-2.5 px-1 text-xs leading-relaxed text-neutral-500">
+          <Droplet size={16} className="mt-0.5 shrink-0 text-neutral-400" aria-hidden="true" />
           <p>
             Bebe {round50(5 * weightKg)}-{round50(7 * weightKg)} ml de agua unas 4 h antes de entrenar y a sorbos durante la sesión (5-7 ml/kg, ACSM 2016). Creatina 3-5 g al
             día es opcional.

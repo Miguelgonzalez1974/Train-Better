@@ -107,7 +107,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
           aria-selected={mode === 'auto'}
           onClick={() => setMode('auto')}
           className={`flex-1 rounded-md py-1.5 text-center text-xs font-semibold transition-colors ${
-            mode === 'auto' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+            mode === 'auto' ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'
           }`}
         >
           Automático
@@ -117,7 +117,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
           aria-selected={mode === 'manual'}
           onClick={() => setMode('manual')}
           className={`flex-1 rounded-md py-1.5 text-center text-xs font-semibold transition-colors ${
-            mode === 'manual' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+            mode === 'manual' ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'
           }`}
         >
           A mi manera{meal.custom ? ' •' : ''}
@@ -260,7 +260,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
                     aria-selected={group === g}
                     onClick={() => setGroup(g)}
                     className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                      group === g ? 'border-brand-gold bg-brand-gold/15 text-brand-gold' : 'border-brand-border text-neutral-400 hover:text-white'
+                      group === g ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
                     }`}
                   >
                     {g}

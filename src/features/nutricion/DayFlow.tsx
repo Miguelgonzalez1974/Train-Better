@@ -61,7 +61,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
                 >
                   <span
                     className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors duration-300 ${
-                      m.done ? 'border-emerald-400 bg-emerald-400' : 'border-white/30 bg-brand-surface hover:border-brand-gold'
+                      m.done ? 'border-emerald-400 bg-emerald-400' : 'border-white/30 bg-brand-surface hover:border-white'
                     }`}
                   >
                     {m.done && <Check size={11} strokeWidth={3.5} className="text-black" aria-hidden="true" />}
@@ -80,7 +80,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
               style={{ left: `${pos(e.hour)}%` }}
               title={`${e.label} · ${fmt(e.hour)} · extra`}
             >
-              <span className="block h-3.5 w-3.5 rotate-45 rounded-[3px] border-2 border-violet-300 bg-violet-400" />
+              <span className="block h-3.5 w-3.5 rotate-45 rounded-[3px] border-2 border-neutral-300 bg-neutral-400" />
             </div>
           ))}
         </div>
@@ -93,8 +93,8 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
 
       {/* Lo que llevas del día */}
       <div className="flex items-center justify-around">
-        <MacroRing label="Proteína" value={done.protein} target={objective.protein} strokeClass="stroke-red-400" size={112} />
-        <MacroRing label="Hidratos" value={done.carbs} target={objective.carbs} strokeClass="stroke-brand-gold" size={112} />
+        <MacroRing label="Proteína" value={done.protein} target={objective.protein} size={112} />
+        <MacroRing label="Hidratos" value={done.carbs} target={objective.carbs} size={112} />
       </div>
 
       {extras.length > 0 && (
@@ -107,7 +107,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
 
       <button
         onClick={onAddExtra}
-        className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-brand-border px-3 py-2.5 text-xs font-semibold text-neutral-300 transition-colors hover:border-brand-gold hover:text-white"
+        className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-brand-border px-3 py-2.5 text-xs font-semibold text-neutral-300 transition-colors hover:border-white/40 hover:text-white"
       >
         <Plus size={14} aria-hidden="true" /> Añadir un alimento ahora
       </button>
@@ -120,7 +120,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
 function ExtraRow({ extra, onRemove }: { extra: FlowExtra; onRemove: () => void }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2">
-      <span className="block h-2.5 w-2.5 shrink-0 rotate-45 rounded-[2px] bg-violet-400" aria-hidden="true" />
+      <span className="block h-2.5 w-2.5 shrink-0 rotate-45 rounded-[2px] bg-neutral-400" aria-hidden="true" />
       <span className="num shrink-0 text-[11px] text-neutral-500">{fmt(extra.hour)}</span>
       <span className="flex-1 truncate text-sm text-neutral-200">{extra.label}</span>
       <span className="num shrink-0 text-[11px] text-neutral-500">
