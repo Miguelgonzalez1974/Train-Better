@@ -8,6 +8,16 @@ export default {
         // Grotesca de rendimiento para cifras y titulares — el "92 kg", el nombre del día, las etiquetas de bloque.
         display: ['"Space Grotesk Variable"', '"Inter Variable"', 'system-ui', 'sans-serif'],
       },
+      keyframes: {
+        // Aparición de los menús desplegables: nacen en la esquina del botón que los abre.
+        'menu-in': {
+          '0%': { opacity: '0', transform: 'scale(0.96) translateY(-4px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+      },
+      animation: {
+        'menu-in': 'menu-in 140ms ease-out',
+      },
       colors: {
         // Colores resueltos por variable CSS para poder cambiar de tema (oscuro por defecto, claro
         // opcional con [data-theme="light"] en <html>). Los valores viven en `src/index.css`. Solo se

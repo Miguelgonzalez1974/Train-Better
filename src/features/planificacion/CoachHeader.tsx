@@ -16,22 +16,18 @@ export function CoachHeader({ profile, onSaveProfile }: CoachHeaderProps) {
   return (
     <>
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-surface">
-            <span className="absolute inset-0 animate-pulse rounded-2xl bg-brand-neon/20 blur-lg" />
-            <Brain size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.65)]" />
-          </span>
-          <div>
-            <p className="text-lg font-bold tracking-tight text-white">Coach IA</p>
-            <p className="text-xs text-neutral-500">Tu entrenador personal</p>
-          </div>
+        <div className="flex items-center gap-2">
+          <Brain size={18} strokeWidth={2} className="text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.65)]" />
+          <p className="text-sm font-semibold tracking-tight text-neutral-300">Coach IA</p>
         </div>
 
         <button
           onClick={() => setOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-border text-neutral-400 transition-all duration-200 hover:rotate-45 hover:border-brand-gold hover:text-brand-gold"
+          title="Tu perfil"
+          aria-label="Tu perfil"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-all duration-200 hover:rotate-45 hover:border-brand-gold hover:text-brand-gold"
         >
-          <Settings size={18} />
+          <Settings size={16} />
         </button>
       </div>
 

@@ -657,9 +657,9 @@ export function TrainingTimer() {
       <button
         onClick={() => setExpanded(true)}
         aria-label="Reloj de entreno"
-        className="fixed bottom-24 right-4 z-40 flex h-20 w-20 items-center justify-center rounded-full bg-brand-surface text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
+        className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-surface/95 text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
       >
-        <Timer size={28} strokeWidth={2.25} />
+        <Timer size={22} strokeWidth={2.25} />
         {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-border" />}
       </button>
     );

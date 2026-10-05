@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2 } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
@@ -59,6 +59,7 @@ import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { DayShapeChips } from '../shell/blockMeta';
+import { ActionMenu } from '../shell/ActionMenu';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import { CoachNotices } from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
@@ -890,16 +891,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             <h1 className="text-2xl font-semibold text-white">
               {session.isRestDay ? 'Día de descanso' : todayWeekdayLabel}
             </h1>
-            {!session.isRestDay && (
-              <button
-                onClick={() => setShowTypePicker(true)}
-                title="Elegir tipo de sesión"
-                aria-label="Elegir tipo de sesión"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-border bg-brand-surfaceMuted text-brand-neon transition-colors duration-200 hover:border-brand-neon/50"
-              >
-                <Brain size={14} strokeWidth={2.25} />
-              </button>
-            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-400">
             {session.mesocycleWeek > 0 && (
@@ -912,110 +903,52 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             {session.mesocycleWeek === 0 && !session.isRestDay && (
               <span>{session.strengthProgramLabel?.split(' · Semana ')[0] ?? session.swapLabel ?? 'Mantenimiento'}</span>
             )}
-            {!session.isRestDay && weekCount.planned > 0 && (
-              <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-xs text-neutral-300">
-                <span className="num">{weekCount.done}/{weekCount.planned}</span> esta semana
-              </span>
-            )}
             {!session.isRestDay && session.dayEmphasis && (
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
-                  session.dayEmphasis === 'fuerza' ? 'bg-brand-gold/10 text-brand-gold' : 'bg-brand-orange/10 text-brand-orange'
-                }`}
-              >
-                {session.dayEmphasis === 'fuerza' ? 'Día de fuerza' : 'Foco metcon'}
-              </span>
+              <>
+                {session.mesocycleWeek > 0 && <span aria-hidden>·</span>}
+                <span className={session.dayEmphasis === 'fuerza' ? 'text-brand-gold' : 'text-brand-orange'}>
+                  {session.dayEmphasis === 'fuerza' ? 'Día de fuerza' : 'Foco metcon'}
+                </span>
+              </>
             )}
           </div>
         </div>
         {!session.isRestDay && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setEditMode((prev) => !prev)}
-                title={editMode ? 'Terminar edición' : 'Editar sesión'}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
-                  editMode ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-brand-gold'
-                }`}
-              >
-                {editMode ? <Check size={17} /> : <Pencil size={16} />}
-              </button>
-              <button
-                onClick={handleRegenerate}
-                title="Regenerar sesión"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-all duration-200 hover:bg-white/10 hover:text-brand-gold"
-              >
-                <RefreshCw size={17} className={spinning ? 'animate-spin' : ''} />
-              </button>
-              {!alreadyCompletedToday && (
-                <button
-                  onClick={handleDeleteTodaySession}
-                  title="Borrar sesión de hoy"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-all duration-200 hover:bg-red-500/15 hover:text-red-400"
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-              <button
-                onClick={() => setShowPainPicker(true)}
-                title="¿Algo te molesta hoy?"
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
-                  activePainFlags.length > 0
-                    ? 'bg-red-500/15 text-red-400'
-                    : 'bg-white/5 text-neutral-300 hover:bg-red-500/15 hover:text-red-400'
-                }`}
-              >
-                <Bandage size={16} />
-              </button>
-            </div>
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            {alreadyCompletedToday && (
+              <div className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-400/10 px-3 py-2.5 text-sm font-semibold text-emerald-300 ring-1 ring-emerald-400/30 sm:flex-none">
+                <CheckCircle2 size={15} strokeWidth={2.5} />
+                Sesión completada
+              </div>
+            )}
             {!alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && (
               <button
                 onClick={() => setFocusMode(true)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-neon/15 px-3 py-2 text-sm font-semibold text-brand-neon ring-1 ring-brand-neon/40 transition-all duration-200 hover:bg-brand-neon/25 sm:w-auto"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-neon/15 px-3 py-2.5 text-sm font-semibold text-brand-neon ring-1 ring-brand-neon/40 transition-all duration-200 hover:bg-brand-neon/25 sm:flex-none"
               >
                 <Play size={14} strokeWidth={2.5} />
                 Empezar sesión
               </button>
             )}
-            {/* MOCKUP: "Marcar como completado" y "Hice otra cosa" son casos puntuales (registro manual
-                / salirse del guion) frente a "Empezar sesión" — van en una fila secundaria, más
-                discretos, en vez de tres botones con el mismo peso visual apilados. */}
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <button
-                onClick={() => {
-                  setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-                  setPrUpdateMessage(null);
-                  setShowCompletePanel(true);
-                }}
-                disabled={alreadyCompletedToday}
-                title="Marcar como completado"
-                className="flex-1 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-orange hover:text-brand-orange disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
-              >
-                {alreadyCompletedToday ? 'Completado ✓' : 'Completado'}
-              </button>
-              {!alreadyCompletedToday && (
-                <button
-                  onClick={() => {
-                    setQuickRpe(7);
-                    setQuickDuration(60);
-                    setShowQuickLog(true);
-                  }}
-                  title="Hice otra cosa (solo RPE)"
-                  className="flex-1 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold sm:flex-none"
-                >
-                  Otra cosa
-                </button>
-              )}
-              {alreadyCompletedToday && (
-                <button
-                  onClick={handleUndoComplete}
-                  title="Deshacer el registro de hoy"
-                  className="text-xs text-neutral-500 underline decoration-dotted transition-colors duration-200 hover:text-red-400"
-                >
-                  Deshacer
-                </button>
-              )}
-            </div>
+            <ActionMenu
+              active={editMode}
+              alert={activePainFlags.length > 0}
+              busy={spinning}
+              items={[
+                { label: editMode ? 'Terminar edición' : 'Editar sesión', Icon: editMode ? Check : Pencil, onSelect: () => setEditMode((prev) => !prev) },
+                { label: 'Regenerar sesión', Icon: RefreshCw, onSelect: handleRegenerate },
+                { label: 'Cambiar tipo de sesión', Icon: Brain, onSelect: () => setShowTypePicker(true) },
+                {
+                  label: activePainFlags.length > 0 ? 'Molestias activas' : '¿Algo te molesta hoy?',
+                  Icon: Bandage,
+                  onSelect: () => setShowPainPicker(true),
+                  tone: activePainFlags.length > 0 ? 'danger' : 'default',
+                },
+                alreadyCompletedToday
+                  ? { label: 'Deshacer el registro de hoy', Icon: Undo2, onSelect: handleUndoComplete, tone: 'danger' }
+                  : { label: 'Borrar sesión de hoy', Icon: Trash2, onSelect: handleDeleteTodaySession, tone: 'danger' },
+              ]}
+            />
           </div>
         )}
       </div>
@@ -1172,6 +1105,39 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           setFeedbackByIndex={editMode || showCompletePanel ? undefined : sessionCardFeedbackByIndex}
           onRateSet={editMode || showCompletePanel ? undefined : handleRateSet}
         />
+      )}
+
+      {/* Cierre de la sesión: va tras los bloques, donde se usa. Una vez completada, el estado vive
+          en la cabecera ("Sesión completada") y deshacer en el menú "···". */}
+      {!session.isRestDay && !alreadyCompletedToday && !showCompletePanel && (
+        <div className="mb-14 flex flex-col gap-2 border-t border-white/5 pt-4">
+          <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-neutral-500">¿Has terminado?</p>
+          <div className="flex items-stretch gap-2">
+            <button
+              onClick={() => {
+                setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+                setPrUpdateMessage(null);
+                setShowCompletePanel(true);
+              }}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-orange/40 bg-brand-orange/10 px-3 py-2.5 text-sm font-semibold text-brand-orange transition-colors duration-200 hover:bg-brand-orange/20"
+            >
+              <CheckCircle2 size={15} strokeWidth={2.5} />
+              Sí, completada
+            </button>
+            <button
+              onClick={() => {
+                setQuickRpe(7);
+                setQuickDuration(60);
+                setShowQuickLog(true);
+              }}
+              title="Hice otra cosa (solo RPE)"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-border px-3 py-2.5 text-sm font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            >
+              <NotebookPen size={15} strokeWidth={2.25} />
+              Hice otra cosa
+            </button>
+          </div>
+        </div>
       )}
 
       {session.strengthProgramLabel && !session.isRestDay && (
