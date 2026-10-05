@@ -9,6 +9,11 @@ export default {
         display: ['"Space Grotesk Variable"', '"Inter Variable"', 'system-ui', 'sans-serif'],
       },
       keyframes: {
+        // Cambio de sección dentro de una pantalla con pestañas: el contenido sube suavemente.
+        'section-in': {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
         // Aparición de los menús desplegables: nacen en la esquina del botón que los abre.
         'menu-in': {
           '0%': { opacity: '0', transform: 'scale(0.96) translateY(-4px)' },
@@ -17,6 +22,7 @@ export default {
       },
       animation: {
         'menu-in': 'menu-in 140ms ease-out',
+        'section-in': 'section-in 200ms ease-out',
       },
       colors: {
         // Colores resueltos por variable CSS para poder cambiar de tema (oscuro por defecto, claro

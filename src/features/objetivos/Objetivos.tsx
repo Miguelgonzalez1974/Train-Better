@@ -12,6 +12,7 @@ import {
   Map,
   Sparkles,
   AlertTriangle,
+  PauseCircle,
   type LucideIcon,
 } from 'lucide-react';
 import { STRENGTH_METHOD_META, STRENGTH_METHODS, STRENGTH_METHOD_COLOR } from './strengthMethodMeta';
@@ -29,8 +30,8 @@ import type {
   SessionHistoryEntry,
   StrengthProgram,
 } from '../../data/athlete/types';
-import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
-import { DEFAULT_STRENGTH_PROGRAM_LIFTS, resolveStrengthProgramDay, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
+import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
+import { DEFAULT_STRENGTH_PROGRAM_LIFTS, getActiveStrengthProgram, resolveStrengthProgramDay, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
 import {
   MAYHEM_BASE_TOTAL_WEEKS,
@@ -46,7 +47,8 @@ import { GOAL_TYPE_COLOR, GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 import { MacroPlanModal } from './MacroPlanModal';
 import { SeasonPlannerModal } from './SeasonPlannerModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
-import { buildGoalRows } from '../dashboard/progressOverview';
+import { buildGoalRows, buildStructureRow } from '../dashboard/progressOverview';
+import { JourneyProgress } from '../dashboard/JourneyProgress';
 
 /** A partir de aqui, un objetivo se trata como urgente — mismo umbral usado para destacarlo con el badge pulsante. */
 const URGENT_THRESHOLD_DAYS = 14;
@@ -60,6 +62,11 @@ type MacroStatus = 'activo' | 'proximo' | 'finalizado';
 
 function todayIso(): string {
   return toLocalIsoDate(new Date());
+}
+
+/** "2026-11-12" → "12 nov". */
+function formatShortDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', '');
 }
 
 function macroStatus(macro: Macrocycle, today: string): MacroStatus {
@@ -195,6 +202,9 @@ export function Objetivos() {
   const [nextMacroDismissed, setNextMacroDismissed] = useState(false);
   const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
+  const structureRow = useMemo(() => buildStructureRow(profile, toLocalIsoDate(new Date())), [profile]);
+  const activeProgram = getActiveStrengthProgram(profile.strengthPrograms ?? [], todayIso());
+  const activeMacro = getActiveMacrocycle(profile.macrocycles, todayIso());
 
   function persist(next: AthleteProfile) {
     athleteRepository.saveProfile(next);
@@ -285,63 +295,67 @@ export function Objetivos() {
   const goalMeta = goalDraft ? GOAL_TYPE_META[goalDraft.type] : null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+    <div className="flex flex-col gap-5">
+      {/* Lo que tienes activo ahora, de un vistazo, sin saltar de pestaña en pestaña. Tocarlo lleva a
+          los objetivos. Se esconde mientras hay un formulario abierto para no estorbar. */}
+      {!macroDraft && !goalDraft && !programDraft && !rampDraft && (structureRow || goalRows.length > 0) && (
+        <div className="card p-3">
+          <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Activo ahora</p>
+          <JourneyProgress structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={() => setActiveSection('objetivos')} />
+          {activeProgram && activeMacro && (
+            <p className="mt-2 flex items-start gap-1.5 border-t border-white/5 px-1 pt-2 text-[11px] leading-snug text-neutral-500">
+              <PauseCircle size={13} strokeWidth={2.25} className="mt-px shrink-0" />
+              <span>
+                «{activeMacro.label}» está en pausa hasta el {formatShortDate(activeProgram.endDate)}, mientras dure tu programa de fuerza.
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      <div role="tablist" className="grid grid-cols-4 gap-1 rounded-xl border border-brand-border bg-brand-surface p-1">
         {SECTION_TABS.map((tab) => {
           const isActive = activeSection === tab.key;
-          const badgeCount = tab.key === 'objetivos' ? profile.goals.length : 0;
+          const count = tab.key === 'objetivos' ? profile.goals.length : 0;
           return (
-            <div key={tab.key} className="relative">
-              <button
-                onClick={() => setActiveSection(tab.key)}
-                className={`relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                  isActive
-                    ? 'bg-brand-bg text-white'
-                    : 'border border-brand-border text-neutral-400 hover:border-brand-neon/40 hover:text-neutral-200'
-                }`}
-              >
-                {isActive && <span className="absolute inset-0 rounded-full bg-brand-neon/20 blur-md" />}
-                <tab.Icon
-                  size={16}
-                  strokeWidth={2.25}
-                  className={`relative shrink-0 ${isActive ? 'text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.7)]' : 'text-neutral-500'}`}
-                />
-                <span className="relative">{tab.label}</span>
-              </button>
-              {badgeCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-gold text-[9px] font-bold text-black">
-                  {badgeCount}
-                </span>
-              )}
-            </div>
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveSection(tab.key)}
+              className={`flex flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-semibold transition-all duration-200 ${
+                isActive ? 'bg-brand-bg text-white shadow-sm ring-1 ring-brand-neon/30' : 'text-neutral-500 hover:text-neutral-200'
+              }`}
+            >
+              <span className="relative">
+                <tab.Icon size={17} strokeWidth={2.25} className={isActive ? 'text-brand-neon' : ''} />
+                {count > 0 && (
+                  <span className="absolute -right-2.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-brand-gold px-0.5 text-[9px] font-bold text-black">
+                    {count}
+                  </span>
+                )}
+              </span>
+              {tab.label}
+            </button>
           );
         })}
       </div>
 
       {activeSection === 'macrociclos' && (
-      <section className="flex flex-col gap-3">
+      <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-neutral-400">Tu programación</p>
             <p className="text-lg font-semibold text-white">Macrociclos</p>
           </div>
           {!macroDraft && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSeasonPlanner({})}
-                className="flex items-center gap-1.5 rounded-lg border border-brand-neon/40 px-3 py-1.5 text-sm font-semibold text-brand-neon transition-all duration-200 hover:bg-brand-neon/10"
-              >
-                <Sparkles size={15} strokeWidth={2.25} />
-                Planificar temporada
-              </button>
-              <button
-                onClick={() => setMacroDraft(newMacroDraft())}
-                className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
-              >
-                <Plus size={15} strokeWidth={2.25} />
-                Nuevo
-              </button>
-            </div>
+            <button
+              onClick={() => setMacroDraft(newMacroDraft())}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
+            >
+              <Plus size={15} strokeWidth={2.25} />
+              Nuevo
+            </button>
           )}
         </div>
 
@@ -464,7 +478,14 @@ export function Objetivos() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-white">{m.label}</p>
-                          <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">Activo ahora</span>
+                          {activeProgram ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-300">
+                              <PauseCircle size={10} strokeWidth={2.5} />
+                              En pausa
+                            </span>
+                          ) : (
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">Activo ahora</span>
+                          )}
                         </div>
                         <p className="text-xs text-neutral-400">
                           {m.startDate} → {m.endDate}
@@ -505,8 +526,11 @@ export function Objetivos() {
                       <span>{pct}%</span>
                     </div>
                     <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
-                      <div className="h-full rounded-full bg-brand-gold" style={{ width: `${pct}%` }} />
+                      <div className={`h-full rounded-full ${activeProgram ? 'bg-neutral-500' : 'bg-brand-gold'}`} style={{ width: `${pct}%` }} />
                     </div>
+                    {activeProgram && (
+                      <p className="mt-2 text-[11px] text-neutral-500">Hasta el {formatShortDate(activeProgram.endDate)} las sesiones salen de tu programa de fuerza; después vuelve este bloque.</p>
+                    )}
                   </div>
                 </div>
               );
@@ -573,6 +597,21 @@ export function Objetivos() {
               setSeasonPlanner(null);
             }}
           />
+        )}
+
+        {!macroDraft && (
+          <button
+            onClick={() => setSeasonPlanner({})}
+            className="flex items-center gap-3 rounded-xl border border-dashed border-brand-neon/30 p-3 text-left transition-colors duration-200 hover:border-brand-neon/60 hover:bg-brand-neon/[0.05]"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-neon/10">
+              <Sparkles size={17} strokeWidth={2.25} className="text-brand-neon" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-white">Planificar temporada</span>
+              <span className="block text-xs text-neutral-400">El coach encadena varios bloques hasta tu fecha clave.</span>
+            </span>
+          </button>
         )}
 
         {macroDraft && (
@@ -695,7 +734,7 @@ export function Objetivos() {
       )}
 
       {activeSection === 'programa' && (
-      <section className="flex flex-col gap-3">
+      <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-neutral-400">Solo fuerza, sin wod</p>
@@ -983,7 +1022,7 @@ export function Objetivos() {
       )}
 
       {activeSection === 'rampa' && (
-      <section className="flex flex-col gap-3">
+      <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-neutral-400">Vuelta gradual sin macro ni programa</p>
@@ -1112,7 +1151,7 @@ export function Objetivos() {
       )}
 
       {activeSection === 'objetivos' && (
-      <section className="flex flex-col gap-3">
+      <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-neutral-400">Énfasis concurrentes</p>
