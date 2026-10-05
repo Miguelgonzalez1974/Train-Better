@@ -9,10 +9,12 @@ import type { DailySession } from '../../data/athlete/types';
  */
 export type Accent = 'orange' | 'gold' | 'neutral';
 
+// Estilo minimalista: el color queda reservado para el estado y la acción principal. Los bloques se
+// reconocen por su icono y su nombre, así que todos comparten el mismo gris (la vuelta a la calma, más tenue).
 export const ACCENT_CLASSES: Record<Accent, { icon: string; bar: string }> = {
-  orange: { icon: 'text-brand-orange', bar: 'bg-brand-orange/50' },
-  gold: { icon: 'text-brand-gold', bar: 'bg-brand-gold/45' },
-  neutral: { icon: 'text-neutral-400', bar: 'bg-white/15' },
+  orange: { icon: 'text-neutral-300', bar: 'bg-white/20' },
+  gold: { icon: 'text-neutral-300', bar: 'bg-white/20' },
+  neutral: { icon: 'text-neutral-500', bar: 'bg-white/10' },
 };
 
 export const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent: Accent }> = {

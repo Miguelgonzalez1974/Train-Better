@@ -895,7 +895,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-white">
+            <h1 className="text-3xl font-semibold tracking-tight text-white">
               {session.isRestDay ? 'Día de descanso' : todayWeekdayLabel}
             </h1>
           </div>
@@ -931,7 +931,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             {!alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && (
               <button
                 onClick={() => setFocusMode(true)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-neon/15 px-3 py-2.5 text-sm font-semibold text-brand-neon ring-1 ring-brand-neon/40 transition-all duration-200 hover:bg-brand-neon/25 sm:flex-none"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-orange px-4 py-3 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark sm:flex-none"
               >
                 <Play size={14} strokeWidth={2.5} />
                 Empezar sesión
@@ -959,7 +959,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           </div>
         )}
       </div>
-      {!session.isRestDay && <DayShapeChips session={session} className="mt-2" />}
+      {!session.isRestDay && <DayShapeChips session={session} variant="text" />}
 
       {alreadyCompletedToday && todayHistoryEntry && (
         <SessionSummaryCard

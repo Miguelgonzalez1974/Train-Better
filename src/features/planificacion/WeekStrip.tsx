@@ -87,7 +87,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
   }, [expanded, weekOffset, profile, history, goals]);
 
   return (
-    <div className="card p-3">
+    <div className="py-1">
       <div className="mb-2 flex items-center justify-between">
         <button
           onClick={() => setWeekOffset((prev) => prev - 1)}

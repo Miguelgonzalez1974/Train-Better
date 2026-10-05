@@ -84,15 +84,12 @@ export function CoachNotices({
   if (count === 0 && coachReasons.length === 0) return null;
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div className="overflow-hidden rounded-xl bg-white/[0.03]">
       <button onClick={() => setCollapsed((prev) => !prev)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
-        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-surfaceMuted">
-          <span className="absolute inset-0 animate-pulse rounded-xl bg-brand-neon/20 blur-md" />
-          <Brain size={15} strokeWidth={2.25} className="relative text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.6)]" />
-        </span>
-        <span className="flex flex-1 items-center gap-2 text-sm font-semibold text-white">
+        <Brain size={16} strokeWidth={2.25} className="shrink-0 text-brand-neon" />
+        <span className="flex flex-1 items-center gap-2 text-sm font-medium text-neutral-200">
           Avisos del coach
-          <span className="rounded-full bg-brand-neon/20 px-1.5 py-0.5 text-[10px] font-bold text-brand-neon">
+          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-neutral-300">
             {count + (coachReasons.length > 0 ? 1 : 0)}
           </span>
         </span>
@@ -104,7 +101,7 @@ export function CoachNotices({
       </button>
 
       {!collapsed && (
-        <div className="flex flex-col gap-2.5 border-t border-brand-border px-3.5 py-3">
+        <div className="flex flex-col gap-2.5 border-t border-white/5 px-3.5 py-3">
           {activePainFlags.map((flag) => (
             <div key={flag.id} className={`${rowClass} border-red-400 items-center`}>
               <span className="flex-1 text-red-300">

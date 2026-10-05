@@ -62,13 +62,13 @@ export function DaySessionBlocks({
   const showingTask = tab === 'task' && taskSections.length > 0;
 
   return (
-    <div className="card flex flex-col p-4">
+    <div className="flex flex-col">
       {!editable && taskSections.length > 0 && (
         <div className="mb-3 flex gap-0.5 rounded-lg bg-white/5 p-0.5">
           <button
             onClick={() => setTab('session')}
             className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
-              tab === 'session' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+              tab === 'session' ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'
             }`}
           >
             Sesión
@@ -76,7 +76,7 @@ export function DaySessionBlocks({
           <button
             onClick={() => setTab('task')}
             className={`flex flex-1 items-center justify-center gap-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
-              tab === 'task' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+              tab === 'task' ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'
             }`}
           >
             <Brain size={12} strokeWidth={2.5} />
