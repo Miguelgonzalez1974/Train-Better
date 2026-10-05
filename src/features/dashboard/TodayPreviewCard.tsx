@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Flame, ArrowRight, Moon, CalendarPlus, PartyPopper } from 'lucide-react';
+import { ArrowRight, Moon, CalendarPlus, PartyPopper } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import {
   generateSessionForDate,
@@ -129,20 +129,17 @@ export function TodayPreviewCard({
   return (
     <button
       onClick={onNavigateToPlanificacion}
-      className={`${TILE_CLASS} border-brand-orange/30 bg-brand-orange/[0.08] hover:border-brand-orange/60 hover:bg-brand-orange/[0.12]`}
+      className="group flex items-center gap-4 rounded-3xl bg-gradient-to-br from-brand-orange/[0.14] to-brand-orange/[0.03] p-5 text-left transition-all duration-200 hover:from-brand-orange/[0.2]"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange">
-        <Flame size={18} strokeWidth={2.25} />
-      </span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-orange">
-          Entrenamiento de hoy
-          {durationMin > 0 && <span className="font-normal normal-case text-brand-orange/70"> · ~{durationMin} min</span>}
-        </p>
-        <p className="mt-0.5 truncate text-[15px] font-semibold text-white">{buildPreviewLine(session)}</p>
-        <DayShapeChips session={session} className="mt-1.5" />
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-orange">Hoy</p>
+        <p className="mt-1.5 text-xl font-semibold leading-snug text-white">{buildPreviewLine(session)}</p>
+        <DayShapeChips session={session} variant="text" className="mt-2" />
+        {durationMin > 0 && <p className="mt-0.5 text-[13px] text-neutral-500">~{durationMin} min</p>}
       </div>
-      <ArrowRight size={18} strokeWidth={2.5} className="shrink-0 text-brand-orange" />
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-orange text-black transition-transform duration-200 group-hover:translate-x-0.5">
+        <ArrowRight size={20} strokeWidth={2.5} />
+      </span>
     </button>
   );
 }

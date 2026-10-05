@@ -37,9 +37,25 @@ const DAY_SHAPE_SKIP = new Set<Block>(['warmup', 'cooldown']);
  * bajar a leer cada parte. Se usa en Planificación (bajo los botones de acción) y en el titular de
  * "hoy" del Dashboard.
  */
-export function DayShapeChips({ session, className = '' }: { session: DailySession; className?: string }) {
+export function DayShapeChips({
+  session,
+  className = '',
+  variant = 'chips',
+}: {
+  session: DailySession;
+  className?: string;
+  /** `text`: una sola línea gris ("Fuerza · WOD · Oly") sin cajas ni iconos — la versión minimalista. */
+  variant?: 'chips' | 'text';
+}) {
   const present = BLOCK_ORDER.filter((block) => !DAY_SHAPE_SKIP.has(block) && session.blocks.some((b) => b.block === block));
   if (present.length === 0) return null;
+  if (variant === 'text') {
+    return (
+      <p className={`text-[13px] text-neutral-400 ${className}`}>
+        {present.map((block) => `${BLOCK_META[block].label}${block === 'wod' && session.doubleWod ? ' ×2' : ''}`).join(' · ')}
+      </p>
+    );
+  }
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
       {present.map((block) => {

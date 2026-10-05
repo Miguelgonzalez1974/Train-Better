@@ -31,20 +31,20 @@ function Gauge({ spec, onClick }: { spec: GaugeSpec; onClick?: () => void }) {
           móvil estrecho — de ahí que antes se salieran por la derecha. Con `w-full h-auto` el arco
           escala con el hueco que le deje el flex, nunca lo desborda. */}
       <svg viewBox="0 0 100 58" role="img" aria-label={`${spec.label}: ${spec.valueLabel}`} className="h-auto w-full">
-        <path d="M 10 52 A 40 40 0 0 1 90 52" fill="none" strokeWidth="8" strokeLinecap="round" className="stroke-white/[0.08]" />
+        <path d="M 10 52 A 40 40 0 0 1 90 52" fill="none" strokeWidth="3.5" strokeLinecap="round" className="stroke-white/[0.08]" />
         <path
           d="M 10 52 A 40 40 0 0 1 90 52"
           fill="none"
-          strokeWidth="8"
+          strokeWidth="3.5"
           strokeLinecap="round"
           className={spec.strokeClass}
           style={{ strokeDasharray: ARC_LENGTH, strokeDashoffset: offset, transition: 'stroke-dashoffset 0.6s ease' }}
         />
-        <text x="50" y="43" textAnchor="middle" className="num fill-white" style={{ fontSize: 16, fontWeight: 700 }}>
+        <text x="50" y="46" textAnchor="middle" className="num fill-white" style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>
           {spec.valueLabel}
         </text>
       </svg>
-      <span className="-mt-1 block w-full truncate px-0.5 text-center text-[9px] leading-tight text-neutral-400">{spec.label}</span>
+      <span className="block w-full truncate px-0.5 text-center text-[10px] leading-tight text-neutral-500">{spec.label}</span>
     </>
   );
 
@@ -82,18 +82,20 @@ export function MetricsGauges({
   header?: ReactNode;
 }) {
   return (
-    <div className="card flex flex-col gap-2 p-3">
-      {header && <div className="border-b border-white/5 pb-2.5">{header}</div>}
+    <div className="flex flex-col gap-7 px-1">
+      {header && <div>{header}</div>}
       <div className="flex items-stretch gap-0.5">
         {row1.map((spec) => (
           <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
         ))}
       </div>
-      <div className="flex items-stretch gap-0.5 border-t border-white/5 pt-2">
-        {row2.map((spec) => (
-          <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
-        ))}
-      </div>
+      {row2.length > 0 && (
+        <div className="flex items-stretch gap-0.5">
+          {row2.map((spec) => (
+            <Gauge key={spec.label} spec={spec} onClick={spec.target ? () => onJumpTo(spec.target!) : undefined} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

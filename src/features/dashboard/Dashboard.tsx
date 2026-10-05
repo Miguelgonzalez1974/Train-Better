@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Apple, BarChart3, Scale, Target } from 'lucide-react';
+import { Apple, BarChart3, ChevronDown, Scale, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -39,6 +39,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const [showVolume, setShowVolume] = useState(false);
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
 
   // Cada gauge abre (o cierra, si ya estaba abierta) su propia tarjeta de detalle — sin un "Más
   // detalle" intermedio que bucear. El de carga expande el gauge completo de ACWR ahí mismo; el
@@ -134,14 +135,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       label: 'Constancia (semana)',
       valueLabel: `${weekCount.done}/${weekCount.planned}`,
       fraction: weekCount.planned > 0 ? weekCount.done / weekCount.planned : 0,
-      strokeClass: 'stroke-brand-gold',
+      strokeClass: 'stroke-white',
       target: 'heatmap',
     },
     {
       label: 'Dominios energéticos',
       valueLabel: energyAdherencePct !== null ? `${energyAdherencePct}%` : '—',
       fraction: (energyAdherencePct ?? 0) / 100,
-      strokeClass: energyAdherencePct !== null ? 'stroke-sky-400' : 'stroke-neutral-600',
+      strokeClass: energyAdherencePct !== null ? 'stroke-white' : 'stroke-neutral-600',
       target: 'energy',
     },
   ];
@@ -151,21 +152,21 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       label: 'Salud de patrones',
       valueLabel: healthyPatterns.length > 0 ? `${patternsOk}/${healthyPatterns.length}` : '—',
       fraction: healthyPatterns.length > 0 ? patternsOk / healthyPatterns.length : 0,
-      strokeClass: healthyPatterns.length > 0 ? 'stroke-brand-neon' : 'stroke-neutral-600',
+      strokeClass: healthyPatterns.length > 0 ? 'stroke-white' : 'stroke-neutral-600',
       target: 'weak',
     },
     {
       label: 'Desequilibrios',
       valueLabel: balancedPairs.length > 0 ? `${balancedOk}/${balancedPairs.length}` : '—',
       fraction: balancedPairs.length > 0 ? balancedOk / balancedPairs.length : 0,
-      strokeClass: balancedPairs.length > 0 ? 'stroke-purple-400' : 'stroke-neutral-600',
+      strokeClass: balancedPairs.length > 0 ? 'stroke-white' : 'stroke-neutral-600',
       target: 'imbalances',
     },
     {
       label: 'Progreso de PRs',
       valueLabel: prTrendValues.length > 0 ? `${prsUp}/${prTrendValues.length}` : '—',
       fraction: prTrendValues.length > 0 ? prsUp / prTrendValues.length : 0,
-      strokeClass: prTrendValues.length > 0 ? 'stroke-rose-400' : 'stroke-neutral-600',
+      strokeClass: prTrendValues.length > 0 ? 'stroke-white' : 'stroke-neutral-600',
       target: 'prs',
     },
   ];
@@ -229,7 +230,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
           )}
         </div>
       </div>
-
       {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
       {showNutrition && (
         <NutritionModal
@@ -262,7 +262,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       */}
       <MetricsGauges
         row1={row1}
-        row2={row2}
+        row2={[]}
         onJumpTo={jumpTo}
         header={
           hasStructure ? (
@@ -271,6 +271,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         }
       />
       {acwrOpen && <AcwrGauge result={acwr} trend={acwrTrend} />}
+
+      {/* Análisis: lo que no hace falta mirar cada día — plegado por defecto. */}
+      <button
+        onClick={() => setAnalysisOpen((v) => !v)}
+        className="-mt-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-white"
+      >
+        {analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}
+        <ChevronDown size={14} className={`transition-transform duration-200 ${analysisOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {analysisOpen && <MetricsGauges row1={row2} row2={[]} onJumpTo={jumpTo} />}
 
       {heatmapOpen && (
         <div ref={heatmapRef}>
@@ -308,7 +318,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       )}
 
       {/* Lo que no encaja en un gauge (no es "N de M"): totales del mes, tal cual, en una línea. */}
-      {stats.diasEntrenados > 0 && (
+      {analysisOpen && stats.diasEntrenados > 0 && (
         <p className="px-1 text-center text-[11px] text-neutral-500">
           <span className="num font-semibold text-neutral-300">{stats.diasEntrenados}</span> días entrenados este mes
           {stats.diasEsteAnio > 0 && (
@@ -336,14 +346,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         del coach (calibrando cómo respondes), no un "N de M" puntual. Ya colapsa sola a una frase
         (ver ResponseProfileCard), así que no pesa aunque esté siempre aquí.
       */}
-      <ResponseProfileCard
-        history={history}
-        prLog={profile.prLog ?? []}
-        setFeedbackLog={profile.setFeedbackLog ?? []}
-        bodyweightLog={profile.bodyweightLog ?? []}
-        workLog={profile.workLog ?? []}
-        prs={profile.prs}
-      />
+      {analysisOpen && (
+        <ResponseProfileCard
+          history={history}
+          prLog={profile.prLog ?? []}
+          setFeedbackLog={profile.setFeedbackLog ?? []}
+          bodyweightLog={profile.bodyweightLog ?? []}
+          workLog={profile.workLog ?? []}
+          prs={profile.prs}
+        />
+      )}
     </div>
   );
 }
