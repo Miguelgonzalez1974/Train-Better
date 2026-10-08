@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Timer, X } from 'lucide-react';
 import type { RxOrScaled, WodScoreType } from '../../data/athlete/types';
 import type { WodResultForm } from '../../engine/wodScoring';
 import { WodResultField } from './WodResultField';
@@ -15,6 +15,8 @@ interface CompleteSessionPanelProps {
   /** Objetivo del coach de cada parte, ya formateado ("12:30", "5 rondas"...). */
   targets: Partial<Record<Part, string>>;
   forms: Record<Part, WodResultForm>;
+  /** Partes cuyo resultado vino prellenado del reloj de entreno — se marca para que se sepa de dónde sale. */
+  clockParts?: Part[];
   onFormChange: (part: Part, patch: Partial<WodResultForm>) => void;
   /** Presente solo en un día de test de 1RM. */
   test?: { movementName: string; loadKg: number; onChange: (kg: number) => void };
@@ -40,6 +42,7 @@ export function CompleteSessionPanel({
   scoreTypes,
   targets,
   forms,
+  clockParts = [],
   onFormChange,
   test,
   rxOrScaled,
@@ -110,6 +113,11 @@ export function CompleteSessionPanel({
               <p className="mb-2 text-sm font-medium text-neutral-300">
                 {isDouble ? `WOD · parte ${part} de 2` : 'WOD'}
                 {targets[part] && <span className="ml-2 font-normal text-neutral-500">objetivo {targets[part]}</span>}
+                {clockParts.includes(part) && (
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
+                    <Timer size={10} aria-hidden /> del reloj
+                  </span>
+                )}
               </p>
               <WodResultField scoreType={scoreTypes[part]!} form={forms[part]} onChange={(patch) => onFormChange(part, patch)} />
             </div>

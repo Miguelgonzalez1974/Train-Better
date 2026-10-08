@@ -67,6 +67,7 @@ import { NutritionDayButton } from './NutritionDayButton';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
+import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { Modal } from '../shell/Modal';
@@ -175,6 +176,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
 
   // Resultado del WOD por parte: la 1 es el unico WOD de un dia normal (o la primera pieza de un dia de doble WOD).
   const [wodForms, setWodForms] = useState<Record<1 | 2, WodResultForm>>({ 1: EMPTY_WOD_FORM, 2: EMPTY_WOD_FORM });
+  // Partes del WOD cuyo resultado salió prellenado desde el reloj de entreno (ver workoutClockResult).
+  const [clockParts, setClockParts] = useState<(1 | 2)[]>([]);
   const [testedLoadKg, setTestedLoadKg] = useState(0);
   const [prUpdateMessage, setPrUpdateMessage] = useState<string | null>(null);
   const [e1rmSuggestions, setE1rmSuggestions] = useState<E1rmSuggestion[]>([]);
@@ -252,7 +255,27 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   const estimatedMin = useMemo(() => (session ? Math.min(120, Math.max(20, Math.round(estimateSessionMinutes(session) / 5) * 5)) : 60), [session]);
   // Al abrir el cierre de sesión la duración arranca en la estimada: si fue lo normal, no hay que tocarla.
   useEffect(() => {
-    if (showCompletePanel) setDurationMin(estimatedMin);
+    if (!showCompletePanel) return;
+    setDurationMin(estimatedMin);
+    // Si paraste el reloj de entreno en el WOD, su tiempo o sus rondas llegan ya rellenos (editables). Solo se toca un
+    // formulario que sigue vacío, y solo el día de hoy.
+    if (!session || session.date !== toLocalIsoDate(new Date())) return;
+    const runs = readClockRuns(session.date);
+    const filled: (1 | 2)[] = [];
+    const nextForms = { ...wodForms };
+    for (const part of wodParts) {
+      const scoreType = wodScoreTypes[part];
+      const stop = pickClockStop(runs, part, wodParts.length);
+      const patch = scoreType && stop ? clockFormFor(stop, scoreType) : null;
+      if (patch && isFormUntouched(wodForms[part])) {
+        nextForms[part] = { ...wodForms[part], ...patch };
+        filled.push(part);
+      }
+    }
+    if (filled.length > 0) {
+      setClockParts((prev) => [...new Set([...prev, ...filled])]);
+      setWodForms(nextForms);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showCompletePanel]);
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
@@ -1011,6 +1034,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]),
           )}
           forms={wodForms}
+          clockParts={clockParts}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
           test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
           rxOrScaled={rxOrScaled}

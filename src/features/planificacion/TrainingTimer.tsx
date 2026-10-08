@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Timer, Pause, Play, RotateCcw, X, Minus, Plus } from 'lucide-react';
+import { readClockRuns, recordClockStop } from './workoutClockResult';
 
 const PRESETS = [60, 90, 120, 180];
 const PRE_START_SECONDS = 10;
@@ -299,12 +300,20 @@ export function TrainingTimer() {
   const [rounds, setRounds] = useState(0);
   const workoutStartRef = useRef<number | null>(null);
   const workoutRafRef = useRef<number | null>(null);
+  // Tanda del cronómetro de hoy (de arrancar desde cero hasta reiniciar): la siguiente a las ya guardadas. Cada vez que
+  // paras, el tiempo y las rondas quedan guardados para el resultado del WOD al cerrar la sesión (ver workoutClockResult).
+  const workoutRunRef = useRef(readClockRuns().length);
 
   const workoutTick = useCallback(() => {
     if (workoutStartRef.current == null) return;
     setWorkoutElapsed((Date.now() - workoutStartRef.current) / 1000);
     workoutRafRef.current = window.setTimeout(workoutTick, 200);
   }, []);
+
+  useEffect(() => {
+    if (workoutRunning || workoutElapsed < 1) return;
+    recordClockStop(workoutRunRef.current, { seconds: Math.round(workoutElapsed), rounds });
+  }, [workoutRunning, workoutElapsed, rounds]);
 
   useEffect(() => {
     if (workoutRunning) {
@@ -324,6 +333,8 @@ export function TrainingTimer() {
     else wakeLock.release();
   };
   const resetWorkout = () => {
+    // Reiniciar tras una parada cierra esa tanda: la siguiente (p.ej. la parte 2 de un doble WOD) cuenta aparte.
+    if (workoutElapsed >= 1) workoutRunRef.current += 1;
     setWorkoutRunning(false);
     setWorkoutElapsed(0);
     setRounds(0);
@@ -801,6 +812,9 @@ export function TrainingTimer() {
               <RotateCcw size={15} strokeWidth={2.25} />
             </button>
           </div>
+          {!workoutRunning && workoutElapsed >= 1 && (
+            <p className="mt-2 text-center text-[11px] text-neutral-500">Este tiempo y las rondas se usarán como resultado al cerrar la sesión.</p>
+          )}
         </>
       ) : mode === 'emom' ? (
         <>
