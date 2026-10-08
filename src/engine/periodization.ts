@@ -276,6 +276,16 @@ export function doubleWodSlotDate(date: Date, trainingDaysPerWeek: 3 | 4 | 5 | 6
   return toLocalIsoDate(d);
 }
 
+/**
+ * Dia de solo fuerza (sabado del calendario de 6 dias, `trainingDayIndex` 5): fuerza + accesorio + skill, sin WOD
+ * ni oly. El sabado el atleta suele hacer algo por equipos aparte, asi que la app solo programa la parte de barra
+ * y el esfuerzo se registra con el RPE. El viernes (doble WOD + oly) ya cubre el acondicionamiento y la halterofilia.
+ */
+const STRENGTH_ONLY_SLOT_6_DAYS = 5;
+export function isStrengthOnlyDay(trainingDaysPerWeek: 3 | 4 | 5 | 6, trainingDayIndex: number): boolean {
+  return trainingDaysPerWeek === 6 && trainingDayIndex === STRENGTH_ONLY_SLOT_6_DAYS;
+}
+
 export type DayEmphasis = 'mixto' | 'fuerza' | 'metcon';
 
 /**

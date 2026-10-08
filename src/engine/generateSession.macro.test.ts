@@ -88,7 +88,8 @@ describe('generateSessionForDate — macrociclo', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 6 });
     let doubleMachine = 0;
     let mixed = 0;
-    for (const d of consecutiveDates(START, 140)) {
+    // 200 dias (no 140): el sabado de 6 dias ya no lleva WOD, asi que hay un dia menos por semana donde medir.
+    for (const d of consecutiveDates(START, 200)) {
       const s = generateSessionForDate(profile, [], d, profile.goals);
       if (s.blocks.some((b) => b.block === 'wod' && b.wodLibraryId)) continue;
       const wodIds = s.blocks
@@ -315,7 +316,9 @@ describe('generateSessionForDate — macrociclo', () => {
       // Degrada con menos movimientos si el pool se agota, pero nunca se queda sin ninguno.
       for (const s of sessions) {
         const wodCount = s.blocks.filter((b) => b.block === 'wod').length;
-        if (!s.isRestDay) expect(wodCount, s.date).toBeGreaterThan(0);
+        // El sabado de 6 dias es de solo fuerza (sin WOD a proposito) — ver `isStrengthOnlyDay`.
+        const isSaturday = new Date(`${s.date}T12:00:00`).getDay() === 6;
+        if (!s.isRestDay && !isSaturday) expect(wodCount, s.date).toBeGreaterThan(0);
       }
     }
   });

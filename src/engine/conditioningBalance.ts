@@ -5,6 +5,7 @@ import {
   getActiveMacrocycle,
   getDayPlan,
   getWeekdayIndex,
+  isStrengthOnlyDay,
   resolveMacrocyclePhase,
   resolvePhaseAtWeek,
   toLocalIsoDate,
@@ -121,7 +122,8 @@ export function computeConditioningBalance(
     const dp = getDayPlan(getWeekdayIndex(cursor), n);
     // Solo días de WOD rotativo: se salta el no-entreno, la recuperación activa de n=6 (WOD suave
     // fijo) y el día 0 (benchmark de referencia — estímulo propio, no de la rotación de fase).
-    if (dp.isTrainingDay && !dp.isRecoveryDay && dp.trainingDayIndex > 0) {
+    // (el sabado de solo fuerza de n=6 tampoco lleva WOD — ver `isStrengthOnlyDay`)
+    if (dp.isTrainingDay && !dp.isRecoveryDay && dp.trainingDayIndex > 0 && !isStrengthOnlyDay(n, dp.trainingDayIndex)) {
       const weeksSince = weeksSinceStart(macro.startDate, cursor);
       const phase = resolvePhaseAtWeek(macro, weeksSince).phaseIndex;
       const sys = planEnergySystems(macro.id, weeksSince + 1, phase, n)[dp.trainingDayIndex];

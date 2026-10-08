@@ -34,6 +34,7 @@ import {
   getDayPlan,
   getWeekdayIndex,
   isEmphasisDay,
+  isStrengthOnlyDay,
   resolveDayEmphasis,
   resolveMacrocyclePhase,
   resolveWeekProgression,
@@ -2847,7 +2848,7 @@ const SKILL_DAY_INDICES: Record<3 | 4 | 5 | 6, readonly number[]> = {
   3: [0, 2],
   4: [1, 3],
   5: [1, 3],
-  6: [1, 4],
+  6: [1, 5],
 };
 
 /**
@@ -3825,7 +3826,10 @@ export function generateDailySession(
   // La tirada de "dia de test" se hace siempre (mismo consumo del RNG), pero el hueco del doble nunca es dia
   // de test: la semana ya lo planifico como acondicionamiento y un test de maximos ahi la descuadraria.
   const rolledTestDayFocus = resolveTestDayFocus(week);
-  const testDayFocus = isDoubleSlotToday ? null : rolledTestDayFocus;
+  // Dia de solo fuerza (sabado de 6 dias, ver isStrengthOnlyDay): fuerza + accesorio + skill, sin WOD ni oly. No hay oly que
+  // testear ese dia, asi que un test de oly se descarta; uno de fuerza si puede caer.
+  const strengthOnlyDay = isStrengthOnlyDay(profile.trainingDaysPerWeek, dayPlan.trainingDayIndex);
+  const testDayFocus = isDoubleSlotToday ? null : strengthOnlyDay && rolledTestDayFocus === 'oly' ? null : rolledTestDayFocus;
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
@@ -3892,6 +3896,8 @@ export function generateDailySession(
   // para tener contra que medir el progreso. Recortar dominios por dia desde el dia 1 deja media
   // semana sin metcon y sin referencia. A partir de la semana 2 la periodizacion actua normal.
   if (weeksSinceStart(macro.startDate, date) === 0) dayEmphasis = 'mixto';
+  // El dia de solo fuerza lo es siempre (tambien la primera semana y en taper), salvo un test de maximos, que ya es mixto.
+  if (strengthOnlyDay && !testDayFocus) dayEmphasis = 'fuerza';
   // Esqueleto fijo: warm up + fuerza + WOD + oly TODOS los días de entreno. El énfasis del día ya no
   // quita bloques; en los días de "afinar" de la fase pico (antes 'metcon' = sin barra) la fuerza y
   // el oly siguen, pero en TÉCNICO-LIGERO (menos series, ~85% de carga) y con el WOD como prioridad.
@@ -3913,7 +3919,8 @@ export function generateDailySession(
   // WOD y las series de fuerza para que la sesión no se dispare de duración (el core cuenta a medias).
   const secondaryLoad =
     (skillToday ? 1 : 0) + (accessoryToday ? 1 : 0) + (coreToday ? 0.5 : 0) + (armsToday ? 0.5 : 0);
-  const crowdTrim = secondaryLoad >= 2 ? 0.85 : secondaryLoad >= 1.5 ? 0.92 : 1;
+  // Sin WOD ni oly en el dia de solo fuerza no hay nada que recortar: la barra tiene todo el volumen.
+  const crowdTrim = strengthOnlyDay ? 1 : secondaryLoad >= 2 ? 0.85 : secondaryLoad >= 1.5 ? 0.92 : 1;
 
   // Dosis del WOD y de fuerza/oly tras el recorte por acumulación; en día ligero, además, fuerza y
   // oly bajan fuerte y el WOD sube (es el foco de ese día).
@@ -4013,7 +4020,7 @@ export function generateDailySession(
   );
   const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
 
-  const { blocks: olyBlock, reasons: olyReasons } = buildOlyBlock(
+  const { blocks: olyBlock, reasons: olyReasons } = strengthOnlyDay ? { blocks: [] as SessionBlockResult[], reasons: [] as string[] } : buildOlyBlock(
     dayPlan,
     week,
     profile.prs,
@@ -4057,7 +4064,7 @@ export function generateDailySession(
       )
     : [];
   const wodKindOut: { kind?: WodFormatKind; reasons?: string[]; lockSkipped?: boolean } = { reasons: [] };
-  const wodBlockRaw = buildWodBlock(
+  const wodBlockRaw = strengthOnlyDay ? [] : buildWodBlock(
     dayPlan,
     week,
     profile.trainingDaysPerWeek,
@@ -4119,7 +4126,9 @@ export function generateDailySession(
   const deloadNote = deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined;
   const emphasisNote =
     dayEmphasis === 'fuerza'
-      ? 'Hoy es día de fuerza — el WOD es corto y de bajo impacto, la prioridad está en la barra.'
+      ? strengthOnlyDay
+        ? 'Sábado de solo fuerza: fuerza, accesorio y skill, sin WOD ni oly — el sábado lo dejas para lo de equipo. El viernes ya llevó el doble WOD y el oly.'
+        : 'Hoy es día de fuerza — el WOD es corto y de bajo impacto, la prioridad está en la barra.'
       : technicalLight
         ? 'Semana pico: hoy la fuerza y el oly van en técnico-ligero (menos series, carga contenida) y el WOD manda — llegas fresco a los tests y a los metcons largos. Si te encuentras fuerte, puedes subir la carga desde la edición de la sesión.'
         : dayEmphasis === 'metcon'
@@ -4131,7 +4140,7 @@ export function generateDailySession(
           .filter(Boolean)
           .join(' + ')} además de lo principal — recortamos un poco el WOD y las series de fuerza para que la sesión no se alargue.`
       : undefined;
-  const energyReason = (plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week)).note;
+  const energyReason = strengthOnlyDay ? undefined : (plannedEnergy ? resolveEnergySystemPlan(plannedEnergy) : resolveEnergySystem(week)).note;
   // Progresion dentro del bloque + onda de intensidad del dia (ver `resolveWeekProgression` / `planDayIntensity`).
   const progressionNote = weekProg.note || undefined;
   const intensityNote =
@@ -4215,7 +4224,7 @@ export function generateDailySession(
     // El benchmark bloqueado para hoy choca con un aviso de molestia y se sirvio otro WOD: no es un desacuerdo con el bloqueo.
     ...(wodKindOut.lockSkipped ? { wodLockSkipped: true } : {}),
     coachReasons: coachReasons.length > 0 ? coachReasons : undefined,
-    energySystem: wodIsBenchmark ? undefined : plannedEnergy ?? undefined,
+    energySystem: wodIsBenchmark || strengthOnlyDay ? undefined : plannedEnergy ?? undefined,
     dayIntensity: dayIntensity === 'media' ? undefined : dayIntensity,
     phaseWeekInPhase: phaseProgress.weekInPhase,
     phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
