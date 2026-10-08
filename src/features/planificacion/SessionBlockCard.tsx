@@ -64,7 +64,7 @@ function StatBox({ value, label }: { value: string | number; label: string }) {
 
 function FormatBadge({ format }: { format: string }) {
   return (
-    <span className="mb-2 inline-block rounded-md bg-brand-gold/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/90">
+    <span className="mb-2 inline-block rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
       {format}
     </span>
   );
@@ -92,7 +92,7 @@ function LastTimeHint({ movementId, block, progress }: { movementId: string; blo
 function RepStyleBadge() {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full bg-brand-gold/15 px-2.5 py-1 text-[11px] font-semibold text-brand-gold"
+      className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-neutral-300"
       title="Toca y sigue: encadena las repeticiones sin soltar la barra"
     >
       <Link2 size={11} strokeWidth={2.5} />
@@ -311,7 +311,7 @@ function BenchmarkWodCard({
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-semibold text-white">{displayMovement.name}</p>
                 {swappedTo && (
-                  <p className="mt-0.5 text-[10px] text-brand-gold">en vez de {getMovementById(movementId)?.name}</p>
+                  <p className="mt-0.5 text-[10px] text-neutral-400">en vez de {getMovementById(movementId)?.name}</p>
                 )}
               </div>
               {onUpdateEntry && index !== undefined && (
@@ -335,7 +335,7 @@ function BenchmarkWodCard({
 /** Etiqueta de una parte de un día de doble WOD ("Parte 1 de 2"). */
 function WodPartLabel({ part }: { part: 1 | 2 }) {
   return (
-    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-brand-gold">Parte {part} de 2</p>
+    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-400">Parte {part} de 2</p>
   );
 }
 
@@ -414,7 +414,7 @@ function CustomWodCard({
                 <div className="min-w-[8rem] flex-1">
                   {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. */}
                   <p className={`${NAME_STEP} break-words`}>{movement.name}</p>
-                  {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-brand-gold">Escalado desde {entry.scaledFrom}</p>}
+                  {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-neutral-400">Escalado desde {entry.scaledFrom}</p>}
                 </div>
                 {entry.reps && (
                   <span className="num ml-auto max-w-full text-right text-sm text-neutral-300 [overflow-wrap:anywhere]">
@@ -431,7 +431,7 @@ function CustomWodCard({
         })}
       </div>
       {target?.display && (
-        <p className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
+        <p className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
           <Trophy size={12} strokeWidth={2.5} />
           Objetivo {target.display}
         </p>
@@ -469,7 +469,7 @@ function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
               key={gi}
               onClick={() => setActiveIdx(gi)}
               className={`flex-1 rounded-md py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
-                gi === activeIdx ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
+                gi === activeIdx ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-200'
               }`}
             >
               {(group.subgroup && WARMUP_TAB_LABEL[group.subgroup]) ?? group.subgroup ?? 'Calentamiento'}
@@ -564,7 +564,7 @@ function ComplexCard({
           <div>
             <button
               onClick={() => setPrepOpen((o) => !o)}
-              className="flex w-full items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/80"
+              className="flex w-full items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400"
             >
               {prepOpen ? <ChevronDown size={13} strokeWidth={2.5} /> : <ChevronRight size={13} strokeWidth={2.5} />}
               <span className="min-w-0 truncate">{prep[0].subgroup}</span>

@@ -80,7 +80,7 @@ export function DaySessionBlocks({
             }`}
           >
             <Brain size={12} strokeWidth={2.5} />
-            Task
+            Notas
           </button>
         </div>
       )}

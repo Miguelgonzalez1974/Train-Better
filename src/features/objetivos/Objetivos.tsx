@@ -15,7 +15,7 @@ import {
   PauseCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { STRENGTH_METHOD_META, STRENGTH_METHODS, STRENGTH_METHOD_COLOR } from './strengthMethodMeta';
+import { STRENGTH_METHOD_META, STRENGTH_METHODS } from './strengthMethodMeta';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import { getSkillProgressionFor } from '../../data/movements/skillProgressions';
@@ -43,7 +43,7 @@ import {
 } from '../../engine/mayhemProgram';
 import { getAvoidedPatterns } from '../../engine/painFlags';
 import { describeRampStatus } from '../../engine/intensityRamp';
-import { GOAL_TYPE_COLOR, GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
+import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 import { MacroPlanModal } from './MacroPlanModal';
 import { SeasonPlannerModal } from './SeasonPlannerModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
@@ -325,11 +325,11 @@ export function Objetivos() {
               aria-selected={isActive}
               onClick={() => setActiveSection(tab.key)}
               className={`flex flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-semibold transition-all duration-200 ${
-                isActive ? 'bg-brand-bg text-white shadow-sm ring-1 ring-brand-neon/30' : 'text-neutral-500 hover:text-neutral-200'
+                isActive ? 'bg-brand-bg text-white shadow-sm ring-1 ring-white/15' : 'text-neutral-500 hover:text-neutral-200'
               }`}
             >
               <span className="relative">
-                <tab.Icon size={17} strokeWidth={2.25} className={isActive ? 'text-brand-neon' : ''} />
+                <tab.Icon size={17} strokeWidth={2.25} className={isActive ? 'text-white' : ''} />
                 {count > 0 && (
                   <span className="absolute -right-2.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-brand-gold px-0.5 text-[9px] font-bold text-black">
                     {count}
@@ -352,7 +352,7 @@ export function Objetivos() {
           {!macroDraft && (
             <button
               onClick={() => setMacroDraft(newMacroDraft())}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-orange px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
             >
               <Plus size={15} strokeWidth={2.25} />
               Nuevo
@@ -440,12 +440,12 @@ export function Objetivos() {
         )}
 
         {sortedMacros.length === 0 && !macroDraft && (
-          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
-            <CalendarRange size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+          <div className="relative overflow-hidden rounded-2xl bg-white/[0.03] p-4">
+            <CalendarRange size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-white/[0.04]" />
             <div className="relative flex items-center gap-3.5">
               <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
-                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
-                <CalendarRange size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+                
+                <CalendarRange size={24} strokeWidth={2} className="relative text-neutral-300" />
               </span>
               <div>
                 <p className="text-sm font-semibold text-white">Macrociclos</p>
@@ -466,15 +466,14 @@ export function Objetivos() {
               return (
                 <div
                   key={m.id}
-                  className="relative overflow-hidden rounded-xl border p-3.5"
-                  style={{ borderColor: 'rgba(212,175,55,0.4)', background: 'linear-gradient(135deg, rgba(212,175,55,0.12), rgb(var(--c-brand-surface)) 55%)' }}
+                  className="relative overflow-hidden rounded-xl bg-white/[0.04] p-3.5"
                 >
-                  <div className="absolute inset-y-0 left-0 w-[3px] bg-brand-gold" />
+                  <div className="absolute inset-y-0 left-0 w-[3px] bg-white/25" />
                   <div className="ml-1.5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
-                        <span className="absolute inset-0 rounded-[11px] bg-brand-gold/30 blur-md" />
-                        <CalendarRange size={17} strokeWidth={2.25} className="relative text-brand-gold" />
+                        
+                        <CalendarRange size={17} strokeWidth={2.25} className="relative text-neutral-300" />
                       </span>
                       <div>
                         <div className="flex items-center gap-2">
@@ -485,7 +484,7 @@ export function Objetivos() {
                               En pausa
                             </span>
                           ) : (
-                            <span className="shrink-0 whitespace-nowrap rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">Activo ahora</span>
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Activo ahora</span>
                           )}
                         </div>
                         <p className="text-xs text-neutral-400">
@@ -527,7 +526,7 @@ export function Objetivos() {
                       <span>{pct}%</span>
                     </div>
                     <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
-                      <div className={`h-full rounded-full ${activeProgram ? 'bg-neutral-500' : 'bg-brand-gold'}`} style={{ width: `${pct}%` }} />
+                      <div className={`h-full rounded-full ${activeProgram ? 'bg-neutral-600' : 'bg-white/70'}`} style={{ width: `${pct}%` }} />
                     </div>
                     {activeProgram && (
                       <p className="mt-2 text-[11px] text-neutral-500">Hasta el {formatShortDate(activeProgram.endDate)} las sesiones salen de tu programa de fuerza; después vuelve este bloque.</p>
@@ -603,10 +602,10 @@ export function Objetivos() {
         {!macroDraft && (
           <button
             onClick={() => setSeasonPlanner({})}
-            className="flex items-center gap-3 rounded-xl border border-dashed border-brand-neon/30 p-3 text-left transition-colors duration-200 hover:border-brand-neon/60 hover:bg-brand-neon/[0.05]"
+            className="flex items-center gap-3 rounded-xl border border-dashed border-white/15 p-3 text-left transition-colors duration-200 hover:border-white/40 hover:bg-white/[0.04]"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-neon/10">
-              <Sparkles size={17} strokeWidth={2.25} className="text-brand-neon" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-white/10">
+              <Sparkles size={17} strokeWidth={2.25} className="text-neutral-300" />
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-white">Planificar temporada</span>
@@ -744,7 +743,7 @@ export function Objetivos() {
           {!programDraft && (
             <button
               onClick={() => setProgramDraft(newStrengthProgramDraft())}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-orange px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
             >
               <Plus size={15} strokeWidth={2.25} />
               Nuevo
@@ -753,12 +752,12 @@ export function Objetivos() {
         </div>
 
         {sortedPrograms.length === 0 && !programDraft && (
-          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
-            <Dumbbell size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+          <div className="relative overflow-hidden rounded-2xl bg-white/[0.03] p-4">
+            <Dumbbell size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-white/[0.04]" />
             <div className="relative flex items-center gap-3.5">
               <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
-                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
-                <Dumbbell size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+                
+                <Dumbbell size={24} strokeWidth={2} className="relative text-neutral-300" />
               </span>
               <div>
                 <p className="text-sm font-semibold text-white">Programa de fuerza</p>
@@ -772,7 +771,6 @@ export function Objetivos() {
           {sortedPrograms.map((p) => {
             const status = programStatus(p, today);
             const meta = STRENGTH_METHOD_META[p.method];
-            const color = STRENGTH_METHOD_COLOR[p.method];
             const lifts = p.lifts.length > 0 ? p.lifts : DEFAULT_STRENGTH_PROGRAM_LIFTS;
             // El ciclo de halterofilia ignora `lifts` (trae fijos snatch/clean&jerk/tirones/sentadilla
             // cada semana) — mostrar ese array por defecto aqui confundiria con levantamientos que el
@@ -789,20 +787,18 @@ export function Objetivos() {
               return (
                 <div
                   key={p.id}
-                  className="relative overflow-hidden rounded-xl border p-3.5"
-                  style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, rgb(var(--c-brand-surface)) 55%)` }}
-                >
-                  <div className="absolute inset-y-0 left-0 w-[3px]" style={{ background: color }} />
+                  className="relative overflow-hidden rounded-xl bg-white/[0.04] p-3.5">
+                  <div className="absolute inset-y-0 left-0 w-[3px] bg-white/25" />
                   <div className="ml-1.5 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
-                        <span className="absolute inset-0 rounded-[11px] blur-md" style={{ background: `${color}4d` }} />
-                        <meta.Icon size={17} strokeWidth={2.25} className="relative" style={{ color }} />
+                        
+                        <meta.Icon size={17} strokeWidth={2.25} className="relative text-neutral-300" />
                       </span>
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-white">{meta.label}</p>
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: color, color: '#171310' }}>
+                          <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
                             Activo ahora
                           </span>
                         </div>
@@ -827,7 +823,7 @@ export function Objetivos() {
                   {todayFormat && (
                     <div className="ml-1.5 mt-2.5 flex items-center gap-1.5">
                       <span className="text-[10px] text-neutral-500">Hoy:</span>
-                      <span className="rounded-md px-2 py-0.5 text-[10px] font-semibold" style={{ background: `${color}26`, color }}>
+                      <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-200">
                         {todayFormat}
                       </span>
                     </div>
@@ -1032,7 +1028,7 @@ export function Objetivos() {
           {!rampDraft && (
             <button
               onClick={() => setRampDraft(newRampDraft(profile.intensityRamp))}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-orange px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
             >
               {profile.intensityRamp ? <Pencil size={13} strokeWidth={2.25} /> : <Plus size={15} strokeWidth={2.25} />}
               {profile.intensityRamp ? 'Editar' : 'Nueva'}
@@ -1041,12 +1037,12 @@ export function Objetivos() {
         </div>
 
         {!profile.intensityRamp && !rampDraft && (
-          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
-            <Gauge size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+          <div className="relative overflow-hidden rounded-2xl bg-white/[0.03] p-4">
+            <Gauge size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-white/[0.04]" />
             <div className="relative flex items-center gap-3.5">
               <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
-                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
-                <Gauge size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+                
+                <Gauge size={24} strokeWidth={2} className="relative text-neutral-300" />
               </span>
               <div>
                 <p className="text-sm font-semibold text-white">Rampa de vuelta</p>
@@ -1057,13 +1053,13 @@ export function Objetivos() {
         )}
 
         {profile.intensityRamp && !rampDraft && (
-          <div className="relative overflow-hidden rounded-xl border border-brand-neon/25 p-3.5" style={{ background: 'linear-gradient(135deg, rgba(57,255,20,0.12), rgb(var(--c-brand-surface)) 55%)' }}>
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-brand-neon" />
+          <div className="relative overflow-hidden rounded-xl bg-white/[0.04] p-3.5">
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-white/25" />
             <div className="ml-1.5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
-                  <span className="absolute inset-0 rounded-[11px] bg-brand-neon/30 blur-md" />
-                  <Gauge size={17} strokeWidth={2.25} className="relative text-brand-neon" />
+                  
+                  <Gauge size={17} strokeWidth={2.25} className="relative text-neutral-300" />
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-white">
@@ -1161,7 +1157,7 @@ export function Objetivos() {
           {!goalDraft && (
             <button
               onClick={() => setGoalDraft(newGoalDraft())}
-              className="flex items-center gap-1.5 rounded-lg bg-brand-gold px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-gold/20 transition-all duration-200 hover:bg-brand-gold-soft"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-orange px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
             >
               <Plus size={15} strokeWidth={2.25} />
               Nuevo
@@ -1170,12 +1166,12 @@ export function Objetivos() {
         </div>
 
         {profile.goals.length === 0 && !goalDraft && (
-          <div className="relative overflow-hidden rounded-2xl border border-brand-neon/20 bg-gradient-to-br from-brand-surfaceMuted to-brand-surface p-4">
-            <Target size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-brand-neon/[0.06]" />
+          <div className="relative overflow-hidden rounded-2xl bg-white/[0.03] p-4">
+            <Target size={100} strokeWidth={1.5} className="pointer-events-none absolute -bottom-4 -right-2 text-white/[0.04]" />
             <div className="relative flex items-center gap-3.5">
               <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-bg">
-                <span className="absolute inset-0 rounded-2xl bg-brand-neon/25 blur-md" />
-                <Target size={24} strokeWidth={2} className="relative text-brand-neon drop-shadow-[0_0_5px_rgba(57,255,20,0.6)]" />
+                
+                <Target size={24} strokeWidth={2} className="relative text-neutral-300" />
               </span>
               <div>
                 <p className="text-sm font-semibold text-white">Objetivos</p>
@@ -1188,7 +1184,6 @@ export function Objetivos() {
         <div className="flex flex-col gap-2">
           {profile.goals.map((g) => {
             const meta = GOAL_TYPE_META[g.type];
-            const color = GOAL_TYPE_COLOR[g.type];
             const movement = g.movementId ? getMovementById(g.movementId) : undefined;
             const remaining = daysRemaining(g.targetDate);
             const row = goalRows.find((r) => r.id === g.id);
@@ -1222,15 +1217,13 @@ export function Objetivos() {
             return (
               <div
                 key={g.id}
-                className="relative overflow-hidden rounded-xl border p-3.5"
-                style={{ borderColor: `${color}66`, background: `linear-gradient(135deg, ${color}1f, rgb(var(--c-brand-surface)) 55%)` }}
-              >
-                <div className="absolute inset-y-0 left-0 w-[3px]" style={{ background: color }} />
+                className="relative overflow-hidden rounded-xl bg-white/[0.04] p-3.5">
+                <div className="absolute inset-y-0 left-0 w-[3px] bg-white/25" />
                 <div className="ml-1.5 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-brand-surface">
-                      <span className="absolute inset-0 rounded-[11px] blur-md" style={{ background: `${color}4d` }} />
-                      <meta.Icon size={17} strokeWidth={2.25} className="relative" style={{ color }} />
+                      
+                      <meta.Icon size={17} strokeWidth={2.25} className="relative text-neutral-300" />
                     </span>
                     <div>
                       <div className="flex items-center gap-2">
@@ -1271,7 +1264,7 @@ export function Objetivos() {
                     <span>{row?.pct ?? 0}%</span>
                   </div>
                   <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-white/[0.08]">
-                    <div className="h-full rounded-full" style={{ width: `${row?.pct ?? 0}%`, background: color }} />
+                    <div className="h-full rounded-full bg-white/70" style={{ width: `${row?.pct ?? 0}%` }} />
                   </div>
                 </div>
               </div>

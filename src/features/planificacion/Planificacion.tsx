@@ -67,11 +67,10 @@ import { NutritionDayButton } from './NutritionDayButton';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
+import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { Modal } from '../shell/Modal';
 
-const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
-const DURATION_PRESETS = [30, 45, 60, 75, 90];
 
 const PAIN_AREAS: PainArea[] = ['hombro', 'cadera-lumbar', 'rodilla', 'codo-muneca'];
 const PAIN_DURATION_OPTIONS: { value: PainDuration; label: string }[] = [
@@ -1125,37 +1124,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             esfuerzo, para que el coach tenga algo de información.
           </p>
           <div>
-            <p className="mb-2 text-sm font-medium text-neutral-300">RPE (esfuerzo percibido)</p>
-            <div className="flex flex-wrap gap-1.5">
-              {RPE_SCALE.map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setQuickRpe(value)}
-                  className={`h-8 w-8 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    quickRpe === value ? 'bg-brand-orange text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
+            <p className="mb-3 text-sm font-medium text-neutral-300">¿Cómo lo has sentido?</p>
+            <RpePicker value={quickRpe} onChange={setQuickRpe} />
           </div>
-          <div>
-            <p className="mb-2 text-sm font-medium text-neutral-300">Duración</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DURATION_PRESETS.map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setQuickDuration(value)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-all duration-200 ${
-                    quickDuration === value ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
-                  }`}
-                >
-                  {value} min
-                </button>
-              ))}
-            </div>
-          </div>
+          <DurationStepper value={quickDuration} onChange={setQuickDuration} />
           <div className="flex gap-2">
             <button
               onClick={handleConfirmQuickLog}
