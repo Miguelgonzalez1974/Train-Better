@@ -59,7 +59,7 @@ const MIN_SESSIONS = 2;
  * duro esta progresando de verdad, no estancado. Las peores 2 se marcan "a trabajar", las 2
  * siguientes "vigilar", el resto "en progreso".
  *
- * Ademas de alimentar `WeakPointsCard` (Dashboard), `generateSession.ts` usa este mismo resultado
+ * Ya no se muestra en el Dashboard (no daba una accion al atleta), pero `generateSession.ts` usa este mismo resultado
  * para dar mas frecuencia a los patrones "a trabajar" — ver `weakestUntrainedStrengthPattern`/
  * `weakestUntrainedOlyFamily` en ese archivo.
  */

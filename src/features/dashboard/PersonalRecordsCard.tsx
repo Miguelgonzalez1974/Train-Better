@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Trophy, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import type { PersonalRecords, PrLogEntry } from '../../data/athlete/types';
 import type { PrTrendDirection } from '../../engine/weakPoints';
 import { buildPrSeries, summarisePrProgress, type PrProgress } from '../../engine/progressSeries';
 import { Sparkline } from './Sparkline';
+import { SectionLabel } from '../shell/SectionLabel';
 
 /** Orden deliberado: fila 1 los grandes basicos, fila 2 press estricto + los 3 de halterofilia — no alfabetico, se lee como un atleta agruparia sus propios numeros. */
 export const PR_ROWS: { key: keyof PersonalRecords; label: string }[] = [
@@ -83,6 +84,13 @@ interface PersonalRecordsCardProps {
   prLog: PrLogEntry[];
   /** Fecha de inicio del macrociclo activo, si lo hay — para el delta "desde que empezó el bloque" en la trayectoria. */
   macroStartIso?: string;
+  /** Último peso corporal registrado: con él cada marca sale también en veces tu peso (fuerza relativa). */
+  bodyweightKg?: number;
+}
+
+/** Veces el peso corporal, con coma decimal (1,8). */
+function times(kg: number, bodyweightKg: number): string {
+  return (kg / bodyweightKg).toFixed(1).replace('.', ',');
 }
 
 /**
@@ -92,7 +100,7 @@ interface PersonalRecordsCardProps {
  * dos veces en el Dashboard. La flechita de tendencia y la trayectoria son lo que la diferencia de
  * un simple duplicado del perfil: comparan tests reales en el tiempo, como haría un coach de verdad.
  */
-export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso }: PersonalRecordsCardProps) {
+export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso, bodyweightKg }: PersonalRecordsCardProps) {
   const [showTrajectory, setShowTrajectory] = useState(false);
 
   const trajectoryRows = useMemo<TrajectoryRow[]>(() => {
@@ -107,14 +115,11 @@ export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso }: Perso
   const gainers = trajectoryRows.filter((r) => r.prog.deltaKg > 0).length;
 
   return (
-    <section className="card p-4">
+    <section className="rounded-2xl bg-white/[0.03] p-4">
       <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gold/15 text-brand-gold">
-          <Trophy size={14} strokeWidth={2.25} />
-        </span>
-        <p className="flex-1 text-sm font-semibold uppercase tracking-wide text-white">Tus PRs</p>
+        <SectionLabel className="flex-1">Fuerza</SectionLabel>
         {gainers > 0 && (
-          <span className="rounded-full bg-brand-neon/15 px-2 py-0.5 text-[10px] font-bold text-brand-neon">{gainers} subiendo</span>
+          <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">{gainers} subiendo</span>
         )}
       </div>
       <div className="grid grid-cols-4 gap-2">
@@ -128,8 +133,8 @@ export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso }: Perso
                   <TrendIcon size={11} strokeWidth={2.75} />
                 </span>
               )}
-              <span className="text-[15px] font-bold leading-none text-white">{prs[key]}</span>
-              <span className="text-[9px] text-neutral-500">kg</span>
+              <span className="num text-[15px] font-semibold leading-none text-white">{prs[key]}</span>
+              <span className="text-[9px] text-neutral-500">{bodyweightKg ? `×${times(prs[key], bodyweightKg)}` : 'kg'}</span>
               <span className="mt-0.5 text-[9px] leading-tight text-neutral-400">{label}</span>
             </div>
           );
@@ -150,8 +155,13 @@ export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso }: Perso
         </div>
         <div className="flex items-center justify-between rounded-lg bg-brand-surfaceMuted/80 px-3 py-2">
           <span className="text-[10px] text-neutral-400">Total de Fuerza</span>
-          <span className="text-sm font-bold text-white">
-            {prs.backSquat + prs.benchPress + prs.deadlift} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+          <span className="flex flex-col items-end text-sm font-bold leading-tight text-white">
+            <span>
+              {prs.backSquat + prs.benchPress + prs.deadlift} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+            </span>
+            {bodyweightKg ? (
+              <span className="text-[10px] font-normal text-neutral-400">×{times(prs.backSquat + prs.benchPress + prs.deadlift, bodyweightKg)} tu peso</span>
+            ) : null}
           </span>
         </div>
       </div>

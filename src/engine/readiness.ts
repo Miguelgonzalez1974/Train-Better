@@ -18,7 +18,18 @@ export interface ReadinessAutoregResult {
   isLow: boolean;
 }
 
-function scoreCheck(check: ReadinessCheck): number {
+/** Puntuación de cada eje del check-in, de -1 (mal) a 1 (bien). */
+export function readinessAxisScores(check: ReadinessCheck): { sleep: number; soreness: number; stress: number; motivation: number } {
+  return {
+    sleep: SLEEP_SCORE[check.sleep],
+    soreness: SORENESS_SCORE[check.soreness],
+    stress: STRESS_SCORE[check.stress],
+    motivation: MOTIVATION_SCORE[check.motivation],
+  };
+}
+
+/** Suma de los 4 ejes (rango -4..4). */
+export function scoreCheck(check: ReadinessCheck): number {
   return SLEEP_SCORE[check.sleep] + SORENESS_SCORE[check.soreness] + STRESS_SCORE[check.stress] + MOTIVATION_SCORE[check.motivation];
 }
 

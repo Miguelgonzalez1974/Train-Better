@@ -58,7 +58,7 @@ function GroupRow({ group }: { group: ImbalanceGroup }) {
 }
 
 /**
- * Complementa a `WeakPointsCard`: aquella mira RPE/escalado/tendencia dentro de un mismo patron,
+ * Complementa a `computeWeakPoints` (motor): aquello mira RPE/escalado/tendencia dentro de un mismo patron,
  * esta compara levantamientos relacionados entre si (ver `computeImbalances`). Colapsada por
  * defecto para no alargar el scroll, pero el resumen de pildoras ya es visible sin expandir —
  * un grupo equilibrado es un refuerzo positivo real para el atleta, no ruido a esconder detras de
@@ -113,9 +113,7 @@ export function ImbalancesCard({
 
       {/*
         Adelanto del grupo mas relevante, visible solo colapsada — mismo espiritu que un titular:
-        no hace falta desplegar para saber si hay algo que mirar. Con el mismo formato de fila
-        compacta que ya usa WeakPointsCard, para que las dos tarjetas emparejadas se lean como una
-        misma familia visual en vez de dos formatos distintos.
+        no hace falta desplegar para saber si hay algo que mirar.
       */}
       {collapsed && (
         <div className="border-t border-white/5 px-3.5 pb-3.5 pt-3">

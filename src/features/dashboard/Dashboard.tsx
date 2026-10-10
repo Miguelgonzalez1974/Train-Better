@@ -5,7 +5,8 @@ import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
 import { computeConditioningBalance } from '../../engine/conditioningBalance';
 import { getMonthlyStats } from './stats';
-import { computeWeakPoints, computePrTrends } from '../../engine/weakPoints';
+import { computePrTrends } from '../../engine/weakPoints';
+import { computeRecoverySummary } from '../../engine/recovery';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, ACWR_ZONE_STROKE, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
@@ -13,7 +14,7 @@ import { AcwrGauge } from './AcwrGauge';
 import { TodayPreviewCard } from './TodayPreviewCard';
 import { JourneyProgress } from './JourneyProgress';
 import { SectionLabel } from '../shell/SectionLabel';
-import { WeakPointsCard } from './WeakPointsCard';
+import { RecoveryCard } from './RecoveryCard';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
@@ -25,6 +26,9 @@ import { ResponseProfileCard } from './ResponseProfileCard';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
+
+/** Veces el peso corporal (total sentadilla + banca + peso muerto) a las que el arco de "Fuerza" llega lleno. */
+const STRENGTH_RATIO_FULL = 7;
 
 const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
@@ -47,22 +51,21 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   // resto revela su tarjeta justo debajo de la fila de gauges.
   const [acwrOpen, setAcwrOpen] = useState(false);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
-  const [weakOpen, setWeakOpen] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [energyOpen, setEnergyOpen] = useState(false);
   const [imbalancesOpen, setImbalancesOpen] = useState(false);
-  const [prsOpen, setPrsOpen] = useState(false);
+  const [strengthOpen, setStrengthOpen] = useState(false);
   const [scrollTarget, setScrollTarget] = useState<GaugeTarget | null>(null);
 
   const heatmapRef = useRef<HTMLDivElement>(null);
-  const weakRef = useRef<HTMLDivElement>(null);
+  const recoveryRef = useRef<HTMLDivElement>(null);
   const energyRef = useRef<HTMLDivElement>(null);
   const imbalancesRef = useRef<HTMLDivElement>(null);
-  const prsRef = useRef<HTMLDivElement>(null);
+  const strengthRef = useRef<HTMLDivElement>(null);
 
   const stats = useMemo(() => getMonthlyStats(history, profile.trainingDatesLog ?? []), [history, profile.trainingDatesLog]);
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const acwrTrend = useMemo(() => getAcwrTrend(history), [history]);
-  const weakPoints = useMemo(() => computeWeakPoints(history), [history]);
   const prTrends = useMemo(() => computePrTrends(history), [history]);
   const todayIso = toLocalIsoDate(new Date());
   const structureRow = useMemo(() => buildStructureRow(profile, todayIso), [profile, todayIso]);
@@ -85,14 +88,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         return setAcwrOpen((v) => !v);
       case 'heatmap':
         return toggleAndMaybeScroll(heatmapOpen, setHeatmapOpen, target);
-      case 'weak':
-        return toggleAndMaybeScroll(weakOpen, setWeakOpen, target);
+      case 'recovery':
+        return toggleAndMaybeScroll(recoveryOpen, setRecoveryOpen, target);
       case 'energy':
         return toggleAndMaybeScroll(energyOpen, setEnergyOpen, target);
       case 'imbalances':
         return toggleAndMaybeScroll(imbalancesOpen, setImbalancesOpen, target);
-      case 'prs':
-        return toggleAndMaybeScroll(prsOpen, setPrsOpen, target);
+      case 'strength':
+        return toggleAndMaybeScroll(strengthOpen, setStrengthOpen, target);
     }
   }
 
@@ -100,10 +103,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
     if (!scrollTarget) return;
     const refs: Partial<Record<GaugeTarget, React.RefObject<HTMLDivElement>>> = {
       heatmap: heatmapRef,
-      weak: weakRef,
+      recovery: recoveryRef,
       energy: energyRef,
       imbalances: imbalancesRef,
-      prs: prsRef,
+      strength: strengthRef,
     };
     const frame = requestAnimationFrame(() => {
       refs[scrollTarget]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -113,12 +116,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   }, [scrollTarget]);
 
   // --- Los 6 gauges: solo métricas que ya se calculan en algún sitio de la app, ninguna inventada. ---
-  const healthyPatterns = weakPoints.filter((p) => p.status !== 'sin-datos');
-  const patternsOk = healthyPatterns.filter((p) => p.status === 'en-progreso').length;
   const balancedPairs = imbalanceGroups.filter((g) => g.status !== 'faltan-datos');
   const balancedOk = balancedPairs.filter((g) => g.status === 'equilibrado').length;
-  const prTrendValues = Object.values(prTrends);
-  const prsUp = prTrendValues.filter((t) => t === 'subida').length;
+  // Fuerza relativa: el total de los tres grandes (sentadilla, banca, peso muerto) en veces tu peso corporal. El arco llega
+  // lleno en `STRENGTH_RATIO_FULL` veces (en torno al nivel de un levantador muy fuerte).
+  const latestBodyweightKg = [...bodyweightLog].sort((a, b) => a.date.localeCompare(b.date)).pop()?.kg;
+  const strengthTotalKg = profile.prs.backSquat + profile.prs.benchPress + profile.prs.deadlift;
+  const strengthRatio = latestBodyweightKg ? strengthTotalKg / latestBodyweightKg : null;
+  const recovery = computeRecoverySummary(profile.readinessLog, todayIso);
+  const recoveryStroke = recovery.score === null ? 'stroke-neutral-600' : recovery.score >= 65 ? 'stroke-emerald-400' : recovery.score <= 40 ? 'stroke-red-400' : 'stroke-amber-400';
   const energyAdherencePct =
     conditioningBalance && conditioningBalance.totalPlanned > 0
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
@@ -150,11 +156,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
 
   const row2: GaugeSpec[] = [
     {
-      label: 'Salud de patrones',
-      valueLabel: healthyPatterns.length > 0 ? `${patternsOk}/${healthyPatterns.length}` : '—',
-      fraction: healthyPatterns.length > 0 ? patternsOk / healthyPatterns.length : 0,
-      strokeClass: healthyPatterns.length > 0 ? 'stroke-white' : 'stroke-neutral-600',
-      target: 'weak',
+      label: 'Recuperación',
+      valueLabel: recovery.score !== null ? `${recovery.score}` : '—',
+      fraction: (recovery.score ?? 0) / 100,
+      strokeClass: recoveryStroke,
+      target: 'recovery',
     },
     {
       label: 'Desequilibrios',
@@ -164,11 +170,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       target: 'imbalances',
     },
     {
-      label: 'Progreso de PRs',
-      valueLabel: prTrendValues.length > 0 ? `${prsUp}/${prTrendValues.length}` : '—',
-      fraction: prTrendValues.length > 0 ? prsUp / prTrendValues.length : 0,
-      strokeClass: prTrendValues.length > 0 ? 'stroke-white' : 'stroke-neutral-600',
-      target: 'prs',
+      label: 'Fuerza (× peso)',
+      valueLabel: strengthRatio !== null ? `${strengthRatio.toFixed(1).replace('.', ',')}×` : '—',
+      fraction: strengthRatio !== null ? strengthRatio / STRENGTH_RATIO_FULL : 0,
+      strokeClass: strengthRatio !== null ? 'stroke-white' : 'stroke-neutral-600',
+      target: 'strength',
     },
   ];
 
@@ -299,9 +305,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         </div>
       )}
 
-      {weakOpen && (
-        <div ref={weakRef}>
-          <WeakPointsCard points={weakPoints} />
+      {recoveryOpen && (
+        <div ref={recoveryRef}>
+          <RecoveryCard readinessLog={profile.readinessLog ?? []} />
         </div>
       )}
 
@@ -311,13 +317,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         </div>
       )}
 
-      {prsOpen && (
-        <div ref={prsRef}>
+      {strengthOpen && (
+        <div ref={strengthRef}>
           <PersonalRecordsCard
             prs={profile.prs}
             trends={prTrends}
             prLog={profile.prLog ?? []}
             macroStartIso={getActiveMacrocycle(profile.macrocycles, todayIso)?.startDate}
+            bodyweightKg={latestBodyweightKg}
           />
         </div>
       )}
