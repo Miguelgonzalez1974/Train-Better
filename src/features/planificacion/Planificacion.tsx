@@ -241,7 +241,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     [profile.prs, profile.variantPrs, profile.prLog, workLog],
   );
   const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
-  const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && !todayReadiness && !readinessDismissed);
+  const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && (todayReadiness || !readinessDismissed));
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
   // Partes de WOD de hoy (1 en un dia normal, 2 en un dia de doble WOD) y como se puntua cada una.
   const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
@@ -983,6 +983,16 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       </div>
       {!session.isRestDay && <DayShapeChips session={session} variant="text" />}
 
+      {showReadinessCheck && (
+        <ReadinessCheckIn
+          dateIso={todayIso}
+          log={readinessLog}
+          existing={todayReadiness}
+          onConfirm={handleSaveReadinessCheck}
+          onSkip={() => setReadinessDismissed(true)}
+        />
+      )}
+
       {alreadyCompletedToday && todayHistoryEntry && (
         <SessionSummaryCard
           session={session}
@@ -1314,10 +1324,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             Guardar aviso
           </button>
         </div>
-      </Modal>
-
-      <Modal open={showReadinessCheck} onClose={() => setReadinessDismissed(true)} title="¿Cómo llegas hoy?">
-        <ReadinessCheckIn dateIso={todayIso} onConfirm={handleSaveReadinessCheck} onSkip={() => setReadinessDismissed(true)} />
       </Modal>
     </div>
   );

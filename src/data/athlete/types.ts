@@ -190,6 +190,8 @@ export interface ReadinessCheck {
   soreness: SorenessLevel;
   stress: StressLevel;
   motivation: MotivationLevel;
+  /** Horas dormidas (opcional, solo si el atleta las anota). Aún no entra en la nota: se guarda para aprender cuánto le afecta. */
+  sleepHours?: number;
 }
 
 /**

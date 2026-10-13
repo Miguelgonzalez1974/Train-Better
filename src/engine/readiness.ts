@@ -67,6 +67,50 @@ export function getReadinessFactor(check: ReadinessCheck | undefined): Readiness
 export const READINESS_TEST_POSTPONE_NOTE =
   ' Tu check-in de hoy indica poca energía — si puedes, mejor aplaza el test a otro día para que el máximo registrado sea real.';
 
+export type CheckInOverall = 'bien' | 'normal' | 'mal';
+export type CheckInAxis = 'sleep' | 'soreness' | 'stress' | 'motivation';
+const AXIS_ORDER: CheckInAxis[] = ['sleep', 'soreness', 'stress', 'motivation'];
+
+/**
+ * Convierte la respuesta rápida ("Bien / Normal / Mal" + los ejes que pesan) en el check-in de 4 ejes que
+ * ya entiende el motor. Bien = todo a favor; Normal = lo marcado en contra y el resto neutro; Mal = igual,
+ * pero siempre cuenta como poca energía (si marcas menos de 2 ejes, se completan hasta llegar al umbral).
+ */
+export function checkFromQuickAnswer(dateIso: string, overall: CheckInOverall, marked: CheckInAxis[], sleepHours?: number): ReadinessCheck {
+  if (overall === 'bien') return { date: dateIso, sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' };
+  const bad = new Set<CheckInAxis>(marked);
+  if (overall === 'mal') {
+    for (const axis of AXIS_ORDER) {
+      if (bad.size >= -READINESS_LOW_THRESHOLD) break;
+      bad.add(axis);
+    }
+  }
+  const check: ReadinessCheck = {
+    date: dateIso,
+    sleep: bad.has('sleep') ? 'mal' : 'regular',
+    soreness: bad.has('soreness') ? 'alto' : 'leve',
+    stress: bad.has('stress') ? 'alto' : 'medio',
+    motivation: bad.has('motivation') ? 'baja' : 'normal',
+  };
+  if (sleepHours !== undefined && bad.has('sleep')) check.sleepHours = sleepHours;
+  return check;
+}
+
+/** Días seguidos con check-in hasta hoy (si hoy aún no hay, cuenta desde ayer para no romper la racha antes de tiempo). */
+export function checkInStreak(log: ReadinessCheck[] | undefined, todayIso: string): number {
+  const dates = new Set((log ?? []).map((c) => c.date));
+  const d = new Date(`${todayIso}T12:00:00`);
+  if (!dates.has(todayIso)) d.setDate(d.getDate() - 1);
+  let n = 0;
+  for (;;) {
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!dates.has(iso)) break;
+    n += 1;
+    d.setDate(d.getDate() - 1);
+  }
+  return n;
+}
+
 export function getReadinessCheckForDate(log: ReadinessCheck[] | undefined, dateIso: string): ReadinessCheck | undefined {
   return (log ?? []).find((entry) => entry.date === dateIso);
 }
