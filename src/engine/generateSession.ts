@@ -35,6 +35,7 @@ import {
   getWeekdayIndex,
   isEmphasisDay,
   isStrengthOnlyDay,
+  usesWeeklySplit,
   resolveDayEmphasis,
   resolveMacrocyclePhase,
   resolveWeekProgression,
@@ -312,10 +313,19 @@ const CORE_PRIORITY_BY_FAMILY: Record<StrengthFamily, CoreCategory[]> = {
  */
 const STRENGTH_SUPERSET_POOL: Partial<Record<MovementPattern, string[]>> = {
   horizontalPush: ['single-arm-dumbbell-row', 'pendlay-row', 'landmine-row', 'chest-supported-row'],
-  verticalPush: ['lateral-raise', 'face-pull', 'lat-pulldown', 'band-pull-apart'],
+  verticalPush: ['strict-pull-up', 'lateral-raise', 'face-pull', 'lat-pulldown', 'band-pull-apart'],
   squat: ['good-morning', 'back-extension', 'hip-thrust', 'bulgarian-split-squat'],
-  hinge: ['ab-wheel-rollout', 'ghd-situp', 'weighted-plank', 'pallof-press'],
+  hinge: ['hip-thrust', 'ghd-hip-extension', 'back-extension', 'ab-wheel-rollout', 'weighted-plank', 'pallof-press'],
 };
+
+/** `trainingDayIndex` del viernes en el calendario de 6 dias (el dia del peso muerto en el split, o del doble WOD cuando el coach lo mete). */
+const DOUBLE_WOD_FRIDAY_IDX = 4;
+
+/** El complemento del split semanal progresa como el accesorio: series de la dosis del día, reps y carga de la semana del meso. */
+interface ComplementProgression {
+  dose: DayDose;
+  loadCtx: Pick<AccessoryLoadContext, 'prs' | 'bodyweightKg' | 'loadFactor'>;
+}
 
 /**
  * Cuanto de a menudo el bloque de fuerza lleva un A2 en superserie. El press y el bench se
@@ -334,8 +344,10 @@ function buildStrengthSuperset(
   mainMovementId: string,
   recentIds: Set<string>,
   avoidedPatterns: Set<MovementPattern>,
+  /** Split semanal: el complemento sale SIEMPRE (cada dia es fuerza + un complemento) y progresa con la semana del meso. */
+  progression?: ComplementProgression,
 ): SessionBlockResult | null {
-  if (rng() >= strengthSupersetChance(pattern, week)) return null;
+  if (!progression && rng() >= strengthSupersetChance(pattern, week)) return null;
   const ids = STRENGTH_SUPERSET_POOL[pattern];
   if (!ids) return null;
   const pool = filterAvoidingPain(
@@ -344,6 +356,18 @@ function buildStrengthSuperset(
   );
   const pick = pickVaried(pool, new Set([...recentIds, mainMovementId]));
   if (!pick) return null;
+  if (progression) {
+    const scheme = ACCESSORY_WEEK_SCHEME[week];
+    const loadKg = suggestAccessoryLoadKg(pick.id, { ...progression.loadCtx, week, doseLoad: progression.dose.strengthLoad });
+    return {
+      block: 'strength',
+      movementId: pick.id,
+      sets: Math.min(4, Math.max(2, Math.round(3 * progression.dose.strengthSets))),
+      reps: scheme.reps,
+      loadKg,
+      notes: `Complemento del día (A2), en superserie con el levantamiento principal. ${scheme.note}${loadKg !== undefined ? ' Carga sugerida orientativa desde tus PRs: ajústala a la reserva indicada.' : ''}`,
+    };
+  }
   return {
     block: 'strength',
     movementId: pick.id,
@@ -815,6 +839,12 @@ function buildStrengthBlock(
    * o invalido -> comportamiento normal, sin bloqueo.
    */
   lockedMovementId?: string,
+  /**
+   * Split semanal (ver `weekPlan.allocateSplitPatterns`): el patron del dia es fijo, asi que un objetivo atrasado ya
+   * no lo cambia (solo elige la variante dentro del patron, y el dia libre de la semana le da prioridad), y el
+   * complemento (A2) sale siempre y progresa con la semana del meso.
+   */
+  split?: { complement?: ComplementProgression },
 ): { blocks: SessionBlockResult[]; pattern: MovementPattern; reasons: string[] } {
   const responseBias = clampResponseBias(responseProfile.rpe.bias);
   const rpeAutoreg = getRpeAutoregFactor(history, date, responseProfile.rpe.reliability);
@@ -872,7 +902,7 @@ function buildStrengthBlock(
         actsIntensive(pref.goal, pref.progress, pref.behindSchedule) &&
         (pref.behindSchedule || isEmphasisDay(dayPlan.trainingDayIndex)),
     );
-    if (goalForcedPattern) {
+    if (goalForcedPattern && !(split && plannedPattern)) {
       pattern = getMovementById(pref.movementId!)!.pattern;
     } else if (!plannedPattern) {
       // Sin plan de semana: se decide el patron dia a dia como antes. Con plan, el reparto ya
@@ -912,7 +942,7 @@ function buildStrengthBlock(
     // Nunca dos dias de fuerza seguidos con el mismo patron, ni siquiera con un objetivo atrasado
     // forzandolo: mas frecuencia a lo largo de la semana si, pero "deadlift lunes y deadlift miercoles"
     // no es lo que hace un coach. El objetivo ya se lleva su cuota de dias por el reparto de semana.
-    pattern = avoidPatternRepeat(pattern, history, date);
+    pattern = avoidPatternRepeat(pattern, history, date, split && plannedPattern ? 1 : 2);
 
     // Si el patron de hoy coincide con un aviso de molestia activo, se sustituye por otro de los 4
     // patrones habituales que no este marcado — un coach real no ignora un aviso de dolor solo
@@ -1017,7 +1047,7 @@ function buildStrengthBlock(
 
   // Superserie: el A2 se empareja con el levantamiento principal (bench + remo, press + laterales…).
   // Nunca en un dia de test. Los 3 estilos de esquema comparten el mismo A2.
-  const supersetEntry = buildStrengthSuperset(pattern, week, movement.id, recentIds, avoidedPatterns);
+  const supersetEntry = buildStrengthSuperset(pattern, week, movement.id, recentIds, avoidedPatterns, split?.complement);
   const withSuperset = (main: SessionBlockResult): SessionBlockResult[] => (supersetEntry ? [main, supersetEntry] : [main]);
 
   const scheme = STRENGTH_WEEK_SCHEMES[week];
@@ -3811,7 +3841,7 @@ export function generateDailySession(
   // carga (ACWR alto, RPE alto) no quita el hueco de la planificacion — la vetara, en su caso, el dia real.
   // Un bloqueo del dia del hueco solo cuenta si lleva la marca `doubleDecided` (lo planifico un motor que ya
   // conocia el doble); uno anterior, sin marca, no decide nada y el dia se resuelve con el estado de hoy.
-  const doubleSlotIso = doubleWodSlotDate(date, profile.trainingDaysPerWeek, calendarWeek);
+  const doubleSlotIso = doubleWodSlotDate(date, profile.trainingDaysPerWeek, phaseProgress);
   const doubleSlotLock = doubleSlotIso ? profile.weeklyLocks?.[doubleSlotIso] : undefined;
   // Con la semana en descarga FORZADA ahora mismo (`week` 4 sin ser la 4 del calendario) el dia real no es doble,
   // asi que el microciclo reparte la fuerza en todos sus dias como en cualquier descarga (sin el hueco); al
@@ -3822,7 +3852,7 @@ export function generateDailySession(
     !forcedDeloadNow &&
     weeksSinceStart(macro.startDate, new Date(`${doubleSlotIso}T12:00:00`)) > 0 &&
     (doubleSlotLock?.doubleDecided ? doubleSlotLock.doubleWod === true : true);
-  const isDoubleSlotToday = weekHasDouble && dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, calendarWeek);
+  const isDoubleSlotToday = weekHasDouble && dayPlan.trainingDayIndex === doubleWodSlot(profile.trainingDaysPerWeek, phaseProgress);
   // La tirada de "dia de test" se hace siempre (mismo consumo del RNG), pero el hueco del doble nunca es dia
   // de test: la semana ya lo planifico como acondicionamiento y un test de maximos ahi la descuadraria.
   const rolledTestDayFocus = resolveTestDayFocus(week);
@@ -3849,7 +3879,9 @@ export function generateDailySession(
   // anti-repeticion entre semanas y la autorregulacion siguen actuando encima, por dia.
   const strengthGoal = pickPriorityGoal(goals, (g) => (g.type === 'elevar-fuerza' || g.type === 'subir-pr') && Boolean(g.movementId));
   const olyGoal = pickPriorityGoal(goals, (g) => (g.type === 'mejorar-potencia' || g.type === 'subir-pr') && Boolean(g.movementId));
+  const weeklySplit = usesWeeklySplit(profile);
   const microPlan = buildMicrocyclePlan({
+    weeklySplit,
     doubleWodActive: weekHasDouble,
     macroId: macro.id,
     weekNumber: weeksSinceStart(macro.startDate, date) + 1,
@@ -3911,9 +3943,12 @@ export function generateDailySession(
   // Core: hasta 3 días no consecutivos, puede solaparse con skill/accesorios. Brazos: 2º día de
   // accesorios cuando no hay día de recuperación (calendarios de 3-5 días).
   const skillToday = SKILL_DAY_INDICES[n].includes(idx);
-  const accessoryToday = !technicalLight && ACCESSORY_DAY_INDICES[n].includes(idx);
+  // Con el split semanal cada dia de fuerza ya lleva su complemento (A2), asi que el bloque de accesorios completo
+  // queda para el ultimo dia de entreno de la semana (el sabado de 6 dias, que sigue como antes).
+  const accessoryDays = weeklySplit ? [n - 1] : ACCESSORY_DAY_INDICES[n];
+  const accessoryToday = !technicalLight && accessoryDays.includes(idx);
   const coreToday = CORE_DAY_INDICES[n].includes(idx);
-  const armsToday = accessoryToday && n < 6 && idx === ACCESSORY_DAY_INDICES[n][1];
+  const armsToday = accessoryToday && n < 6 && idx === accessoryDays[accessoryDays.length - 1];
 
   // Control de dosis por acumulación: si hoy caen varios bloques secundarios, se recortan un poco el
   // WOD y las series de fuerza para que la sesión no se dispare de duración (el core cuenta a medias).
@@ -3939,7 +3974,10 @@ export function generateDailySession(
   // Movimiento de fuerza/oly bloqueado para hoy por la planificacion semanal (ver
   // AthleteProfile.weeklyLocks / planWeekLocks) — si no hay bloqueo para esta fecha, undefined, y
   // buildStrengthBlock/buildOlyBlock deciden como siempre.
-  const weekLock = profile.weeklyLocks?.[dateIso];
+  // Un bloqueo planificado con el otro modo de reparto (split semanal vs adaptativo) es viejo: no manda, y la
+  // semana se re-planifica en cuanto se pueda (ver `resolveWeekLocks`).
+  const storedLock = profile.weeklyLocks?.[dateIso];
+  const weekLock = storedLock && Boolean(storedLock.split) === weeklySplit ? storedLock : undefined;
 
   // Autorregulacion del WOD: mismas señales que fuerza/oly, solo hacia abajo (ver getWodLoadFactor).
   const wodLoadFactor = getWodLoadFactor(
@@ -4017,6 +4055,13 @@ export function generateDailySession(
     plannedPattern,
     strengthOlyDose,
     weekLock?.strengthMovementId,
+    weeklySplit
+      ? {
+          complement: technicalLight
+            ? undefined
+            : { dose: strengthOlyDose, loadCtx: { prs: profile.prs, bodyweightKg: latestBodyweightKg(profile.bodyweightLog), loadFactor: wodLoadFactor } },
+        }
+      : undefined,
   );
   const { blocks: strengthBlock, pattern: trainedStrengthPattern, reasons: strengthReasons } = strengthResult;
 
@@ -4040,7 +4085,10 @@ export function generateDailySession(
     patternFatigue,
     responseProfile,
     plannedFamily,
-    strengthOlyDose,
+    // Viernes del split (peso muerto pesado + WOD + oly): el oly va en tecnico-ligero para no apilar fatiga.
+    weeklySplit && n === 6 && idx === DOUBLE_WOD_FRIDAY_IDX && !testDayFocus
+      ? { ...strengthOlyDose, strengthLoad: clampDose(strengthOlyDose.strengthLoad * 0.9, 0.75, 1.07) }
+      : strengthOlyDose,
     plannedOlyCombined,
     weekLock?.olyMovementId,
   );
@@ -4619,7 +4667,7 @@ export function planWeekLocks(
     // que ese dia no cambie de estructura (doble <-> normal) al regenerarse.
     const doubleWod = session.doubleWod ? true : undefined;
     if (strengthMovementId || olyMovementId || accessoryMovements || wodBenchmarkId || doubleWod) {
-      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, doubleWod, doubleDecided: isDoubleWodEnabled() ? true : undefined, plannedOn: options?.plannedOn };
+      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, doubleWod, doubleDecided: isDoubleWodEnabled() ? true : undefined, split: usesWeeklySplit(profile) ? true : undefined, plannedOn: options?.plannedOn };
     }
     workingHistory = [...workingHistory, toHistoryEntry(session, 'rx', 7, 60)];
   }

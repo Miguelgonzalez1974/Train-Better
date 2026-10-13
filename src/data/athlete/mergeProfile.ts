@@ -216,6 +216,7 @@ export function mergeProfile(
     prs: localIsFresh ? remote.prs : local.prs,
     variantPrs: (localIsFresh ? remote.variantPrs : local.variantPrs) ?? remote.variantPrs,
     trainingDaysPerWeek: localIsFresh ? remote.trainingDaysPerWeek : local.trainingDaysPerWeek,
+    strengthSplit: (localIsFresh ? remote.strengthSplit : local.strengthSplit) ?? remote.strengthSplit,
     onboardedAt: local.onboardedAt ?? remote.onboardedAt,
     intensityRamp: (localIsFresh ? remote.intensityRamp : local.intensityRamp) ?? remote.intensityRamp,
 

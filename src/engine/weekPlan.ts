@@ -1,5 +1,5 @@
 import type { MovementPattern } from '../data/movements/types';
-import { doubleWodSlot, type OlyFamily } from './periodization';
+import { doubleWodDayIndex, type OlyFamily } from './periodization';
 import { stalledOlyFamily, stalledStrengthPattern, type ResponseProfile } from './responseProfile';
 import { PHASE_DOMINANT_ENERGY, type EnergySystem, type WodDomain } from './wodDomains';
 
@@ -340,7 +340,50 @@ function allocatePatterns(
   return spaceOut(shuffle(bag, rand));
 }
 
+/**
+ * Reparto semanal por días ("split"): cada día de fuerza tiene su patrón fijo, en este orden — piernas (sentadilla y sus
+ * variantes), pecho (press horizontal), hombro (press vertical) y peso muerto (bisagra). Con 6 días eso es lunes, martes,
+ * miércoles y viernes; con 3-4 días manda la prioridad piernas, pecho, peso muerto, hombro. El día que sobra (el sábado
+ * de 6 días, el quinto de 5) es LIBRE: va al patrón que más lo necesita (el de un objetivo, el estancado, o el que más
+ * pesa en la fase), distinto del día anterior. Si en una semana el viernes se lo queda el doble WOD, el peso muerto pasa al
+ * día libre para no perder la bisagra de la semana.
+ */
+const SPLIT_ORDER: Record<3 | 4 | 5 | 6, StrengthPattern[]> = {
+  3: ['squat', 'horizontalPush', 'hinge'],
+  4: ['squat', 'horizontalPush', 'hinge', 'verticalPush'],
+  5: ['squat', 'horizontalPush', 'verticalPush', 'hinge'],
+  6: ['squat', 'horizontalPush', 'verticalPush', 'hinge'],
+};
+
+function allocateSplitPatterns(
+  slotCount: number,
+  n: 3 | 4 | 5 | 6,
+  phase: 1 | 2 | 3 | 4,
+  responseProfile: ResponseProfile,
+  avoidedPatterns: Set<MovementPattern>,
+  goalForcedPattern: StrengthPattern | null,
+  rand: () => number,
+): StrengthPattern[] {
+  const fixed = SPLIT_ORDER[n].slice(0, slotCount);
+  if (slotCount <= fixed.length) return fixed;
+
+  // Dia libre: patron de mas peso (fase + estancado + objetivo), sin el del dia anterior ni uno bajo aviso de molestia.
+  const weight: Record<StrengthPattern, number> = { ...PATTERN_WEIGHT[phase] };
+  const stalled = stalledStrengthPattern(responseProfile);
+  if (stalled && isStrengthPattern(stalled)) weight[stalled] += 2;
+  if (goalForcedPattern) weight[goalForcedPattern] += 2;
+  // Ni el del dia anterior ni el del lunes siguiente (la sentadilla): nunca el mismo patron en dos dias de entreno seguidos
+  // (el sabado o el quinto dia de 5 dejan un hueco de descanso antes del lunes).
+  const previous = fixed[fixed.length - 1];
+  const nextWeekOpener = SPLIT_ORDER[n][0];
+  const candidates = shuffle(STRENGTH_PATTERNS, rand).filter((p) => p !== previous && p !== nextWeekOpener && !avoidedPatterns.has(p));
+  const free = [...(candidates.length > 0 ? candidates : STRENGTH_PATTERNS)].sort((a, b) => weight[b] - weight[a])[0];
+  return [...fixed, ...Array.from({ length: slotCount - fixed.length }, () => free)];
+}
+
 export function buildMicrocyclePlan(input: {
+  /** Reparto semanal por días en vez del adaptativo — ver `allocateSplitPatterns`. */
+  weeklySplit?: boolean;
   macroId: string;
   /** Semana del macrociclo, 1-indexada. */
   weekNumber: number;
@@ -368,8 +411,10 @@ export function buildMicrocyclePlan(input: {
   // El hueco del doble WOD ya no necesita familia/combinado planificados aqui: el viernes monta su
   // propio oly simetrico (`buildFridayOlyBlock`, ambas familias siempre) independiente del reparto
   // semanal — ver `generateSession.ts`.
-  const strengthSlots = strengthDoingSlots(n, input.doubleWodActive ? doubleWodSlot(n, 1) : -1);
-  const allocated = allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand);
+  const strengthSlots = strengthDoingSlots(n, input.doubleWodActive ? doubleWodDayIndex(n) : -1);
+  const allocated = input.weeklySplit
+    ? allocateSplitPatterns(strengthSlots.length, n, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand)
+    : allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand);
 
   // Patron por trainingDayIndex: el planificado para los slots de fuerza, y el del ciclo natural
   // como relleno inocuo para el resto (dia de solo metcon / recuperacion — no generan bloque de fuerza).

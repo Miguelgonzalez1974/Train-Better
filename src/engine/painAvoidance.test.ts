@@ -151,7 +151,7 @@ describe('WOD de referencia bloqueado que choca con el aviso', () => {
   // Un benchmark que lleve comba y que un dia de test bloqueado serviria tal cual.
   const duBenchmark = benchmarkWorkouts.find((w) => w.category !== 'custom' && /double[- ]?under/i.test(w.format) && w.movements.includes('double-under'))!;
   const MON = consecutiveDates('2026-01-12', 1)[0]; // dia 0 de la semana: dia de benchmark
-  const lock = { wodBenchmarkId: duBenchmark.id, plannedOn: '2026-01-12' };
+  const lock = { wodBenchmarkId: duBenchmark.id, split: true, plannedOn: '2026-01-12' };
   const iso = '2026-01-12';
 
   it('sin aviso se sirve el benchmark bloqueado; con el aviso se sirve otra cosa, marcada, y la cache no lo toma por desacuerdo', () => {

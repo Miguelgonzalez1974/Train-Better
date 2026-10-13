@@ -150,13 +150,38 @@ describe('dia de doble WOD (6 dias)', () => {
     }
   });
 
-  it('planificacion: con el doble activo, 6 dias = 4 sesiones de fuerza esperadas y el hueco solo existe fuera de descarga', () => {
+  it('planificacion: el doble solo lo mete el coach en Intensificacion (2a mitad) y Pico; nunca en Acumulacion ni descarga', () => {
     expect(isDoubleWodEnabled()).toBe(true);
-    expect(expectedStrengthSessionsPerWeek(6)).toBe(4);
-    expect(doubleWodSlot(6, 1)).toBe(4);
-    expect(doubleWodSlot(6, 3)).toBe(4);
-    expect(doubleWodSlot(6, 4)).toBe(-1);
-    for (const n of [3, 4, 5] as const) expect(doubleWodSlot(n, 1)).toBe(-1);
+    expect(expectedStrengthSessionsPerWeek(6)).toBe(5);
+    const prog = (phaseIndex: 1 | 2 | 3 | 4, weekInPhase = 1, phaseLengthWeeks = 1) => ({ phaseIndex, weekInPhase, phaseLengthWeeks });
+    expect(doubleWodSlot(6, prog(1))).toBe(-1);
+    expect(doubleWodSlot(6, prog(2))).toBe(4); // fases de 1 semana: toda la Intensificacion
+    expect(doubleWodSlot(6, prog(3))).toBe(4);
+    expect(doubleWodSlot(6, prog(4))).toBe(-1);
+    // Con fases largas, solo la segunda mitad de la Intensificacion
+    expect(doubleWodSlot(6, prog(2, 1, 4))).toBe(-1);
+    expect(doubleWodSlot(6, prog(2, 2, 4))).toBe(-1);
+    expect(doubleWodSlot(6, prog(2, 3, 4))).toBe(4);
+    expect(doubleWodSlot(6, prog(2, 4, 4))).toBe(4);
+    expect(doubleWodSlot(6, prog(3, 1, 4))).toBe(4);
+    for (const n of [3, 4, 5] as const) expect(doubleWodSlot(n, prog(3))).toBe(-1);
+  });
+
+  it('las semanas de Acumulacion y descarga no llevan doble: el viernes es de peso muerto', () => {
+    const doubleWeeks = new Set(doubles.map((d) => d.week));
+    let checked = 0;
+    for (const s of all) {
+      if (getWeekdayIndex(s.date) !== 4 || s.session.mesocycleWeek === 0) continue;
+      if (s.session.mesocycleWeek === 1 || s.session.mesocycleWeek === 4) {
+        expect(doubleWeeks.has(s.week), `${s.session.date}: doble en fase ${s.session.mesocycleWeek}`).toBe(false);
+        const st = s.session.blocks.find((b) => b.block === 'strength');
+        if (s.session.mesocycleWeek === 1 && st) {
+          expect(getMovementById(st.movementId)?.pattern, s.session.date).toBe('hinge');
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
   });
 });
 
@@ -220,7 +245,7 @@ describe('doble WOD y bloqueo semanal (fase 2)', () => {
     const p = baseProfile();
     const decidedNormal = {
       ...p,
-      weeklyLocks: { [iso(FRI)]: { strengthMovementId: 'back-squat', doubleDecided: true, plannedOn: iso(MON) } },
+      weeklyLocks: { [iso(FRI)]: { strengthMovementId: 'back-squat', doubleDecided: true, split: true, plannedOn: iso(MON) } },
     };
     const lock = decidedNormal.weeklyLocks[iso(FRI)];
     const s = generateSessionForDate(decidedNormal, chronic(), FRI, goalsOf(p));
@@ -348,7 +373,7 @@ describe('doble WOD apagado', () => {
   it('no genera ningun doble y la planificacion no cambia', () => {
     expect(isDoubleWodEnabled()).toBe(false);
     expect(expectedStrengthSessionsPerWeek(6)).toBe(5);
-    expect(doubleWodSlot(6, 1)).toBe(-1);
+    expect(doubleWodSlot(6, { phaseIndex: 3, weekInPhase: 1, phaseLengthWeeks: 1 })).toBe(-1);
     const profile = makeProfile({ trainingDaysPerWeek: 6, macrocycles: [makeMacro({ id: 'a' })] });
     for (const d of consecutiveDates('2026-01-05', 84)) {
       expect(generateSessionForDate(profile, [], d, profile.goals).doubleWod, d.toISOString()).toBeUndefined();

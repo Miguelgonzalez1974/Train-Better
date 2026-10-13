@@ -139,6 +139,21 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
         </select>
       </label>
 
+      <label className="flex flex-col gap-1 text-xs text-neutral-400">
+        Reparto de la fuerza
+        <select
+          value={draft.strengthSplit ?? 'weekly'}
+          onChange={(e) => setDraft((prev) => ({ ...prev, strengthSplit: e.target.value as NonNullable<AthleteProfile['strengthSplit']> }))}
+          className={`w-full sm:w-72 ${inputClass}`}
+        >
+          <option value="weekly">Semanal por días (piernas, pecho, hombro, peso muerto)</option>
+          <option value="adaptive">Adaptativo (según fase y objetivos)</option>
+        </select>
+        <span className="text-[11px] text-neutral-600">
+          El semanal da a cada día su patrón fijo, con un complemento (p. ej. banca + remo). El sábado va al patrón que más lo necesita.
+        </span>
+      </label>
+
       {activePainFlags.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Avisos de molestia activos</p>

@@ -1,5 +1,5 @@
 import { planWeekLocks } from './generateSession';
-import { getWeekdayIndex, toLocalIsoDate } from './periodization';
+import { getWeekdayIndex, toLocalIsoDate, usesWeeklySplit } from './periodization';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../data/athlete/types';
 
 /** Lunes (fecha) de la semana de calendario que contiene `iso`. */
@@ -46,12 +46,15 @@ export function resolveWeekLocks(
   if (!weekDates.includes(todayIso)) return profile;
 
   const trained = new Set(history.map((h) => h.date));
-  const missed = lockedDates.filter((d) => d < todayIso && !trained.has(d));
-  if (missed.length === 0) return profile;
-  const lastMissed = missed[missed.length - 1];
-
   const remainingLocked = lockedDates.filter((d) => d >= todayIso);
-  const needsReplan = remainingLocked.some((d) => (locks[d]?.plannedOn ?? '') <= lastMissed);
+  // Bloqueos de los dias que quedan planificados con el OTRO modo de reparto (el atleta cambio entre split semanal y
+  // adaptativo, o la semana se planifico antes de existir el split): estan viejos y se re-planifican ya.
+  const split = usesWeeklySplit(profile);
+  const staleMode = remainingLocked.some((d) => Boolean(locks[d]?.split) !== split);
+  const missed = lockedDates.filter((d) => d < todayIso && !trained.has(d));
+  const lastMissed = missed.length > 0 ? missed[missed.length - 1] : null;
+  const needsReplan =
+    staleMode || (lastMissed !== null && remainingLocked.some((d) => (locks[d]?.plannedOn ?? '') <= lastMissed));
   if (!needsReplan) return profile;
 
   const protectedSessions: Record<string, DailySession> = {};

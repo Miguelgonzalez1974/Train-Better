@@ -1,5 +1,10 @@
 import type { MovementPattern } from '../data/movements/types';
-import type { Macrocycle } from '../data/athlete/types';
+import type { AthleteProfile, Macrocycle } from '../data/athlete/types';
+
+/** ¿Reparte el coach la fuerza con el split semanal por días? Por defecto sí; solo 'adaptive' lo apaga. */
+export function usesWeeklySplit(profile: Pick<AthleteProfile, 'strengthSplit'>): boolean {
+  return profile.strengthSplit !== 'adaptive';
+}
 
 export type OlyFamily = 'snatch' | 'clean';
 
@@ -246,14 +251,16 @@ export function isEmphasisDay(trainingDayIndex: number): boolean {
  * de patrones) debe usar esto, no el numero de dias de entreno a secas.
  */
 export function expectedStrengthSessionsPerWeek(trainingDaysPerWeek: 3 | 4 | 5 | 6): number {
-  if (trainingDaysPerWeek === 6) return isDoubleWodEnabled() ? 4 : 5;
+  // En 6 dias: lunes a sabado menos el jueves de recuperacion. El doble WOD (que se come el viernes) es ocasional, no cuenta.
+  if (trainingDaysPerWeek === 6) return 5;
   return trainingDaysPerWeek;
 }
 
 /**
- * Dia de doble WOD (dos piezas de acondicionamiento, sin fuerza ni oly — como los martes/viernes de
- * PushJerk). Solo en el calendario de 6 dias, en el `trainingDayIndex` 4 (viernes, tras el jueves de
- * recuperacion), y nunca en semana de descarga. Apagado hasta que la interfaz sepa mostrar dos WODs.
+ * Dia de doble WOD (dos piezas de acondicionamiento, sin fuerza — como los martes/viernes de PushJerk). Solo en el
+ * calendario de 6 dias y en el `trainingDayIndex` 4 (viernes, tras el jueves de recuperacion). NO es fijo: lo
+ * introduce el coach cuando la fase lo pide (ver `coachWantsDoubleWod`); el resto de semanas el viernes es de
+ * peso muerto como cualquier dia de fuerza. El veto por estado real (descarga, ACWR, readiness) sigue mandando.
  */
 let doubleWodEnabled = true;
 export function isDoubleWodEnabled(): boolean {
@@ -263,13 +270,34 @@ export function setDoubleWodEnabled(enabled: boolean): void {
   doubleWodEnabled = enabled;
 }
 const DOUBLE_WOD_SLOT_6_DAYS = 4;
-/** `trainingDayIndex` del dia de doble WOD para esta semana de meso, o -1 si no hay. */
-export function doubleWodSlot(trainingDaysPerWeek: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4): number {
-  return doubleWodEnabled && trainingDaysPerWeek === 6 && phase !== 4 ? DOUBLE_WOD_SLOT_6_DAYS : -1;
+/** `trainingDayIndex` que ocupa el doble WOD en un calendario (cuando una semana lo lleva), o -1 si ese calendario nunca lo tiene. */
+export function doubleWodDayIndex(trainingDaysPerWeek: 3 | 4 | 5 | 6): number {
+  return doubleWodEnabled && trainingDaysPerWeek === 6 ? DOUBLE_WOD_SLOT_6_DAYS : -1;
+}
+/**
+ * ¿Mete el coach un doble WOD esta semana? Solo cuando el bloque ya tiene base y pide acondicionamiento: en
+ * Intensificacion a partir de la segunda mitad de la fase (con fases de 1 semana, todas) y en todo el Pico.
+ * Acumulacion es base de fuerza (el viernes es de peso muerto) y la descarga no lleva doble.
+ */
+export function coachWantsDoubleWod(progress: Pick<PhaseProgress, 'phaseIndex' | 'weekInPhase' | 'phaseLengthWeeks'>): boolean {
+  if (progress.phaseIndex === 3) return true;
+  if (progress.phaseIndex === 2) return progress.weekInPhase > progress.phaseLengthWeeks / 2;
+  return false;
+}
+/** `trainingDayIndex` del dia de doble WOD para esta semana de meso, o -1 si el coach no lo mete. */
+export function doubleWodSlot(
+  trainingDaysPerWeek: 3 | 4 | 5 | 6,
+  progress: Pick<PhaseProgress, 'phaseIndex' | 'weekInPhase' | 'phaseLengthWeeks'>,
+): number {
+  return coachWantsDoubleWod(progress) ? doubleWodDayIndex(trainingDaysPerWeek) : -1;
 }
 /** Fecha ISO del dia de doble WOD de la semana (lunes a domingo) que contiene `date`, o null si esa semana no tiene hueco. */
-export function doubleWodSlotDate(date: Date, trainingDaysPerWeek: 3 | 4 | 5 | 6, phase: 1 | 2 | 3 | 4): string | null {
-  const slot = doubleWodSlot(trainingDaysPerWeek, phase);
+export function doubleWodSlotDate(
+  date: Date,
+  trainingDaysPerWeek: 3 | 4 | 5 | 6,
+  progress: Pick<PhaseProgress, 'phaseIndex' | 'weekInPhase' | 'phaseLengthWeeks'>,
+): string | null {
+  const slot = doubleWodSlot(trainingDaysPerWeek, progress);
   if (slot < 0) return null;
   const d = new Date(date);
   d.setDate(d.getDate() - getWeekdayIndex(d) + TRAINING_DAY_TEMPLATES[trainingDaysPerWeek][slot]);

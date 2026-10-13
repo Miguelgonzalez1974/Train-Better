@@ -321,6 +321,12 @@ export interface AthleteProfile {
   /** Preferencias del módulo de nutrición — ver [[NutritionPrefs]]. */
   nutritionPrefs?: NutritionPrefs;
   /**
+   * Cómo reparte el coach la fuerza en la semana: 'weekly' (por defecto) = un patrón fijo por día (lunes piernas, martes
+   * pecho, miércoles hombro, viernes peso muerto, el día libre al patrón que más lo necesita), cada día con su
+   * complemento; 'adaptive' = reparto que se recalcula según fase, objetivos y estancamientos. Ver `weekPlan.ts`.
+   */
+  strengthSplit?: 'weekly' | 'adaptive';
+  /**
    * Movimiento de fuerza/oly (y, si aplica, accesorio por rol / benchmark del día de test) bloqueado
    * para ese día, por fecha ISO — decidido una vez al planificar la semana (ver `planWeekLocks` en
    * generateSession.ts) para que "qué toca" no cambie solo entre una vista y otra; la carga/series
@@ -342,6 +348,8 @@ export interface AthleteProfile {
       doubleWod?: boolean;
       /** El bloqueo lo planificó un motor que ya conocía el día de doble WOD, así que la ausencia de `doubleWod` significa "día normal" a propósito. Un bloqueo anterior (sin esta marca) no decide la estructura del día: se resuelve con el estado de ese día. */
       doubleDecided?: boolean;
+      /** El bloqueo lo planificó el reparto semanal por días (`AthleteProfile.strengthSplit` = 'weekly'). Si el modo del perfil cambia, un bloqueo del otro modo se considera viejo y la semana se re-planifica. */
+      split?: boolean;
       /** Fecha ISO en que se decidio este bloqueo — permite saber si un dia perdido de la semana ocurrio DESPUES de planificar (y hay que re-planificar los dias que quedan). */
       plannedOn?: string;
     }
@@ -425,7 +433,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 67;
+export const SESSION_GEN_VERSION = 68;
 
 export interface DailySession {
   date: string;

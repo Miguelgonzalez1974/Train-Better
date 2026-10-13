@@ -15,6 +15,7 @@ import { getWodDomain, WOD_PAIR_AFFINITY } from './wodDomains';
 import { toLocalIsoDate } from './periodization';
 import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../data/athlete/types';
 import {
+  makeMacro,
   makeProfile,
   makeStrengthGoal,
   consecutiveDates,
@@ -601,22 +602,26 @@ describe('generateSessionForDate — macrociclo', () => {
   });
 
   it('dominio planificado del WOD: el dominio que manda aporta al menos 2 movimientos, y la semana reparte los tres', () => {
-    const profile = makeProfile({ trainingDaysPerWeek: 5 });
     const leadByLabel: [string, 'weighted' | 'gymnastics' | 'monostructural'][] = [
       ['manda la barra', 'weighted'],
       ['mandan los gimnásticos', 'gymnastics'],
       ['manda el cardio', 'monostructural'],
     ];
     const seen = new Set<string>();
-    for (const d of consecutiveDates(START, 84)) {
-      const s = generateSessionForDate(profile, [], d, profile.goals);
-      const wod = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
-      const note = wod[0]?.notes ?? '';
-      const hit = leadByLabel.find(([label]) => note.includes(`Foco de la semana: hoy ${label}`));
-      if (!hit) continue;
-      seen.add(hit[1]);
-      const inLead = wod.filter((b) => getWodDomain(b.movementId) === hit[1]).length;
-      expect(inLead, `${s.date}: ${wod.map((b) => b.movementId).join(', ')}`).toBeGreaterThanOrEqual(2);
+    // Varios macros (otra semilla de semana cada uno): el WOD de barra esquiva el patron de fuerza del dia, asi que
+    // con un patron fijo por dia solo cae en algunos dias y una muestra corta puede no verlo.
+    for (const id of ['a', 'b', 'c', 'd']) {
+      const profile = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [makeMacro({ id })] });
+      for (const d of consecutiveDates(START, 84)) {
+        const s = generateSessionForDate(profile, [], d, profile.goals);
+        const wod = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
+        const note = wod[0]?.notes ?? '';
+        const hit = leadByLabel.find(([label]) => note.includes(`Foco de la semana: hoy ${label}`));
+        if (!hit) continue;
+        seen.add(hit[1]);
+        const inLead = wod.filter((b) => getWodDomain(b.movementId) === hit[1]).length;
+        expect(inLead, `${s.date}: ${wod.map((b) => b.movementId).join(', ')}`).toBeGreaterThanOrEqual(2);
+      }
     }
     expect(seen.size, 'la semana no reparte los tres dominios').toBe(3);
   });
@@ -673,18 +678,21 @@ describe('generateSessionForDate — macrociclo', () => {
     let days = 0;
     let noted = 0;
     const overlaps: string[] = [];
+    // Con el split semanal el bloque de accesorios solo cae el ultimo dia de entreno: varios macros para tener muestra.
     for (const trainingDaysPerWeek of [4, 5, 6] as const) {
-      const profile = makeProfile({ trainingDaysPerWeek });
-      for (const d of consecutiveDates(START, 168)) {
-        const s = generateSessionForDate(profile, [], d, profile.goals);
-        const wod = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
-        const acc = s.blocks.filter((b) => b.block === 'accessory' && b.accessoryRole);
-        if (wod.length === 0 || acc.length === 0) continue;
-        days++;
-        if ((wod[0].notes ?? '').includes('esquiva el patrón')) noted++;
-        const accGroups = new Set(acc.map((b) => groupOf(b.movementId)).filter((g) => g >= 0));
-        if (wod.some((b) => accGroups.has(groupOf(b.movementId)))) {
-          overlaps.push(`${s.date}: wod=${wod.map((b) => b.movementId).join(',')} acc=${acc.map((b) => b.movementId).join(',')}`);
+      for (const id of ['a', 'b', 'c', 'd']) {
+        const profile = makeProfile({ trainingDaysPerWeek, macrocycles: [makeMacro({ id })] });
+        for (const d of consecutiveDates(START, 168)) {
+          const s = generateSessionForDate(profile, [], d, profile.goals);
+          const wod = s.blocks.filter((b) => b.block === 'wod' && !b.movementId.startsWith('benchmark:'));
+          const acc = s.blocks.filter((b) => b.block === 'accessory' && b.accessoryRole);
+          if (wod.length === 0 || acc.length === 0) continue;
+          days++;
+          if ((wod[0].notes ?? '').includes('esquiva el patrón')) noted++;
+          const accGroups = new Set(acc.map((b) => groupOf(b.movementId)).filter((g) => g >= 0));
+          if (wod.some((b) => accGroups.has(groupOf(b.movementId)))) {
+            overlaps.push(`${s.date}: wod=${wod.map((b) => b.movementId).join(',')} acc=${acc.map((b) => b.movementId).join(',')}`);
+          }
         }
       }
     }

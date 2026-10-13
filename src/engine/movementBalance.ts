@@ -94,10 +94,16 @@ const STRENGTH_PATTERN_CYCLE: MovementPattern[] = ['squat', 'hinge', 'verticalPu
  * con uno forzado el dia anterior (p.ej. viernes forzado + lunes natural de la semana siguiente son
  * el mismo patron), y ese hueco no lo cierra solo bloquear el forzado de un objetivo.
  */
-export function avoidPatternRepeat(candidate: MovementPattern, history: SessionHistoryEntry[], referenceDate: Date): MovementPattern {
-  if (!wasPatternRecentlyDominant(candidate, history, referenceDate)) return candidate;
+export function avoidPatternRepeat(
+  candidate: MovementPattern,
+  history: SessionHistoryEntry[],
+  referenceDate: Date,
+  /** Dias hacia atras que cuentan como "reciente" (2 por defecto). El split semanal usa 1: solo un repetido en dias consecutivos. */
+  lookbackDays = 2,
+): MovementPattern {
+  if (!wasPatternRecentlyDominant(candidate, history, referenceDate, lookbackDays)) return candidate;
   const alternative = STRENGTH_PATTERN_CYCLE.find(
-    (p) => p !== candidate && !wasPatternRecentlyDominant(p, history, referenceDate),
+    (p) => p !== candidate && !wasPatternRecentlyDominant(p, history, referenceDate, lookbackDays),
   );
   return alternative ?? candidate;
 }
