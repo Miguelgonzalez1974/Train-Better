@@ -7,6 +7,7 @@ import { computeConditioningBalance } from '../../engine/conditioningBalance';
 import { getMonthlyStats } from './stats';
 import { computePrTrends } from '../../engine/weakPoints';
 import { computeReadinessScore } from '../../engine/readinessScore';
+import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
@@ -112,6 +113,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const strengthRatio = latestBodyweightKg ? strengthTotalKg / latestBodyweightKg : null;
   // Nota de preparación: el check-in más tu carga y cómo te salen las sesiones (ver `computeReadinessScore`).
   const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
+  const readinessLearning = computeReadinessLearning(profile.readinessLog, history);
   const energyAdherencePct =
     conditioningBalance && conditioningBalance.totalPlanned > 0
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
@@ -229,6 +231,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         structureRow={hasStructure ? structureRow : null}
         goalRows={goalRows}
         readiness={readiness}
+        learning={readinessLearning}
         acwr={acwr}
         trend={acwrTrend}
         yearConsistency={yearConsistency}

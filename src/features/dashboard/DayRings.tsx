@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { ReadinessScore } from '../../engine/readinessScore';
+import type { ReadinessLearning } from '../../engine/readinessLearning';
+import { LearnedInsights } from './LearnedInsights';
 import type { YearConsistency } from '../../engine/yearConsistency';
 import { SectionLabel } from '../shell/SectionLabel';
 import { AcwrGauge } from './AcwrGauge';
@@ -178,6 +180,7 @@ export function DayRings({
   structureRow,
   goalRows,
   readiness,
+  learning,
   acwr,
   trend,
   yearConsistency,
@@ -187,6 +190,8 @@ export function DayRings({
   structureRow: ProgressRow | null;
   goalRows: ProgressRow[];
   readiness: ReadinessScore;
+  /** Qué factores del check-in te suben el esfuerzo de las sesiones (solo informativo). */
+  learning: ReadinessLearning;
   acwr: AcwrResult;
   trend: (number | null)[];
   /** Constancia del año: el número grande del anillo de "Constancia". */
@@ -323,6 +328,7 @@ export function DayRings({
           {open === 'prep' && (
             <div className="flex flex-col gap-7">
               <RecoveryDetail readiness={readiness} />
+              <LearnedInsights learning={learning} />
               <div className="flex flex-col gap-3">
                 <SectionLabel>Carga acumulada</SectionLabel>
                 <AcwrGauge result={acwr} trend={trend} />
