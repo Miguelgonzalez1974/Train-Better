@@ -24,17 +24,17 @@ export interface ReadinessScore {
   /** true si no hay check-ins y la nota sale solo de las señales objetivas. */
   estimated: boolean;
   feel: ReadinessPart;
-  load: ReadinessPart;
+  /** La carga (ACWR): no se promedia con lo demás, solo resta (`loadPenalty`) cuando va alta. */
+  load: LoadPart;
+  /** Puntos que la carga resta a la nota (0 con carga baja u óptima). */
+  loadPenalty: number;
   performance: ReadinessPart;
   pain: { count: number; areas: string[]; penalty: number };
   /** La lectura del check-in (barras por día, ejes...) — la tarjeta la sigue enseñando debajo. */
   checkins: RecoverySummary;
 }
 
-/**
- * La carga (ACWR) NO entra en la nota de recuperación: se enseña aparte, junto a ella, como segundo anillo. Así son dos
- * señales distintas — cuánto aguantas hoy y cuánto llevas encima — y no se cuenta dos veces.
- */
+/** Peso de las dos partes que se promedian. La carga y la molestia no se promedian: restan (ver `computeReadinessScore`). */
 const WEIGHT = { feel: 0.6, performance: 0.4 };
 const HIGH_FROM = 65;
 const LOW_UNTIL = 40;
@@ -62,9 +62,15 @@ function feelPart(r: RecoverySummary): ReadinessPart {
   return { score, detail: `${r.checks} check-ins esta semana${vs}` };
 }
 
-function loadPart(history: SessionHistoryEntry[], today: Date, todayIso: string): ReadinessPart {
+export type LoadPart = ReadinessPart & { penalty: number };
+
+/** Lo que la carga resta a la nota: nada con carga baja u óptima, y más cuanto más alta o más días seguidos sin descansar. */
+const ZONE_PENALTY = { baja: 0, optima: 0, moderada: 10, alta: 20 } as const;
+const LOAD_PENALTY_MAX = 25;
+
+function loadPart(history: SessionHistoryEntry[], today: Date, todayIso: string): LoadPart {
   const acwr = computeAcwr(history, today);
-  if (acwr.coldStart || acwr.acwr === null) return { score: null, detail: 'Aún sin sesiones suficientes para medir tu carga.' };
+  if (acwr.coldStart || acwr.acwr === null) return { score: null, detail: 'Aún sin sesiones suficientes para medir tu carga.', penalty: 0 };
   const base = acwr.zone === 'optima' ? 90 : acwr.zone === 'baja' ? 75 : acwr.zone === 'moderada' ? 45 : 20;
 
   // Días seguidos entrenando hasta hoy (o hasta ayer, si hoy todavía no).
@@ -83,11 +89,16 @@ function loadPart(history: SessionHistoryEntry[], today: Date, todayIso: string)
     d.setDate(d.getDate() - 1);
     cursor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
-  const streakPenalty = streak >= 7 ? 25 : streak >= 5 ? 12 : 0;
+  const streakPenalty = streak >= 7 ? 12 : streak >= 5 ? 8 : 0;
+  const streakScoreDrop = streak >= 7 ? 25 : streak >= 5 ? 12 : 0;
 
   const zoneText = acwr.zone === 'optima' ? 'zona óptima' : acwr.zone === 'baja' ? 'carga baja' : acwr.zone === 'moderada' ? 'carga algo alta' : 'carga muy alta';
   const streakText = streak >= 5 ? ` · ${streak} días seguidos sin descansar` : '';
-  return { score: clamp(base - streakPenalty), detail: `ACWR ${es1(acwr.acwr)} · ${zoneText}${streakText}` };
+  return {
+    score: clamp(base - streakScoreDrop),
+    detail: `ACWR ${es1(acwr.acwr)} · ${zoneText}${streakText}`,
+    penalty: Math.min(LOAD_PENALTY_MAX, ZONE_PENALTY[acwr.zone] + streakPenalty),
+  };
 }
 
 function performancePart(history: SessionHistoryEntry[], feedback: SetFeedbackEntry[], todayIso: string): ReadinessPart {
@@ -134,13 +145,16 @@ export function computeReadinessScore(input: {
   const areas = [...new Set(active.map((f) => PAIN_AREA_LABEL[f.area].toLowerCase()))];
   const penalty = Math.min(PAIN_PENALTY_MAX, areas.length * PAIN_PENALTY_EACH);
 
+  const pain = { count: areas.length, areas, penalty };
   const available = (['feel', 'performance'] as const).filter((k) => ({ feel, performance })[k].score !== null);
   if (available.length === 0) {
-    return { total: null, level: null, estimated: false, feel, load, performance, pain: { count: areas.length, areas, penalty }, checkins };
+    return { total: null, level: null, estimated: false, feel, load, loadPenalty: load.penalty, performance, pain, checkins };
   }
   const weightSum = available.reduce((s, k) => s + WEIGHT[k], 0);
   const raw = available.reduce((s, k) => s + ({ feel, performance })[k].score! * WEIGHT[k], 0) / weightSum;
-  const total = clamp(raw - penalty);
+  // La carga no es una parte que se promedie: es un LÍMITE. Una carga alta (o muchos días seguidos sin descansar) resta,
+  // y una carga baja u óptima no suma nada — así unos buenos check-ins no pueden tapar que vas pasado de carga.
+  const total = clamp(raw - penalty - load.penalty);
   const level: RecoveryLevel = total >= HIGH_FROM ? 'alta' : total <= LOW_UNTIL ? 'baja' : 'normal';
-  return { total, level, estimated: feel.score === null, feel, load, performance, pain: { count: areas.length, areas, penalty }, checkins };
+  return { total, level, estimated: feel.score === null, feel, load, loadPenalty: load.penalty, performance, pain, checkins };
 }

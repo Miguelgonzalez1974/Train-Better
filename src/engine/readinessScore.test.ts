@@ -99,14 +99,23 @@ describe('nota de recuperación (check-in + cómo te salen las sesiones)', () =>
     expect(r.total).toBe(64);
   });
 
-  it('la carga se calcula pero NO entra en la nota', () => {
+  it('la carga no se promedia: con carga óptima no suma ni resta, y con carga alta resta', () => {
     const calm = computeReadinessScore(input({ readinessLog: checks(GOOD, [0, -1, -2]), history: baseHistory(6) }));
-    // misma nota aunque el historial lleve 8 días seguidos entrenando (carga muy distinta)
+    expect(calm.loadPenalty).toBe(0);
+    // el historial acumula una semana seguida de sesiones: ACWR alto y días seguidos sin descansar
     const streak = [...baseHistory(6), ...[-9, -7, -6, -4, -3, -1, 0].map((o) => session(o, 6))];
     const loaded = computeReadinessScore(input({ readinessLog: checks(GOOD, [0, -1, -2]), history: streak }));
-    expect(loaded.load.score).not.toBeNull();
     expect(loaded.load.detail).toContain('días seguidos');
-    expect(loaded.total).toBe(calm.total);
+    expect(loaded.loadPenalty).toBeGreaterThan(0);
+    expect(loaded.loadPenalty).toBeLessThanOrEqual(25);
+    // la nota baja exactamente lo que resta la carga (unos buenos check-ins no pueden taparlo)
+    expect(loaded.total).toBe(calm.total! - loaded.loadPenalty);
+  });
+
+  it('sin sesiones suficientes para medir la carga no resta nada', () => {
+    const r = computeReadinessScore(input({ readinessLog: checks(GOOD, [0, -1, -2]), history: [session(-1, 7), session(-3, 7)] }));
+    expect(r.load.score).toBeNull();
+    expect(r.loadPenalty).toBe(0);
   });
 
   it('una molestia activa resta 8 puntos por zona, hasta 16', () => {

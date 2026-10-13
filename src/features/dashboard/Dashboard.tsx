@@ -12,6 +12,8 @@ import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
 import { TodayPreviewCard } from './TodayPreviewCard';
 import { DayRings } from './DayRings';
+import { ConsistencyDetail } from './ConsistencyDetail';
+import { computeYearConsistency } from '../../engine/yearConsistency';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
@@ -46,13 +48,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   // Cada gauge abre (o cierra, si ya estaba abierta) su propia tarjeta de detalle — sin un "Más
   // detalle" intermedio que bucear. El de carga expande el gauge completo de ACWR ahí mismo; el
   // resto revela su tarjeta justo debajo de la fila de gauges.
-  const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [energyOpen, setEnergyOpen] = useState(false);
   const [imbalancesOpen, setImbalancesOpen] = useState(false);
   const [strengthOpen, setStrengthOpen] = useState(false);
   const [scrollTarget, setScrollTarget] = useState<GaugeTarget | null>(null);
 
-  const heatmapRef = useRef<HTMLDivElement>(null);
   const energyRef = useRef<HTMLDivElement>(null);
   const imbalancesRef = useRef<HTMLDivElement>(null);
   const strengthRef = useRef<HTMLDivElement>(null);
@@ -66,6 +66,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
+  const yearConsistency = useMemo(() => computeYearConsistency(profile, history, new Date()), [profile, history]);
   const conditioningBalance = useMemo(() => computeConditioningBalance(profile, history, new Date()), [profile, history]);
 
   // Alterna la tarjeta (abre si estaba cerrada, cierra si ya estaba abierta) y solo desplaza la
@@ -78,8 +79,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
 
   function jumpTo(target: GaugeTarget) {
     switch (target) {
-      case 'heatmap':
-        return toggleAndMaybeScroll(heatmapOpen, setHeatmapOpen, target);
       case 'energy':
         return toggleAndMaybeScroll(energyOpen, setEnergyOpen, target);
       case 'imbalances':
@@ -92,7 +91,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   useEffect(() => {
     if (!scrollTarget) return;
     const refs: Partial<Record<GaugeTarget, React.RefObject<HTMLDivElement>>> = {
-      heatmap: heatmapRef,
       energy: energyRef,
       imbalances: imbalancesRef,
       strength: strengthRef,
@@ -119,14 +117,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
       : null;
 
-  const row1: GaugeSpec[] = [
-    {
-      label: 'Constancia (semana)',
-      valueLabel: `${weekCount.done}/${weekCount.planned}`,
-      fraction: weekCount.planned > 0 ? weekCount.done / weekCount.planned : 0,
-      strokeClass: 'stroke-white',
-      target: 'heatmap',
-    },
+  const analysisGauges: GaugeSpec[] = [
     {
       label: 'Dominios energéticos',
       valueLabel: energyAdherencePct !== null ? `${energyAdherencePct}%` : '—',
@@ -134,9 +125,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       strokeClass: energyAdherencePct !== null ? 'stroke-white' : 'stroke-neutral-600',
       target: 'energy',
     },
-  ];
-
-  const row2: GaugeSpec[] = [
     {
       label: 'Desequilibrios',
       valueLabel: balancedPairs.length > 0 ? `${balancedOk}/${balancedPairs.length}` : '—',
@@ -236,44 +224,37 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       */}
       <TodayPreviewCard profile={profile} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
 
-      {/* Los tres números del día: plan, recuperación (cuánto aguantas hoy) y carga (cuánto llevas encima). */}
+      {/* Los tres números del día: plan, preparación (cuánto aguantas hoy, con la carga ya descontada) y constancia. */}
       <DayRings
         structureRow={hasStructure ? structureRow : null}
         goalRows={goalRows}
         readiness={readiness}
         acwr={acwr}
         trend={acwrTrend}
+        yearConsistency={yearConsistency}
+        consistencyDetail={
+          <ConsistencyDetail
+            week={weekCount}
+            monthDays={stats.diasEntrenados}
+            year={yearConsistency}
+            calendar={<TrainingHeatmap history={history} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
+          />
+        }
         onNavigateToObjetivos={onNavigateToObjetivos}
       />
 
       {/*
-        Los 6 gauges: todo lo esencial de un vistazo, cada uno la puerta directa a su detalle. Fila 1
-        = cómo vas ahora mismo (carga, constancia, dominios); fila 2 = qué tal progresas (patrones,
-        desequilibrios, PRs). Debajo, solo la(s) tarjeta(s) cuyo gauge se ha tocado — nada se ve sin
-        pedirlo antes.
+        Análisis: lo que no hace falta mirar cada día, plegado por defecto. Los gauges (dominios energéticos,
+        desequilibrios, fuerza) son la puerta directa a su detalle; debajo solo sale la tarjeta cuyo gauge se ha tocado.
       */}
-      <MetricsGauges
-        row1={row1}
-        row2={[]}
-        onJumpTo={jumpTo}
-        title="Cómo vas"
-      />
-
-      {/* Análisis: lo que no hace falta mirar cada día — plegado por defecto. */}
       <button
         onClick={() => setAnalysisOpen((v) => !v)}
-        className="-mt-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-white"
+        className="flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-white"
       >
         {analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}
         <ChevronDown size={14} className={`transition-transform duration-200 ${analysisOpen ? 'rotate-180' : ''}`} />
       </button>
-      {analysisOpen && <MetricsGauges row1={row2} row2={[]} onJumpTo={jumpTo} />}
-
-      {heatmapOpen && (
-        <div ref={heatmapRef}>
-          <TrainingHeatmap history={history} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />
-        </div>
-      )}
+      {analysisOpen && <MetricsGauges row1={analysisGauges} row2={[]} onJumpTo={jumpTo} />}
 
       {energyOpen && (
         <div ref={energyRef}>

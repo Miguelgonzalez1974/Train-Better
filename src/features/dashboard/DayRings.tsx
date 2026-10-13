@@ -1,14 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { ACWR_ZONE_LABEL, type AcwrResult } from '../../engine/loadMetrics';
+import type { AcwrResult } from '../../engine/loadMetrics';
 import type { ReadinessScore } from '../../engine/readinessScore';
+import type { YearConsistency } from '../../engine/yearConsistency';
 import { SectionLabel } from '../shell/SectionLabel';
 import { AcwrGauge } from './AcwrGauge';
 import { GoalFillRow, MAX_GOALS, remainingDaysOf } from './JourneyProgress';
 import type { ProgressRow } from './progressOverview';
 import { RECOVERY_GOOD, RECOVERY_LOW, RecoveryDetail, recoveryColor } from './RecoveryCard';
 
-type RingKey = 'plan' | 'recovery' | 'load';
+type RingKey = 'plan' | 'prep' | 'consistency';
+
+const NEUTRAL = '#525252';
 
 /** Color de cada zona de carga: azul = poca, verde = óptima, naranja y rojo = demasiada. */
 const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
@@ -17,9 +20,9 @@ const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
   moderada: 'rgb(var(--c-state-hot))',
   alta: 'rgb(var(--c-state-low))',
 };
-const NEUTRAL = '#525252';
+const ZONE_WORD: Record<AcwrResult['zone'], string> = { baja: 'Carga baja', optima: 'Carga óptima', moderada: 'Carga alta', alta: 'Carga muy alta' };
 
-/** Nivel de recuperación en una sola palabra, para que quepa bajo un anillo de un tercio de pantalla. */
+/** Nivel de preparación en una sola palabra, para que quepa bajo un anillo de un tercio de pantalla. */
 const LEVEL_SHORT = { alta: 'Con ganas', normal: 'Normal', baja: 'Cansado' } as const;
 
 const PART_SHORT = { feel: 'cómo te sientes', load: 'tu carga', performance: 'cómo te salen las sesiones' } as const;
@@ -60,12 +63,77 @@ function Ring({ fraction, color, children }: { fraction: number; color: string; 
   );
 }
 
+/**
+ * Anillo doble: por fuera lo principal (la preparación, trazo grueso) y por dentro, más fino y tenue, la carga. Cada uno
+ * se llena desde cero al aparecer. El hueco del centro lleva el número.
+ */
+function DoubleRing({
+  outer,
+  outerColor,
+  inner,
+  innerColor,
+  children,
+}: {
+  outer: number;
+  outerColor: string;
+  inner: number;
+  innerColor: string;
+  children: ReactNode;
+}) {
+  const rOuter = 45;
+  const rInner = 34;
+  const cOuter = 2 * Math.PI * rOuter;
+  const cInner = 2 * Math.PI * rInner;
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setFilled(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+  const arc = 'transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none';
+  return (
+    <div className="relative aspect-square w-full">
+      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden="true">
+        <circle cx="50" cy="50" r={rOuter} fill="none" strokeWidth={8} className="stroke-white/[0.07]" />
+        <circle
+          cx="50"
+          cy="50"
+          r={rOuter}
+          fill="none"
+          strokeWidth={8}
+          strokeLinecap="round"
+          style={{ stroke: outerColor }}
+          strokeDasharray={cOuter}
+          strokeDashoffset={cOuter * (1 - (filled ? clamp01(outer) : 0))}
+          className={arc}
+        />
+        <circle cx="50" cy="50" r={rInner} fill="none" strokeWidth={4.5} className="stroke-white/[0.06]" />
+        <circle
+          cx="50"
+          cy="50"
+          r={rInner}
+          fill="none"
+          strokeWidth={4.5}
+          strokeLinecap="round"
+          style={{ stroke: innerColor, opacity: 0.85 }}
+          strokeDasharray={cInner}
+          strokeDashoffset={cInner * (1 - (filled ? clamp01(inner) : 0))}
+          className={arc}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">{children}</div>
+    </div>
+  );
+}
+
 function RingButton({
   selected,
   onClick,
   label,
   word,
   wordColor,
+  extraWord,
+  extraColor,
   children,
   title,
 }: {
@@ -74,6 +142,9 @@ function RingButton({
   label: string;
   word: string;
   wordColor?: string;
+  /** Segunda palabra de estado, más pequeña (la carga bajo la preparación). */
+  extraWord?: string;
+  extraColor?: string;
   children: ReactNode;
   title: string;
 }) {
@@ -89,14 +160,19 @@ function RingButton({
       <p className="mt-0.5 w-full truncate text-center text-[13px] font-semibold" style={{ color: wordColor ?? undefined }}>
         {word}
       </p>
+      {extraWord && (
+        <p className="w-full truncate text-center text-[11px] font-medium" style={{ color: extraColor ?? undefined }}>
+          {extraWord}
+        </p>
+      )}
     </button>
   );
 }
 
 /**
- * Los tres números del día en una línea, al estilo Whoop: tu plan (avance del bloque), tu recuperación (cuánto aguantas
- * hoy) y tu carga (cuánto llevas encima). El del medio, algo más grande, es el que decide el día. Tocar un anillo abre su
- * detalle justo debajo; solo uno a la vez.
+ * Los tres números del día en una línea, al estilo Whoop: tu plan (avance del bloque), tu preparación (cuánto aguantas
+ * hoy, con la carga ya descontada cuando va alta) y tu constancia de la semana. El del medio, algo más grande, es el que
+ * decide el día. Tocar un anillo abre su detalle justo debajo; solo uno a la vez.
  */
 export function DayRings({
   structureRow,
@@ -104,6 +180,8 @@ export function DayRings({
   readiness,
   acwr,
   trend,
+  yearConsistency,
+  consistencyDetail,
   onNavigateToObjetivos,
 }: {
   structureRow: ProgressRow | null;
@@ -111,6 +189,10 @@ export function DayRings({
   readiness: ReadinessScore;
   acwr: AcwrResult;
   trend: (number | null)[];
+  /** Constancia del año: el número grande del anillo de "Constancia". */
+  yearConsistency: YearConsistency;
+  /** Lo que se abre al tocar "Constancia" (el calendario de entrenos). */
+  consistencyDetail: ReactNode;
   onNavigateToObjetivos: () => void;
 }) {
   const [open, setOpen] = useState<RingKey | null>(null);
@@ -119,7 +201,6 @@ export function DayRings({
   const { total, level } = readiness;
   const recoveryTint = total !== null ? recoveryColor(total) : NEUTRAL;
   const hasLoad = acwr.acwr !== null && !acwr.coldStart;
-  const loadTint = hasLoad ? ZONE_COLOR[acwr.zone] : NEUTRAL;
 
   const planPct = structureRow ? Math.min(100, Math.max(0, structureRow.pct)) : 0;
   const week = structureRow?.sublabel.match(/Semana (\d+) de (\d+)/);
@@ -170,31 +251,40 @@ export function DayRings({
         )}
 
         <RingButton
-          selected={open === 'recovery'}
-          onClick={() => toggle('recovery')}
-          label="Recuperación"
+          selected={open === 'prep'}
+          onClick={() => toggle('prep')}
+          label="Preparación"
           word={level ? LEVEL_SHORT[level] : 'Sin datos'}
           wordColor={recoveryTint}
-          title="Recuperación: cuánto aguantas hoy"
+          extraWord={hasLoad ? ZONE_WORD[acwr.zone] : undefined}
+          extraColor={hasLoad ? ZONE_COLOR[acwr.zone] : undefined}
+          title="Preparación (anillo exterior) y carga (anillo interior)"
         >
-          <Ring fraction={(total ?? 0) / 100} color={recoveryTint}>
-            <span className={`${numberClass} text-[clamp(1.6rem,8vw,2.4rem)]`}>
+          <DoubleRing
+            outer={(total ?? 0) / 100}
+            outerColor={recoveryTint}
+            inner={(acwr.acwr ?? 0) / 2}
+            innerColor={hasLoad ? ZONE_COLOR[acwr.zone] : NEUTRAL}
+          >
+            <span className={`${numberClass} text-[clamp(1.3rem,6.4vw,1.95rem)]`}>
               {total !== null ? total : '—'}
               {total !== null && <span className="text-[0.5em] font-medium text-neutral-400">%</span>}
             </span>
-          </Ring>
+          </DoubleRing>
         </RingButton>
 
         <RingButton
-          selected={open === 'load'}
-          onClick={() => toggle('load')}
-          label="Carga"
-          word={hasLoad ? ACWR_ZONE_LABEL[acwr.zone] : 'Sin datos'}
-          wordColor={loadTint}
-          title="Carga: cuánto llevas encima (ACWR)"
+          selected={open === 'consistency'}
+          onClick={() => toggle('consistency')}
+          label="Constancia"
+          word={yearConsistency.pct !== null ? `${yearConsistency.days} días` : 'Sin datos'}
+          title="Constancia del año: días entrenados frente a los previstos desde que empezaste"
         >
-          <Ring fraction={(acwr.acwr ?? 0) / 2} color={loadTint}>
-            <span className={`${numberClass} text-[clamp(1.2rem,6vw,1.7rem)]`}>{hasLoad ? acwr.acwr!.toFixed(2).replace('.', ',') : '—'}</span>
+          <Ring fraction={(yearConsistency.pct ?? 0) / 100} color="rgb(var(--c-white))">
+            <span className={`${numberClass} text-[clamp(1.2rem,6vw,1.7rem)]`}>
+              {yearConsistency.pct !== null ? yearConsistency.pct : '—'}
+              {yearConsistency.pct !== null && <span className="text-[0.55em] font-medium text-neutral-400">%</span>}
+            </span>
           </Ring>
         </RingButton>
       </div>
@@ -230,15 +320,17 @@ export function DayRings({
             </div>
           )}
 
-          {open === 'recovery' && <RecoveryDetail readiness={readiness} />}
-
-          {open === 'load' && (
-            <div className="flex flex-col gap-3">
-              <SectionLabel>Carga</SectionLabel>
-              <AcwrGauge result={acwr} trend={trend} />
-              {readiness.load.score !== null && <p className="text-[11px] text-neutral-500">{readiness.load.detail}</p>}
+          {open === 'prep' && (
+            <div className="flex flex-col gap-7">
+              <RecoveryDetail readiness={readiness} />
+              <div className="flex flex-col gap-3">
+                <SectionLabel>Carga acumulada</SectionLabel>
+                <AcwrGauge result={acwr} trend={trend} />
+              </div>
             </div>
           )}
+
+          {open === 'consistency' && consistencyDetail}
         </div>
       )}
     </section>

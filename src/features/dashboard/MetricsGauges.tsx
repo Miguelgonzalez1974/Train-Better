@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { SectionLabel } from '../shell/SectionLabel';
 import type { AcwrResult } from '../../engine/loadMetrics';
 
-export type GaugeTarget = 'heatmap' | 'energy' | 'imbalances' | 'strength';
+export type GaugeTarget = 'energy' | 'imbalances' | 'strength';
 
 export interface GaugeSpec {
   label: string;

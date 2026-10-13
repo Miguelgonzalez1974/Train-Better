@@ -58,10 +58,21 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
   const r = readiness.checkins;
   return (
     <div className="flex flex-col gap-6">
-      <SectionLabel>Recuperación</SectionLabel>
+      <SectionLabel>Preparación</SectionLabel>
       <div className="flex flex-col gap-3.5">
         <PartRow title="Cómo te sientes" part={readiness.feel} />
         <PartRow title="Cómo te está saliendo" part={readiness.performance} />
+        {/* La carga no se promedia: solo resta cuando va alta, para que unos buenos check-ins no tapen que vas pasado. */}
+        <div>
+          <div className="flex items-baseline gap-3">
+            <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">Tu carga</span>
+            <span className="flex-1 text-[11px] text-neutral-500">{readiness.load.score === null ? 'sin datos aún' : readiness.loadPenalty > 0 ? 'resta a la nota' : 'no resta nada'}</span>
+            <span className="num w-9 shrink-0 text-right text-sm font-semibold" style={{ color: readiness.loadPenalty > 0 ? RECOVERY_LOW : RECOVERY_GOOD }}>
+              {readiness.load.score === null ? '—' : readiness.loadPenalty > 0 ? `−${readiness.loadPenalty}` : '0'}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.load.detail}</p>
+        </div>
         {readiness.pain.count > 0 && (
           <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
             <HeartPulse size={12} className="shrink-0 text-red-400" aria-hidden="true" />
@@ -107,7 +118,7 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
       </div>
 
       <p className="text-[11px] leading-relaxed text-neutral-600">
-        Orientativo: mezcla lo que dices que sientes con cómo te salen las sesiones. El coach ya ajusta la carga de cada día con todo esto y con tu carga acumulada.
+        Orientativo: mezcla lo que dices que sientes con cómo te salen las sesiones, y la carga acumulada solo resta cuando va alta. El coach ya ajusta los kilos de cada día con todo esto.
       </p>
     </div>
   );
