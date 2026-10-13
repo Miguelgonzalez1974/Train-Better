@@ -1,22 +1,22 @@
 import type { ProgressRow } from './progressOverview';
 
 /** Objetivos que se enseñan como mucho (el resto, "+N más") — la tarjeta no debe crecer sin tope. */
-const MAX_GOALS = 3;
+export const MAX_GOALS = 3;
 
 /** "Vence en 18d" → 18; "Objetivo vencido" u otro texto → al final de la cola. */
-function remainingDaysOf(row: ProgressRow): number {
+export function remainingDaysOf(row: ProgressRow): number {
   const m = row.sublabel.match(/Vence en (\d+)d/);
   return m ? Number(m[1]) : Infinity;
 }
 
 /** "Vence en 18d" → "18d"; "Objetivo vencido" → "vencido". */
-function shortRemaining(row: ProgressRow): string {
+export function shortRemaining(row: ProgressRow): string {
   const m = row.sublabel.match(/Vence en (\d+d)/);
   return m ? m[1] : 'vencido';
 }
 
 /** "Subir PR — Clean" → "Clean": junto al anillo el sitio es poco y el icono ya dice el tipo de objetivo. */
-function shortGoalLabel(row: ProgressRow): string {
+export function shortGoalLabel(row: ProgressRow): string {
   const i = row.label.indexOf(' — ');
   const name = i >= 0 ? row.label.slice(i + 3) : row.label;
   return name.replace(/\s*\([^)]*\)/g, '').trim() || name;
@@ -26,7 +26,7 @@ function shortGoalLabel(row: ProgressRow): string {
  * Macrociclo (o programa de fuerza) activo: un anillo con el % del bloque y, debajo, la semana en la que
  * estás y la fase. Es lo que da el contexto de todo lo demás, así que lleva el protagonismo visual.
  */
-function ProgramRing({ row }: { row: ProgressRow }) {
+export function ProgramRing({ row }: { row: ProgressRow }) {
   const m = row.sublabel.match(/Semana (\d+) de (\d+)(?: · (.+))?/);
   const week = m ? Number(m[1]) : 0;
   const total = m ? Number(m[2]) : 0;
@@ -69,7 +69,7 @@ function ProgramRing({ row }: { row: ProgressRow }) {
 }
 
 /** Un objetivo: una fila cuyo fondo se va llenando con el avance — porcentaje y días que quedan a la derecha. */
-function GoalFillRow({ row }: { row: ProgressRow }) {
+export function GoalFillRow({ row }: { row: ProgressRow }) {
   const pct = Math.min(100, Math.max(0, row.pct));
   return (
     <div className="flex flex-col gap-1.5">

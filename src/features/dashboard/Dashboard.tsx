@@ -6,15 +6,12 @@ import { computeWeekCount } from '../../engine/adherence';
 import { computeConditioningBalance } from '../../engine/conditioningBalance';
 import { getMonthlyStats } from './stats';
 import { computePrTrends } from '../../engine/weakPoints';
-import { computeRecoverySummary } from '../../engine/recovery';
+import { computeReadinessScore } from '../../engine/readinessScore';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
-import { MetricsGauges, ACWR_ZONE_STROKE, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
-import { AcwrGauge } from './AcwrGauge';
+import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
 import { TodayPreviewCard } from './TodayPreviewCard';
-import { JourneyProgress } from './JourneyProgress';
-import { SectionLabel } from '../shell/SectionLabel';
-import { RecoveryCard } from './RecoveryCard';
+import { DayRings } from './DayRings';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
@@ -49,16 +46,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   // Cada gauge abre (o cierra, si ya estaba abierta) su propia tarjeta de detalle — sin un "Más
   // detalle" intermedio que bucear. El de carga expande el gauge completo de ACWR ahí mismo; el
   // resto revela su tarjeta justo debajo de la fila de gauges.
-  const [acwrOpen, setAcwrOpen] = useState(false);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
-  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [energyOpen, setEnergyOpen] = useState(false);
   const [imbalancesOpen, setImbalancesOpen] = useState(false);
   const [strengthOpen, setStrengthOpen] = useState(false);
   const [scrollTarget, setScrollTarget] = useState<GaugeTarget | null>(null);
 
   const heatmapRef = useRef<HTMLDivElement>(null);
-  const recoveryRef = useRef<HTMLDivElement>(null);
   const energyRef = useRef<HTMLDivElement>(null);
   const imbalancesRef = useRef<HTMLDivElement>(null);
   const strengthRef = useRef<HTMLDivElement>(null);
@@ -84,12 +78,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
 
   function jumpTo(target: GaugeTarget) {
     switch (target) {
-      case 'acwr':
-        return setAcwrOpen((v) => !v);
       case 'heatmap':
         return toggleAndMaybeScroll(heatmapOpen, setHeatmapOpen, target);
-      case 'recovery':
-        return toggleAndMaybeScroll(recoveryOpen, setRecoveryOpen, target);
       case 'energy':
         return toggleAndMaybeScroll(energyOpen, setEnergyOpen, target);
       case 'imbalances':
@@ -103,7 +93,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
     if (!scrollTarget) return;
     const refs: Partial<Record<GaugeTarget, React.RefObject<HTMLDivElement>>> = {
       heatmap: heatmapRef,
-      recovery: recoveryRef,
       energy: energyRef,
       imbalances: imbalancesRef,
       strength: strengthRef,
@@ -123,21 +112,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const latestBodyweightKg = [...bodyweightLog].sort((a, b) => a.date.localeCompare(b.date)).pop()?.kg;
   const strengthTotalKg = profile.prs.backSquat + profile.prs.benchPress + profile.prs.deadlift;
   const strengthRatio = latestBodyweightKg ? strengthTotalKg / latestBodyweightKg : null;
-  const recovery = computeRecoverySummary(profile.readinessLog, todayIso);
-  const recoveryStroke = recovery.score === null ? 'stroke-neutral-600' : recovery.score >= 65 ? 'stroke-emerald-400' : recovery.score <= 40 ? 'stroke-red-400' : 'stroke-amber-400';
+  // Nota de preparación: el check-in más tu carga y cómo te salen las sesiones (ver `computeReadinessScore`).
+  const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
   const energyAdherencePct =
     conditioningBalance && conditioningBalance.totalPlanned > 0
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
       : null;
 
   const row1: GaugeSpec[] = [
-    {
-      label: 'Carga (ACWR)',
-      valueLabel: acwr.acwr !== null ? acwr.acwr.toFixed(2) : '—',
-      fraction: acwr.acwr !== null ? acwr.acwr / 2 : 0,
-      strokeClass: acwr.acwr !== null ? ACWR_ZONE_STROKE[acwr.zone] : 'stroke-neutral-600',
-      target: 'acwr',
-    },
     {
       label: 'Constancia (semana)',
       valueLabel: `${weekCount.done}/${weekCount.planned}`,
@@ -155,13 +137,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   ];
 
   const row2: GaugeSpec[] = [
-    {
-      label: 'Recuperación',
-      valueLabel: recovery.score !== null ? `${recovery.score}` : '—',
-      fraction: (recovery.score ?? 0) / 100,
-      strokeClass: recoveryStroke,
-      target: 'recovery',
-    },
     {
       label: 'Desequilibrios',
       valueLabel: balancedPairs.length > 0 ? `${balancedOk}/${balancedPairs.length}` : '—',
@@ -261,6 +236,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       */}
       <TodayPreviewCard profile={profile} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
 
+      {/* Los tres números del día: plan, recuperación (cuánto aguantas hoy) y carga (cuánto llevas encima). */}
+      <DayRings
+        structureRow={hasStructure ? structureRow : null}
+        goalRows={goalRows}
+        readiness={readiness}
+        acwr={acwr}
+        trend={acwrTrend}
+        onNavigateToObjetivos={onNavigateToObjetivos}
+      />
+
       {/*
         Los 6 gauges: todo lo esencial de un vistazo, cada uno la puerta directa a su detalle. Fila 1
         = cómo vas ahora mismo (carga, constancia, dominios); fila 2 = qué tal progresas (patrones,
@@ -272,16 +257,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         row2={[]}
         onJumpTo={jumpTo}
         title="Cómo vas"
-        header={
-          hasStructure ? (
-            <>
-              <SectionLabel className="mb-3">Plan activo</SectionLabel>
-              <JourneyProgress structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={onNavigateToObjetivos} />
-            </>
-          ) : undefined
-        }
       />
-      {acwrOpen && <AcwrGauge result={acwr} trend={acwrTrend} />}
 
       {/* Análisis: lo que no hace falta mirar cada día — plegado por defecto. */}
       <button
@@ -302,12 +278,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       {energyOpen && (
         <div ref={energyRef}>
           <EnergyDomainsCard profile={profile} history={history} collapsed={false} onToggleCollapsed={() => setEnergyOpen(false)} />
-        </div>
-      )}
-
-      {recoveryOpen && (
-        <div ref={recoveryRef}>
-          <RecoveryCard readinessLog={profile.readinessLog ?? []} />
         </div>
       )}
 

@@ -21,6 +21,13 @@
   --c-brand-gold-soft: 233 207 122;
   --c-brand-neon: 74 222 128;
   --c-brand-neon-soft: 134 239 172;
+  /* Colores de ESTADO (recuperación, carga): bien / regular / mal / poca carga. En claro se oscurecen para que el texto y
+     los anillos se lean sobre fondo blanco. */
+  --c-state-good: 52 211 153;
+  --c-state-mid: 251 191 36;
+  --c-state-low: 248 113 113;
+  --c-state-cool: 56 189 248;
+  --c-state-hot: 249 115 22;
 }
 
 /* Tema claro (opt-in): "white" pasa a ser texto oscuro, el ramo neutral se invierte, y las
@@ -47,6 +54,11 @@
   --c-brand-gold-soft: 133 95 20;
   --c-brand-neon: 22 163 74;
   --c-brand-neon-soft: 21 128 61;
+  --c-state-good: 5 150 105;
+  --c-state-mid: 180 83 9;
+  --c-state-low: 220 38 38;
+  --c-state-cool: 2 132 199;
+  --c-state-hot: 234 88 12;
 }
 
 body {
