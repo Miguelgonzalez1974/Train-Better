@@ -53,17 +53,19 @@ export function summarizeNotices(p: CoachNoticesProps): { count: number; actiona
 }
 
 /**
- * El icono de los avisos, en la fila de arriba junto al perfil. El punto solo se enciende (naranja) si hay algo
- * que decidir; con avisos meramente informativos el icono queda apagado y sin número.
+ * El icono de los avisos, en la fila de arriba junto al perfil — siempre visible. El punto solo se enciende (naranja)
+ * si hay algo que decidir; con avisos meramente informativos el icono se ve normal y sin punto, y sin ningún aviso
+ * queda atenuado (la hoja dice que no hay nada).
  */
 export function CoachNoticesButton({ count, actionable, onClick }: { count: number; actionable: boolean; onClick: () => void }) {
-  if (count === 0) return null;
   return (
     <button
       onClick={onClick}
       title="Avisos del coach"
       aria-label={actionable ? 'Avisos del coach — hay algo que decidir' : 'Avisos del coach'}
-      className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+      className={`relative flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold ${
+        count === 0 ? 'text-neutral-600' : 'text-neutral-300'
+      }`}
     >
       <Brain size={16} strokeWidth={2.25} />
       {actionable && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-brand-orange ring-2 ring-brand-bg" />}
@@ -74,21 +76,25 @@ export function CoachNoticesButton({ count, actionable, onClick }: { count: numb
 const rowClass = 'flex items-start gap-2.5 border-l-2 py-1.5 pl-3 text-sm';
 
 /** El contenido de la hoja de avisos: lo que el coach quiere decirte, cada uno con su color en el borde izquierdo. */
-export function CoachNoticesBody({
-  activePainFlags,
-  onRemovePainFlag,
-  rampStatus,
-  returnRampSuggestion,
-  showReturnRampSuggestion,
-  onActivateReturnRamp,
-  onDismissReturnRamp,
-  macroReviewSuggestion,
-  onConfirmMacroReview,
-  onDismissMacroReview,
-  nextMacroSuggestion,
-  onNavigateToObjetivos,
-  retestHeadsUp,
-}: CoachNoticesProps) {
+export function CoachNoticesBody(props: CoachNoticesProps) {
+  const {
+    activePainFlags,
+    onRemovePainFlag,
+    rampStatus,
+    returnRampSuggestion,
+    showReturnRampSuggestion,
+    onActivateReturnRamp,
+    onDismissReturnRamp,
+    macroReviewSuggestion,
+    onConfirmMacroReview,
+    onDismissMacroReview,
+    nextMacroSuggestion,
+    onNavigateToObjetivos,
+    retestHeadsUp,
+  } = props;
+  if (summarizeNotices(props).count === 0) {
+    return <p className="text-sm text-neutral-400">Sin avisos por ahora. Si el coach tiene algo que decirte, aparecerá aquí.</p>;
+  }
   return (
     <div className="flex flex-col gap-2.5">
       {activePainFlags.map((flag) => (
