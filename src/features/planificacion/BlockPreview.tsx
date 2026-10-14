@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import type { Block } from '../../data/movements/types';
-import type { SessionBlockResult } from '../../data/athlete/types';
+import type { PersonalRecords, SessionBlockResult, VariantPersonalRecords } from '../../data/athlete/types';
+import { resolveLiftPrTarget } from '../../engine/movementProgress';
+import type { MovementProgressData } from './LoadStat';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { fmtKgValue } from '../../lib/format';
@@ -23,22 +25,41 @@ function Mini({ value, label, accent }: { value: ReactNode; label: string; accen
   );
 }
 
-function LiftPreview({ block, results }: { block: Block; results: SessionBlockResult[] }) {
+/** Qué fracción de su 1RM es la carga de hoy (0-1), o null si el movimiento no tiene PR propio o no hay carga. */
+function pctOfOneRm(entry: SessionBlockResult, progress?: MovementProgressData): number | null {
+  const movement = getMovementById(entry.movementId);
+  if (!movement || !progress || !entry.loadKg) return null;
+  const target = resolveLiftPrTarget(movement, progress.variantPrs);
+  if (!target) return null;
+  const oneRm = target.kind === 'variant' ? progress.variantPrs?.[target.key as keyof VariantPersonalRecords] : progress.prs[target.key as keyof PersonalRecords];
+  return oneRm && oneRm > 0 ? entry.loadKg / oneRm : null;
+}
+
+function LiftPreview({ block, results, progress }: { block: Block; results: SessionBlockResult[]; progress?: MovementProgressData }) {
   // El levantamiento de trabajo: en oly, sin el calentamiento de barra ni el primer tecnico del complejo.
   const work = block === 'oly' ? results.filter((e) => !e.subgroup && e.reps !== '2-3') : results;
   const list = work.length > 0 ? work : results;
   const main = list[0];
   const rest = list.slice(1).map((e) => nameOf(e.movementId));
   const extra = block === 'oly' && rest.length > 0 ? `+ ${rest.length} más` : rest.length > 0 ? `+ ${rest.join(' · ')}` : '';
+  const pct = pctOfOneRm(main, progress);
   return (
     <>
-      <p className="mt-1 truncate text-[15px] font-semibold text-white">{nameOf(main.movementId)}</p>
-      <div className="mt-1.5 flex items-center gap-1.5">
+      <p className="mt-1 truncate text-[17px] font-semibold leading-tight text-white">{nameOf(main.movementId)}</p>
+      <div className="mt-2 flex items-center gap-1.5">
         {main.sets ? <Mini value={main.sets} label="series" /> : null}
         {main.reps ? <Mini value={main.reps} label="reps" /> : null}
         {main.loadKg ? <Mini value={fmtKgValue(main.loadKg)} label={loadUnitLabel(main.movementId, block)} accent /> : null}
         {extra && <span className="ml-1 min-w-0 truncate text-xs text-neutral-500">{extra}</span>}
       </div>
+      {pct !== null && (
+        <div className="mt-2.5 flex items-center gap-2">
+          <span className="h-1 w-20 shrink-0 overflow-hidden rounded-full bg-white/[0.08]">
+            <span className="block h-full rounded-full bg-white/60" style={{ width: `${Math.min(100, Math.round(pct * 100))}%` }} />
+          </span>
+          <span className="whitespace-nowrap text-[11px] text-neutral-500">{Math.round(pct * 100)} % de tu 1RM</span>
+        </div>
+      )}
     </>
   );
 }
@@ -53,14 +74,21 @@ function WodPreview({ results }: { results: SessionBlockResult[] }) {
         const head = group[0];
         const isBenchmark = head.movementId.startsWith('benchmark:');
         const title = head.title ? `"${head.title}"` : nameOf(head.movementId);
-        const detail = [head.format, isBenchmark ? '' : `${group.length} mov.`].filter(Boolean).join(' · ');
+        // El formato empieza por su tipo ("AMRAP 16 min", "For time"): ese primer tramo va en una píldora.
+        const [kind, ...restOfFormat] = (head.format ?? '').split(/ — | · /);
+        const detail = [restOfFormat.join(' · '), isBenchmark ? '' : `${group.length} mov.`].filter(Boolean).join(' · ');
         return (
           <div key={part} className="min-w-0">
-            <p className="truncate text-[15px] font-semibold text-white">
+            <p className="truncate text-[17px] font-semibold leading-tight text-white">
               {groups.length > 1 && <span className="mr-1.5 text-xs font-medium text-neutral-500">Parte {part}</span>}
               {title}
             </p>
-            {detail && <p className="truncate text-xs text-neutral-500">{detail}</p>}
+            <div className="mt-1.5 flex items-center gap-2">
+              {kind && (
+                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-200">{kind}</span>
+              )}
+              {detail && <span className="min-w-0 truncate text-xs text-neutral-500">{detail}</span>}
+            </div>
           </div>
         );
       })}
@@ -69,8 +97,8 @@ function WodPreview({ results }: { results: SessionBlockResult[] }) {
 }
 
 /** La línea (o dos) que se ve cuando el bloque está plegado: lo justo para saber qué toca sin abrirlo. */
-export function BlockPreview({ block, results }: { block: Block; results: SessionBlockResult[] }) {
-  if (block === 'strength' || block === 'oly') return <LiftPreview block={block} results={results} />;
+export function BlockPreview({ block, results, progress }: { block: Block; results: SessionBlockResult[]; progress?: MovementProgressData }) {
+  if (block === 'strength' || block === 'oly') return <LiftPreview block={block} results={results} progress={progress} />;
   if (block === 'wod') return <WodPreview results={results} />;
   if (block === 'warmup' || block === 'cooldown') {
     return <p className="mt-0.5 text-sm text-neutral-400">{results.length} {results.length === 1 ? 'ejercicio' : 'ejercicios'}</p>;

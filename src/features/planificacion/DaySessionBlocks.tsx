@@ -93,7 +93,7 @@ export function DaySessionBlocks({
       {showingTask ? (
         <SessionTaskView sections={taskSections} />
       ) : !editable ? (
-        <div>
+        <div className="flex flex-col gap-2.5">
           <button
             onClick={() => setOpenBlocks(openBlocks.size === blocksWithResults.length ? new Set() : new Set(blocksWithResults.map((g) => g.block)))}
             className="mb-1 ml-auto block text-[11px] font-medium text-neutral-500 transition-colors duration-200 hover:text-neutral-300"
@@ -112,7 +112,7 @@ export function DaySessionBlocks({
               onRateSet={onRateSet}
               onUpdateEntry={onUpdateEntry}
               indexMode={{
-                preview: <BlockPreview block={block} results={results} />,
+                preview: <BlockPreview block={block} results={results} progress={progress} />,
                 open: openBlocks.has(block),
                 onToggle: () =>
                   setOpenBlocks((prev) => {

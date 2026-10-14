@@ -15,7 +15,7 @@ import { fmtKg, fmtDay } from '../../lib/format';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { findLastSessionTopSet } from '../../engine/movementProgress';
 import { Modal } from '../shell/Modal';
-import { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
+import { ACCENT_CLASSES, BLOCK_META, BlockTile } from '../shell/blockMeta';
 import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
@@ -1195,6 +1195,8 @@ export function SessionBlockCard({
 }: SessionBlockCardProps) {
   if (results.length === 0) return null;
   const asIndex = Boolean(indexMode) && !editable;
+  // Fuerza, WOD y oly son los protagonistas del dia (tarjeta con fondo); el resto son filas finas.
+  const hero = asIndex && (block === 'strength' || block === 'wod' || block === 'oly');
   const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
   const isBenchmarkWod = block === 'wod' && results[0].movementId.startsWith('benchmark:');
@@ -1223,22 +1225,30 @@ export function SessionBlockCard({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className={asIndex ? 'border-t border-white/[0.06] first:border-t-0' : `relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`}>
+    <div
+      className={
+        asIndex
+          ? hero
+            ? 'rounded-2xl bg-white/[0.045] ring-1 ring-white/[0.06]'
+            : ''
+          : `relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`
+      }
+    >
       {!asIndex && <span className={`absolute bottom-1 left-0 top-0.5 w-[3px] ${accentClasses.bar}`} />}
 
-      <div className={asIndex && indexMode?.open ? 'pb-5' : undefined}>
+      <div className={asIndex && indexMode?.open ? (hero ? 'px-3 pb-3' : 'pb-3') : undefined}>
         {asIndex && indexMode ? (
           <button
             onClick={indexMode.onToggle}
             aria-expanded={indexMode.open}
-            className="flex w-full items-start gap-3 py-3.5 text-left"
+            className={hero ? 'flex w-full items-start gap-3.5 p-4 text-left' : 'flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.03]'}
           >
-            <Icon size={15} strokeWidth={2.25} className="mt-0.5 shrink-0 text-neutral-500" aria-hidden />
+            <BlockTile block={block} size={hero ? 40 : 30} active={indexMode.open} />
             <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>
+              <span className={`block font-semibold uppercase tracking-[0.14em] ${hero ? 'text-[11px] text-neutral-500' : 'text-[10px] text-neutral-500'}`}>{label}</span>
               {!indexMode.open && indexMode.preview}
             </span>
-            <ChevronDown size={14} strokeWidth={2.25} className={`mt-0.5 shrink-0 text-neutral-600 transition-transform duration-200 ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />
+            <ChevronDown size={14} strokeWidth={2.25} className={`shrink-0 text-neutral-600 transition-transform duration-200 ${hero ? 'mt-1' : ''} ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />
           </button>
         ) : collapsible ? (
           <button

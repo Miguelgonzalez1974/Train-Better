@@ -27,6 +27,25 @@ export const BLOCK_META: Record<Block, { label: string; Icon: LucideIcon; accent
   cooldown: { label: 'Vuelta a la calma', Icon: Wind, accent: 'neutral' },
 };
 
+/**
+ * El icono de un bloque dentro de un cuadradito redondeado. Todos neutros (el color queda para el estado y la marca): el
+ * bloque que está ABIERTO se tiñe con el naranja de marca, que es lo único que destaca.
+ */
+export function BlockTile({ block, size = 36, active = false }: { block: Block; size?: number; active?: boolean }) {
+  const { Icon } = BLOCK_META[block];
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
+        active ? 'bg-brand-orange/15 text-brand-orange' : 'bg-white/[0.07] text-neutral-300'
+      }`}
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <Icon size={Math.round(size * 0.5)} strokeWidth={2.25} />
+    </span>
+  );
+}
+
 /** Orden de bloques, igual que `BLOCK_ORDER` en `DaySessionBlocks.tsx` (duplicado a propósito: ese
  * archivo sí tira de toda la tarjeta de sesión, esto es solo el orden, nada más). */
 const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
