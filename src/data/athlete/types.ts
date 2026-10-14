@@ -446,7 +446,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 70;
+export const SESSION_GEN_VERSION = 71;
 
 export interface DailySession {
   date: string;
@@ -580,6 +580,8 @@ export interface SessionHistoryEntry {
   wodLibraryId?: string;
   /** Id de catálogo (`bm:…`) del WOD de programación real hecho ese día (ver `SessionBlockResult.wodCatalogId`). */
   wodCatalogId?: string;
+  /** Un día de doble WOD: los ids de catálogo (`lib:…` / `bm:…`) de sus dos partes, para no repetir ninguna. */
+  wodCatalogIds?: string[];
   /**
    * Punto medio de la banda BASE (sin calibrar) del objetivo del WOD de ese dia, con su formato y
    * unidad — junto a `wodResult` permite medir cuanto rinde el atleta respecto a la estimacion del

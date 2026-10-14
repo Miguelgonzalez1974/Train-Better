@@ -81,17 +81,18 @@ describe('WOD por partes', () => {
     expect(wodResultsOf({ ...base, wodResult: { scoreType: 'time', value: '0:00' }, wodResult2: rounds })).toEqual([{ part: 2, result: rounds }]);
   });
 
-  it('el historial guarda los dos resultados y la banda base es la de la parte 1, nunca la del WOD real', () => {
-    const withTarget = doubles.find((s) => s.blocks.some((b) => b.wodPart === 1 && b.wodTarget && b.wodTarget.high > 0));
-    expect(withTarget, 'ningun doble con objetivo en la parte 1').toBeTruthy();
-    const entry = toHistoryEntry(withTarget!, 'rx', 8, 70, time, undefined, rounds);
+  it('el historial guarda los dos resultados y los dos WODs reales; la banda base nunca es la de un WOD real publicado', () => {
+    const withTarget = doubles[0];
+    const entry = toHistoryEntry(withTarget, 'rx', 8, 70, time, undefined, rounds);
     expect(entry.wodResult).toEqual(time);
     expect(entry.wodResult2).toEqual(rounds);
-    expect(entry.wodTargetBase?.kind).not.toBe('library');
-    expect(entry.wodFormatKind).not.toBe('library');
-    expect(entry.wodLibraryId, 'la parte 2 es el WOD real').toBeTruthy();
+    // El objetivo de un WOD real lo publica la fuente: no es una estimacion del motor y no entra en la calibracion.
+    if (entry.wodTargetBase) expect(entry.wodTargetBase.kind).not.toBe('library');
+    // Las dos partes son WODs reales: el historial recuerda los dos para no repetir ninguno.
+    expect(entry.wodCatalogIds, 'los dos WODs reales del dia').toHaveLength(2);
+    expect(new Set(entry.wodCatalogIds).size).toBe(2);
     // Sin resultado de la parte 2 no se crea la clave.
-    expect('wodResult2' in toHistoryEntry(withTarget!, 'rx', 8, 70, time)).toBe(false);
+    expect('wodResult2' in toHistoryEntry(withTarget, 'rx', 8, 70, time)).toBe(false);
     // Un dia normal no cambia.
     expect('wodResult2' in toHistoryEntry(normal, 'rx', 8, 70, time)).toBe(false);
   });

@@ -1309,17 +1309,25 @@ export function SessionBlockCard({
             />
           )
         ) : block === 'wod' ? (
-          isBenchmarkWod ? (
-            <BenchmarkWodCard entry={results[0]} index={entryIndices?.[0]} onUpdateEntry={onUpdateEntry} />
-          ) : wodGroups.length > 1 ? (
+          wodGroups.length > 1 ? (
             <div className="flex flex-col">
               {wodGroups.map((g) => (
                 <Fragment key={g.part}>
                   {g.part === 2 && <WodRestDivider />}
-                  <CustomWodCard entries={g.entries} entryIndices={g.indices} onUpdateEntry={onUpdateEntry} part={g.part} />
+                  {g.entries[0].movementId.startsWith('benchmark:') ? (
+                    // Una parte puede ser un WOD de programacion servido como tarjeta (Mayhem, CompTrain, Invictus…).
+                    <>
+                      {g.part ? <WodPartLabel part={g.part} /> : null}
+                      <BenchmarkWodCard entry={g.entries[0]} index={g.indices?.[0]} onUpdateEntry={onUpdateEntry} />
+                    </>
+                  ) : (
+                    <CustomWodCard entries={g.entries} entryIndices={g.indices} onUpdateEntry={onUpdateEntry} part={g.part} />
+                  )}
                 </Fragment>
               ))}
             </div>
+          ) : isBenchmarkWod ? (
+            <BenchmarkWodCard entry={results[0]} index={entryIndices?.[0]} onUpdateEntry={onUpdateEntry} />
           ) : (
             <CustomWodCard entries={results} entryIndices={entryIndices} onUpdateEntry={onUpdateEntry} />
           )

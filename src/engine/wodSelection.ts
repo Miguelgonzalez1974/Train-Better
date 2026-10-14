@@ -43,15 +43,28 @@ export interface SelectionContext {
   recentSources?: WodSource[];
   /** Fuentes permitidas (por defecto todas). */
   allowedSources?: readonly WodSource[];
+  /** Movimientos que no pueden salir (p. ej. los de la parte 1 de un día de doble WOD). */
+  excludeMovementIds?: Set<string>;
+  /** Formatos que no pueden salir. */
+  excludeFormats?: readonly CatalogFormat[];
+  /** Máximo de movimientos distintos del WOD (por defecto 7; las piezas de un doble WOD son más cortas). */
+  maxMovements?: number;
+  /**
+   * Parte 2 de un día de doble WOD: el WOD debe COMPLEMENTAR a la parte 1 — otro dominio, ningún patrón compartido y otro
+   * formato (pesa mucho en la puntuación).
+   */
+  complement?: { domain: WodDomain | null; patterns: Set<MovementPattern>; format: CatalogFormat | null };
 }
 
 export interface RankedWod {
   wod: CatalogWod;
   score: number;
-  parts: { duration: number; energy: number; domain: number; demand: number; interference: number; variety: number; balance: number; competition: number };
+  parts: { duration: number; energy: number; domain: number; demand: number; interference: number; variety: number; balance: number; competition: number; complement: number };
 }
 
-const WEIGHTS = { duration: 0.32, energy: 0.17, domain: 0.12, demand: 0.16, interference: 0.08, variety: 0.05, balance: 0.06, competition: 0.04 };
+const WEIGHTS = { duration: 0.3, energy: 0.17, domain: 0.12, demand: 0.16, interference: 0.1, variety: 0.05, balance: 0.06, competition: 0.04, complement: 0 };
+/** La parte 2 de un doble WOD pesa sobre todo por cuánto complementa a la parte 1. */
+const COMPLEMENT_WEIGHT = 0.3;
 /** Cuántos de los últimos WODs reales cuentan para repartir entre fuentes. */
 const BALANCE_WINDOW = 12;
 /** Más de esto y el WOD no se sirve como WOD del día (lista de movimientos demasiado larga). */
@@ -147,6 +160,17 @@ function balanceFit(w: CatalogWod, ctx: SelectionContext): number {
   return clamp01(1 - (share - 0.15) / 0.5);
 }
 
+/** Qué tanto complementa a la parte 1: otro dominio (lo que más), sin patrones compartidos y otro formato. */
+function complementFit(w: CatalogWod, ctx: SelectionContext): number {
+  const c = ctx.complement;
+  if (!c) return 1;
+  const domain = c.domain !== null && w.leadDomain !== null && w.leadDomain !== c.domain ? 1 : 0.25;
+  const patterns = patternsOf(w);
+  const shared = patterns.length === 0 ? 0 : patterns.filter((p) => c.patterns.has(p)).length / patterns.length;
+  const format = c.format !== null && w.format !== c.format ? 1 : 0.3;
+  return 0.5 * domain + 0.3 * (1 - shared) + 0.2 * format;
+}
+
 function competitionFit(w: CatalogWod, ctx: SelectionContext): number {
   if (!ctx.competitionPeak) return 0.5;
   return COMPETITION_SOURCES.includes(w.source) ? 1 : 0.2;
@@ -161,11 +185,14 @@ export function rankCatalogWods(catalog: CatalogWod[], ctx: SelectionContext): R
     (w) =>
       w.usable &&
       w.movementIds.length > 0 &&
-      w.movementIds.length <= MAX_MOVEMENTS &&
+      w.movementIds.length <= (ctx.maxMovements ?? MAX_MOVEMENTS) &&
       (!ctx.allowedSources || ctx.allowedSources.includes(w.source)) &&
       !ctx.recentCatalogIds.has(w.id) &&
+      !(ctx.excludeFormats && ctx.excludeFormats.includes(w.format)) &&
+      !(ctx.excludeMovementIds && w.movementIds.some((id) => ctx.excludeMovementIds!.has(id))) &&
       !conflictsWithPain(w, ctx.painAvoided),
   );
+  const weights = ctx.complement ? { ...WEIGHTS, complement: COMPLEMENT_WEIGHT } : WEIGHTS;
   const strict = base.filter((w) => !patternsOf(w).some((p) => ctx.excludePatterns.has(p)));
   const pool = strict.length >= MIN_POOL ? strict : base;
   return pool
@@ -179,8 +206,9 @@ export function rankCatalogWods(catalog: CatalogWod[], ctx: SelectionContext): R
         variety: varietyFit(wod, ctx),
         balance: balanceFit(wod, ctx),
         competition: competitionFit(wod, ctx),
+        complement: complementFit(wod, ctx),
       };
-      const score = (Object.keys(WEIGHTS) as (keyof typeof WEIGHTS)[]).reduce((s, k) => s + WEIGHTS[k] * parts[k], 0);
+      const score = (Object.keys(weights) as (keyof typeof weights)[]).reduce((s, k) => s + weights[k] * parts[k], 0);
       return { wod, score, parts };
     })
     .sort((a, b) => b.score - a.score || a.wod.id.localeCompare(b.wod.id));

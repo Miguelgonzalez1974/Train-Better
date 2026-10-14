@@ -2,14 +2,15 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { generateSessionForDate, isCachedSessionStale, toHistoryEntry } from './generateSession';
 import { doubleWodSlot, expectedStrengthSessionsPerWeek, getWeekdayIndex, isDoubleWodEnabled, setDoubleWodEnabled, toLocalIsoDate } from './periodization';
 import { resolveWeekLocks } from './weekLocks';
-import { dominantWodDomain } from './wodDomains';
+import { getCatalogWod } from './wodCatalog';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import { getMovementById } from '../data/movements';
-import { SESSION_GEN_VERSION, type DailySession, type SessionHistoryEntry } from '../data/athlete/types';
+import { SESSION_GEN_VERSION, type DailySession, type SessionBlockResult, type SessionHistoryEntry } from '../data/athlete/types';
 
 /**
  * Dia de doble WOD (como los martes/viernes de PushJerk): solo en el calendario de 6 dias, el
- * `trainingDayIndex` 4 (viernes), solo acondicionamiento — parte 1 corta del generador y parte 2 un WOD
+ * `trainingDayIndex` 4 (viernes), solo acondicionamiento — las dos piezas son WODs reales de las programaciones
+ * (la 1 corta e intensa, la 2 la complementa); el generador solo entra de respaldo. Antes: parte 1 corta del generador y parte 2 un WOD
  * real de la biblioteca que la complementa. Fase 1: motor y planificacion; la pantalla llega despues.
  */
 
@@ -86,8 +87,16 @@ describe('dia de doble WOD (6 dias)', () => {
     expect(bad).toEqual([]);
   });
 
-  it('dos partes bien formadas: parte 1 (1 entrada o mas) antes de la parte 2, formatos y titulos distintos, sin benchmark', () => {
+  /** El WOD real de una parte (de la biblioteca o de una programación servida como tarjeta). */
+  const realOf = (blocks: SessionBlockResult[]) => {
+    const head = blocks[0];
+    const id = head?.wodCatalogId ?? (head?.wodLibraryId ? `lib:${head.wodLibraryId}` : undefined);
+    return id ? getCatalogWod(id) : undefined;
+  };
+
+  it('dos partes bien formadas: parte 1 antes de la parte 2, las dos de programaciones reales y distintas, sin benchmark de test', () => {
     const bad: string[] = [];
+    let real = 0;
     for (const { session: s } of doubles) {
       const wod = s.blocks.filter((b) => b.block === 'wod');
       const parts = wod.map((b) => b.wodPart);
@@ -99,37 +108,52 @@ describe('dia de doble WOD (6 dias)', () => {
       }
       const a = wod.filter((b) => b.wodPart === 1);
       const b = wod.filter((x) => x.wodPart === 2);
-      if (wod.some((x) => x.movementId.startsWith('benchmark:'))) bad.push(`${s.date}: benchmark en doble`);
-      if (a[0].format === b[0].format) bad.push(`${s.date}: mismo formato en las dos partes`);
-      if (a[0].wodKind === 'library' || a[0].wodKind === 'chipper' || a[0].wodKind === 'cardioChipper') bad.push(`${s.date}: parte 1 no puede ser ${a[0].wodKind}`);
-      // La pantalla ya rotula "Parte N de 2": el titulo es solo el nombre del WOD, y distinto en cada parte.
-      if (!a[0].title || !b[0].title || a[0].title === b[0].title) bad.push(`${s.date}: titulos ausentes o iguales`);
-      if (/parte \d de 2/i.test(`${a[0].title} ${b[0].title}`)) bad.push(`${s.date}: la parte va dentro del titulo`);
+      // Un benchmark de dia de test nunca; una programacion real servida como tarjeta (`wodCatalogId`) si.
+      if (wod.some((x) => x.movementId.startsWith('benchmark:') && !x.wodCatalogId)) bad.push(`${s.date}: benchmark de test en doble`);
+      const wa = realOf(a);
+      const wb = realOf(b);
+      if (wa && wb) {
+        real++;
+        if (wa.id === wb.id) bad.push(`${s.date}: la misma pieza dos veces`);
+        if (wa.format === 'chipper') bad.push(`${s.date}: la parte 1 no puede ser un chipper`);
+        if (a.some((x) => x.wodKind !== 'library')) bad.push(`${s.date}: parte 1 real sin su marca`);
+      }
       if (!/^Parte 1 de 2/.test(a[0].notes ?? '') || !/^Parte 2 de 2/.test(b[0].notes ?? '')) bad.push(`${s.date}: notas sin la parte`);
+      // La pantalla ya rotula "Parte N de 2": ni el titulo ni la nota lo repiten dentro.
+      if (/parte \d de 2/i.test(`${a[0].title ?? ''} ${b[0].title ?? ''}`)) bad.push(`${s.date}: la parte va dentro del titulo`);
     }
     expect(bad).toEqual([]);
+    expect(real / doubles.length, `${real}/${doubles.length} dobles con las dos piezas reales`).toBeGreaterThan(0.95);
   });
 
-  it('la parte 2 es un WOD real que complementa a la parte 1: otro dominio y ningun patron ni movimiento compartido', () => {
-    let library = 0;
-    let complementary = 0;
+  it('la parte 1 es corta e intensa y la parte 2 la complementa: otro dominio, ningun movimiento compartido y pocos patrones compartidos', () => {
+    let pairs = 0;
+    let otherDomain = 0;
+    let sharedPatterns = 0;
+    let otherFormat = 0;
+    let minutesA = 0;
+    let minutesB = 0;
     const bad: string[] = [];
     for (const { session: s } of doubles) {
-      const a = s.blocks.filter((b) => b.wodPart === 1);
-      const b = s.blocks.filter((x) => x.wodPart === 2);
-      if (!b[0]?.wodLibraryId) continue;
-      library++;
-      if (b.length > 5) bad.push(`${s.date}: parte 2 de ${b.length} lineas`);
-      const aIds = new Set(a.map((x) => x.movementId));
-      if (b.some((x) => aIds.has(x.movementId))) bad.push(`${s.date}: movimiento repetido entre partes`);
-      const pa = new Set(a.map((x) => getMovementById(x.movementId)?.pattern));
-      const sharesPattern = b.some((x) => pa.has(getMovementById(x.movementId)?.pattern));
-      const sameDomain = dominantWodDomain(a.map((x) => x.movementId)) === dominantWodDomain(b.map((x) => x.movementId));
-      if (!sharesPattern && !sameDomain) complementary++;
+      const a = realOf(s.blocks.filter((x) => x.wodPart === 1));
+      const b = realOf(s.blocks.filter((x) => x.wodPart === 2));
+      if (!a || !b) continue;
+      pairs++;
+      if (a.movementIds.some((id) => b.movementIds.includes(id))) bad.push(`${s.date}: movimiento repetido entre partes (${a.name} / ${b.name})`);
+      if (a.leadDomain !== b.leadDomain) otherDomain++;
+      const pa = new Set(a.movementIds.map((id) => getMovementById(id)?.pattern));
+      if (b.movementIds.some((id) => pa.has(getMovementById(id)?.pattern))) sharedPatterns++;
+      if (a.format !== b.format) otherFormat++;
+      minutesA += a.durationMin ?? 0;
+      minutesB += b.durationMin ?? 0;
+      if ((a.durationMin ?? 99) > 14) bad.push(`${s.date}: la parte 1 dura ${a.durationMin} min (${a.name})`);
     }
     expect(bad).toEqual([]);
-    expect(library, 'la parte 2 casi siempre debe ser real').toBeGreaterThan(doubles.length * 0.9);
-    expect(complementary / library, `${complementary}/${library} complementarios`).toBeGreaterThan(0.9);
+    expect(pairs).toBeGreaterThan(20);
+    expect(otherDomain / pairs, 'otro dominio').toBeGreaterThan(0.7);
+    expect(sharedPatterns / pairs, 'patrones compartidos').toBeLessThan(0.3);
+    expect(otherFormat / pairs, 'otro formato').toBeGreaterThan(0.6);
+    expect(minutesA / pairs, 'la parte 1 es la corta').toBeLessThan(minutesB / pairs);
   });
 
   it('las semanas con doble siguen cubriendo los 4 patrones de fuerza en sus 4 dias de fuerza', () => {

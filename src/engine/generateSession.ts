@@ -1947,15 +1947,35 @@ function pickRealWod(a: {
   effortNote: string;
   /** Pista de ritmo del sistema energético de hoy (va a la nota). */
   paceCue: string;
-}): { blocks: SessionBlockResult[]; reasons: string[] } | null {
-  const recentCatalogIds = new Set<string>();
+  /** Día de doble WOD: la parte que se sirve (cada bloque lleva `wodPart` y la nota abre con "Parte N de 2"). */
+  part?: 1 | 2;
+  /** Ids de catálogo ya elegidos hoy (la otra parte de un doble WOD): no se repiten. */
+  alsoRecentIds?: string[];
+}): { blocks: SessionBlockResult[]; reasons: string[]; wod: CatalogWod } | null {
+  const served = pickRealWodUnparted(a);
+  if (!served || !a.part) return served;
+  const prefix =
+    a.part === 1
+      ? 'Parte 1 de 2 — pieza corta e intensa; luego 5-10 min de descanso antes de la parte 2. '
+      : 'Parte 2 de 2 — tras 5-10 min de descanso; complementa a la parte 1. ';
+  return {
+    ...served,
+    blocks: served.blocks.map((b) => ({ ...b, wodPart: a.part, wodKind: 'library', notes: `${prefix}${b.notes ?? ''}`.trim() })),
+  };
+}
+
+function pickRealWodUnparted(a: Parameters<typeof pickRealWod>[0]): { blocks: SessionBlockResult[]; reasons: string[]; wod: CatalogWod } | null {
+  const recentCatalogIds = new Set<string>(a.alsoRecentIds ?? []);
   const recentSeq: CatalogWod[] = [];
   for (const e of recentRealWodHistory(a.history)) {
-    const id = e.wodCatalogId ?? (e.wodLibraryId ? `lib:${e.wodLibraryId}` : undefined);
-    if (!id) continue;
-    recentCatalogIds.add(id);
-    const w = getCatalogWod(id);
-    if (w) recentSeq.push(w);
+    // Un día de doble WOD guarda los dos WODs en `wodCatalogIds`; el resto, un solo id.
+    const ids = e.wodCatalogIds ?? [e.wodCatalogId ?? (e.wodLibraryId ? `lib:${e.wodLibraryId}` : undefined)];
+    for (const id of ids) {
+      if (!id) continue;
+      recentCatalogIds.add(id);
+      const w = getCatalogWod(id);
+      if (w) recentSeq.push(w);
+    }
   }
   for (const id of a.recentBenchmarkIds) recentCatalogIds.add(`bm:${id}`);
   const ctx: SelectionContext = {
@@ -1975,7 +1995,7 @@ function pickRealWod(a: {
   if (wod.origin === 'library') {
     const lw = getLibraryWod(wod.refId);
     if (!lw) return null;
-    return { blocks: serveLibraryWod(lw, notes, a.prs, a.bodyweightKg, a.loadFactor), reasons };
+    return { blocks: serveLibraryWod(lw, notes, a.prs, a.bodyweightKg, a.loadFactor), reasons, wod };
   }
   const bm = benchmarkWorkouts.find((w) => w.id === wod.refId);
   if (!bm) return null;
@@ -1998,6 +2018,7 @@ function pickRealWod(a: {
       },
     ],
     reasons,
+    wod,
   };
 }
 
@@ -2238,7 +2259,8 @@ function buildWodBlock(
         // Objetivo de competición activo y en su recta final (segunda mitad del plazo, pico o taper): programaciones de competición.
         competitionPeak: Boolean(competicionGoal) && (week === 3 || isTaper || competicionProgress >= 0.5),
         excludePatterns,
-        softAvoidPatterns,
+        // Lo que ya carga el accesorio de hoy y la halterofilia (el oly va casi todos los dias): el WOD los esquiva si puede.
+        softAvoidPatterns: new Set<MovementPattern>([...(softAvoidPatterns ?? []), 'olyLift']),
         painAvoided,
       },
       history,
@@ -3818,38 +3840,104 @@ function buildDoubleWodDay(ctx: {
     date: ctx.date,
   });
 
-  const kindOutA: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
-  // "Regenerar": solo las piezas del WOD (partes 1 y 2) toman la semilla de la variante; el oly y el resto del dia no cambian.
-  const rawA = withWodVariant(ctx.macroId, `${ctx.dateIso}:a`, () =>
-    buildWodBlock(
-      ctx.dayPlan, week, profile.trainingDaysPerWeek, recentIds, excludePatterns, ctx.goals, false, history, false,
-      profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutA,
-      ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: SHORT_ONLY, painAvoided: ctx.avoidedPatterns },
-    ),
-  );
   const effort = WOD_EFFORT_BY_WEEK[week];
   const effortNote = ` Esfuerzo de hoy: RPE ~${effort.rpe} — ${effort.intent}.`;
-  const partA: SessionBlockResult[] = rawA.map((b) => ({
-    ...b,
-    wodKind: kindOutA.kind,
-    wodPart: 1 as const,
-    notes: `Parte 1 de 2 — pieza corta e intensa; luego 5-10 min de descanso antes de la parte 2. ${b.notes ?? ''}`.trim(),
-  }));
-
-  // Parte 2: WOD real que complementa a la parte 1.
-  const libB = withWodVariant(ctx.macroId, `${ctx.dateIso}:b`, () => pickLibraryPartB(partA, history, excludePatterns, ctx.avoidedPatterns));
-  let partB: SessionBlockResult[];
   const activePain = getActivePainFlags(profile.painFlags, ctx.dateIso);
   const reasons: string[] = [
     'Hoy toca doble WOD: dos piezas de acondicionamiento con 5-10 min de descanso entre ellas, y sin fuerza ni oly.',
-    ...(kindOutA.reasons ?? []),
     ...(activePain.length > 0
       ? [
           `Tienes un aviso de molestia activo (${[...new Set(activePain.map((f) => PAIN_AREA_LABEL[f.area].toLowerCase()))].join(', ')}): el WOD y el calentamiento evitan los movimientos de esa zona.`,
         ]
       : []),
   ];
-  if (libB) {
+
+  // Las DOS piezas salen de programaciones reales (ver `pickRealWod`): la parte 1 corta e intensa y la parte 2 un
+  // WOD que la complementa (otro dominio, ningun movimiento ni patron compartido, otro formato). "Regenerar": solo las
+  // piezas del WOD toman la semilla de la variante; el oly y el resto del dia no cambian.
+  let real: { a: NonNullable<ReturnType<typeof pickRealWod>>; b: NonNullable<ReturnType<typeof pickRealWod>> } | null = null;
+  if (realWodSelection) {
+    const plan = resolveEnergySystemPlan(energyA ?? 'umbral');
+    const base = WOD_TIME_DOMAIN[week].amrapMin * plan.durationScale;
+    const targetA = Math.min(10, Math.max(5, Math.round(base * doseA.wodVolume * 0.55)));
+    const targetB = Math.min(16, Math.max(9, Math.round(base * ctx.dayDose.wodVolume * 0.85)));
+    const lightPref = Math.min(1, Math.max(0, (1 - ctx.wodLoadFactor) / 0.15, ctx.dayDose.dayIntensity === 'baja' ? 0.25 : 0));
+    const competicionGoal = pickPriorityGoal(ctx.goals, (g) => g.type === 'preparar-competicion');
+    const common = {
+      history,
+      recentBenchmarkIds: new Set([...recentIds].filter((id) => id.startsWith('benchmark:')).map((id) => id.replace('benchmark:', ''))),
+      prs: profile.prs,
+      bodyweightKg,
+      loadFactor: ctx.wodLoadFactor,
+      effortNote,
+      paceCue: plan.paceCue,
+    };
+    const baseCtx = {
+      energy: energyA ?? ('umbral' as EnergySystem),
+      leadDomain: ctx.plannedDomain,
+      lowInterference: false,
+      lightPref,
+      competitionPeak: Boolean(competicionGoal) && (week === 3 || getGoalProgress(competicionGoal!, history) >= 0.5),
+      excludePatterns,
+      // El oly del viernes (snatch y clean & jerk) ya carga la halterofilia: las piezas del WOD la esquivan si pueden.
+      softAvoidPatterns: new Set<MovementPattern>(['olyLift']),
+      painAvoided: ctx.avoidedPatterns,
+      maxMovements: 5,
+    };
+    const a = withWodVariant(ctx.macroId, `${ctx.dateIso}:a`, () =>
+      pickRealWod({ ...common, ctx: { ...baseCtx, targetMin: targetA, excludeFormats: ['chipper'] }, part: 1 }),
+    );
+    const b = a
+      ? withWodVariant(ctx.macroId, `${ctx.dateIso}:b`, () =>
+          pickRealWod({
+            ...common,
+            ctx: {
+              ...baseCtx,
+              energy: 'umbral' as EnergySystem,
+              leadDomain: null,
+              targetMin: targetB,
+              excludeMovementIds: new Set(a.wod.movementIds),
+              complement: {
+                domain: a.wod.leadDomain,
+                patterns: new Set(a.wod.movementIds.map((id) => getMovementById(id)?.pattern).filter((p): p is MovementPattern => Boolean(p))),
+                format: a.wod.format,
+              },
+            },
+            part: 2,
+            alsoRecentIds: [a.wod.id],
+          }),
+        )
+      : null;
+    if (a && b) real = { a, b };
+  }
+
+  // Respaldo: si no hay dos WODs reales compatibles (molestias, repetidos), decide el generador como antes.
+  const kindOutA: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
+  const rawA = real
+    ? []
+    : withWodVariant(ctx.macroId, `${ctx.dateIso}:a`, () =>
+        buildWodBlock(
+          ctx.dayPlan, week, profile.trainingDaysPerWeek, recentIds, excludePatterns, ctx.goals, false, history, false,
+          profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutA,
+          ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: SHORT_ONLY, painAvoided: ctx.avoidedPatterns },
+        ),
+      );
+  const partA: SessionBlockResult[] = real
+    ? real.a.blocks
+    : rawA.map((b) => ({
+        ...b,
+        wodKind: kindOutA.kind,
+        wodPart: 1 as const,
+        notes: `Parte 1 de 2 — pieza corta e intensa; luego 5-10 min de descanso antes de la parte 2. ${b.notes ?? ''}`.trim(),
+      }));
+  reasons.push(...(real ? [`Parte 1: ${real.a.reasons.join(' ')}`, `Parte 2: ${real.b.reasons.join(' ')}`] : (kindOutA.reasons ?? [])));
+
+  // Parte 2 (respaldo): WOD real de la biblioteca que complementa a la parte 1.
+  const libB = real ? null : withWodVariant(ctx.macroId, `${ctx.dateIso}:b`, () => pickLibraryPartB(partA, history, excludePatterns, ctx.avoidedPatterns));
+  let partB: SessionBlockResult[];
+  if (real) {
+    partB = real.b.blocks;
+  } else if (libB) {
     partB = serveLibraryWod(
       libB,
       `Parte 2 de 2 — tras 5-10 min de descanso; ${WOD_FORMAT_RATIONALE.library}${effortNote}`,
@@ -3878,9 +3966,13 @@ function buildDoubleWodDay(ctx: {
   }
 
   const wodBlocks = [...partA, ...partB];
-  const wodIds = wodBlocks.map((b) => b.movementId);
-  const leadPattern = getMovementById(partA[0]?.movementId ?? '')?.pattern ?? ctx.dayPlan.strengthPattern;
-  const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) }, avoidedPatterns);
+  // Un WOD servido como tarjeta (`benchmark:…`) aporta sus movimientos reales al calentamiento y al core del dia.
+  const wodIds = wodBlocks.flatMap((b) => (b.wodCatalogId ? realWodMovementIds(b.wodCatalogId) ?? [] : [b.movementId]));
+  const leadPattern =
+    getMovementById(partA[0]?.wodCatalogId ? realWodMovementIds(partA[0].wodCatalogId)?.[0] ?? '' : partA[0]?.movementId ?? '')?.pattern ??
+    ctx.dayPlan.strengthPattern;
+  const hasLoad = wodBlocks.some((b) => (b.loadKg ?? 0) > 0 || Object.keys(b.benchmarkLoads ?? {}).length > 0);
+  const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: hasLoad }, avoidedPatterns);
 
   const coreBlock = ctx.coreToday
     ? buildCoreBlock(
@@ -5018,6 +5110,15 @@ export function toHistoryEntry(
   const wodMovementIds = session.blocks
     .filter((b) => b.block === 'wod')
     .flatMap((b) => (b.wodCatalogId ? realWodMovementIds(b.wodCatalogId) ?? [b.movementId] : [b.movementId]));
+  // Los WODs reales del dia (uno, o dos en un doble WOD), con su id de catalogo.
+  const catalogIdsOfDay = [
+    ...new Set(
+      session.blocks
+        .filter((b) => b.block === 'wod')
+        .map((b) => b.wodCatalogId ?? (b.wodLibraryId ? `lib:${b.wodLibraryId}` : undefined))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
   const strengthMovement = session.blocks.find((b) => b.block === 'strength');
   const olyMovement = session.blocks.find((b) => b.block === 'oly' && !b.subgroup);
   // Dia mixto (viernes de doble WOD, o cierre "Day 5 de Mayhem" de un dia normal): se entrenaron las
@@ -5035,7 +5136,8 @@ export function toHistoryEntry(
   const wodTargetBlock = session.blocks.find((b) => b.block === 'wod' && b.wodPart !== 2 && b.wodTarget && b.wodTarget.high > 0);
   // Un WOD editado a mano ya no es el que el motor estimo: su resultado no informa de la calibracion.
   const wodBase: SessionHistoryEntry['wodTargetBase'] =
-    wodTargetBlock?.wodTarget && wodTargetBlock.wodKind && !session.editedByAthlete
+    // Un WOD real ('library') trae el objetivo que PUBLICO la fuente, no una estimacion del motor: no sirve para calibrar.
+    wodTargetBlock?.wodTarget && wodTargetBlock.wodKind && wodTargetBlock.wodKind !== 'library' && !session.editedByAthlete
       ? {
           kind: wodTargetBlock.wodKind,
           unit: wodTargetBlock.wodTarget.unit,
@@ -5060,6 +5162,7 @@ export function toHistoryEntry(
     // En un dia de doble WOD el WOD real es la parte 2, no el primer bloque.
     wodLibraryId: session.blocks.find((b) => b.block === 'wod' && b.wodLibraryId)?.wodLibraryId,
     wodCatalogId: session.blocks.find((b) => b.block === 'wod' && b.wodCatalogId)?.wodCatalogId,
+    ...(catalogIdsOfDay.length > 1 ? { wodCatalogIds: catalogIdsOfDay } : {}),
     wodTargetBase: wodBase,
   };
 }

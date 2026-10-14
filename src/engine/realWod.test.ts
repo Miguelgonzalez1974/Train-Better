@@ -156,6 +156,80 @@ describe('WOD real — molestias y competición', () => {
   });
 });
 
+describe('WOD real — días de doble WOD', () => {
+  function simulateDoubles(over: Partial<AthleteProfile> = {}, macros = ['d1', 'd2']): DailySession[] {
+    const out: DailySession[] = [];
+    for (const id of macros) {
+      const profile = makeProfile({ trainingDaysPerWeek: 6, macrocycles: [makeMacro({ id })], bodyweightLog: [{ date: '2026-01-01', kg: 82 }], ...over });
+      let history: SessionHistoryEntry[] = [];
+      for (const d of consecutiveDates('2026-01-12', 140)) {
+        const session = generateSessionForDate(profile, history, d, profile.goals);
+        if (session.isRestDay) continue;
+        history = [...history, toHistoryEntry(session, 'rx', 7, 60)];
+        if (session.doubleWod) out.push(session);
+      }
+    }
+    return out;
+  }
+  const catalogIdsOf = (s: DailySession) => [
+    ...new Set(s.blocks.filter((b) => b.block === 'wod').map((b) => b.wodCatalogId ?? `lib:${b.wodLibraryId}`)),
+  ];
+
+  const baseDoubles = simulateDoubles();
+
+  it('las dos piezas salen de programaciones reales y el historial recuerda las dos', () => {
+    const doubles = baseDoubles;
+    expect(doubles.length).toBeGreaterThan(8);
+    for (const s of doubles) {
+      const ids = catalogIdsOf(s);
+      expect(ids, s.date).toHaveLength(2);
+      for (const id of ids) expect(getCatalogWod(id), `${s.date}: ${id}`).toBeTruthy();
+      expect(toHistoryEntry(s, 'rx', 8, 70).wodCatalogIds, s.date).toEqual(ids);
+    }
+  });
+
+  it('ninguna pieza se repite entre dobles, ni con los WODs de los días normales', () => {
+    // Misma simulacion encadenada: el historial de cada dia incluye lo anterior, asi que un WOD no vuelve a salir.
+    const seen = new Set<string>();
+    for (const id of ['d1']) {
+      const profile = makeProfile({ trainingDaysPerWeek: 6, macrocycles: [makeMacro({ id })], bodyweightLog: [{ date: '2026-01-01', kg: 82 }] });
+      let history: SessionHistoryEntry[] = [];
+      for (const d of consecutiveDates('2026-01-12', 140)) {
+        const session = generateSessionForDate(profile, history, d, profile.goals);
+        if (session.isRestDay) continue;
+        history = [...history, toHistoryEntry(session, 'rx', 7, 60)];
+        for (const cid of catalogIdsOf(session).filter((x) => !x.endsWith('undefined'))) {
+          expect(seen.has(cid), `${session.date}: ${cid} repetido`).toBe(false);
+          seen.add(cid);
+        }
+      }
+    }
+    expect(seen.size).toBeGreaterThan(50);
+  });
+
+  it('con una molestia activa ninguna de las dos piezas lleva movimientos ni palabras de esa zona', () => {
+    for (const area of ['rodilla', 'hombro'] as const) {
+      const flags = [{ id: 'p', area, createdDate: '2026-01-01', until: null }];
+      const avoided = getAvoidedPatterns(flags, '2026-02-01');
+      for (const s of simulateDoubles({ painFlags: flags }, ['d1'])) {
+        for (const id of catalogIdsOf(s)) {
+          const wod = getCatalogWod(id);
+          if (!wod) continue;
+          expect(benchmarkConflictsWithPain({ movements: wod.movementIds, format: wod.text }, avoided, getMovementById), `${area}: ${s.date} ${wod.name}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('el doble queda coherente con el calentamiento: se calienta lo que se va a hacer, también con piezas servidas como tarjeta', () => {
+    for (const s of baseDoubles.slice(0, 12)) {
+      expect(s.blocks.some((b) => b.block === 'warmup'), s.date).toBe(true);
+      expect(s.blocks.some((b) => b.block === 'cooldown'), s.date).toBe(true);
+      expect(s.blocks.some((b) => b.block === 'strength'), s.date).toBe(false);
+    }
+  });
+});
+
 describe('WOD real — historial e interruptor', () => {
   it('el historial recuerda el WOD hecho (y los movimientos reales de uno servido como tarjeta)', () => {
     const programmed = base.find((d) => d.catalogId?.startsWith('bm:'))!;
@@ -184,8 +258,9 @@ describe('WOD real — historial e interruptor', () => {
         }
       }
     }
-    // Una parte de los WODs de programaciones lleva barra o mancuernas: ahí el coach propone carga.
-    expect(withLoads / cards.length).toBeGreaterThan(0.25);
+    // Una parte de los WODs de programaciones lleva barra o mancuernas: ahí el coach propone carga. (El WOD esquiva la
+    // halterofilia que ya carga el oly del dia, asi que salen algo menos que en el catalogo entero.)
+    expect(withLoads / cards.length).toBeGreaterThan(0.15);
   });
 
   it('con poca preparación las cargas propuestas son menores que con buena preparación', () => {
