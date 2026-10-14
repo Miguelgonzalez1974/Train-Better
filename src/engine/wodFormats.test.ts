@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { generateSessionForDate } from './generateSession';
+import { describe, it, expect, afterAll } from 'vitest';
+import { generateSessionForDate, isRealWodSelectionEnabled, setRealWodSelectionEnabled } from './generateSession';
 import { getWodDomain, WOD_BARBELL_LOAD_PERCENT, WOD_PRESCRIPTION, WOD_RX_BW_FRACTION } from './wodDomains';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import type { SessionBlockResult } from '../data/athlete/types';
@@ -14,7 +14,14 @@ import { getLibraryWod } from '../data/library/libraryWods';
  * barra" con uno solo, una "triada de barra" de mancuernas, una escalera de reps con un acarreo). Estos
  * tests recorren cientos de sesiones de varios macrociclos (cada uno con su semilla) y comprueban
  * invariantes por formato, no una salida concreta.
+ *
+ * Prueban el GENERADOR, que desde que el coach elige WODs reales del catálogo (ver `wodSelection.ts`) es el último
+ * recurso: se apaga la selección real durante este archivo para ejercitarlo entero.
  */
+const REAL_WOD_INITIAL = isRealWodSelectionEnabled();
+// Se apaga al cargar el archivo (no en un `beforeAll`): la muestra de WODs se genera al declarar los tests.
+setRealWodSelectionEnabled(false);
+afterAll(() => setRealWodSelectionEnabled(REAL_WOD_INITIAL));
 
 interface GeneratedWod {
   date: string;

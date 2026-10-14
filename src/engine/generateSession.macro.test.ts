@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   adoptAdditiveEngineFields,
   bestAffinityPartner,
   generateSessionForDate,
+  isRealWodSelectionEnabled,
+  setRealWodSelectionEnabled,
   isCachedSessionOrphaned,
   isCachedSessionStale,
   planWeekLocks,
@@ -25,6 +27,13 @@ import {
   allIdsResolve,
 } from './__fixtures';
 import { getMovementById } from '../data/movements';
+
+// Este archivo prueba el motor periodizado con el GENERADOR de WODs (que desde que el coach elige WODs reales del
+// catálogo —ver `wodSelection.ts`— es el último recurso): se apaga la selección real para ejercitarlo entero. La
+// selección real tiene su propio archivo (`realWod.test.ts`).
+const REAL_WOD_INITIAL = isRealWodSelectionEnabled();
+beforeAll(() => setRealWodSelectionEnabled(false));
+afterAll(() => setRealWodSelectionEnabled(REAL_WOD_INITIAL));
 
 const START = '2026-01-05'; // lunes, semana 1 del macro fixture
 const THREE_WEEKS = consecutiveDates(START, 21);

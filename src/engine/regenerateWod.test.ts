@@ -37,7 +37,8 @@ describe('regenerar: otro WOD', () => {
     let wodDays = 0;
     for (const d of days) {
       const base = generateSessionForDate(p, [], d, p.goals);
-      if (!base.blocks.some((b) => b.block === 'wod') || base.blocks.some((b) => b.movementId.startsWith('benchmark:'))) continue;
+      // Sin WOD, o con un benchmark de dia de test fijado por la semana (no es un WOD de programacion elegido): nada que regenerar.
+      if (!base.blocks.some((b) => b.block === 'wod') || base.blocks.some((b) => b.movementId.startsWith('benchmark:') && !b.wodCatalogId)) continue;
       wodDays++;
       const variants = [1, 2, 3, 4].map((v) => generateSessionForDate({ ...p, regenVariants: { [iso(d)]: v } }, [], d, p.goals));
       if (variants.some((s) => wodOf(s) !== wodOf(base))) changed++;

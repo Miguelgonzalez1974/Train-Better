@@ -81,7 +81,9 @@ import {
   type WodTimeDomain,
 } from './wodDomains';
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parsePublishedGoal, type WodTarget } from './wodTargets';
-import { libraryWods, type LibraryWod } from '../data/library/libraryWods';
+import { getLibraryWod, libraryWods, type LibraryWod } from '../data/library/libraryWods';
+import { getCatalogWod, getWodCatalog, type CatalogWod } from './wodCatalog';
+import { explainChoice, pickRanked, rankCatalogWods, SOURCE_LABEL, type SelectionContext } from './wodSelection';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
 import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
 import {
@@ -1910,6 +1912,91 @@ function interferingPatterns(blocks: SessionBlockResult[]): Set<MovementPattern>
   return out;
 }
 
+/**
+ * Interruptor del WOD real del catálogo (encendido): apagado, el WOD sale siempre del generador, como antes. Existe para
+ * poder probar el generador (último recurso) por separado; la app no lo apaga.
+ */
+let realWodSelection = true;
+export function isRealWodSelectionEnabled(): boolean {
+  return realWodSelection;
+}
+export function setRealWodSelectionEnabled(enabled: boolean): void {
+  realWodSelection = enabled;
+}
+
+/** Movimientos reales de un WOD del catálogo (para el análisis de dominios del historial). */
+function realWodMovementIds(catalogId: string): string[] | undefined {
+  return getCatalogWod(catalogId)?.movementIds;
+}
+
+/**
+ * WOD REAL de una programación (PushJerk, Mayhem, CompTrain, Invictus, clásicos) elegido para hoy en vez de uno
+ * generado: puntúa el catálogo por la duración que pide el día, el sistema energético y el dominio planificados, la
+ * exigencia frente a cómo llegas y la interferencia con la fuerza y el accesorio de hoy (ver `wodSelection.ts`).
+ * Devuelve null si no queda ninguno compatible (molestias, repetidos): entonces decide el generador, como último recurso.
+ * Los de PushJerk se sirven estructurados, con las cargas del coach; los demás, como tarjeta con su formato original.
+ */
+function pickRealWod(a: {
+  ctx: Omit<SelectionContext, 'recentCatalogIds' | 'lastSource' | 'recentFormats'>;
+  history: SessionHistoryEntry[];
+  recentBenchmarkIds: Set<string>;
+  prs: PersonalRecords;
+  bodyweightKg: number | null;
+  loadFactor: number;
+  effortNote: string;
+  /** Pista de ritmo del sistema energético de hoy (va a la nota). */
+  paceCue: string;
+}): { blocks: SessionBlockResult[]; reasons: string[] } | null {
+  const recentCatalogIds = new Set<string>();
+  const recentSeq: CatalogWod[] = [];
+  for (const e of recentRealWodHistory(a.history)) {
+    const id = e.wodCatalogId ?? (e.wodLibraryId ? `lib:${e.wodLibraryId}` : undefined);
+    if (!id) continue;
+    recentCatalogIds.add(id);
+    const w = getCatalogWod(id);
+    if (w) recentSeq.push(w);
+  }
+  for (const id of a.recentBenchmarkIds) recentCatalogIds.add(`bm:${id}`);
+  const ctx: SelectionContext = {
+    ...a.ctx,
+    recentCatalogIds,
+    lastSource: recentSeq[0]?.source,
+    recentFormats: recentSeq.map((w) => w.format),
+    recentSources: recentSeq.map((w) => w.source),
+  };
+  const ranked = rankCatalogWods(getWodCatalog(), ctx);
+  const pick = pickRanked(ranked, rng);
+  if (!pick) return null;
+  const wod = pick.wod;
+  const reasons = [`Hoy toca un WOD real de la programación de ${SOURCE_LABEL[wod.source]} (${wod.name}), no uno generado.`, ...explainChoice(pick, ctx)];
+  if (a.loadFactor < 0.99) reasons.push(`Las cargas van recortadas un ${Math.round((1 - a.loadFactor) * 100)} % por cómo llegas hoy.`);
+  const notes = `${reasons[0]}${a.effortNote} Ritmo: ${a.paceCue}.`;
+  if (wod.origin === 'library') {
+    const lw = getLibraryWod(wod.refId);
+    if (!lw) return null;
+    return { blocks: serveLibraryWod(lw, notes, a.prs, a.bodyweightKg, a.loadFactor), reasons };
+  }
+  const bm = benchmarkWorkouts.find((w) => w.id === wod.refId);
+  if (!bm) return null;
+  return {
+    blocks: [
+      {
+        block: 'wod',
+        movementId: `benchmark:${bm.id}`,
+        format: bm.format,
+        notes: `${bm.name} — ${bm.format}. WOD real de la programación de ${SOURCE_LABEL[wod.source]}; respeta su formato y ajusta el ritmo al RPE de hoy.${a.effortNote} Ritmo: ${a.paceCue}.`,
+        wodCatalogId: wod.id,
+      },
+    ],
+    reasons,
+  };
+}
+
+/** Las últimas sesiones registradas, de la más reciente a la más antigua, dentro de la ventana de "no repetir WODs reales". */
+function recentRealWodHistory(history: SessionHistoryEntry[]): SessionHistoryEntry[] {
+  return history.slice(-LIBRARY_RECENT_WINDOW).reverse();
+}
+
 function buildWodBlock(
   dayPlan: DayPlan,
   week: 1 | 2 | 3 | 4,
@@ -1993,7 +2080,10 @@ function buildWodBlock(
   const effort = WOD_EFFORT_BY_WEEK[week];
   const effortNote = ` Esfuerzo de hoy: RPE ~${effort.rpe} — ${effort.intent}.`;
 
-  if (!wodRampActive && !opts?.noBenchmark && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || forceBenchmarkByGoal)) {
+  // Con la seleccion de WODs reales encendida, el empuje de un objetivo de competicion ya no convierte cada dia en un
+  // benchmark al azar: esos dias eligen un WOD real que encaje con hoy, preferente de programaciones de competicion
+  // (ver `pickRealWod`). Siguen siendo benchmark el dia 0 de la semana y el extra de la semana pico.
+  if (!wodRampActive && !opts?.noBenchmark && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || (forceBenchmarkByGoal && !realWodSelection))) {
     // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
     // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
     // Aviso de molestia: un benchmark es una pieza unica de formato fijo, asi que si lleva algo que el aviso
@@ -2118,6 +2208,46 @@ function buildWodBlock(
     amrapMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.amrapMin * wodScale)),
     emomMin: Math.max(lowInterferenceWod ? 8 : 6, Math.round(baseDomain.emomMin * wodScale)),
   };
+
+  // WOD REAL de una programación (ver `pickRealWod`): es lo normal; el generador de abajo es el último recurso. El
+  // día de doble WOD (`excludeKinds` con 'library') mantiene su pieza corta generada, de momento.
+  if (realWodSelection && !opts?.excludeKinds?.includes('library')) {
+    // Cómo llegas hoy: el factor de carga (0,8-1) ya resume readiness, ACWR y RPE reciente; la descarga y la rampa de vuelta piden WODs ligeros.
+    const lightPref = Math.min(
+      1,
+      Math.max(0, (1 - loadFactor) / 0.15, week === 4 ? 0.6 : 0, wodRampActive ? 0.7 : 0, dose.dayIntensity === 'baja' ? 0.25 : 0),
+    );
+    // Mismo criterio conservador que el generador: sin dominio líder en días de fuerza, ni "barra manda" en pico/descarga.
+    const leadDomainToday: WodDomain | null = plannedDomain && !lowInterferenceWod && !(plannedDomain === 'weighted' && week > 2) ? plannedDomain : null;
+    const real = pickRealWod({
+      ctx: {
+        targetMin: timeDomain.amrapMin,
+        energy: energy.system,
+        leadDomain: leadDomainToday,
+        lowInterference: lowInterferenceWod,
+        lightPref,
+        // Objetivo de competición activo y en su recta final (segunda mitad del plazo, pico o taper): programaciones de competición.
+        competitionPeak: Boolean(competicionGoal) && (week === 3 || isTaper || competicionProgress >= 0.5),
+        excludePatterns,
+        softAvoidPatterns,
+        painAvoided,
+      },
+      history,
+      recentBenchmarkIds,
+      prs,
+      bodyweightKg,
+      loadFactor,
+      effortNote,
+      paceCue: energy.paceCue,
+    });
+    if (real) {
+      if (kindOut) {
+        kindOut.kind = 'library';
+        kindOut.reasons?.push(...real.reasons);
+      }
+      return real.blocks;
+    }
+  }
 
   // Semana pico: formatos cortos e intensos, sin chipper largo ni escalera de acumulacion de volumen.
   // Rampa de vuelta: mismo criterio que la semana pico, por la razon contraria — nada de formatos
@@ -4685,7 +4815,9 @@ export function planWeekLocks(
         : undefined;
     // Solo los dias que la simulacion marco como dia de test llevan un benchmark que bloquear — el
     // WOD "normal" (no-benchmark) no se bloquea, sigue variando hasta que se entrena.
-    const wodBenchmarkMovementId = session.blocks.find((b) => b.block === 'wod')?.movementId;
+    // Un WOD de programación real servido como tarjeta (`wodCatalogId`) lleva tambien id `benchmark:`, pero no es un dia de test: no se bloquea.
+    const wodBlockToday = session.blocks.find((b) => b.block === 'wod');
+    const wodBenchmarkMovementId = wodBlockToday?.wodCatalogId ? undefined : wodBlockToday?.movementId;
     const wodBenchmarkId = wodBenchmarkMovementId?.startsWith('benchmark:')
       ? wodBenchmarkMovementId.replace('benchmark:', '')
       : undefined;
@@ -4873,7 +5005,10 @@ export function toHistoryEntry(
   /** Resultado de la parte 2 de un dia de doble WOD. */
   wodResult2?: WodResult,
 ): SessionHistoryEntry {
-  const wodMovementIds = session.blocks.filter((b) => b.block === 'wod').map((b) => b.movementId);
+  // Un WOD de programación real servido como tarjeta (`benchmark:…`) aporta sus movimientos reales al análisis de dominios.
+  const wodMovementIds = session.blocks
+    .filter((b) => b.block === 'wod')
+    .flatMap((b) => (b.wodCatalogId ? realWodMovementIds(b.wodCatalogId) ?? [b.movementId] : [b.movementId]));
   const strengthMovement = session.blocks.find((b) => b.block === 'strength');
   const olyMovement = session.blocks.find((b) => b.block === 'oly' && !b.subgroup);
   // Dia mixto (viernes de doble WOD, o cierre "Day 5 de Mayhem" de un dia normal): se entrenaron las
@@ -4915,6 +5050,7 @@ export function toHistoryEntry(
     wodFormatKind: wodKindBlock?.wodKind,
     // En un dia de doble WOD el WOD real es la parte 2, no el primer bloque.
     wodLibraryId: session.blocks.find((b) => b.block === 'wod' && b.wodLibraryId)?.wodLibraryId,
+    wodCatalogId: session.blocks.find((b) => b.block === 'wod' && b.wodCatalogId)?.wodCatalogId,
     wodTargetBase: wodBase,
   };
 }

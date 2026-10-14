@@ -412,6 +412,8 @@ export interface SessionBlockResult {
   wodPart?: 1 | 2;
   /** Id del WOD real de la biblioteca (`src/data/library`) que sirve este bloque — permite no repetirlo en el historial. Solo WOD de tipo "library". */
   wodLibraryId?: string;
+  /** Id de catálogo (`bm:…`) del WOD de una programación real (Mayhem, CompTrain, Invictus…) servido como WOD del día — permite no repetirlo. Ver `engine/wodCatalog.ts`. */
+  wodCatalogId?: string;
   /**
    * Objetivo orientativo del WOD estimado por el motor (`src/engine/wodTargets.ts`) — banda de
    * tiempo / rondas / reps. Solo bloque 'wod' generado (no benchmark). `low === 0 && high === 0`
@@ -439,7 +441,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 68;
+export const SESSION_GEN_VERSION = 69;
 
 export interface DailySession {
   date: string;
@@ -571,6 +573,8 @@ export interface SessionHistoryEntry {
   wodFormatKind?: string;
   /** Id del WOD real de la biblioteca hecho ese día (ver `SessionBlockResult.wodLibraryId`), para no repetirlo pronto. */
   wodLibraryId?: string;
+  /** Id de catálogo (`bm:…`) del WOD de programación real hecho ese día (ver `SessionBlockResult.wodCatalogId`). */
+  wodCatalogId?: string;
   /**
    * Punto medio de la banda BASE (sin calibrar) del objetivo del WOD de ese dia, con su formato y
    * unidad — junto a `wodResult` permite medir cuanto rinde el atleta respecto a la estimacion del

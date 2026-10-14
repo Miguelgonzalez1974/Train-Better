@@ -327,7 +327,13 @@ function BenchmarkWodCard({
           );
         })}
       </div>
-      <CoachNote text="WOD de referencia: compara tu resultado con intentos anteriores para medir tu progreso real." />
+      <CoachNote
+        text={
+          entry.wodCatalogId
+            ? 'WOD real de una programación: respeta su formato y ajusta el ritmo al RPE de hoy. Las cargas del texto son las Rx originales (en lb): escálalas a tus kilos.'
+            : 'WOD de referencia: compara tu resultado con intentos anteriores para medir tu progreso real.'
+        }
+      />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { benchmarkHasExplicitScheme } from '../data/movements/benchmarkCompleten
 import { usesExcludedMovement } from '../data/movements/excluded';
 import { libraryWods, type LibraryWod } from '../data/library/libraryWods';
 import type { PainArea } from '../data/athlete/types';
-import { avoidsMovement, getAvoidedPatterns } from './painFlags';
+import { benchmarkConflictsWithPain, getAvoidedPatterns } from './painFlags';
 import { getWodDomain, type EnergySystem, type WodDomain } from './wodDomains';
 
 /**
@@ -35,6 +35,8 @@ export interface CatalogWod {
   refId: string;
   source: WodSource;
   name: string;
+  /** Texto original del WOD (cabecera y líneas, o el formato del benchmark): para detectar movimientos que el aviso de molestia evita aunque no estén en la lista. */
+  text: string;
   format: CatalogFormat;
   durationMin: number | null;
   durationBasis: DurationBasis | null;
@@ -249,6 +251,7 @@ function fromLibrary(w: LibraryWod): CatalogWod {
       refId: w.id,
       source: 'pushjerk',
       name: `PushJerk ${w.date}`,
+      text: w.original,
       format: libraryFormat(w.header, w.lines.length),
       durationMin: duration.min,
       durationBasis: duration.basis,
@@ -273,6 +276,7 @@ function fromBenchmark(w: BenchmarkWorkout): CatalogWod {
       refId: w.id,
       source: sourceOf(w),
       name: w.name,
+      text: w.format,
       format: benchmarkFormat(w.format, w.movements.length),
       durationMin: duration?.min ?? null,
       durationBasis: duration?.basis ?? null,
@@ -285,10 +289,18 @@ function fromBenchmark(w: BenchmarkWorkout): CatalogWod {
 
 let cached: CatalogWod[] | null = null;
 
+let byIdCache: Map<string, CatalogWod> | null = null;
+
 /** El catálogo entero (se construye una vez): biblioteca PushJerk + catálogo de benchmarks y programaciones. */
 export function getWodCatalog(): CatalogWod[] {
   if (!cached) cached = [...libraryWods.map(fromLibrary), ...benchmarkWorkouts.map(fromBenchmark)];
   return cached;
+}
+
+/** Un WOD del catálogo por su id (`lib:…` / `bm:…`). */
+export function getCatalogWod(id: string): CatalogWod | undefined {
+  if (!byIdCache) byIdCache = new Map(getWodCatalog().map((w) => [w.id, w]));
+  return byIdCache.get(id);
 }
 
 export const isDeclaredDuration = (w: CatalogWod): boolean => w.durationBasis !== null && DECLARED_BASIS.includes(w.durationBasis);
@@ -356,7 +368,7 @@ export function summarizeCatalog(catalog: CatalogWod[]): CatalogCoverage {
   const painSurvivors = Object.fromEntries(
     PAIN_AREAS.map((area) => {
       const avoided = getAvoidedPatterns([{ id: 'x', area, createdDate: '2026-01-01', until: null }], '2026-06-01');
-      const ok = usableList.filter((w) => w.movementIds.every((id) => !avoidsMovement(avoided, getMovementById(id)!))).length;
+      const ok = usableList.filter((w) => !benchmarkConflictsWithPain({ movements: w.movementIds, format: w.text }, avoided, getMovementById)).length;
       return [area, ok];
     }),
   ) as CatalogCoverage['painSurvivors'];
