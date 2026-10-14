@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Brain, Settings } from 'lucide-react';
 import { Modal } from '../shell/Modal';
 import { PerfilRapido } from './PerfilRapido';
@@ -8,9 +8,11 @@ import type { AthleteProfile } from '../../data/athlete/types';
 interface CoachHeaderProps {
   profile: AthleteProfile;
   onSaveProfile: (profile: AthleteProfile) => void;
+  /** Botones extra a la derecha, junto al del perfil (el de los avisos del coach). */
+  trailing?: ReactNode;
 }
 
-export function CoachHeader({ profile, onSaveProfile }: CoachHeaderProps) {
+export function CoachHeader({ profile, onSaveProfile, trailing }: CoachHeaderProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -21,14 +23,17 @@ export function CoachHeader({ profile, onSaveProfile }: CoachHeaderProps) {
           <p className="text-sm font-semibold tracking-tight text-neutral-300">Coach IA</p>
         </div>
 
-        <button
-          onClick={() => setOpen(true)}
-          title="Tu perfil"
-          aria-label="Tu perfil"
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-all duration-200 hover:rotate-45 hover:border-brand-gold hover:text-brand-gold"
-        >
-          <Settings size={16} />
-        </button>
+        <div className="flex items-center gap-2">
+          {trailing}
+          <button
+            onClick={() => setOpen(true)}
+            title="Tu perfil"
+            aria-label="Tu perfil"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-all duration-200 hover:rotate-45 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <Settings size={16} />
+          </button>
+        </div>
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Tu perfil">

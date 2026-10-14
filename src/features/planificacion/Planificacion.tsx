@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2 } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
@@ -61,7 +61,14 @@ import { DaySessionBlocks } from './DaySessionBlocks';
 import { DayShapeChips } from '../shell/blockMeta';
 import { ActionMenu } from '../shell/ActionMenu';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
-import { CoachNotices } from './CoachNotices';
+import {
+  CoachNoticesBody,
+  CoachNoticesButton,
+  CoachReasonsList,
+  PainChips,
+  summarizeNotices,
+  type CoachNoticesProps,
+} from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
 import { NutritionDayButton } from './NutritionDayButton';
 import { FocusMode } from './FocusMode';
@@ -189,6 +196,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   const [showAddWodPicker, setShowAddWodPicker] = useState(false);
   const [macroWodPreview, setMacroWodPreview] = useState<SessionBlockResult[] | null>(null);
   const [showPainPicker, setShowPainPicker] = useState(false);
+  const [showNotices, setShowNotices] = useState(false);
+  const [showReasons, setShowReasons] = useState(false);
   const [painAreaDraft, setPainAreaDraft] = useState<PainArea>('hombro');
   const [painDurationDraft, setPainDurationDraft] = useState<PainDuration>('semanas');
   const [showQuickLog, setShowQuickLog] = useState(false);
@@ -780,8 +789,32 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     handleSaveProfile({ ...profile, painFlags });
   }
 
+  // Los avisos del coach ya no ocupan una barra: un icono arriba (con punto solo si hay algo que decidir) abre la hoja.
+  const noticeProps: CoachNoticesProps = {
+    activePainFlags,
+    onRemovePainFlag: handleRemovePainFlag,
+    rampStatus,
+    returnRampSuggestion,
+    showReturnRampSuggestion,
+    onActivateReturnRamp: handleActivateReturnRamp,
+    onDismissReturnRamp: () => setReturnRampDismissed(true),
+    macroReviewSuggestion,
+    onConfirmMacroReview: handleConfirmMacroReview,
+    onDismissMacroReview: handleDismissMacroReview,
+    nextMacroSuggestion,
+    onNavigateToObjetivos,
+    retestHeadsUp,
+  };
+  const noticeSummary = summarizeNotices(noticeProps);
+
   return (
     <div className="flex flex-col gap-4">
+      <Modal open={showNotices} onClose={() => setShowNotices(false)} title="Avisos del coach">
+        <CoachNoticesBody {...noticeProps} />
+      </Modal>
+      <Modal open={showReasons} onClose={() => setShowReasons(false)} title="Por qué tu sesión es así hoy">
+        <CoachReasonsList reasons={session?.coachReasons ?? []} />
+      </Modal>
       {session && !session.isRestDay && <TrainingTimer />}
       {focusMode && session && !session.isRestDay && (
         <FocusMode
@@ -801,7 +834,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           }}
         />
       )}
-      <CoachHeader profile={profile} onSaveProfile={handleSaveProfile} />
+      <CoachHeader
+        profile={profile}
+        onSaveProfile={handleSaveProfile}
+        trailing={<CoachNoticesButton count={noticeSummary.count} actionable={noticeSummary.actionable} onClick={() => setShowNotices(true)} />}
+      />
 
       {showDiary && (
         <TrainingDiary
@@ -823,22 +860,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
         <div className="contents lg:col-start-2 lg:row-start-1 lg:block">
           <div className="flex flex-col gap-3 lg:sticky lg:top-6">
-            <CoachNotices
-              activePainFlags={activePainFlags}
-              onRemovePainFlag={handleRemovePainFlag}
-              rampStatus={rampStatus}
-              returnRampSuggestion={returnRampSuggestion}
-              showReturnRampSuggestion={showReturnRampSuggestion}
-              onActivateReturnRamp={handleActivateReturnRamp}
-              onDismissReturnRamp={() => setReturnRampDismissed(true)}
-              macroReviewSuggestion={macroReviewSuggestion}
-              onConfirmMacroReview={handleConfirmMacroReview}
-              onDismissMacroReview={handleDismissMacroReview}
-              nextMacroSuggestion={nextMacroSuggestion}
-              onNavigateToObjetivos={onNavigateToObjetivos}
-              retestHeadsUp={retestHeadsUp}
-              coachReasons={session?.coachReasons ?? []}
-            />
             <div className="flex flex-col gap-1.5">
               <WeekStrip
                 profile={profile}
@@ -920,6 +941,16 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             <h1 className="text-3xl font-semibold tracking-tight text-white">
               {session.isRestDay ? 'Día de descanso' : todayWeekdayLabel}
             </h1>
+            {(session.coachReasons?.length ?? 0) > 0 && (
+              <button
+                onClick={() => setShowReasons(true)}
+                title="Por qué tu sesión es así hoy"
+                aria-label="Por qué tu sesión es así hoy"
+                className="mt-1 flex h-6 w-6 items-center justify-center rounded-full text-neutral-600 transition-colors duration-200 hover:bg-white/5 hover:text-neutral-300"
+              >
+                <Info size={15} strokeWidth={2.25} />
+              </button>
+            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-400">
             {session.mesocycleWeek > 0 && (
@@ -982,6 +1013,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         )}
       </div>
       {!session.isRestDay && <DayShapeChips session={session} variant="text" />}
+      {!session.isRestDay && <PainChips flags={activePainFlags} onRemove={handleRemovePainFlag} />}
 
       {showReadinessCheck && (
         <ReadinessCheckIn
