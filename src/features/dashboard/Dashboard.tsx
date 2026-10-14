@@ -8,6 +8,9 @@ import { getMonthlyStats } from './stats';
 import { computePrTrends } from '../../engine/weakPoints';
 import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
+import { buildTrend, dayStrain, recommendedStrain, strainStatus } from '../../engine/strain';
+import { StrainCard } from './StrainCard';
+import { TrendCard } from './TrendCard';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
@@ -26,6 +29,9 @@ import { ResponseProfileCard } from './ResponseProfileCard';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
+
+/** Cómo se llama cada zona de carga (ACWR) en las frases del Dashboard. */
+const LOAD_WORD = { baja: 'baja', optima: 'óptima', moderada: 'alta', alta: 'muy alta' } as const;
 
 /** Veces el peso corporal (total sentadilla + banca + peso muerto) a las que el arco de "Fuerza" llega lleno. */
 const STRENGTH_RATIO_FULL = 7;
@@ -114,6 +120,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   // Nota de preparación: el check-in más tu carga y cómo te salen las sesiones (ver `computeReadinessScore`).
   const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
   const readinessLearning = computeReadinessLearning(profile.readinessLog, history);
+  const todayStrain = dayStrain(history.find((h) => h.date === todayIso));
+  const strainRange = recommendedStrain(readiness.total, acwr.acwr !== null && !acwr.coldStart ? acwr.zone : null);
+  const strainState = strainStatus(todayStrain, strainRange);
   const energyAdherencePct =
     conditioningBalance && conditioningBalance.totalPlanned > 0
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
@@ -245,6 +254,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         }
         onNavigateToObjetivos={onNavigateToObjetivos}
       />
+
+      {/* Esfuerzo de hoy frente al rango que recomienda el coach, y la tendencia de esfuerzo y preparación. */}
+      <StrainCard
+        strain={todayStrain}
+        range={strainRange}
+        status={strainState}
+        readiness={readiness.total}
+        loadWord={acwr.acwr !== null && !acwr.coldStart ? LOAD_WORD[acwr.zone] : null}
+      />
+      <TrendCard series={(days) => buildTrend(history, profile.readinessLog, todayIso, days)} />
 
       {/*
         Análisis: lo que no hace falta mirar cada día, plegado por defecto. Los gauges (dominios energéticos,
