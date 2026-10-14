@@ -3,6 +3,7 @@ import { NotebookPen, Brain } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult } from '../../data/athlete/types';
 import { SessionBlockCard, type RpeFeedback } from './SessionBlockCard';
+import { BlockPreview } from './BlockPreview';
 import { buildTaskSections, SessionTaskView } from './SessionTaskView';
 import type { MovementProgressData } from './LoadStat';
 
@@ -36,7 +37,12 @@ export function DaySessionBlocks({
   // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
   // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
   const [tab, setTab] = useState<'session' | 'task'>('session');
-  useEffect(() => setTab('session'), [session.date]);
+  // Todo plegado por defecto: un bloque abierto a la vez (al abrir otro se cierra el anterior), o todos con "Abrir todo".
+  const [openBlocks, setOpenBlocks] = useState<Set<Block>>(new Set());
+  useEffect(() => {
+    setTab('session');
+    setOpenBlocks(new Set());
+  }, [session.date]);
 
   if (session.source === 'custom') {
     return (
@@ -86,6 +92,41 @@ export function DaySessionBlocks({
       )}
       {showingTask ? (
         <SessionTaskView sections={taskSections} />
+      ) : !editable ? (
+        <div>
+          <button
+            onClick={() => setOpenBlocks(openBlocks.size === blocksWithResults.length ? new Set() : new Set(blocksWithResults.map((g) => g.block)))}
+            className="mb-1 ml-auto block text-[11px] font-medium text-neutral-500 transition-colors duration-200 hover:text-neutral-300"
+          >
+            {openBlocks.size === blocksWithResults.length ? 'Cerrar todo' : 'Abrir todo'}
+          </button>
+          {blocksWithResults.map(({ block, results, entryIndices }) => (
+            <SessionBlockCard
+              key={block}
+              block={block}
+              results={results}
+              entryIndices={entryIndices}
+              isLast={false}
+              progress={progress}
+              setFeedbackByIndex={setFeedbackByIndex}
+              onRateSet={onRateSet}
+              onUpdateEntry={onUpdateEntry}
+              indexMode={{
+                preview: <BlockPreview block={block} results={results} />,
+                open: openBlocks.has(block),
+                onToggle: () =>
+                  setOpenBlocks((prev) => {
+                    if (prev.has(block)) {
+                      const next = new Set(prev);
+                      next.delete(block);
+                      return next;
+                    }
+                    return new Set([block]);
+                  }),
+              }}
+            />
+          ))}
+        </div>
       ) : (
         blocksWithResults.map(({ block, results, entryIndices }, index) => (
           <SessionBlockCard

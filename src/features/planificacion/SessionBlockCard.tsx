@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, Timer, Trophy } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import {
@@ -1172,6 +1172,11 @@ interface SessionBlockCardProps {
    * `session.blocks` — se pinta debajo de su levantamiento (no en modo edición). */
   setFeedbackByIndex?: Map<number, RpeFeedback>;
   onRateSet?: (index: number, rpe: number) => void;
+  /**
+   * Modo plegable: el bloque se enseña como una fila (etiqueta + `preview` con lo esencial) y su detalle completo solo
+   * al abrirlo. Lo controla quien pinta la lista (`DaySessionBlocks`). No aplica en edición.
+   */
+  indexMode?: { preview: ReactNode; open: boolean; onToggle: () => void };
 }
 
 export function SessionBlockCard({
@@ -1186,8 +1191,10 @@ export function SessionBlockCard({
   progress,
   setFeedbackByIndex,
   onRateSet,
+  indexMode,
 }: SessionBlockCardProps) {
   if (results.length === 0) return null;
+  const asIndex = Boolean(indexMode) && !editable;
   const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
   const isBenchmarkWod = block === 'wod' && results[0].movementId.startsWith('benchmark:');
@@ -1216,11 +1223,24 @@ export function SessionBlockCard({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className={`relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`}>
-      <span className={`absolute bottom-1 left-0 top-0.5 w-[3px] ${accentClasses.bar}`} />
+    <div className={asIndex ? 'border-t border-white/[0.06] first:border-t-0' : `relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`}>
+      {!asIndex && <span className={`absolute bottom-1 left-0 top-0.5 w-[3px] ${accentClasses.bar}`} />}
 
-      <div>
-        {collapsible ? (
+      <div className={asIndex && indexMode?.open ? 'pb-5' : undefined}>
+        {asIndex && indexMode ? (
+          <button
+            onClick={indexMode.onToggle}
+            aria-expanded={indexMode.open}
+            className="flex w-full items-start gap-3 py-3.5 text-left"
+          >
+            <Icon size={15} strokeWidth={2.25} className="mt-0.5 shrink-0 text-neutral-500" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>
+              {!indexMode.open && indexMode.preview}
+            </span>
+            <ChevronDown size={14} strokeWidth={2.25} className={`mt-0.5 shrink-0 text-neutral-600 transition-transform duration-200 ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />
+          </button>
+        ) : collapsible ? (
           <button
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
@@ -1238,7 +1258,7 @@ export function SessionBlockCard({
           </p>
         )}
 
-        {(!collapsible || open) && (editable && onUpdateEntry && entryIndices ? (
+        {(asIndex ? Boolean(indexMode?.open) : !collapsible || open) && (editable && onUpdateEntry && entryIndices ? (
           wodGroups.length > 1 ? (
             // Dia de doble WOD en edicion: cada parte se edita por separado (los movimientos que se anadan o
             // quiten quedan dentro de su parte).
