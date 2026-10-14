@@ -3626,6 +3626,7 @@ function buildFridayOlyBlock(ctx: {
  * Entre las dos piezas de WOD, 5-10 min de descanso (como indica PushJerk). El core del dia, si toca, va al final.
  */
 function buildDoubleWodDay(ctx: {
+  macroId: string;
   dateIso: string;
   date: Date;
   week: 1 | 2 | 3 | 4;
@@ -3658,11 +3659,34 @@ function buildDoubleWodDay(ctx: {
   const doseA: DayDose = { ...ctx.dayDose, wodVolume: clampDose(ctx.dayDose.wodVolume * 0.85, 0.6, 1.2) };
   const SHORT_ONLY: readonly WodFormatKind[] = ['library', 'chipper', 'cardioChipper'];
 
+  // Oly al cierre del dia (ver `buildFridayOlyBlock`): simetrico, Squat Snatch + accesorio y Clean &
+  // Jerk + accesorio, sin depender del reparto semanal de familias. Se decide ANTES que el WOD para que regenerar el
+  // WOD (otra semilla) no mueva las elecciones del oly.
+  const { blocks: olyBlock, reasons: olyReasons } = buildFridayOlyBlock({
+    week,
+    prs: profile.prs,
+    variantPrs: profile.variantPrs,
+    recentIds,
+    avoidedPatterns,
+    acwrZone: ctx.acwrZone,
+    olyRampFactor: ctx.olyRampFactor,
+    readinessCheck: ctx.readinessCheck,
+    painReintro: ctx.painReintro,
+    patternFatigue: ctx.patternFatigue,
+    responseProfile: ctx.responseProfile,
+    dose: ctx.olyDose,
+    history,
+    date: ctx.date,
+  });
+
   const kindOutA: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
-  const rawA = buildWodBlock(
-    ctx.dayPlan, week, profile.trainingDaysPerWeek, recentIds, excludePatterns, ctx.goals, false, history, false,
-    profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutA,
-    ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: SHORT_ONLY, painAvoided: ctx.avoidedPatterns },
+  // "Regenerar": solo las piezas del WOD (partes 1 y 2) toman la semilla de la variante; el oly y el resto del dia no cambian.
+  const rawA = withWodVariant(ctx.macroId, `${ctx.dateIso}:a`, () =>
+    buildWodBlock(
+      ctx.dayPlan, week, profile.trainingDaysPerWeek, recentIds, excludePatterns, ctx.goals, false, history, false,
+      profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutA,
+      ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: SHORT_ONLY, painAvoided: ctx.avoidedPatterns },
+    ),
   );
   const effort = WOD_EFFORT_BY_WEEK[week];
   const effortNote = ` Esfuerzo de hoy: RPE ~${effort.rpe} — ${effort.intent}.`;
@@ -3674,7 +3698,7 @@ function buildDoubleWodDay(ctx: {
   }));
 
   // Parte 2: WOD real que complementa a la parte 1.
-  const libB = pickLibraryPartB(partA, history, excludePatterns, ctx.avoidedPatterns);
+  const libB = withWodVariant(ctx.macroId, `${ctx.dateIso}:b`, () => pickLibraryPartB(partA, history, excludePatterns, ctx.avoidedPatterns));
   let partB: SessionBlockResult[];
   const activePain = getActivePainFlags(profile.painFlags, ctx.dateIso);
   const reasons: string[] = [
@@ -3698,10 +3722,12 @@ function buildDoubleWodDay(ctx: {
   } else {
     const kindOutB: { kind?: WodFormatKind; reasons?: string[] } = { reasons: [] };
     const idsA = new Set([...recentIds, ...partA.map((b) => b.movementId)]);
-    const rawB = buildWodBlock(
-      ctx.dayPlan, week, profile.trainingDaysPerWeek, idsA, excludePatterns, ctx.goals, false, history, false,
-      profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutB,
-      ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: [...SHORT_ONLY, ...(kindOutA.kind ? [kindOutA.kind] : [])], painAvoided: ctx.avoidedPatterns },
+    const rawB = withWodVariant(ctx.macroId, `${ctx.dateIso}:c`, () =>
+      buildWodBlock(
+        ctx.dayPlan, week, profile.trainingDaysPerWeek, idsA, excludePatterns, ctx.goals, false, history, false,
+        profile.prs, ctx.responseProfile, 'mixto', energyA, doseA, bodyweightKg, undefined, ctx.wodLoadFactor, kindOutB,
+        ctx.plannedDomain, undefined, { noBenchmark: true, excludeKinds: [...SHORT_ONLY, ...(kindOutA.kind ? [kindOutA.kind] : [])], painAvoided: ctx.avoidedPatterns },
+      ),
     );
     partB = rawB.map((b) => ({
       ...b,
@@ -3716,25 +3742,6 @@ function buildDoubleWodDay(ctx: {
   const wodIds = wodBlocks.map((b) => b.movementId);
   const leadPattern = getMovementById(partA[0]?.movementId ?? '')?.pattern ?? ctx.dayPlan.strengthPattern;
   const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: wodBlocks.some((b) => (b.loadKg ?? 0) > 0) }, avoidedPatterns);
-
-  // Oly al cierre del dia (ver `buildFridayOlyBlock`): simetrico, Squat Snatch + accesorio y Clean &
-  // Jerk + accesorio, sin depender del reparto semanal de familias.
-  const { blocks: olyBlock, reasons: olyReasons } = buildFridayOlyBlock({
-    week,
-    prs: profile.prs,
-    variantPrs: profile.variantPrs,
-    recentIds,
-    avoidedPatterns,
-    acwrZone: ctx.acwrZone,
-    olyRampFactor: ctx.olyRampFactor,
-    readinessCheck: ctx.readinessCheck,
-    painReintro: ctx.painReintro,
-    patternFatigue: ctx.patternFatigue,
-    responseProfile: ctx.responseProfile,
-    dose: ctx.olyDose,
-    history,
-    date: ctx.date,
-  });
 
   const coreBlock = ctx.coreToday
     ? buildCoreBlock(
@@ -4006,6 +4013,7 @@ export function generateDailySession(
   const doublePlanned = weekLock?.doubleDecided ? weekLock.doubleWod === true : true;
   if (doubleAllowedToday && doublePlanned) {
     return buildDoubleWodDay({
+      macroId: macro.id,
       dateIso,
       date,
       week,
@@ -4112,7 +4120,7 @@ export function generateDailySession(
       )
     : [];
   const wodKindOut: { kind?: WodFormatKind; reasons?: string[]; lockSkipped?: boolean } = { reasons: [] };
-  const wodBlockRaw = strengthOnlyDay ? [] : buildWodBlock(
+  const wodBlockRaw = strengthOnlyDay ? [] : withWodVariant(macro.id, dateIso, () => buildWodBlock(
     dayPlan,
     week,
     profile.trainingDaysPerWeek,
@@ -4134,7 +4142,7 @@ export function generateDailySession(
     plannedDomain,
     interferingPatterns(accessoryWork),
     { painAvoided: avoidedPatterns },
-  );
+  ));
   const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
   const armsWork = armsToday ? buildArmsBlock(avoidedPatterns) : [];
   const coreWork = coreToday
@@ -4577,12 +4585,30 @@ export function generateSessionForDate(
   // que el mismo perfil sincronizado produce EXACTAMENTE la misma sesión en cualquier dispositivo y
   // en cada refresco. `withSeededRng` es síncrono y restaura `Math.random` al salir.
   const seedKey = `sess:${activeProgram?.id ?? activeMacro?.id ?? 'off'}:${dateIso}`;
-  return withSeededRng(seedKey, () => {
-    if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
-    return activeMacro
-      ? generateDailySession(profile, history, activeMacro, date, goals)
-      : generateOffSeasonSession(profile, history, date);
-  });
+  // "Regenerar sesión": cada pulsación sube la variante del dia y cambia SOLO la semilla del WOD (ver `withWodVariant`).
+  const variant = !planningPass && activeMacro && !activeProgram ? (profile.regenVariants?.[dateIso] ?? 0) : 0;
+  const prevVariant = wodVariant;
+  wodVariant = variant;
+  try {
+    const session = withSeededRng(seedKey, () => {
+      if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
+      return activeMacro
+        ? generateDailySession(profile, history, activeMacro, date, goals)
+        : generateOffSeasonSession(profile, history, date);
+    });
+    return variant > 0 ? { ...session, regenVariant: variant } : session;
+  } finally {
+    wodVariant = prevVariant;
+  }
+}
+
+/**
+ * Variante del WOD de la sesion que se esta generando (0 = la de siempre). Va aparte del RNG principal para que
+ * regenerar cambie el WOD sin tocar el resto de decisiones del dia. Se fija en `generateSessionForDate` (sincrono).
+ */
+let wodVariant = 0;
+function withWodVariant<T>(macroId: string, dateIso: string, fn: () => T): T {
+  return wodVariant > 0 ? withSeededRng(`wod:${macroId}:${dateIso}:v${wodVariant}`, fn) : fn();
 }
 
 /**
@@ -4732,11 +4758,14 @@ export function isCachedSessionStale(
   history?: readonly { date: string }[],
   /** Avisos de molestia actuales: si los que afectan a la fecha de la sesion ya no son los de cuando se genero, se regenera. */
   painFlags?: readonly PainFlag[],
+  /** Variante del WOD que el perfil lleva para la fecha de la sesion (`regenVariants`): si la cacheada es de otra (se regenero en otro dispositivo), se regenera. */
+  regenVariant?: number,
 ): boolean {
   if (session.source === 'custom' || session.swapLabel || session.editedByAthlete) return false;
   const periodized = session.mesocycleWeek > 0 || Boolean(session.strengthProgramLabel);
   if (!periodized) return false;
   if ((session.genVersion ?? 0) < SESSION_GEN_VERSION) return true;
+  if (regenVariant !== undefined && (session.regenVariant ?? 0) !== regenVariant) return true;
   if (painFlags !== undefined && session.genPainStamp !== undefined && session.genPainStamp !== painStamp(painFlags, session.date)) return true;
   if (history && cachedSessionPredatesHistory(session, history)) return true;
   return lock ? cachedSessionDisagreesWithLock(session, lock) : false;

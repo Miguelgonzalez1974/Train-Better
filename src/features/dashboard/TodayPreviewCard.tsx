@@ -69,7 +69,7 @@ export function TodayPreviewCard({
   const session = useMemo(() => {
     if (completedToday || !hasActiveTrainingStructure(profile, todayIso)) return null;
     const cached = athleteRepository.getCachedSession(todayIso);
-    if (cached && !isCachedSessionOrphaned(cached, profile, todayIso) && !isCachedSessionStale(cached, profile.weeklyLocks?.[todayIso], history, profile.painFlags)) {
+    if (cached && !isCachedSessionOrphaned(cached, profile, todayIso) && !isCachedSessionStale(cached, profile.weeklyLocks?.[todayIso], history, profile.painFlags, profile.regenVariants?.[todayIso] ?? 0)) {
       return cached;
     }
     return generateSessionForDate(profile, history, new Date(), profile.goals);

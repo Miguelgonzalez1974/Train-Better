@@ -139,7 +139,7 @@ function loadTodaySession(
   if (cached) {
     if (isCachedSessionOrphaned(cached, profile, todayIso)) {
       athleteRepository.deleteCachedSession(todayIso);
-    } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso], history, lockedProfile.painFlags)) {
+    } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso], history, lockedProfile.painFlags, lockedProfile.regenVariants?.[todayIso] ?? 0)) {
       return cached;
     } else if (history.some((h) => h.date === todayIso)) {
       const adopted = adoptAdditiveEngineFields(cached, profile, history, new Date(), goals);
@@ -197,6 +197,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   const [macroWodPreview, setMacroWodPreview] = useState<SessionBlockResult[] | null>(null);
   const [showPainPicker, setShowPainPicker] = useState(false);
   const [showNotices, setShowNotices] = useState(false);
+  const [regenNote, setRegenNote] = useState<string | null>(null);
   const [showReasons, setShowReasons] = useState(false);
   const [painAreaDraft, setPainAreaDraft] = useState<PainArea>('hombro');
   const [painDurationDraft, setPainDurationDraft] = useState<PainDuration>('semanas');
@@ -525,10 +526,36 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     setSession(generateAndCache(profile));
   }
 
+  /**
+   * "Regenerar sesión": da OTRO WOD (y el core/skill que dependan del azar) para hoy. La fuerza, el oly y el accesorio
+   * los fija el bloqueo semanal y no cambian. Cada pulsación sube la variante del día (`profile.regenVariants`), que
+   * entra en la semilla del WOD, así que PC y móvil ven el mismo. Si el WOD está fijado por la semana (día de test)
+   * no hay otro que dar y se avisa en vez de guardar nada.
+   */
   function handleRegenerate() {
-    setSession(generateAndCache(profile));
+    if (!session || alreadyCompletedToday) return;
     setSpinning(true);
     setTimeout(() => setSpinning(false), 500);
+    const wodSignature = (s: DailySession) =>
+      s.blocks.filter((b) => b.block === 'wod').map((b) => `${b.movementId}|${b.reps ?? ''}|${b.format ?? ''}|${b.wodPart ?? ''}`).join(';');
+    const before = wodSignature(session);
+    const current = profile.regenVariants?.[todayIso] ?? 0;
+    const date = new Date();
+    for (let k = 1; k <= 4; k++) {
+      const merged = { ...(profile.regenVariants ?? {}), [todayIso]: current + k };
+      const recent = Object.fromEntries(Object.keys(merged).sort().slice(-14).map((d) => [d, merged[d]]));
+      const candidateProfile: AthleteProfile = { ...profile, regenVariants: recent };
+      const candidate = generateSessionForDate(candidateProfile, history, date, candidateProfile.goals);
+      if (wodSignature(candidate) === before) continue;
+      athleteRepository.saveProfile(candidateProfile);
+      setProfile(candidateProfile);
+      athleteRepository.saveCachedSession(candidate);
+      setSession(candidate);
+      setRegenNote(null);
+      return;
+    }
+    setRegenNote('Hoy el WOD está fijado por la semana (día de test o de referencia), así que no hay otro que dar.');
+    setTimeout(() => setRegenNote(null), 6000);
   }
 
   function openCustomEditor(mode: 'replace' | 'append' = 'replace') {
@@ -996,7 +1023,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
               busy={spinning}
               items={[
                 { label: editMode ? 'Terminar edición' : 'Editar sesión', Icon: editMode ? Check : Pencil, onSelect: () => setEditMode((prev) => !prev) },
-                { label: 'Regenerar sesión', Icon: RefreshCw, onSelect: handleRegenerate },
+                ...(alreadyCompletedToday || !hasWodBlock ? [] : [{ label: 'Otro WOD', Icon: RefreshCw, onSelect: handleRegenerate }]),
                 { label: 'Cambiar tipo de sesión', Icon: Brain, onSelect: () => setShowTypePicker(true) },
                 {
                   label: activePainFlags.length > 0 ? 'Molestias activas' : '¿Algo te molesta hoy?',
@@ -1014,6 +1041,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       </div>
       {!session.isRestDay && <DayShapeChips session={session} variant="text" />}
       {!session.isRestDay && <PainChips flags={activePainFlags} onRemove={handleRemovePainFlag} />}
+      {regenNote && <p className="text-xs text-neutral-500">{regenNote}</p>}
 
       {showReadinessCheck && (
         <ReadinessCheckIn

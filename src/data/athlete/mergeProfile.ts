@@ -32,6 +32,15 @@ const NUTRITION_CUSTOM_FOODS_LIMIT = 200;
 const NUTRITION_EXTRA_DAYS_LIMIT = 60;
 const NUTRITION_EXTRAS_PER_DAY_LIMIT = 50;
 
+const REGEN_VARIANTS_LIMIT = 14;
+
+/** Union de las veces que se regenero cada dia: gana la mayor, y solo se guardan las fechas mas recientes. */
+function mergeRegenVariants(remote?: Record<string, number>, local?: Record<string, number>): Record<string, number> | undefined {
+  const merged: Record<string, number> = { ...(remote ?? {}) };
+  for (const [date, n] of Object.entries(local ?? {})) merged[date] = Math.max(merged[date] ?? 0, n);
+  return Object.keys(merged).length === 0 ? undefined : keepLatestKeys(merged, REGEN_VARIANTS_LIMIT);
+}
+
 /** Se queda con las `limit` claves mas recientes de un objeto cuyas claves empiezan por una fecha ISO. */
 function keepLatestKeys<T>(obj: Record<string, T>, limit: number): Record<string, T> {
   const keys = Object.keys(obj).sort();
@@ -265,6 +274,8 @@ export function mergeProfile(
     // Union por fecha, gana el local en la misma fecha (es una decision de planificacion deliberada,
     // igual criterio que el resto de campos "de config") — recortado igual que sessionCache.
     nutritionPrefs: mergeNutritionPrefs(remote.nutritionPrefs, local.nutritionPrefs),
+    // Veces regenerado cada dia: la mayor de las dos (regenerar en cualquier dispositivo gana), solo las fechas recientes.
+    regenVariants: mergeRegenVariants(remote.regenVariants, local.regenVariants),
     weeklyLocks: pruneByProximityToToday({ ...(remote.weeklyLocks ?? {}), ...(local.weeklyLocks ?? {}) }, WEEKLY_LOCKS_LIMIT),
   };
 }

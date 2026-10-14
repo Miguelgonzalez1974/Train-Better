@@ -327,6 +327,12 @@ export interface AthleteProfile {
    */
   strengthSplit?: 'weekly' | 'adaptive';
   /**
+   * Veces que el atleta ha pulsado "Regenerar sesión" en cada fecha ISO. Entra en la semilla del WOD de ese día (ver
+   * `generateSessionForDate`): 0 o ausente = el WOD de siempre; cada regeneración da otro, igual en todos los
+   * dispositivos. La fuerza, el oly y el accesorio no cambian (los fija el bloqueo semanal). Solo se guardan los últimos días.
+   */
+  regenVariants?: Record<string, number>;
+  /**
    * Movimiento de fuerza/oly (y, si aplica, accesorio por rol / benchmark del día de test) bloqueado
    * para ese día, por fecha ISO — decidido una vez al planificar la semana (ver `planWeekLocks` en
    * generateSession.ts) para que "qué toca" no cambie solo entre una vista y otra; la carga/series
@@ -462,6 +468,8 @@ export interface DailySession {
   genHistoryStamp?: string;
   /** Huella de los avisos de molestia vigentes para la fecha de la sesión cuando se generó (`painStamp`): si cambia (se marca, quita o caduca un aviso) la sesión cacheada se regenera. Ausente en cacheadas anteriores. */
   genPainStamp?: string;
+  /** Variante del WOD con la que se generó (`AthleteProfile.regenVariants` de ese día); si el perfil ya va por otra, la sesión cacheada está vieja. Ausente = 0. */
+  regenVariant?: number;
   /** 'custom' cuando el atleta escribio su propia sesion en vez de usar la generada — `blocks` va vacio y el contenido vive en customTitle/customNote. */
   source?: 'generated' | 'custom';
   customTitle?: string;
