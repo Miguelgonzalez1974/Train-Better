@@ -1,7 +1,6 @@
 import type { Goal, SessionHistoryEntry } from '../data/athlete/types';
 import type { AcwrZone } from './loadMetrics';
 import { daysBetween } from './loadMetrics';
-import { pickPriorityGoal } from './goalPriority';
 import type { RecoveryTier } from './responseProfile';
 
 export type DeloadReason = 'fatiga' | 'taper' | 'rpe-alto';
@@ -12,21 +11,6 @@ export const DELOAD_REASON_NOTE: Record<DeloadReason, string> = {
     'Descarga activada por tu esfuerzo percibido: llevas varias sesiones seguidas a RPE 9 o más. Un coach no espera a que el ACWR lo confirme — bajamos unos días para que asimiles el trabajo y vuelvas a rendir.',
   taper: 'Taper pre-competición: quedan pocos días para tu objetivo — bajamos volumen para que llegues fresco, no más fuerte que hoy.',
 };
-
-/** Ventana de taper: los ultimos 7 dias antes de la fecha de una competicion se entrenan en descarga. */
-const TAPER_WINDOW_DAYS = 7;
-
-/** Dias que faltan hasta la fecha objetivo — `daysBetween` da el sentido contrario (referencia menos fecha), asi que se invierte. */
-function daysUntil(targetDateIso: string, today: Date): number {
-  return -daysBetween(targetDateIso, today);
-}
-
-export function isTaperActive(goals: Goal[], today: Date): boolean {
-  const competicionGoal = pickPriorityGoal(goals, (g) => g.type === 'preparar-competicion');
-  if (!competicionGoal) return false;
-  const daysToGoal = daysUntil(competicionGoal.targetDate, today);
-  return daysToGoal >= 0 && daysToGoal <= TAPER_WINDOW_DAYS;
-}
 
 /** RPE a partir del cual una sesion cuenta como "al limite". */
 const RPE_OVERREACH_HARD = 9;
@@ -73,13 +57,14 @@ export function hasSustainedHighRpe(history: SessionHistoryEntry[], today: Date,
 export function resolveTrainingWeek(
   calendarWeek: 1 | 2 | 3 | 4,
   acwrZone: AcwrZone,
-  goals: Goal[],
+  _goals: Goal[],
   today: Date,
   recoveryTier: RecoveryTier | null = null,
   history: SessionHistoryEntry[] = [],
   rpeReliability = 1,
 ): { week: 1 | 2 | 3 | 4; reason?: DeloadReason } {
-  if (isTaperActive(goals, today)) return { week: 4, reason: 'taper' };
+  // El taper de una competicion ya no es una descarga: lo gestiona la cuenta atras de `competition.ts` (pico con el
+  // volumen recortado) y aqui solo mandan los motivos de seguridad.
   if (acwrZone === 'alta') return { week: 4, reason: 'fatiga' };
   // Un atleta que el perfil de respuesta marca como de recuperacion lenta frena antes: se descarga
   // ya en riesgo moderado, sin esperar a que el ACWR llegue a alto.

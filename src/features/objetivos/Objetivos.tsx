@@ -1238,6 +1238,7 @@ export function Objetivos() {
                       <p className="text-xs text-neutral-400">
                         {movement ? `${movement.name} · ` : ''}
                         {g.targetDate}
+                        {g.eventEndDate && g.eventEndDate > g.targetDate ? ` → ${g.eventEndDate}` : ''}
                       </p>
                     </div>
                   </div>
@@ -1378,6 +1379,22 @@ export function Objetivos() {
                 className={`w-40 ${inputClass}`}
               />
             </label>
+
+            {goalDraft.type === 'preparar-competicion' && (
+              <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                Último día de la competición (opcional)
+                <input
+                  type="date"
+                  min={goalDraft.targetDate}
+                  value={goalDraft.eventEndDate ?? ''}
+                  onChange={(e) => setGoalDraft((prev) => (prev ? { ...prev, eventEndDate: e.target.value || undefined } : prev))}
+                  className={`w-40 ${inputClass}`}
+                />
+                <span className="text-[11px] text-neutral-600">
+                  La "Fecha objetivo" es el primer día. El coach lleva la cuenta atrás (pico, taper, simulacro) y deja libres los días de la prueba.
+                </span>
+              </label>
+            )}
 
             <div>
               <p className="mb-2 text-sm font-medium text-neutral-300">Énfasis</p>

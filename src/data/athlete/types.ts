@@ -451,7 +451,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 72;
+export const SESSION_GEN_VERSION = 73;
 
 export interface DailySession {
   date: string;
@@ -482,6 +482,23 @@ export interface DailySession {
   genPainStamp?: string;
   /** Variante del WOD con la que se generó (`AthleteProfile.regenVariants` de ese día); si el perfil ya va por otra, la sesión cacheada está vieja. Ausente = 0. */
   regenVariant?: number;
+  /**
+   * El día cae dentro de la cuenta atrás de una competición (`preparar-competicion`): fase, qué toca en ella y
+   * cuántos días faltan. Ver `engine/competition.ts`. En los días de la competición la sesión va vacía.
+   */
+  competition?: {
+    phase: 'construccion' | 'pico-1' | 'pico' | 'taper' | 'activacion' | 'vispera' | 'evento' | 'post';
+    /** Titular corto de la fase ("Taper", "Simulacro de competición"…). */
+    label: string;
+    /** Qué toca en esta fase, en una frase. */
+    guidance: string;
+    /** Días que faltan para el primer día de la competición (0 el primer día, negativo durante y después). */
+    daysToEvent: number;
+    /** Hoy es el simulacro de competición. */
+    simulacro?: boolean;
+    /** Hoy es día de competición (no hay sesión que programar). */
+    eventDay?: boolean;
+  };
   /** 'custom' cuando el atleta escribio su propia sesion en vez de usar la generada — `blocks` va vacio y el contenido vive en customTitle/customNote. */
   source?: 'generated' | 'custom';
   customTitle?: string;
@@ -631,6 +648,11 @@ export interface Goal {
   movementId?: string;
   /** Fecha ISO objetivo (yyyy-mm-dd) */
   targetDate: string;
+  /**
+   * Solo `preparar-competicion` de varios días: último día de la competición (inclusive). `targetDate` es el PRIMER día.
+   * Ausente = competición de un solo día. Ver `engine/competition.ts`.
+   */
+  eventEndDate?: string;
   emphasis: GoalEmphasis;
   createdAt: string;
   /**

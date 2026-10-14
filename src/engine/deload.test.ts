@@ -77,7 +77,7 @@ describe('resolveTrainingWeek — sobrecarga por RPE', () => {
     expect(resolveTrainingWeek(2, 'optima', [], TODAY, null, [entry(2, 7)], 1)).toEqual({ week: 2 });
   });
 
-  it('el ACWR alto y el taper mandan sobre este motivo', () => {
+  it('el ACWR alto manda sobre este motivo', () => {
     expect(resolveTrainingWeek(2, 'alta', [], TODAY, null, hard, 1)).toEqual({ week: 4, reason: 'fatiga' });
   });
 

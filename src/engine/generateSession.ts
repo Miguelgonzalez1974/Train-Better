@@ -83,6 +83,7 @@ import {
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parsePublishedGoal, type WodTarget } from './wodTargets';
 import { getLibraryWod, libraryWods, type LibraryWod } from '../data/library/libraryWods';
 import { getCatalogWod, getWodCatalog, type CatalogWod, type WodSource } from './wodCatalog';
+import { competitionInfo, computeCompetitionDay, isCompetitionTaper, type CompetitionDay } from './competition';
 import { localizeWodText } from './wodUnits';
 import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type SelectionContext } from './wodSelection';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
@@ -98,7 +99,7 @@ import {
 } from './loadMetrics';
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor, getWodLoadFactor } from './autoregulation';
 import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
-import { resolveTrainingWeek, isTaperActive, DELOAD_REASON_NOTE } from './deload';
+import { resolveTrainingWeek, DELOAD_REASON_NOTE } from './deload';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR, resolveVariantPRKey } from './prResolution';
 import {
   avoidOlyFamilyRepeat,
@@ -2074,6 +2075,8 @@ function buildWodBlock(
     painAvoided?: Set<MovementPattern>;
     /** Programaciones de las que puede salir el WOD real de hoy (`AthleteProfile.wodSources`); ausente = todas. */
     allowedSources?: readonly WodSource[];
+    /** Hay una competición cerca (ver `competition.ts`): tope de minutos del WOD, simulacro de competición y sin tests. */
+    competition?: { maxMinutes: number | null; simulacro: boolean; noTests: boolean };
   },
 ): SessionBlockResult[] {
   // Patrones que evitan los avisos de molestia activos — SOLO los del aviso, no los de interferencia con la fuerza de
@@ -2118,7 +2121,10 @@ function buildWodBlock(
   // Con la seleccion de WODs reales encendida, el empuje de un objetivo de competicion ya no convierte cada dia en un
   // benchmark al azar: esos dias eligen un WOD real que encaje con hoy, preferente de programaciones de competicion
   // (ver `pickRealWod`). Siguen siendo benchmark el dia 0 de la semana y el extra de la semana pico.
-  if (!wodRampActive && !opts?.noBenchmark && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || (forceBenchmarkByGoal && !realWodSelection))) {
+  // Con la competicion cerca (pico, taper…) no hay dias de test: ni benchmark de referencia ni retest. El simulacro lo elige
+  // el WOD real de competicion de mas abajo.
+  const competitionNoTests = Boolean(opts?.competition?.noTests || opts?.competition?.simulacro);
+  if (!wodRampActive && !opts?.noBenchmark && !competitionNoTests && (dayPlan.trainingDayIndex === 0 || isPeakWeekExtraBenchmark || (forceBenchmarkByGoal && !realWodSelection))) {
     // Retest deliberado: si el benchmark real mas atrasado lleva RETEST_INTERVAL dias de benchmark
     // sin repetirse, hoy se vuelve a hacer ese mismo para medir progreso real contra una marca anterior.
     // Aviso de molestia: un benchmark es una pieza unica de formato fijo, asi que si lleva algo que el aviso
@@ -2254,20 +2260,26 @@ function buildWodBlock(
     );
     // Mismo criterio conservador que el generador: sin dominio líder en días de fuerza, ni "barra manda" en pico/descarga.
     const leadDomainToday: WodDomain | null = plannedDomain && !lowInterferenceWod && !(plannedDomain === 'weighted' && week > 2) ? plannedDomain : null;
+    // Competicion cerca: el simulacro es un WOD de programacion de competicion de ~16 min a tope (de las fuentes de
+    // competicion que el atleta tenga permitidas); en el taper y la activacion hay un tope de minutos.
+    const comp = opts?.competition;
+    const simulacro = Boolean(comp?.simulacro);
+    const competitionSources: WodSource[] = ['mayhem', 'invictus', 'comptrain'];
+    const simulacroSources = opts?.allowedSources ? opts.allowedSources.filter((s) => competitionSources.includes(s)) : competitionSources;
     const real = pickRealWod({
       ctx: {
-        targetMin: timeDomain.amrapMin,
+        targetMin: simulacro ? 16 : Math.min(timeDomain.amrapMin, comp?.maxMinutes ?? Infinity),
         energy: energy.system,
         leadDomain: leadDomainToday,
         lowInterference: lowInterferenceWod,
-        lightPref,
+        lightPref: simulacro ? Math.min(lightPref, 0.2) : lightPref,
         // Objetivo de competición activo y en su recta final (segunda mitad del plazo, pico o taper): programaciones de competición.
-        competitionPeak: Boolean(competicionGoal) && (week === 3 || isTaper || competicionProgress >= 0.5),
+        competitionPeak: Boolean(comp) || (Boolean(competicionGoal) && (week === 3 || isTaper || competicionProgress >= 0.5)),
         excludePatterns,
         // Lo que ya carga el accesorio de hoy y la halterofilia (el oly va casi todos los dias): el WOD los esquiva si puede.
         softAvoidPatterns: new Set<MovementPattern>([...(softAvoidPatterns ?? []), 'olyLift']),
         painAvoided,
-        allowedSources: opts?.allowedSources,
+        allowedSources: simulacro && simulacroSources.length > 0 ? simulacroSources : opts?.allowedSources,
       },
       history,
       recentBenchmarkIds,
@@ -2281,6 +2293,7 @@ function buildWodBlock(
       if (kindOut) {
         kindOut.kind = 'library';
         kindOut.reasons?.push(...real.reasons);
+        if (simulacro) kindOut.reasons?.push('Simulacro de competición: haz el WOD con la estrategia que usarás el día de la prueba — ritmo repetible, transiciones limpias y sin sprint inicial.');
       }
       return real.blocks;
     }
@@ -4006,12 +4019,51 @@ function buildDoubleWodDay(ctx: {
   };
 }
 
+/** Sesión de un día de competición: no hay nada que programar, solo cómo afrontarlo. */
+function competitionDaySession(macro: Macrocycle, date: Date, comp: CompetitionDay): DailySession {
+  const phaseProgress = resolveMacrocyclePhase(macro, date);
+  return {
+    date: toLocalIsoDate(date),
+    mesocycleWeek: phaseProgress.phaseIndex,
+    isRestDay: true,
+    blocks: [],
+    competition: competitionInfo(comp),
+    coachReasons: [
+      `${comp.label}: ${comp.guidance}`,
+      'Calienta como un WOD: 15-20 min con los movimientos de la prueba y 2-3 aproximaciones a ritmo de competición.',
+      'Dosifica el esfuerzo desde la primera prueba: el ritmo que puedas repetir gana al sprint que te apaga.',
+    ],
+    phaseWeekInPhase: phaseProgress.weekInPhase,
+    phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
+  };
+}
+
+/**
+ * Sesión del día con el macrociclo activo. Si hay una competición cerca (`preparar-competicion`), la cuenta atrás
+ * (ver `competition.ts`) fuerza la semana de entreno, recorta el volumen en el taper, programa el simulacro y deja
+ * libre el día de la prueba; aquí se anota la fase en la sesión y se explica en el resumen del día.
+ */
 export function generateDailySession(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
   macro: Macrocycle,
   date: Date = new Date(),
   goals: Goal[] = [],
+): DailySession {
+  const comp = computeCompetitionDay(goals, date, profile.trainingDaysPerWeek);
+  if (comp?.eventDay) return competitionDaySession(macro, date, comp);
+  const session = generateDailySessionCore(profile, history, macro, date, goals, comp);
+  if (!comp) return session;
+  return { ...session, competition: competitionInfo(comp), coachReasons: [`${comp.label}: ${comp.guidance}`, ...(session.coachReasons ?? [])] };
+}
+
+function generateDailySessionCore(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  macro: Macrocycle,
+  date: Date,
+  goals: Goal[],
+  comp: CompetitionDay | null,
 ): DailySession {
   const phaseProgress = resolveMacrocyclePhase(macro, date);
   const calendarWeek = phaseProgress.phaseIndex;
@@ -4034,7 +4086,8 @@ export function generateDailySession(
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
   const painReintro = getPainReintroPatterns(profile.painFlags, dateIso);
 
-  if (dayPlan.isRecoveryDay) {
+  // La víspera de una competición es siempre de recuperación activa, caiga en el día de la semana que caiga.
+  if (dayPlan.isRecoveryDay || comp?.recoverySession) {
     const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, null, avoidedPatterns);
     const recoveryWodBlock = buildRecoveryWodBlock(recentIds, avoidedPatterns);
     const recoverySkillBlock = buildRecoverySkillBlock(recentIds, avoidedPatterns);
@@ -4067,7 +4120,7 @@ export function generateDailySession(
   const responseProfile = engineResponseProfile(
     computeResponseProfile(history, profile.prLog, date, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, profile.prs),
   );
-  const { week, reason: deloadReason } = resolveTrainingWeek(
+  const resolved = resolveTrainingWeek(
     calendarWeek,
     acwrZone,
     goals,
@@ -4076,7 +4129,11 @@ export function generateDailySession(
     history,
     responseProfile.rpe.reliability,
   );
-  const isTaper = isTaperActive(goals, date);
+  const deloadReason = resolved.reason;
+  // La cuenta atras de la competicion fuerza la semana de entrenamiento (pico, taper…) — salvo que la seguridad
+  // (ACWR alto, RPE sostenido) pida descarga: esa manda siempre.
+  const week: 1 | 2 | 3 | 4 = comp?.week && !deloadReason ? comp.week : resolved.week;
+  const isTaper = isCompetitionTaper(comp);
   // ¿Esta semana lleva dia de doble WOD? Es una decision de SEMANA, la misma para todos sus dias: si la
   // semana esta planificada manda el bloqueo del dia del hueco (doble o normal); sin bloqueo (vista previa,
   // semana aun sin planificar) se asume que si, salvo la primera semana del macrociclo, que va completa.
@@ -4104,7 +4161,8 @@ export function generateDailySession(
   // Dia de solo fuerza (sabado de 6 dias, ver isStrengthOnlyDay): fuerza + accesorio + skill, sin WOD ni oly. No hay oly que
   // testear ese dia, asi que un test de oly se descarta; uno de fuerza si puede caer.
   const strengthOnlyDay = isStrengthOnlyDay(profile.trainingDaysPerWeek, dayPlan.trainingDayIndex);
-  const testDayFocus = isDoubleSlotToday ? null : strengthOnlyDay && rolledTestDayFocus === 'oly' ? null : rolledTestDayFocus;
+  // Con una competicion cerca no se testean maximos: un test es fatiga nueva justo cuando toca afinar.
+  const testDayFocus = comp || isDoubleSlotToday ? null : strengthOnlyDay && rolledTestDayFocus === 'oly' ? null : rolledTestDayFocus;
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
@@ -4153,9 +4211,11 @@ export function generateDailySession(
   // sobre la fase de calendario: en una descarga forzada -> fase 4 -> progresion plana, correcto.
   const weekProg = resolveWeekProgression(week, phaseProgress.weekInPhase, phaseProgress.phaseLengthWeeks);
   const dayIntensity: DayIntensity = microPlan.dayIntensity[dayPlan.trainingDayIndex] ?? 'media';
+  // En el taper de una competicion el volumen baja (`comp.volumeScale`) y la intensidad (carga) se mantiene.
+  const compScale = comp?.volumeScale ?? 1;
   const dayDose: DayDose = {
-    wodVolume: clampDose(weekProg.wodVolume * INTENSITY_VOL[dayIntensity], 0.72, 1.2),
-    strengthSets: clampDose(weekProg.strengthVolume * INTENSITY_VOL[dayIntensity], 0.75, 1.18),
+    wodVolume: clampDose(weekProg.wodVolume * INTENSITY_VOL[dayIntensity], 0.72, 1.2) * compScale,
+    strengthSets: clampDose(weekProg.strengthVolume * INTENSITY_VOL[dayIntensity], 0.75, 1.18) * compScale,
     strengthLoad: clampDose(weekProg.strengthLoad * INTENSITY_LOAD[dayIntensity], 0.93, 1.07),
     dayIntensity,
   };
@@ -4165,7 +4225,8 @@ export function generateDailySession(
   // anulaciones: en taper el ultimo dia de la semana es un metcon de simulacion, y un dia de test
   // de maximo nunca se salta la fuerza/oly.
   let dayEmphasis = resolveDayEmphasis(week, dayPlan.trainingDayIndex, profile.trainingDaysPerWeek);
-  if (isTaper && dayPlan.trainingDayIndex >= profile.trainingDaysPerWeek - 1) dayEmphasis = 'metcon';
+  // Simulacro y activacion de una competicion: el WOD es el foco y la barra va tecnica y ligera.
+  if (comp?.technicalLight) dayEmphasis = 'metcon';
   if (testDayFocus) dayEmphasis = 'mixto';
   // La PRIMERA semana del macrociclo va siempre completa (fuerza + WOD cada dia de entreno), aunque
   // caiga en Acumulacion (donde `resolveDayEmphasis` normalmente deja dias de solo barra). Un coach
@@ -4245,7 +4306,7 @@ export function generateDailySession(
   // Al PLANIFICAR la semana (`planningPass`) solo cuenta lo estructural: las sesiones de los dias anteriores son
   // simuladas (RPE 7, 60 min) y su carga aguda inventada dispararia un ACWR alto que no existe — el veto por
   // estado real (descarga, ACWR, disponibilidad) se aplica el dia de verdad, no al decidir la estructura.
-  const doubleStructuralOk = isDoubleSlotToday && !testDayFocus && !isTaper && !wodRampActive && weeksSinceStart(macro.startDate, date) > 0;
+  const doubleStructuralOk = isDoubleSlotToday && !testDayFocus && !isTaper && !comp?.noDouble && !wodRampActive && weeksSinceStart(macro.startDate, date) > 0;
   const doubleSafeToday = !deloadReason && acwrZone !== 'alta' && !getReadinessFactor(readinessCheck).isLow;
   const doubleAllowedToday = doubleStructuralOk && (planningPass || doubleSafeToday);
   const doublePlanned = weekLock?.doubleDecided ? weekLock.doubleWod === true : true;
@@ -4379,7 +4440,11 @@ export function generateDailySession(
     wodKindOut,
     plannedDomain,
     interferingPatterns(accessoryWork),
-    { painAvoided: avoidedPatterns, allowedSources: profile.wodSources },
+    {
+      painAvoided: avoidedPatterns,
+      allowedSources: profile.wodSources,
+      competition: comp ? { maxMinutes: comp.maxWodMinutes, simulacro: comp.simulacro, noTests: comp.noTests } : undefined,
+    },
   ));
   const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
   const armsWork = armsToday ? buildArmsBlock(avoidedPatterns) : [];

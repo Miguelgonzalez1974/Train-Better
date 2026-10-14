@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowRight, Moon, CalendarPlus, PartyPopper } from 'lucide-react';
+import { ArrowRight, Moon, CalendarPlus, PartyPopper, Trophy } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import {
   generateSessionForDate,
@@ -11,6 +11,7 @@ import { toLocalIsoDate } from '../../engine/periodization';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import type { AthleteProfile, DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { DayShapeChips } from '../shell/blockMeta';
+import { competitionHeadline } from '../shell/competitionMeta';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 
 /** "Back Squat · WOD 12 min AMRAP" — el titular de dos golpes de vista de la sesion de hoy, no el detalle entero (para eso esta Planificacion). */
@@ -109,6 +110,21 @@ export function TodayPreviewCard({
     );
   }
 
+  if (session.competition?.eventDay) {
+    return (
+      <button onClick={onNavigateToPlanificacion} className={`${TILE_CLASS} border-brand-gold/30 bg-brand-gold/[0.08] hover:border-brand-gold/60`}>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-gold/15 text-brand-gold">
+          <Trophy size={18} strokeWidth={2.25} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-white">Hoy compites</p>
+          <p className="mt-0.5 text-xs text-neutral-400">Calienta como un WOD y dosifica desde la primera prueba</p>
+        </div>
+        <ArrowRight size={17} strokeWidth={2.25} className="shrink-0 text-brand-gold" />
+      </button>
+    );
+  }
+
   if (session.isRestDay) {
     return (
       <button onClick={onNavigateToPlanificacion} className={`${TILE_CLASS} border-brand-border bg-brand-surface/60 hover:border-brand-gold/40`}>
@@ -132,7 +148,10 @@ export function TodayPreviewCard({
       className="group flex items-center gap-4 rounded-3xl bg-gradient-to-br from-brand-orange/[0.14] to-brand-orange/[0.03] p-5 text-left transition-all duration-200 hover:from-brand-orange/[0.2]"
     >
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-orange">Hoy</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-orange">
+          Hoy
+          {session.competition && <span className="text-brand-gold"> · {competitionHeadline(session.competition)}</span>}
+        </p>
         <p className="mt-1.5 text-xl font-semibold leading-snug text-white">{buildPreviewLine(session)}</p>
         <DayShapeChips session={session} variant="text" className="mt-2" />
         {durationMin > 0 && <p className="mt-0.5 text-[13px] text-neutral-500">~{durationMin} min</p>}

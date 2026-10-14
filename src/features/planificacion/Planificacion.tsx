@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy } from 'lucide-react';
 import type {
   AthleteProfile,
   DailySession,
@@ -59,6 +59,7 @@ import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { DayShapeChips } from '../shell/blockMeta';
+import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
 import { ActionMenu } from '../shell/ActionMenu';
 import { ReadinessCheckIn } from './ReadinessCheckIn';
 import {
@@ -974,7 +975,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-semibold tracking-tight text-white">
-              {session.isRestDay ? 'Día de descanso' : todayWeekdayLabel}
+              {session.competition?.eventDay ? 'Día de competición' : session.isRestDay ? 'Día de descanso' : todayWeekdayLabel}
             </h1>
             {(session.coachReasons?.length ?? 0) > 0 && (
               <button
@@ -988,7 +989,16 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-400">
-            {session.mesocycleWeek > 0 && (
+            {session.competition && (
+              <>
+                <span className="inline-flex items-center gap-1 font-semibold text-brand-gold">
+                  <Trophy size={13} strokeWidth={2.5} />
+                  {competitionHeadline(session.competition)}
+                </span>
+                {session.mesocycleWeek > 0 && !session.competition.eventDay && <span aria-hidden>·</span>}
+              </>
+            )}
+            {session.mesocycleWeek > 0 && !session.competition?.eventDay && (
               <span>
                 {MESOCYCLE_PHASE[session.mesocycleWeek as 1 | 2 | 3 | 4]}
                 {session.phaseWeekInPhase && session.phaseLengthWeeks && session.phaseLengthWeeks > 1 &&
@@ -1076,7 +1086,20 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       )}
 
 
-      {session.isRestDay ? (
+      {session.competition?.eventDay ? (
+        <div className="card flex flex-col gap-2 p-4">
+          <p className="flex items-center gap-2 text-lg font-semibold text-white">
+            <Trophy size={18} strokeWidth={2.25} className="text-brand-gold" />
+            {competitionCountdown(session.competition)}
+          </p>
+          <p className="text-sm text-neutral-300">{session.competition.guidance}</p>
+          <ul className="mt-1 flex flex-col gap-1 text-sm text-neutral-400">
+            {(session.coachReasons ?? []).slice(1).map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      ) : session.isRestDay ? (
         <div className="card flex flex-col gap-3 p-4">
           <p className="text-neutral-400">Hoy toca descansar. Aprovecha para movilidad ligera o recuperación activa.</p>
           <button
