@@ -5,6 +5,8 @@ import type { DailySession, SessionBlockResult, WorkSetEntry } from '../../data/
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { parseWorkingReps } from '../../engine/setFeedback';
+import { localizeWodText } from '../../engine/wodUnits';
+import { fmtKgValue } from '../../lib/format';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
@@ -374,10 +376,15 @@ export function FocusMode({
       return (
         <div className="flex flex-col gap-3">
           <h2 className="text-2xl font-semibold leading-tight text-white">{wod?.name ?? 'Benchmark'}</h2>
-          {(first.format || wod?.format) && <p className="text-sm font-semibold text-brand-orange">{first.format || wod?.format}</p>}
+          {(first.format || wod?.format) && <p className="text-sm font-semibold text-brand-orange">{localizeWodText((first.format || wod?.format) as string)}</p>}
           {wod && wod.movements.length > 0 && (
             <p className="text-sm text-neutral-300">
-              {wod.movements.map((m) => resolveName(first.benchmarkSwaps?.[m] ?? m)).join(' · ')}
+              {wod.movements
+                .map((m) => {
+                  const kg = first.benchmarkLoads?.[m];
+                  return `${resolveName(first.benchmarkSwaps?.[m] ?? m)}${kg ? ` (tu carga ${fmtKgValue(kg)} kg)` : ''}`;
+                })
+                .join(' · ')}
             </p>
           )}
           {first.notes && <FocusNote text={first.notes} />}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Block } from '../../data/movements/types';
 import type { PersonalRecords, SessionBlockResult, VariantPersonalRecords } from '../../data/athlete/types';
 import { resolveLiftPrTarget } from '../../engine/movementProgress';
+import { localizeWodText } from '../../engine/wodUnits';
 import type { MovementProgressData } from './LoadStat';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
@@ -75,8 +76,10 @@ function WodPreview({ results }: { results: SessionBlockResult[] }) {
         const isBenchmark = head.movementId.startsWith('benchmark:');
         const title = head.title ? `"${head.title}"` : nameOf(head.movementId);
         // El formato empieza por su tipo ("AMRAP 16 min", "For time"): ese primer tramo va en una píldora.
-        const [kind, ...restOfFormat] = (head.format ?? '').split(/ — | · /);
-        const detail = [restOfFormat.join(' · '), isBenchmark ? '' : `${group.length} mov.`].filter(Boolean).join(' · ');
+        // Los WODs de programaciones escriben "AMRAP 15 min: 20 snatches, 10 burpees (…)": el tipo va antes de los dos puntos.
+        const colon = (head.format ?? '').match(/^([^:]{3,40}):\s*(.*)$/);
+        const [kind, ...restOfFormat] = colon ? [colon[1], colon[2]] : (head.format ?? '').split(/ — | · /);
+        const detail = [localizeWodText(restOfFormat.join(' · ')), isBenchmark ? '' : `${group.length} mov.`].filter(Boolean).join(' · ');
         return (
           <div key={part} className="min-w-0">
             <p className="truncate text-[17px] font-semibold leading-tight text-white">

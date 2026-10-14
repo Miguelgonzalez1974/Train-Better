@@ -83,6 +83,7 @@ import {
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parsePublishedGoal, type WodTarget } from './wodTargets';
 import { getLibraryWod, libraryWods, type LibraryWod } from '../data/library/libraryWods';
 import { getCatalogWod, getWodCatalog, type CatalogWod } from './wodCatalog';
+import { localizeWodText } from './wodUnits';
 import { explainChoice, pickRanked, rankCatalogWods, SOURCE_LABEL, type SelectionContext } from './wodSelection';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
 import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
@@ -1978,14 +1979,22 @@ function pickRealWod(a: {
   }
   const bm = benchmarkWorkouts.find((w) => w.id === wod.refId);
   if (!bm) return null;
+  // La carga que el coach propone para cada movimiento con peso (la Rx del texto es la de la fuente, en libras).
+  const benchmarkLoads: Record<string, number> = {};
+  for (const id of bm.movements) {
+    const m = getMovementById(id);
+    const kg = m ? wodMovementLoadKg(m, a.prs, a.bodyweightKg, a.loadFactor) : undefined;
+    if (kg !== undefined && kg > 0) benchmarkLoads[id] = kg;
+  }
   return {
     blocks: [
       {
         block: 'wod',
         movementId: `benchmark:${bm.id}`,
         format: bm.format,
-        notes: `${bm.name} — ${bm.format}. WOD real de la programación de ${SOURCE_LABEL[wod.source]}; respeta su formato y ajusta el ritmo al RPE de hoy.${a.effortNote} Ritmo: ${a.paceCue}.`,
+        notes: `${bm.name} — ${localizeWodText(bm.format)}. WOD real de la programación de ${SOURCE_LABEL[wod.source]}; respeta su formato y ajusta el ritmo al RPE de hoy.${a.effortNote} Ritmo: ${a.paceCue}.`,
         wodCatalogId: wod.id,
+        ...(Object.keys(benchmarkLoads).length > 0 ? { benchmarkLoads } : {}),
       },
     ],
     reasons,
@@ -2111,7 +2120,7 @@ function buildWodBlock(
             block: 'wod',
             movementId: `benchmark:${lockedWod.id}`,
             format: lockedWod.format,
-            notes: `${lockedWod.name} — ${lockedWod.format}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
+            notes: `${lockedWod.name} — ${localizeWodText(lockedWod.format)}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
           },
         ];
       }
@@ -2120,7 +2129,7 @@ function buildWodBlock(
           block: 'wod',
           movementId: `benchmark:${lockedWod.id}`,
           format: lockedWod.format,
-          notes: `${lockedWod.name} — ${lockedWod.format}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
+          notes: `${lockedWod.name} — ${localizeWodText(lockedWod.format)}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
         },
       ];
     }
@@ -2136,7 +2145,7 @@ function buildWodBlock(
           block: 'wod',
           movementId: `benchmark:${wod.id}`,
           format: wod.format,
-          notes: `${wod.name} — ${wod.format}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
+          notes: `${wod.name} — ${localizeWodText(wod.format)}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
         },
       ];
     }
@@ -2162,7 +2171,7 @@ function buildWodBlock(
               block: 'wod',
               movementId: `benchmark:${wod.id}`,
               format: wod.format,
-              notes: `${wod.name} — ${wod.format}. Benchmark de referencia: registra bien tu marca, en unas semanas lo repetimos para medir progreso real.${effortNote}`,
+              notes: `${wod.name} — ${localizeWodText(wod.format)}. Benchmark de referencia: registra bien tu marca, en unas semanas lo repetimos para medir progreso real.${effortNote}`,
             },
           ];
         }
@@ -2180,7 +2189,7 @@ function buildWodBlock(
           block: 'wod',
           movementId: `benchmark:${wod.id}`,
           format: wod.format,
-          notes: `${wod.name} — ${wod.format}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
+          notes: `${wod.name} — ${localizeWodText(wod.format)}. WOD de referencia: usa el resultado para medir tu progreso real.${effortNote}`,
         },
       ];
     }

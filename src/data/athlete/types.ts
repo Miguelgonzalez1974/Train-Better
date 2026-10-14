@@ -415,6 +415,11 @@ export interface SessionBlockResult {
   /** Id de catálogo (`bm:…`) del WOD de una programación real (Mayhem, CompTrain, Invictus…) servido como WOD del día — permite no repetirlo. Ver `engine/wodCatalog.ts`. */
   wodCatalogId?: string;
   /**
+   * Carga (kg) que el coach propone para cada movimiento con peso de un WOD de programación servido como tarjeta
+   * (`wodCatalogId`), a partir de tus PRs, tu peso corporal y cómo llegas hoy. Las Rx del texto son las de la fuente.
+   */
+  benchmarkLoads?: Record<string, number>;
+  /**
    * Objetivo orientativo del WOD estimado por el motor (`src/engine/wodTargets.ts`) — banda de
    * tiempo / rondas / reps. Solo bloque 'wod' generado (no benchmark). `low === 0 && high === 0`
    * significa objetivo cualitativo (solo la frase ya va en `notes`). Se usa para juzgar el
@@ -441,7 +446,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 69;
+export const SESSION_GEN_VERSION = 70;
 
 export interface DailySession {
   date: string;

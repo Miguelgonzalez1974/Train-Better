@@ -168,6 +168,39 @@ describe('WOD real — historial e interruptor', () => {
     expect(toHistoryEntry(library.session, 'rx', 7, 60).wodLibraryId).toBe(library.catalogId!.replace('lib:', ''));
   });
 
+  it('un WOD servido como tarjeta trae su texto en kilos y la carga que propone el coach para cada movimiento con peso', () => {
+    const cards = base.filter((d) => d.catalogId?.startsWith('bm:'));
+    expect(cards.length).toBeGreaterThan(20);
+    let withLoads = 0;
+    for (const d of cards) {
+      const block = d.session.blocks.find((b) => b.block === 'wod')!;
+      expect(block.notes, d.session.date).not.toMatch(/\b\d+(?:\/\d+)?\s*lb\b/i);
+      expect(block.notes, d.session.date).not.toMatch(/\bin\b\)/);
+      if (block.benchmarkLoads) {
+        withLoads++;
+        for (const [id, kg] of Object.entries(block.benchmarkLoads)) {
+          expect(getMovementById(id), `${d.session.date}: ${id}`).toBeTruthy();
+          expect(Number.isFinite(kg) && kg > 0 && kg < 400, `${d.session.date}: ${id} ${kg}`).toBe(true);
+        }
+      }
+    }
+    // Una parte de los WODs de programaciones lleva barra o mancuernas: ahí el coach propone carga.
+    expect(withLoads / cards.length).toBeGreaterThan(0.25);
+  });
+
+  it('con poca preparación las cargas propuestas son menores que con buena preparación', () => {
+    const loadsOf = (days: Day[]) => {
+      const out: number[] = [];
+      for (const d of days) for (const kg of Object.values(d.session.blocks.find((b) => b.block === 'wod')?.benchmarkLoads ?? {})) out.push(kg);
+      return out;
+    };
+    const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
+    const bad = loadsOf(simulate({}, BAD));
+    const good = loadsOf(simulate({}, GOOD));
+    expect(bad.length).toBeGreaterThan(10);
+    expect(mean(bad)).toBeLessThan(mean(good));
+  });
+
   it('un WOD de programación servido como tarjeta no se bloquea como día de test', () => {
     // planWeekLocks solo bloquea el benchmark de un dia de test: un WOD elegido de una programacion no lleva bloqueo
     const programmed = base.find((d) => d.catalogId?.startsWith('bm:'))!;

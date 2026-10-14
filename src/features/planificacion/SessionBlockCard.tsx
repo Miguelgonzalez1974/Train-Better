@@ -11,9 +11,10 @@ import {
   type ScalingOption,
 } from '../../data/movements';
 import type { SessionBlockResult } from '../../data/athlete/types';
-import { fmtKg, fmtDay } from '../../lib/format';
+import { fmtKg, fmtKgValue, fmtDay } from '../../lib/format';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { findLastSessionTopSet } from '../../engine/movementProgress';
+import { localizeWodText } from '../../engine/wodUnits';
 import { Modal } from '../shell/Modal';
 import { ACCENT_CLASSES, BLOCK_META, BlockTile } from '../shell/blockMeta';
 import { LoadStat, type MovementProgressData } from './LoadStat';
@@ -300,7 +301,7 @@ function BenchmarkWodCard({
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       <p className={NAME_HEADLINE}>{wod.name}</p>
-      <p className="text-sm text-neutral-300">{wod.format}</p>
+      <p className="text-sm text-neutral-300">{localizeWodText(wod.format)}</p>
       <div className="mt-2 flex flex-col divide-y divide-white/5 border-y border-white/5">
         {wod.movements.map((movementId, idx) => {
           const swappedTo = entry.benchmarkSwaps?.[movementId];
@@ -313,6 +314,9 @@ function BenchmarkWodCard({
                 {swappedTo && (
                   <p className="mt-0.5 text-[10px] text-neutral-400">en vez de {getMovementById(movementId)?.name}</p>
                 )}
+                {!swappedTo && entry.benchmarkLoads?.[movementId] ? (
+                  <p className="mt-0.5 text-[11px] font-medium text-brand-neon/90">Tu carga: {fmtKgValue(entry.benchmarkLoads[movementId])} kg</p>
+                ) : null}
               </div>
               {onUpdateEntry && index !== undefined && (
                 <BenchmarkMovementScalingPicker
@@ -1075,7 +1079,7 @@ function EditableBlockEntries({
                   </option>
                 ))}
               </select>
-              {wod?.format && <p className="text-xs text-neutral-500">{wod.format}</p>}
+              {wod?.format && <p className="text-xs text-neutral-500">{localizeWodText(wod.format)}</p>}
             </div>
           );
         }
