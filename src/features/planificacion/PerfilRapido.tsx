@@ -27,6 +27,17 @@ const VARIANT_PR_FIELDS: { key: keyof VariantPersonalRecords; label: string }[] 
   { key: 'powerClean', label: 'Power Clean' },
 ];
 
+type WodSourceId = NonNullable<AthleteProfile['wodSources']>[number];
+
+/** Las programaciones que se pueden marcar; "Clásicos" incluye también las piezas de programaciones menores. */
+const WOD_SOURCE_OPTIONS: { key: string; label: string; sources: WodSourceId[] }[] = [
+  { key: 'pushjerk', label: 'PushJerk', sources: ['pushjerk'] },
+  { key: 'mayhem', label: 'CrossFit Mayhem', sources: ['mayhem'] },
+  { key: 'comptrain', label: 'CompTrain', sources: ['comptrain'] },
+  { key: 'invictus', label: 'CrossFit Invictus', sources: ['invictus'] },
+  { key: 'clasicos', label: 'Clásicos (Girls, Heroes, Open)', sources: ['clasicos', 'otros'] },
+];
+
 const inputClass =
   'rounded-lg border border-brand-border bg-brand-bg px-2.5 py-1.5 text-sm text-white transition-colors focus:border-brand-gold focus:outline-none';
 
@@ -49,6 +60,16 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
   function handleVariantPrChange(key: keyof VariantPersonalRecords, value: string) {
     const parsed = Number(value);
     setDraft((prev) => ({ ...prev, variantPrs: { ...prev.variantPrs, [key]: Number.isFinite(parsed) && parsed > 0 ? parsed : undefined } }));
+  }
+
+  // Sin lista guardada valen todas. "Clásicos" agrupa los clásicos y el resto de programaciones sueltas.
+  const selectedWodSources = WOD_SOURCE_OPTIONS.filter((o) => !draft.wodSources || o.sources.some((s) => draft.wodSources!.includes(s))).map((o) => o.key);
+
+  function toggleWodSource(key: string) {
+    const next = selectedWodSources.includes(key) ? selectedWodSources.filter((k) => k !== key) : [...selectedWodSources, key];
+    if (next.length === 0) return; // siempre queda al menos una
+    const sources = next.length === WOD_SOURCE_OPTIONS.length ? undefined : WOD_SOURCE_OPTIONS.filter((o) => next.includes(o.key)).flatMap((o) => o.sources);
+    setDraft((prev) => ({ ...prev, wodSources: sources }));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -146,13 +167,38 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
           onChange={(e) => setDraft((prev) => ({ ...prev, strengthSplit: e.target.value as NonNullable<AthleteProfile['strengthSplit']> }))}
           className={`w-full sm:w-72 ${inputClass}`}
         >
-          <option value="weekly">Semanal por días (piernas, pecho, hombro, peso muerto)</option>
-          <option value="adaptive">Adaptativo (según fase y objetivos)</option>
+          <option value="weekly">Semanal por días</option>
+          <option value="adaptive">Adaptativo</option>
         </select>
         <span className="text-[11px] text-neutral-600">
-          El semanal da a cada día su patrón fijo, con un complemento (p. ej. banca + remo). El sábado va al patrón que más lo necesita.
+          Semanal: cada día tiene su patrón fijo (piernas, pecho, hombro, peso muerto) con un complemento (p. ej. banca + remo); el sábado va al que más lo necesita. Adaptativo: el reparto se recalcula según la fase y tus objetivos.
         </span>
       </label>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-xs text-neutral-400">Programaciones de las que sale tu WOD</legend>
+        <div className="flex flex-wrap gap-2">
+          {WOD_SOURCE_OPTIONS.map((opt) => {
+            const on = selectedWodSources.includes(opt.key);
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleWodSource(opt.key)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                  on ? 'border-white/40 bg-white/10 text-white' : 'border-white/10 text-neutral-500 hover:bg-white/5'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <span className="text-[11px] text-neutral-600">
+          El coach elige el WOD de cada día entre las programaciones marcadas. Si dejas pocas, algún día puede recurrir a un WOD generado.
+        </span>
+      </fieldset>
 
       {activePainFlags.length > 0 && (
         <div className="flex flex-col gap-2">

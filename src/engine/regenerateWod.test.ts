@@ -49,6 +49,47 @@ describe('regenerar: otro WOD', () => {
     expect(changed, `${changed}/${wodDays}`).toBeGreaterThanOrEqual(wodDays - 1);
   });
 
+  it('"Otro WOD" recorre los mejores candidatos de uno en uno: cada pulsación da uno distinto hasta dar la vuelta', () => {
+    const p = profile();
+    const idOf = (v: number, d: Date) => {
+      const s = generateSessionForDate({ ...p, regenVariants: { [iso(d)]: v } }, [], d, p.goals);
+      const head = s.blocks.find((b) => b.block === 'wod');
+      return head?.wodCatalogId ?? (head?.wodLibraryId ? `lib:${head.wodLibraryId}` : undefined);
+    };
+    let checked = 0;
+    for (const d of days) {
+      const base = generateSessionForDate(p, [], d, p.goals);
+      const head = base.blocks.find((b) => b.block === 'wod');
+      // Solo los dias con un WOD real elegido (no el de recuperacion del jueves ni un benchmark de dia de test).
+      if (!head || base.doubleWod || !(head.wodCatalogId || head.wodLibraryId)) continue;
+      checked++;
+      const ids = [0, 1, 2, 3, 4, 5].map((v) => idOf(v, d));
+      expect(ids.every(Boolean), iso(d)).toBe(true);
+      expect(new Set(ids).size, `${iso(d)}: ${ids.join(' ')}`).toBe(6);
+      // La variante 0 es el WOD de siempre y al dar la vuelta se vuelve a él.
+      expect(ids[0]).toBe(head.wodCatalogId ?? `lib:${head.wodLibraryId}`);
+      expect(idOf(6, d)).toBe(ids[0]);
+    }
+    expect(checked).toBeGreaterThanOrEqual(2); // martes y miercoles: el lunes es test, el jueves recuperacion, el viernes doble y el sabado sin WOD
+  });
+
+  it('en un doble WOD cada pulsación cambia al menos una de las dos piezas, y las dos siguen siendo distintas', () => {
+    const p = profile();
+    const friday = days[4];
+    const idsOf = (v: number) => {
+      const s = generateSessionForDate({ ...p, regenVariants: { [iso(friday)]: v } }, [], friday, p.goals);
+      expect(s.doubleWod, `variante ${v}`).toBe(true);
+      return [...new Set(s.blocks.filter((b) => b.block === 'wod').map((b) => b.wodCatalogId ?? `lib:${b.wodLibraryId}`))];
+    };
+    const seen = new Set<string>();
+    for (let v = 0; v < 5; v++) {
+      const ids = idsOf(v);
+      expect(ids).toHaveLength(2);
+      seen.add(ids.join('+'));
+    }
+    expect(seen.size).toBe(5);
+  });
+
   it('la misma variante da siempre el mismo WOD, y queda marcada en la sesion', () => {
     const p = profile({ regenVariants: { '2026-01-14': 2 } });
     const d = days[2];

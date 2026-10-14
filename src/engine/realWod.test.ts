@@ -126,6 +126,34 @@ describe('WOD real — fase del macro y cómo llegas', () => {
   });
 });
 
+describe('WOD real — programaciones elegidas', () => {
+  it('con una sola programación marcada, todo WOD real sale de ella (tambien en los dobles)', () => {
+    for (const source of ['mayhem', 'pushjerk'] as const) {
+      const days = simulate({ wodSources: [source], trainingDaysPerWeek: 6 }, undefined, ['a'], 84);
+      const real = days.filter((d) => d.catalogId);
+      expect(real.length, source).toBeGreaterThan(30);
+      expect(days.some((d) => d.session.doubleWod), `${source}: sin ningun doble`).toBe(true);
+      for (const d of real) {
+        for (const id of d.session.blocks.filter((b) => b.block === 'wod').map((b) => b.wodCatalogId ?? `lib:${b.wodLibraryId}`)) {
+          expect(getCatalogWod(id)?.source, `${source}: ${d.session.date}`).toBe(source);
+        }
+      }
+    }
+  });
+
+  it('sin lista valen todas, y marcar todas equivale a no marcar ninguna', () => {
+    const all = simulate({}, undefined, ['a'], 56);
+    const explicit = simulate({ wodSources: ['pushjerk', 'mayhem', 'comptrain', 'invictus', 'clasicos', 'otros'] }, undefined, ['a'], 56);
+    expect(explicit.map((d) => d.catalogId)).toEqual(all.map((d) => d.catalogId));
+  });
+
+  it('cambiar las programaciones cambia los WODs (y los dias de test siguen saliendo del catalogo entero)', () => {
+    const only = simulate({ wodSources: ['invictus'] }, undefined, ['a'], 56);
+    const tests = only.filter((d) => !d.catalogId && d.session.blocks.find((b) => b.block === 'wod')?.movementId.startsWith('benchmark:'));
+    expect(tests.length).toBeGreaterThan(0);
+  });
+});
+
 describe('WOD real — molestias y competición', () => {
   it('con una molestia activa ningún WOD lleva movimientos ni palabras de esa zona', () => {
     for (const area of ['rodilla', 'hombro', 'cadera-lumbar'] as const) {

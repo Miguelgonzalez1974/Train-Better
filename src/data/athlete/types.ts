@@ -333,6 +333,11 @@ export interface AthleteProfile {
    */
   regenVariants?: Record<string, number>;
   /**
+   * De qué programaciones puede elegir el coach el WOD del día (ver `engine/wodSelection.ts`). Ausente = todas. Los días de
+   * test (benchmark) no se ven afectados. Si quedan pocas, el coach puede recurrir a un WOD generado.
+   */
+  wodSources?: ('pushjerk' | 'mayhem' | 'comptrain' | 'invictus' | 'clasicos' | 'otros')[];
+  /**
    * Movimiento de fuerza/oly (y, si aplica, accesorio por rol / benchmark del día de test) bloqueado
    * para ese día, por fecha ISO — decidido una vez al planificar la semana (ver `planWeekLocks` en
    * generateSession.ts) para que "qué toca" no cambie solo entre una vista y otra; la carga/series
@@ -446,7 +451,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 71;
+export const SESSION_GEN_VERSION = 72;
 
 export interface DailySession {
   date: string;

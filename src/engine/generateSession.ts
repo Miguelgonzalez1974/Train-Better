@@ -82,9 +82,9 @@ import {
 } from './wodDomains';
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parsePublishedGoal, type WodTarget } from './wodTargets';
 import { getLibraryWod, libraryWods, type LibraryWod } from '../data/library/libraryWods';
-import { getCatalogWod, getWodCatalog, type CatalogWod } from './wodCatalog';
+import { getCatalogWod, getWodCatalog, type CatalogWod, type WodSource } from './wodCatalog';
 import { localizeWodText } from './wodUnits';
-import { explainChoice, pickRanked, rankCatalogWods, SOURCE_LABEL, type SelectionContext } from './wodSelection';
+import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type SelectionContext } from './wodSelection';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
 import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
 import {
@@ -111,7 +111,7 @@ import {
 import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { buildMicrocyclePlan, type DayIntensity } from './weekPlan';
-import { rng, withSeededRng } from './rng';
+import { rng, seededRng, withSeededRng } from './rng';
 import {
   computeResponseProfile,
   engineResponseProfile,
@@ -1986,7 +1986,10 @@ function pickRealWodUnparted(a: Parameters<typeof pickRealWod>[0]): { blocks: Se
     recentSources: recentSeq.map((w) => w.source),
   };
   const ranked = rankCatalogWods(getWodCatalog(), ctx);
-  const pick = pickRanked(ranked, rng);
+  // El WOD "de siempre" del dia sale de un sorteo con semilla propia (macro + fecha + parte), no del flujo del dia; cada
+  // regeneracion ("Otro WOD") pasa al siguiente mejor de la lista, sin repetir hasta dar la vuelta.
+  const sequence = rankedSequence(ranked, seededRng(`wod-pick:${wodSeedKey}:${a.part ?? 0}`));
+  const pick = sequence.length > 0 ? sequence[wodVariant % sequence.length] : null;
   if (!pick) return null;
   const wod = pick.wod;
   const reasons = [`Hoy toca un WOD real de la programación de ${SOURCE_LABEL[wod.source]} (${wod.name}), no uno generado.`, ...explainChoice(pick, ctx)];
@@ -2069,6 +2072,8 @@ function buildWodBlock(
     excludeKinds?: readonly WodFormatKind[];
     /** Patrones que evitan los avisos de molestia activos (sin los de interferencia con la fuerza de hoy): un WOD de referencia que los lleve no se sirve. */
     painAvoided?: Set<MovementPattern>;
+    /** Programaciones de las que puede salir el WOD real de hoy (`AthleteProfile.wodSources`); ausente = todas. */
+    allowedSources?: readonly WodSource[];
   },
 ): SessionBlockResult[] {
   // Patrones que evitan los avisos de molestia activos — SOLO los del aviso, no los de interferencia con la fuerza de
@@ -2262,6 +2267,7 @@ function buildWodBlock(
         // Lo que ya carga el accesorio de hoy y la halterofilia (el oly va casi todos los dias): el WOD los esquiva si puede.
         softAvoidPatterns: new Set<MovementPattern>([...(softAvoidPatterns ?? []), 'olyLift']),
         painAvoided,
+        allowedSources: opts?.allowedSources,
       },
       history,
       recentBenchmarkIds,
@@ -3883,6 +3889,7 @@ function buildDoubleWodDay(ctx: {
       softAvoidPatterns: new Set<MovementPattern>(['olyLift']),
       painAvoided: ctx.avoidedPatterns,
       maxMovements: 5,
+      allowedSources: profile.wodSources,
     };
     const a = withWodVariant(ctx.macroId, `${ctx.dateIso}:a`, () =>
       pickRealWod({ ...common, ctx: { ...baseCtx, targetMin: targetA, excludeFormats: ['chipper'] }, part: 1 }),
@@ -4372,7 +4379,7 @@ export function generateDailySession(
     wodKindOut,
     plannedDomain,
     interferingPatterns(accessoryWork),
-    { painAvoided: avoidedPatterns },
+    { painAvoided: avoidedPatterns, allowedSources: profile.wodSources },
   ));
   const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
   const armsWork = armsToday ? buildArmsBlock(avoidedPatterns) : [];
@@ -4819,7 +4826,9 @@ export function generateSessionForDate(
   // "Regenerar sesión": cada pulsación sube la variante del dia y cambia SOLO la semilla del WOD (ver `withWodVariant`).
   const variant = !planningPass && activeMacro && !activeProgram ? (profile.regenVariants?.[dateIso] ?? 0) : 0;
   const prevVariant = wodVariant;
+  const prevSeedKey = wodSeedKey;
   wodVariant = variant;
+  wodSeedKey = seedKey;
   try {
     const session = withSeededRng(seedKey, () => {
       if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
@@ -4830,6 +4839,7 @@ export function generateSessionForDate(
     return variant > 0 ? { ...session, regenVariant: variant } : session;
   } finally {
     wodVariant = prevVariant;
+    wodSeedKey = prevSeedKey;
   }
 }
 
@@ -4838,6 +4848,8 @@ export function generateSessionForDate(
  * regenerar cambie el WOD sin tocar el resto de decisiones del dia. Se fija en `generateSessionForDate` (sincrono).
  */
 let wodVariant = 0;
+/** Clave (macro + fecha) del dia que se esta generando: semilla del sorteo del WOD real, independiente del flujo del resto del dia. */
+let wodSeedKey = 'x';
 function withWodVariant<T>(macroId: string, dateIso: string, fn: () => T): T {
   return wodVariant > 0 ? withSeededRng(`wod:${macroId}:${dateIso}:v${wodVariant}`, fn) : fn();
 }

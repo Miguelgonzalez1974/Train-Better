@@ -477,6 +477,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
 
   function handleSaveProfile(newProfile: AthleteProfile) {
     athleteRepository.saveProfile(newProfile);
+    // Al cambiar las programaciones de las que sale el WOD, las vistas previas de dias futuros ya cacheadas se descartan
+    // para que se recalculen con las nuevas (hoy se recalcula justo debajo).
+    if (JSON.stringify(newProfile.wodSources ?? null) !== JSON.stringify(profile.wodSources ?? null)) {
+      for (const date of Object.keys(athleteRepository.getProfile().sessionCache ?? {})) {
+        if (date > todayIso) athleteRepository.deleteCachedSession(date);
+      }
+      newProfile = athleteRepository.getProfile();
+    }
     setProfile(newProfile);
     // Solo se recalcula la sesion de hoy (p.ej. tras cambiar un PR) si ya habia una elegida —
     // guardar el perfil no debe materializar una sesion cuando se esta esperando a que el

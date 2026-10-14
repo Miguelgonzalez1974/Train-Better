@@ -71,7 +71,7 @@ const BALANCE_WINDOW = 12;
 const MAX_MOVEMENTS = 7;
 /** Candidatos mínimos para que los filtros "blandos" (patrones de hoy) se mantengan estrictos. */
 const MIN_POOL = 8;
-/** Cuántos de los mejores entran en el sorteo final. */
+/** Cuántos de los mejores entran en el sorteo final (y en la lista que recorre "Otro WOD"). */
 const TOP_K = 6;
 
 const COMPETITION_SOURCES: WodSource[] = ['mayhem', 'invictus', 'comptrain'];
@@ -226,6 +226,18 @@ export function pickRanked(ranked: RankedWod[], rand: () => number, topK = TOP_K
     if (roll < 0) return top[i];
   }
   return top[top.length - 1];
+}
+
+/**
+ * Los mejores candidatos en el orden en que se ofrecen: primero el que sale del sorteo ponderado (el WOD "de siempre"
+ * de ese día) y después los demás en orden de puntuación. "Otro WOD" recorre esta lista de uno en uno — sin repetir
+ * hasta dar la vuelta —, así que cada pulsación da el siguiente mejor y no un sorteo nuevo.
+ */
+export function rankedSequence(ranked: RankedWod[], rand: () => number, topK = TOP_K): RankedWod[] {
+  const top = ranked.slice(0, Math.max(topK, 1));
+  const base = pickRanked(top, rand, top.length);
+  if (!base) return [];
+  return [base, ...top.filter((r) => r !== base)];
 }
 
 /** Las frases que explican por qué se eligió este WOD (van a la nota y al resumen "por qué tu sesión es así hoy"). */
