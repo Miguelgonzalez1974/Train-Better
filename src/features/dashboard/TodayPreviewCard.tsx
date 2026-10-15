@@ -1,15 +1,7 @@
-import { useMemo } from 'react';
 import { ArrowRight, Moon, CalendarPlus, PartyPopper, Trophy } from 'lucide-react';
-import { athleteRepository } from '../../data/athlete/athleteRepository';
-import {
-  generateSessionForDate,
-  hasActiveTrainingStructure,
-  isCachedSessionOrphaned,
-  isCachedSessionStale,
-} from '../../engine/generateSession';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
-import type { AthleteProfile, DailySession, SessionHistoryEntry } from '../../data/athlete/types';
+import type { DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { DayShapeChips } from '../shell/blockMeta';
 import { competitionHeadline } from '../shell/competitionMeta';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -56,26 +48,17 @@ const TILE_CLASS = 'flex items-center gap-3 rounded-2xl border p-4 text-left tra
  * se ve al entrar de verdad.
  */
 export function TodayPreviewCard({
-  profile,
+  session,
   history,
   onNavigateToPlanificacion,
 }: {
-  profile: AthleteProfile;
+  /** La sesión de hoy (ver `resolveTodaySession`); null si ya entrenaste o no hay estructura activa. */
+  session: DailySession | null;
   history: SessionHistoryEntry[];
   onNavigateToPlanificacion: () => void;
 }) {
   const todayIso = toLocalIsoDate(new Date());
   const completedToday = history.some((h) => h.date === todayIso);
-
-  const session = useMemo(() => {
-    if (completedToday || !hasActiveTrainingStructure(profile, todayIso)) return null;
-    const cached = athleteRepository.getCachedSession(todayIso);
-    if (cached && !isCachedSessionOrphaned(cached, profile, todayIso) && !isCachedSessionStale(cached, profile.weeklyLocks?.[todayIso], history, profile.painFlags, profile.regenVariants?.[todayIso] ?? 0)) {
-      return cached;
-    }
-    return generateSessionForDate(profile, history, new Date(), profile.goals);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, history, todayIso, completedToday]);
 
   if (completedToday) {
     return (

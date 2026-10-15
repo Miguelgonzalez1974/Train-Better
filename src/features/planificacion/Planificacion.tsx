@@ -7,11 +7,11 @@ import type {
   NutritionPrefs,
   PainArea,
   PersonalRecords,
-  ReadinessCheck,
   RxOrScaled,
   SessionBlockResult,
   SessionHistoryEntry,
   SetFeedbackEntry,
+  StrainTarget,
   WorkSetEntry,
   VariantPersonalRecords,
   WodResult,
@@ -48,7 +48,6 @@ import {
 } from '../../engine/wodScoring';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
-import { getReadinessCheckForDate } from '../../engine/readiness';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
@@ -60,8 +59,10 @@ import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { DayShapeChips } from '../shell/blockMeta';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
+import { StrainPlanRow } from './StrainPlanRow';
+import { ensureStrainTarget } from '../../engine/strainTarget';
+import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { ActionMenu } from '../shell/ActionMenu';
-import { ReadinessCheckIn } from './ReadinessCheckIn';
 import {
   CoachNoticesBody,
   CoachNoticesButton,
@@ -241,8 +242,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     [alreadyCompletedToday, profile, history, todayIso],
   );
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history, todayIso]);
-  const [readinessLog, setReadinessLog] = useState<ReadinessCheck[]>(() => athleteRepository.getReadinessLog());
-  const [readinessDismissed, setReadinessDismissed] = useState(false);
   const [setFeedbackLog, setSetFeedbackLog] = useState<SetFeedbackEntry[]>(() => athleteRepository.getSetFeedbackLog());
   const [workLog, setWorkLog] = useState<WorkSetEntry[]>(() => athleteRepository.getWorkLog());
   const todayWorkLog = useMemo(() => workLog.filter((e) => e.date === todayIso), [workLog, todayIso]);
@@ -251,9 +250,21 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     () => ({ prs: profile.prs, variantPrs: profile.variantPrs, prLog: profile.prLog ?? [], workLog }),
     [profile.prs, profile.variantPrs, profile.prLog, workLog],
   );
-  const todayReadiness = useMemo(() => getReadinessCheckForDate(readinessLog, todayIso), [readinessLog, todayIso]);
-  const showReadinessCheck = Boolean(session && !session.isRestDay && !alreadyCompletedToday && (todayReadiness || !readinessDismissed));
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
+  // Objetivo de esfuerzo de hoy (el de la mañana, ver `engine/strainTarget.ts`): lo fija el Dashboard al contestar el
+  // check-in; aquí se lee (y se fija si entras antes aquí) para comparar con la sesión prevista.
+  const [strainTarget, setStrainTarget] = useState<StrainTarget | null>(() => profile.strainTargets?.[todayIso] ?? null);
+  useEffect(() => {
+    const fresh = athleteRepository.getProfile();
+    const next = ensureStrainTarget(fresh, athleteRepository.getHistory(), todayIso);
+    if (next !== fresh) {
+      athleteRepository.saveProfile(next);
+      setProfile((prev) => ({ ...prev, strainTargets: next.strainTargets }));
+    }
+    setStrainTarget(next.strainTargets?.[todayIso] ?? null);
+  }, [todayIso]);
+  const plannedStrain = useMemo(() => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history) : null), [session, history, alreadyCompletedToday]);
+  const planFitResult = plannedStrain && strainTarget ? planFit(plannedStrain, strainTarget) : null;
   // Partes de WOD de hoy (1 en un dia normal, 2 en un dia de doble WOD) y como se puntua cada una.
   const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
   const wodScoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(
@@ -437,7 +448,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     setEditMode(false);
     setPrUpdateMessage(null);
     setE1rmSuggestions([]);
-    setReadinessDismissed(false);
     setReturnRampDismissed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayIso]);
@@ -524,15 +534,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   function handleDismissMacroReview() {
     if (!macroReviewSuggestion) return;
     markMacroWeekReviewed(macroReviewSuggestion.reviewKey);
-  }
-
-  function handleSaveReadinessCheck(check: ReadinessCheck) {
-    athleteRepository.saveReadinessCheck(check);
-    setReadinessLog(athleteRepository.getReadinessLog());
-    // Recalcula la sesion de hoy con el nuevo factor de energia — mismo compromiso que ya acepta
-    // handleSaveProfile al cambiar un PR o un aviso de dolor: el motor tiene aleatoriedad interna,
-    // asi que confirmar el check-in puede volver a barajar el WOD de hoy, no solo el peso.
-    setSession(generateAndCache(profile));
   }
 
   /**
@@ -1061,13 +1062,15 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       {!session.isRestDay && <PainChips flags={activePainFlags} onRemove={handleRemovePainFlag} />}
       {regenNote && <p className="text-xs text-neutral-500">{regenNote}</p>}
 
-      {showReadinessCheck && (
-        <ReadinessCheckIn
-          dateIso={todayIso}
-          log={readinessLog}
-          existing={todayReadiness}
-          onConfirm={handleSaveReadinessCheck}
-          onSkip={() => setReadinessDismissed(true)}
+      {plannedStrain && strainTarget && planFitResult && !editMode && (
+        <StrainPlanRow
+          planned={plannedStrain}
+          target={strainTarget}
+          fit={planFitResult.fit}
+          diff={planFitResult.diff}
+          canSwapWod={hasWodBlock}
+          onSwapWod={handleRegenerate}
+          onLighter={() => handlePickType('recovery')}
         />
       )}
 

@@ -10,8 +10,9 @@ import { AcwrGauge } from './AcwrGauge';
 import { GoalFillRow, MAX_GOALS, remainingDaysOf } from './JourneyProgress';
 import type { ProgressRow } from './progressOverview';
 import { RECOVERY_GOOD, RECOVERY_LOW, RecoveryDetail, recoveryColor } from './RecoveryCard';
+import { StrainDetail, StrainRing, strainColor, strainWord, type StrainView } from './StrainRing';
 
-type RingKey = 'plan' | 'prep' | 'consistency';
+type RingKey = 'plan' | 'prep' | 'strain' | 'consistency';
 
 const NEUTRAL = '#525252';
 
@@ -171,10 +172,42 @@ function RingButton({
   );
 }
 
+/** Anillo pequeño con su etiqueta al lado: para lo que se mira menos cada día (plan y constancia). */
+function MiniRingButton({
+  selected,
+  onClick,
+  label,
+  word,
+  title,
+  ring,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  label: string;
+  word: string;
+  title: string;
+  ring: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={selected}
+      title={title}
+      className={`flex min-w-0 items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors duration-200 ${selected ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'}`}
+    >
+      <div className="w-12 shrink-0">{ring}</div>
+      <div className="min-w-0">
+        <SectionLabel className="truncate !tracking-[0.1em]">{label}</SectionLabel>
+        <p className="mt-0.5 truncate text-[13px] font-semibold text-white">{word}</p>
+      </div>
+    </button>
+  );
+}
+
 /**
- * Los tres números del día en una línea, al estilo Whoop: tu plan (avance del bloque), tu preparación (cuánto aguantas
- * hoy, con la carga ya descontada cuando va alta) y tu constancia de la semana. El del medio, algo más grande, es el que
- * decide el día. Tocar un anillo abre su detalle justo debajo; solo uno a la vez.
+ * El estado del día en círculos, al estilo Whoop. Arriba, los dos que deciden el día: tu preparación (cuánto aguantas hoy,
+ * con la carga acumulada dentro) y tu esfuerzo (el objetivo fijado por la mañana, la sesión prevista y lo que llevas
+ * hecho). Debajo, en pequeño, tu plan y tu constancia. Tocar un anillo abre su detalle justo debajo; solo uno a la vez.
  */
 export function DayRings({
   structureRow,
@@ -185,6 +218,8 @@ export function DayRings({
   trend,
   yearConsistency,
   consistencyDetail,
+  strain,
+  onAdjustSession,
   onNavigateToObjetivos,
 }: {
   structureRow: ProgressRow | null;
@@ -198,6 +233,10 @@ export function DayRings({
   yearConsistency: YearConsistency;
   /** Lo que se abre al tocar "Constancia" (el calendario de entrenos). */
   consistencyDetail: ReactNode;
+  /** El esfuerzo de hoy (objetivo, previsto, real); null si aún no hay objetivo que enseñar. */
+  strain: StrainView | null;
+  /** "Ajustar sesión": lleva a Planificación, donde se puede cambiar el WOD o bajar la sesión. */
+  onAdjustSession: () => void;
   onNavigateToObjetivos: () => void;
 }) {
   const [open, setOpen] = useState<RingKey | null>(null);
@@ -237,24 +276,7 @@ export function DayRings({
 
   return (
     <section>
-      <div className={`grid items-end gap-1.5 ${structureRow ? 'grid-cols-[1fr_1.3fr_1fr]' : 'grid-cols-2'}`}>
-        {structureRow && (
-          <RingButton
-            selected={open === 'plan'}
-            onClick={() => toggle('plan')}
-            label="Plan activo"
-            word={week ? `Sem. ${week[1]}/${week[2]}` : 'En curso'}
-            title={`${structureRow.label} · ${structureRow.sublabel}`}
-          >
-            <Ring fraction={planPct / 100} color="rgb(var(--c-white))">
-              <span className={`${numberClass} text-[clamp(1.2rem,6vw,1.7rem)]`}>
-                {planPct}
-                <span className="text-[0.55em] font-medium text-neutral-400">%</span>
-              </span>
-            </Ring>
-          </RingButton>
-        )}
-
+      <div className={`grid items-end gap-1.5 ${strain ? 'grid-cols-2' : 'grid-cols-1 px-[22%]'}`}>
         <RingButton
           selected={open === 'prep'}
           onClick={() => toggle('prep')}
@@ -278,20 +300,49 @@ export function DayRings({
           </DoubleRing>
         </RingButton>
 
-        <RingButton
+        {strain && (
+          <RingButton
+            selected={open === 'strain'}
+            onClick={() => toggle('strain')}
+            label="Esfuerzo"
+            word={strainWord(strain)}
+            wordColor={strainColor(strain)}
+            extraWord={`Objetivo ${strain.target.low}–${strain.target.high}`}
+            title="Esfuerzo de hoy: el objetivo (banda verde), la sesión prevista (punto) y lo que llevas hecho"
+          >
+            <StrainRing view={strain} />
+          </RingButton>
+        )}
+      </div>
+
+      {/* Plan y constancia: se miran menos cada día, así que van en una fila pequeña. */}
+      <div className={`mt-2 grid gap-1.5 ${structureRow ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {structureRow && (
+          <MiniRingButton
+            selected={open === 'plan'}
+            onClick={() => toggle('plan')}
+            label="Plan activo"
+            word={week ? `Sem. ${week[1]}/${week[2]}` : 'En curso'}
+            title={`${structureRow.label} · ${structureRow.sublabel}`}
+            ring={
+              <Ring fraction={planPct / 100} color="rgb(var(--c-white))">
+                <span className={`${numberClass} text-[0.95rem]`}>{planPct}</span>
+              </Ring>
+            }
+          />
+        )}
+        <MiniRingButton
           selected={open === 'consistency'}
           onClick={() => toggle('consistency')}
           label="Constancia"
           word={yearConsistency.pct !== null ? `${yearConsistency.days} días` : 'Sin datos'}
           title="Constancia del año: días entrenados frente a los previstos desde que empezaste"
-        >
-          <Ring fraction={(yearConsistency.pct ?? 0) / 100} color="rgb(var(--c-white))">
-            <span className={`${numberClass} text-[clamp(1.2rem,6vw,1.7rem)]`}>
-              {yearConsistency.pct !== null ? yearConsistency.pct : '—'}
-              {yearConsistency.pct !== null && <span className="text-[0.55em] font-medium text-neutral-400">%</span>}
-            </span>
-          </Ring>
-        </RingButton>
+          ring={
+            <Ring fraction={(yearConsistency.pct ?? 0) / 100} color="rgb(var(--c-white))">
+              <span className={`${numberClass} text-[0.95rem]`}>{yearConsistency.pct !== null ? yearConsistency.pct : '—'}</span>
+            </Ring>
+          }
+        />
       </div>
 
       {advice && (
@@ -335,6 +386,8 @@ export function DayRings({
               </div>
             </div>
           )}
+
+          {open === 'strain' && strain && <StrainDetail view={strain} onAdjust={onAdjustSession} />}
 
           {open === 'consistency' && consistencyDetail}
         </div>

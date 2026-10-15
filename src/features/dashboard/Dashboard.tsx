@@ -10,7 +10,12 @@ import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { buildTrend, dayStrain, strainStatus } from '../../engine/strain';
 import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget';
-import { StrainCard } from './StrainCard';
+import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
+import { getReadinessCheckForDate } from '../../engine/readiness';
+import type { ReadinessCheck } from '../../data/athlete/types';
+import { ReadinessCheckIn } from '../planificacion/ReadinessCheckIn';
+import { refreshTodaySession, resolveTodaySession } from './todaySession';
+import type { StrainView } from './StrainRing';
 import { TrendCard } from './TrendCard';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
@@ -44,12 +49,15 @@ interface DashboardProps {
 export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
-  const [profile] = useState(() => {
+  const [profile, setProfile] = useState(() => {
     const current = athleteRepository.getProfile();
     const next = ensureStrainTarget(current, history, toLocalIsoDate(new Date()));
     if (next !== current) athleteRepository.saveProfile(next);
     return next;
   });
+  // Sube cada vez que la sesión de hoy se rehace (check-in), para que lo que enseña el Dashboard se relea de la caché.
+  const [sessionVersion, setSessionVersion] = useState(0);
+  const [checkInDismissed, setCheckInDismissed] = useState(false);
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showVolume, setShowVolume] = useState(false);
   const [showBodyweight, setShowBodyweight] = useState(false);
@@ -127,6 +135,30 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const todayStrain = dayStrain(history.find((h) => h.date === todayIso));
   const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, history, todayIso);
   const strainState = strainStatus(todayStrain, strainTarget);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const todaySession = useMemo(() => resolveTodaySession(profile, history, todayIso), [profile, history, todayIso, sessionVersion]);
+  const plannedStrain = useMemo(() => (todaySession ? estimatePlannedStrain(todaySession, history) : null), [todaySession, history]);
+  const strainView: StrainView = {
+    target: strainTarget,
+    planned: plannedStrain,
+    fit: plannedStrain ? planFit(plannedStrain, strainTarget) : null,
+    real: todayStrain,
+    status: strainState,
+  };
+  const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
+  // El check-in solo tiene sentido si hoy hay sesión por entrenar (o ya hecho, para poder corregirlo).
+  const showCheckIn = Boolean(todaySession && !todaySession.isRestDay && (todayReadiness || !checkInDismissed));
+
+  function handleSaveCheckIn(check: ReadinessCheck) {
+    athleteRepository.saveReadinessCheck(check);
+    // El objetivo provisional se rehace con el check-in y queda fijo; la sesión de hoy se recalcula con la nueva energía.
+    const fresh = athleteRepository.getProfile();
+    const next = ensureStrainTarget(fresh, history, todayIso);
+    if (next !== fresh) athleteRepository.saveProfile(next);
+    refreshTodaySession(next, history, todayIso);
+    setProfile(athleteRepository.getProfile());
+    setSessionVersion((v) => v + 1);
+  }
   const energyAdherencePct =
     conditioningBalance && conditioningBalance.totalPlanned > 0
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
@@ -237,10 +269,23 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       {/*
         El titular: que toca hoy, en una linea, sin tener que entrar a Planificacion para saberlo.
       */}
-      <TodayPreviewCard profile={profile} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
+      <TodayPreviewCard session={todaySession} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
 
-      {/* Los tres números del día: plan, preparación (cuánto aguantas hoy, con la carga ya descontada) y constancia. */}
+      {/* Cómo llegas hoy: el primer gesto de la mañana. Al contestar se fija el objetivo de esfuerzo y se rehace la sesión. */}
+      {showCheckIn && (
+        <ReadinessCheckIn
+          dateIso={todayIso}
+          log={profile.readinessLog ?? []}
+          existing={todayReadiness}
+          onConfirm={handleSaveCheckIn}
+          onSkip={() => setCheckInDismissed(true)}
+        />
+      )}
+
+      {/* El estado del día: preparación (cuánto aguantas, con la carga dentro) y esfuerzo (objetivo, previsto y real); debajo plan y constancia. */}
       <DayRings
+        strain={strainView}
+        onAdjustSession={onNavigateToPlanificacion}
         structureRow={hasStructure ? structureRow : null}
         goalRows={goalRows}
         readiness={readiness}
@@ -260,7 +305,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       />
 
       {/* Esfuerzo de hoy frente al rango que recomienda el coach, y la tendencia de esfuerzo y preparación. */}
-      <StrainCard strain={todayStrain} target={strainTarget} status={strainState} />
       <TrendCard series={(days) => buildTrend(history, profile.readinessLog, todayIso, days)} />
 
       {/*
