@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useEffect, useId, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
@@ -55,58 +55,103 @@ const C = 2 * Math.PI * R;
 const R_INNER = 34;
 const C_INNER = 2 * Math.PI * R_INNER;
 
+type Token = 'cool' | 'good' | 'mid' | 'low';
+const tok = (t: Token) => `rgb(var(--c-state-${t}))`;
+const mix = (from: Token, to: Token, pctTo: number) => `color-mix(in srgb, ${tok(to)} ${Math.round(pctTo)}%, ${tok(from)})`;
+
 /**
- * Anillo doble del esfuerzo de hoy, como el de preparación: por fuera el objetivo que el coach fijó por la mañana (la
- * banda verde es el rango que toca) y por dentro tu esfuerzo, que se llena hasta lo previsto de la sesión (más tenue) y,
- * una vez entrenado, hasta lo real. Si el anillo interior acaba a la altura de la banda verde, encaja. El número del
+ * El color de cada punto de la escala de esfuerzo según el objetivo: azul por debajo del mínimo, verde en el mínimo que
+ * se va degradando (verde, amarillo, rojo) hasta el máximo, y rojo por encima. Los dos anillos usan la misma escala, así
+ * que el color donde acaba tu esfuerzo dice de un vistazo cuánto margen queda.
+ */
+function scaleColor(value: number, low: number, high: number): string {
+  if (value < low) return tok('cool');
+  if (value >= high) return tok('low');
+  const t = high > low ? (value - low) / (high - low) : 0;
+  return t < 0.5 ? mix('good', 'mid', t * 200) : mix('mid', 'low', (t - 0.5) * 200);
+}
+
+/** Trocitos de la escala entre `from` y `to` (en puntos 0-100), cada uno con su color; el solape evita rendijas entre ellos. */
+function scaleSegments(from: number, to: number, step: number, r: number, c: number, strokeWidth: number, low: number, high: number) {
+  const out = [];
+  for (let v = from; v < to; v += step) {
+    const end = Math.min(to, v + step);
+    const len = ((end - v) / 100) * c + 0.4;
+    out.push(
+      <circle
+        key={`${r}-${v}`}
+        cx="50"
+        cy="50"
+        r={r}
+        fill="none"
+        strokeWidth={strokeWidth}
+        style={{ stroke: scaleColor(v + step / 2, low, high) }}
+        strokeDasharray={`${len} ${c}`}
+        strokeDashoffset={-((v / 100) * c)}
+      />,
+    );
+  }
+  return out;
+}
+
+/** Una marca fina que cruza el anillo exterior en el punto `value`. */
+function tick(value: number) {
+  const a = (value / 100) * 2 * Math.PI;
+  const x = (r: number) => 50 + r * Math.cos(a);
+  const y = (r: number) => 50 + r * Math.sin(a);
+  return <line key={value} x1={x(40)} y1={y(40)} x2={x(50)} y2={y(50)} stroke="rgb(var(--c-white))" strokeOpacity={0.75} strokeWidth={1.2} strokeLinecap="round" />;
+}
+
+/**
+ * Anillo doble del esfuerzo de hoy, como el de preparación. Por fuera el objetivo que el coach fijó por la mañana: solo se
+ * colorea su tramo, verde en el mínimo y degradado hacia rojo en el máximo, con una marca en cada extremo. Por dentro tu
+ * esfuerzo, que se llena desde cero hasta lo previsto de la sesión (más tenue) y, una vez entrenado, hasta lo real, con la
+ * misma escala de color: azul si no llega al mínimo, verde dentro y rojo si se acerca al máximo o lo pasa. El número del
  * centro es el previsto (con ~) hasta que entrenas y el real después.
  */
 export function StrainRing({ view }: { view: StrainView }) {
   const { target, planned, real } = view;
-  const color = strainColor(view);
+  const maskId = useId();
   const [filled, setFilled] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const bandLen = ((target.high - target.low) / 100) * C;
-  const bandStart = (target.low / 100) * C;
   const shown = real !== null ? real : planned?.strain ?? null;
   const innerFraction = filled && shown !== null ? Math.min(1, shown / 100) : 0;
 
   return (
     <div className="relative aspect-square w-full">
       <svg viewBox="0 0 100 100" className="h-full w-full" role="img" aria-label={`Esfuerzo de hoy, objetivo ${target.low} a ${target.high}`}>
-        <g transform="rotate(-90 50 50)">
-          {/* Anillo exterior: el objetivo (la banda verde es el rango que toca hoy). */}
-          <circle cx="50" cy="50" r={R} fill="none" strokeWidth={8} className="stroke-white/[0.07]" />
-          <circle
-            cx="50"
-            cy="50"
-            r={R}
-            fill="none"
-            strokeWidth={8}
-            style={{ stroke: 'rgb(var(--c-state-good))' }}
-            strokeDasharray={`${bandLen} ${C - bandLen}`}
-            strokeDashoffset={-bandStart}
-          />
-          {/* Anillo interior: tu esfuerzo (previsto antes de entrenar, real después). Si termina bajo la banda verde, encaja. */}
-          <circle cx="50" cy="50" r={R_INNER} fill="none" strokeWidth={6} className="stroke-white/[0.06]" />
-          {shown !== null && (
+        <defs>
+          <mask id={maskId}>
             <circle
               cx="50"
               cy="50"
               r={R_INNER}
               fill="none"
-              strokeWidth={6}
-              strokeLinecap="round"
-              style={{ stroke: color, opacity: real !== null ? 1 : 0.7 }}
+              stroke="white"
+              strokeWidth={8}
               strokeDasharray={C_INNER}
               strokeDashoffset={C_INNER * (1 - innerFraction)}
               className="transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none"
             />
+          </mask>
+        </defs>
+        <g transform="rotate(-90 50 50)">
+          {/* Anillo exterior: el objetivo (solo su tramo lleva color). */}
+          <circle cx="50" cy="50" r={R} fill="none" strokeWidth={8} className="stroke-white/[0.07]" />
+          {scaleSegments(target.low, target.high, 1.5, R, C, 8, target.low, target.high)}
+          {/* Anillo interior: tu esfuerzo, con la escala completa revelada hasta donde llegas. */}
+          <circle cx="50" cy="50" r={R_INNER} fill="none" strokeWidth={6} className="stroke-white/[0.06]" />
+          {shown !== null && (
+            <g mask={`url(#${maskId})`} opacity={real !== null ? 1 : 0.75}>
+              {scaleSegments(0, 100, 2, R_INNER, C_INNER, 6, target.low, target.high)}
+            </g>
           )}
+          {tick(target.low)}
+          {tick(target.high)}
         </g>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -126,7 +171,7 @@ export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: (
     <div className="flex flex-col gap-4">
       <div>
         <SectionLabel>Esfuerzo de hoy</SectionLabel>
-        <p className="mt-1 text-[11px] text-neutral-500">Anillo exterior: tu objetivo (banda verde). Anillo interior: tu esfuerzo.</p>
+        <p className="mt-1 text-[11px] text-neutral-500">Anillo exterior: tu objetivo (de verde a rojo según te acerques al máximo). Anillo interior: tu esfuerzo, que cambia de color según dónde llegue.</p>
         <p className="mt-1.5 text-base font-semibold text-white">
           Objetivo <span className="num">{target.low}–{target.high}</span>
         </p>
