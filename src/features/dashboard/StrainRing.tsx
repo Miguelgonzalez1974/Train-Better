@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
@@ -49,11 +49,14 @@ export function strainWord(v: StrainView): string {
 
 const R = 45;
 const C = 2 * Math.PI * R;
+const R_INNER = 34;
+const C_INNER = 2 * Math.PI * R_INNER;
 
 /**
- * Anillo del esfuerzo de hoy: la banda verde es el objetivo que el coach fijó por la mañana, el punto es dónde cae la
- * sesión prevista, y el trazo grueso se va llenando con el esfuerzo real una vez entrenado. El número del centro es el
- * previsto (con ~) hasta que entrenas y el real después.
+ * Anillo doble del esfuerzo de hoy, como el de preparación: por fuera el objetivo que el coach fijó por la mañana (la
+ * banda verde es el rango que toca) y por dentro tu esfuerzo, que se llena hasta lo previsto de la sesión (más tenue) y,
+ * una vez entrenado, hasta lo real. Si el anillo interior acaba a la altura de la banda verde, encaja. El número del
+ * centro es el previsto (con ~) hasta que entrenas y el real después.
  */
 export function StrainRing({ view }: { view: StrainView }) {
   const { target, planned, real } = view;
@@ -66,43 +69,42 @@ export function StrainRing({ view }: { view: StrainView }) {
 
   const bandLen = ((target.high - target.low) / 100) * C;
   const bandStart = (target.low / 100) * C;
-  const realFraction = real !== null && filled ? Math.min(1, real / 100) : 0;
-  const markerAt = real === null && planned ? Math.min(100, planned.strain) : null;
-  const angle = markerAt !== null ? (markerAt / 100) * 2 * Math.PI : 0;
-  const marker = markerAt !== null ? { x: 50 + R * Math.sin(angle), y: 50 - R * Math.cos(angle) } : null;
   const shown = real !== null ? real : planned?.strain ?? null;
+  const innerFraction = filled && shown !== null ? Math.min(1, shown / 100) : 0;
 
   return (
     <div className="relative aspect-square w-full">
       <svg viewBox="0 0 100 100" className="h-full w-full" role="img" aria-label={`Esfuerzo de hoy, objetivo ${target.low} a ${target.high}`}>
         <g transform="rotate(-90 50 50)">
+          {/* Anillo exterior: el objetivo (la banda verde es el rango que toca hoy). */}
           <circle cx="50" cy="50" r={R} fill="none" strokeWidth={8} className="stroke-white/[0.07]" />
           <circle
             cx="50"
             cy="50"
             r={R}
             fill="none"
-            strokeWidth={12}
-            style={{ stroke: 'rgb(var(--c-state-good) / 0.38)' }}
+            strokeWidth={8}
+            style={{ stroke: 'rgb(var(--c-state-good))' }}
             strokeDasharray={`${bandLen} ${C - bandLen}`}
             strokeDashoffset={-bandStart}
           />
-          {real !== null && (
+          {/* Anillo interior: tu esfuerzo (previsto antes de entrenar, real después). Si termina bajo la banda verde, encaja. */}
+          <circle cx="50" cy="50" r={R_INNER} fill="none" strokeWidth={6} className="stroke-white/[0.06]" />
+          {shown !== null && (
             <circle
               cx="50"
               cy="50"
-              r={R}
+              r={R_INNER}
               fill="none"
-              strokeWidth={8}
+              strokeWidth={6}
               strokeLinecap="round"
-              style={{ stroke: color }}
-              strokeDasharray={C}
-              strokeDashoffset={C * (1 - realFraction)}
+              style={{ stroke: color, opacity: real !== null ? 1 : 0.7 }}
+              strokeDasharray={C_INNER}
+              strokeDashoffset={C_INNER * (1 - innerFraction)}
               className="transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none"
             />
           )}
         </g>
-        {marker && <circle cx={marker.x} cy={marker.y} r={5.5} fill="rgb(var(--c-white))" stroke={color} strokeWidth={3} />}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="num text-[clamp(1.3rem,6.4vw,1.95rem)] font-semibold leading-none tracking-tight text-white">
@@ -121,6 +123,7 @@ export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: (
     <div className="flex flex-col gap-4">
       <div>
         <SectionLabel>Esfuerzo de hoy</SectionLabel>
+        <p className="mt-1 text-[11px] text-neutral-500">Anillo exterior: tu objetivo (banda verde). Anillo interior: tu esfuerzo.</p>
         <p className="mt-1.5 text-base font-semibold text-white">
           Objetivo <span className="num">{target.low}–{target.high}</span>
         </p>

@@ -271,19 +271,22 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       */}
       <TodayPreviewCard session={todaySession} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
 
-      {/* Cómo llegas hoy: el primer gesto de la mañana. Al contestar se fija el objetivo de esfuerzo y se rehace la sesión. */}
-      {showCheckIn && (
-        <ReadinessCheckIn
-          dateIso={todayIso}
-          log={profile.readinessLog ?? []}
-          existing={todayReadiness}
-          onConfirm={handleSaveCheckIn}
-          onSkip={() => setCheckInDismissed(true)}
-        />
-      )}
-
-      {/* El estado del día: preparación (cuánto aguantas, con la carga dentro) y esfuerzo (objetivo, previsto y real); debajo plan y constancia. */}
+      {/*
+        El estado del día: plan y constancia justo bajo "Hoy"; luego el check-in (el primer gesto de la mañana: al contestar
+        se fija el objetivo de esfuerzo y se rehace la sesión) y los dos círculos grandes, preparación y esfuerzo.
+      */}
       <DayRings
+        checkIn={
+          showCheckIn ? (
+            <ReadinessCheckIn
+              dateIso={todayIso}
+              log={profile.readinessLog ?? []}
+              existing={todayReadiness}
+              onConfirm={handleSaveCheckIn}
+              onSkip={() => setCheckInDismissed(true)}
+            />
+          ) : null
+        }
         strain={strainView}
         onAdjustSession={onNavigateToPlanificacion}
         structureRow={hasStructure ? structureRow : null}

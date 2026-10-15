@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+﻿import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { ReadinessScore } from '../../engine/readinessScore';
@@ -172,8 +172,8 @@ function RingButton({
   );
 }
 
-/** Anillo pequeño con su etiqueta al lado: para lo que se mira menos cada día (plan y constancia). */
-function MiniRingButton({
+/** Anillo mediano con su título completo debajo, en letra pequeña: para plan y constancia, que van arriba. */
+function SmallRingButton({
   selected,
   onClick,
   label,
@@ -193,13 +193,11 @@ function MiniRingButton({
       onClick={onClick}
       aria-pressed={selected}
       title={title}
-      className={`flex min-w-0 items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors duration-200 ${selected ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'}`}
+      className={`flex min-w-0 flex-col items-center rounded-2xl px-1 pb-2 pt-2 transition-colors duration-200 ${selected ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'}`}
     >
-      <div className="w-12 shrink-0">{ring}</div>
-      <div className="min-w-0">
-        <SectionLabel className="truncate !tracking-[0.1em]">{label}</SectionLabel>
-        <p className="mt-0.5 truncate text-[13px] font-semibold text-white">{word}</p>
-      </div>
+      <div className="w-[4.75rem]">{ring}</div>
+      <p className="mt-1.5 text-center text-[10px] font-semibold uppercase leading-tight tracking-[0.1em] text-neutral-500">{label}</p>
+      <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-neutral-300">{word}</p>
     </button>
   );
 }
@@ -219,6 +217,7 @@ export function DayRings({
   yearConsistency,
   consistencyDetail,
   strain,
+  checkIn,
   onAdjustSession,
   onNavigateToObjetivos,
 }: {
@@ -235,6 +234,8 @@ export function DayRings({
   consistencyDetail: ReactNode;
   /** El esfuerzo de hoy (objetivo, previsto, real); null si aún no hay objetivo que enseñar. */
   strain: StrainView | null;
+  /** El check-in de hoy ("¿Cómo llegas?"): va entre plan/constancia y los dos círculos grandes. */
+  checkIn?: ReactNode;
   /** "Ajustar sesión": lleva a Planificación, donde se puede cambiar el WOD o bajar la sesión. */
   onAdjustSession: () => void;
   onNavigateToObjetivos: () => void;
@@ -274,86 +275,8 @@ export function DayRings({
 
   const numberClass = 'num font-semibold leading-none tracking-tight text-white';
 
-  return (
-    <section>
-      <div className={`grid items-end gap-1.5 ${strain ? 'grid-cols-2' : 'grid-cols-1 px-[22%]'}`}>
-        <RingButton
-          selected={open === 'prep'}
-          onClick={() => toggle('prep')}
-          label="Preparación"
-          word={level ? LEVEL_SHORT[level] : 'Sin datos'}
-          wordColor={recoveryTint}
-          extraWord={hasLoad ? ZONE_WORD[acwr.zone] : undefined}
-          extraColor={hasLoad ? ZONE_COLOR[acwr.zone] : undefined}
-          title="Preparación (anillo exterior) y carga (anillo interior)"
-        >
-          <DoubleRing
-            outer={(total ?? 0) / 100}
-            outerColor={recoveryTint}
-            inner={(acwr.acwr ?? 0) / 2}
-            innerColor={hasLoad ? ZONE_COLOR[acwr.zone] : NEUTRAL}
-          >
-            <span className={`${numberClass} text-[clamp(1.3rem,6.4vw,1.95rem)]`}>
-              {total !== null ? total : '—'}
-              {total !== null && <span className="text-[0.5em] font-medium text-neutral-400">%</span>}
-            </span>
-          </DoubleRing>
-        </RingButton>
-
-        {strain && (
-          <RingButton
-            selected={open === 'strain'}
-            onClick={() => toggle('strain')}
-            label="Esfuerzo"
-            word={strainWord(strain)}
-            wordColor={strainColor(strain)}
-            extraWord={`Objetivo ${strain.target.low}–${strain.target.high}`}
-            title="Esfuerzo de hoy: el objetivo (banda verde), la sesión prevista (punto) y lo que llevas hecho"
-          >
-            <StrainRing view={strain} />
-          </RingButton>
-        )}
-      </div>
-
-      {/* Plan y constancia: se miran menos cada día, así que van en una fila pequeña. */}
-      <div className={`mt-2 grid gap-1.5 ${structureRow ? 'grid-cols-2' : 'grid-cols-1'}`}>
-        {structureRow && (
-          <MiniRingButton
-            selected={open === 'plan'}
-            onClick={() => toggle('plan')}
-            label="Plan activo"
-            word={week ? `Sem. ${week[1]}/${week[2]}` : 'En curso'}
-            title={`${structureRow.label} · ${structureRow.sublabel}`}
-            ring={
-              <Ring fraction={planPct / 100} color="rgb(var(--c-white))">
-                <span className={`${numberClass} text-[0.95rem]`}>{planPct}</span>
-              </Ring>
-            }
-          />
-        )}
-        <MiniRingButton
-          selected={open === 'consistency'}
-          onClick={() => toggle('consistency')}
-          label="Constancia"
-          word={yearConsistency.pct !== null ? `${yearConsistency.days} días` : 'Sin datos'}
-          title="Constancia del año: días entrenados frente a los previstos desde que empezaste"
-          ring={
-            <Ring fraction={(yearConsistency.pct ?? 0) / 100} color="rgb(var(--c-white))">
-              <span className={`${numberClass} text-[0.95rem]`}>{yearConsistency.pct !== null ? yearConsistency.pct : '—'}</span>
-            </Ring>
-          }
-        />
-      </div>
-
-      {advice && (
-        <p className="mt-3 text-center text-sm font-semibold" style={{ color: advice.color }}>
-          {advice.text}
-        </p>
-      )}
-      {driver && <p className={`${advice ? 'mt-0.5' : 'mt-3'} text-center text-xs text-neutral-400`}>{driver}</p>}
-      {open === null && !advice && !driver && <p className="mt-3 text-center text-[11px] text-neutral-600">Toca un anillo para ver el detalle</p>}
-
-      {open && (
+  // El detalle del anillo tocado: el de plan y constancia se abre bajo su fila (arriba) y el de preparación y esfuerzo bajo los círculos grandes.
+  const panel = open ? (
         <div className="mt-3 animate-section-in rounded-2xl bg-white/[0.03] p-5 motion-reduce:animate-none">
           {open === 'plan' && structureRow && (
             <div className="flex flex-col gap-4">
@@ -391,7 +314,97 @@ export function DayRings({
 
           {open === 'consistency' && consistencyDetail}
         </div>
+  ) : null;
+
+  return (
+    <section>
+      {/* Plan y constancia: lo primero bajo "Hoy", en círculos con su título completo debajo. */}
+      <div className={`grid gap-1.5 ${structureRow ? 'grid-cols-2' : 'grid-cols-1 px-[28%]'}`}>
+        {structureRow && (
+          <SmallRingButton
+            selected={open === 'plan'}
+            onClick={() => toggle('plan')}
+            label="Plan activo"
+            word={week ? `Semana ${week[1]} de ${week[2]}` : 'En curso'}
+            title={`${structureRow.label} · ${structureRow.sublabel}`}
+            ring={
+              <Ring fraction={planPct / 100} color="rgb(var(--c-white))">
+                <span className={`${numberClass} text-[1.15rem]`}>
+                  {planPct}
+                  <span className="text-[0.55em] font-medium text-neutral-400">%</span>
+                </span>
+              </Ring>
+            }
+          />
+        )}
+        <SmallRingButton
+          selected={open === 'consistency'}
+          onClick={() => toggle('consistency')}
+          label="Constancia"
+          word={yearConsistency.pct !== null ? `${yearConsistency.days} días este año` : 'Sin datos'}
+          title="Constancia del año: días entrenados frente a los previstos desde que empezaste"
+          ring={
+            <Ring fraction={(yearConsistency.pct ?? 0) / 100} color="rgb(var(--c-white))">
+              <span className={`${numberClass} text-[1.15rem]`}>
+                {yearConsistency.pct !== null ? yearConsistency.pct : '—'}
+                {yearConsistency.pct !== null && <span className="text-[0.55em] font-medium text-neutral-400">%</span>}
+              </span>
+            </Ring>
+          }
+        />
+      </div>
+      {(open === 'plan' || open === 'consistency') && panel}
+
+      {checkIn && <div className="mt-4">{checkIn}</div>}
+
+      <div className={`mt-3 grid items-end gap-1.5 ${strain ? 'grid-cols-2' : 'grid-cols-1 px-[22%]'}`}>
+        <RingButton
+          selected={open === 'prep'}
+          onClick={() => toggle('prep')}
+          label="Preparación"
+          word={level ? LEVEL_SHORT[level] : 'Sin datos'}
+          wordColor={recoveryTint}
+          extraWord={hasLoad ? ZONE_WORD[acwr.zone] : undefined}
+          extraColor={hasLoad ? ZONE_COLOR[acwr.zone] : undefined}
+          title="Preparación (anillo exterior) y carga (anillo interior)"
+        >
+          <DoubleRing
+            outer={(total ?? 0) / 100}
+            outerColor={recoveryTint}
+            inner={(acwr.acwr ?? 0) / 2}
+            innerColor={hasLoad ? ZONE_COLOR[acwr.zone] : NEUTRAL}
+          >
+            <span className={`${numberClass} text-[clamp(1.3rem,6.4vw,1.95rem)]`}>
+              {total !== null ? total : '—'}
+              {total !== null && <span className="text-[0.5em] font-medium text-neutral-400">%</span>}
+            </span>
+          </DoubleRing>
+        </RingButton>
+
+        {strain && (
+          <RingButton
+            selected={open === 'strain'}
+            onClick={() => toggle('strain')}
+            label="Esfuerzo"
+            word={strainWord(strain)}
+            wordColor={strainColor(strain)}
+            extraWord={`Objetivo ${strain.target.low}–${strain.target.high}`}
+            title="Esfuerzo de hoy: el objetivo (anillo exterior) y tu esfuerzo (anillo interior)"
+          >
+            <StrainRing view={strain} />
+          </RingButton>
+        )}
+      </div>
+
+      {advice && (
+        <p className="mt-3 text-center text-sm font-semibold" style={{ color: advice.color }}>
+          {advice.text}
+        </p>
       )}
+      {driver && <p className={`${advice ? 'mt-0.5' : 'mt-3'} text-center text-xs text-neutral-400`}>{driver}</p>}
+      {open === null && !advice && !driver && <p className="mt-3 text-center text-[11px] text-neutral-600">Toca un anillo para ver el detalle</p>}
+
+      {(open === 'prep' || open === 'strain') && panel}
     </section>
   );
 }
