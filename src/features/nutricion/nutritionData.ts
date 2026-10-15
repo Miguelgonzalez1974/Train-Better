@@ -100,6 +100,32 @@ export function withoutExtra(prefs: NutritionPrefs, iso: string, entryId: string
   return { ...prefs, extraFoods: all };
 }
 
+/** Id del apunte del diario que corresponde a una comida del menú ("la he comido"): uno por comida y día, así no se duplica. */
+export const menuEntryId = (meal: MealKey): string => `menu-${meal}`;
+
+/** La comida del menú ya está apuntada en el diario de ese día. */
+export function isMenuEaten(prefs: NutritionPrefs | undefined, iso: string, meal: MealKey): boolean {
+  return (prefs?.extraFoods?.[iso] ?? []).some((e) => e.id === menuEntryId(meal));
+}
+
+/** Apunta una comida del menú en el diario del día (sustituye el apunte anterior de esa comida si lo había). */
+export function withMenuEaten(prefs: NutritionPrefs, iso: string, meal: MealKey, hour: number, items: CustomMealItem[]): NutritionPrefs {
+  const without = withoutExtra(prefs, iso, menuEntryId(meal));
+  return withExtra(without, iso, { id: menuEntryId(meal), hour, items });
+}
+
+/** Quita del diario la comida del menú. */
+export function withoutMenuEaten(prefs: NutritionPrefs, iso: string, meal: MealKey): NutritionPrefs {
+  return withoutExtra(prefs, iso, menuEntryId(meal));
+}
+
+/** Cambia la cantidad de un alimento de un apunte del diario. */
+export function withExtraItemGrams(prefs: NutritionPrefs, iso: string, entryId: string, itemIndex: number, grams: number): NutritionPrefs {
+  const all = { ...(prefs.extraFoods ?? {}) };
+  all[iso] = (all[iso] ?? []).map((e) => (e.id === entryId ? { ...e, items: e.items.map((it, i) => (i === itemIndex ? { ...it, grams } : it)) } : e));
+  return { ...prefs, extraFoods: all };
+}
+
 /** Preferencias con un alimento propio nuevo dado de alta. */
 export function withCustomFood(prefs: NutritionPrefs, food: CustomFood): NutritionPrefs {
   return { ...prefs, customFoods: [...(prefs.customFoods ?? []), food] };

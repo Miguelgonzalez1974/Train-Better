@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { NutritionPrefs } from '../../data/athlete/types';
-import { MEAL_ORDER, type MealKey } from '../../engine/mealPlan';
+import { parseHour } from '../../engine/dayFlow';
+import { materialize } from '../../engine/mealBuilder';
+import type { MealKey } from '../../engine/mealPlan';
 import type { NutritionDayType } from '../../engine/nutritionPlan';
 import { MealBuilder } from './MealBuilder';
-import { autoPlanFor, planFor, withCustomMeal, withoutCustomMeal } from './nutritionData';
+import { autoPlanFor, isMenuEaten, planFor, withCustomMeal, withMenuEaten, withoutCustomMeal, withoutMenuEaten } from './nutritionData';
 
 interface MealBuilderPanelProps {
   prefs: NutritionPrefs;
@@ -30,8 +32,9 @@ export function MealBuilderPanel({ prefs, weightKg, updatePrefs, iso, dayType, m
   const excluded = useMemo(() => prefs.excludedFoodIds ?? [], [prefs.excludedFoodIds]);
   if (!meal || !autoMeal) return null;
 
-  const mealIndex = MEAL_ORDER.indexOf(mealKey);
-  const done = prefs.doneMeals?.[iso]?.includes(mealIndex) ?? false;
+  // "Comer esto" = apuntar la comida en el diario del día. Si ya estaba apuntada y la cambias, el apunte se actualiza.
+  const eaten = isMenuEaten(prefs, iso, mealKey);
+  const hour = parseHour(meal.time);
 
   return (
     <MealBuilder
@@ -40,19 +43,21 @@ export function MealBuilderPanel({ prefs, weightKg, updatePrefs, iso, dayType, m
       autoMeal={autoMeal}
       excludedFoodIds={excluded}
       customFoods={prefs.customFoods ?? []}
-      done={done}
-      onChange={(items) => updatePrefs((p) => withCustomMeal(p, iso, mealKey, items))}
-      onAuto={() => {
-        updatePrefs((p) => withoutCustomMeal(p, iso, mealKey));
-        setResetCount((n) => n + 1);
-      }}
-      onToggleDone={() =>
+      done={eaten}
+      onChange={(items) =>
         updatePrefs((p) => {
-          const current = p.doneMeals?.[iso] ?? [];
-          const next = current.includes(mealIndex) ? current.filter((i) => i !== mealIndex) : [...current, mealIndex].sort();
-          return { ...p, doneMeals: { ...(p.doneMeals ?? {}), [iso]: next } };
+          const next = withCustomMeal(p, iso, mealKey, items);
+          return isMenuEaten(next, iso, mealKey) ? withMenuEaten(next, iso, mealKey, hour, items) : next;
         })
       }
+      onAuto={() => {
+        updatePrefs((p) => {
+          const next = withoutCustomMeal(p, iso, mealKey);
+          return isMenuEaten(next, iso, mealKey) ? withMenuEaten(next, iso, mealKey, hour, materialize(autoMeal)) : next;
+        });
+        setResetCount((n) => n + 1);
+      }}
+      onToggleDone={() => updatePrefs((p) => (isMenuEaten(p, iso, mealKey) ? withoutMenuEaten(p, iso, mealKey) : withMenuEaten(p, iso, mealKey, hour, materialize(meal))))}
     />
   );
 }

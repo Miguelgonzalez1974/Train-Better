@@ -112,7 +112,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
         <Plus size={14} aria-hidden="true" /> Añadir un alimento ahora
       </button>
 
-      <p className="text-[11px] leading-relaxed text-neutral-600">Toca un punto para montar esa comida. Los donuts cuentan lo que marques como hecho, más los extras.</p>
+      <p className="text-[11px] leading-relaxed text-neutral-600">Toca un punto para ver o cambiar esa comida. Los donuts cuentan lo que hayas apuntado en el diario.</p>
     </div>
   );
 }

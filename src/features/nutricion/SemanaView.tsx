@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { NUTRITION_DAY_LABEL } from '../../engine/nutritionPlan';
 import { DAY_TYPE_DOT } from '../planificacion/NutritionGlance';
 import { MacroRing } from './MacroRing';
-import { addDays, extraInputsFor, mondayOf, parseIso, planFor, WEEKDAY_LONG } from './nutritionData';
+import { addDays, extraInputsFor, isMenuEaten, mondayOf, parseIso, planFor, WEEKDAY_LONG } from './nutritionData';
 import type { NutritionShared } from './shared';
 
 interface SemanaViewProps {
@@ -12,9 +12,9 @@ interface SemanaViewProps {
 }
 
 /**
- * Menú de la semana entera: un vistazo por día con dos donuts compactos (lo hecho + extras frente al objetivo de
- * ese día, igual que en "Tu día") y, desplegado, qué se come en cada comida. Los días futuros muestran los donuts
- * vacíos — aún no hay nada marcado, es la previsión del menú.
+ * Menú de la semana entera: un vistazo por día con dos donuts compactos (lo apuntado en el diario frente al objetivo
+ * de ese día) y, desplegado, qué se come en cada comida. Los días futuros muestran los donuts vacíos — aún no hay
+ * nada apuntado, es la previsión del menú.
  */
 export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
   const { prefs, weightKg, todayIso, getWeek } = shared;
@@ -26,10 +26,11 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
     () =>
       getWeek(anchor).map((d) => {
         const plan = planFor(prefs, d.iso, d.type, weightKg);
-        const doneIdx = prefs.doneMeals?.[d.iso] ?? [];
+        // Lo comido sale del diario del día (las comidas del menú que has "comido" también son apuntes del diario).
+        const doneIdx = plan.meals.flatMap((m, i) => (isMenuEaten(prefs, d.iso, m.key) ? [i] : []));
         const extras = extraInputsFor(prefs, d.iso);
-        const doneProtein = plan.meals.reduce((s, m, i) => s + (doneIdx.includes(i) ? m.protein : 0), 0) + extras.reduce((s, e) => s + e.protein, 0);
-        const doneCarbs = plan.meals.reduce((s, m, i) => s + (doneIdx.includes(i) ? m.carbs : 0), 0) + extras.reduce((s, e) => s + e.carbs, 0);
+        const doneProtein = extras.reduce((s, e) => s + e.protein, 0);
+        const doneCarbs = extras.reduce((s, e) => s + e.carbs, 0);
         // Objetivo fijo del día (punto medio del rango) — no lo compuesto, que puede bajar si una comida se monta a mano con menos.
         const objectiveProtein = Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2);
         const objectiveCarbs = Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2);
@@ -107,7 +108,7 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
                   })}
                 </ul>
                 <button onClick={() => onOpenDay(d.iso)} className="mt-3 text-xs font-semibold text-neutral-300 underline decoration-dotted hover:text-white">
-                  Abrir el día para marcar o cambiar alimentos
+                  Abrir el día para comer o cambiar alimentos
                 </button>
               </div>
             )}

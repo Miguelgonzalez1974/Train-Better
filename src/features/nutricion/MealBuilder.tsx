@@ -308,7 +308,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
         }`}
       >
         {done && <Check size={16} strokeWidth={3} aria-hidden="true" />}
-        {done ? 'Hecha (tocar para deshacer)' : 'Marcar como hecha'}
+        {done ? 'En tu diario (tocar para quitar)' : 'Comer esto: añadir al diario'}
       </button>
       <p className="text-[11px] leading-relaxed text-neutral-600">
         Las cantidades son aproximadas y solo cuentan proteína e hidratos: el aceite, los frutos secos y los quesos suman grasa que aquí no se ve.

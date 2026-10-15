@@ -4,16 +4,16 @@ import type { NutritionPrefs } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { BodyweightCard } from '../dashboard/BodyweightCard';
 import { NutritionModal } from '../dashboard/NutritionModal';
-import { AjustesView } from './AjustesView';
-import { CompraView } from './CompraView';
+import { Modal } from '../shell/Modal';
+import { AlimentosView } from './AlimentosView';
 import { DiarioView } from './DiarioView';
-import { HoyView } from './HoyView';
+import { MenuDiaView } from './MenuDiaView';
 import { computeWeekDays, mondayOf, type WeekDay } from './nutritionData';
 import { SemanaView } from './SemanaView';
 import type { NutritionShared } from './shared';
 
 type SubTab = 'hoy' | 'menus' | 'alimentos';
-type MenuView = 'dia' | 'semana' | 'compra';
+type MenuView = 'dia' | 'semana';
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'hoy', label: 'Hoy' },
@@ -24,12 +24,11 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
 const MENU_VIEWS: { id: MenuView; label: string }[] = [
   { id: 'dia', label: 'Día' },
   { id: 'semana', label: 'Semana' },
-  { id: 'compra', label: 'Compra' },
 ];
 
 /**
  * Módulo de nutrición en tres pestañas: Hoy (el diario: apuntas lo que comes y se llenan los anillos de proteína e
- * hidratos), Menús (menús posibles para el día y la semana, y la lista de la compra) y Alimentos (el catálogo, los
+ * hidratos), Menús (menús posibles para el día y la semana, que se comen de un toque) y Alimentos (el catálogo, los
  * tuyos y los que no quieres). Lee del entreno el tipo de día. Ver `engine/mealPlan.ts`.
  */
 export function Nutricion() {
@@ -39,6 +38,7 @@ export function Nutricion() {
   const [tab, setTab] = useState<SubTab>('hoy');
   const [menuView, setMenuView] = useState<MenuView>('dia');
   const [showGuide, setShowGuide] = useState(false);
+  const [showWeight, setShowWeight] = useState(false);
   const todayIso = toLocalIsoDate(new Date());
   const [selectedIso, setSelectedIso] = useState(todayIso);
 
@@ -118,7 +118,7 @@ export function Nutricion() {
                   </button>
                 ))}
               </div>
-              {menuView === 'dia' && <HoyView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} onOpenGuide={() => setShowGuide(true)} />}
+              {menuView === 'dia' && <MenuDiaView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} />}
               {menuView === 'semana' && (
                 <SemanaView
                   shared={shared}
@@ -128,10 +128,9 @@ export function Nutricion() {
                   }}
                 />
               )}
-              {menuView === 'compra' && <CompraView shared={shared} />}
             </div>
           )}
-          {tab === 'alimentos' && <AjustesView shared={shared} bodyweightLog={bodyweightLog} onBodyweightChange={setBodyweightLog} />}
+          {tab === 'alimentos' && <AlimentosView shared={shared} />}
         </>
       )}
 
@@ -143,9 +142,15 @@ export function Nutricion() {
           onClose={() => setShowGuide(false)}
           onOpenBodyweight={() => {
             setShowGuide(false);
-            setTab('alimentos');
+            setShowWeight(true);
           }}
         />
+      )}
+
+      {showWeight && (
+        <Modal open onClose={() => setShowWeight(false)} title="Peso corporal">
+          <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} embedded />
+        </Modal>
       )}
     </div>
   );
