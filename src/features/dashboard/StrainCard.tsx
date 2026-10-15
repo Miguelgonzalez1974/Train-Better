@@ -1,4 +1,6 @@
+import { ChevronDown } from 'lucide-react';
 import type { StrainRange, StrainStatus } from '../../engine/strain';
+import type { StrainTarget } from '../../data/athlete/types';
 import { SectionLabel } from '../shell/SectionLabel';
 
 const CX = 110;
@@ -24,36 +26,34 @@ const STATUS_COLOR: Record<StrainStatus, string> = {
   pasado: 'rgb(var(--c-state-hot))',
 };
 
-function statusText(status: StrainStatus, range: StrainRange): string {
+function statusText(status: StrainStatus, range: StrainRange, strain: number | null): string {
   switch (status) {
     case 'sin-entrenar':
       return `Aún sin entrenar · hoy te conviene entre ${range.low} y ${range.high}`;
     case 'por-debajo':
-      return 'Por debajo del rango · aún tenías margen';
+      return `${range.low - (strain ?? 0)} puntos por debajo del objetivo · aún tenías margen`;
     case 'dentro':
-      return 'Dentro del rango · justo lo que tocaba';
+      return 'Dentro del objetivo · justo lo que tocaba';
     case 'pasado':
-      return 'Por encima del rango · mañana, con cuidado';
+      return `${(strain ?? 0) - range.high} puntos por encima del objetivo · mañana, con cuidado`;
   }
 }
 
 /**
- * "Esfuerzo de hoy": un semicírculo con el rango que el coach recomienda hoy (la banda verde, según tu preparación y tu
- * carga) y, una vez entrenado, dónde caíste. Estimación de carga percibida (RPE x duración), no una medida fisiológica.
+ * "Esfuerzo de hoy": un semicírculo con el objetivo que el coach fijó por la mañana (la banda verde, según tu preparación,
+ * tu carga y cómo fue ayer) y, una vez entrenado, dónde caíste. El objetivo no se mueve durante el día. Estimación de
+ * carga percibida (RPE x duración), no una medida fisiológica.
  */
 export function StrainCard({
   strain,
-  range,
+  target,
   status,
-  readiness,
-  loadWord,
 }: {
   strain: number | null;
-  range: StrainRange;
+  target: StrainTarget;
   status: StrainStatus;
-  readiness: number | null;
-  loadWord: string | null;
 }) {
+  const range: StrainRange = target;
   const color = STATUS_COLOR[status];
   const marker = strain !== null ? point(strain) : null;
   return (
@@ -73,15 +73,28 @@ export function StrainCard({
       </div>
       <div className="mt-3 flex items-center justify-center gap-2 text-xs text-neutral-400">
         <span className="h-2 w-5 rounded-sm" style={{ backgroundColor: 'rgb(var(--c-state-good) / 0.45)' }} aria-hidden="true" />
-        Rango recomendado <span className="num font-semibold text-neutral-200">{range.low}–{range.high}</span>
+        Objetivo de hoy <span className="num font-semibold text-neutral-200">{range.low}–{range.high}</span>
       </div>
       <p className="mt-2 text-center text-sm font-semibold" style={{ color: status === 'sin-entrenar' ? undefined : color }}>
-        {statusText(status, range)}
+        {statusText(status, range, strain)}
       </p>
-      <p className="mt-1.5 text-center text-[11px] leading-relaxed text-neutral-600">
-        {readiness !== null ? `Sale de tu preparación (${readiness} %)` : 'Sin check-in de hoy'}
-        {loadWord ? ` y tu carga (${loadWord})` : ''}. Es una estimación del esfuerzo percibido (RPE × duración), no una medida fisiológica.
+      <p className="mt-1 text-center text-[11px] text-neutral-600">
+        {target.provisional && strain === null ? 'Provisional: haz el check-in y se fija' : 'Fijado esta mañana · no cambia durante el día'}
       </p>
+      <details className="group mt-3 border-t border-white/5 pt-2">
+        <summary className="flex cursor-pointer list-none items-center justify-center gap-1 text-xs font-medium text-neutral-400 transition-colors hover:text-white [&::-webkit-details-marker]:hidden">
+          Por qué este objetivo
+          <ChevronDown size={13} className="transition-transform duration-200 group-open:rotate-180" />
+        </summary>
+        <ul className="mt-2 flex flex-col gap-1 text-xs leading-relaxed text-neutral-400">
+          {target.reasons.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11px] leading-relaxed text-neutral-600">
+          Estimación del esfuerzo percibido (RPE × duración), no una medida fisiológica.
+        </p>
+      </details>
     </section>
   );
 }

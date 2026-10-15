@@ -8,7 +8,8 @@ import { getMonthlyStats } from './stats';
 import { computePrTrends } from '../../engine/weakPoints';
 import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
-import { buildTrend, dayStrain, recommendedStrain, strainStatus } from '../../engine/strain';
+import { buildTrend, dayStrain, strainStatus } from '../../engine/strain';
+import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget';
 import { StrainCard } from './StrainCard';
 import { TrendCard } from './TrendCard';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
@@ -30,9 +31,6 @@ import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
 
-/** Cómo se llama cada zona de carga (ACWR) en las frases del Dashboard. */
-const LOAD_WORD = { baja: 'baja', optima: 'óptima', moderada: 'alta', alta: 'muy alta' } as const;
-
 /** Veces el peso corporal (total sentadilla + banca + peso muerto) a las que el arco de "Fuerza" llega lleno. */
 const STRENGTH_RATIO_FULL = 7;
 
@@ -45,7 +43,13 @@ interface DashboardProps {
 
 export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
-  const [profile] = useState(() => athleteRepository.getProfile());
+  // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
+  const [profile] = useState(() => {
+    const current = athleteRepository.getProfile();
+    const next = ensureStrainTarget(current, history, toLocalIsoDate(new Date()));
+    if (next !== current) athleteRepository.saveProfile(next);
+    return next;
+  });
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showVolume, setShowVolume] = useState(false);
   const [showBodyweight, setShowBodyweight] = useState(false);
@@ -121,8 +125,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
   const readinessLearning = computeReadinessLearning(profile.readinessLog, history);
   const todayStrain = dayStrain(history.find((h) => h.date === todayIso));
-  const strainRange = recommendedStrain(readiness.total, acwr.acwr !== null && !acwr.coldStart ? acwr.zone : null);
-  const strainState = strainStatus(todayStrain, strainRange);
+  const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, history, todayIso);
+  const strainState = strainStatus(todayStrain, strainTarget);
   const energyAdherencePct =
     conditioningBalance && conditioningBalance.totalPlanned > 0
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
@@ -256,13 +260,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
       />
 
       {/* Esfuerzo de hoy frente al rango que recomienda el coach, y la tendencia de esfuerzo y preparación. */}
-      <StrainCard
-        strain={todayStrain}
-        range={strainRange}
-        status={strainState}
-        readiness={readiness.total}
-        loadWord={acwr.acwr !== null && !acwr.coldStart ? LOAD_WORD[acwr.zone] : null}
-      />
+      <StrainCard strain={todayStrain} target={strainTarget} status={strainState} />
       <TrendCard series={(days) => buildTrend(history, profile.readinessLog, todayIso, days)} />
 
       {/*

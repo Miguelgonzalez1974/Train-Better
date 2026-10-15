@@ -344,6 +344,11 @@ export interface AthleteProfile {
    * siguen calculándose frescas cada vez a partir de lo ya fijado. El WOD "normal" (no-benchmark) no
    * se bloquea — ver planWeekLocks.
    */
+  /**
+   * Esfuerzo objetivo de cada día, fijado una vez por la mañana (ver `engine/strainTarget.ts`): así lo que el coach
+   * pedía no se mueve mientras entrenas y se puede comparar con lo que hiciste. Por fecha ISO.
+   */
+  strainTargets?: Record<string, StrainTarget>;
   weeklyLocks?: Record<
     string,
     {
@@ -365,6 +370,22 @@ export interface AthleteProfile {
       plannedOn?: string;
     }
   >;
+}
+
+/** Esfuerzo recomendado para un día (rango 0-100), con los datos de los que salió. */
+export interface StrainTarget {
+  low: number;
+  high: number;
+  /** Preparación (0-100) con la que se calculó, antes de entrenar; null si no había datos. */
+  readiness: number | null;
+  /** Esfuerzo de ayer (0-100), o null si no entrenaste. */
+  yesterday: number | null;
+  /** Frases cortas con el porqué del rango. */
+  reasons: string[];
+  /** Se calculó sin el check-in de hoy: se rehace cuando lo hagas y, tras eso, queda fijo. */
+  provisional: boolean;
+  /** Fecha ISO en que se fijó. */
+  setOn: string;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */

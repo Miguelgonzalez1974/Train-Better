@@ -1,4 +1,4 @@
-import type { AthleteProfile, DailySession, ExtraFoodEntry, SessionHistoryEntry, WorkSetEntry } from './types';
+import type { AthleteProfile, DailySession, ExtraFoodEntry, SessionHistoryEntry, StrainTarget, WorkSetEntry } from './types';
 
 /**
  * Fusion de dos estados del atleta (remoto y local) para la sincronizacion. Antes cada `pushRemote`
@@ -39,6 +39,18 @@ function mergeRegenVariants(remote?: Record<string, number>, local?: Record<stri
   const merged: Record<string, number> = { ...(remote ?? {}) };
   for (const [date, n] of Object.entries(local ?? {})) merged[date] = Math.max(merged[date] ?? 0, n);
   return Object.keys(merged).length === 0 ? undefined : keepLatestKeys(merged, REGEN_VARIANTS_LIMIT);
+}
+
+const STRAIN_TARGETS_LIMIT = 45;
+
+/** Objetivo de esfuerzo por dia: el definitivo (con check-in) gana al provisional; entre iguales, el local. */
+function mergeStrainTargets(remote?: Record<string, StrainTarget>, local?: Record<string, StrainTarget>): Record<string, StrainTarget> | undefined {
+  const merged: Record<string, StrainTarget> = { ...(remote ?? {}) };
+  for (const [date, t] of Object.entries(local ?? {})) {
+    const other = merged[date];
+    merged[date] = other && !other.provisional && t.provisional ? other : t;
+  }
+  return Object.keys(merged).length === 0 ? undefined : keepLatestKeys(merged, STRAIN_TARGETS_LIMIT);
 }
 
 /** Se queda con las `limit` claves mas recientes de un objeto cuyas claves empiezan por una fecha ISO. */
@@ -278,5 +290,6 @@ export function mergeProfile(
     // Veces regenerado cada dia: la mayor de las dos (regenerar en cualquier dispositivo gana), solo las fechas recientes.
     regenVariants: mergeRegenVariants(remote.regenVariants, local.regenVariants),
     weeklyLocks: pruneByProximityToToday({ ...(remote.weeklyLocks ?? {}), ...(local.weeklyLocks ?? {}) }, WEEKLY_LOCKS_LIMIT),
+    strainTargets: mergeStrainTargets(remote.strainTargets, local.strainTargets),
   };
 }
