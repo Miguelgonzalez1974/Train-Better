@@ -60,12 +60,12 @@ const tok = (t: Token) => `rgb(var(--c-state-${t}))`;
 const mix = (from: Token, to: Token, pctTo: number) => `color-mix(in srgb, ${tok(to)} ${Math.round(pctTo)}%, ${tok(from)})`;
 
 /**
- * El color de cada punto de la escala de esfuerzo según el objetivo: azul por debajo del mínimo, verde en el mínimo que
- * se va degradando (verde, amarillo, rojo) hasta el máximo, y rojo por encima. Los dos anillos usan la misma escala, así
- * que el color donde acaba tu esfuerzo dice de un vistazo cuánto margen queda.
+ * El color de cada punto de la escala de esfuerzo según el objetivo: verde desde cero hasta el mínimo, y desde ahí se va
+ * degradando (verde, amarillo, rojo) hasta el máximo; por encima del máximo, rojo. Los dos anillos usan la misma escala,
+ * así que el color donde acaba tu esfuerzo dice de un vistazo cuánto margen queda.
  */
 function scaleColor(value: number, low: number, high: number): string {
-  if (value < low) return tok('cool');
+  if (value < low) return tok('good');
   if (value >= high) return tok('low');
   const t = high > low ? (value - low) / (high - low) : 0;
   return t < 0.5 ? mix('good', 'mid', t * 200) : mix('mid', 'low', (t - 0.5) * 200);
@@ -103,11 +103,12 @@ function tick(value: number) {
 }
 
 /**
- * Anillo doble del esfuerzo de hoy, como el de preparación. Por fuera el objetivo que el coach fijó por la mañana: solo se
- * colorea su tramo, verde en el mínimo y degradado hacia rojo en el máximo, con una marca en cada extremo. Por dentro tu
- * esfuerzo, que se llena desde cero hasta lo previsto de la sesión (más tenue) y, una vez entrenado, hasta lo real, con la
- * misma escala de color: azul si no llega al mínimo, verde dentro y rojo si se acerca al máximo o lo pasa. El número del
- * centro es el previsto (con ~) hasta que entrenas y el real después.
+ * Anillo doble del esfuerzo de hoy, como el de preparación; los dos arrancan de cero, a las 12 y en el sentido del reloj.
+ * Por fuera el objetivo que el coach fijó por la mañana, de cero hasta tu máximo: verde hasta el mínimo y degradado
+ * hacia rojo hasta el máximo, con una marca en el mínimo y otra en el máximo. Por dentro tu esfuerzo, que se llena desde
+ * cero hasta lo previsto de la sesión (más tenue) y, una vez entrenado, hasta lo real, con la misma escala de color. Si el
+ * anillo interior llega más lejos que el exterior, te pasas. El número del centro es el previsto (con ~) hasta que
+ * entrenas y el real después.
  */
 export function StrainRing({ view }: { view: StrainView }) {
   const { target, planned, real } = view;
@@ -140,9 +141,9 @@ export function StrainRing({ view }: { view: StrainView }) {
           </mask>
         </defs>
         <g transform="rotate(-90 50 50)">
-          {/* Anillo exterior: el objetivo (solo su tramo lleva color). */}
+          {/* Anillo exterior: el objetivo, de cero (las 12) hasta el máximo; verde hasta el mínimo y degradado hacia rojo. */}
           <circle cx="50" cy="50" r={R} fill="none" strokeWidth={8} className="stroke-white/[0.07]" />
-          {scaleSegments(target.low, target.high, 1.5, R, C, 8, target.low, target.high)}
+          {scaleSegments(0, target.high, 1.5, R, C, 8, target.low, target.high)}
           {/* Anillo interior: tu esfuerzo, con la escala completa revelada hasta donde llegas. */}
           <circle cx="50" cy="50" r={R_INNER} fill="none" strokeWidth={6} className="stroke-white/[0.06]" />
           {shown !== null && (
@@ -171,7 +172,7 @@ export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: (
     <div className="flex flex-col gap-4">
       <div>
         <SectionLabel>Esfuerzo de hoy</SectionLabel>
-        <p className="mt-1 text-[11px] text-neutral-500">Anillo exterior: tu objetivo (de verde a rojo según te acerques al máximo). Anillo interior: tu esfuerzo, que cambia de color según dónde llegue.</p>
+        <p className="mt-1 text-[11px] text-neutral-500">Los dos anillos arrancan a las 12. Exterior: tu objetivo, hasta tu máximo (de verde a rojo). Interior: tu esfuerzo, que acaba donde llegas.</p>
         <p className="mt-1.5 text-base font-semibold text-white">
           Objetivo <span className="num">{target.low}–{target.high}</span>
         </p>
