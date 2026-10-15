@@ -9,9 +9,61 @@ import type { AthleteProfile, DailySession, ExtraFoodEntry, SessionHistoryEntry,
  * Criterio: los campos "de log" (worklog, pesajes, historial, cache...) son estructuras de
  * append/upsert-por-clave -> se unen por clave. Los campos "de config" (PRs, macros, objetivos...)
  * son cambios deliberados y poco frecuentes -> gana el local (el dispositivo que acaba de tocarlo).
- * Un borrado que el otro dispositivo aun no sincronizo puede "revivir" una entrada; es un mal mucho
- * menor que perder datos en silencio, y volver a borrar es un toque.
+ *
+ * BORRADOS: una union pura revive siempre lo que borras (el remoto aun lo tiene y vuelve en el siguiente
+ * `pushRemote`: asi no se podia borrar un macrociclo, un objetivo o un apunte del diario). Por eso la fusion es de
+ * tres vias: `SyncBase` guarda las claves de la ultima sincronizacion y lo que estaba ahi y ya no esta en el local
+ * (borrado aqui) o en el remoto (borrado en otro dispositivo) se elimina del resultado. Sin base (primera
+ * sincronizacion del dispositivo) se comporta como la union de siempre.
  */
+
+/** Claves de lo que habia en la ultima sincronizacion, para distinguir "lo borraron" de "aun no ha llegado". */
+export interface SyncBase {
+  macrocycles?: string[];
+  goals?: string[];
+  strengthPrograms?: string[];
+  customFoods?: string[];
+  /** `fecha|id` de cada apunte del diario de nutricion. */
+  extraFoods?: string[];
+  workLog?: string[];
+  setFeedbackLog?: string[];
+  history?: string[];
+  /** Fecha de inicio de la rampa de vuelta que habia (null si no habia). */
+  rampStart?: string | null;
+}
+
+const workKey = (e: WorkSetEntry) => `${e.date}|${e.movementId}|${e.setNumber}`;
+const feedbackKey = (e: { date: string; movementId: string }) => `${e.date}|${e.movementId}`;
+
+/** Foto de las claves del estado ya fusionado, para la siguiente fusion. */
+export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistoryEntry[]): SyncBase {
+  return {
+    macrocycles: profile.macrocycles.map((m) => m.id),
+    goals: profile.goals.map((g) => g.id),
+    strengthPrograms: (profile.strengthPrograms ?? []).map((p) => p.id),
+    customFoods: (profile.nutritionPrefs?.customFoods ?? []).map((f) => f.id),
+    extraFoods: Object.entries(profile.nutritionPrefs?.extraFoods ?? {}).flatMap(([iso, list]) => list.map((e) => `${iso}|${e.id}`)),
+    workLog: (profile.workLog ?? []).map(workKey),
+    setFeedbackLog: (profile.setFeedbackLog ?? []).map(feedbackKey),
+    history: history.map((h) => h.date),
+    rampStart: profile.intensityRamp?.startDate ?? null,
+  };
+}
+
+/**
+ * Quita del resultado de la union lo que se borro desde la ultima sincronizacion: estaba en la base y ya no esta en el
+ * local (lo borraste aqui) o en el remoto (lo borraron en otro dispositivo). Lo que no estaba en la base es nuevo y se conserva.
+ */
+function dropDeleted<T>(merged: T[], keyOf: (x: T) => string, baseKeys: string[] | undefined, remote: T[] | undefined, local: T[] | undefined): T[] {
+  if (!baseKeys || baseKeys.length === 0) return merged;
+  const base = new Set(baseKeys);
+  const inRemote = new Set((remote ?? []).map(keyOf));
+  const inLocal = new Set((local ?? []).map(keyOf));
+  return merged.filter((x) => {
+    const k = keyOf(x);
+    return !base.has(k) || (inRemote.has(k) && inLocal.has(k));
+  });
+}
 
 // Topes — mismos valores que en `localRepository.ts` (una union fusionada puede superarlos).
 const HISTORY_LIMIT = 30;
@@ -63,16 +115,17 @@ function keepLatestKeys<T>(obj: Record<string, T>, limit: number): Record<string
 function mergeExtraFoods(
   remote: Record<string, ExtraFoodEntry[]> | undefined,
   local: Record<string, ExtraFoodEntry[]> | undefined,
+  baseKeys?: string[],
 ): Record<string, ExtraFoodEntry[]> {
   const dates = new Set([...Object.keys(remote ?? {}), ...Object.keys(local ?? {})]);
   const merged: Record<string, ExtraFoodEntry[]> = {};
   for (const iso of dates) {
-    merged[iso] = mergeByKey(
+    merged[iso] = dropDeleted(
+      mergeByKey(remote?.[iso], local?.[iso], (e) => e.id, (e) => String(Math.round(e.hour * 100)).padStart(6, '0'), NUTRITION_EXTRAS_PER_DAY_LIMIT),
+      (e) => `${iso}|${e.id}`,
+      baseKeys,
       remote?.[iso],
       local?.[iso],
-      (e) => e.id,
-      (e) => String(Math.round(e.hour * 100)).padStart(6, '0'),
-      NUTRITION_EXTRAS_PER_DAY_LIMIT,
     );
   }
   return keepLatestKeys(merged, NUTRITION_EXTRA_DAYS_LIMIT);
@@ -83,7 +136,7 @@ function mergeExtraFoods(
  * tiene); los cambios de alimento y las comidas hechas se unen por clave/fecha, gana el local en la misma.
  * Los alimentos propios se unen por id (gana el local si el mismo id cambió en los dos sitios).
  */
-function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: AthleteProfile['nutritionPrefs']): AthleteProfile['nutritionPrefs'] {
+function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: AthleteProfile['nutritionPrefs'], base?: SyncBase): AthleteProfile['nutritionPrefs'] {
   if (!remote && !local) return undefined;
   return {
     excludedFoodIds: local?.excludedFoodIds ?? remote?.excludedFoodIds,
@@ -93,8 +146,14 @@ function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: At
     doneMeals: keepLatestKeys({ ...(remote?.doneMeals ?? {}), ...(local?.doneMeals ?? {}) }, NUTRITION_DONE_DAYS_LIMIT),
     // Por fecha: gana el local (el día entero que el atleta acaba de tocar); las demás fechas de ambos dispositivos se conservan.
     customMeals: keepLatestKeys({ ...(remote?.customMeals ?? {}), ...(local?.customMeals ?? {}) }, NUTRITION_CUSTOM_DAYS_LIMIT),
-    customFoods: mergeByKey(remote?.customFoods, local?.customFoods, (f) => f.id, (f) => f.id, NUTRITION_CUSTOM_FOODS_LIMIT),
-    extraFoods: mergeExtraFoods(remote?.extraFoods, local?.extraFoods),
+    customFoods: dropDeleted(
+      mergeByKey(remote?.customFoods, local?.customFoods, (f) => f.id, (f) => f.id, NUTRITION_CUSTOM_FOODS_LIMIT),
+      (f) => f.id,
+      base?.customFoods,
+      remote?.customFoods,
+      local?.customFoods,
+    ),
+    extraFoods: mergeExtraFoods(remote?.extraFoods, local?.extraFoods, base?.extraFoods),
   };
 }
 
@@ -132,8 +191,21 @@ function pickRicherHistory(remote: SessionHistoryEntry, local: SessionHistoryEnt
 export function mergeHistory(
   remote: SessionHistoryEntry[] | undefined,
   local: SessionHistoryEntry[] | undefined,
+  base?: SyncBase,
 ): SessionHistoryEntry[] {
-  return mergeByKey(remote, local, (e) => e.date, (e) => e.date, HISTORY_LIMIT, pickRicherHistory);
+  return dropDeleted(mergeByKey(remote, local, (e) => e.date, (e) => e.date, HISTORY_LIMIT, pickRicherHistory), (e) => e.date, base?.history, remote, local);
+}
+
+/** La rampa de vuelta: gana el local salvo que se haya borrado (aqui o en el otro dispositivo) desde la ultima sincronizacion. */
+function mergeRamp(remote: AthleteProfile, local: AthleteProfile, localIsFresh: boolean, base?: SyncBase): AthleteProfile['intensityRamp'] {
+  const rr = remote.intensityRamp;
+  const lr = local.intensityRamp;
+  const baseStart = base?.rampStart ?? null;
+  if (!localIsFresh && baseStart) {
+    if (!lr && (!rr || rr.startDate === baseStart)) return undefined;
+    if (!rr && lr && lr.startDate === baseStart) return undefined;
+  }
+  return (localIsFresh ? rr : lr) ?? rr;
 }
 
 /** Fecha ISO local de "hoy" — mismo formato que `toLocalIsoDate` del motor, calculado aqui sin importar `engine/` (esta capa de datos se mantiene independiente). */
@@ -222,6 +294,7 @@ export function mergeProfile(
   local: AthleteProfile,
   remoteHistory?: SessionHistoryEntry[],
   localHistory?: SessionHistoryEntry[],
+  base?: SyncBase,
 ): AthleteProfile {
   // Un dispositivo recien instalado (o con el almacenamiento local vaciado) arranca en
   // `DEFAULT_PROFILE` — sin `onboardedAt` local. Si esos valores de fabrica (PRs base, 4
@@ -240,12 +313,18 @@ export function mergeProfile(
     strengthSplit: (localIsFresh ? remote.strengthSplit : local.strengthSplit) ?? remote.strengthSplit,
     wodSources: (localIsFresh ? remote.wodSources : local.wodSources) ?? remote.wodSources,
     onboardedAt: local.onboardedAt ?? remote.onboardedAt,
-    intensityRamp: (localIsFresh ? remote.intensityRamp : local.intensityRamp) ?? remote.intensityRamp,
+    intensityRamp: mergeRamp(remote, local, localIsFresh, base),
 
-    // --- estructuras con id: union, gana el local en misma id ---
-    macrocycles: mergeByKey(remote.macrocycles, local.macrocycles, (m) => m.id, (m) => m.startDate, 999),
-    goals: mergeByKey(remote.goals, local.goals, (g) => g.id, (g) => g.createdAt ?? '', 999),
-    strengthPrograms: mergeByKey(remote.strengthPrograms, local.strengthPrograms, (p) => p.id, (p) => p.startDate, 999),
+    // --- estructuras con id: union, gana el local en misma id; lo borrado desde la ultima sincronizacion no vuelve ---
+    macrocycles: dropDeleted(mergeByKey(remote.macrocycles, local.macrocycles, (m) => m.id, (m) => m.startDate, 999), (m) => m.id, base?.macrocycles, remote.macrocycles, local.macrocycles),
+    goals: dropDeleted(mergeByKey(remote.goals, local.goals, (g) => g.id, (g) => g.createdAt ?? '', 999), (g) => g.id, base?.goals, remote.goals, local.goals),
+    strengthPrograms: dropDeleted(
+      mergeByKey(remote.strengthPrograms, local.strengthPrograms, (p) => p.id, (p) => p.startDate, 999),
+      (p) => p.id,
+      base?.strengthPrograms,
+      remote.strengthPrograms,
+      local.strengthPrograms,
+    ),
     // Un aviso de dolor con `clearedDate` = "el atleta lo quito"; esa version gana sobre la que aun lo tiene activo.
     painFlags: mergeByKey(
       remote.painFlags,
@@ -258,22 +337,28 @@ export function mergeProfile(
     reviewedMacroWeeks: mergeStringSet(remote.reviewedMacroWeeks, local.reviewedMacroWeeks, 999),
 
     // --- logs: union por clave ---
-    workLog: mergeByKey(
+    workLog: dropDeleted(
+      mergeByKey(remote.workLog, local.workLog, workKey, (e) => e.date, WORK_LOG_LIMIT),
+      workKey,
+      base?.workLog,
       remote.workLog,
       local.workLog,
-      (e) => `${e.date}|${e.movementId}|${e.setNumber}`,
-      (e) => e.date,
-      WORK_LOG_LIMIT,
     ),
     bodyweightLog: mergeByKey(remote.bodyweightLog, local.bodyweightLog, (e) => e.date, (e) => e.date, BODYWEIGHT_LOG_LIMIT),
     readinessLog: mergeByKey(remote.readinessLog, local.readinessLog, (e) => e.date, (e) => e.date, READINESS_LOG_LIMIT),
-    setFeedbackLog: mergeByKey(
+    setFeedbackLog: dropDeleted(
+      mergeByKey(
+        remote.setFeedbackLog,
+        local.setFeedbackLog,
+        feedbackKey,
+        (e) => e.date,
+        SET_FEEDBACK_LOG_LIMIT,
+        (r, l) => (l.estimated1rm != null || l.actualKg != null ? l : r.estimated1rm != null || r.actualKg != null ? r : l),
+      ),
+      feedbackKey,
+      base?.setFeedbackLog,
       remote.setFeedbackLog,
       local.setFeedbackLog,
-      (e) => `${e.date}|${e.movementId}`,
-      (e) => e.date,
-      SET_FEEDBACK_LOG_LIMIT,
-      (r, l) => (l.estimated1rm != null || l.actualKg != null ? l : r.estimated1rm != null || r.actualKg != null ? r : l),
     ),
     prLog: mergeByKey(
       remote.prLog,
@@ -286,7 +371,7 @@ export function mergeProfile(
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
     // Union por fecha, gana el local en la misma fecha (es una decision de planificacion deliberada,
     // igual criterio que el resto de campos "de config") — recortado igual que sessionCache.
-    nutritionPrefs: mergeNutritionPrefs(remote.nutritionPrefs, local.nutritionPrefs),
+    nutritionPrefs: mergeNutritionPrefs(remote.nutritionPrefs, local.nutritionPrefs, base),
     // Veces regenerado cada dia: la mayor de las dos (regenerar en cualquier dispositivo gana), solo las fechas recientes.
     regenVariants: mergeRegenVariants(remote.regenVariants, local.regenVariants),
     weeklyLocks: pruneByProximityToToday({ ...(remote.weeklyLocks ?? {}), ...(local.weeklyLocks ?? {}) }, WEEKLY_LOCKS_LIMIT),

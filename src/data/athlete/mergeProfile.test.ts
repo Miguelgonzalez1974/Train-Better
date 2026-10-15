@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeProfile, mergeHistory } from './mergeProfile';
+import { mergeProfile, mergeHistory, snapshotSyncBase } from './mergeProfile';
 import { DEFAULT_PROFILE } from './types';
 import type { AthleteProfile, SessionHistoryEntry, WorkSetEntry } from './types';
 
@@ -347,5 +347,67 @@ describe('mergeHistory', () => {
     const merged = mergeHistory(remote, local);
     expect(merged).toHaveLength(1);
     expect(merged[0].testLoadKg).toBe(180);
+  });
+});
+
+describe('borrados: no vuelven tras sincronizar (fusion de tres vias con la ultima sincronizacion)', () => {
+  const macro = (id: string) => ({ id, label: id, startDate: '2026-01-05', endDate: '2026-06-01' });
+  const goal = (id: string) => ({ id, type: 'subir-pr' as const, movementId: 'snatch', targetDate: '2026-05-01', emphasis: 'moderado' as const, createdAt: '2026-01-01' });
+
+  it('un macrociclo borrado aqui no revive aunque el remoto aun lo tenga', () => {
+    const synced = { ...base(), macrocycles: [macro('invierno'), macro('verano')] };
+    const syncBase = snapshotSyncBase(synced, []);
+    const local = { ...base(), macrocycles: [macro('verano')] }; // lo borraste aqui; el servidor aun lo tiene
+    const merged = mergeProfile(synced, local, undefined, undefined, syncBase);
+    expect(merged.macrocycles.map((m) => m.id)).toEqual(['verano']);
+  });
+
+  it('sin base (primera sincronizacion) se comporta como la union de siempre', () => {
+    const remote = { ...base(), macrocycles: [macro('invierno')] };
+    const local = { ...base(), macrocycles: [macro('verano')] };
+    expect(mergeProfile(remote, local).macrocycles.map((m) => m.id).sort()).toEqual(['invierno', 'verano']);
+  });
+
+  it('lo nuevo del otro dispositivo se conserva y lo que borraron alli desaparece tambien aqui', () => {
+    const synced = { ...base(), goals: [goal('a'), goal('b')] };
+    const syncBase = snapshotSyncBase(synced, []);
+    const remote = { ...base(), goals: [goal('b'), goal('c')] }; // alli borraron a y crearon c
+    const merged = mergeProfile(remote, synced, undefined, undefined, syncBase);
+    expect(merged.goals.map((g) => g.id).sort()).toEqual(['b', 'c']);
+  });
+
+  it('volver a crear algo con la misma clave tras borrarlo si se conserva (serie del modo entreno)', () => {
+    const synced = { ...base(), workLog: [ws('2026-03-01', 'back-squat', 1, 100)] };
+    const deletedLocally = { ...base(), workLog: [] };
+    expect(mergeProfile(synced, deletedLocally, undefined, undefined, snapshotSyncBase(synced, [])).workLog).toHaveLength(0);
+    // Tras sincronizar el borrado, la vuelves a marcar: es nueva respecto a la base y entra
+    const reAdded = { ...base(), workLog: [ws('2026-03-01', 'back-squat', 1, 102)] };
+    expect(mergeProfile(deletedLocally, reAdded, undefined, undefined, snapshotSyncBase(deletedLocally, [])).workLog?.[0].kg).toBe(102);
+  });
+
+  it('un apunte del diario de nutricion quitado no vuelve, y uno nuevo si entra', () => {
+    const item = (id: string) => ({ id, hour: 9, items: [{ foodId: 'huevos', grams: 110 }] });
+    const synced = { ...base(), nutritionPrefs: { extraFoods: { '2026-10-15': [item('x'), item('y')] } } };
+    const syncBase = snapshotSyncBase(synced, []);
+    const local = { ...base(), nutritionPrefs: { extraFoods: { '2026-10-15': [item('y'), item('z')] } } }; // quitas x, añades z
+    const merged = mergeProfile(synced, local, undefined, undefined, syncBase);
+    expect(merged.nutritionPrefs?.extraFoods?.['2026-10-15']?.map((e) => e.id).sort()).toEqual(['y', 'z']);
+  });
+
+  it('una entrada del historial borrada ("deshacer el registro") no vuelve', () => {
+    const e = (date: string): SessionHistoryEntry => ({ date, mesocycleWeek: 1, movementIds: [], rxOrScaled: 'rx', rpe: 7, durationMin: 60 });
+    const syncBase = snapshotSyncBase(base(), [e('2026-03-01'), e('2026-03-02')]);
+    const merged = mergeHistory([e('2026-03-01'), e('2026-03-02')], [e('2026-03-01')], syncBase);
+    expect(merged.map((h) => h.date)).toEqual(['2026-03-01']);
+  });
+
+  it('la rampa de vuelta borrada aqui no vuelve; una nueva del otro dispositivo si', () => {
+    const ramp = { startDate: '2026-03-01', strengthWeeks: 4, olyWeeks: 4, wodWeeks: 3 };
+    const synced = { ...base(), onboardedAt: '2026-01-01T00:00:00.000Z', intensityRamp: ramp };
+    const syncBase = snapshotSyncBase(synced, []);
+    const deleted = { ...synced, intensityRamp: undefined };
+    expect(mergeProfile(synced, deleted, undefined, undefined, syncBase).intensityRamp).toBeUndefined();
+    const newRemote = { ...synced, intensityRamp: { ...ramp, startDate: '2026-04-01' } };
+    expect(mergeProfile(newRemote, deleted, undefined, undefined, syncBase).intensityRamp?.startDate).toBe('2026-04-01');
   });
 });

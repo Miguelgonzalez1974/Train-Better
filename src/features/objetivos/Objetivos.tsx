@@ -570,14 +570,18 @@ export function Objetivos() {
             }
 
             return (
-              <div key={m.id} className="flex items-center gap-3 rounded-xl px-3 py-1.5 opacity-50">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600">
+              <div key={m.id} className="flex items-center gap-3 rounded-xl px-3 py-1">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600 opacity-60">
                   <Check size={12} strokeWidth={2.5} />
                 </span>
                 <p className="flex-1 text-xs text-neutral-500">{m.label}</p>
                 <span className="text-[10px] text-neutral-600">Finalizado</span>
-                <button onClick={() => deleteMacro(m.id)} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400">
-                  <Trash2 size={12} />
+                <button
+                  onClick={() => deleteMacro(m.id)}
+                  aria-label={`Eliminar ${m.label}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5 hover:text-white"
+                >
+                  <Trash2 size={14} />
                 </button>
               </div>
             );
@@ -862,16 +866,20 @@ export function Objetivos() {
             }
 
             return (
-              <div key={p.id} className="flex items-center gap-3 rounded-xl px-3 py-1.5 opacity-50">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600">
+              <div key={p.id} className="flex items-center gap-3 rounded-xl px-3 py-1">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600 opacity-60">
                   <Check size={12} strokeWidth={2.5} />
                 </span>
                 <p className="flex-1 text-xs text-neutral-500">
                   {meta.label} — {liftsLabel}
                 </p>
                 <span className="text-[10px] text-neutral-600">Finalizado</span>
-                <button onClick={() => deleteStrengthProgram(p.id)} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400">
-                  <Trash2 size={12} />
+                <button
+                  onClick={() => deleteStrengthProgram(p.id)}
+                  aria-label="Eliminar programa"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5 hover:text-white"
+                >
+                  <Trash2 size={14} />
                 </button>
               </div>
             );
@@ -1192,8 +1200,8 @@ export function Objetivos() {
 
             if (isExpired) {
               return (
-                <div key={g.id} className="flex items-center gap-3 rounded-xl px-3 py-1.5 opacity-50">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600">
+                <div key={g.id} className="flex items-center gap-3 rounded-xl px-3 py-1">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.03] text-neutral-600 opacity-60">
                     <meta.Icon size={12} strokeWidth={2.5} />
                   </span>
                   <p className="flex-1 text-xs text-neutral-500">
@@ -1203,12 +1211,17 @@ export function Objetivos() {
                   <span className="text-[10px] text-neutral-600">Vencido</span>
                   <button
                     onClick={() => setGoalDraft(g)}
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400"
+                    aria-label="Editar objetivo"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5 hover:text-white"
                   >
-                    <Pencil size={12} />
+                    <Pencil size={14} />
                   </button>
-                  <button onClick={() => deleteGoal(g.id)} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-600 hover:text-neutral-400">
-                    <Trash2 size={12} />
+                  <button
+                    onClick={() => deleteGoal(g.id)}
+                    aria-label="Eliminar objetivo"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5 hover:text-white"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </div>
               );

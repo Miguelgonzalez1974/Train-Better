@@ -2,7 +2,27 @@ import { supabase } from '../../lib/supabaseClient';
 import type { AthleteProfile, Goal, SessionHistoryEntry } from './types';
 import { DEFAULT_PROFILE } from './types';
 import { localAthleteRepository } from './localRepository';
-import { mergeHistory, mergeProfile } from './mergeProfile';
+import { mergeHistory, mergeProfile, snapshotSyncBase, type SyncBase } from './mergeProfile';
+
+const SYNC_BASE_KEY = 'train-better:sync-base';
+
+/** Las claves de la ultima sincronizacion (ver `SyncBase`); undefined si este dispositivo aun no ha sincronizado. */
+function readSyncBase(): SyncBase | undefined {
+  try {
+    const raw = localStorage.getItem(SYNC_BASE_KEY);
+    return raw ? (JSON.parse(raw) as SyncBase) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeSyncBase(base: SyncBase): void {
+  try {
+    localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(base));
+  } catch {
+    // Sin almacenamiento: se sigue sin base y la fusion se comporta como la union de siempre.
+  }
+}
 
 interface AthleteRow {
   user_id: string;
@@ -74,10 +94,11 @@ async function flushPush(): Promise<{ ok: boolean }> {
     return { ok: false };
   }
 
+  const base = readSyncBase();
   const mergedProfile = remote
-    ? mergeProfile(normalizeRemote(remote.profile, remote.goal), localProfile, remote.history, localHistory)
+    ? mergeProfile(normalizeRemote(remote.profile, remote.goal), localProfile, remote.history, localHistory, base)
     : localProfile;
-  const mergedHistory = remote ? mergeHistory(remote.history, localHistory) : localHistory;
+  const mergedHistory = remote ? mergeHistory(remote.history, localHistory, base) : localHistory;
 
   // Converge el local a la fusion antes de subir — asi este dispositivo ya tiene lo del otro aunque el upsert falle.
   localAthleteRepository.saveProfile(mergedProfile);
@@ -90,6 +111,8 @@ async function flushPush(): Promise<{ ok: boolean }> {
     setStatus('error');
     return { ok: false };
   }
+  // La foto se hace de lo que se acaba de subir (no de lo que haya ahora en local: algo nuevo escrito mientras subia aun no esta en remoto).
+  writeSyncBase(snapshotSyncBase(row.profile, mergedHistory));
   setStatus('idle');
   return { ok: true };
 }
@@ -145,6 +168,7 @@ export async function pushRemoteReplace(): Promise<{ ok: boolean }> {
     setStatus('error');
     return { ok: false };
   }
+  writeSyncBase(snapshotSyncBase(row.profile, row.history));
   setStatus('idle');
   return { ok: true };
 }
@@ -175,8 +199,9 @@ export async function pullRemoteOrSeed(): Promise<void> {
 
   const local = localAthleteRepository.getProfile();
   const localHistory = localAthleteRepository.getHistory();
-  const mergedProfile = mergeProfile(normalizeRemote(remote.profile, remote.goal), local, remote.history, localHistory);
-  const mergedHistory = mergeHistory(remote.history, localHistory);
+  const base = readSyncBase();
+  const mergedProfile = mergeProfile(normalizeRemote(remote.profile, remote.goal), local, remote.history, localHistory, base);
+  const mergedHistory = mergeHistory(remote.history, localHistory, base);
   localAthleteRepository.saveProfile(mergedProfile);
   localAthleteRepository.replaceHistory(mergedHistory);
   await pushRemote();
