@@ -8,14 +8,16 @@ interface MacroRingProps {
   size?: number;
   /** Oculta la etiqueta de abajo y el "de X g" — solo el número, para usarlo en listas compactas (fila de la semana). El significado sigue accesible por `aria-label`. */
   compact?: boolean;
+  /** Grosor del trazo; por defecto fino (4). El diario del día usa uno grueso para que el anillo se vea de lejos. */
+  strokeWidth?: number;
 }
 
 /**
  * Anillo de progreso de un macro: fino y blanco, con el número grande en el centro. El color queda para el
  * estado — verde al cubrirlo, naranja si se pasa.
  */
-export function MacroRing({ label, value, target, size = 92, compact = false }: MacroRingProps) {
-  const stroke = size >= 110 ? 4 : size <= 56 ? 3 : 4;
+export function MacroRing({ label, value, target, size = 92, compact = false, strokeWidth }: MacroRingProps) {
+  const stroke = strokeWidth ?? (size >= 110 ? 4 : size <= 56 ? 3 : 4);
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const ratio = target > 0 ? value / target : 0;

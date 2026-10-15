@@ -24,6 +24,8 @@ interface ExtraFoodPanelProps {
   iso: string;
   defaultHour: number;
   onDone: () => void;
+  /** `diario`: el diario de comidas del día — sin hora ni comida que elegir, solo lo que has tomado. */
+  mode?: 'extra' | 'diario';
 }
 
 /**
@@ -31,7 +33,8 @@ interface ExtraFoodPanelProps {
  * cantidad y decir a qué hora. Sin objetivo que cubrir — es un antojo, no una toma planificada — así que no hay
  * anillos ni estado, solo lo que suma. Al confirmar se guarda como ya tomado. Ver `engine/dayFlow.ts` (`ExtraInput`).
  */
-export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone }: ExtraFoodPanelProps) {
+export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, mode = 'extra' }: ExtraFoodPanelProps) {
+  const diario = mode === 'diario';
   const [items, setItems] = useState<CustomMealItem[]>([]);
   const [hourText, setHourText] = useState(fmtHour(defaultHour));
   const [group, setGroup] = useState<BuilderGroup>('Proteína');
@@ -77,7 +80,7 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone }:
     <div className="flex flex-col gap-3">
       <div className="rounded-xl border border-brand-border bg-brand-surfaceMuted/60 px-3.5 py-1">
         {items.length === 0 ? (
-          <p className="py-5 text-center text-sm text-neutral-500">¿Qué te has tomado? Elígelo abajo.</p>
+          <p className="py-5 text-center text-sm text-neutral-500">{diario ? '¿Qué has comido? Elígelo abajo, da igual la hora.' : '¿Qué te has tomado? Elígelo abajo.'}</p>
         ) : (
           <ul className="divide-y divide-white/5">
             {items.map((it, index) => {
@@ -174,15 +177,17 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone }:
         )}
       </div>
 
-      <label className="flex items-center justify-between gap-3 rounded-lg border border-brand-border px-3.5 py-2.5">
-        <span className="text-sm text-neutral-300">Hora</span>
-        <input
-          type="time"
-          value={hourText}
-          onChange={(e) => setHourText(e.target.value)}
-          className="num rounded-md border border-brand-border bg-brand-bg px-2 py-1 text-sm text-white focus:border-brand-gold focus:outline-none"
-        />
-      </label>
+      {!diario && (
+        <label className="flex items-center justify-between gap-3 rounded-lg border border-brand-border px-3.5 py-2.5">
+          <span className="text-sm text-neutral-300">Hora</span>
+          <input
+            type="time"
+            value={hourText}
+            onChange={(e) => setHourText(e.target.value)}
+            className="num rounded-md border border-brand-border bg-brand-bg px-2 py-1 text-sm text-white focus:border-brand-gold focus:outline-none"
+          />
+        </label>
+      )}
 
       {items.length > 0 && (
         <p className="text-center text-xs text-neutral-500">
@@ -199,10 +204,10 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone }:
           disabled={items.length === 0}
           className="flex-[2] rounded-lg bg-brand-orange px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Añadir al día
+          {diario ? 'Añadir al diario' : 'Añadir al día'}
         </button>
       </div>
-      <p className="text-[11px] leading-relaxed text-neutral-600">Se cuenta como ya tomado — no hay un estado pendiente para un antojo.</p>
+      {!diario && <p className="text-[11px] leading-relaxed text-neutral-600">Se cuenta como ya tomado — no hay un estado pendiente para un antojo.</p>}
     </div>
   );
 }

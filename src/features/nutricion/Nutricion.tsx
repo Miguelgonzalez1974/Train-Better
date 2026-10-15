@@ -5,32 +5,39 @@ import { toLocalIsoDate } from '../../engine/periodization';
 import { BodyweightCard } from '../dashboard/BodyweightCard';
 import { NutritionModal } from '../dashboard/NutritionModal';
 import { AjustesView } from './AjustesView';
-import { CalendarioView } from './CalendarioView';
 import { CompraView } from './CompraView';
+import { DiarioView } from './DiarioView';
 import { HoyView } from './HoyView';
 import { computeWeekDays, mondayOf, type WeekDay } from './nutritionData';
 import { SemanaView } from './SemanaView';
 import type { NutritionShared } from './shared';
 
-type SubTab = 'hoy' | 'mes' | 'semana' | 'compra' | 'ajustes';
+type SubTab = 'hoy' | 'menus' | 'alimentos';
+type MenuView = 'dia' | 'semana' | 'compra';
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'hoy', label: 'Hoy' },
-  { id: 'mes', label: 'Mes' },
+  { id: 'menus', label: 'Menús' },
+  { id: 'alimentos', label: 'Alimentos' },
+];
+
+const MENU_VIEWS: { id: MenuView; label: string }[] = [
+  { id: 'dia', label: 'Día' },
   { id: 'semana', label: 'Semana' },
   { id: 'compra', label: 'Compra' },
-  { id: 'ajustes', label: 'Ajustes' },
 ];
 
 /**
- * Módulo de nutrición: el menú de cada día (5 comidas con cantidades según el entreno), la semana entera, la
- * lista de la compra y los ajustes. Funciona aparte del entreno pero lee de él el tipo de día. Ver `engine/mealPlan.ts`.
+ * Módulo de nutrición en tres pestañas: Hoy (el diario: apuntas lo que comes y se llenan los anillos de proteína e
+ * hidratos), Menús (menús posibles para el día y la semana, y la lista de la compra) y Alimentos (el catálogo, los
+ * tuyos y los que no quieres). Lee del entreno el tipo de día. Ver `engine/mealPlan.ts`.
  */
 export function Nutricion() {
   const [profile, setProfile] = useState(() => athleteRepository.getProfile());
   const [history] = useState(() => athleteRepository.getHistory());
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [tab, setTab] = useState<SubTab>('hoy');
+  const [menuView, setMenuView] = useState<MenuView>('dia');
   const [showGuide, setShowGuide] = useState(false);
   const todayIso = toLocalIsoDate(new Date());
   const [selectedIso, setSelectedIso] = useState(todayIso);
@@ -93,19 +100,38 @@ export function Nutricion() {
         </div>
       ) : (
         <>
-          {tab === 'hoy' && <HoyView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} onOpenGuide={() => setShowGuide(true)} />}
-          {tab === 'mes' && <CalendarioView shared={shared} />}
-          {tab === 'semana' && (
-            <SemanaView
-              shared={shared}
-              onOpenDay={(iso) => {
-                setSelectedIso(iso);
-                setTab('hoy');
-              }}
-            />
+          {tab === 'hoy' && <DiarioView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} onOpenGuide={() => setShowGuide(true)} />}
+          {tab === 'menus' && (
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-1.5" role="tablist" aria-label="Vista de menús">
+                {MENU_VIEWS.map((v) => (
+                  <button
+                    key={v.id}
+                    role="tab"
+                    aria-selected={menuView === v.id}
+                    onClick={() => setMenuView(v.id)}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                      menuView === v.id ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              {menuView === 'dia' && <HoyView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} onOpenGuide={() => setShowGuide(true)} />}
+              {menuView === 'semana' && (
+                <SemanaView
+                  shared={shared}
+                  onOpenDay={(iso) => {
+                    setSelectedIso(iso);
+                    setMenuView('dia');
+                  }}
+                />
+              )}
+              {menuView === 'compra' && <CompraView shared={shared} />}
+            </div>
           )}
-          {tab === 'compra' && <CompraView shared={shared} />}
-          {tab === 'ajustes' && <AjustesView shared={shared} bodyweightLog={bodyweightLog} onBodyweightChange={setBodyweightLog} />}
+          {tab === 'alimentos' && <AjustesView shared={shared} bodyweightLog={bodyweightLog} onBodyweightChange={setBodyweightLog} />}
         </>
       )}
 
@@ -117,7 +143,7 @@ export function Nutricion() {
           onClose={() => setShowGuide(false)}
           onOpenBodyweight={() => {
             setShowGuide(false);
-            setTab('ajustes');
+            setTab('alimentos');
           }}
         />
       )}
