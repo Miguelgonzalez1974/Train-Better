@@ -2,6 +2,7 @@ import type { AthleteProfile, SessionHistoryEntry, StrainTarget } from '../data/
 import { computeAcwr } from './loadMetrics';
 import { computeCompetitionDay } from './competition';
 import { computeReadinessScore } from './readinessScore';
+import { learnStrain } from './strainLearning';
 import { dayStrain, recommendedStrain } from './strain';
 
 /**
@@ -16,6 +17,8 @@ const RANGE_HALF_WIDTH = 10;
 /** Si ayer fue un esfuerzo muy alto, hoy el centro baja un poco más (la carga acumulada ya pesa, esto es el dato fresco). */
 const YESTERDAY_HIGH = 75;
 const YESTERDAY_SHIFT = -4;
+/** Cuánto sube el centro cuando el patrón reciente es quedarse corto (ver `learnStrain`). */
+const LEARNED_SHIFT_UP = 4;
 /** Tope del centro del rango según la fase de la competición: en el taper no se sube el esfuerzo aunque te sientas bien. */
 const COMPETITION_CENTER_CAP: Record<string, number> = { taper: 55, activacion: 35, vispera: 20, post: 40 };
 
@@ -61,6 +64,17 @@ export function buildStrainTarget(profile: AthleteProfile, history: SessionHisto
     reasons.push(`Ayer fue un esfuerzo muy alto (${yesterday}): hoy se modera un poco.`);
   } else {
     reasons.push(`Ayer: esfuerzo ${yesterday}.`);
+  }
+
+  // Lo aprendido de los últimos días. Si te quedas por debajo del objetivo día tras día y la carga acumulada va bien, el
+  // rango sube un poco (aguantas más de lo que se te pedía). Si te pasas, el rango no baja —no se te empuja a hacer
+  // menos por ser constante— pero se avisa en los motivos.
+  const learned = learnStrain(profile, history, todayIso);
+  if (learned.pattern === 'corto' && (zone === null || zone === 'baja' || zone === 'optima')) {
+    center += LEARNED_SHIFT_UP;
+    reasons.push('Estos días te has quedado por debajo del objetivo y la carga va bien: subo el rango un poco.');
+  } else if (learned.pattern === 'pasado') {
+    reasons.push('Estos días te has pasado del objetivo: hoy, que no se te vaya de las manos.');
   }
 
   const comp = computeCompetitionDay(profile.goals, reference, profile.trainingDaysPerWeek);

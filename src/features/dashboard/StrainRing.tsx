@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
 import type { StrainStatus } from '../../engine/strain';
+import type { StrainLearning } from '../../engine/strainLearning';
 import { SectionLabel } from '../shell/SectionLabel';
 
 /** Todo lo que el anillo y su detalle necesitan saber del esfuerzo de hoy. */
@@ -14,6 +15,8 @@ export interface StrainView {
   /** Esfuerzo real de hoy, una vez entrenado. */
   real: number | null;
   status: StrainStatus;
+  /** Lo que el coach ha aprendido de tus aciertos y fallos (ver `learnStrain`). */
+  learning: StrainLearning;
 }
 
 const STATUS_COLOR: Record<StrainStatus, string> = {
@@ -182,6 +185,37 @@ export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: (
         </ul>
         <p className="mt-2 text-[11px] leading-relaxed text-neutral-600">Estimación del esfuerzo percibido (RPE × duración), no una medida fisiológica.</p>
       </div>
+
+      <LearnedStrain learning={view.learning} />
+    </div>
+  );
+}
+
+/** "Lo que aprendo": cómo te van saliendo los días frente al objetivo y cuánto se corrige la previsión. Solo con muestra suficiente. */
+function LearnedStrain({ learning }: { learning: StrainLearning }) {
+  const { outcomes, bias, biasSample } = learning;
+  const showTally = outcomes.total >= 3;
+  const showBias = biasSample >= 4 && Math.abs(bias) >= 3;
+  if (!showTally && !showBias) return null;
+  return (
+    <div>
+      <p className="text-xs font-medium text-neutral-300">Lo que aprendo de ti</p>
+      <ul className="mt-1.5 flex flex-col gap-1 text-xs leading-relaxed text-neutral-400">
+        {showTally && (
+          <li>
+            Dentro del objetivo en <span className="num font-semibold text-neutral-200">{outcomes.dentro}</span> de tus últimos{' '}
+            <span className="num">{outcomes.total}</span> días con sesión
+            {outcomes.pasado > 0 && ` · por encima ${outcomes.pasado}`}
+            {outcomes.corto > 0 && ` · por debajo ${outcomes.corto}`}.
+          </li>
+        )}
+        {showBias && (
+          <li>
+            Tus sesiones suelen salirte unos <span className="num font-semibold text-neutral-200">{Math.abs(bias)}</span> puntos{' '}
+            {bias > 0 ? 'por encima' : 'por debajo'} de lo que el coach prevé: ya lo tengo en cuenta en el esfuerzo previsto.
+          </li>
+        )}
+      </ul>
     </div>
   );
 }

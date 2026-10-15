@@ -45,8 +45,17 @@ describe('esfuerzo previsto de la sesión', () => {
     expect(estimatePlannedStrain(session({ doubleWod: true }), [])!.rpe).toBe(base.rpe + 0.5);
   });
 
+  it('la corrección aprendida se suma a la estimación y se mantiene entre 0 y 100', () => {
+    const base = estimatePlannedStrain(session(), [])!;
+    const adjusted = estimatePlannedStrain(session(), [], 6)!;
+    expect(adjusted.strain).toBe(base.strain + 6);
+    expect(adjusted.bias).toBe(6);
+    expect(estimatePlannedStrain(session(), [], -200)!.strain).toBe(0);
+    expect(estimatePlannedStrain(session(), [], 200)!.strain).toBe(100);
+  });
+
   it('compara con el objetivo: avisa si se pasa, y solo avisa de margen si sobra mucho', () => {
-    const p = (strain: number) => ({ strain, rpe: 7, minutes: 60 });
+    const p = (strain: number) => ({ strain, rpe: 7, minutes: 60, bias: 0 });
     const target = { low: 50, high: 70 };
     expect(planFit(p(60), target).fit).toBe('dentro');
     expect(planFit(p(73), target).fit).toBe('dentro'); // dentro del margen de 3

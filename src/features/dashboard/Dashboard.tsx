@@ -11,6 +11,7 @@ import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { buildTrend, dayStrain, strainStatus } from '../../engine/strain';
 import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
+import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
 import type { ReadinessCheck } from '../../data/athlete/types';
 import { ReadinessCheckIn } from '../planificacion/ReadinessCheckIn';
@@ -137,13 +138,18 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const strainState = strainStatus(todayStrain, strainTarget);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const todaySession = useMemo(() => resolveTodaySession(profile, history, todayIso), [profile, history, todayIso, sessionVersion]);
-  const plannedStrain = useMemo(() => (todaySession ? estimatePlannedStrain(todaySession, history) : null), [todaySession, history]);
+  const strainLearned = useMemo(() => learnStrain(profile, history, todayIso), [profile, history, todayIso]);
+  const plannedStrain = useMemo(
+    () => (todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias) : null),
+    [todaySession, history, strainLearned.bias],
+  );
   const strainView: StrainView = {
     target: strainTarget,
     planned: plannedStrain,
     fit: plannedStrain ? planFit(plannedStrain, strainTarget) : null,
     real: todayStrain,
     status: strainState,
+    learning: strainLearned,
   };
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // El check-in solo tiene sentido si hoy hay sesión por entrenar (o ya hecho, para poder corregirlo).

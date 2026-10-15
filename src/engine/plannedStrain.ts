@@ -12,6 +12,8 @@ export interface PlannedStrain {
   strain: number;
   rpe: number;
   minutes: number;
+  /** Corrección aprendida que ya está sumada a `strain` (0 si no hay). */
+  bias: number;
 }
 
 /** RPE típico por semana del mesociclo cuando aún no hay historial suficiente: acumulación, intensificación, pico, descarga. */
@@ -49,13 +51,17 @@ function expectedRpe(session: DailySession, history: SessionHistoryEntry[]): num
   return Math.min(9.5, Math.max(4, Math.round(rpe * 10) / 10));
 }
 
-/** null si hoy no hay sesión que estimar (descanso, sesión propia o sin bloques). */
-export function estimatePlannedStrain(session: DailySession, history: SessionHistoryEntry[]): PlannedStrain | null {
+/**
+ * null si hoy no hay sesión que estimar (descanso, sesión propia o sin bloques). `bias` son los puntos que se suman a la
+ * estimación porque tus sesiones suelen salir por encima o por debajo de lo previsto (ver `learnStrain`); 0 sin corrección.
+ */
+export function estimatePlannedStrain(session: DailySession, history: SessionHistoryEntry[], bias = 0): PlannedStrain | null {
   if (session.isRestDay || session.source === 'custom' || session.blocks.length === 0) return null;
   const minutes = estimateSessionMinutes(session);
   if (minutes <= 0) return null;
   const rpe = expectedRpe(session, history);
-  return { strain: strainFromSrpe(rpe * minutes), rpe, minutes };
+  const raw = strainFromSrpe(rpe * minutes);
+  return { strain: Math.max(0, Math.min(100, raw + bias)), rpe, minutes, bias };
 }
 
 export type PlanFit = 'dentro' | 'se-pasa' | 'se-queda-corta';

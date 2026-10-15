@@ -62,6 +62,7 @@ import { competitionCountdown, competitionHeadline } from '../shell/competitionM
 import { StrainPlanRow } from './StrainPlanRow';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
+import { learnStrain } from '../../engine/strainLearning';
 import { ActionMenu } from '../shell/ActionMenu';
 import {
   CoachNoticesBody,
@@ -263,7 +264,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     }
     setStrainTarget(next.strainTargets?.[todayIso] ?? null);
   }, [todayIso]);
-  const plannedStrain = useMemo(() => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history) : null), [session, history, alreadyCompletedToday]);
+  const strainBias = useMemo(() => learnStrain(profile, history, todayIso).bias, [profile, history, todayIso]);
+  const plannedStrain = useMemo(
+    () => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history, strainBias) : null),
+    [session, history, alreadyCompletedToday, strainBias],
+  );
   const planFitResult = plannedStrain && strainTarget ? planFit(plannedStrain, strainTarget) : null;
   // Partes de WOD de hoy (1 en un dia normal, 2 en un dia de doble WOD) y como se puntua cada una.
   const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
