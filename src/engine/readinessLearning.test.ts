@@ -18,6 +18,34 @@ function scenario(n: number, rpeBad: number, rpeOk: number) {
   return { log, history };
 }
 
+describe('hábitos del check-in', () => {
+  /** 16 días: los pares tomaron alcohol (y su RPE sube); los impares no. */
+  function habitScenario(rpeWithHabit: number, rpeWithout: number, logged = true) {
+    const log: ReadinessCheck[] = [];
+    const history: SessionHistoryEntry[] = [];
+    for (let i = 0; i < 16; i++) {
+      const alcohol = i % 2 === 0;
+      const check = checkFromQuickAnswer(day(i), 'bien', []);
+      log.push(logged ? { ...check, habits: alcohol ? ['alcohol'] : [] } : check);
+      history.push(entry(day(i), alcohol ? rpeWithHabit : rpeWithout));
+    }
+    return { log, history };
+  }
+
+  it('enseña cuánto te cuesta más una sesión cuando tomas un hábito', () => {
+    const { log, history } = habitScenario(8.5, 7);
+    const alcohol = computeReadinessLearning(log, history).insights.find((i) => i.key === 'habit:alcohol');
+    expect(alcohol).toMatchObject({ label: 'Alcohol', condition: 'tomas alcohol', nBad: 8, nOk: 8, delta: 1.5 });
+  });
+
+  it('sin hábitos anotados no inventa nada, y un hábito que no cambia el esfuerzo sale sin efecto', () => {
+    const none = habitScenario(8.5, 7, false);
+    expect(computeReadinessLearning(none.log, none.history).insights.some((i) => i.key.startsWith('habit:'))).toBe(false);
+    const flat = habitScenario(7, 7);
+    expect(computeReadinessLearning(flat.log, flat.history).insights.find((i) => i.key === 'habit:alcohol')?.delta).toBe(0);
+  });
+});
+
 describe('lo que aprendo de ti (etapa 1)', () => {
   it('con pocas sesiones emparejadas no enseña nada y dice cuántas lleva', () => {
     const { log, history } = scenario(LEARNING_MIN_PAIRS - 1, 8, 6);

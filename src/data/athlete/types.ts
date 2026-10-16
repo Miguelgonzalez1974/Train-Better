@@ -192,7 +192,12 @@ export interface ReadinessCheck {
   motivation: MotivationLevel;
   /** Horas dormidas (opcional, solo si el atleta las anota). Aún no entra en la nota: se guarda para aprender cuánto le afecta. */
   sleepHours?: number;
+  /** Hábitos de ayer y de anoche que el atleta marca (opcional). Ausente = no los ha anotado; vacío = anotó que ninguno. Solo se usan para aprender qué le afecta. */
+  habits?: HabitTag[];
 }
+
+/** Hábitos que se pueden marcar en el check-in para que el coach aprenda cuáles te afectan (ver `engine/habits.ts`). */
+export type HabitTag = 'alcohol' | 'cafeina' | 'cena-tarde' | 'pantallas' | 'viaje' | 'estres-trabajo' | 'siesta' | 'enfermo';
 
 /**
  * Preferencias del módulo de nutrición (menús del día/semana). Todo opcional: sin ellas se usa el catálogo

@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Minus, Plus, Flame } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import type { ReadinessCheck } from '../../data/athlete/types';
 import {
   checkFromQuickAnswer,
-  checkInStreak,
   getReadinessFactor,
   scoreCheck,
   type CheckInAxis,
@@ -31,13 +30,49 @@ function overallOf(check: ReadinessCheck): CheckInOverall {
   return s >= 2 ? 'bien' : s <= -2 ? 'mal' : 'normal';
 }
 
+interface CheckInSummaryProps {
+  dateIso: string;
+  log: ReadinessCheck[];
+  /** El check-in de hoy ya guardado. */
+  existing: ReadinessCheck;
+  /** Si está corrigiéndolo: en vez de la línea sale la pregunta otra vez. */
+  editing: boolean;
+  onEdit: () => void;
+  onConfirm: (check: ReadinessCheck) => void;
+  onCancel: () => void;
+}
+
+/**
+ * Lo contestado en el check-in, en una línea ("Llegas bien · Carga de hoy +4 %") con un "Cambiar" que
+ * vuelve a abrir la pregunta. El Resumen la enseña unos segundos tras contestar y luego vive en la pestaña Preparación.
+ */
+export function CheckInSummary({ dateIso, log, existing, editing, onEdit, onConfirm, onCancel }: CheckInSummaryProps) {
+  if (editing) return <ReadinessCheckIn dateIso={dateIso} log={log} onConfirm={onConfirm} onSkip={onCancel} skipLabel="Cancelar" />;
+  const { factor } = getReadinessFactor(existing);
+  const pct = Math.round((factor - 1) * 100);
+  const o = overallOf(existing);
+  const color = OVERALL.find((x) => x.value === o)!.color;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
+      <span className="flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+        Llegas <span className="font-semibold text-neutral-200">{WORD[o]}</span>
+      </span>
+      <span>{pct === 0 ? 'Carga de hoy sin cambios' : `Carga de hoy ${pct > 0 ? '+' : '−'}${Math.abs(pct)} %`}</span>
+      <button onClick={onEdit} className="ml-auto text-neutral-500 underline-offset-2 transition-colors hover:text-white hover:underline">
+        Cambiar
+      </button>
+    </div>
+  );
+}
+
 interface ReadinessCheckInProps {
   dateIso: string;
   log: ReadinessCheck[];
-  /** Check-in ya guardado hoy: se enseña resumido, con opción de corregirlo. */
-  existing?: ReadinessCheck;
   onConfirm: (check: ReadinessCheck) => void;
   onSkip: () => void;
+  /** Texto del botón de arriba a la derecha ("Ahora no" al contestar; "Cancelar" al corregir). */
+  skipLabel?: string;
 }
 
 /**
@@ -45,65 +80,22 @@ interface ReadinessCheckInProps {
  * marcas qué pesa. Nada viene preseleccionado — si no contestas, no se guarda nada. Ver
  * `checkFromQuickAnswer` para cómo se traduce a los 4 ejes que usa el motor.
  */
-export function ReadinessCheckIn({ dateIso, log, existing, onConfirm, onSkip }: ReadinessCheckInProps) {
-  const [editing, setEditing] = useState(false);
+export function ReadinessCheckIn({ dateIso, log, onConfirm, onSkip, skipLabel = 'Ahora no' }: ReadinessCheckInProps) {
   const [overall, setOverall] = useState<CheckInOverall | null>(null);
   const [marked, setMarked] = useState<CheckInAxis[]>([]);
   const lastHours = [...log].reverse().find((c) => c.sleepHours !== undefined)?.sleepHours ?? 7;
   const [hours, setHours] = useState(lastHours);
 
-  if (existing && !editing) {
-    const { factor } = getReadinessFactor(existing);
-    const pct = Math.round((factor - 1) * 100);
-    const streak = checkInStreak(log, dateIso);
-    const o = overallOf(existing);
-    const color = OVERALL.find((x) => x.value === o)!.color;
-    return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-          Llegas <span className="font-semibold text-neutral-200">{WORD[o]}</span>
-        </span>
-        <span>{pct === 0 ? 'Carga de hoy sin cambios' : `Carga de hoy ${pct > 0 ? '+' : '−'}${Math.abs(pct)} %`}</span>
-        {streak >= 2 && (
-          <span className="flex items-center gap-1">
-            <Flame size={12} strokeWidth={2.25} className="text-brand-orange" />
-            {streak} días seguidos
-          </span>
-        )}
-        <button
-          onClick={() => {
-            setOverall(null);
-            setMarked([]);
-            setEditing(true);
-          }}
-          className="ml-auto text-neutral-500 underline-offset-2 transition-colors hover:text-white hover:underline"
-        >
-          Cambiar
-        </button>
-      </div>
-    );
-  }
-
   const needsDetail = overall === 'normal' || overall === 'mal';
   const toggle = (axis: CheckInAxis) => setMarked((m) => (m.includes(axis) ? m.filter((a) => a !== axis) : [...m, axis]));
-  const confirm = (o: CheckInOverall) => {
-    setEditing(false);
-    onConfirm(checkFromQuickAnswer(dateIso, o, marked, hours));
-  };
+  const confirm = (o: CheckInOverall) => onConfirm(checkFromQuickAnswer(dateIso, o, marked, hours));
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
         <SectionLabel>¿Cómo llegas hoy?</SectionLabel>
-        <button
-          onClick={() => {
-            setEditing(false);
-            onSkip();
-          }}
-          className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
-        >
-          Ahora no
+        <button onClick={onSkip} className="text-xs text-neutral-500 transition-colors hover:text-neutral-300">
+          {skipLabel}
         </button>
       </div>
       <div className="grid grid-cols-3 gap-2">

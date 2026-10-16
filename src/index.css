@@ -30,6 +30,8 @@
   --c-state-hot: 249 115 22;
   /* Esfuerzo del Dashboard: coral para el tramo que rebasa el máximo del objetivo (el esfuerzo en sí es azul, --c-state-cool). */
   --c-over: 255 107 74;
+  /* Sueño: un violeta suave, para que no se confunda con el azul del esfuerzo. */
+  --c-sleep: 167 139 250;
 }
 
 /* Tema claro (opt-in): "white" pasa a ser texto oscuro, el ramo neutral se invierte, y las
@@ -62,6 +64,7 @@
   --c-state-cool: 2 132 199;
   --c-state-hot: 234 88 12;
   --c-over: 220 60 30;
+  --c-sleep: 109 40 217;
 }
 
 body {

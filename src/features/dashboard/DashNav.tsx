@@ -6,7 +6,7 @@ const TABS: { id: DashTab; label: string }[] = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'esfuerzo', label: 'Esfuerzo' },
   { id: 'preparacion', label: 'Preparación' },
-  { id: 'carga', label: 'Carga' },
+  { id: 'sueno', label: 'Sueño' },
 ];
 
 /** Pestañas de arriba, al estilo Whoop: texto pequeño en mayúsculas y una raya bajo la activa. */

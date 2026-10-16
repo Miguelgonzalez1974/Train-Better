@@ -5,16 +5,25 @@ import type { ReadinessScore } from '../../engine/readinessScore';
 import { recoveryColor } from './RecoveryCard';
 import { ACCENT as EFFORT, OVER, type StrainView } from './StrainRing';
 
-export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'carga';
+export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
+/** Lo que se abre al tocar un número del anillo: una pestaña, o la carga (que vive en el icono de arriba). */
+export type RingTarget = 'esfuerzo' | 'preparacion' | 'carga';
 
 const NEUTRAL = '#525252';
-const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
-  baja: 'rgb(var(--c-state-cool))',
-  optima: 'rgb(var(--c-state-good))',
-  moderada: 'rgb(var(--c-state-hot))',
-  alta: 'rgb(var(--c-state-low))',
+/** Variable de color de cada zona de carga (para componer `rgb(var(...) / alfa)` donde haga falta). */
+export const ZONE_TOKEN: Record<AcwrResult['zone'], string> = {
+  baja: '--c-state-cool',
+  optima: '--c-state-good',
+  moderada: '--c-state-hot',
+  alta: '--c-state-low',
 };
-const ZONE_WORD: Record<AcwrResult['zone'], string> = { baja: 'Baja', optima: 'Óptima', moderada: 'Alta', alta: 'Muy alta' };
+export const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
+  baja: `rgb(var(${ZONE_TOKEN.baja}))`,
+  optima: `rgb(var(${ZONE_TOKEN.optima}))`,
+  moderada: `rgb(var(${ZONE_TOKEN.moderada}))`,
+  alta: `rgb(var(${ZONE_TOKEN.alta}))`,
+};
+export const ZONE_WORD: Record<AcwrResult['zone'], string> = { baja: 'Baja', optima: 'Óptima', moderada: 'Alta', alta: 'Muy alta' };
 
 // Dos anillos completos que arrancan a las 12: el exterior es el esfuerzo (azul) y el interior la preparación (con el color
 // de su nivel). El objetivo es un corchete fino por fuera del anillo del esfuerzo, entre tu mínimo y tu máximo.
@@ -116,7 +125,7 @@ export function DayRing({
   /** Lo que va en el centro del anillo: "Hoy", "Ayer" o el día. */
   centerLabel: string;
   isToday: boolean;
-  onOpenTab: (tab: Exclude<DashTab, 'resumen'>) => void;
+  onOpenTab: (target: RingTarget) => void;
   /** "Ajustar sesión": lleva a Planificación (otro WOD o una sesión ligera). */
   onAdjust?: () => void;
 }) {

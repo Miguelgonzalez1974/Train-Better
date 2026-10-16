@@ -1,4 +1,5 @@
-import type { ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
+import type { HabitTag, ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
+import { HABIT_CONDITION, HABIT_LABEL, HABIT_ORDER } from './habits';
 import { readinessAxisScores } from './readiness';
 import { RECOVERY_AXIS_LABEL, type RecoveryAxisKey } from './recovery';
 
@@ -9,7 +10,7 @@ import { RECOVERY_AXIS_LABEL, type RecoveryAxisKey } from './recovery';
  * Correlación, no causa: el RPE también depende de lo duro que fuese el día programado.
  */
 
-export type LearnedFactorKey = RecoveryAxisKey | 'sleepHours';
+export type LearnedFactorKey = RecoveryAxisKey | 'sleepHours' | `habit:${HabitTag}`;
 
 export interface LearnedInsight {
   key: LearnedFactorKey;
@@ -39,7 +40,7 @@ export const LEARNING_MIN_PAIRS = 12;
 const MIN_GROUP = 3;
 const SHORT_SLEEP_HOURS = 6.5;
 
-const CONDITION: Record<LearnedFactorKey, string> = {
+const CONDITION: Record<RecoveryAxisKey | 'sleepHours', string> = {
   sleep: 'duermes mal',
   soreness: 'llegas con agujetas altas',
   stress: 'vas con estrés alto',
@@ -76,10 +77,11 @@ export function computeReadinessLearning(log: ReadinessCheck[] | undefined, hist
     if (bad.length < MIN_GROUP || ok.length < MIN_GROUP) return;
     const rpeBad = mean(bad);
     const rpeOk = mean(ok);
+    const habit = key.startsWith('habit:') ? (key.slice(6) as HabitTag) : null;
     result.insights.push({
       key,
-      label: key === 'sleepHours' ? 'Horas de sueño' : RECOVERY_AXIS_LABEL[key],
-      condition: CONDITION[key],
+      label: habit ? HABIT_LABEL[habit] : key === 'sleepHours' ? 'Horas de sueño' : RECOVERY_AXIS_LABEL[key as RecoveryAxisKey],
+      condition: habit ? HABIT_CONDITION[habit] : CONDITION[key as RecoveryAxisKey | 'sleepHours'],
       nBad: bad.length,
       nOk: ok.length,
       rpeBad: round1(rpeBad),
@@ -92,6 +94,10 @@ export function computeReadinessLearning(log: ReadinessCheck[] | undefined, hist
     split(key, (p) => readinessAxisScores(p.check)[key] <= -1);
   }
   split('sleepHours', (p) => (p.check.sleepHours === undefined ? null : p.check.sleepHours < SHORT_SLEEP_HOURS));
+  // Hábitos: solo cuentan los días en que los anotaste (ausente = no sé; vacío = ninguno).
+  for (const tag of HABIT_ORDER) {
+    split(`habit:${tag}`, (p) => (p.check.habits === undefined ? null : p.check.habits.includes(tag)));
+  }
 
   result.insights.sort((a, b) => b.delta - a.delta);
   return result;
