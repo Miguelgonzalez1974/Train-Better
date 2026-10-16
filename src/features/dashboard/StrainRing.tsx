@@ -55,12 +55,23 @@ export function strainVerdict(v: StrainView): string {
 }
 
 /** El detalle que se abre al tocar una columna del medidor: objetivo, previsto, real y el porqué. */
-export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: () => void }) {
+export function StrainDetail({
+  view,
+  onAdjust,
+  dayLabel = 'hoy',
+  isToday = true,
+}: {
+  view: StrainView;
+  onAdjust: () => void;
+  dayLabel?: string;
+  /** Un día pasado se cuenta en pasado y no ofrece "mañana, con cuidado". */
+  isToday?: boolean;
+}) {
   const { target, planned, fit, real } = view;
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <SectionLabel>Esfuerzo de hoy</SectionLabel>
+        <SectionLabel>Esfuerzo de {dayLabel.toLowerCase()}</SectionLabel>
         <p className="mt-1 text-[11px] text-neutral-500">
           Anillo exterior (azul): tu esfuerzo. El corchete blanco de fuera marca tu objetivo, del mínimo al máximo; si el azul pasa de su final, te pasas.
         </p>
@@ -68,7 +79,11 @@ export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: (
           Objetivo <span className="num">{target.low}–{target.high}</span>
         </p>
         <p className="mt-0.5 text-xs text-neutral-400">
-          {target.provisional && real === null ? 'Provisional: haz el check-in y se fija.' : 'Fijado esta mañana · no cambia durante el día.'}
+          {!isToday
+            ? 'Lo que se pedía ese día.'
+            : target.provisional && real === null
+              ? 'Provisional: haz el check-in y se fija.'
+              : 'Fijado esta mañana · no cambia durante el día.'}
         </p>
       </div>
 
@@ -107,8 +122,8 @@ export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: (
             {view.status === 'dentro'
               ? 'justo lo que tocaba.'
               : view.status === 'por-debajo'
-                ? `${target.low - real} puntos por debajo del objetivo: aún tenías margen.`
-                : `${real - target.high} puntos por encima del objetivo: mañana, con cuidado.`}
+                ? `${target.low - real} puntos por debajo del objetivo: ${isToday ? 'aún tenías margen' : 'había margen'}.`
+                : `${real - target.high} puntos por encima del objetivo${isToday ? ': mañana, con cuidado.' : '.'}`}
           </span>
         </p>
       )}

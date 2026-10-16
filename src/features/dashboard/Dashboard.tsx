@@ -22,7 +22,13 @@ import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization'
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
 import { TodayPreviewCard } from './TodayPreviewCard';
-import { DayRing } from './DayRing';
+import { DayRing, type DashTab } from './DayRing';
+import { DashTabs, DaySelector, PastDayCard, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
+import { buildPastDayView } from './pastDay';
+import { StrainDetail } from './StrainRing';
+import { RecoveryDetail } from './RecoveryCard';
+import { LearnedInsights } from './LearnedInsights';
+import { AcwrGauge } from './AcwrGauge';
 import { ConsistencyDetail } from './ConsistencyDetail';
 import { computeYearConsistency } from '../../engine/yearConsistency';
 import { TrainingHeatmap } from './TrainingHeatmap';
@@ -65,6 +71,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const [showNutrition, setShowNutrition] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
+  // Día que se está mirando (hoy por defecto) y pestaña de arriba.
+  const [dayIso, setDayIso] = useState(() => toLocalIsoDate(new Date()));
+  const [tab, setTab] = useState<DashTab>('resumen');
+  // Deslizar el dedo sobre el anillo cambia de día (también están las flechas de arriba).
+  const swipe = useDaySwipe((delta) => setDayIso((cur) => shiftDay(cur, delta, toLocalIsoDate(new Date()))));
 
   // Cada gauge abre (o cierra, si ya estaba abierta) su propia tarjeta de detalle — sin un "Más
   // detalle" intermedio que bucear. El de carga expande el gauge completo de ACWR ahí mismo; el
@@ -152,6 +163,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
     status: strainState,
     learning: strainLearned,
   };
+  // El día elegido en el selector: hoy usa lo de hoy (con la sesión prevista); un día pasado se reconstruye con lo que se sabía esa mañana.
+  const isToday = dayIso === todayIso;
+  const pastView = useMemo(() => (isToday ? null : buildPastDayView(profile, history, dayIso, strainLearned)), [isToday, profile, history, dayIso, strainLearned]);
+  const shown = pastView ?? { readiness, acwr, trend: acwrTrend, strain: strainView, entry: history.find((h) => h.date === todayIso) };
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // El check-in solo tiene sentido si hoy hay sesión por entrenar (o ya hecho, para poder corregirlo).
   const showCheckIn = Boolean(todaySession && !todaySession.isRestDay && (todayReadiness || !checkInDismissed));
@@ -281,34 +296,63 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         </Modal>
       )}
 
-      {/*
-        El titular: que toca hoy, en una linea, sin tener que entrar a Planificacion para saberlo.
-      */}
-      <TodayPreviewCard session={todaySession} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
+      {/* Selector de día y pestañas, al estilo Whoop: el día elegido manda sobre todo lo de debajo. */}
+      <DaySelector dayIso={dayIso} todayIso={todayIso} onChange={setDayIso} />
+      <DashTabs tab={tab} onChange={setTab} />
 
-      {/*
-        El estado del día: plan y constancia justo bajo "Hoy"; luego el check-in (el primer gesto de la mañana: al contestar
-        se fija el objetivo de esfuerzo y se rehace la sesión) y los dos círculos grandes, preparación y esfuerzo.
-      */}
-      <DayRing
-        checkIn={
-          showCheckIn ? (
-            <ReadinessCheckIn
-              dateIso={todayIso}
-              log={profile.readinessLog ?? []}
-              existing={todayReadiness}
-              onConfirm={handleSaveCheckIn}
-              onSkip={() => setCheckInDismissed(true)}
-            />
-          ) : null
-        }
-        strain={strainView}
-        onAdjustSession={onNavigateToPlanificacion}
-        readiness={readiness}
-        learning={readinessLearning}
-        acwr={acwr}
-        trend={acwrTrend}
-      />
+      {tab === 'resumen' && (
+        <>
+          {/* El titular de hoy (o lo que se registró el día elegido), sin tener que entrar a Planificación. */}
+          {isToday ? (
+            <TodayPreviewCard session={todaySession} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
+          ) : (
+            <PastDayCard entry={shown.entry} label={dayLabel(dayIso, todayIso)} />
+          )}
+
+          {/*
+            El estado del día: el check-in (el primer gesto de la mañana: al contestar se fija el objetivo de esfuerzo y se
+            rehace la sesión) y los dos anillos, esfuerzo y preparación. Tocar un número abre su pestaña.
+          */}
+          <div {...swipe} className="touch-pan-y">
+          <DayRing
+            checkIn={
+              isToday && showCheckIn ? (
+                <ReadinessCheckIn
+                  dateIso={todayIso}
+                  log={profile.readinessLog ?? []}
+                  existing={todayReadiness}
+                  onConfirm={handleSaveCheckIn}
+                  onSkip={() => setCheckInDismissed(true)}
+                />
+              ) : null
+            }
+            strain={shown.strain}
+            readiness={shown.readiness}
+            acwr={shown.acwr}
+            centerLabel={ringDayLabel(dayIso, todayIso)}
+            isToday={isToday}
+            onOpenTab={setTab}
+          />
+          </div>
+        </>
+      )}
+
+      {tab === 'esfuerzo' && (
+        <div className="animate-section-in rounded-2xl bg-white/[0.03] p-5 motion-reduce:animate-none">
+          <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
+        </div>
+      )}
+      {tab === 'preparacion' && (
+        <div className="animate-section-in flex flex-col gap-7 rounded-2xl bg-white/[0.03] p-5 motion-reduce:animate-none">
+          <RecoveryDetail readiness={shown.readiness} />
+          <LearnedInsights learning={readinessLearning} />
+        </div>
+      )}
+      {tab === 'carga' && (
+        <div className="animate-section-in rounded-2xl bg-white/[0.03] p-5 motion-reduce:animate-none">
+          <AcwrGauge result={shown.acwr} trend={shown.trend} />
+        </div>
+      )}
 
       {showConsistency && (
         <Modal open onClose={() => setShowConsistency(false)} title="Constancia">
@@ -321,6 +365,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         </Modal>
       )}
 
+      {tab === 'resumen' && (
+        <>
       {/*
         Análisis: lo que no hace falta mirar cada día, plegado por defecto. Los gauges (dominios energéticos,
         desequilibrios, fuerza) son la puerta directa a su detalle; debajo solo sale la tarjeta cuyo gauge se ha tocado.
@@ -397,6 +443,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
           workLog={profile.workLog ?? []}
           prs={profile.prs}
         />
+      )}
+        </>
       )}
     </div>
   );
