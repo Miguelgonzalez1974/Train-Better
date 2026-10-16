@@ -18,8 +18,8 @@ export interface StrainView {
   learning: StrainLearning;
 }
 
-/** Un solo acento (lima) para "dentro de lo que toca" y coral para "te pasas"; sin color hasta que hay algo que decir. */
-export const ACCENT = 'rgb(var(--c-accent))';
+/** El esfuerzo es azul (su color en todo el Dashboard) y pasa a coral cuando rebasa el máximo del objetivo. */
+export const ACCENT = 'rgb(var(--c-state-cool))';
 export const OVER = 'rgb(var(--c-over))';
 const NEUTRAL = 'rgb(var(--c-white) / 0.5)';
 
@@ -62,7 +62,7 @@ export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: (
       <div>
         <SectionLabel>Esfuerzo de hoy</SectionLabel>
         <p className="mt-1 text-[11px] text-neutral-500">
-          Arco exterior: tu objetivo, de cero a tu máximo. Arco medio: tu esfuerzo; si pasa del final del exterior, te pasas.
+          Anillo exterior (azul): tu esfuerzo. El corchete blanco de fuera marca tu objetivo, del mínimo al máximo; si el azul pasa de su final, te pasas.
         </p>
         <p className="mt-1.5 text-base font-semibold text-white">
           Objetivo <span className="num">{target.low}–{target.high}</span>

@@ -22,7 +22,7 @@ import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization'
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
 import { TodayPreviewCard } from './TodayPreviewCard';
-import { DayGauge } from './DayGauge';
+import { DayRing } from './DayRing';
 import { ConsistencyDetail } from './ConsistencyDetail';
 import { computeYearConsistency } from '../../engine/yearConsistency';
 import { TrainingHeatmap } from './TrainingHeatmap';
@@ -290,7 +290,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         El estado del día: plan y constancia justo bajo "Hoy"; luego el check-in (el primer gesto de la mañana: al contestar
         se fija el objetivo de esfuerzo y se rehace la sesión) y los dos círculos grandes, preparación y esfuerzo.
       */}
-      <DayGauge
+      <DayRing
         checkIn={
           showCheckIn ? (
             <ReadinessCheckIn
