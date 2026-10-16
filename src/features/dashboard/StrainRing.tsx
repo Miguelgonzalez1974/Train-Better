@@ -56,7 +56,7 @@ const R_INNER = 34;
 const C_INNER = 2 * Math.PI * R_INNER;
 
 type Token = 'cool' | 'good' | 'mid' | 'low';
-const tok = (t: Token) => `rgb(var(--c-state-${t}))`;
+export const tok = (t: Token) => `rgb(var(--c-state-${t}))`;
 const mix = (from: Token, to: Token, pctTo: number) => `color-mix(in srgb, ${tok(to)} ${Math.round(pctTo)}%, ${tok(from)})`;
 
 /** El color de cada punto del objetivo: verde desde cero hasta el mínimo y, desde ahí, degradado (verde, amarillo, rojo) hasta el máximo. */
@@ -68,7 +68,7 @@ function scaleColor(value: number, low: number, high: number): string {
 }
 
 /** Trocitos de la escala entre `from` y `to` (en puntos 0-100), cada uno con su color; el solape evita rendijas entre ellos. */
-function scaleSegments(from: number, to: number, step: number, r: number, c: number, strokeWidth: number, low: number, high: number) {
+export function scaleSegments(from: number, to: number, step: number, r: number, c: number, strokeWidth: number, low: number, high: number) {
   const out = [];
   for (let v = from; v < to; v += step) {
     const end = Math.min(to, v + step);
@@ -90,12 +90,25 @@ function scaleSegments(from: number, to: number, step: number, r: number, c: num
   return out;
 }
 
-/** Una marca fina que cruza el anillo exterior en el punto `value`. */
-function tick(value: number) {
+/** Una marca fina que cruza un anillo en el punto `value` (de `r1` a `r2`, por defecto el anillo exterior del esfuerzo). */
+export function tick(value: number, r1 = 40, r2 = 50) {
   const a = (value / 100) * 2 * Math.PI;
   const x = (r: number) => 50 + r * Math.cos(a);
   const y = (r: number) => 50 + r * Math.sin(a);
-  return <line key={value} x1={x(40)} y1={y(40)} x2={x(50)} y2={y(50)} stroke="rgb(var(--c-white))" strokeOpacity={0.75} strokeWidth={1.2} strokeLinecap="round" />;
+  return <line key={value} x1={x(r1)} y1={y(r1)} x2={x(r2)} y2={y(r2)} stroke="rgb(var(--c-white))" strokeOpacity={0.75} strokeWidth={1.2} strokeLinecap="round" />;
+}
+
+/** La frase de veredicto de una línea sobre el esfuerzo de hoy (real si ya entrenaste; si no, cómo encaja la sesión prevista). */
+export function strainVerdict(v: StrainView): string {
+  if (v.real !== null) {
+    if (v.status === 'dentro') return 'Dentro del objetivo · justo lo que tocaba';
+    if (v.status === 'por-debajo') return 'Por debajo del objetivo · aún tenías margen';
+    return 'Te pasaste del objetivo · mañana, con cuidado';
+  }
+  if (!v.fit) return 'Sin sesión prevista hoy';
+  if (v.fit.fit === 'dentro') return 'Encaja con tu objetivo';
+  if (v.fit.fit === 'se-pasa') return `Se pasa ${v.fit.diff} de tu objetivo`;
+  return 'Te deja margen: puedes apretar un poco más';
 }
 
 /**

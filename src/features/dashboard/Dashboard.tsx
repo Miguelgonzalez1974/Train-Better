@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Apple, BarChart3, ChevronDown, Scale, Target } from 'lucide-react';
+import { Apple, BarChart3, ChevronDown, Flame, Scale, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -22,7 +22,7 @@ import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization'
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
 import { TodayPreviewCard } from './TodayPreviewCard';
-import { DayRings } from './DayRings';
+import { DayGauge } from './DayGauge';
 import { ConsistencyDetail } from './ConsistencyDetail';
 import { computeYearConsistency } from '../../engine/yearConsistency';
 import { TrainingHeatmap } from './TrainingHeatmap';
@@ -64,6 +64,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [showConsistency, setShowConsistency] = useState(false);
 
   // Cada gauge abre (o cierra, si ya estaba abierta) su propia tarjeta de detalle — sin un "Más
   // detalle" intermedio que bucear. El de carga expande el gauge completo de ACWR ahí mismo; el
@@ -229,6 +230,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
           >
             <BarChart3 size={17} strokeWidth={2.25} />
           </button>
+          <button
+            onClick={() => setShowConsistency(true)}
+            title={yearConsistency.pct !== null ? `Constancia · ${yearConsistency.pct} % (${yearConsistency.days} días este año)` : 'Constancia'}
+            aria-label="Constancia"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <Flame size={17} strokeWidth={2.25} />
+          </button>
           {hasStructure && (
             <button
               onClick={onNavigateToObjetivos}
@@ -281,7 +290,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         El estado del día: plan y constancia justo bajo "Hoy"; luego el check-in (el primer gesto de la mañana: al contestar
         se fija el objetivo de esfuerzo y se rehace la sesión) y los dos círculos grandes, preparación y esfuerzo.
       */}
-      <DayRings
+      <DayGauge
         checkIn={
           showCheckIn ? (
             <ReadinessCheckIn
@@ -295,26 +304,22 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         }
         strain={strainView}
         onAdjustSession={onNavigateToPlanificacion}
-        structureRow={hasStructure ? structureRow : null}
-        goalRows={goalRows}
         readiness={readiness}
         learning={readinessLearning}
         acwr={acwr}
         trend={acwrTrend}
-        yearConsistency={yearConsistency}
-        consistencyDetail={
+      />
+
+      {showConsistency && (
+        <Modal open onClose={() => setShowConsistency(false)} title="Constancia">
           <ConsistencyDetail
             week={weekCount}
             monthDays={stats.diasEntrenados}
             year={yearConsistency}
             calendar={<TrainingHeatmap history={history} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
           />
-        }
-        onNavigateToObjetivos={onNavigateToObjetivos}
-      />
-
-      {/* Esfuerzo de hoy frente al rango que recomienda el coach, y la tendencia de esfuerzo y preparación. */}
-      <TrendCard series={(days) => buildTrend(history, profile.readinessLog, todayIso, days)} />
+        </Modal>
+      )}
 
       {/*
         Análisis: lo que no hace falta mirar cada día, plegado por defecto. Los gauges (dominios energéticos,
@@ -327,6 +332,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
         {analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}
         <ChevronDown size={14} className={`transition-transform duration-200 ${analysisOpen ? 'rotate-180' : ''}`} />
       </button>
+      {analysisOpen && <TrendCard series={(days) => buildTrend(history, profile.readinessLog, todayIso, days)} />}
       {analysisOpen && <MetricsGauges row1={analysisGauges} row2={[]} onJumpTo={jumpTo} />}
 
       {energyOpen && (
