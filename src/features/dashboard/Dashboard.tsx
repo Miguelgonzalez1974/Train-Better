@@ -21,9 +21,11 @@ import { TrendCard } from './TrendCard';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
-import { TodayPreviewCard } from './TodayPreviewCard';
 import { DayRing, type DashTab } from './DayRing';
-import { DashTabs, DaySelector, PastDayCard, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
+import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
+import { DayRows, type NutritionSummary } from './DayRows';
+import { classifyNutritionDay } from '../../engine/nutritionPlan';
+import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
 import { buildPastDayView } from './pastDay';
 import { StrainDetail } from './StrainRing';
 import { RecoveryDetail } from './RecoveryCard';
@@ -51,9 +53,10 @@ const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeri
 interface DashboardProps {
   onNavigateToPlanificacion: () => void;
   onNavigateToObjetivos: () => void;
+  onNavigateToNutricion: () => void;
 }
 
-export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: DashboardProps) {
+export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, onNavigateToNutricion }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
   const [profile, setProfile] = useState(() => {
@@ -167,6 +170,22 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
   const isToday = dayIso === todayIso;
   const pastView = useMemo(() => (isToday ? null : buildPastDayView(profile, history, dayIso, strainLearned)), [isToday, profile, history, dayIso, strainLearned]);
   const shown = pastView ?? { readiness, acwr, trend: acwrTrend, strain: strainView, entry: history.find((h) => h.date === todayIso) };
+  // Nutrición del día elegido: lo apuntado en el diario frente a lo que toca (proteína e hidratos), si hay peso para calcularlo.
+  const nutrition = useMemo<NutritionSummary | null>(() => {
+    if (!latestBodyweightKg) return null;
+    const prefs = profile.nutritionPrefs;
+    const dayEntry = history.find((h) => h.date === dayIso);
+    const daySession = isToday ? (todaySession ?? athleteRepository.getCachedSession(dayIso)) : profile.sessionCache?.[dayIso];
+    const dayType = daySession ? classifyNutritionDay(daySession) : dayEntry ? 'normal' : 'descanso';
+    const plan = planFor(prefs, dayIso, dayType, latestBodyweightKg, trainingHourFor(prefs, dayIso));
+    const eaten = extraInputsFor(prefs, dayIso);
+    // Un día pasado sin nada apuntado no muestra la fila (un 0 % no dice nada).
+    if (!isToday && eaten.length === 0) return null;
+    return {
+      protein: { done: eaten.reduce((s, e) => s + e.protein, 0), target: Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2) },
+      carbs: { done: eaten.reduce((s, e) => s + e.carbs, 0), target: Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2) },
+    };
+  }, [latestBodyweightKg, profile.nutritionPrefs, profile.sessionCache, history, dayIso, isToday, todaySession]);
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // El check-in solo tiene sentido si hoy hay sesión por entrenar (o ya hecho, para poder corregirlo).
   const showCheckIn = Boolean(todaySession && !todaySession.isRestDay && (todayReadiness || !checkInDismissed));
@@ -302,13 +321,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
 
       {tab === 'resumen' && (
         <>
-          {/* El titular de hoy (o lo que se registró el día elegido), sin tener que entrar a Planificación. */}
-          {isToday ? (
-            <TodayPreviewCard session={todaySession} history={history} onNavigateToPlanificacion={onNavigateToPlanificacion} />
-          ) : (
-            <PastDayCard entry={shown.entry} label={dayLabel(dayIso, todayIso)} />
-          )}
-
           {/*
             El estado del día: el check-in (el primer gesto de la mañana: al contestar se fija el objetivo de esfuerzo y se
             rehace la sesión) y los dos anillos, esfuerzo y preparación. Tocar un número abre su pestaña.
@@ -334,6 +346,17 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos }: 
             onOpenTab={setTab}
           />
           </div>
+
+          {/* Tu día: la sesión (con su esfuerzo en la insignia) y la nutrición, una fila cada una. */}
+          <DayRows
+            isToday={isToday}
+            session={isToday ? todaySession : null}
+            entry={shown.entry}
+            strain={shown.strain}
+            nutrition={nutrition}
+            onNavigateToPlanificacion={onNavigateToPlanificacion}
+            onNavigateToNutricion={onNavigateToNutricion}
+          />
         </>
       )}
 

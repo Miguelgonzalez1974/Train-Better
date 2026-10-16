@@ -1,6 +1,5 @@
 import { useRef, type TouchEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { SessionHistoryEntry } from '../../data/athlete/types';
 import type { DashTab } from './DayRing';
 
 const TABS: { id: DashTab; label: string }[] = [
@@ -107,25 +106,6 @@ export function DaySelector({ dayIso, todayIso, onChange }: { dayIso: string; to
       <button onClick={() => onChange(addDays(dayIso, 1))} disabled={atToday} aria-label="Día siguiente" className={btn}>
         <ChevronRight size={18} />
       </button>
-    </div>
-  );
-}
-
-/** El día elegido cuando no es hoy: lo que se registró ese día, en una línea. */
-export function PastDayCard({ entry, label }: { entry: SessionHistoryEntry | undefined; label: string }) {
-  return (
-    <div className="rounded-2xl border border-brand-border bg-brand-surface/60 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</p>
-      {entry ? (
-        <p className="mt-1.5 text-base font-semibold text-white">
-          Sesión completada
-          <span className="ml-2 text-sm font-normal text-neutral-400">
-            RPE <span className="num">{entry.rpe}</span> · <span className="num">{entry.durationMin}</span> min
-          </span>
-        </p>
-      ) : (
-        <p className="mt-1.5 text-base font-semibold text-neutral-300">Sin sesión registrada</p>
-      )}
     </div>
   );
 }

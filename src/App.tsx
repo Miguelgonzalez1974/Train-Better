@@ -79,6 +79,7 @@ export default function App() {
             <Dashboard
               onNavigateToPlanificacion={() => setActiveTab('planificacion')}
               onNavigateToObjetivos={() => setActiveTab('objetivos')}
+              onNavigateToNutricion={() => setActiveTab('nutricion')}
             />
           )}
           {activeTab === 'planificacion' && (
