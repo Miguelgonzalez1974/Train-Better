@@ -6,7 +6,7 @@ import type { ReadinessLearning } from '../../engine/readinessLearning';
 import { LearnedInsights } from './LearnedInsights';
 import { AcwrGauge } from './AcwrGauge';
 import { RecoveryDetail } from './RecoveryCard';
-import { StrainDetail, strainColor, strainVerdict, tok, type StrainView } from './StrainRing';
+import { ACCENT, OVER, StrainDetail, strainColor, strainVerdict, type StrainView } from './StrainRing';
 
 type Open = 'prep' | 'objective' | 'strain' | 'load';
 
@@ -29,13 +29,12 @@ const circ = (r: number) => 2 * Math.PI * r;
 const arcLen = (r: number) => (SWEEP / 360) * circ(r);
 const valueDeg = (v: number) => START_DEG + (Math.min(100, Math.max(0, v)) / 100) * SWEEP;
 
-/** Color del objetivo en un punto: verde hasta el mínimo y de ahí degradado (verde, amarillo, rojo) hasta el máximo. */
-function objectiveColor(value: number, low: number, high: number): string {
-  if (value < low) return tok('good');
-  const t = high > low ? Math.min(1, (value - low) / (high - low)) : 1;
-  const mix = (from: 'good' | 'mid', to: 'mid' | 'low', p: number) => `color-mix(in srgb, ${tok(to)} ${Math.round(p)}%, ${tok(from)})`;
-  return t < 0.5 ? mix('good', 'mid', t * 200) : mix('mid', 'low', (t - 0.5) * 200);
-}
+/**
+ * El objetivo es de un solo tono que gana intensidad hacia el máximo (del gris casi del fondo al color del texto), así
+ * funciona igual en tema oscuro y claro. `t` va de 0 (cero) a 1 (tu máximo).
+ */
+const objectiveShade = (t: number): string =>
+  `color-mix(in srgb, rgb(var(--c-white)) ${Math.round(14 + 72 * Math.min(1, Math.max(0, t)))}%, rgb(var(--c-brand-bg)))`;
 
 /** Trocitos del arco entre `from` y `to` (puntos 0-100) con el color de cada uno; el solape evita rendijas. */
 function arcSegments(from: number, to: number, r: number, strokeWidth: number, color: (v: number) => string) {
@@ -105,6 +104,10 @@ export function DayGauge({
   const { target, planned, real } = strain;
   const shown = real !== null ? real : planned?.strain ?? null;
   const verdictColor = strainColor(strain);
+  // El esfuerzo es lima mientras estás dentro de lo que toca y pasa a coral si rebasas el máximo del objetivo.
+  const isOver = shown !== null && shown > target.high;
+  const effortColor = isOver ? OVER : ACCENT;
+  const effortGlow = isOver ? 'rgb(var(--c-over) / 0.5)' : 'rgb(var(--c-accent) / 0.5)';
 
   const grow = (r: number, v: number) => (filled ? (Math.min(100, Math.max(0, v)) / 100) * arcLen(r) : 0);
   const slide = 'transition-[stroke-dasharray] duration-[900ms] ease-out motion-reduce:transition-none';
@@ -119,7 +122,7 @@ export function DayGauge({
           <g transform="rotate(135 50 50)">
             {/* Objetivo: de cero al máximo */}
             <circle cx="50" cy="50" r={R_OBJ} fill="none" strokeWidth={3.5} strokeLinecap="round" strokeDasharray={`${arcLen(R_OBJ)} ${circ(R_OBJ)}`} className="stroke-white/[0.07]" />
-            {arcSegments(0, target.high, R_OBJ, 3.5, (v) => objectiveColor(v, target.low, target.high))}
+            {arcSegments(0, target.high, R_OBJ, 3.5, (v) => objectiveShade(v / target.high))}
             {/* Esfuerzo */}
             <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={5} strokeLinecap="round" strokeDasharray={`${arcLen(R_EFF)} ${circ(R_EFF)}`} className="stroke-white/[0.07]" />
             {shown !== null && (
@@ -130,7 +133,7 @@ export function DayGauge({
                 fill="none"
                 strokeWidth={5}
                 strokeLinecap="round"
-                style={{ stroke: tok('cool'), opacity: real !== null ? 1 : 0.75, filter: 'drop-shadow(0 0 2.5px rgb(var(--c-state-cool) / 0.55))' }}
+                style={{ stroke: effortColor, opacity: real !== null ? 1 : 0.8, filter: `drop-shadow(0 0 2.5px ${effortGlow})` }}
                 strokeDasharray={`${grow(R_EFF, shown)} ${circ(R_EFF)}`}
                 className={slide}
               />
@@ -190,7 +193,7 @@ export function DayGauge({
           label="Objetivo"
           value={`${target.low}–${target.high}`}
           note={target.provisional && real === null ? 'provisional' : 'fijado hoy'}
-          line={<span className="block h-[3px] w-8 rounded-full" style={{ background: `linear-gradient(90deg, ${tok('good')}, ${tok('mid')}, ${tok('low')})` }} />}
+          line={<span className="block h-[3px] w-8 rounded-full" style={{ background: `linear-gradient(90deg, ${objectiveShade(0)}, ${objectiveShade(1)})` }} />}
         />
         <Stat
           selected={open === 'strain'}
@@ -198,7 +201,7 @@ export function DayGauge({
           label="Esfuerzo"
           value={shown !== null ? `${real === null ? '~' : ''}${shown}` : '—'}
           note={real !== null ? 'hecho hoy' : planned ? 'previsto' : 'sin sesión'}
-          line={<span className="block h-[3px] w-8 rounded-full" style={{ backgroundColor: tok('cool') }} />}
+          line={<span className="block h-[3px] w-8 rounded-full" style={{ backgroundColor: effortColor }} />}
         />
       </div>
 
@@ -210,7 +213,7 @@ export function DayGauge({
             className="flex items-center gap-2 rounded-full border border-brand-border px-3.5 py-1.5 text-xs font-semibold transition-colors hover:bg-white/5"
           >
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ZONE_COLOR[acwr.zone] }} />
-            <span style={{ color: ZONE_COLOR[acwr.zone] }}>{ZONE_WORD[acwr.zone]}</span>
+            <span className="text-neutral-200">{ZONE_WORD[acwr.zone]}</span>
             <ChevronDown size={13} className={`text-neutral-500 transition-transform duration-200 ${open === 'load' ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
         </div>

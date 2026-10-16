@@ -1,12 +1,11 @@
-﻿import { useEffect, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+﻿import { ArrowRight } from 'lucide-react';
 import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
 import type { StrainStatus } from '../../engine/strain';
 import type { StrainLearning } from '../../engine/strainLearning';
 import { SectionLabel } from '../shell/SectionLabel';
 
-/** Todo lo que el anillo y su detalle necesitan saber del esfuerzo de hoy. */
+/** Todo lo que el medidor y su detalle necesitan saber del esfuerzo de hoy. */
 export interface StrainView {
   target: StrainTarget;
   /** Esfuerzo que cuesta la sesión de hoy (null si no hay sesión o ya se entrenó). */
@@ -19,83 +18,27 @@ export interface StrainView {
   learning: StrainLearning;
 }
 
+/** Un solo acento (lima) para "dentro de lo que toca" y coral para "te pasas"; sin color hasta que hay algo que decir. */
+export const ACCENT = 'rgb(var(--c-accent))';
+export const OVER = 'rgb(var(--c-over))';
+const NEUTRAL = 'rgb(var(--c-white) / 0.5)';
+
 const STATUS_COLOR: Record<StrainStatus, string> = {
-  'sin-entrenar': 'rgb(var(--c-white) / 0.5)',
-  'por-debajo': 'rgb(var(--c-state-cool))',
-  dentro: 'rgb(var(--c-state-good))',
-  pasado: 'rgb(var(--c-state-hot))',
+  'sin-entrenar': NEUTRAL,
+  'por-debajo': ACCENT,
+  dentro: ACCENT,
+  pasado: OVER,
 };
 const FIT_COLOR: Record<PlanFit, string> = {
-  dentro: 'rgb(var(--c-state-good))',
-  'se-pasa': 'rgb(var(--c-state-hot))',
-  'se-queda-corta': 'rgb(var(--c-state-cool))',
+  dentro: ACCENT,
+  'se-pasa': OVER,
+  'se-queda-corta': ACCENT,
 };
 
 /** El color que manda: el del resultado real si ya entrenaste; si no, el de cómo encaja la sesión prevista. */
 export function strainColor(v: StrainView): string {
   if (v.real !== null) return STATUS_COLOR[v.status];
   return v.fit ? FIT_COLOR[v.fit.fit] : STATUS_COLOR['sin-entrenar'];
-}
-
-/** La palabra de estado bajo el anillo. */
-export function strainWord(v: StrainView): string {
-  if (v.real !== null) {
-    if (v.status === 'dentro') return 'Dentro del objetivo';
-    if (v.status === 'por-debajo') return 'Por debajo';
-    return 'Te pasaste';
-  }
-  if (!v.fit) return 'Sin sesión';
-  if (v.fit.fit === 'dentro') return 'Encaja';
-  if (v.fit.fit === 'se-pasa') return `Se pasa ${v.fit.diff}`;
-  return 'Con margen';
-}
-
-const R = 45;
-const C = 2 * Math.PI * R;
-const R_INNER = 34;
-const C_INNER = 2 * Math.PI * R_INNER;
-
-type Token = 'cool' | 'good' | 'mid' | 'low';
-export const tok = (t: Token) => `rgb(var(--c-state-${t}))`;
-const mix = (from: Token, to: Token, pctTo: number) => `color-mix(in srgb, ${tok(to)} ${Math.round(pctTo)}%, ${tok(from)})`;
-
-/** El color de cada punto del objetivo: verde desde cero hasta el mínimo y, desde ahí, degradado (verde, amarillo, rojo) hasta el máximo. */
-function scaleColor(value: number, low: number, high: number): string {
-  if (value < low) return tok('good');
-  if (value >= high) return tok('low');
-  const t = high > low ? (value - low) / (high - low) : 0;
-  return t < 0.5 ? mix('good', 'mid', t * 200) : mix('mid', 'low', (t - 0.5) * 200);
-}
-
-/** Trocitos de la escala entre `from` y `to` (en puntos 0-100), cada uno con su color; el solape evita rendijas entre ellos. */
-export function scaleSegments(from: number, to: number, step: number, r: number, c: number, strokeWidth: number, low: number, high: number) {
-  const out = [];
-  for (let v = from; v < to; v += step) {
-    const end = Math.min(to, v + step);
-    const len = ((end - v) / 100) * c + 0.4;
-    out.push(
-      <circle
-        key={`${r}-${v}`}
-        cx="50"
-        cy="50"
-        r={r}
-        fill="none"
-        strokeWidth={strokeWidth}
-        style={{ stroke: scaleColor(v + step / 2, low, high) }}
-        strokeDasharray={`${len} ${c}`}
-        strokeDashoffset={-((v / 100) * c)}
-      />,
-    );
-  }
-  return out;
-}
-
-/** Una marca fina que cruza un anillo en el punto `value` (de `r1` a `r2`, por defecto el anillo exterior del esfuerzo). */
-export function tick(value: number, r1 = 40, r2 = 50) {
-  const a = (value / 100) * 2 * Math.PI;
-  const x = (r: number) => 50 + r * Math.cos(a);
-  const y = (r: number) => 50 + r * Math.sin(a);
-  return <line key={value} x1={x(r1)} y1={y(r1)} x2={x(r2)} y2={y(r2)} stroke="rgb(var(--c-white))" strokeOpacity={0.75} strokeWidth={1.2} strokeLinecap="round" />;
 }
 
 /** La frase de veredicto de una línea sobre el esfuerzo de hoy (real si ya entrenaste; si no, cómo encaja la sesión prevista). */
@@ -111,70 +54,16 @@ export function strainVerdict(v: StrainView): string {
   return 'Te deja margen: puedes apretar un poco más';
 }
 
-/**
- * Anillo doble del esfuerzo de hoy, como el de preparación; los dos arrancan de cero, a las 12 y en el sentido del reloj.
- * Por fuera el objetivo que el coach fijó por la mañana, de cero hasta tu máximo: verde hasta el mínimo y degradado
- * hacia rojo hasta el máximo, con una marca en el mínimo y otra en el máximo. Por dentro tu esfuerzo, en azul para que no
- * se confunda con el objetivo: se llena desde cero hasta lo previsto de la sesión (más tenue) y, una vez entrenado, hasta
- * lo real. Si el anillo azul llega más lejos que el de color, te pasas. El número del centro es el previsto (con ~) hasta
- * que entrenas y el real después.
- */
-export function StrainRing({ view }: { view: StrainView }) {
-  const { target, planned, real } = view;
-  const [filled, setFilled] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setFilled(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-
-  const shown = real !== null ? real : planned?.strain ?? null;
-  const innerFraction = filled && shown !== null ? Math.min(1, shown / 100) : 0;
-
-  return (
-    <div className="relative aspect-square w-full">
-      <svg viewBox="0 0 100 100" className="h-full w-full" role="img" aria-label={`Esfuerzo de hoy, objetivo ${target.low} a ${target.high}`}>
-        <g transform="rotate(-90 50 50)">
-          {/* Anillo exterior: el objetivo, de cero (las 12) hasta el máximo; verde hasta el mínimo y degradado hacia rojo. */}
-          <circle cx="50" cy="50" r={R} fill="none" strokeWidth={8} className="stroke-white/[0.07]" />
-          {scaleSegments(0, target.high, 1.5, R, C, 8, target.low, target.high)}
-          {tick(target.low)}
-          {tick(target.high)}
-          {/* Anillo interior: tu esfuerzo, en azul, desde cero hasta donde llegas. */}
-          <circle cx="50" cy="50" r={R_INNER} fill="none" strokeWidth={7} className="stroke-white/[0.06]" />
-          {shown !== null && (
-            <circle
-              cx="50"
-              cy="50"
-              r={R_INNER}
-              fill="none"
-              strokeWidth={7}
-              strokeLinecap="round"
-              style={{ stroke: tok('cool'), opacity: real !== null ? 1 : 0.7 }}
-              strokeDasharray={C_INNER}
-              strokeDashoffset={C_INNER * (1 - innerFraction)}
-              className="transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none"
-            />
-          )}
-        </g>
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="num text-[clamp(1.3rem,6.4vw,1.95rem)] font-semibold leading-none tracking-tight text-white">
-          {shown !== null ? `${real === null ? '~' : ''}${shown}` : '—'}
-        </span>
-        <span className="mt-1 text-[9px] uppercase tracking-[0.14em] text-neutral-500">{real !== null ? 'hoy' : 'previsto'}</span>
-      </div>
-    </div>
-  );
-}
-
-/** El detalle que se abre al tocar el anillo: objetivo, previsto, real y el porqué. */
+/** El detalle que se abre al tocar una columna del medidor: objetivo, previsto, real y el porqué. */
 export function StrainDetail({ view, onAdjust }: { view: StrainView; onAdjust: () => void }) {
   const { target, planned, fit, real } = view;
   return (
     <div className="flex flex-col gap-4">
       <div>
         <SectionLabel>Esfuerzo de hoy</SectionLabel>
-        <p className="mt-1 text-[11px] text-neutral-500">Los dos anillos arrancan a las 12. Exterior: tu objetivo, hasta tu máximo (de verde a rojo). Interior (azul): tu esfuerzo; si pasa del final del exterior, te pasas.</p>
+        <p className="mt-1 text-[11px] text-neutral-500">
+          Arco exterior: tu objetivo, de cero a tu máximo. Arco medio: tu esfuerzo; si pasa del final del exterior, te pasas.
+        </p>
         <p className="mt-1.5 text-base font-semibold text-white">
           Objetivo <span className="num">{target.low}–{target.high}</span>
         </p>
