@@ -8,7 +8,7 @@ import { getMonthlyStats } from './stats';
 import { computePrTrends } from '../../engine/weakPoints';
 import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
-import { buildTrend, dayStrain, strainStatus } from '../../engine/strain';
+import { dayStrain, strainStatus } from '../../engine/strain';
 import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
@@ -17,7 +17,6 @@ import type { ReadinessCheck } from '../../data/athlete/types';
 import { ReadinessCheckIn } from '../planificacion/ReadinessCheckIn';
 import { refreshTodaySession, resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
-import { TrendCard } from './TrendCard';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { MetricsGauges, type GaugeSpec, type GaugeTarget } from './MetricsGauges';
@@ -26,7 +25,8 @@ import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } 
 import { DayRows, type NutritionSummary } from './DayRows';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
-import { buildPastDayView } from './pastDay';
+import { buildPastDayView, buildReadinessSeries, buildWeekWindow } from './pastDay';
+import { ReadinessTrendChart, WeekEffortChart } from './WeekCharts';
 import { StrainDetail } from './StrainRing';
 import { RecoveryDetail } from './RecoveryCard';
 import { LearnedInsights } from './LearnedInsights';
@@ -186,6 +186,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       carbs: { done: eaten.reduce((s, e) => s + e.carbs, 0), target: Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2) },
     };
   }, [latestBodyweightKg, profile.nutritionPrefs, profile.sessionCache, history, dayIso, isToday, todaySession]);
+  // Datos de las gráficas de las pestañas (solo se calculan al abrirlas).
+  const weekPoints = useMemo(
+    () => (tab === 'esfuerzo' ? buildWeekWindow(profile, history, dayIso, todayIso, strainView) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab, profile, history, dayIso, todayIso, strainView.planned?.strain, strainView.target],
+  );
+  const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // El check-in solo tiene sentido si hoy hay sesión por entrenar (o ya hecho, para poder corregirlo).
   const showCheckIn = Boolean(todaySession && !todaySession.isRestDay && (todayReadiness || !checkInDismissed));
@@ -344,6 +351,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             centerLabel={ringDayLabel(dayIso, todayIso)}
             isToday={isToday}
             onOpenTab={setTab}
+            onAdjust={onNavigateToPlanificacion}
           />
           </div>
 
@@ -361,14 +369,20 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       )}
 
       {tab === 'esfuerzo' && (
-        <div className="animate-section-in rounded-2xl bg-white/[0.03] p-5 motion-reduce:animate-none">
-          <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
+        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
+          <WeekEffortChart points={weekPoints} selectedIso={dayIso} todayIso={todayIso} onSelect={setDayIso} />
+          <div className="rounded-2xl bg-white/[0.03] p-5">
+            <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
+          </div>
         </div>
       )}
       {tab === 'preparacion' && (
-        <div className="animate-section-in flex flex-col gap-7 rounded-2xl bg-white/[0.03] p-5 motion-reduce:animate-none">
-          <RecoveryDetail readiness={shown.readiness} />
-          <LearnedInsights learning={readinessLearning} />
+        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
+          <ReadinessTrendChart series={readinessSeries} selectedIso={dayIso} onSelect={setDayIso} />
+          <div className="flex flex-col gap-7 rounded-2xl bg-white/[0.03] p-5">
+            <RecoveryDetail readiness={shown.readiness} />
+            <LearnedInsights learning={readinessLearning} />
+          </div>
         </div>
       )}
       {tab === 'carga' && (
@@ -401,7 +415,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         {analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}
         <ChevronDown size={14} className={`transition-transform duration-200 ${analysisOpen ? 'rotate-180' : ''}`} />
       </button>
-      {analysisOpen && <TrendCard series={(days) => buildTrend(history, profile.readinessLog, todayIso, days)} />}
       {analysisOpen && <MetricsGauges row1={analysisGauges} row2={[]} onJumpTo={jumpTo} />}
 
       {energyOpen && (

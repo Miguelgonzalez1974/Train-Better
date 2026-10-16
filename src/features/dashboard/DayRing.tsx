@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { ArrowRight } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { recoveryColor } from './RecoveryCard';
@@ -106,6 +107,7 @@ export function DayRing({
   centerLabel,
   isToday,
   onOpenTab,
+  onAdjust,
 }: {
   readiness: ReadinessScore;
   acwr: AcwrResult;
@@ -115,6 +117,8 @@ export function DayRing({
   centerLabel: string;
   isToday: boolean;
   onOpenTab: (tab: Exclude<DashTab, 'resumen'>) => void;
+  /** "Ajustar sesión": lleva a Planificación (otro WOD o una sesión ligera). */
+  onAdjust?: () => void;
 }) {
   const [filled, setFilled] = useState(false);
   useEffect(() => {
@@ -223,6 +227,19 @@ export function DayRing({
       </div>
 
       <p className="mx-auto mt-5 max-w-[22rem] text-center text-[13px] leading-relaxed text-neutral-400">{sentence(strain, readiness, acwr, isToday)}</p>
+
+      {/* Si la sesión de hoy se pasa del objetivo, la decisión está aquí, no escondida en otra pestaña. */}
+      {onAdjust && isToday && real === null && strain.fit?.fit === 'se-pasa' && (
+        <div className="mt-3 flex justify-center">
+          <button
+            onClick={onAdjust}
+            className="flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-colors duration-200 hover:bg-white/5"
+            style={{ borderColor: 'rgb(var(--c-over) / 0.6)', color: OVER }}
+          >
+            Ajustar sesión <ArrowRight size={13} aria-hidden="true" />
+          </button>
+        </div>
+      )}
     </section>
   );
 }
