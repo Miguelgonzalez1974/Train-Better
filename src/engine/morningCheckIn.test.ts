@@ -7,8 +7,10 @@ import {
   restingHrBaseline,
   soreRoleLevels,
   soreSummary,
+  verdictFor,
 } from './morningCheckIn';
 import { applyPainFollowUps, PAIN_BETTER_DAYS } from './painFlags';
+import { computeHrvPart } from './hrv';
 import { getReadinessFactor, scoreCheck } from './readiness';
 import { generateSessionForDate } from './generateSession';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
@@ -188,10 +190,28 @@ describe('seguimiento de los avisos de molestia', () => {
   });
 });
 
+describe('cómo llegas a entrenar, en una frase', () => {
+  it('sale del nivel de la preparación y baja un escalón con una HRV o un pulso en contra', () => {
+    expect(verdictFor({ level: 'alta', day: 'training', hrvLow: false })).toEqual({ text: 'Llegas bien: buen día para apretar', tone: 'good' });
+    expect(verdictFor({ level: 'normal', day: 'training', hrvLow: false })?.tone).toBe('mid');
+    expect(verdictFor({ level: 'normal', day: 'training', hrvLow: true })?.tone).toBe('bad');
+    expect(verdictFor({ level: 'baja', day: 'training', hrvLow: false })?.text).toContain('Llegas justo');
+    // con la preparación alta, una HRV baja suelta no la hunde
+    expect(verdictFor({ level: 'alta', day: 'training', hrvLow: true })?.tone).toBe('good');
+  });
+
+  it('en descanso habla de recuperar, y sin nota o tras entrenar no dice nada', () => {
+    expect(verdictFor({ level: 'baja', day: 'rest', hrvLow: false })?.text).toContain('necesitas recuperar');
+    expect(verdictFor({ level: 'alta', day: 'rest', hrvLow: false })?.text).toBe('Vas muy bien de recuperación');
+    expect(verdictFor({ level: null, day: 'training', hrvLow: false })).toBeNull();
+    expect(verdictFor({ level: 'alta', day: 'trained', hrvLow: false })).toBeNull();
+  });
+});
+
 describe('qué cambia hoy y qué solo se apunta', () => {
   const base: ReadinessCheck = { date: D, sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' };
   const knee: PainFlag = { id: 'k', area: 'rodilla', createdDate: '2026-03-01', until: null };
-  const input = { check: base, day: 'training' as const, hasAccessory: true, factor: 1, flags: [], restingHrBaseline: null };
+  const input = { check: base, day: 'training' as const, hasAccessory: true, factor: 1, flags: [], hrv: computeHrvPart([], D) };
   const texts = (lines: { text: string }[]) => lines.map((l) => l.text);
 
   it('el factor del check-in sube, baja o mantiene la carga', () => {
@@ -235,14 +255,50 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     expect(texts(describeMorning({ ...input, rest: { credit: 0, streak: 1, restDays: 1 } }).changes).some((t) => t.includes('Descansaste'))).toBe(false);
   });
 
-  it('el sueño corto y el pulso solo se apuntan, y no inventa nada si no hay nada', () => {
-    const r = describeMorning({ ...input, check: { ...base, sleepHours: 6.5, restingHr: 60 }, restingHrBaseline: 54 });
-    expect(texts(r.notes)).toEqual([
-      'Sueño corto (6 h 30): lo apunto para aprender cuánto te afecta',
-      'Pulso 60 ppm, por encima de tu media: lo apunto, aún no cambia tu carga',
-    ]);
+  it('el sueño corto solo se apunta, y no inventa nada si no hay nada', () => {
+    const r = describeMorning({ ...input, check: { ...base, sleepHours: 6.5 } });
+    expect(texts(r.notes)).toEqual(['Sueño corto (6 h 30): lo apunto para aprender cuánto te afecta']);
     const quiet = describeMorning({ ...input, day: 'trained' });
     expect(texts(quiet.changes)).toEqual([]);
     expect(texts(quiet.notes)).toEqual(['Nada más cambia hoy']);
+  });
+
+  describe('HRV y pulso', () => {
+    const prior = (hrv: number, hr: number, days: number): ReadinessCheck[] =>
+      Array.from({ length: days }, (_, i) => {
+        const d = new Date('2026-03-09T12:00:00');
+        d.setDate(d.getDate() - i);
+        // ±12 ms de variación día a día: un rango de unos 55–74 ms, que una sola medición baja no arrastra por sí sola
+        return { ...base, date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, hrv: hrv + (i % 2 === 0 ? 12 : -12), restingHr: hr };
+      });
+    const describeWith = (log: ReadinessCheck[], check: ReadinessCheck) => describeMorning({ ...input, check, hrv: computeHrvPart([...log, check], D) });
+
+    it('sin rango solo se apunta y dice cuántas mediciones llevas', () => {
+      const check = { ...base, hrv: 64, restingHr: 67 };
+      const r = describeWith(prior(64, 60, 3), check);
+      expect(texts(r.notes)).toContain('HRV 64 ms apuntada: llevas 4 de 14 mediciones para calcular tu rango normal');
+      // El pulso tiene su propia media (3 mediciones) y resta aunque la HRV aún no tenga rango.
+      expect(texts(r.changes)).toContain('Pulso 67 ppm, 7 por encima de tu media (60): resta 2 puntos a tu preparación');
+    });
+
+    it('con el pulso como tu media solo se apunta', () => {
+      const r = describeWith(prior(64, 55, 3), { ...base, restingHr: 56 });
+      expect(texts(r.notes)).toContain('Pulso 56 ppm, como tu media (55)');
+    });
+
+    it('con rango, una HRV dentro de él no cambia nada, y una por debajo resta y cuenta como señal en contra de la carga', () => {
+      const log = prior(64, 55, 20);
+      const ok = describeWith(log, { ...base, hrv: 64, restingHr: 55, hrvVs: 'normal' });
+      expect(texts(ok.notes).some((t) => t.startsWith('HRV 64 ms, dentro de tu rango'))).toBe(true);
+      expect(texts(ok.changes).some((t) => t.includes('HRV'))).toBe(false);
+      const low = describeWith(log, { ...base, hrv: 40, restingHr: 55, hrvVs: 'bajo' });
+      expect(texts(low.changes).some((t) => /^Tu HRV de hoy \(40 ms, por debajo de tu rango \(\d+–\d+\)\): resta 3 puntos a tu preparación$/.test(t))).toBe(true);
+      expect(texts(low.changes)).toContain('Una HRV baja cuenta como una señal en contra para la carga de hoy');
+    });
+
+    it('un pulso alto frente a tu media resta puntos', () => {
+      const r = describeWith(prior(64, 55, 20), { ...base, hrv: 64, restingHr: 62 });
+      expect(texts(r.changes)).toContain('Pulso 62 ppm, 7 por encima de tu media (55): resta 2 puntos a tu preparación');
+    });
   });
 });

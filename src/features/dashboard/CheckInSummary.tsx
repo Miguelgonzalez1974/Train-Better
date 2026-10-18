@@ -1,4 +1,4 @@
-import { Moon } from 'lucide-react';
+import { HeartPulse, Moon } from 'lucide-react';
 import type { ReadinessCheck } from '../../data/athlete/types';
 import { getReadinessFactor, scoreCheck, type CheckInOverall } from '../../engine/readiness';
 import { formatSleep } from '../../engine/habits';
@@ -26,6 +26,12 @@ export function CheckInSummary({ check, onEdit }: { check: ReadinessCheck; onEdi
         Llegas <span className="font-semibold text-neutral-200">{WORD[o]}</span>
       </span>
       <span>{pct === 0 ? 'Carga de hoy sin cambios' : `Carga de hoy ${pct > 0 ? '+' : '−'}${Math.abs(pct)} %`}</span>
+      {check.hrv !== undefined && (
+        <span className="flex items-center gap-1">
+          <HeartPulse size={12} strokeWidth={2.25} aria-hidden="true" />
+          HRV {check.hrv}
+        </span>
+      )}
       {check.sleepHours !== undefined && (
         <span className="flex items-center gap-1">
           <Moon size={12} strokeWidth={2.25} style={{ color: 'rgb(var(--c-sleep))' }} aria-hidden="true" />

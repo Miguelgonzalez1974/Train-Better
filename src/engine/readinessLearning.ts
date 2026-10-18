@@ -10,7 +10,7 @@ import { RECOVERY_AXIS_LABEL, type RecoveryAxisKey } from './recovery';
  * Correlación, no causa: el RPE también depende de lo duro que fuese el día programado.
  */
 
-export type LearnedFactorKey = RecoveryAxisKey | 'sleepHours' | `habit:${HabitTag}`;
+export type LearnedFactorKey = RecoveryAxisKey | 'sleepHours' | 'hrv' | `habit:${HabitTag}`;
 
 export interface LearnedInsight {
   key: LearnedFactorKey;
@@ -40,7 +40,8 @@ export const LEARNING_MIN_PAIRS = 12;
 const MIN_GROUP = 3;
 const SHORT_SLEEP_HOURS = 6.5;
 
-const CONDITION: Record<RecoveryAxisKey | 'sleepHours', string> = {
+const CONDITION: Record<RecoveryAxisKey | 'sleepHours' | 'hrv', string> = {
+  hrv: 'tu HRV cae por debajo de tu rango',
   sleep: 'duermes mal',
   soreness: 'llegas con agujetas altas',
   stress: 'vas con estrés alto',
@@ -80,8 +81,8 @@ export function computeReadinessLearning(log: ReadinessCheck[] | undefined, hist
     const habit = key.startsWith('habit:') ? (key.slice(6) as HabitTag) : null;
     result.insights.push({
       key,
-      label: habit ? HABIT_LABEL[habit] : key === 'sleepHours' ? 'Horas de sueño' : RECOVERY_AXIS_LABEL[key as RecoveryAxisKey],
-      condition: habit ? HABIT_CONDITION[habit] : CONDITION[key as RecoveryAxisKey | 'sleepHours'],
+      label: habit ? HABIT_LABEL[habit] : key === 'sleepHours' ? 'Horas de sueño' : key === 'hrv' ? 'HRV' : RECOVERY_AXIS_LABEL[key as RecoveryAxisKey],
+      condition: habit ? HABIT_CONDITION[habit] : CONDITION[key as RecoveryAxisKey | 'sleepHours' | 'hrv'],
       nBad: bad.length,
       nOk: ok.length,
       rpeBad: round1(rpeBad),
@@ -94,6 +95,8 @@ export function computeReadinessLearning(log: ReadinessCheck[] | undefined, hist
     split(key, (p) => readinessAxisScores(p.check)[key] <= -1);
   }
   split('sleepHours', (p) => (p.check.sleepHours === undefined ? null : p.check.sleepHours < SHORT_SLEEP_HOURS));
+  // HRV: solo cuentan los días con rango (`hrvVs`): por debajo de tu rango frente a dentro o por encima.
+  split('hrv', (p) => (p.check.hrvVs === undefined ? null : p.check.hrvVs === 'bajo'));
   // Hábitos: solo cuentan los días en que los anotaste (ausente = no sé; vacío = ninguno).
   for (const tag of HABIT_ORDER) {
     split(`habit:${tag}`, (p) => (p.check.habits === undefined ? null : p.check.habits.includes(tag)));

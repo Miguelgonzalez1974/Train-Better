@@ -1,6 +1,7 @@
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, PainFlag, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
-import { checkFromCard, describeMorning, restingHrBaseline, type CardAnswers, type MorningLine } from '../../engine/morningCheckIn';
+import { computeHrvStatus, hrvVsOf } from '../../engine/hrv';
+import { checkFromCard, describeMorning, verdictFor, type CardAnswers, type MorningLine, type MorningVerdict } from '../../engine/morningCheckIn';
 import { applyPainFollowUps, getActivePainFlags, prunePainFlags, type PainFollowUp } from '../../engine/painFlags';
 import { getReadinessCheckForDate, getReadinessFactor } from '../../engine/readiness';
 import { computeReadinessScore } from '../../engine/readinessScore';
@@ -8,6 +9,8 @@ import { ensureStrainTarget } from '../../engine/strainTarget';
 import { refreshTodaySession, resolveTodaySession } from '../dashboard/todaySession';
 
 export interface MorningResult {
+  /** Cómo llegas a entrenar, en una frase (null si ya entrenaste hoy o aún no hay nota). */
+  verdict: MorningVerdict | null;
   /** Nota de preparación de hoy con lo que acabas de contar (null si aún no hay datos para calcularla). */
   readiness: number | null;
   /** Objetivo de esfuerzo de hoy; null en días de descanso o si ya entrenaste. */
@@ -36,6 +39,9 @@ export function commitMorning(
   if (JSON.stringify(painFlags) !== JSON.stringify(before.painFlags ?? [])) athleteRepository.saveProfile({ ...before, painFlags });
 
   const check: ReadinessCheck = { ...checkFromCard(todayIso, answers), ...(previous?.habits ? { habits: previous.habits } : {}) };
+  // Dónde cae tu HRV frente a tu rango: se guarda con el check-in para que el factor de carga y lo que aprende el coach la lean.
+  const hrvVs = hrvVsOf(computeHrvStatus([...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check], todayIso));
+  if (hrvVs) check.hrvVs = hrvVs;
   athleteRepository.saveReadinessCheck(check);
 
   // El objetivo provisional se rehace con el check-in y queda fijo; la sesión de hoy se recalcula con todo lo nuevo.
@@ -65,8 +71,9 @@ function buildResult(
     hasAccessory: Boolean(session?.blocks.some((b) => b.block === 'accessory')),
     factor: getReadinessFactor(check).factor,
     flags,
-    restingHrBaseline: restingHrBaseline(profile.readinessLog, todayIso),
+    hrv: score.hrv,
     rest: score.rest,
   });
-  return { readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
+  const hrvLow = check.hrvVs === 'bajo' || score.hrv.hrPenalty > 0;
+  return { verdict: verdictFor({ level: score.level, day, hrvLow }), readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
 }

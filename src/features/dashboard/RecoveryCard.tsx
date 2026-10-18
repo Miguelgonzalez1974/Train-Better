@@ -73,6 +73,21 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
           </div>
           <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.load.detail}</p>
         </div>
+        {/* HRV y pulso de la mañana frente a tu rango y tu media: solo restan cuando caen fuera, y la HRV solo con rango. */}
+        {readiness.hrv.detail !== '' && (
+          <div>
+            <div className="flex items-baseline gap-3">
+              <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">Tu HRV</span>
+              <span className="flex-1 text-[11px] text-neutral-500">
+                {readiness.hrv.status.state === 'listo' ? (readiness.hrv.penalty > 0 ? 'resta a la nota' : 'no resta nada') : 'reuniendo datos'}
+              </span>
+              <span className="num w-9 shrink-0 text-right text-sm font-semibold" style={{ color: readiness.hrv.penalty > 0 ? RECOVERY_LOW : RECOVERY_GOOD }}>
+                {readiness.hrv.penalty > 0 ? `−${readiness.hrv.penalty}` : '0'}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.hrv.detail}</p>
+          </div>
+        )}
         {/* El descanso de ayer suma: haber parado tras una racha de días entrenando (y dormir bien hoy) sube un poco la nota. */}
         {readiness.rest.credit > 0 && (
           <div>

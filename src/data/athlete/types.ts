@@ -203,8 +203,12 @@ export interface ReadinessCheck {
   motivationLevel?: number;
   /** Agujetas por zona (1 = leves, 2 = fuertes); una zona sin entrada no tiene. El eje `soreness` sale de aquí y el accesorio de hoy se ajusta (ver `engine/morningCheckIn.ts`). */
   soreZones?: Partial<Record<SoreZoneId, SoreLevelNum>>;
-  /** Pulso en reposo de la mañana (ppm), si lo mide. Solo se guarda: aún no cambia la carga. */
+  /** Pulso en reposo de la mañana (ppm), si lo mide (con la medición de HRV, mejor). Se compara con tu media (ver `engine/hrv.ts`). */
   restingHr?: number;
+  /** HRV de la mañana como rMSSD en milisegundos (p. ej. el de HRV4Training con la cámara del móvil). Se compara con tu rango normal (ver `engine/hrv.ts`). */
+  hrv?: number;
+  /** Cómo estaba tu HRV frente a tu rango cuando contestaste (media de 7 días si la había, si no la de hoy). `bajo` cuenta como una señal en contra para la carga de hoy. Ausente = aún sin rango. */
+  hrvVs?: 'bajo' | 'normal' | 'alto';
 }
 
 /** Zonas de la silueta donde se marcan agujetas (izquierda y derecha por separado). */

@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Bell, Brain, Check, Equal, Flame, Frown, Hea
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { SoreLevelNum, SoreZoneId } from '../../data/athlete/types';
 import { formatSleep, SLEEP_OK_FROM } from '../../engine/habits';
-import { hasAnyAnswer, answersFromCheck, restingHrBaseline, type CardAnswers, type MorningIcon, type MorningLine, type MorningTone } from '../../engine/morningCheckIn';
+import { hasAnyAnswer, answersFromCheck, type CardAnswers, type MorningIcon, type MorningLine, type MorningTone } from '../../engine/morningCheckIn';
 import { getActivePainFlags, PAIN_AREA_LABEL, type PainFollowUp } from '../../engine/painFlags';
 import type { CheckInOverall } from '../../engine/readiness';
 import { getReadinessCheckForDate } from '../../engine/readiness';
@@ -11,6 +11,7 @@ import { toLocalIsoDate } from '../../engine/periodization';
 import { recoveryColor } from '../dashboard/RecoveryCard';
 import { ACCENT as EFFORT } from '../dashboard/StrainRing';
 import { BodyMap, SORE_COLOR } from './BodyMap';
+import { HrvInputs } from './HrvInputs';
 import { commitMorning, type MorningResult } from './morningCommit';
 
 const GOOD = 'rgb(var(--c-state-good))';
@@ -19,7 +20,6 @@ const LOW = 'rgb(var(--c-state-low))';
 const HOT = 'rgb(var(--c-state-hot))';
 const SLEEP = 'rgb(var(--c-sleep))';
 const DEFAULT_HOURS = 7.5;
-const DEFAULT_HR = 55;
 
 const OVERALL: { value: CheckInOverall; label: string; Icon: typeof Smile; color: string }[] = [
   { value: 'bien', label: 'Bien', Icon: Smile, color: GOOD },
@@ -166,7 +166,7 @@ interface MorningCardProps {
 
 /**
  * La tarjeta de la mañana: una sola pantalla compacta con todo lo que el coach necesita saber de hoy — cómo amaneces, cómo
- * siguen tus molestias, sueño, agujetas por zona, estrés, motivación y pulso en reposo — y, al terminar, los anillos del día y la
+ * siguen tus molestias, sueño, agujetas por zona, estrés, motivación, HRV y pulso en reposo — y, al terminar, los anillos del día y la
  * lista honesta de qué cambia hoy y qué solo se apunta. Sale al abrir la app cada día (también en descanso) y "Más tarde" la
  * deja como una pastilla en el Resumen.
  */
@@ -175,7 +175,6 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
   const profile = useMemo(() => athleteRepository.getProfile(), []);
   const history = useMemo(() => athleteRepository.getHistory(), []);
   const activeFlags = useMemo(() => getActivePainFlags(profile.painFlags, todayIso), [profile.painFlags, todayIso]);
-  const baseline = useMemo(() => restingHrBaseline(profile.readinessLog, todayIso), [profile.readinessLog, todayIso]);
 
   const [answers, setAnswers] = useState<CardAnswers>(() => answersFromCheck(getReadinessCheckForDate(profile.readinessLog, todayIso)));
   const [followUps, setFollowUps] = useState<Record<string, PainFollowUp>>({});
@@ -202,9 +201,6 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
   function stepHours(delta: number) {
     setAnswers((a) => ({ ...a, hours: Math.min(12, Math.max(3, (a.hours ?? DEFAULT_HOURS) + delta)) }));
   }
-  function stepHr(delta: number) {
-    setAnswers((a) => ({ ...a, restingHr: Math.min(120, Math.max(30, (a.restingHr ?? baseline ?? DEFAULT_HR) + delta)) }));
-  }
   /** Tocar una zona: sin agujetas → leves → fuertes → sin agujetas. */
   function cycleZone(id: SoreZoneId) {
     setAnswers((a) => {
@@ -228,6 +224,11 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
               <p className={`mt-2 text-center ${LABEL}`} style={{ color: result.readiness !== null ? recoveryColor(result.readiness) : undefined }}>
                 Preparación
               </p>
+              {result.verdict && (
+                <p className="mx-auto mt-2 max-w-[19rem] text-center text-[15px] font-semibold leading-snug" style={{ color: result.verdict.tone === 'good' ? GOOD : result.verdict.tone === 'bad' ? LOW : MID }}>
+                  {result.verdict.text}
+                </p>
+              )}
               <p className="mt-1 text-center text-[13px]">
                 {result.target ? (
                   <>
@@ -368,26 +369,7 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
               <Section icon={<Brain size={13} aria-hidden="true" />} label="Mente" className="flex min-w-0 flex-1 flex-col justify-between gap-2.5">
                 <Scale label="Estrés" words={['Muy bajo', 'Bajo', 'Medio', 'Alto', 'Muy alto']} value={answers.stress} onChange={(v) => patch({ stress: v })} />
                 <Scale label="Motivación" words={['Muy baja', 'Baja', 'Media', 'Alta', 'Muy alta']} value={answers.motivation} onChange={(v) => patch({ motivation: v })} />
-                <div className="border-t border-white/[0.07] pt-2">
-                  <p className={`mb-1.5 flex items-center gap-1.5 ${LABEL}`}>
-                    <HeartPulse size={12} aria-hidden="true" />
-                    Pulso en reposo
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <RoundButton onClick={() => stepHr(-1)} label="Menos pulsaciones" small>
-                      <Minus size={14} />
-                    </RoundButton>
-                    <div className="text-center">
-                      <p className="num text-lg font-semibold leading-none" style={{ color: answers.restingHr === undefined ? 'rgb(var(--c-white) / 0.3)' : 'rgb(var(--c-white))' }}>
-                        {answers.restingHr ?? '—'} <span className="text-[11px] font-normal text-neutral-500">ppm</span>
-                      </p>
-                      {baseline !== null && <p className="mt-0.5 text-[10.5px] text-neutral-500">Tu media: {baseline}</p>}
-                    </div>
-                    <RoundButton onClick={() => stepHr(1)} label="Más pulsaciones" small>
-                      <Plus size={14} />
-                    </RoundButton>
-                  </div>
-                </div>
+                <HrvInputs hrv={answers.hrv} hr={answers.restingHr} log={profile.readinessLog ?? []} todayIso={todayIso} onChange={patch} />
               </Section>
             </div>
 

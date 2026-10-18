@@ -3,6 +3,7 @@ import { computeAcwr } from './loadMetrics';
 import { PAIN_AREA_LABEL, getActivePainFlags } from './painFlags';
 import { computeRecoverySummary, type RecoveryLevel, type RecoverySummary } from './recovery';
 import { getReadinessCheckForDate } from './readiness';
+import { computeHrvPart, type HrvPart } from './hrv';
 
 /**
  * "Cómo estás de recuperado hoy", más allá del check-in: junto a lo que DICES que sientes (60 %) entra cómo te está saliendo
@@ -31,6 +32,8 @@ export interface ReadinessScore {
   loadPenalty: number;
   /** El descanso de ayer: lo que suma a la nota haber parado tras una racha de días entrenando (ver `restPart`). */
   rest: RestPart;
+  /** HRV y pulso de la mañana frente a tu rango y tu media: solo restan, y solo con rango (ver `computeHrvPart`). */
+  hrv: HrvPart;
   performance: ReadinessPart;
   pain: { count: number; areas: string[]; penalty: number };
   /** La lectura del check-in (barras por día, ejes...) — la tarjeta la sigue enseñando debajo. */
@@ -216,16 +219,17 @@ export function computeReadinessScore(input: {
 
   const pain = { count: areas.length, areas, penalty };
   const rest = restPart(input.history, todayIso, getReadinessCheckForDate(input.readinessLog, todayIso));
+  const hrv = computeHrvPart(input.readinessLog, todayIso);
   const available = (['feel', 'performance'] as const).filter((k) => ({ feel, performance })[k].score !== null);
   if (available.length === 0) {
-    return { total: null, level: null, estimated: false, feel, load, loadPenalty: load.penalty, rest, performance, pain, checkins };
+    return { total: null, level: null, estimated: false, feel, load, loadPenalty: load.penalty, rest, hrv, performance, pain, checkins };
   }
   const weightSum = available.reduce((s, k) => s + WEIGHT[k], 0);
   const raw = available.reduce((s, k) => s + ({ feel, performance })[k].score! * WEIGHT[k], 0) / weightSum;
   // La carga no es una parte que se promedie: es un LÍMITE. Una carga alta (o muchos días seguidos sin descansar) resta,
   // y una carga baja u óptima no suma nada — así unos buenos check-ins no pueden tapar que vas pasado de carga. El descanso
   // de ayer, en cambio, suma un poco (ver `restPart`).
-  const total = clamp(raw - penalty - load.penalty + rest.credit);
+  const total = clamp(raw - penalty - load.penalty + rest.credit - hrv.penalty);
   const level: RecoveryLevel = total >= HIGH_FROM ? 'alta' : total <= LOW_UNTIL ? 'baja' : 'normal';
-  return { total, level, estimated: feel.score === null, feel, load, loadPenalty: load.penalty, rest, performance, pain, checkins };
+  return { total, level, estimated: feel.score === null, feel, load, loadPenalty: load.penalty, rest, hrv, performance, pain, checkins };
 }

@@ -35,7 +35,7 @@ export function scoreCheck(check: ReadinessCheck): number {
 
 /**
  * Cuarta senal de autorregulacion, independiente de ACWR y RPE reciente: el check-in diario de
- * sueno, agujetas, estres y motivacion. Un coach real no cambia el peso del dia porque un unico eje
+ * sueno, agujetas, estres y motivacion (y, si la mides, la HRV frente a tu rango). Un coach real no cambia el peso del dia porque un unico eje
  * ande regular — pero dos o mas ejes en contra a la vez si son una senal real de que hoy no es el
  * dia de forzar. El factor resultante entra en `combineAutoregFactors` junto a ACWR y RPE, que ya
  * tiene un suelo y un techo (0.7-1.05) — este check-in nunca puede mover la carga fuera de ese rango
@@ -44,7 +44,8 @@ export function scoreCheck(check: ReadinessCheck): number {
  */
 export function getReadinessFactor(check: ReadinessCheck | undefined): ReadinessAutoregResult {
   if (!check) return { factor: 1, isLow: false };
-  const score = scoreCheck(check);
+  // Una HRV por debajo de tu rango pesa como un eje más en contra (ver `engine/hrv.ts`); una normal o alta no suma nada.
+  const score = scoreCheck(check) + (check.hrvVs === 'bajo' ? -1 : 0);
 
   if (score <= READINESS_LOW_THRESHOLD) {
     return {

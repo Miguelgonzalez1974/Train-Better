@@ -26,6 +26,7 @@ import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildWeekWindow } from './pastDay';
 import { ReadinessTrendChart, WeekEffortChart } from './WeekCharts';
+import { HrvChart } from './HrvChart';
 import { SleepTab } from './SleepHabits';
 import { StrainDetail } from './StrainRing';
 import { RecoveryDetail } from './RecoveryCard';
@@ -388,6 +389,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {tab === 'preparacion' && (
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
           <ReadinessTrendChart series={readinessSeries} selectedIso={dayIso} onSelect={setDayIso} />
+          <HrvChart log={profile.readinessLog ?? []} dayIso={dayIso} />
           <div className="flex flex-col gap-7 rounded-2xl bg-white/[0.03] p-5">
             {isToday && todayReadiness && <CheckInSummary check={todayReadiness} onEdit={onOpenMorning} />}
             <RecoveryDetail readiness={shown.readiness} />

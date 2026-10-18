@@ -1,6 +1,7 @@
 import type { PainFlag, ReadinessCheck, SoreLevelNum, SoreZoneId } from '../data/athlete/types';
 import { checkFromQuickAnswer, type CheckInOverall } from './readiness';
 import { PAIN_AREA_AVOID_TEXT, PAIN_AREA_LABEL, type PainFollowUp } from './painFlags';
+import { VS_WORD, type HrvPart } from './hrv';
 
 /**
  * Lógica de la tarjeta de la mañana: cómo sus respuestas (Bien/Normal/Mal, sueño, agujetas por zona, estrés, motivación,
@@ -104,6 +105,8 @@ export interface CardAnswers {
   motivation?: number;
   soreZones?: Partial<Record<SoreZoneId, SoreLevelNum>>;
   restingHr?: number;
+  /** rMSSD de la medición de la mañana, en ms. */
+  hrv?: number;
 }
 
 /** True si la tarjeta lleva alguna respuesta (si no, no hay nada que guardar). */
@@ -115,6 +118,7 @@ export function hasAnyAnswer(a: CardAnswers): boolean {
     a.stress !== undefined ||
     a.motivation !== undefined ||
     a.restingHr !== undefined ||
+    a.hrv !== undefined ||
     Object.keys(a.soreZones ?? {}).length > 0
   );
 }
@@ -156,6 +160,7 @@ export function checkFromCard(dateIso: string, a: CardAnswers): ReadinessCheck {
   if (a.motivation !== undefined) check.motivationLevel = a.motivation;
   if (zones.length > 0) check.soreZones = Object.fromEntries(zones) as ReadinessCheck['soreZones'];
   if (a.restingHr !== undefined) check.restingHr = a.restingHr;
+  if (a.hrv !== undefined) check.hrv = a.hrv;
   return check;
 }
 
@@ -170,21 +175,11 @@ export function answersFromCheck(check: ReadinessCheck | undefined): CardAnswers
     motivation: check.motivationLevel,
     soreZones: check.soreZones,
     restingHr: check.restingHr,
+    hrv: check.hrv,
   };
 }
 
-const BASELINE_DAYS = 14;
-const BASELINE_MIN_SAMPLES = 3;
-
-/** Tu pulso en reposo medio de las últimas dos semanas (sin contar hoy); null si hay menos de 3 mediciones. */
-export function restingHrBaseline(log: ReadinessCheck[] | undefined, todayIso: string): number | null {
-  const from = new Date(`${todayIso}T12:00:00`);
-  from.setDate(from.getDate() - BASELINE_DAYS);
-  const fromIso = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
-  const values = (log ?? []).filter((c) => c.restingHr !== undefined && c.date >= fromIso && c.date < todayIso).map((c) => c.restingHr as number);
-  if (values.length < BASELINE_MIN_SAMPLES) return null;
-  return Math.round(values.reduce((s, v) => s + v, 0) / values.length);
-}
+export { restingHrBaseline } from './hrv';
 
 export type MorningTone = 'good' | 'mid' | 'warn' | 'bad' | 'sleep' | 'info' | 'neutral';
 export type MorningIcon = 'trend-up' | 'trend-down' | 'equal' | 'moon' | 'shield' | 'shield-check' | 'flame' | 'brain' | 'heart' | 'bell' | 'check';
@@ -192,6 +187,27 @@ export interface MorningLine {
   icon: MorningIcon;
   tone: MorningTone;
   text: string;
+}
+
+export interface MorningVerdict {
+  text: string;
+  tone: 'good' | 'mid' | 'bad';
+}
+
+/**
+ * La frase que resume cómo llegas a entrenar, a partir de la nota de preparación de hoy (su nivel), de si hay una HRV por debajo
+ * de tu rango o un pulso alto, y de si hay sesión. Es lo primero que lees al terminar la tarjeta.
+ */
+export function verdictFor(input: { level: 'alta' | 'normal' | 'baja' | null; day: 'training' | 'rest' | 'trained'; hrvLow: boolean }): MorningVerdict | null {
+  const { level, day, hrvLow } = input;
+  if (level === null || day === 'trained') return null;
+  const low = level === 'baja' || (level === 'normal' && hrvLow);
+  if (day === 'rest') {
+    if (low) return { text: 'Hoy necesitas recuperar: duerme y come bien, y nada de extras', tone: 'bad' };
+    return level === 'alta' ? { text: 'Vas muy bien de recuperación', tone: 'good' } : { text: 'Vas normal de recuperación: descansa tranquilo', tone: 'mid' };
+  }
+  if (low) return { text: 'Llegas justo: entrena sin pasarte del objetivo y escucha al cuerpo', tone: 'bad' };
+  return level === 'alta' ? { text: 'Llegas bien: buen día para apretar', tone: 'good' } : { text: 'Llegas normal: entrena como está previsto', tone: 'mid' };
 }
 
 export interface MorningDescribeInput {
@@ -204,7 +220,8 @@ export interface MorningDescribeInput {
   factor: number;
   /** Avisos de molestia que había vigentes al abrir la tarjeta y lo que contestaste de cada uno (sin contestar = sigue). */
   flags: { flag: PainFlag; answer: PainFollowUp | null }[];
-  restingHrBaseline: number | null;
+  /** HRV y pulso de hoy frente a tu rango y tu media (ver `computeHrvPart`). */
+  hrv: HrvPart;
   /** El descanso de ayer (ver `restPart`): si suma a la nota de hoy, se cuenta como uno de los cambios. */
   rest?: { credit: number; streak: number; restDays: number };
 }
@@ -217,10 +234,11 @@ const fmtHours = (h: number) => {
 /**
  * Lo que de verdad cambia hoy por lo que has contado (`changes`) y lo que solo se apunta para aprender (`notes`). No promete
  * nada que el motor no haga: las agujetas recortan el accesorio, los avisos de molestia evitan sus movimientos, el check-in
- * mueve la carga con el factor de siempre; sueño corto, pulso y hábitos solo se anotan.
+ * mueve la carga con el factor de siempre; HRV y pulso restan a la preparación cuando caen fuera de tu rango; el sueño corto
+ * solo se anota para aprender.
  */
 export function describeMorning(input: MorningDescribeInput): { changes: MorningLine[]; notes: MorningLine[] } {
-  const { check, day, hasAccessory, factor, flags, restingHrBaseline: baseline, rest } = input;
+  const { check, day, hasAccessory, factor, flags, hrv, rest } = input;
   const changes: MorningLine[] = [];
   const notes: MorningLine[] = [];
   const seen = new Set<string>();
@@ -267,10 +285,35 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
     const what = check.sleepHours !== undefined && check.sleepHours < 7 ? `Sueño corto (${fmtHours(check.sleepHours)})` : 'Sueño de mala calidad';
     add(notes, { icon: 'moon', tone: 'sleep', text: `${what}: lo apunto para aprender cuánto te afecta` });
   }
-  if (check.restingHr !== undefined) {
-    const high = baseline !== null && check.restingHr >= baseline + 5;
-    add(notes, { icon: 'heart', tone: 'neutral', text: `Pulso ${check.restingHr} ppm${high ? ', por encima de tu media' : ''}: lo apunto, aún no cambia tu carga` });
+
+  // HRV y pulso: con rango resta si cae por debajo (y una HRV baja pesa como señal en contra para la carga); sin rango solo se cuenta.
+  const { status } = hrv;
+  if (status.today) {
+    const { rmssd } = status.today;
+    if (status.state === 'listo' && status.range) {
+      const where = `${rmssd} ms, ${VS_WORD[status.today.vs ?? 'normal']} (${status.range.low}–${status.range.high})`;
+      if (hrv.hrvPenalty > 0) {
+        const base = status.week?.vs === 'bajo' ? `Tu HRV de la semana (${status.week.avg} ms) está por debajo de tu rango` : `Tu HRV de hoy (${where})`;
+        add(changes, { icon: 'heart', tone: 'warn', text: `${base}: resta ${hrv.hrvPenalty} ${hrv.hrvPenalty === 1 ? 'punto' : 'puntos'} a tu preparación` });
+        if (day === 'training' && check.hrvVs === 'bajo') add(changes, { icon: 'trend-down', tone: 'warn', text: 'Una HRV baja cuenta como una señal en contra para la carga de hoy' });
+      } else {
+        add(notes, { icon: 'heart', tone: status.today.vs === 'bajo' ? 'warn' : 'good', text: `HRV ${where}${status.today.vs === 'bajo' ? '' : ': sin cambios'}` });
+      }
+    } else {
+      const left = Math.max(0, status.needed - status.n);
+      add(notes, {
+        icon: 'heart',
+        tone: 'neutral',
+        text: left > 0 ? `HRV ${rmssd} ms apuntada: llevas ${status.n} de ${status.needed} mediciones para calcular tu rango normal` : `HRV ${rmssd} ms apuntada: mañana ya tendrás tu rango normal`,
+      });
+    }
   }
+  if (status.hr.today !== null) {
+    const { today: hr, baseline, delta } = status.hr;
+    if (hrv.hrPenalty > 0) add(changes, { icon: 'heart', tone: 'warn', text: `Pulso ${hr} ppm, ${delta} por encima de tu media (${baseline}): resta ${hrv.hrPenalty} ${hrv.hrPenalty === 1 ? 'punto' : 'puntos'} a tu preparación` });
+    else add(notes, { icon: 'heart', tone: 'neutral', text: baseline !== null ? `Pulso ${hr} ppm, como tu media (${baseline})` : `Pulso ${hr} ppm: lo apunto para calcular tu media` });
+  }
+
   const pending = flags.filter(({ answer }) => answer !== 'paso');
   if (pending.length > 0) add(notes, { icon: 'bell', tone: 'info', text: `Mañana te preguntaré otra vez por ${pending.map(({ flag }) => PAIN_AREA_LABEL[flag.area].toLowerCase()).join(' y ')}` });
 
