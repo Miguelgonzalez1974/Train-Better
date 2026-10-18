@@ -73,6 +73,19 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
           </div>
           <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.load.detail}</p>
         </div>
+        {/* El descanso de ayer suma: haber parado tras una racha de días entrenando (y dormir bien hoy) sube un poco la nota. */}
+        {readiness.rest.credit > 0 && (
+          <div>
+            <div className="flex items-baseline gap-3">
+              <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">Tu descanso</span>
+              <span className="flex-1 text-[11px] text-neutral-500">suma a la nota</span>
+              <span className="num w-9 shrink-0 text-right text-sm font-semibold" style={{ color: RECOVERY_GOOD }}>
+                +{readiness.rest.credit}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.rest.detail}</p>
+          </div>
+        )}
         {readiness.pain.count > 0 && (
           <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
             <HeartPulse size={12} className="shrink-0 text-red-400" aria-hidden="true" />

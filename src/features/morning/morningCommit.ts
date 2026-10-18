@@ -57,7 +57,7 @@ function buildResult(
   const trained = history.some((h) => h.date === todayIso);
   const session = trained ? null : resolveTodaySession(profile, history, todayIso);
   const day: MorningResult['day'] = trained ? 'trained' : session && !session.isRestDay ? 'training' : 'rest';
-  const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) }).total;
+  const score = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) });
   const stored = profile.strainTargets?.[todayIso];
   const { changes, notes } = describeMorning({
     check,
@@ -66,6 +66,7 @@ function buildResult(
     factor: getReadinessFactor(check).factor,
     flags,
     restingHrBaseline: restingHrBaseline(profile.readinessLog, todayIso),
+    rest: score.rest,
   });
-  return { readiness, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
+  return { readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
 }

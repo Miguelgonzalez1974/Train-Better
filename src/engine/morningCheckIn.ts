@@ -205,6 +205,8 @@ export interface MorningDescribeInput {
   /** Avisos de molestia que había vigentes al abrir la tarjeta y lo que contestaste de cada uno (sin contestar = sigue). */
   flags: { flag: PainFlag; answer: PainFollowUp | null }[];
   restingHrBaseline: number | null;
+  /** El descanso de ayer (ver `restPart`): si suma a la nota de hoy, se cuenta como uno de los cambios. */
+  rest?: { credit: number; streak: number; restDays: number };
 }
 
 const fmtHours = (h: number) => {
@@ -218,7 +220,7 @@ const fmtHours = (h: number) => {
  * mueve la carga con el factor de siempre; sueño corto, pulso y hábitos solo se anotan.
  */
 export function describeMorning(input: MorningDescribeInput): { changes: MorningLine[]; notes: MorningLine[] } {
-  const { check, day, hasAccessory, factor, flags, restingHrBaseline: baseline } = input;
+  const { check, day, hasAccessory, factor, flags, restingHrBaseline: baseline, rest } = input;
   const changes: MorningLine[] = [];
   const notes: MorningLine[] = [];
   const seen = new Set<string>();
@@ -234,6 +236,12 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
     if (factor > 1) add(changes, { icon: 'trend-up', tone: 'good', text: `Subo la intensidad un ${pct} %, el último tramo de la sesión` });
     else if (factor < 1) add(changes, { icon: 'trend-down', tone: 'bad', text: `Reduzco la carga de hoy un ${pct} %` });
     else add(changes, { icon: 'equal', tone: 'mid', text: 'Mantengo la carga prevista' });
+  }
+
+  if (rest && rest.credit > 0) {
+    const when = rest.restDays === 1 ? 'Descansaste ayer' : `Llevas ${rest.restDays} días de descanso`;
+    const after = rest.streak >= 2 ? ` tras ${rest.streak} días seguidos` : '';
+    add(changes, { icon: 'moon', tone: 'good', text: `${when}${after}: suma ${rest.credit} ${rest.credit === 1 ? 'punto' : 'puntos'} a tu preparación` });
   }
 
   for (const { flag, answer } of flags) {

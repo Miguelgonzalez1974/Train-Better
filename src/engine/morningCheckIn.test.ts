@@ -227,6 +227,14 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     expect(texts(paso.notes).some((t) => t.startsWith('Mañana'))).toBe(false);
   });
 
+  it('el descanso de ayer cuenta como un cambio cuando suma a la nota, y no sale si no suma', () => {
+    const r = describeMorning({ ...input, rest: { credit: 4, streak: 6, restDays: 1 } });
+    expect(texts(r.changes)).toContain('Descansaste ayer tras 6 días seguidos: suma 4 puntos a tu preparación');
+    const two = describeMorning({ ...input, rest: { credit: 1, streak: 5, restDays: 2 } });
+    expect(texts(two.changes)).toContain('Llevas 2 días de descanso tras 5 días seguidos: suma 1 punto a tu preparación');
+    expect(texts(describeMorning({ ...input, rest: { credit: 0, streak: 1, restDays: 1 } }).changes).some((t) => t.includes('Descansaste'))).toBe(false);
+  });
+
   it('el sueño corto y el pulso solo se apuntan, y no inventa nada si no hay nada', () => {
     const r = describeMorning({ ...input, check: { ...base, sleepHours: 6.5, restingHr: 60 }, restingHrBaseline: 54 });
     expect(texts(r.notes)).toEqual([

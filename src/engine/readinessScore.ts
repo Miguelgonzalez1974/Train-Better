@@ -2,13 +2,14 @@ import type { PainFlag, SessionHistoryEntry, SetFeedbackEntry, SetFeel, Readines
 import { computeAcwr } from './loadMetrics';
 import { PAIN_AREA_LABEL, getActivePainFlags } from './painFlags';
 import { computeRecoverySummary, type RecoveryLevel, type RecoverySummary } from './recovery';
+import { getReadinessCheckForDate } from './readiness';
 
 /**
  * "Cómo estás de recuperado hoy", más allá del check-in: junto a lo que DICES que sientes (60 %) entra cómo te está saliendo
  * el entrenamiento (40 %: RPE reciente frente a tu norma y sensación en las primeras series). Un aviso de molestia activo
- * la baja un poco. La carga que llevas encima (ACWR y días seguidos sin descansar) se calcula aquí pero NO entra en la
- * nota: el Dashboard la enseña aparte, en su propio anillo, para no contarla dos veces. Orientativo: son indicios, no un
- * diagnóstico.
+ * la baja un poco, y haber descansado ayer tras una racha de días entrenando la sube otro poco (`restPart`). La carga que
+ * llevas encima (ACWR y días seguidos sin descansar) resta cuando va alta, y el Dashboard la enseña aparte en su propio
+ * icono. Orientativo: son indicios, no un diagnóstico.
  */
 
 export interface ReadinessPart {
@@ -28,6 +29,8 @@ export interface ReadinessScore {
   load: LoadPart;
   /** Puntos que la carga resta a la nota (0 con carga baja u óptima). */
   loadPenalty: number;
+  /** El descanso de ayer: lo que suma a la nota haber parado tras una racha de días entrenando (ver `restPart`). */
+  rest: RestPart;
   performance: ReadinessPart;
   pain: { count: number; areas: string[]; penalty: number };
   /** La lectura del check-in (barras por día, ejes...) — la tarjeta la sigue enseñando debajo. */
@@ -60,6 +63,72 @@ function feelPart(r: RecoverySummary): ReadinessPart {
   const vs =
     r.delta === null ? '' : Math.abs(r.delta) < 4 ? ' · como tu media' : ` · ${Math.abs(r.delta)} puntos ${r.delta > 0 ? 'por encima' : 'por debajo'} de tu media`;
   return { score, detail: `${r.checks} check-ins esta semana${vs}` };
+}
+
+export interface RestPart {
+  /** Puntos que suma a la nota (0 si ayer no fue descanso, o si no había mucho que recuperar). */
+  credit: number;
+  /** Días seguidos entrenando antes de parar. */
+  streak: number;
+  /** Días de descanso seguidos hasta ayer (0 si ayer entrenaste). */
+  restDays: number;
+  /** Una línea con el porqué; vacía si ayer no fue descanso. */
+  detail: string;
+}
+
+/** Lo máximo que suma el descanso a la nota (una racha larga de días seguidos entrenando seguida de un descanso con buen sueño). */
+export const REST_CREDIT_MAX = 6;
+/** Hasta cuántos días de descanso seguidos cuentan: más de 3 ya no es descansar, es parar. */
+const REST_DAYS_MAX = 2;
+/** Cuánto de la racha previa cuenta: entrenar 1 día no deja nada que recuperar; 6 o más, el máximo. */
+const REST_BASE_BY_STREAK = [0, 0, 2, 3, 4, 5, 6];
+/** Lo que se queda del crédito según el sueño de hoy: dormir mal tras descansar lo recorta (sin check-in, un término medio). */
+const REST_SLEEP_FACTOR = { bien: 1, regular: 0.7, mal: 0.3 } as const;
+const REST_SLEEP_UNKNOWN = 0.7;
+/** Con dos días de descanso seguidos, el segundo ya aporta menos. */
+const REST_SECOND_DAY_FACTOR = 0.6;
+
+function isoMinus(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Descansar también puntúa: si ayer no entrenaste (1 o 2 días de descanso seguidos) tras una racha de días seguidos, la
+ * nota de hoy sube un poco, tanto más cuanto más larga era la racha (hasta `REST_CREDIT_MAX`) y siempre que hoy hayas dormido
+ * bien (el sueño de hoy lo recorta si fue malo). Se suma a lo que el descanso ya hace por su cuenta (la carga aguda baja y la
+ * resta por días seguidos desaparece); aquí es el bonus visible por haber parado a tiempo. Tres o más días sin entrenar no
+ * cuentan: eso es parar, no descansar.
+ */
+export function restPart(history: SessionHistoryEntry[], todayIso: string, todayCheck: ReadinessCheck | undefined): RestPart {
+  const dates = new Set(history.map((h) => h.date));
+  let restDays = 0;
+  let cursor = isoMinus(todayIso, 1);
+  while (!dates.has(cursor) && restDays <= REST_DAYS_MAX) {
+    restDays += 1;
+    cursor = isoMinus(cursor, 1);
+  }
+  if (restDays === 0) return { credit: 0, streak: 0, restDays: 0, detail: '' };
+  if (restDays > REST_DAYS_MAX) return { credit: 0, streak: 0, restDays, detail: '' };
+
+  let streak = 0;
+  while (dates.has(cursor) && streak < 30) {
+    streak += 1;
+    cursor = isoMinus(cursor, 1);
+  }
+  const base = REST_BASE_BY_STREAK[Math.min(streak, REST_BASE_BY_STREAK.length - 1)];
+  const sleepFactor = todayCheck ? REST_SLEEP_FACTOR[todayCheck.sleep] : REST_SLEEP_UNKNOWN;
+  const credit = Math.min(REST_CREDIT_MAX, Math.round(base * (restDays === 1 ? 1 : REST_SECOND_DAY_FACTOR) * sleepFactor));
+
+  const rested = restDays === 1 ? 'Descansaste ayer' : `Llevas ${restDays} días de descanso`;
+  if (credit === 0) {
+    const why = base === 0 ? 'venías de pocos días seguidos, no había mucho que recuperar' : 'hoy has dormido mal y eso se come lo que suma el descanso';
+    return { credit, streak, restDays, detail: `${rested}, pero ${why}.` };
+  }
+  const after = streak >= 2 ? ` tras ${streak} días seguidos entrenando` : '';
+  const sleepNote = todayCheck && todayCheck.sleep !== 'bien' ? ' · el sueño de hoy lo recorta' : '';
+  return { credit, streak, restDays, detail: `${rested}${after}${sleepNote}.` };
 }
 
 export type LoadPart = ReadinessPart & { penalty: number };
@@ -146,15 +215,17 @@ export function computeReadinessScore(input: {
   const penalty = Math.min(PAIN_PENALTY_MAX, areas.length * PAIN_PENALTY_EACH);
 
   const pain = { count: areas.length, areas, penalty };
+  const rest = restPart(input.history, todayIso, getReadinessCheckForDate(input.readinessLog, todayIso));
   const available = (['feel', 'performance'] as const).filter((k) => ({ feel, performance })[k].score !== null);
   if (available.length === 0) {
-    return { total: null, level: null, estimated: false, feel, load, loadPenalty: load.penalty, performance, pain, checkins };
+    return { total: null, level: null, estimated: false, feel, load, loadPenalty: load.penalty, rest, performance, pain, checkins };
   }
   const weightSum = available.reduce((s, k) => s + WEIGHT[k], 0);
   const raw = available.reduce((s, k) => s + ({ feel, performance })[k].score! * WEIGHT[k], 0) / weightSum;
   // La carga no es una parte que se promedie: es un LÍMITE. Una carga alta (o muchos días seguidos sin descansar) resta,
-  // y una carga baja u óptima no suma nada — así unos buenos check-ins no pueden tapar que vas pasado de carga.
-  const total = clamp(raw - penalty - load.penalty);
+  // y una carga baja u óptima no suma nada — así unos buenos check-ins no pueden tapar que vas pasado de carga. El descanso
+  // de ayer, en cambio, suma un poco (ver `restPart`).
+  const total = clamp(raw - penalty - load.penalty + rest.credit);
   const level: RecoveryLevel = total >= HIGH_FROM ? 'alta' : total <= LOW_UNTIL ? 'baja' : 'normal';
-  return { total, level, estimated: feel.score === null, feel, load, loadPenalty: load.penalty, performance, pain, checkins };
+  return { total, level, estimated: feel.score === null, feel, load, loadPenalty: load.penalty, rest, performance, pain, checkins };
 }

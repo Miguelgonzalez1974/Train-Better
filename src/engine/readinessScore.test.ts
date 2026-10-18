@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { PainFlag, ReadinessCheck, SessionHistoryEntry, SetFeedbackEntry } from '../data/athlete/types';
-import { computeReadinessScore } from './readinessScore';
+import { computeReadinessScore, REST_CREDIT_MAX, restPart } from './readinessScore';
 
 const TODAY = new Date('2026-10-10T12:00:00');
 const day = (n: number) => {
@@ -11,7 +11,7 @@ const day = (n: number) => {
 
 const GOOD = { sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' } as const;
 const BAD = { sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' } as const;
-const checks = (q: typeof GOOD | typeof BAD, offsets: number[]): ReadinessCheck[] => offsets.map((o) => ({ date: day(o), ...q }));
+const checks = (q: Pick<ReadinessCheck, 'sleep' | 'soreness' | 'stress' | 'motivation'>, offsets: number[]): ReadinessCheck[] => offsets.map((o) => ({ date: day(o), ...q }));
 
 const session = (offset: number, rpe: number): SessionHistoryEntry => ({
   date: day(offset),
@@ -45,6 +45,51 @@ const input = (over: Partial<Parameters<typeof computeReadinessScore>[0]> = {}) 
   painFlags: undefined as PainFlag[] | undefined,
   today: TODAY,
   ...over,
+});
+
+describe('el descanso de ayer suma a la nota', () => {
+  const trained = (offsets: number[]) => offsets.map((o) => session(o, 6));
+  const MID = { sleep: 'bien', soreness: 'leve', stress: 'medio', motivation: 'normal' } as const;
+  const todayCheck = (sleep: ReadinessCheck['sleep']): ReadinessCheck => ({ date: day(0), ...MID, sleep });
+  const todayIso = day(0);
+
+  it('tras una racha larga y con buen sueño suma el máximo, y cuanto más corta la racha, menos', () => {
+    const six = restPart(trained([-2, -3, -4, -5, -6, -7]), todayIso, todayCheck('bien'));
+    expect(six).toMatchObject({ credit: REST_CREDIT_MAX, streak: 6, restDays: 1 });
+    expect(six.detail).toBe('Descansaste ayer tras 6 días seguidos entrenando.');
+    expect(restPart(trained([-2, -3, -4]), todayIso, todayCheck('bien')).credit).toBe(3);
+    expect(restPart(trained([-2, -3]), todayIso, todayCheck('bien')).credit).toBe(2);
+    expect(restPart(trained([-2]), todayIso, todayCheck('bien')).credit).toBe(0);
+  });
+
+  it('ayer entrenaste, o llevas tres o más días sin entrenar: no suma nada', () => {
+    expect(restPart(trained([-1, -2, -3, -4]), todayIso, todayCheck('bien'))).toMatchObject({ credit: 0, restDays: 0, detail: '' });
+    expect(restPart(trained([-4, -5, -6, -7]), todayIso, todayCheck('bien')).credit).toBe(0);
+    expect(restPart([], todayIso, todayCheck('bien')).credit).toBe(0);
+  });
+
+  it('dormir mal hoy recorta lo que suma, y sin check-in aún cuenta un término medio', () => {
+    const h = trained([-2, -3, -4, -5, -6, -7]);
+    expect(restPart(h, todayIso, todayCheck('regular')).credit).toBe(4);
+    expect(restPart(h, todayIso, todayCheck('mal')).credit).toBe(2);
+    expect(restPart(h, todayIso, undefined).credit).toBe(4);
+    expect(restPart(h, todayIso, todayCheck('regular')).detail).toContain('el sueño de hoy lo recorta');
+  });
+
+  it('el segundo día de descanso seguido aporta menos', () => {
+    const h = trained([-3, -4, -5, -6, -7, -8]);
+    expect(restPart(h, todayIso, todayCheck('bien'))).toMatchObject({ credit: 4, streak: 6, restDays: 2 });
+    expect(restPart(h, todayIso, todayCheck('bien')).detail).toBe('Llevas 2 días de descanso tras 6 días seguidos entrenando.');
+  });
+
+  it('entra en la nota total junto al resto de partes', () => {
+    const history = trained([-2, -3, -4, -5, -6, -7]);
+    const r = computeReadinessScore(input({ readinessLog: [...checks(MID, [-1, -2]), todayCheck('bien')], history }));
+    expect(r.rest.credit).toBe(REST_CREDIT_MAX);
+    expect(r.feel.score).not.toBeNull();
+    const raw = r.performance.score === null ? r.feel.score! : r.feel.score! * 0.6 + r.performance.score * 0.4;
+    expect(r.total).toBe(Math.max(0, Math.min(100, Math.round(raw - r.pain.penalty - r.loadPenalty + r.rest.credit))));
+  });
 });
 
 describe('nota de recuperación (check-in + cómo te salen las sesiones)', () => {
