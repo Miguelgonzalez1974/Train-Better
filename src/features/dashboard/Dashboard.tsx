@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Apple, BarChart3, ChevronDown, Flame, Gauge, Scale, Target } from 'lucide-react';
+import { Apple, ArrowRight, BarChart3, ChevronDown, Flame, Gauge, Scale, Sun, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -13,9 +13,8 @@ import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
-import type { ReadinessCheck } from '../../data/athlete/types';
-import { CheckInSummary, ReadinessCheckIn } from '../planificacion/ReadinessCheckIn';
-import { refreshTodaySession, resolveTodaySession } from './todaySession';
+import { CheckInSummary } from './CheckInSummary';
+import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
@@ -27,7 +26,7 @@ import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildWeekWindow } from './pastDay';
 import { ReadinessTrendChart, WeekEffortChart } from './WeekCharts';
-import { SleepPrompt, SleepTab } from './SleepHabits';
+import { SleepTab } from './SleepHabits';
 import { StrainDetail } from './StrainRing';
 import { RecoveryDetail } from './RecoveryCard';
 import { LearnedInsights } from './LearnedInsights';
@@ -49,43 +48,25 @@ import { NutritionModal } from './NutritionModal';
 /** Veces el peso corporal (total sentadilla + banca + peso muerto) a las que el arco de "Fuerza" llega lleno. */
 const STRENGTH_RATIO_FULL = 7;
 
-const SLEEP_SKIP_KEY = 'train-better:sleep-prompt-skip';
-/** El día en que se pulsó "Ahora no" en la pregunta del sueño (solo comodidad de este dispositivo). */
-function readSleepSkip(): string | null {
-  try {
-    return localStorage.getItem(SLEEP_SKIP_KEY);
-  } catch {
-    return null;
-  }
-}
-function writeSleepSkip(iso: string) {
-  try {
-    localStorage.setItem(SLEEP_SKIP_KEY, iso);
-  } catch {
-    // sin almacenamiento: la pregunta volverá al recargar, nada más
-  }
-}
-
-const MONTH_LABEL =new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
+const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
 interface DashboardProps {
   onNavigateToPlanificacion: () => void;
   onNavigateToObjetivos: () => void;
   onNavigateToNutricion: () => void;
+  /** Abre la tarjeta de la mañana (hacer o corregir el check-in de hoy). */
+  onOpenMorning: () => void;
 }
 
-export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, onNavigateToNutricion }: DashboardProps) {
+export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, onNavigateToNutricion, onOpenMorning }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
-  const [profile, setProfile] = useState(() => {
+  const [profile] = useState(() => {
     const current = athleteRepository.getProfile();
     const next = ensureStrainTarget(current, history, toLocalIsoDate(new Date()));
     if (next !== current) athleteRepository.saveProfile(next);
     return next;
   });
-  // Sube cada vez que la sesión de hoy se rehace (check-in), para que lo que enseña el Dashboard se relea de la caché.
-  const [sessionVersion, setSessionVersion] = useState(0);
-  const [checkInDismissed, setCheckInDismissed] = useState(false);
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showVolume, setShowVolume] = useState(false);
   const [showBodyweight, setShowBodyweight] = useState(false);
@@ -93,12 +74,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
-  // La pregunta del sueño del Resumen: se fija ("latch") la primera vez que falta y se queda hasta pulsar Listo / Ahora no,
-  // para que no desaparezca a mitad de apuntar las etiquetas.
-  const [justAnswered, setJustAnswered] = useState(false);
-  const [editingCheckIn, setEditingCheckIn] = useState(false);
-  const [sleepAsked, setSleepAsked] = useState(false);
-  const [sleepSkipped, setSleepSkipped] = useState(() => readSleepSkip() === toLocalIsoDate(new Date()));
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
   const [dayIso, setDayIso] = useState(() => toLocalIsoDate(new Date()));
   const [tab, setTab] = useState<DashTab>('resumen');
@@ -176,8 +151,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const todayStrain = dayStrain(history.find((h) => h.date === todayIso));
   const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, history, todayIso);
   const strainState = strainStatus(todayStrain, strainTarget);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const todaySession = useMemo(() => resolveTodaySession(profile, history, todayIso), [profile, history, todayIso, sessionVersion]);
+  const todaySession = useMemo(() => resolveTodaySession(profile, history, todayIso), [profile, history, todayIso]);
   const strainLearned = useMemo(() => learnStrain(profile, history, todayIso), [profile, history, todayIso]);
   const plannedStrain = useMemo(
     () => (todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias) : null),
@@ -220,33 +194,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
   const loadKnown = shown.acwr.acwr !== null && !shown.acwr.coldStart;
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
-  // Las preguntas de la mañana (check-in y sueño) solo tienen sentido si hoy hay sesión por entrenar, y se contestan una vez:
-  // después desaparecen del Resumen. Lo contestado se puede ver y corregir en la pestaña Preparación.
-  const morningOn = Boolean(todaySession && !todaySession.isRestDay);
-  const showQuestion = morningOn && !todayReadiness && !checkInDismissed;
-  const sleepMissing = Boolean(todayReadiness && (todayReadiness.sleepHours === undefined || todayReadiness.habits === undefined));
-  useEffect(() => {
-    if (sleepMissing) setSleepAsked(true);
-  }, [sleepMissing]);
-  // Tras contestar, la línea de confirmación ("Llegas bien…") se queda unos segundos por si fue un toque sin querer.
-  useEffect(() => {
-    if (!justAnswered) return;
-    const id = setTimeout(() => setJustAnswered(false), 7000);
-    return () => clearTimeout(id);
-  }, [justAnswered]);
-  function closeSleepPrompt() {
-    setSleepAsked(false);
-    setSleepSkipped(true);
-    writeSleepSkip(todayIso);
-  }
-
-  /** Horas de sueño y hábitos de hoy: se guardan al instante en el check-in de hoy (si ya lo hiciste). */
-  function handleSaveDetails(patch: Partial<Pick<ReadinessCheck, 'sleepHours' | 'habits'>>) {
-    const existing = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
-    if (!existing) return;
-    athleteRepository.saveReadinessCheck({ ...existing, ...patch });
-    setProfile(athleteRepository.getProfile());
-  }
+  // El check-in se hace en la tarjeta de la mañana (que sale al abrir la app): el Resumen solo guarda una pastilla si se dejó para
+  // luego, y lo contestado se ve y se corrige en la pestaña Preparación.
 
   /** Tocar un número del anillo: esfuerzo y preparación abren su pestaña; la carga, su ventana. */
   function openRingTarget(target: RingTarget) {
@@ -254,32 +203,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     else setTab(target);
   }
 
-  function handleSaveCheckIn(check: ReadinessCheck) {
-    // Volver a contestar el check-in no borra lo que ya anotaste de sueño y hábitos.
-    const previous = getReadinessCheckForDate(athleteRepository.getProfile().readinessLog ?? [], todayIso);
-    athleteRepository.saveReadinessCheck({ ...check, sleepHours: check.sleepHours ?? previous?.sleepHours, habits: previous?.habits });
-    // El objetivo provisional se rehace con el check-in y queda fijo; la sesión de hoy se recalcula con la nueva energía.
-    const fresh = athleteRepository.getProfile();
-    const next = ensureStrainTarget(fresh, history, todayIso);
-    if (next !== fresh) athleteRepository.saveProfile(next);
-    refreshTodaySession(next, history, todayIso);
-    setProfile(athleteRepository.getProfile());
-    setSessionVersion((v) => v + 1);
-    setEditingCheckIn(false);
-    setJustAnswered(true);
-  }
-  // Lo contestado en el check-in (con su "Cambiar"): unos segundos en el Resumen y siempre en la pestaña Preparación.
-  const checkInSummary = todayReadiness ? (
-    <CheckInSummary
-      dateIso={todayIso}
-      log={profile.readinessLog ?? []}
-      existing={todayReadiness}
-      editing={editingCheckIn}
-      onEdit={() => setEditingCheckIn(true)}
-      onConfirm={handleSaveCheckIn}
-      onCancel={() => setEditingCheckIn(false)}
-    />
-  ) : null;
   const energyAdherencePct =
     conditioningBalance && conditioningBalance.totalPlanned > 0
       ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
@@ -418,15 +341,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           <div {...swipe} className="touch-pan-y">
           <DayRing
             checkIn={
-              isToday && morningOn && (showQuestion || (todayReadiness && (justAnswered || editingCheckIn || (sleepAsked && !sleepSkipped)))) ? (
-                <div className="flex flex-col gap-3">
-                  {showQuestion && <ReadinessCheckIn dateIso={todayIso} log={profile.readinessLog ?? []} onConfirm={handleSaveCheckIn} onSkip={() => setCheckInDismissed(true)} />}
-                  {todayReadiness && (justAnswered || editingCheckIn) && checkInSummary}
-                  {todayReadiness && !editingCheckIn && sleepAsked && !sleepSkipped && (
-                    <div className="animate-section-in motion-reduce:animate-none">
-                      <SleepPrompt check={todayReadiness} onChange={handleSaveDetails} onDone={closeSleepPrompt} />
-                    </div>
-                  )}
+              isToday && !todayReadiness ? (
+                <div className="flex justify-center">
+                  <button
+                    onClick={onOpenMorning}
+                    className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[13px] font-medium text-neutral-200 transition-colors duration-200 hover:bg-white/[0.07]"
+                  >
+                    <Sun size={15} strokeWidth={2.25} className="text-brand-gold" aria-hidden="true" />
+                    Check-in pendiente
+                    <ArrowRight size={14} className="text-neutral-500" aria-hidden="true" />
+                  </button>
                 </div>
               ) : null
             }
@@ -465,7 +389,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
           <ReadinessTrendChart series={readinessSeries} selectedIso={dayIso} onSelect={setDayIso} />
           <div className="flex flex-col gap-7 rounded-2xl bg-white/[0.03] p-5">
-            {isToday && morningOn && checkInSummary}
+            {isToday && todayReadiness && <CheckInSummary check={todayReadiness} onEdit={onOpenMorning} />}
             <RecoveryDetail readiness={shown.readiness} />
             <LearnedInsights learning={readinessLearning} />
           </div>
@@ -473,7 +397,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       )}
       {tab === 'sueno' && (
         <div className="animate-section-in motion-reduce:animate-none">
-          <SleepTab log={profile.readinessLog ?? []} dayIso={dayIso} todayIso={todayIso} learning={readinessLearning} onSelect={setDayIso} onChange={handleSaveDetails} />
+          <SleepTab log={profile.readinessLog ?? []} dayIso={dayIso} todayIso={todayIso} learning={readinessLearning} onSelect={setDayIso} onOpenMorning={onOpenMorning} />
         </div>
       )}
       {showLoad && (

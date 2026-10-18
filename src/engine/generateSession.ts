@@ -99,6 +99,7 @@ import {
 } from './loadMetrics';
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor, getWodLoadFactor } from './autoregulation';
 import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
+import { soreRoleLevels } from './morningCheckIn';
 import { resolveTrainingWeek, DELOAD_REASON_NOTE } from './deload';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR, resolveVariantPRKey } from './prResolution';
 import {
@@ -250,6 +251,19 @@ const ACCESSORY_WEEK_SCHEME: Record<1 | 2 | 3 | 4, { reps: string; note: string 
   2: { reps: '8-10', note: 'Sube la carga cada serie; la última debe costar de verdad (1-2 en reserva).' },
   3: { reps: '6-8', note: 'Series cortas y pesadas — para a 1 repetición del fallo.' },
   4: { reps: '12-15', note: 'Semana de descarga: carga moderada, técnica limpia, sin acercarte al fallo.' },
+};
+
+/** Con agujetas fuertes, a qué rol se pasa primero: tirones y empujes antes que cadena posterior y piernas. */
+const ACCESSORY_SORE_FALLBACK_ORDER: AccessoryRole[] = ['hPull', 'vPull', 'hPush', 'vPush', 'posterior', 'unilateralLeg', 'plyo'];
+
+const ACCESSORY_ROLE_LABEL: Record<AccessoryRole, string> = {
+  unilateralLeg: 'Pierna unilateral',
+  plyo: 'Salto',
+  posterior: 'Cadena posterior',
+  hPush: 'Empuje horizontal',
+  vPush: 'Empuje vertical',
+  hPull: 'Tirón horizontal',
+  vPull: 'Tirón vertical',
 };
 
 /** Patron de fuerza marcado "a trabajar" por computeWeakPoints -> rol de accesorio que lo refuerza. */
@@ -2881,6 +2895,8 @@ function buildAccessoryBlock(
   lockedByRole?: Partial<Record<AccessoryRole, string>>,
   /** Datos para sugerir la carga de los accesorios con peso (ver `suggestAccessoryLoadKg`); sin ellos el bloque solo prescribe series y reps. */
   loadCtx?: Pick<AccessoryLoadContext, 'prs' | 'bodyweightKg' | 'loadFactor'>,
+  /** Agujetas de hoy por rol (1 = leves, 2 = fuertes), de la tarjeta de la mañana (ver `soreRoleLevels`). Leves: una serie menos en ese rol. Fuertes: el rol se cambia por otro sin agujetas (y si no hay, una serie menos). */
+  soreByRole?: Partial<Record<AccessoryRole, 1 | 2>>,
 ): SessionBlockResult[] {
   // 3 series es el base; la dosis del dia lo mueve entre 2 y 4.
   const accSets = Math.min(4, Math.max(2, Math.round(3 * dose.strengthSets)));
@@ -2903,6 +2919,27 @@ function buildAccessoryBlock(
       label: `${plan[0].label} · énfasis punto débil`,
       rationale: 'Rol reforzado hoy: este patrón va flojo en tu historial de PRs.',
     };
+  }
+
+  // Agujetas fuertes: el rol afectado se cambia por otro que no las cargue y que no esté ya en el plan de hoy.
+  if (soreByRole) {
+    const inPlan = new Set(plan.flatMap((p) => p.roles));
+    for (const p of plan) {
+      let changed = false;
+      const roles = p.roles.map((r) => {
+        if (soreByRole[r] !== 2) return r;
+        const alt = ACCESSORY_SORE_FALLBACK_ORDER.find((x) => !soreByRole[x] && !inPlan.has(x));
+        if (!alt) return r;
+        inPlan.add(alt);
+        changed = true;
+        return alt;
+      }) as [AccessoryRole, AccessoryRole];
+      if (changed) {
+        p.roles = roles;
+        p.label = `${ACCESSORY_ROLE_LABEL[roles[0]]} + ${ACCESSORY_ROLE_LABEL[roles[1]].toLowerCase()}`;
+        p.rationale = 'Hoy cambia el trabajo con agujetas por otro que no las cargue.';
+      }
+    }
   }
 
   const used = new Set(recentIds);
@@ -2932,7 +2969,9 @@ function buildAccessoryBlock(
       : '';
     const notes = `${p.label}. ${p.rationale} ${scheme.note} Alterna ambos movimientos con el mínimo descanso; descansa al completar la pareja.${loadNote}`;
     members.forEach(({ movement: m, role }, k) => {
-      out.push({ block: 'accessory', movementId: m.id, sets: accSets, reps: scheme.reps, loadKg: loads[k], format, notes, accessoryRole: role });
+      // Un rol con agujetas (leves, o fuertes sin alternativa) sale con una serie menos, sin bajar de 2.
+      const sets = soreByRole?.[role] ? Math.max(2, accSets - 1) : accSets;
+      out.push({ block: 'accessory', movementId: m.id, sets, reps: scheme.reps, loadKg: loads[k], format, notes, accessoryRole: role });
     });
   });
 
@@ -4416,6 +4455,7 @@ function generateDailySessionCore(
         armsToday ? 1 : 2,
         weekLock?.accessoryMovements,
         { prs: profile.prs, bodyweightKg: latestBodyweightKg(profile.bodyweightLog), loadFactor: wodLoadFactor },
+        soreRoleLevels(readinessCheck?.soreZones),
       )
     : [];
   const wodKindOut: { kind?: WodFormatKind; reasons?: string[]; lockSkipped?: boolean } = { reasons: [] };

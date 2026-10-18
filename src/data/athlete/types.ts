@@ -194,7 +194,34 @@ export interface ReadinessCheck {
   sleepHours?: number;
   /** Hábitos de ayer y de anoche que el atleta marca (opcional). Ausente = no los ha anotado; vacío = anotó que ninguno. Solo se usan para aprender qué le afecta. */
   habits?: HabitTag[];
+  /** Cómo amaneció el atleta de un vistazo (Bien / Normal / Mal) en la tarjeta de la mañana. Solo para recuperarla al corregir el check-in. */
+  overall?: 'bien' | 'normal' | 'mal';
+  /** Calidad del sueño, de 1 (muy mala) a 5 (muy buena). Con las horas, decide el eje "sueño" del check-in. */
+  sleepQuality?: number;
+  /** Estrés y motivación en la escala de 5 tramos de la tarjeta (0 = muy bajo … 4 = muy alto). Los ejes `stress` y `motivation` salen de aquí. */
+  stressLevel?: number;
+  motivationLevel?: number;
+  /** Agujetas por zona (1 = leves, 2 = fuertes); una zona sin entrada no tiene. El eje `soreness` sale de aquí y el accesorio de hoy se ajusta (ver `engine/morningCheckIn.ts`). */
+  soreZones?: Partial<Record<SoreZoneId, SoreLevelNum>>;
+  /** Pulso en reposo de la mañana (ppm), si lo mide. Solo se guarda: aún no cambia la carga. */
+  restingHr?: number;
 }
+
+/** Zonas de la silueta donde se marcan agujetas (izquierda y derecha por separado). */
+export type SoreZoneId =
+  | 'cuello'
+  | 'hombro-i'
+  | 'hombro-d'
+  | 'codo-i'
+  | 'codo-d'
+  | 'lumbar'
+  | 'cadera-i'
+  | 'cadera-d'
+  | 'muslo-i'
+  | 'muslo-d'
+  | 'gemelo-i'
+  | 'gemelo-d';
+export type SoreLevelNum = 1 | 2;
 
 /** Hábitos que se pueden marcar en el check-in para que el coach aprenda cuáles te afectan (ver `engine/habits.ts`). */
 export type HabitTag = 'alcohol' | 'cafeina' | 'cena-tarde' | 'pantallas' | 'viaje' | 'estres-trabajo' | 'siesta' | 'enfermo';

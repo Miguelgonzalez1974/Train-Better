@@ -18,6 +18,41 @@ export const PAIN_AREA_PATTERNS: Record<PainArea, MovementPattern[]> = {
   'codo-muneca': ['horizontalPush', 'gymnastics'],
 };
 
+/** Lo que evita el motor con un aviso de cada zona, dicho en cristiano (para explicarlo en la tarjeta de la mañana). */
+export const PAIN_AREA_AVOID_TEXT: Record<PainArea, string> = {
+  hombro: 'empujes y tirones por encima de la cabeza y la halterofilia',
+  'cadera-lumbar': 'bisagras, sentadillas, halterofilia y cargas',
+  rodilla: 'sentadillas, zancadas, saltos e impacto',
+  'codo-muneca': 'empujes horizontales y gimnásticos',
+};
+
+/** Respuesta a "¿cómo sigue?" de un aviso activo: sigue igual, va mejor (caduca en unos días) o ya pasó (se quita). */
+export type PainFollowUp = 'sigue' | 'mejor' | 'paso';
+
+/** Días que se mantiene un aviso que "va mejor" antes de caducar solo (y empezar la vuelta progresiva a la carga). */
+export const PAIN_BETTER_DAYS = 3;
+
+function addIsoDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Aplica lo que el atleta contesta por la mañana a cada aviso activo. "Ya pasó" lo quita hoy (clearedDate: la carga de
+ * sus patrones vuelve de forma progresiva); "Va mejor" lo deja caducar en `PAIN_BETTER_DAYS` días si duraba más (o no
+ * caducaba nunca); "Sigue" no toca nada. Un aviso sin respuesta se queda como estaba.
+ */
+export function applyPainFollowUps(painFlags: PainFlag[] | undefined, answers: Record<string, PainFollowUp>, todayIso: string): PainFlag[] {
+  const limit = addIsoDays(todayIso, PAIN_BETTER_DAYS);
+  return (painFlags ?? []).map((f) => {
+    const answer = answers[f.id];
+    if (answer === 'paso' && !f.clearedDate) return { ...f, clearedDate: todayIso };
+    if (answer === 'mejor' && !f.clearedDate && (f.until === null || f.until > limit)) return { ...f, until: limit };
+    return f;
+  });
+}
+
 export type PainDuration = 'dias' | 'semanas' | 'indefinido';
 
 const PAIN_DURATION_DAYS: Record<PainDuration, number | null> = {

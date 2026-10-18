@@ -9,6 +9,7 @@ import { isSupabaseConfigured } from './lib/supabaseClient';
 import { pullRemoteOrSeed } from './data/athlete/remoteSync';
 import { athleteRepository } from './data/athlete/athleteRepository';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard';
+import { getReadinessCheckForDate } from './engine/readiness';
 
 // Cada pestaña carga en su propio trozo de JS, servido solo cuando el atleta la abre — Planificación y
 // Nutrición cargan de paso catálogos enormes (benchmarks/WODs de biblioteca, alimentos) que no hacen
@@ -17,6 +18,8 @@ const Dashboard = lazy(() => import('./features/dashboard/Dashboard').then((m) =
 const Objetivos = lazy(() => import('./features/objetivos/Objetivos').then((m) => ({ default: m.Objetivos })));
 const Planificacion = lazy(() => import('./features/planificacion/Planificacion').then((m) => ({ default: m.Planificacion })));
 const Nutricion = lazy(() => import('./features/nutricion/Nutricion').then((m) => ({ default: m.Nutricion })));
+// La tarjeta de la mañana (check-in) carga aparte: arrastra el motor de sesiones, que no hace falta para pintar la primera pantalla.
+const MorningCard = lazy(() => import('./features/morning/MorningCard').then((m) => ({ default: m.MorningCard })));
 
 function TabLoading() {
   return (
@@ -33,6 +36,10 @@ export default function App() {
   // Alta guiada: perfil sin `onboardedAt` y sin ningún macrociclo = atleta nuevo. Se recomprueba tras
   // sincronizar (un usuario que ya se dio de alta en otro dispositivo trae `onboardedAt` del remoto).
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  // Tarjeta de la mañana: sale sola al abrir la app si hoy aún no hay check-in (`auto`) o a petición desde Preparación (`edit`).
+  // Al guardar algo sube `dataVersion`, que remonta Dashboard y Planificación para que relean el perfil.
+  const [morning, setMorning] = useState<'closed' | 'auto' | 'edit'>('closed');
+  const [dataVersion, setDataVersion] = useState(0);
 
   const userId = session?.user?.id ?? null;
   useEffect(() => {
@@ -52,6 +59,20 @@ export default function App() {
     const p = athleteRepository.getProfile();
     setNeedsOnboarding(!p.onboardedAt && p.macrocycles.length === 0);
   }, [loading, syncing]);
+
+  const ready = !(isSupabaseConfigured && (loading || syncing || !session)) && !needsOnboarding;
+  useEffect(() => {
+    if (!ready) return;
+    const p = athleteRepository.getProfile();
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (!getReadinessCheckForDate(p.readinessLog, todayIso)) setMorning('auto');
+  }, [ready]);
+
+  const closeMorning = (changed: boolean) => {
+    setMorning('closed');
+    if (changed) setDataVersion((v) => v + 1);
+  };
 
   if (isSupabaseConfigured && (loading || (session && syncing))) {
     return (
@@ -77,19 +98,26 @@ export default function App() {
         <Suspense fallback={<TabLoading />}>
           {activeTab === 'dashboard' && (
             <Dashboard
+              key={dataVersion}
               onNavigateToPlanificacion={() => setActiveTab('planificacion')}
               onNavigateToObjetivos={() => setActiveTab('objetivos')}
               onNavigateToNutricion={() => setActiveTab('nutricion')}
+              onOpenMorning={() => setMorning('edit')}
             />
           )}
           {activeTab === 'planificacion' && (
-            <Planificacion onNavigateToObjetivos={() => setActiveTab('objetivos')} onNavigateToNutricion={() => setActiveTab('nutricion')} />
+            <Planificacion key={dataVersion} onNavigateToObjetivos={() => setActiveTab('objetivos')} onNavigateToNutricion={() => setActiveTab('nutricion')} />
           )}
           {activeTab === 'nutricion' && <Nutricion />}
           {activeTab === 'objetivos' && <Objetivos />}
         </Suspense>
       </main>
       <BottomNav active={activeTab} onChange={setActiveTab} />
+      {morning !== 'closed' && (
+        <Suspense fallback={null}>
+          <MorningCard mode={morning} onClose={closeMorning} />
+        </Suspense>
+      )}
     </div>
   );
 }
