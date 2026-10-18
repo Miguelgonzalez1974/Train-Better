@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Apple, CalendarPlus, Check, ChevronRight, Moon, Trophy } from 'lucide-react';
+import { Activity, Apple, CalendarPlus, Check, ChevronRight, Moon, Trophy } from 'lucide-react';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import type { DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -103,8 +103,10 @@ export function DayRows({
   entry,
   strain,
   nutrition,
+  analysis,
   onNavigateToPlanificacion,
   onNavigateToNutricion,
+  onOpenAnalysis,
 }: {
   isToday: boolean;
   /** La sesión de hoy (null si ya entrenaste, no hay estructura activa o es otro día). */
@@ -113,8 +115,12 @@ export function DayRows({
   entry: SessionHistoryEntry | undefined;
   strain: StrainView;
   nutrition: NutritionSummary | null;
+  /** Los tres datos del análisis, ya formateados: dominios energéticos, desequilibrios y fuerza (en ese orden). */
+  analysis: [string, string, string] | string[];
   onNavigateToPlanificacion: () => void;
   onNavigateToNutricion: () => void;
+  /** Abre la ventana con el análisis completo. */
+  onOpenAnalysis: () => void;
 }) {
   const real = strain.real;
   const over = real !== null && real > strain.target.high;
@@ -191,6 +197,22 @@ export function DayRows({
           onClick={onNavigateToNutricion}
         />
       )}
+      {/* Análisis: lo que no hace falta mirar cada día, con sus tres datos a la vista; la ventana trae el detalle. */}
+      <Row
+        badge={
+          <Badge tone="neutral">
+            <Activity size={20} strokeWidth={2.25} aria-hidden="true" />
+          </Badge>
+        }
+        title="Análisis"
+        sub={
+          <>
+            Energía <span className="num">{analysis[0]}</span> · Equilibrio <span className="num">{analysis[1]}</span> · Fuerza <span className="num">{analysis[2]}</span>
+          </>
+        }
+        right={chevron}
+        onClick={onOpenAnalysis}
+      />
     </section>
   );
 }

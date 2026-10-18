@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Apple, ArrowRight, BarChart3, ChevronDown, Flame, Gauge, Scale, Sun, Target } from 'lucide-react';
+import { Apple, ArrowRight, BarChart3, Flame, Gauge, Scale, Sun, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -372,8 +372,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             entry={shown.entry}
             strain={shown.strain}
             nutrition={nutrition}
+            analysis={analysisGauges.map((g) => g.valueLabel)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
             onNavigateToNutricion={onNavigateToNutricion}
+            onOpenAnalysis={() => setAnalysisOpen(true)}
           />
         </>
       )}
@@ -419,85 +421,75 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </Modal>
       )}
 
-      {tab === 'resumen' && (
-        <>
       {/*
-        Análisis: lo que no hace falta mirar cada día, plegado por defecto. Los gauges (dominios energéticos,
-        desequilibrios, fuerza) son la puerta directa a su detalle; debajo solo sale la tarjeta cuyo gauge se ha tocado.
-      */}
-      <button
-        onClick={() => setAnalysisOpen((v) => !v)}
-        className="flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-white"
-      >
-        {analysisOpen ? 'Ocultar análisis' : 'Ver análisis'}
-        <ChevronDown size={14} className={`transition-transform duration-200 ${analysisOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {analysisOpen && <MetricsGauges row1={analysisGauges} row2={[]} onJumpTo={jumpTo} />}
-
-      {energyOpen && (
-        <div ref={energyRef}>
-          <EnergyDomainsCard profile={profile} history={history} collapsed={false} onToggleCollapsed={() => setEnergyOpen(false)} />
-        </div>
-      )}
-
-      {imbalancesOpen && (
-        <div ref={imbalancesRef}>
-          <ImbalancesCard groups={imbalanceGroups} collapsed={false} onToggleCollapsed={() => setImbalancesOpen(false)} />
-        </div>
-      )}
-
-      {strengthOpen && (
-        <div ref={strengthRef}>
-          <PersonalRecordsCard
-            prs={profile.prs}
-            trends={prTrends}
-            prLog={profile.prLog ?? []}
-            macroStartIso={getActiveMacrocycle(profile.macrocycles, todayIso)?.startDate}
-            bodyweightKg={latestBodyweightKg}
-          />
-        </div>
-      )}
-
-      {/* Lo que no encaja en un gauge (no es "N de M"): totales del mes, tal cual, en una línea. */}
-      {analysisOpen && stats.diasEntrenados > 0 && (
-        <p className="px-1 text-center text-[11px] text-neutral-500">
-          <span className="num font-semibold text-neutral-300">{stats.diasEntrenados}</span> días entrenados este mes
-          {stats.diasEsteAnio > 0 && (
-            <>
-              {' '}
-              (<span className="num">{stats.diasEsteAnio}</span> en el año)
-            </>
-          )}
-          {' · '}
-          <span className="num font-semibold text-neutral-300">
-            {stats.diasRx}/{stats.diasEntrenados}
-          </span>{' '}
-          Rx
-          {stats.rpeMedio !== null && (
-            <>
-              {' · RPE medio '}
-              <span className="num font-semibold text-neutral-300">{stats.rpeMedio.toFixed(1)}</span>
-            </>
-          )}
-        </p>
-      )}
-
-      {/*
-        Perfil de respuesta se queda siempre visible, sin gauge propio — es una actividad continua
-        del coach (calibrando cómo respondes), no un "N de M" puntual. Ya colapsa sola a una frase
-        (ver ResponseProfileCard), así que no pesa aunque esté siempre aquí.
+        Análisis: lo que no hace falta mirar cada día. Vive en una ventana que se abre desde la fila "Análisis" de "Tu día", así el
+        Resumen no se alarga. Dentro, los medidores (dominios energéticos, desequilibrios, fuerza) son la puerta a su detalle: solo
+        sale la tarjeta del medidor tocado.
       */}
       {analysisOpen && (
-        <ResponseProfileCard
-          history={history}
-          prLog={profile.prLog ?? []}
-          setFeedbackLog={profile.setFeedbackLog ?? []}
-          bodyweightLog={profile.bodyweightLog ?? []}
-          workLog={profile.workLog ?? []}
-          prs={profile.prs}
-        />
-      )}
-        </>
+        <Modal open onClose={() => setAnalysisOpen(false)} title="Análisis">
+          <div className="flex flex-col gap-4">
+            <MetricsGauges row1={analysisGauges} row2={[]} onJumpTo={jumpTo} />
+
+            {energyOpen && (
+              <div ref={energyRef}>
+                <EnergyDomainsCard profile={profile} history={history} collapsed={false} onToggleCollapsed={() => setEnergyOpen(false)} />
+              </div>
+            )}
+
+            {imbalancesOpen && (
+              <div ref={imbalancesRef}>
+                <ImbalancesCard groups={imbalanceGroups} collapsed={false} onToggleCollapsed={() => setImbalancesOpen(false)} />
+              </div>
+            )}
+
+            {strengthOpen && (
+              <div ref={strengthRef}>
+                <PersonalRecordsCard
+                  prs={profile.prs}
+                  trends={prTrends}
+                  prLog={profile.prLog ?? []}
+                  macroStartIso={getActiveMacrocycle(profile.macrocycles, todayIso)?.startDate}
+                  bodyweightKg={latestBodyweightKg}
+                />
+              </div>
+            )}
+
+            {/* Lo que no encaja en un gauge (no es "N de M"): totales del mes, tal cual, en una línea. */}
+            {stats.diasEntrenados > 0 && (
+              <p className="px-1 text-center text-[11px] text-neutral-500">
+                <span className="num font-semibold text-neutral-300">{stats.diasEntrenados}</span> días entrenados este mes
+                {stats.diasEsteAnio > 0 && (
+                  <>
+                    {' '}
+                    (<span className="num">{stats.diasEsteAnio}</span> en el año)
+                  </>
+                )}
+                {' · '}
+                <span className="num font-semibold text-neutral-300">
+                  {stats.diasRx}/{stats.diasEntrenados}
+                </span>{' '}
+                Rx
+                {stats.rpeMedio !== null && (
+                  <>
+                    {' · RPE medio '}
+                    <span className="num font-semibold text-neutral-300">{stats.rpeMedio.toFixed(1)}</span>
+                  </>
+                )}
+              </p>
+            )}
+
+            {/* El perfil de respuesta no tiene medidor: es una actividad continua del coach (calibrando cómo respondes). Ya colapsa sola a una frase. */}
+            <ResponseProfileCard
+              history={history}
+              prLog={profile.prLog ?? []}
+              setFeedbackLog={profile.setFeedbackLog ?? []}
+              bodyweightLog={profile.bodyweightLog ?? []}
+              workLog={profile.workLog ?? []}
+              prs={profile.prs}
+            />
+          </div>
+        </Modal>
       )}
     </div>
   );
