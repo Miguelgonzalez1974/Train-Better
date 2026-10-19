@@ -1,5 +1,5 @@
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import type { AthleteProfile, PainFlag, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, DayLightInfo, PainFlag, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
 import { computeHrvStatus, hrvVsOf } from '../../engine/hrv';
 import { checkFromCard, describeMorning, verdictFor, type CardAnswers, type MorningLine, type MorningVerdict } from '../../engine/morningCheckIn';
 import { applyPainFollowUps, getActivePainFlags, prunePainFlags, type PainFollowUp } from '../../engine/painFlags';
@@ -9,6 +9,8 @@ import { ensureStrainTarget } from '../../engine/strainTarget';
 import { refreshTodaySession, resolveTodaySession } from '../dashboard/todaySession';
 
 export interface MorningResult {
+  /** El semáforo de hoy (null en descanso o si aún no hay nota de preparación). */
+  light: DayLightInfo | null;
   /** Cómo llegas a entrenar, en una frase (null si ya entrenaste hoy o aún no hay nota). */
   verdict: MorningVerdict | null;
   /** Nota de preparación de hoy con lo que acabas de contar (null si aún no hay datos para calcularla). */
@@ -65,6 +67,9 @@ function buildResult(
   const day: MorningResult['day'] = trained ? 'trained' : session && !session.isRestDay ? 'training' : 'rest';
   const score = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) });
   const stored = profile.strainTargets?.[todayIso];
+  const dayLight = session?.dayLight ?? null;
+  // En un día verde solo hay permiso para apretar fuera de descarga y lejos de una competición (como en el motor).
+  const lightInfo = dayLight ? { color: dayLight.color, push: !session?.competition && session?.mesocycleWeek !== 4 } : null;
   const { changes, notes } = describeMorning({
     check,
     day,
@@ -73,7 +78,8 @@ function buildResult(
     flags,
     hrv: score.hrv,
     rest: score.rest,
+    light: lightInfo,
   });
   const hrvLow = check.hrvVs === 'bajo' || score.hrv.hrPenalty > 0;
-  return { verdict: verdictFor({ level: score.level, day, hrvLow }), readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
+  return { light: dayLight, verdict: verdictFor({ level: score.level, day, hrvLow, light: dayLight?.color ?? null }), readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
 }

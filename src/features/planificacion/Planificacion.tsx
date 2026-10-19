@@ -60,6 +60,7 @@ import { DaySessionBlocks } from './DaySessionBlocks';
 import { DayShapeChips } from '../shell/blockMeta';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
 import { StrainPlanRow } from './StrainPlanRow';
+import { DayLightPill } from '../shell/DayLightPill';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
@@ -1066,6 +1067,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       {!session.isRestDay && <DayShapeChips session={session} variant="text" />}
       {!session.isRestDay && <PainChips flags={activePainFlags} onRemove={handleRemovePainFlag} />}
       {regenNote && <p className="text-xs text-neutral-500">{regenNote}</p>}
+
+      {/* El semáforo de hoy (solo con el check-in hecho): el color y por qué, junto a lo que cambia en la sesión. */}
+      {session.dayLight && !session.isRestDay && !editMode && (
+        <div className="flex flex-col items-start gap-1.5">
+          <DayLightPill light={session.dayLight} />
+          <p className="text-xs text-neutral-500">{session.dayLight.reasons.join(' · ')}</p>
+        </div>
+      )}
 
       {plannedStrain && strainTarget && planFitResult && !editMode && (
         <StrainPlanRow

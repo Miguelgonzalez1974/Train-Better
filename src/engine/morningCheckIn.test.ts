@@ -200,6 +200,13 @@ describe('cómo llegas a entrenar, en una frase', () => {
     expect(verdictFor({ level: 'alta', day: 'training', hrvLow: true })?.tone).toBe('good');
   });
 
+  it('con semáforo manda sobre el nivel en un día de entreno, pero no en descanso', () => {
+    expect(verdictFor({ level: 'alta', day: 'training', hrvLow: false, light: 'ambar' })).toEqual({ text: 'Mantén el estímulo sin acumular', tone: 'mid' });
+    expect(verdictFor({ level: 'baja', day: 'training', hrvLow: false, light: 'verde' })?.tone).toBe('good');
+    expect(verdictFor({ level: 'normal', day: 'training', hrvLow: false, light: 'rojo' })).toEqual({ text: 'Hoy toca recuperar, no entrenar', tone: 'bad' });
+    expect(verdictFor({ level: 'alta', day: 'rest', hrvLow: false, light: 'rojo' })?.text).toBe('Vas muy bien de recuperación');
+  });
+
   it('en descanso habla de recuperar, y sin nota o tras entrenar no dice nada', () => {
     expect(verdictFor({ level: 'baja', day: 'rest', hrvLow: false })?.text).toContain('necesitas recuperar');
     expect(verdictFor({ level: 'alta', day: 'rest', hrvLow: false })?.text).toBe('Vas muy bien de recuperación');
@@ -245,6 +252,20 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     const paso = describeMorning({ ...input, flags: [{ flag: knee, answer: 'paso' }] });
     expect(texts(paso.changes)).toContain('Quito el aviso de rodilla: la carga vuelve poco a poco');
     expect(texts(paso.notes).some((t) => t.startsWith('Mañana'))).toBe(false);
+  });
+
+  it('el semáforo es lo primero que cambia: rojo sustituye la sesión, ámbar la recorta y verde da permiso para apretar', () => {
+    const rojo = describeMorning({ ...input, factor: 0.92, light: { color: 'rojo', push: false } });
+    expect(texts(rojo.changes)[0]).toBe('Día rojo: cambio la sesión por recuperación activa — movilidad, técnica ligera y aeróbico suave');
+    // en un día rojo no se habla de bajar la carga de una sesión que ya no es esa
+    expect(texts(rojo.changes).some((t) => t.startsWith('Reduzco'))).toBe(false);
+    const ambar = describeMorning({ ...input, light: { color: 'ambar', push: false } });
+    expect(texts(ambar.changes)[0]).toBe('Día ámbar: una serie menos de fuerza y un WOD más corto, con una sola superserie de accesorio');
+    expect(texts(describeMorning({ ...input, hasAccessory: false, light: { color: 'ambar', push: false } }).changes)[0]).toBe('Día ámbar: una serie menos de fuerza y un WOD más corto');
+    expect(texts(describeMorning({ ...input, light: { color: 'verde', push: true } }).changes)[0]).toBe('Día verde: sesión completa y permiso para apretar algo más en el WOD');
+    expect(texts(describeMorning({ ...input, light: { color: 'verde', push: false } }).changes)[0]).toBe('Día verde: sesión completa, tal como está prevista');
+    // sin sesión de entreno no hay semáforo que contar
+    expect(texts(describeMorning({ ...input, day: 'rest', light: { color: 'rojo', push: false } }).changes).some((t) => t.startsWith('Día rojo'))).toBe(false);
   });
 
   it('el descanso de ayer cuenta como un cambio cuando suma a la nota, y no sale si no suma', () => {

@@ -100,6 +100,7 @@ import {
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor, getWodLoadFactor } from './autoregulation';
 import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
 import { soreRoleLevels } from './morningCheckIn';
+import { AMBER_MAX_SUPERSETS, AMBER_STRENGTH_SETS, AMBER_WOD_VOLUME, GREEN_WOD_VOLUME, lightReason, resolveDayLight } from './dayLight';
 import { resolveTrainingWeek, DELOAD_REASON_NOTE } from './deload';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR, resolveVariantPRKey } from './prResolution';
 import {
@@ -4124,15 +4125,22 @@ function generateDailySessionCore(
   const recentIds = getRecentMovementIds(history);
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
   const painReintro = getPainReintroPatterns(profile.painFlags, dateIso);
+  const readinessCheck = getReadinessCheckForDate(profile.readinessLog, dateIso);
 
-  // La víspera de una competición es siempre de recuperación activa, caiga en el día de la semana que caiga.
-  if (dayPlan.isRecoveryDay || comp?.recoverySession) {
+  // Semáforo del día (ver `engine/dayLight.ts`): solo con el check-in de hoy, y no al planificar la semana (ahí las sesiones de
+  // los días anteriores son simuladas y su nota inventada). Un día que ya es de recuperación no lleva semáforo.
+  const naturalRecovery = dayPlan.isRecoveryDay || Boolean(comp?.recoverySession);
+  const light = planningPass || naturalRecovery ? null : resolveDayLight(profile, history, date, readinessCheck, comp);
+
+  // La víspera de una competición es siempre de recuperación activa, caiga en el día de la semana que caiga; y un día rojo
+  // del semáforo se convierte en esa misma recuperación activa.
+  if (naturalRecovery || light?.color === 'rojo') {
     const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, null, avoidedPatterns);
     const recoveryWodBlock = buildRecoveryWodBlock(recentIds, avoidedPatterns);
     const recoverySkillBlock = buildRecoverySkillBlock(recentIds, avoidedPatterns);
     // El día de recuperación activa (calendario de 6) lleva además el remate de brazos: bajo SNC,
-    // aislado, sin robar sitio a los días principales.
-    const armsBlock = buildArmsBlock(avoidedPatterns);
+    // aislado, sin robar sitio a los días principales. En un día rojo no: hoy no se añade nada.
+    const armsBlock = naturalRecovery ? buildArmsBlock(avoidedPatterns) : [];
     const cooldownBlock = buildCooldownBlock(dayPlan.strengthPattern, recentIds, avoidedPatterns);
 
     return {
@@ -4140,6 +4148,7 @@ function generateDailySessionCore(
       mesocycleWeek: calendarWeek,
       isRestDay: false,
       blocks: [...warmupBlock, ...recoveryWodBlock, ...recoverySkillBlock, ...armsBlock, ...cooldownBlock],
+      ...(light ? { dayLight: light, coachReasons: [lightReason(light, { push: false, hasAccessory: false })] } : {}),
       phaseWeekInPhase: phaseProgress.weekInPhase,
       phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
     };
@@ -4205,7 +4214,6 @@ function generateDailySessionCore(
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
-  const readinessCheck = getReadinessCheckForDate(profile.readinessLog, dateIso);
   // Sesgo de desbalance entre levantamientos relacionados (Front Squat flojo vs Back Squat, etc.) —
   // se calcula una vez y lo comparten fuerza y oly. Solo el motor periodizado lo usa (no mantenimiento
   // ni programas con nombre), igual que el resto de senales del macrociclo.
@@ -4304,10 +4312,10 @@ function generateDailySessionCore(
 
   // Dosis del WOD y de fuerza/oly tras el recorte por acumulación; en día ligero, además, fuerza y
   // oly bajan fuerte y el WOD sube (es el foco de ese día).
-  const wodDose: DayDose = technicalLight
+  const wodDoseBase: DayDose = technicalLight
     ? { ...dayDose, wodVolume: clampDose(dayDose.wodVolume * 1.12, 0.72, 1.35) }
     : { ...dayDose, wodVolume: clampDose(dayDose.wodVolume * crowdTrim, 0.6, 1.3) };
-  const strengthOlyDose: DayDose = technicalLight
+  const strengthOlyDoseBase: DayDose = technicalLight
     ? {
         ...dayDose,
         strengthSets: clampDose(dayDose.strengthSets * 0.55, 0.4, 1.18),
@@ -4315,6 +4323,18 @@ function generateDailySessionCore(
         dayIntensity: 'baja',
       }
     : { ...dayDose, strengthSets: clampDose(dayDose.strengthSets * crowdTrim, 0.6, 1.18) };
+  // Semáforo: un día ámbar recorta series de fuerza y volumen del WOD; uno verde da permiso para apretar algo más en el WOD
+  // (no en descarga, ni cerca de una competición). Un día de test de máximos no se toca: ya tiene su propia regla (aplazar).
+  const amberToday = light?.color === 'ambar' && !testDayFocus;
+  const greenPush = light?.color === 'verde' && !testDayFocus && !comp && week !== 4;
+  const wodDose: DayDose = amberToday
+    ? { ...wodDoseBase, wodVolume: clampDose(wodDoseBase.wodVolume * AMBER_WOD_VOLUME, 0.5, 1.3) }
+    : greenPush
+      ? { ...wodDoseBase, wodVolume: clampDose(wodDoseBase.wodVolume * GREEN_WOD_VOLUME, 0.6, 1.3) }
+      : wodDoseBase;
+  const strengthOlyDose: DayDose = amberToday
+    ? { ...strengthOlyDoseBase, strengthSets: clampDose(strengthOlyDoseBase.strengthSets * AMBER_STRENGTH_SETS, 0.4, 1.18) }
+    : strengthOlyDoseBase;
 
   // Movimiento de fuerza/oly bloqueado para hoy por la planificacion semanal (ver
   // AthleteProfile.weeklyLocks / planWeekLocks) — si no hay bloqueo para esta fecha, undefined, y
@@ -4346,7 +4366,7 @@ function generateDailySessionCore(
   // simuladas (RPE 7, 60 min) y su carga aguda inventada dispararia un ACWR alto que no existe — el veto por
   // estado real (descarga, ACWR, disponibilidad) se aplica el dia de verdad, no al decidir la estructura.
   const doubleStructuralOk = isDoubleSlotToday && !testDayFocus && !isTaper && !comp?.noDouble && !wodRampActive && weeksSinceStart(macro.startDate, date) > 0;
-  const doubleSafeToday = !deloadReason && acwrZone !== 'alta' && !getReadinessFactor(readinessCheck).isLow;
+  const doubleSafeToday = !deloadReason && acwrZone !== 'alta' && !getReadinessFactor(readinessCheck).isLow && light?.color !== 'ambar';
   const doubleAllowedToday = doubleStructuralOk && (planningPass || doubleSafeToday);
   const doublePlanned = weekLock?.doubleDecided ? weekLock.doubleWod === true : true;
   if (doubleAllowedToday && doublePlanned) {
@@ -4452,7 +4472,7 @@ function generateDailySessionCore(
         week,
         history,
         leastTrainedFamily(microPlan.strengthPattern),
-        armsToday ? 1 : 2,
+        armsToday ? 1 : amberToday ? AMBER_MAX_SUPERSETS : 2,
         weekLock?.accessoryMovements,
         { prs: profile.prs, bodyweightKg: latestBodyweightKg(profile.bodyweightLog), loadFactor: wodLoadFactor },
         soreRoleLevels(readinessCheck?.soreZones),
@@ -4587,9 +4607,11 @@ function generateDailySessionCore(
   const weakPointAccessoryReason = accessoryWork.some((b) => b.notes?.includes('Rol reforzado hoy'))
     ? 'Accesorio reforzado en tu punto débil: ese patrón va flojo en tu historial de PRs.'
     : undefined;
+  const lightNote = light ? lightReason(light, { push: greenPush, hasAccessory: accessoryWork.length > 0 }) : undefined;
   const coachReasons = Array.from(
     new Set(
       collectReasons(
+        lightNote,
         deloadNote,
         emphasisNote,
         crowdTrimNote,
@@ -4615,6 +4637,7 @@ function generateDailySessionCore(
     mesocycleWeek: week,
     isRestDay: false,
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
+    ...(light ? { dayLight: light } : {}),
     deloadReason,
     deloadNote,
     dayEmphasis: dayEmphasis === 'mixto' ? undefined : dayEmphasis,

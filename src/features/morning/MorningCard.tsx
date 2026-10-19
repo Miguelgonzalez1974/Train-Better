@@ -12,6 +12,7 @@ import { recoveryColor } from '../dashboard/RecoveryCard';
 import { ACCENT as EFFORT } from '../dashboard/StrainRing';
 import { BodyMap, SORE_COLOR } from './BodyMap';
 import { HrvInputs } from './HrvInputs';
+import { DayLightPill } from '../shell/DayLightPill';
 import { commitMorning, type MorningResult } from './morningCommit';
 
 const GOOD = 'rgb(var(--c-state-good))';
@@ -224,6 +225,7 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
               <p className={`mt-2 text-center ${LABEL}`} style={{ color: result.readiness !== null ? recoveryColor(result.readiness) : undefined }}>
                 Preparación
               </p>
+              {result.light && <DayLightPill light={result.light} className="mt-3" />}
               {result.verdict && (
                 <p className="mx-auto mt-2 max-w-[19rem] text-center text-[15px] font-semibold leading-snug" style={{ color: result.verdict.tone === 'good' ? GOOD : result.verdict.tone === 'bad' ? LOW : MID }}>
                   {result.verdict.text}

@@ -508,13 +508,24 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 73;
+export const SESSION_GEN_VERSION = 74;
+
+/** Color del día según cómo llegas (ver `engine/dayLight.ts`): verde = a por todas, ámbar = mantener sin acumular, rojo = recuperar. */
+export type DayLightColor = 'verde' | 'ambar' | 'rojo';
+
+export interface DayLightInfo {
+  color: DayLightColor;
+  /** Por qué sale ese color, en frases cortas ("Preparación 58 %", "HRV por debajo de tu rango"…). */
+  reasons: string[];
+}
 
 export interface DailySession {
   date: string;
   mesocycleWeek: number;
   isRestDay: boolean;
   blocks: SessionBlockResult[];
+  /** El semáforo de hoy (solo si hiciste el check-in y hay nota de preparación): cambia la estructura de la sesión, no solo la carga. */
+  dayLight?: DayLightInfo;
   /** Sello de `SESSION_GEN_VERSION` con el que se genero — lo pone `saveCachedSession`. Ausente en sesiones cacheadas antes de introducir el sello (se tratan como version 0). */
   genVersion?: number;
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */

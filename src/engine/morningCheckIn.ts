@@ -1,4 +1,4 @@
-import type { PainFlag, ReadinessCheck, SoreLevelNum, SoreZoneId } from '../data/athlete/types';
+import type { DayLightColor, PainFlag, ReadinessCheck, SoreLevelNum, SoreZoneId } from '../data/athlete/types';
 import { checkFromQuickAnswer, type CheckInOverall } from './readiness';
 import { PAIN_AREA_AVOID_TEXT, PAIN_AREA_LABEL, type PainFollowUp } from './painFlags';
 import { VS_WORD, type HrvPart } from './hrv';
@@ -198,9 +198,23 @@ export interface MorningVerdict {
  * La frase que resume cómo llegas a entrenar, a partir de la nota de preparación de hoy (su nivel), de si hay una HRV por debajo
  * de tu rango o un pulso alto, y de si hay sesión. Es lo primero que lees al terminar la tarjeta.
  */
-export function verdictFor(input: { level: 'alta' | 'normal' | 'baja' | null; day: 'training' | 'rest' | 'trained'; hrvLow: boolean }): MorningVerdict | null {
-  const { level, day, hrvLow } = input;
+export function verdictFor(input: {
+  level: 'alta' | 'normal' | 'baja' | null;
+  day: 'training' | 'rest' | 'trained';
+  hrvLow: boolean;
+  /** El semáforo de hoy, si lo hay: en un día de entreno manda sobre el nivel. */
+  light?: DayLightColor | null;
+}): MorningVerdict | null {
+  const { level, day, hrvLow, light } = input;
   if (level === null || day === 'trained') return null;
+  if (day === 'training' && light) {
+    // La cápsula del color ya dice "Día ámbar": la frase cuenta qué significa.
+    return light === 'verde'
+      ? { text: 'Llegas bien: a por la sesión', tone: 'good' }
+      : light === 'ambar'
+        ? { text: 'Mantén el estímulo sin acumular', tone: 'mid' }
+        : { text: 'Hoy toca recuperar, no entrenar', tone: 'bad' };
+  }
   const low = level === 'baja' || (level === 'normal' && hrvLow);
   if (day === 'rest') {
     if (low) return { text: 'Hoy necesitas recuperar: duerme y come bien, y nada de extras', tone: 'bad' };
@@ -222,6 +236,8 @@ export interface MorningDescribeInput {
   flags: { flag: PainFlag; answer: PainFollowUp | null }[];
   /** HRV y pulso de hoy frente a tu rango y tu media (ver `computeHrvPart`). */
   hrv: HrvPart;
+  /** El semáforo de hoy (ver `engine/dayLight.ts`) y si en un día verde hay permiso para apretar (no en descarga ni cerca de competir). */
+  light?: { color: DayLightColor; push: boolean } | null;
   /** El descanso de ayer (ver `restPart`): si suma a la nota de hoy, se cuenta como uno de los cambios. */
   rest?: { credit: number; streak: number; restDays: number };
 }
@@ -238,7 +254,7 @@ const fmtHours = (h: number) => {
  * solo se anota para aprender.
  */
 export function describeMorning(input: MorningDescribeInput): { changes: MorningLine[]; notes: MorningLine[] } {
-  const { check, day, hasAccessory, factor, flags, hrv, rest } = input;
+  const { check, day, hasAccessory, factor, flags, hrv, rest, light } = input;
   const changes: MorningLine[] = [];
   const notes: MorningLine[] = [];
   const seen = new Set<string>();
@@ -248,8 +264,16 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
     list.push(line);
   };
 
+  // El semáforo cambia la estructura de la sesión: lo primero que se dice.
+  if (day === 'training' && light) {
+    if (light.color === 'rojo') add(changes, { icon: 'shield', tone: 'bad', text: 'Día rojo: cambio la sesión por recuperación activa — movilidad, técnica ligera y aeróbico suave' });
+    else if (light.color === 'ambar') {
+      add(changes, { icon: 'trend-down', tone: 'mid', text: `Día ámbar: una serie menos de fuerza y un WOD más corto${hasAccessory ? ', con una sola superserie de accesorio' : ''}` });
+    } else add(changes, { icon: 'trend-up', tone: 'good', text: light.push ? 'Día verde: sesión completa y permiso para apretar algo más en el WOD' : 'Día verde: sesión completa, tal como está prevista' });
+  }
+
   if (day === 'rest') add(changes, { icon: 'moon', tone: 'sleep', text: 'Hoy no hay sesión: lo que cuentas ajusta tu preparación de mañana' });
-  else if (day === 'training') {
+  else if (day === 'training' && light?.color !== 'rojo') {
     const pct = Math.round(Math.abs(factor - 1) * 100);
     if (factor > 1) add(changes, { icon: 'trend-up', tone: 'good', text: `Subo la intensidad un ${pct} %, el último tramo de la sesión` });
     else if (factor < 1) add(changes, { icon: 'trend-down', tone: 'bad', text: `Reduzco la carga de hoy un ${pct} %` });
