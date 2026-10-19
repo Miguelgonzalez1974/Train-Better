@@ -268,6 +268,24 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     expect(texts(describeMorning({ ...input, day: 'rest', light: { color: 'rojo', push: false } }).changes).some((t) => t.startsWith('Día rojo'))).toBe(false);
   });
 
+  it('el simulacro: hoy dice que midas antes y mañana, y al día siguiente cuenta cómo respondiste', () => {
+    const hoy = describeMorning({ ...input, simulacro: { when: 'hoy' } });
+    expect(texts(hoy.notes)).toContain('Hoy es el simulacro: mide tu HRV y tu pulso antes de empezar y repite mañana para ver cómo respondes');
+    expect(texts(describeMorning({ ...input, check: { ...base, hrv: 64 }, simulacro: { when: 'hoy' } }).notes)).toContain(
+      'Hoy es el simulacro: ya tienes la medición de antes; mañana mide otra vez tu HRV y tu pulso para ver cómo respondes',
+    );
+    const unmeasured = { measured: false, cost: null, hrvDropPct: null, hrRise: null, nextHrv: null, priorAvg: null };
+    expect(texts(describeMorning({ ...input, simulacro: { when: 'ayer', result: unmeasured } }).notes)).toContain('Ayer fue el simulacro: sin tu HRV ni tu pulso de hoy no puedo ver cómo respondiste');
+    const costo = { measured: true, cost: true, hrvDropPct: 22, hrRise: 9, nextHrv: 50, priorAvg: 64 };
+    expect(texts(describeMorning({ ...input, simulacro: { when: 'ayer', result: costo } }).changes)).toContain(
+      'Ayer fue el simulacro y te costó (tu HRV está un 22 % bajo tu media y tu pulso ha subido 9 ppm): el taper será reforzado',
+    );
+    const bien = { measured: true, cost: false, hrvDropPct: 3, hrRise: 1, nextHrv: 62, priorAvg: 64 };
+    expect(texts(describeMorning({ ...input, simulacro: { when: 'ayer', result: bien } }).notes)).toContain(
+      'Ayer fue el simulacro y respondiste bien (HRV 62 ms, tu media 64): sigues con el taper previsto',
+    );
+  });
+
   it('el descanso de ayer cuenta como un cambio cuando suma a la nota, y no sale si no suma', () => {
     const r = describeMorning({ ...input, rest: { credit: 4, streak: 6, restDays: 1 } });
     expect(texts(r.changes)).toContain('Descansaste ayer tras 6 días seguidos: suma 4 puntos a tu preparación');
@@ -297,7 +315,7 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     it('sin rango solo se apunta y dice cuántas mediciones llevas', () => {
       const check = { ...base, hrv: 64, restingHr: 67 };
       const r = describeWith(prior(64, 60, 3), check);
-      expect(texts(r.notes)).toContain('HRV 64 ms apuntada: llevas 4 de 14 mediciones para calcular tu rango normal');
+      expect(texts(r.notes)).toContain('HRV 64 ms apuntada: llevas 4 de 7 mediciones para un primer rango');
       // El pulso tiene su propia media (3 mediciones) y resta aunque la HRV aún no tenga rango.
       expect(texts(r.changes)).toContain('Pulso 67 ppm, 7 por encima de tu media (60): resta 2 puntos a tu preparación');
     });

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { HeartPulse } from 'lucide-react';
 import type { ReadinessCheck } from '../../data/athlete/types';
-import { computeHrvStatus, HR_MAX, HR_MIN, HRV_MAX_RMSSD, HRV_MIN_RMSSD } from '../../engine/hrv';
+import { computeHrvStatus, HR_MAX, HR_MIN, HRV_MAX_RMSSD, HRV_MIN_RMSSD, HRV_PROVISIONAL_MIN } from '../../engine/hrv';
 
 const GOOD = 'rgb(var(--c-state-good))';
 const LOW = 'rgb(var(--c-state-low))';
@@ -69,11 +69,11 @@ export function HrvInputs({
     line = { text: `El pulso va entre ${HR_MIN} y ${HR_MAX} ppm`, color: LOW };
   } else if (status.range && status.today?.vs) {
     const where = status.today.vs === 'bajo' ? 'Por debajo de tu rango' : status.today.vs === 'alto' ? 'Por encima de tu rango' : 'Dentro de tu rango';
-    line = { text: `${where} (${status.range.low}–${status.range.high} ms)`, color: status.today.vs === 'bajo' ? LOW : status.today.vs === 'alto' ? INFO : GOOD };
+    line = { text: `${where} (${status.range.low}–${status.range.high} ms${status.provisional ? ', provisional' : ''})`, color: status.today.vs === 'bajo' ? LOW : status.today.vs === 'alto' ? INFO : GOOD };
   } else if (status.range) {
-    line = { text: `Tu rango normal: ${status.range.low}–${status.range.high} ms` };
+    line = { text: `Tu rango normal${status.provisional ? ' (provisional)' : ''}: ${status.range.low}–${status.range.high} ms` };
   } else {
-    line = { text: status.n >= status.needed ? 'Mañana tendrás tu rango normal' : `Reuniendo datos: ${status.n} de ${status.needed} mediciones` };
+    line = { text: status.n >= HRV_PROVISIONAL_MIN ? 'Mañana tendrás un rango provisional' : `Reuniendo datos: ${status.n} de ${HRV_PROVISIONAL_MIN} para un primer rango` };
   }
 
   return (

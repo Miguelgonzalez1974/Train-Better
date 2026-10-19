@@ -1,7 +1,8 @@
 import type { DayLightColor, PainFlag, ReadinessCheck, SoreLevelNum, SoreZoneId } from '../data/athlete/types';
 import { checkFromQuickAnswer, type CheckInOverall } from './readiness';
 import { PAIN_AREA_AVOID_TEXT, PAIN_AREA_LABEL, type PainFollowUp } from './painFlags';
-import { VS_WORD, type HrvPart } from './hrv';
+import { HRV_PROVISIONAL_MIN, VS_WORD, type HrvPart } from './hrv';
+import type { SimulacroResult } from './taperPlan';
 
 /**
  * Lógica de la tarjeta de la mañana: cómo sus respuestas (Bien/Normal/Mal, sueño, agujetas por zona, estrés, motivación,
@@ -238,6 +239,8 @@ export interface MorningDescribeInput {
   hrv: HrvPart;
   /** El semáforo de hoy (ver `engine/dayLight.ts`) y si en un día verde hay permiso para apretar (no en descarga ni cerca de competir). */
   light?: { color: DayLightColor; push: boolean } | null;
+  /** El simulacro de la competición: hoy es el día, o fue ayer (y entonces se enseña cómo respondiste, si se midió). */
+  simulacro?: { when: 'hoy' } | { when: 'ayer'; result: SimulacroResult } | null;
   /** El descanso de ayer (ver `restPart`): si suma a la nota de hoy, se cuenta como uno de los cambios. */
   rest?: { credit: number; streak: number; restDays: number };
 }
@@ -254,7 +257,7 @@ const fmtHours = (h: number) => {
  * solo se anota para aprender.
  */
 export function describeMorning(input: MorningDescribeInput): { changes: MorningLine[]; notes: MorningLine[] } {
-  const { check, day, hasAccessory, factor, flags, hrv, rest, light } = input;
+  const { check, day, hasAccessory, factor, flags, hrv, rest, light, simulacro } = input;
   const changes: MorningLine[] = [];
   const notes: MorningLine[] = [];
   const seen = new Set<string>();
@@ -278,6 +281,30 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
     if (factor > 1) add(changes, { icon: 'trend-up', tone: 'good', text: `Subo la intensidad un ${pct} %, el último tramo de la sesión` });
     else if (factor < 1) add(changes, { icon: 'trend-down', tone: 'bad', text: `Reduzco la carga de hoy un ${pct} %` });
     else add(changes, { icon: 'equal', tone: 'mid', text: 'Mantengo la carga prevista' });
+  }
+
+  // El simulacro de la competición: se mide antes y a la mañana siguiente, y de ahí sale cómo es el taper.
+  if (simulacro?.when === 'hoy') {
+    add(notes, {
+      icon: 'heart',
+      tone: 'info',
+      text: check.hrv !== undefined || check.restingHr !== undefined
+        ? 'Hoy es el simulacro: ya tienes la medición de antes; mañana mide otra vez tu HRV y tu pulso para ver cómo respondes'
+        : 'Hoy es el simulacro: mide tu HRV y tu pulso antes de empezar y repite mañana para ver cómo respondes',
+    });
+  } else if (simulacro?.when === 'ayer') {
+    const r = simulacro.result;
+    if (!r.measured) {
+      add(notes, { icon: 'heart', tone: 'info', text: 'Ayer fue el simulacro: sin tu HRV ni tu pulso de hoy no puedo ver cómo respondiste' });
+    } else if (r.cost) {
+      const parts: string[] = [];
+      if (r.hrvDropPct !== null && r.hrvDropPct > 0) parts.push(`tu HRV está un ${r.hrvDropPct} % bajo tu media`);
+      if (r.hrRise !== null && r.hrRise > 0) parts.push(`tu pulso ha subido ${r.hrRise} ppm`);
+      add(changes, { icon: 'shield', tone: 'warn', text: `Ayer fue el simulacro y te costó (${parts.join(' y ')}): el taper será reforzado` });
+    } else {
+      const where = r.nextHrv !== null && r.priorAvg !== null ? ` (HRV ${r.nextHrv} ms, tu media ${r.priorAvg})` : '';
+      add(notes, { icon: 'check', tone: 'good', text: `Ayer fue el simulacro y respondiste bien${where}: sigues con el taper previsto` });
+    }
   }
 
   if (rest && rest.credit > 0) {
@@ -315,7 +342,7 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
   if (status.today) {
     const { rmssd } = status.today;
     if (status.state === 'listo' && status.range) {
-      const where = `${rmssd} ms, ${VS_WORD[status.today.vs ?? 'normal']} (${status.range.low}–${status.range.high})`;
+      const where = `${rmssd} ms, ${VS_WORD[status.today.vs ?? 'normal']} (${status.range.low}–${status.range.high}${status.provisional ? ', provisional' : ''})`;
       if (hrv.hrvPenalty > 0) {
         const base = status.week?.vs === 'bajo' ? `Tu HRV de la semana (${status.week.avg} ms) está por debajo de tu rango` : `Tu HRV de hoy (${where})`;
         add(changes, { icon: 'heart', tone: 'warn', text: `${base}: resta ${hrv.hrvPenalty} ${hrv.hrvPenalty === 1 ? 'punto' : 'puntos'} a tu preparación` });
@@ -324,11 +351,13 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
         add(notes, { icon: 'heart', tone: status.today.vs === 'bajo' ? 'warn' : 'good', text: `HRV ${where}${status.today.vs === 'bajo' ? '' : ': sin cambios'}` });
       }
     } else {
-      const left = Math.max(0, status.needed - status.n);
       add(notes, {
         icon: 'heart',
         tone: 'neutral',
-        text: left > 0 ? `HRV ${rmssd} ms apuntada: llevas ${status.n} de ${status.needed} mediciones para calcular tu rango normal` : `HRV ${rmssd} ms apuntada: mañana ya tendrás tu rango normal`,
+        text:
+          status.n < HRV_PROVISIONAL_MIN
+            ? `HRV ${rmssd} ms apuntada: llevas ${status.n} de ${HRV_PROVISIONAL_MIN} mediciones para un primer rango`
+            : `HRV ${rmssd} ms apuntada: mañana ya tendrás un rango provisional`,
       });
     }
   }

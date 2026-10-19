@@ -1,6 +1,6 @@
 import type { AthleteProfile, SessionHistoryEntry, StrainTarget } from '../data/athlete/types';
 import { computeAcwr } from './loadMetrics';
-import { computeCompetitionDay } from './competition';
+import { resolveCompetitionDay } from './taperPlan';
 import { computeReadinessScore } from './readinessScore';
 import { learnStrain } from './strainLearning';
 import { dayStrain, recommendedStrain } from './strain';
@@ -21,6 +21,8 @@ const YESTERDAY_SHIFT = -4;
 const LEARNED_SHIFT_UP = 4;
 /** Tope del centro del rango según la fase de la competición: en el taper no se sube el esfuerzo aunque te sientas bien. */
 const COMPETITION_CENTER_CAP: Record<string, number> = { taper: 55, activacion: 35, vispera: 20, post: 40 };
+/** El taper cambia el tope según cómo llegas: más bajo si es reforzado, algo más alto si es afinado. */
+const TAPER_CENTER_CAP: Record<'reforzado' | 'estandar' | 'afinado', number> = { reforzado: 45, estandar: 55, afinado: 60 };
 
 const LOAD_WORD = { baja: 'baja', optima: 'óptima', moderada: 'alta', alta: 'muy alta' } as const;
 
@@ -77,8 +79,8 @@ export function buildStrainTarget(profile: AthleteProfile, history: SessionHisto
     reasons.push('Estos días te has pasado del objetivo: hoy, que no se te vaya de las manos.');
   }
 
-  const comp = computeCompetitionDay(profile.goals, reference, profile.trainingDaysPerWeek);
-  const cap = comp ? COMPETITION_CENTER_CAP[comp.phase] : undefined;
+  const comp = resolveCompetitionDay(profile, prior, reference);
+  const cap = comp ? (comp.phase === 'taper' ? TAPER_CENTER_CAP[comp.taperKind ?? 'estandar'] : COMPETITION_CENTER_CAP[comp.phase]) : undefined;
   if (comp && cap !== undefined && center > cap) {
     center = cap;
     reasons.push(`${comp.label}: el esfuerzo se mantiene bajo para llegar fresco a la competición.`);

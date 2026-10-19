@@ -4,7 +4,9 @@ import type { ReadinessCheck } from '../data/athlete/types';
  * HRV de la mañana (rMSSD en ms, p. ej. el de HRV4Training con la cámara del móvil) y pulso en reposo, leídos como se hace
  * en ese método: no importa el número de un día (la cámara tiene ruido) sino dónde cae frente a TU rango normal. El rango se
  * calcula con tus mediciones de los últimos 60 días en escala logarítmica (media ± 0,75 desviaciones) y se compara con la
- * media de tus últimos 7 días. Hasta reunir `HRV_NEEDED` mediciones el coach no lo usa: solo las guarda y te dice cuántas llevas.
+ * media de tus últimos 7 días. Con `HRV_PROVISIONAL_MIN` mediciones ya hay un rango PROVISIONAL (orienta, el taper de una
+ * competición lo lee, pero no mueve la carga de hoy ni el semáforo y su resta a la nota va a la mitad); con `HRV_NEEDED`
+ * mediciones el rango es el completo. Antes de eso solo se guardan y te dice cuántas llevas.
  */
 
 export const HRV_MIN_RMSSD = 15;
@@ -14,6 +16,8 @@ export const HR_MAX = 150;
 
 /** Mediciones (sin contar hoy) que hacen falta para tener un rango normal fiable. */
 export const HRV_NEEDED = 14;
+/** Mediciones (sin contar hoy) a partir de las cuales ya hay un rango provisional, menos fiable. */
+export const HRV_PROVISIONAL_MIN = 7;
 const HRV_WINDOW_DAYS = 60;
 const HRV_BAND_SD = 0.75;
 /** Desviación mínima (en logaritmo) para que un rango con mediciones casi idénticas no quede absurdamente estrecho. */
@@ -35,8 +39,10 @@ export function hrvScore(rmssd: number): number {
 export type HrvVs = 'bajo' | 'normal' | 'alto';
 
 export interface HrvStatus {
-  /** `sin-datos`: ninguna medición; `reuniendo`: aún no hay para el rango; `listo`: ya hay rango normal. */
+  /** `sin-datos`: ninguna medición; `reuniendo`: aún no hay para ningún rango; `listo`: ya hay rango (mira `provisional`). */
   state: 'sin-datos' | 'reuniendo' | 'listo';
+  /** El rango sale de menos de `needed` mediciones (pero al menos `HRV_PROVISIONAL_MIN`): orienta, pesa menos y no mueve la carga. */
+  provisional: boolean;
   /** Mediciones (con la de hoy) dentro de la ventana de 60 días. El rango sale de las de antes de hoy: hacen falta `needed`. */
   n: number;
   needed: number;
@@ -44,7 +50,7 @@ export interface HrvStatus {
   today: { rmssd: number; score: number; vs: HrvVs | null } | null;
   /** Media de los últimos 7 días (con hoy) y dónde cae frente a tu rango. */
   week: { avg: number; n: number; vs: HrvVs | null } | null;
-  /** Tu rango normal en ms (null hasta tener `needed` mediciones). */
+  /** Tu rango normal en ms (null hasta tener `HRV_PROVISIONAL_MIN` mediciones). */
   range: { low: number; high: number } | null;
   /** Pulso de hoy, tu media de 14 días y la diferencia (null si falta alguno). */
   hr: { today: number | null; baseline: number | null; delta: number | null };
@@ -80,7 +86,7 @@ export function computeHrvStatus(log: ReadinessCheck[] | undefined, todayIso: st
   const windowFrom = isoMinus(todayIso, HRV_WINDOW_DAYS);
   const baseline = withHrv.filter((c) => c.date >= windowFrom && c.date < todayIso).map((c) => Math.log(c.hrv as number));
   let range: HrvStatus['range'] = null;
-  if (baseline.length >= HRV_NEEDED) {
+  if (baseline.length >= HRV_PROVISIONAL_MIN) {
     const mu = mean(baseline);
     const sd = Math.max(HRV_MIN_SD, Math.sqrt(mean(baseline.map((v) => (v - mu) ** 2))));
     range = { low: Math.round(Math.exp(mu - HRV_BAND_SD * sd)), high: Math.round(Math.exp(mu + HRV_BAND_SD * sd)) };
@@ -100,13 +106,22 @@ export function computeHrvStatus(log: ReadinessCheck[] | undefined, todayIso: st
 
   const state: HrvStatus['state'] = range ? 'listo' : withHrv.length > 0 ? 'reuniendo' : 'sin-datos';
   const n = withHrv.filter((c) => c.date >= windowFrom).length;
-  return { state, n, needed: HRV_NEEDED, today, week, range, hr };
+  return { state, provisional: range !== null && baseline.length < HRV_NEEDED, n, needed: HRV_NEEDED, today, week, range, hr };
 }
 
-/** El `hrvVs` que se guarda en el check-in: la media de 7 días frente a tu rango si la hay, y si no la medición de hoy. */
+/** Dónde cae tu HRV frente a tu rango: la media de 7 días si la hay y si no la medición de hoy (null sin rango). */
+export function hrvVsNow(status: HrvStatus): HrvVs | null {
+  if (status.state !== 'listo') return null;
+  return status.week?.vs ?? status.today?.vs ?? null;
+}
+
+/**
+ * El `hrvVs` que se guarda en el check-in y que pesa en la carga y en el semáforo: solo con el rango completo. Con el rango
+ * provisional no se guarda nada (el taper de la competición sí lo lee, con `hrvVsNow`).
+ */
 export function hrvVsOf(status: HrvStatus): HrvVs | undefined {
-  if (status.state !== 'listo') return undefined;
-  return status.week?.vs ?? status.today?.vs ?? undefined;
+  if (status.state !== 'listo' || status.provisional) return undefined;
+  return hrvVsNow(status) ?? undefined;
 }
 
 export interface HrvPart {
@@ -128,7 +143,7 @@ const HRV_PENALTY_MAX = 10;
  * Lo que HRV y pulso restan a la nota de hoy (nunca suman: un HRV alto no significa estar mejor). Con la media de 7 días por
  * debajo de tu rango resta 6, y 2 más si hoy también cae por debajo; una medición baja suelta, con la semana normal, resta 3.
  * El pulso 5 ppm por encima de tu media resta 2, y 8 o más, 3 (tiene su propia media de 14 días, con 3 mediciones). Tope 10.
- * Sin rango de HRV, la HRV no resta nada.
+ * Sin rango de HRV, la HRV no resta nada; con el rango provisional, la mitad.
  */
 export function computeHrvPart(log: ReadinessCheck[] | undefined, todayIso: string): HrvPart {
   const status = computeHrvStatus(log, todayIso);
@@ -140,7 +155,11 @@ export function computeHrvPart(log: ReadinessCheck[] | undefined, todayIso: stri
   if (status.state !== 'listo') {
     const parts: string[] = [];
     if (status.state === 'reuniendo') {
-      parts.push(status.n >= status.needed ? 'Mañana ya tendrás tu rango normal de HRV' : `Llevas ${status.n} de ${status.needed} mediciones para calcular tu rango normal de HRV`);
+      parts.push(
+        status.n >= HRV_PROVISIONAL_MIN
+          ? 'Mañana ya tendrás un rango provisional de HRV'
+          : `Llevas ${status.n} de ${HRV_PROVISIONAL_MIN} mediciones para un primer rango de HRV (${status.needed} para el completo)`,
+      );
     }
     if (pulse) parts.push(pulse.charAt(0).toUpperCase() + pulse.slice(1));
     return { penalty: hrPenalty, hrvPenalty: 0, hrPenalty, status, detail: parts.length > 0 ? `${parts.join(' · ')}.` : '' };
@@ -149,13 +168,15 @@ export function computeHrvPart(log: ReadinessCheck[] | undefined, todayIso: stri
   let hrvPenalty = 0;
   if (status.week?.vs === 'bajo') hrvPenalty = HRV_PENALTY_WEEK + (status.today?.vs === 'bajo' ? HRV_PENALTY_TODAY_EXTRA : 0);
   else if (status.today?.vs === 'bajo') hrvPenalty = HRV_PENALTY_TODAY_ONLY;
+  // Con el rango provisional (menos de 14 mediciones) la HRV resta la mitad: orienta, no manda.
+  if (status.provisional) hrvPenalty = Math.round(hrvPenalty / 2);
   const penalty = Math.min(HRV_PENALTY_MAX, hrvPenalty + hrPenalty);
 
   const range = status.range!;
   const parts: string[] = [];
   if (status.today) parts.push(`HRV ${status.today.rmssd} ms (${VS_WORD[status.today.vs ?? 'normal']})`);
   if (status.week) parts.push(`media de 7 días ${status.week.avg} ms`);
-  parts.push(`rango normal ${range.low}–${range.high} ms`);
+  parts.push(`rango normal ${range.low}–${range.high} ms${status.provisional ? ' (provisional)' : ''}`);
   if (pulse) parts.push(pulse);
   return { penalty, hrvPenalty, hrPenalty, status, detail: `${parts.join(' · ')}.` };
 }

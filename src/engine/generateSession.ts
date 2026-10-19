@@ -83,7 +83,8 @@ import {
 import { calibrateWodTarget, estimateWodTarget, getWodPerformance, parsePublishedGoal, type WodTarget } from './wodTargets';
 import { getLibraryWod, libraryWods, type LibraryWod } from '../data/library/libraryWods';
 import { getCatalogWod, getWodCatalog, type CatalogWod, type WodSource } from './wodCatalog';
-import { competitionInfo, computeCompetitionDay, isCompetitionTaper, type CompetitionDay } from './competition';
+import { competitionInfo, isCompetitionTaper, type CompetitionDay } from './competition';
+import { resolveCompetitionDay } from './taperPlan';
 import { localizeWodText } from './wodUnits';
 import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type SelectionContext } from './wodSelection';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
@@ -4090,7 +4091,7 @@ export function generateDailySession(
   date: Date = new Date(),
   goals: Goal[] = [],
 ): DailySession {
-  const comp = computeCompetitionDay(goals, date, profile.trainingDaysPerWeek);
+  const comp = resolveCompetitionDay(profile, history, date, goals);
   if (comp?.eventDay) return competitionDaySession(macro, date, comp);
   const session = generateDailySessionCore(profile, history, macro, date, goals, comp);
   if (!comp) return session;

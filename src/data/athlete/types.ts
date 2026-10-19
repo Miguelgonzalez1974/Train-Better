@@ -566,6 +566,9 @@ export interface DailySession {
     simulacro?: boolean;
     /** Hoy es día de competición (no hay sesión que programar). */
     eventDay?: boolean;
+    /** En el taper: reforzado (llegas con fatiga), estándar o afinado (llegas con margen), y por qué. Ver `engine/taperPlan.ts`. */
+    taperKind?: 'reforzado' | 'estandar' | 'afinado';
+    taperReasons?: string[];
   };
   /** 'custom' cuando el atleta escribio su propia sesion en vez de usar la generada — `blocks` va vacio y el contenido vive en customTitle/customNote. */
   source?: 'generated' | 'custom';

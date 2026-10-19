@@ -79,7 +79,9 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
             <div className="flex items-baseline gap-3">
               <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">Tu HRV</span>
               <span className="flex-1 text-[11px] text-neutral-500">
-                {readiness.hrv.status.state === 'listo' ? (readiness.hrv.penalty > 0 ? 'resta a la nota' : 'no resta nada') : 'reuniendo datos'}
+                {readiness.hrv.status.state === 'listo'
+                  ? `${readiness.hrv.status.provisional ? 'rango provisional · ' : ''}${readiness.hrv.penalty > 0 ? 'resta a la nota' : 'no resta nada'}`
+                  : 'reuniendo datos'}
               </span>
               <span className="num w-9 shrink-0 text-right text-sm font-semibold" style={{ color: readiness.hrv.penalty > 0 ? RECOVERY_LOW : RECOVERY_GOOD }}>
                 {readiness.hrv.penalty > 0 ? `−${readiness.hrv.penalty}` : '0'}

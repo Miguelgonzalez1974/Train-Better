@@ -1,7 +1,9 @@
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DayLightInfo, PainFlag, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
 import { computeHrvStatus, hrvVsOf } from '../../engine/hrv';
-import { checkFromCard, describeMorning, verdictFor, type CardAnswers, type MorningLine, type MorningVerdict } from '../../engine/morningCheckIn';
+import { checkFromCard, describeMorning, verdictFor, type CardAnswers, type MorningDescribeInput, type MorningLine, type MorningVerdict } from '../../engine/morningCheckIn';
+import { simulacroDateFor } from '../../engine/competition';
+import { assessSimulacro, resolveCompetitionDay } from '../../engine/taperPlan';
 import { applyPainFollowUps, getActivePainFlags, prunePainFlags, type PainFollowUp } from '../../engine/painFlags';
 import { getReadinessCheckForDate, getReadinessFactor } from '../../engine/readiness';
 import { computeReadinessScore } from '../../engine/readinessScore';
@@ -67,6 +69,17 @@ function buildResult(
   const day: MorningResult['day'] = trained ? 'trained' : session && !session.isRestDay ? 'training' : 'rest';
   const score = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) });
   const stored = profile.strainTargets?.[todayIso];
+  // Simulacro de la competición: hoy es el día (hay que medir antes y mañana) o fue ayer (se enseña cómo respondiste).
+  const comp = resolveCompetitionDay(profile, history, new Date(`${todayIso}T12:00:00`));
+  const yesterdayIso = new Date(`${todayIso}T12:00:00`);
+  yesterdayIso.setDate(yesterdayIso.getDate() - 1);
+  const yIso = `${yesterdayIso.getFullYear()}-${String(yesterdayIso.getMonth() + 1).padStart(2, '0')}-${String(yesterdayIso.getDate()).padStart(2, '0')}`;
+  const simulacroIso = comp ? simulacroDateFor(comp.eventStart, profile.trainingDaysPerWeek) : null;
+  const simulacro: MorningDescribeInput['simulacro'] = comp?.simulacro
+    ? { when: 'hoy' }
+    : simulacroIso !== null && simulacroIso === yIso
+      ? { when: 'ayer', result: assessSimulacro(profile.readinessLog, simulacroIso) }
+      : null;
   const dayLight = session?.dayLight ?? null;
   // En un día verde solo hay permiso para apretar fuera de descarga y lejos de una competición (como en el motor).
   const lightInfo = dayLight ? { color: dayLight.color, push: !session?.competition && session?.mesocycleWeek !== 4 } : null;
@@ -79,6 +92,7 @@ function buildResult(
     hrv: score.hrv,
     rest: score.rest,
     light: lightInfo,
+    simulacro,
   });
   const hrvLow = check.hrvVs === 'bajo' || score.hrv.hrPenalty > 0;
   return { light: dayLight, verdict: verdictFor({ level: score.level, day, hrvLow, light: dayLight?.color ?? null }), readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };

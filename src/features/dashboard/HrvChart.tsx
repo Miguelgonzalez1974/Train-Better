@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ReadinessCheck } from '../../data/athlete/types';
-import { computeHrvStatus } from '../../engine/hrv';
+import { computeHrvStatus, HRV_PROVISIONAL_MIN } from '../../engine/hrv';
 import { SectionLabel } from '../shell/SectionLabel';
 
 const GOOD = 'rgb(var(--c-state-good))';
@@ -35,7 +35,7 @@ export function HrvChart({ log, dayIso }: { log: ReadinessCheck[]; dayIso: strin
       <section className="rounded-2xl bg-white/[0.03] p-5" aria-label="HRV de la mañana">
         <SectionLabel>HRV</SectionLabel>
         <p className="mt-3 text-xs leading-relaxed text-neutral-400">
-          Anota tu HRV (el rMSSD en ms, p. ej. el de HRV4Training) en la tarjeta de cada mañana. Con unas 14 mediciones el coach conoce tu rango normal y te avisa cuando llegas por debajo.
+          Anota tu HRV (el rMSSD en ms, p. ej. el de HRV4Training) en la tarjeta de cada mañana. Con 7 mediciones el coach tiene un primer rango (provisional) y con 14 el completo, y te avisa cuando llegas por debajo.
         </p>
       </section>
     );
@@ -76,13 +76,15 @@ export function HrvChart({ log, dayIso }: { log: ReadinessCheck[]; dayIso: strin
         {status.range && status.week ? (
           <>
             Media de 7 días: <strong className="font-semibold text-neutral-100">{status.week.avg} ms</strong>, {status.week.vs === 'bajo' ? 'por debajo de' : status.week.vs === 'alto' ? 'por encima de' : 'dentro de'} tu rango
-            ({status.range.low}–{status.range.high} ms).
+            ({status.range.low}–{status.range.high} ms{status.provisional ? `, provisional: ${status.n} de ${status.needed} mediciones` : ''}).
           </>
         ) : status.range ? (
-          <>Tu rango normal: {status.range.low}–{status.range.high} ms. Con 3 mediciones en la semana te enseño su media.</>
+          <>
+            Tu rango normal{status.provisional ? ' (provisional)' : ''}: {status.range.low}–{status.range.high} ms. Con 3 mediciones en la semana te enseño su media.
+          </>
         ) : (
           <>
-            Llevas <strong className="font-semibold text-neutral-100">{status.n}</strong> de {status.needed} mediciones para calcular tu rango normal.
+            Llevas <strong className="font-semibold text-neutral-100">{status.n}</strong> de {HRV_PROVISIONAL_MIN} mediciones para un primer rango ({status.needed} para el completo).
           </>
         )}
       </p>

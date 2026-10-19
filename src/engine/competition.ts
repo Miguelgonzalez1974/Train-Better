@@ -20,6 +20,43 @@ import { addDaysIso, getDayPlan, getWeekdayIndex, isoDiffDays, isStrengthOnlyDay
 
 export type CompetitionPhase = 'construccion' | 'pico-1' | 'pico' | 'taper' | 'activacion' | 'vispera' | 'evento' | 'post';
 
+/**
+ * Cómo es el taper según cómo llegas (ver `engine/taperPlan.ts`): reforzado si llegas con fatiga (baja el volumen más y añade un
+ * día de descanso activo), estándar por defecto y afinado si llegas con margen (se recorta menos para conservar chispa).
+ */
+export type TaperKind = 'reforzado' | 'estandar' | 'afinado';
+
+export interface TaperDecision {
+  kind: TaperKind;
+  /** Por qué sale ese taper, en frases cortas. */
+  reasons: string[];
+}
+
+/** Volumen y tope de WOD del taper según su tipo (el estándar es el de siempre: -40 % y WODs de 9 min como máximo). */
+export const TAPER_PARAMS: Record<TaperKind, { label: string; volumeScale: number; maxWodMinutes: number; guidance: string }> = {
+  reforzado: {
+    label: 'Taper reforzado',
+    volumeScale: 0.5,
+    maxWodMinutes: 7,
+    guidance: 'Bajamos el volumen un 50 % y los WODs se quedan en 7 minutos como máximo, con un día más de descanso activo: llegas con algo de fatiga y hay que protegerte.',
+  },
+  estandar: {
+    label: 'Taper',
+    volumeScale: 0.6,
+    maxWodMinutes: 9,
+    guidance: 'Bajamos el volumen un 40 % y mantenemos la intensidad: WODs cortos y afilados para llegar fresco.',
+  },
+  afinado: {
+    label: 'Taper afinado',
+    volumeScale: 0.65,
+    maxWodMinutes: 9,
+    guidance: 'Bajamos el volumen un 35 % y mantenemos la intensidad: llegas con margen, así que recortamos menos para conservar la chispa.',
+  },
+};
+
+/** Día de la cuenta atrás (días que faltan) en el que un taper reforzado mete su día extra de descanso activo. */
+export const TAPER_EXTRA_REST_DAY = 4;
+
 export interface CompetitionDay {
   goalId: string;
   /** Primer y último día de la competición (ISO). */
@@ -45,6 +82,9 @@ export interface CompetitionDay {
   /** Hoy es el simulacro de competición. */
   simulacro: boolean;
   eventDay: boolean;
+  /** Solo en el taper: cómo es según cómo llegas, y por qué. */
+  taperKind?: TaperKind;
+  taperReasons?: string[];
 }
 
 const WINDOW_START_DAYS = 28;
@@ -85,7 +125,7 @@ const BASE: Omit<CompetitionDay, 'goalId' | 'eventStart' | 'eventEnd' | 'daysToE
 };
 
 /** Qué toca hoy en la cuenta atrás de la competición, o null si hoy no hay ninguna (lejos, pasada o sin objetivo). */
-export function computeCompetitionDay(goals: Goal[] | undefined, date: Date, trainingDaysPerWeek: 3 | 4 | 5 | 6): CompetitionDay | null {
+export function computeCompetitionDay(goals: Goal[] | undefined, date: Date, trainingDaysPerWeek: 3 | 4 | 5 | 6, taper?: TaperDecision | null): CompetitionDay | null {
   const todayIso = toLocalIsoDate(date);
   const active = activeCompetition(goals ?? [], todayIso);
   if (!active) return null;
@@ -118,9 +158,21 @@ export function computeCompetitionDay(goals: Goal[] | undefined, date: Date, tra
     };
   }
   if (d >= 3 && d <= 7) {
+    const kind = taper?.kind ?? 'estandar';
+    const params = TAPER_PARAMS[kind];
+    const why = taper && taper.reasons.length > 0 ? ` ${taper.reasons.join(' ')}` : '';
+    // El taper reforzado cambia un día de entreno por descanso activo (el penúltimo antes de la activación).
+    if (kind === 'reforzado' && d === TAPER_EXTRA_REST_DAY) {
+      return {
+        ...BASE, ...ids, phase: 'taper', label: `${params.label} · descanso activo`, week: 3, recoverySession: true, noTests: true, noDouble: true,
+        taperKind: taper?.kind, taperReasons: taper?.reasons,
+        guidance: `Hoy toca descanso activo: movilidad, cardio suave y dormir bien. Es el día extra del taper reforzado.${why}`,
+      };
+    }
     return {
-      ...BASE, ...ids, phase: 'taper', label: 'Taper', week: 3, volumeScale: 0.6, maxWodMinutes: 9, noTests: true, noDouble: true,
-      guidance: 'Bajamos el volumen un 40 % y mantenemos la intensidad: WODs cortos y afilados para llegar fresco.',
+      ...BASE, ...ids, phase: 'taper', label: params.label, week: 3, volumeScale: params.volumeScale, maxWodMinutes: params.maxWodMinutes, noTests: true, noDouble: true,
+      taperKind: taper?.kind, taperReasons: taper?.reasons,
+      guidance: `${params.guidance}${why}`,
     };
   }
   if (d >= 8 && d <= 14) {
@@ -154,6 +206,8 @@ export function competitionInfo(c: CompetitionDay): NonNullable<DailySession['co
     daysToEvent: c.daysToEvent,
     ...(c.simulacro ? { simulacro: true } : {}),
     ...(c.eventDay ? { eventDay: true } : {}),
+    ...(c.taperKind ? { taperKind: c.taperKind } : {}),
+    ...(c.taperReasons && c.taperReasons.length > 0 ? { taperReasons: c.taperReasons } : {}),
   };
 }
 

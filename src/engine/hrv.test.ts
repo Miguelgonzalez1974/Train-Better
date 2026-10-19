@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ReadinessCheck } from '../data/athlete/types';
-import { computeHrvPart, computeHrvStatus, hrvScore, hrvVsOf, HRV_NEEDED, restingHrBaseline } from './hrv';
+import { computeHrvPart, computeHrvStatus, hrvScore, hrvVsNow, hrvVsOf, HRV_NEEDED, HRV_PROVISIONAL_MIN, restingHrBaseline } from './hrv';
 import { getReadinessFactor } from './readiness';
 import { computeReadinessScore } from './readinessScore';
 import { computeReadinessLearning } from './readinessLearning';
@@ -56,10 +56,30 @@ describe('HRV: tu rango normal', () => {
     expect(computeHrvStatus([...log, check(0, 130)], TODAY).today!.vs).toBe('alto');
   });
 
-  it('con 13 mediciones previas aún no hay rango (la de hoy no cuenta para calcularlo)', () => {
-    const status = computeHrvStatus([...series(HRV_NEEDED - 1), check(0, 64)], TODAY);
-    expect(status.state).toBe('reuniendo');
-    expect(status.n).toBe(HRV_NEEDED);
+  it('con 6 mediciones previas aún no hay ningún rango (la de hoy no cuenta para calcularlo)', () => {
+    const status = computeHrvStatus([...series(HRV_PROVISIONAL_MIN - 1), check(0, 64)], TODAY);
+    expect(status).toMatchObject({ state: 'reuniendo', provisional: false, range: null, n: HRV_PROVISIONAL_MIN });
+  });
+
+  it('con 7 a 13 mediciones previas hay un rango PROVISIONAL, y con 14 el completo', () => {
+    const provisional = computeHrvStatus([...series(HRV_PROVISIONAL_MIN), check(0, 64)], TODAY);
+    expect(provisional).toMatchObject({ state: 'listo', provisional: true });
+    expect(provisional.range).not.toBeNull();
+    expect(provisional.today!.vs).toBe('normal');
+    expect(computeHrvStatus([...series(HRV_NEEDED - 1), check(0, 64)], TODAY).provisional).toBe(true);
+    expect(computeHrvStatus([...series(HRV_NEEDED), check(0, 64)], TODAY).provisional).toBe(false);
+  });
+
+  it('el rango provisional no se guarda en el check-in (no mueve la carga ni el semáforo) pero sí se lee para el taper', () => {
+    // 7 mediciones de hace más de una semana + la de hoy (baja): sin media de 7 días, manda la de hoy
+    const older = series(14, 64, 12).filter((c) => c.date <= iso(-8));
+    const provisional = computeHrvStatus([...older, check(0, 30)], TODAY);
+    expect(provisional).toMatchObject({ state: 'listo', provisional: true, week: null });
+    expect(hrvVsNow(provisional)).toBe('bajo');
+    expect(hrvVsOf(provisional)).toBeUndefined();
+    const full = computeHrvStatus([...series(21, 64, 12).filter((c) => c.date <= iso(-8)), check(0, 30)], TODAY);
+    expect(full).toMatchObject({ provisional: false, week: null });
+    expect(hrvVsOf(full)).toBe('bajo');
   });
 
   it('la media de 7 días necesita 3 mediciones y se compara con el rango', () => {
@@ -90,8 +110,17 @@ describe('HRV: lo que resta a la preparación y a la carga', () => {
     const early = computeHrvPart([...series(5, 64, 6, 55), check(0, 20, 64)], TODAY);
     expect(early.hrvPenalty).toBe(0);
     expect(early.hrPenalty).toBe(3);
-    expect(early.detail).toContain('Llevas 6 de 14 mediciones');
+    expect(early.detail).toContain('Llevas 6 de 7 mediciones');
     expect(computeHrvPart([], TODAY)).toMatchObject({ penalty: 0, detail: '' });
+  });
+
+  it('con el rango provisional la HRV resta la mitad y lo dice', () => {
+    const prov = series(HRV_PROVISIONAL_MIN, 64, 12);
+    const part = computeHrvPart([...prov, check(0, 30)], TODAY);
+    expect(part.status.provisional).toBe(true);
+    expect(part.hrvPenalty).toBe(2); // 3 de una medición baja suelta, a la mitad (redondeado)
+    expect(part.detail).toContain('(provisional)');
+    expect(computeHrvPart([...series(HRV_NEEDED, 64, 12), check(0, 30)], TODAY).hrvPenalty).toBe(3);
   });
 
   it('con rango: dentro no resta; una medición baja suelta resta 3; la semana baja resta 6 y 2 más si hoy también', () => {
