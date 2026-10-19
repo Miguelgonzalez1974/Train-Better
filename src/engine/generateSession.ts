@@ -86,6 +86,7 @@ import { getCatalogWod, getWodCatalog, type CatalogWod, type WodSource } from '.
 import { competitionInfo, isCompetitionTaper, type CompetitionDay } from './competition';
 import { resolveCompetitionDay } from './taperPlan';
 import { sustainedLowReadiness } from './readinessTrend';
+import { PREHAB_GROUP_LABEL, prehabNeeds, prehabNote, prehabTag, type PrehabNeed } from './prehab';
 import { localizeWodText } from './wodUnits';
 import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type SelectionContext } from './wodSelection';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
@@ -101,7 +102,7 @@ import {
 } from './loadMetrics';
 import { combineAutoregFactors, getAutoregFactor, getAutoregNote, getRpeAutoregFactor, getWodLoadFactor } from './autoregulation';
 import { getReadinessCheckForDate, getReadinessFactor, READINESS_TEST_POSTPONE_NOTE } from './readiness';
-import { soreRoleLevels } from './morningCheckIn';
+import { soreRoleLevels, soreStrongPatterns } from './morningCheckIn';
 import { AMBER_MAX_SUPERSETS, AMBER_STRENGTH_SETS, AMBER_WOD_VOLUME, GREEN_WOD_VOLUME, lightReason, resolveDayLight } from './dayLight';
 import { resolveTrainingWeek, DELOAD_REASON_NOTE } from './deload';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR, resolveVariantPRKey } from './prResolution';
@@ -2924,14 +2925,25 @@ function buildAccessoryBlock(
     };
   }
 
-  // Agujetas fuertes: el rol afectado se cambia por otro que no las cargue y que no esté ya en el plan de hoy.
-  if (soreByRole) {
+  // Un rol con agujetas fuertes, o cuyo pool ENTERO cae bajo un aviso de molestia (con la rodilla mal: pierna unilateral y salto),
+  // se SUSTITUYE por otro rol que no cargue esa zona y que no esté ya en el plan de hoy — en vez de quitarse y dejar el bloque cojo.
+  const sore: Partial<Record<AccessoryRole, 1 | 2>> = { ...(soreByRole ?? {}) };
+  if (avoidedPatterns.size > 0) {
+    for (const role of Object.keys(ACCESSORY_ROLE_POOL) as AccessoryRole[]) {
+      const valid = filterAvoidingPain(
+        ACCESSORY_ROLE_POOL[role].map((id) => getMovementById(id)).filter((m): m is Movement => Boolean(m)),
+        avoidedPatterns,
+      );
+      if (valid.length === 0) sore[role] = 2;
+    }
+  }
+  if (Object.keys(sore).length > 0) {
     const inPlan = new Set(plan.flatMap((p) => p.roles));
     for (const p of plan) {
       let changed = false;
       const roles = p.roles.map((r) => {
-        if (soreByRole[r] !== 2) return r;
-        const alt = ACCESSORY_SORE_FALLBACK_ORDER.find((x) => !soreByRole[x] && !inPlan.has(x));
+        if (sore[r] !== 2) return r;
+        const alt = ACCESSORY_SORE_FALLBACK_ORDER.find((x) => !sore[x] && !inPlan.has(x));
         if (!alt) return r;
         inPlan.add(alt);
         changed = true;
@@ -2940,7 +2952,7 @@ function buildAccessoryBlock(
       if (changed) {
         p.roles = roles;
         p.label = `${ACCESSORY_ROLE_LABEL[roles[0]]} + ${ACCESSORY_ROLE_LABEL[roles[1]].toLowerCase()}`;
-        p.rationale = 'Hoy cambia el trabajo con agujetas por otro que no las cargue.';
+        p.rationale = 'Hoy se cambia el trabajo por otro que no cargue la zona con agujetas o molestia.';
       }
     }
   }
@@ -2973,7 +2985,7 @@ function buildAccessoryBlock(
     const notes = `${p.label}. ${p.rationale} ${scheme.note} Alterna ambos movimientos con el mínimo descanso; descansa al completar la pareja.${loadNote}`;
     members.forEach(({ movement: m, role }, k) => {
       // Un rol con agujetas (leves, o fuertes sin alternativa) sale con una serie menos, sin bajar de 2.
-      const sets = soreByRole?.[role] ? Math.max(2, accSets - 1) : accSets;
+      const sets = sore[role] ? Math.max(2, accSets - 1) : accSets;
       out.push({ block: 'accessory', movementId: m.id, sets, reps: scheme.reps, loadKg: loads[k], format, notes, accessoryRole: role });
     });
   });
@@ -3398,6 +3410,8 @@ function buildWarmupBlock(
   wodRamp?: WodRampInfo | null,
   /** Patrones que evitan los avisos de molestia activos: el calentamiento tampoco lleva saltos, comba ni carrera con la rodilla mal. */
   avoidedPatterns: Set<MovementPattern> = new Set(),
+  /** Zonas con molestia activa o agujetas hoy: cada una suma una activación suave (prehab) tras la activación fija. */
+  prehab: PrehabNeed[] = [],
 ): SessionBlockResult[] {
   const generalPool = filterAvoidingPain(
     getMovementsByBlock('warmup').filter((m) => m.tags.includes('general')),
@@ -3413,6 +3427,17 @@ function buildWarmupBlock(
     'Activación',
     'Ritual fijo antes de cada sesión: hombro/escápula (Crossover Symmetry) y glúteo/cadera (Hip Halo) activados, da igual lo que toque hoy.',
   );
+
+  // Prehab: una activación suave por cada zona con molestia o agujetas (sin cargar la zona). Solo gasta el azar si hay algo que preparar.
+  const prehabEntries: SessionBlockResult[] = [];
+  const prehabUsed = new Set(recentIds);
+  for (const need of prehab) {
+    const pool = filterAvoidingPain(getMovementsByBlock('warmup').filter((m) => m.tags.includes(prehabTag(need.group))), avoidedPatterns);
+    const pick = pickVaried(pool, prehabUsed);
+    if (!pick) continue;
+    prehabUsed.add(pick.id);
+    prehabEntries.push({ block: 'warmup', movementId: pick.id, subgroup: `Prehab · ${PREHAB_GROUP_LABEL[need.group]}`, notes: prehabNote(need) });
+  }
 
   const rampIds = (wodRamp?.movementIds ?? [])
     .filter((id, i, arr) => arr.indexOf(id) === i && Boolean(getMovementById(id)))
@@ -3447,7 +3472,7 @@ function buildWarmupBlock(
     );
   }
 
-  return [...activacion, ...paraWod];
+  return [...activacion, ...prehabEntries, ...paraWod];
 }
 
 /**
@@ -4034,7 +4059,13 @@ function buildDoubleWodDay(ctx: {
     getMovementById(partA[0]?.wodCatalogId ? realWodMovementIds(partA[0].wodCatalogId)?.[0] ?? '' : partA[0]?.movementId ?? '')?.pattern ??
     ctx.dayPlan.strengthPattern;
   const hasLoad = wodBlocks.some((b) => (b.loadKg ?? 0) > 0 || Object.keys(b.benchmarkLoads ?? {}).length > 0);
-  const warmupBlock = buildWarmupBlock(leadPattern, recentIds, { movementIds: wodIds, weighted: hasLoad }, avoidedPatterns);
+  const warmupBlock = buildWarmupBlock(
+    leadPattern,
+    recentIds,
+    { movementIds: wodIds, weighted: hasLoad },
+    avoidedPatterns,
+    prehabNeeds(getActivePainFlags(profile.painFlags, ctx.dateIso).map((f) => f.area), ctx.readinessCheck?.soreZones),
+  );
 
   const coreBlock = ctx.coreToday
     ? buildCoreBlock(
@@ -4128,6 +4159,8 @@ function generateDailySessionCore(
   const avoidedPatterns = getAvoidedPatterns(profile.painFlags, dateIso);
   const painReintro = getPainReintroPatterns(profile.painFlags, dateIso);
   const readinessCheck = getReadinessCheckForDate(profile.readinessLog, dateIso);
+  // Prehab: las zonas con molestia activa o agujetas hoy suman una activación suave al calentamiento.
+  const prehab = prehabNeeds(getActivePainFlags(profile.painFlags, dateIso).map((f) => f.area), readinessCheck?.soreZones);
 
   // Semáforo del día (ver `engine/dayLight.ts`): solo con el check-in de hoy, y no al planificar la semana (ahí las sesiones de
   // los días anteriores son simuladas y su nota inventada). Un día que ya es de recuperación no lleva semáforo.
@@ -4137,7 +4170,7 @@ function generateDailySessionCore(
   // La víspera de una competición es siempre de recuperación activa, caiga en el día de la semana que caiga; y un día rojo
   // del semáforo se convierte en esa misma recuperación activa.
   if (naturalRecovery || light?.color === 'rojo') {
-    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, null, avoidedPatterns);
+    const warmupBlock = buildWarmupBlock(dayPlan.strengthPattern, recentIds, null, avoidedPatterns, prehab);
     const recoveryWodBlock = buildRecoveryWodBlock(recentIds, avoidedPatterns);
     const recoverySkillBlock = buildRecoverySkillBlock(recentIds, avoidedPatterns);
     // El día de recuperación activa (calendario de 6) lleva además el remate de brazos: bajo SNC,
@@ -4329,6 +4362,10 @@ function generateDailySessionCore(
     : { ...dayDose, strengthSets: clampDose(dayDose.strengthSets * crowdTrim, 0.6, 1.18) };
   // Semáforo: un día ámbar recorta series de fuerza y volumen del WOD; uno verde da permiso para apretar algo más en el WOD
   // (no en descarga, ni cerca de una competición). Un día de test de máximos no se toca: ya tiene su propia regla (aplazar).
+  // Agujetas FUERTES en la zona del patrón de fuerza de hoy: una serie menos (como un día ámbar, sin sumarse a él); el WOD, además,
+  // evita esos patrones (ver `excludePatterns` más abajo).
+  const soreStrong = soreStrongPatterns(readinessCheck?.soreZones);
+  const soreCut = !testDayFocus && plannedPattern !== null && soreStrong.has(plannedPattern);
   const amberToday = light?.color === 'ambar' && !testDayFocus;
   const greenPush = light?.color === 'verde' && !testDayFocus && !comp && week !== 4;
   const wodDose: DayDose = amberToday
@@ -4336,9 +4373,10 @@ function generateDailySessionCore(
     : greenPush
       ? { ...wodDoseBase, wodVolume: clampDose(wodDoseBase.wodVolume * GREEN_WOD_VOLUME, 0.6, 1.3) }
       : wodDoseBase;
-  const strengthOlyDose: DayDose = amberToday
-    ? { ...strengthOlyDoseBase, strengthSets: clampDose(strengthOlyDoseBase.strengthSets * AMBER_STRENGTH_SETS, 0.4, 1.18) }
-    : strengthOlyDoseBase;
+  const strengthOlyDose: DayDose =
+    amberToday || soreCut
+      ? { ...strengthOlyDoseBase, strengthSets: clampDose(strengthOlyDoseBase.strengthSets * AMBER_STRENGTH_SETS, 0.4, 1.18) }
+      : strengthOlyDoseBase;
 
   // Movimiento de fuerza/oly bloqueado para hoy por la planificacion semanal (ver
   // AthleteProfile.weeklyLocks / planWeekLocks) — si no hay bloqueo para esta fecha, undefined, y
@@ -4384,7 +4422,7 @@ function generateDailySessionCore(
       goals,
       history,
       recentIds,
-      excludePatterns: new Set([...avoidedPatterns, ...fatiguedPatterns]),
+      excludePatterns: new Set([...avoidedPatterns, ...fatiguedPatterns, ...soreStrong]),
       avoidedPatterns,
       dayPlan,
       responseProfile,
@@ -4488,7 +4526,7 @@ function generateDailySessionCore(
     week,
     profile.trainingDaysPerWeek,
     recentIds,
-    new Set([trainedStrengthPattern, ...avoidedPatterns, ...fatiguedPatterns]),
+    new Set([trainedStrengthPattern, ...avoidedPatterns, ...fatiguedPatterns, ...soreStrong]),
     goals,
     isTaper,
     history,
@@ -4539,7 +4577,7 @@ function generateDailySessionCore(
     movementIds: wodBlock.filter((b) => !b.movementId.startsWith('benchmark:')).map((b) => b.movementId),
     weighted: wodBlock.some((b) => (b.loadKg ?? 0) > 0),
   };
-  const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds, wodRamp, avoidedPatterns);
+  const warmupBlock = buildWarmupBlock(trainedStrengthPattern, recentIds, wodRamp, avoidedPatterns, prehab);
   const cooldownBlock = buildCooldownBlock(trainedStrengthPattern, recentIds, avoidedPatterns);
 
   // Mismos fragmentos ya visibles en cada bloque, deduplicados (fuerza y oly casi siempre comparten
@@ -4612,10 +4650,15 @@ function generateDailySessionCore(
     ? 'Accesorio reforzado en tu punto débil: ese patrón va flojo en tu historial de PRs.'
     : undefined;
   const lightNote = light ? lightReason(light, { push: greenPush, hasAccessory: accessoryWork.length > 0 }) : undefined;
+  const soreNote =
+    soreStrong.size > 0
+      ? `Agujetas fuertes hoy: el WOD evita los movimientos que cargan esa zona${soreCut && !amberToday ? ' y la fuerza lleva una serie menos' : ''}.`
+      : undefined;
   const coachReasons = Array.from(
     new Set(
       collectReasons(
         lightNote,
+        soreNote,
         deloadNote,
         emphasisNote,
         crowdTrimNote,
@@ -4642,6 +4685,7 @@ function generateDailySessionCore(
     isRestDay: false,
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
     ...(light ? { dayLight: light } : {}),
+    ...(soreCut && !amberToday ? { soreStrengthCut: true } : {}),
     deloadReason,
     deloadNote,
     dayEmphasis: dayEmphasis === 'mixto' ? undefined : dayEmphasis,

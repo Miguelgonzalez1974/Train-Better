@@ -209,6 +209,12 @@ export interface ReadinessCheck {
   hrv?: number;
   /** Cómo estaba tu HRV frente a tu rango cuando contestaste (media de 7 días si la había, si no la de hoy). `bajo` cuenta como una señal en contra para la carga de hoy. Ausente = aún sin rango. */
   hrvVs?: 'bajo' | 'normal' | 'alto';
+  /**
+   * Ajuste PERSONAL del check-in al puntuar el día (de -2 a 2): lo que has aprendido de ti. Un factor en contra que en tus datos te
+   * cuesta mucho cuenta doble (-1) y uno que apenas te afecta no se cuenta (+1). Se calcula al contestar (ver `learnedScoreShift`)
+   * y se suma a la puntuación del check-in en `getReadinessFactor`. Ausente = sin datos suficientes o sin efecto.
+   */
+  learnedShift?: number;
 }
 
 /** Zonas de la silueta donde se marcan agujetas (izquierda y derecha por separado). */
@@ -526,6 +532,8 @@ export interface DailySession {
   blocks: SessionBlockResult[];
   /** El semáforo de hoy (solo si hiciste el check-in y hay nota de preparación): cambia la estructura de la sesión, no solo la carga. */
   dayLight?: DayLightInfo;
+  /** Agujetas fuertes en la zona del patrón de fuerza de hoy: la fuerza lleva una serie menos (y el WOD evita esos movimientos). */
+  soreStrengthCut?: boolean;
   /** Sello de `SESSION_GEN_VERSION` con el que se genero — lo pone `saveCachedSession`. Ausente en sesiones cacheadas antes de introducir el sello (se tratan como version 0). */
   genVersion?: number;
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */

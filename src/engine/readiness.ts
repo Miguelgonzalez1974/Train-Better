@@ -45,7 +45,8 @@ export function scoreCheck(check: ReadinessCheck): number {
 export function getReadinessFactor(check: ReadinessCheck | undefined): ReadinessAutoregResult {
   if (!check) return { factor: 1, isLow: false };
   // Una HRV por debajo de tu rango pesa como un eje más en contra (ver `engine/hrv.ts`); una normal o alta no suma nada.
-  const score = scoreCheck(check) + (check.hrvVs === 'bajo' ? -1 : 0);
+  // Y lo aprendido de ti (`learnedShift`): un factor en contra que a ti te cuesta mucho cuenta doble; uno que apenas te afecta, no cuenta.
+  const score = scoreCheck(check) + (check.hrvVs === 'bajo' ? -1 : 0) + (check.learnedShift ?? 0);
 
   if (score <= READINESS_LOW_THRESHOLD) {
     return {

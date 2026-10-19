@@ -3,6 +3,8 @@ import { checkFromQuickAnswer, type CheckInOverall } from './readiness';
 import { PAIN_AREA_AVOID_TEXT, PAIN_AREA_LABEL, type PainFollowUp } from './painFlags';
 import { HRV_PROVISIONAL_MIN, VS_WORD, type HrvPart } from './hrv';
 import type { SimulacroResult } from './taperPlan';
+import type { LearnedShift } from './readinessLearning';
+import type { MovementPattern } from '../data/movements/types';
 
 /**
  * Lógica de la tarjeta de la mañana: cómo sus respuestas (Bien/Normal/Mal, sueño, agujetas por zona, estrés, motivación,
@@ -71,6 +73,27 @@ const SORE_AREA_TEXT: Record<SoreArea, string> = {
   muslo: 'piernas',
   gemelo: 'piernas',
 };
+
+/** Qué patrones de movimiento carga cada músculo: con agujetas FUERTES, el WOD los evita y la fuerza de ese patrón recorta una serie. */
+const SORE_AREA_PATTERNS: Record<SoreArea, MovementPattern[]> = {
+  cuello: [],
+  hombro: ['verticalPush', 'verticalPull', 'olyLift'],
+  codo: ['horizontalPush', 'horizontalPull', 'gymnastics'],
+  lumbar: ['hinge', 'olyLift', 'carry'],
+  cadera: ['hinge', 'squat', 'lunge'],
+  muslo: ['squat', 'lunge', 'jump'],
+  gemelo: ['jump', 'impact'],
+};
+
+/** Los patrones de movimiento con agujetas FUERTES hoy (las leves no cuentan aquí: solo recortan el accesorio). */
+export function soreStrongPatterns(zones: ReadinessCheck['soreZones']): Set<MovementPattern> {
+  const out = new Set<MovementPattern>();
+  for (const [id, level] of Object.entries(zones ?? {}) as [SoreZoneId, SoreLevelNum | undefined][]) {
+    if (level !== 2) continue;
+    for (const p of SORE_AREA_PATTERNS[SORE_ZONE_AREA[id]]) out.add(p);
+  }
+  return out;
+}
 
 /** El nivel de agujetas más alto que pesa sobre cada rol del accesorio (1 = leves, 2 = fuertes); sin entrada = sin agujetas. */
 export function soreRoleLevels(zones: ReadinessCheck['soreZones']): Partial<Record<SoreRole, SoreLevelNum>> {
@@ -241,6 +264,10 @@ export interface MorningDescribeInput {
   light?: { color: DayLightColor; push: boolean } | null;
   /** El simulacro de la competición: hoy es el día, o fue ayer (y entonces se enseña cómo respondiste, si se midió). */
   simulacro?: { when: 'hoy' } | { when: 'ayer'; result: SimulacroResult } | null;
+  /** Lo aprendido de ti que hoy ajusta el peso de cada factor en contra (ver `learnedScoreShift`). */
+  learned?: LearnedShift | null;
+  /** Agujetas fuertes en la zona del patrón de fuerza de hoy: la fuerza lleva una serie menos (ver `DailySession.soreStrengthCut`). */
+  soreStrengthCut?: boolean;
   /** El descanso de ayer (ver `restPart`): si suma a la nota de hoy, se cuenta como uno de los cambios. */
   rest?: { credit: number; streak: number; restDays: number };
 }
@@ -257,7 +284,7 @@ const fmtHours = (h: number) => {
  * solo se anota para aprender.
  */
 export function describeMorning(input: MorningDescribeInput): { changes: MorningLine[]; notes: MorningLine[] } {
-  const { check, day, hasAccessory, factor, flags, hrv, rest, light, simulacro } = input;
+  const { check, day, hasAccessory, factor, flags, hrv, rest, light, simulacro, learned, soreStrengthCut } = input;
   const changes: MorningLine[] = [];
   const notes: MorningLine[] = [];
   const seen = new Set<string>();
@@ -326,6 +353,20 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
     } else {
       add(notes, { icon: 'flame', tone: 'mid', text: `Agujetas de ${text}: cuentan para tu preparación` });
     }
+  }
+  // Agujetas fuertes: el WOD evita esos movimientos y, si la zona es la del levantamiento de hoy, la fuerza lleva una serie menos.
+  if (day === 'training' && soreSummary(check.soreZones).some((s) => s.level === 2)) {
+    add(changes, {
+      icon: 'flame',
+      tone: 'warn',
+      text: soreStrengthCut ? 'Con agujetas fuertes, el WOD evita esos movimientos y la fuerza lleva una serie menos' : 'Con agujetas fuertes, el WOD evita los movimientos que cargan esa zona',
+    });
+  }
+
+  // Lo aprendido de ti: un factor que en tus datos te cuesta mucho cuenta doble, y uno que apenas te afecta no cuenta en contra.
+  for (const l of learned?.lines ?? []) {
+    if (l.kind === 'doble') add(changes, { icon: 'brain', tone: 'warn', text: l.text });
+    else add(notes, { icon: 'check', tone: 'good', text: l.text });
   }
 
   if (check.stress === 'alto') add(changes, { icon: 'brain', tone: 'neutral', text: 'Estrés alto: resta a tu preparación de hoy' });

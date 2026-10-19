@@ -3,6 +3,7 @@ import type { AthleteProfile, DayLightInfo, PainFlag, ReadinessCheck, SessionHis
 import { computeHrvStatus, hrvVsOf } from '../../engine/hrv';
 import { checkFromCard, describeMorning, verdictFor, type CardAnswers, type MorningDescribeInput, type MorningLine, type MorningVerdict } from '../../engine/morningCheckIn';
 import { simulacroDateFor } from '../../engine/competition';
+import { computeReadinessLearning, learnedScoreShift, type LearnedShift } from '../../engine/readinessLearning';
 import { assessSimulacro, resolveCompetitionDay } from '../../engine/taperPlan';
 import { applyPainFollowUps, getActivePainFlags, prunePainFlags, type PainFollowUp } from '../../engine/painFlags';
 import { getReadinessCheckForDate, getReadinessFactor } from '../../engine/readiness';
@@ -46,6 +47,9 @@ export function commitMorning(
   // Dónde cae tu HRV frente a tu rango: se guarda con el check-in para que el factor de carga y lo que aprende el coach la lean.
   const hrvVs = hrvVsOf(computeHrvStatus([...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check], todayIso));
   if (hrvVs) check.hrvVs = hrvVs;
+  // Pesos aprendidos de ti (con datos suficientes): lo que hoy está en contra y a ti te cuesta mucho cuenta doble, y lo que apenas te afecta no cuenta.
+  const learned = learnedScoreShift(check, computeReadinessLearning((before.readinessLog ?? []).filter((c) => c.date !== todayIso), history));
+  if (learned.shift !== 0) check.learnedShift = learned.shift;
   athleteRepository.saveReadinessCheck(check);
 
   // El objetivo provisional se rehace con el check-in y queda fijo; la sesión de hoy se recalcula con todo lo nuevo.
@@ -54,7 +58,7 @@ export function commitMorning(
   if (next !== fresh) athleteRepository.saveProfile(next);
   refreshTodaySession(next, history, todayIso);
 
-  return buildResult(athleteRepository.getProfile(), history, todayIso, check, activeBefore.map((flag) => ({ flag, answer: followUps[flag.id] ?? null })));
+  return buildResult(athleteRepository.getProfile(), history, todayIso, check, activeBefore.map((flag) => ({ flag, answer: followUps[flag.id] ?? null })), learned);
 }
 
 function buildResult(
@@ -63,6 +67,7 @@ function buildResult(
   todayIso: string,
   check: ReadinessCheck,
   flags: { flag: PainFlag; answer: PainFollowUp | null }[],
+  learned: LearnedShift,
 ): MorningResult {
   const trained = history.some((h) => h.date === todayIso);
   const session = trained ? null : resolveTodaySession(profile, history, todayIso);
@@ -93,6 +98,8 @@ function buildResult(
     rest: score.rest,
     light: lightInfo,
     simulacro,
+    learned,
+    soreStrengthCut: Boolean(session?.soreStrengthCut),
   });
   const hrvLow = check.hrvVs === 'bajo' || score.hrv.hrPenalty > 0;
   return { light: dayLight, verdict: verdictFor({ level: score.level, day, hrvLow, light: dayLight?.color ?? null }), readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };

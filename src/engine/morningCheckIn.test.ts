@@ -286,6 +286,30 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     );
   });
 
+  it('lo aprendido de ti: un factor que te cuesta mucho cuenta doble (cambio) y uno que apenas te afecta no cuenta (nota)', () => {
+    const learned = {
+      shift: 0,
+      lines: [
+        { key: 'sleep' as const, kind: 'doble' as const, text: 'Sueño pesa doble hoy: en tus datos, cuando duermes mal, tus sesiones te cuestan +1,5 de RPE' },
+        { key: 'stress' as const, kind: 'neutro' as const, text: 'Estrés: en tus datos apenas te afecta (+0,2 de RPE), así que hoy no lo cuento en contra' },
+      ],
+    };
+    const r = describeMorning({ ...input, learned });
+    expect(texts(r.changes)).toContain(learned.lines[0].text);
+    expect(texts(r.notes)).toContain(learned.lines[1].text);
+  });
+
+  it('con agujetas fuertes el WOD evita esos movimientos y, si toca, la fuerza lleva una serie menos', () => {
+    const check = { ...base, soreZones: { 'muslo-i': 2 as const } };
+    expect(texts(describeMorning({ ...input, check }).changes)).toContain('Con agujetas fuertes, el WOD evita los movimientos que cargan esa zona');
+    expect(texts(describeMorning({ ...input, check, soreStrengthCut: true }).changes)).toContain('Con agujetas fuertes, el WOD evita esos movimientos y la fuerza lleva una serie menos');
+    // las leves solo recortan el accesorio
+    const leves = describeMorning({ ...input, check: { ...base, soreZones: { 'muslo-i': 1 as const } } });
+    expect(texts(leves.changes).some((t) => t.startsWith('Con agujetas fuertes'))).toBe(false);
+    // y en descanso no hay WOD que evitar
+    expect(texts(describeMorning({ ...input, day: 'rest', check }).changes).some((t) => t.startsWith('Con agujetas fuertes'))).toBe(false);
+  });
+
   it('el descanso de ayer cuenta como un cambio cuando suma a la nota, y no sale si no suma', () => {
     const r = describeMorning({ ...input, rest: { credit: 4, streak: 6, restDays: 1 } });
     expect(texts(r.changes)).toContain('Descansaste ayer tras 6 días seguidos: suma 4 puntos a tu preparación');

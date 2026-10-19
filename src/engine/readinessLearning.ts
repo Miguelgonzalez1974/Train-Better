@@ -52,6 +52,54 @@ const CONDITION: Record<RecoveryAxisKey | 'sleepHours' | 'hrv', string> = {
 const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+/** A partir de cuánto (en puntos de RPE) un factor en contra cuenta DOBLE para ti, y por debajo de cuánto "apenas te afecta" y no cuenta. */
+export const LEARNED_HIGH_DELTA = 1;
+export const LEARNED_LOW_DELTA = 0.3;
+const LEARNED_SHIFT_MAX = 2;
+
+export interface LearnedShiftLine {
+  key: LearnedFactorKey;
+  /** `doble`: en tus datos te cuesta mucho y hoy cuenta doble; `neutro`: apenas te afecta y hoy no cuenta en contra. */
+  kind: 'doble' | 'neutro';
+  text: string;
+}
+
+export interface LearnedShift {
+  /** Ajuste a la puntuación del check-in (-2…2): se guarda en `ReadinessCheck.learnedShift`. */
+  shift: number;
+  lines: LearnedShiftLine[];
+}
+
+const fmtDelta = (d: number) => `${d > 0 ? '+' : ''}${String(d).replace('.', ',')}`;
+
+/**
+ * Pesos aprendidos de ti: cuando hay datos suficientes, un factor en contra de HOY que en tu historial te sube mucho el esfuerzo
+ * de las sesiones (≥ 1 de RPE) cuenta doble, y uno que apenas te afecta (≤ 0,3) no se cuenta en contra. Así el ajuste de carga
+ * del check-in deja de ser el mismo para todos. Solo mira los factores que hoy están en contra, y solo con datos suficientes.
+ */
+export function learnedScoreShift(check: ReadinessCheck, learning: ReadinessLearning): LearnedShift {
+  const none: LearnedShift = { shift: 0, lines: [] };
+  if (!learning.ready) return none;
+  const axes = readinessAxisScores(check);
+  const adverse: LearnedFactorKey[] = (['sleep', 'soreness', 'stress', 'motivation'] as RecoveryAxisKey[]).filter((k) => axes[k] <= -1);
+  if (check.hrvVs === 'bajo') adverse.push('hrv');
+
+  let shift = 0;
+  const lines: LearnedShiftLine[] = [];
+  for (const key of adverse) {
+    const insight = learning.insights.find((i) => i.key === key);
+    if (!insight) continue;
+    if (insight.delta >= LEARNED_HIGH_DELTA) {
+      shift -= 1;
+      lines.push({ key, kind: 'doble', text: `${insight.label} pesa doble hoy: en tus datos, cuando ${insight.condition}, tus sesiones te cuestan ${fmtDelta(insight.delta)} de RPE` });
+    } else if (insight.delta <= LEARNED_LOW_DELTA) {
+      shift += 1;
+      lines.push({ key, kind: 'neutro', text: `${insight.label}: en tus datos apenas te afecta (${fmtDelta(insight.delta)} de RPE), así que hoy no lo cuento en contra` });
+    }
+  }
+  return { shift: Math.max(-LEARNED_SHIFT_MAX, Math.min(LEARNED_SHIFT_MAX, shift)), lines };
+}
+
 export function computeReadinessLearning(log: ReadinessCheck[] | undefined, history: SessionHistoryEntry[]): ReadinessLearning {
   const checkByDate = new Map((log ?? []).map((c) => [c.date, c]));
   // Una entrada por día (la última), con RPE válido.
