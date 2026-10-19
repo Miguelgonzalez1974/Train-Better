@@ -529,7 +529,7 @@ export interface DailySession {
   /** Sello de `SESSION_GEN_VERSION` con el que se genero — lo pone `saveCachedSession`. Ausente en sesiones cacheadas antes de introducir el sello (se tratan como version 0). */
   genVersion?: number;
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */
-  deloadReason?: 'fatiga' | 'taper' | 'rpe-alto';
+  deloadReason?: 'fatiga' | 'taper' | 'rpe-alto' | 'preparacion';
   deloadNote?: string;
   /**
    * Resumen "por que tu sesion es asi hoy" — mismos fragmentos ya visibles dentro de cada bloque

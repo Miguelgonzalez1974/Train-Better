@@ -85,6 +85,7 @@ import { getLibraryWod, libraryWods, type LibraryWod } from '../data/library/lib
 import { getCatalogWod, getWodCatalog, type CatalogWod, type WodSource } from './wodCatalog';
 import { competitionInfo, isCompetitionTaper, type CompetitionDay } from './competition';
 import { resolveCompetitionDay } from './taperPlan';
+import { sustainedLowReadiness } from './readinessTrend';
 import { localizeWodText } from './wodUnits';
 import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type SelectionContext } from './wodSelection';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
@@ -4177,6 +4178,8 @@ function generateDailySessionCore(
     responseProfile.recovery.tier,
     history,
     responseProfile.rpe.reliability,
+    // Varios días seguidos con la preparación baja (o la HRV por debajo de tu rango): descarga sin esperar al calendario. Al planificar la semana no cuenta.
+    !planningPass && sustainedLowReadiness(profile, history, dateIso) !== null,
   );
   const deloadReason = resolved.reason;
   // La cuenta atras de la competicion fuerza la semana de entrenamiento (pico, taper…) — salvo que la seguridad

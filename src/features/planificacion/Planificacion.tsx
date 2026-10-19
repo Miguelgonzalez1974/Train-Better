@@ -11,6 +11,7 @@ import type {
   SessionBlockResult,
   SessionHistoryEntry,
   SetFeedbackEntry,
+  SetFeel,
   StrainTarget,
   WorkSetEntry,
   VariantPersonalRecords,
@@ -417,6 +418,37 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       actualReps: topSet.reps,
       actualRpe: rpe,
       estimated1rm,
+    });
+    setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
+  }
+
+  /**
+   * Cómo fue la primera serie ("me sobró"… "muy duro"): se guarda como feedback del levantamiento para calibrar al coach. Si ya hay
+   * un RPE de la serie más pesada del mismo día, ese dato (más preciso) manda y no se pisa.
+   */
+  function handleFeelSet(index: number, feel: SetFeel) {
+    if (!session) return;
+    const block = session.blocks[index];
+    if (!block) return;
+    const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
+    if (existing?.actualRpe !== undefined) return;
+    const first = todayWorkLog.find((e) => e.movementId === block.movementId && e.setNumber === 1);
+    const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
+    const prescribedSets = existing?.prescribedSets ?? block.sets ?? 0;
+    const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
+    if (prescribedKg <= 0 || prescribedSets < 2) return;
+    const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
+    athleteRepository.appendSetFeedbackEntry({
+      date: session.date,
+      movementId: block.movementId,
+      block: block.block as 'strength' | 'oly',
+      prescribedKg,
+      prescribedReps,
+      prescribedSets,
+      feel,
+      prKey,
+      pctOf1rm,
+      ...(first ? { actualKg: first.kg, actualReps: first.reps } : {}),
     });
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
   }
@@ -868,6 +900,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           progress={movementProgress}
           onLogWorkSet={handleLogWorkSet}
           onClearWorkSet={handleClearWorkSet}
+          canRaise={session.dayLight?.color !== 'ambar' && activePainFlags.length === 0}
+          onFeel={handleFeelSet}
           onExit={() => setFocusMode(false)}
           onFinish={() => {
             setFocusMode(false);

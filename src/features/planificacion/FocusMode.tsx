@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession, SessionBlockResult, WorkSetEntry } from '../../data/athlete/types';
+import type { DailySession, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
-import { parseWorkingReps } from '../../engine/setFeedback';
+import { parseWorkingReps, SET_FEEL_LABEL } from '../../engine/setFeedback';
+import { adjustRemainingSets } from '../../engine/setAdjust';
 import { localizeWodText } from '../../engine/wodUnits';
 import { fmtKgValue } from '../../lib/format';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
@@ -34,6 +35,10 @@ interface FocusModeProps {
   progress: MovementProgressData;
   onLogWorkSet: (movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number) => void;
   onClearWorkSet: (movementId: string, setNumber: number) => void;
+  /** Si hoy se puede subir la carga (no en día ámbar ni con una molestia activa): un "me sobró" solo sube con esto. */
+  canRaise: boolean;
+  /** Cómo fue la primera serie de un levantamiento (índice de su bloque): se guarda para calibrar al coach. */
+  onFeel: (index: number, feel: SetFeel) => void;
   onExit: () => void;
   onFinish: () => void;
 }
@@ -101,6 +106,8 @@ export function FocusMode({
   progress,
   onLogWorkSet,
   onClearWorkSet,
+  canRaise,
+  onFeel,
   onExit,
   onFinish,
 }: FocusModeProps) {
@@ -130,6 +137,8 @@ export function FocusMode({
   // Carga en curso por serie de fuerza/oly (clave `${movementId}:${setNumber}`) antes de fijarla al
   // marcar la serie. Si no hay valor en curso se usa el ya registrado, y si no, lo prescrito.
   const [perSetKg, setPerSetKg] = useState<Record<string, number>>({});
+  // Cómo fue la primera serie de cada levantamiento (por movimiento): ajusta el peso sugerido de las que quedan.
+  const [feelByMovement, setFeelByMovement] = useState<Record<string, SetFeel>>({});
   const loggedKg = (movementId: string, n: number) =>
     todayWorkLog.find((e) => e.movementId === movementId && e.setNumber === n)?.kg;
   const setIsDone = (movementId: string, n: number) =>
@@ -283,7 +292,22 @@ export function FocusMode({
                     setPerSetKg((p) => ({ ...p, [`${mid}:${n}`]: next }));
                     if (setIsDone(mid, n)) onLogWorkSet(mid, blk, n, next, reps);
                   };
+                  // Tras la primera serie: cómo ha ido ajusta el peso de las que quedan (sugerencia: los +/- siguen mandando).
+                  const showFeel = !singleLog && rowCount >= 2 && prescribed > 0 && setIsDone(mid, 1);
+                  const picked = feelByMovement[mid];
+                  const adjustment = picked ? adjustRemainingSets({ prescribedKg: prescribed, feel: picked, canRaise, sets: rowCount }) : null;
+                  const pickFeel = (feel: SetFeel) => {
+                    setFeelByMovement((prev) => ({ ...prev, [mid]: feel }));
+                    const next = adjustRemainingSets({ prescribedKg: prescribed, feel, canRaise, sets: rowCount });
+                    setPerSetKg((prev) => {
+                      const out = { ...prev };
+                      for (let n = 2; n <= rowCount; n++) if (!setIsDone(mid, n)) out[`${mid}:${n}`] = next.kg;
+                      return out;
+                    });
+                    onFeel(e.index, feel);
+                  };
                   return (
+                    <>
                     <div className="flex flex-col gap-1.5">
                       {Array.from({ length: rowCount }, (_, s) => {
                         const n = s + 1;
@@ -341,6 +365,28 @@ export function FocusMode({
                         );
                       })}
                     </div>
+                    {showFeel && (
+                      <div className="rounded-xl bg-white/[0.04] p-3">
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">¿Cómo ha ido la primera?</p>
+                        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Cómo ha ido la primera serie">
+                          {(Object.keys(SET_FEEL_LABEL) as SetFeel[]).map((feel) => (
+                            <button
+                              key={feel}
+                              role="radio"
+                              aria-checked={picked === feel}
+                              onClick={() => pickFeel(feel)}
+                              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                                picked === feel ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
+                              }`}
+                            >
+                              {SET_FEEL_LABEL[feel]}
+                            </button>
+                          ))}
+                        </div>
+                        {adjustment && <p className="mt-2 text-xs leading-snug text-neutral-300">{adjustment.message}</p>}
+                      </div>
+                    )}
+                    </>
                   );
                 })()}
               {b.notes && <FocusNote text={b.notes} />}

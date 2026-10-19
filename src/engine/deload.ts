@@ -3,9 +3,11 @@ import type { AcwrZone } from './loadMetrics';
 import { daysBetween } from './loadMetrics';
 import type { RecoveryTier } from './responseProfile';
 
-export type DeloadReason = 'fatiga' | 'taper' | 'rpe-alto';
+export type DeloadReason = 'fatiga' | 'taper' | 'rpe-alto' | 'preparacion';
 
 export const DELOAD_REASON_NOTE: Record<DeloadReason, string> = {
+  preparacion:
+    'Descarga activada por tu preparación: llevas varios días seguidos con la preparación baja (o con la HRV por debajo de tu rango). No esperamos al calendario: bajamos unos días para que te recuperes y vuelvas a rendir.',
   fatiga: 'Descarga activada por tu carga acumulada (ACWR en riesgo alto) — hoy toca bajar el pie del acelerador, no seguir el plan estándar de la semana.',
   'rpe-alto':
     'Descarga activada por tu esfuerzo percibido: llevas varias sesiones seguidas a RPE 9 o más. Un coach no espera a que el ACWR lo confirme — bajamos unos días para que asimiles el trabajo y vuelvas a rendir.',
@@ -62,6 +64,8 @@ export function resolveTrainingWeek(
   recoveryTier: RecoveryTier | null = null,
   history: SessionHistoryEntry[] = [],
   rpeReliability = 1,
+  /** La tendencia de tu preparación pide descarga (ver `sustainedLowReadiness`). */
+  lowReadiness = false,
 ): { week: 1 | 2 | 3 | 4; reason?: DeloadReason } {
   // El taper de una competicion ya no es una descarga: lo gestiona la cuenta atras de `competition.ts` (pico con el
   // volumen recortado) y aqui solo mandan los motivos de seguridad.
@@ -72,5 +76,7 @@ export function resolveTrainingWeek(
   // Sobrecarga percibida sostenida (varias sesiones a RPE >= 9): se descarga aunque el ACWR aun no lo diga.
   // En la semana 4 de calendario ya es descarga, no se anuncia otro motivo.
   if (calendarWeek !== 4 && hasSustainedHighRpe(history, today, rpeReliability)) return { week: 4, reason: 'rpe-alto' };
+  // Varios días seguidos con la preparación baja (o la HRV por debajo de tu rango): descarga sin esperar al calendario.
+  if (calendarWeek !== 4 && lowReadiness) return { week: 4, reason: 'preparacion' };
   return { week: calendarWeek };
 }
