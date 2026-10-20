@@ -45,7 +45,7 @@
   --c-n-300: 68 64 60;
   --c-n-400: 87 83 78;
   --c-n-500: 107 101 96;
-  --c-n-600: 150 143 138;
+  --c-n-600: 118 111 105;
   --c-brand-bg: 250 248 245;
   --c-brand-surface: 255 255 255;
   --c-brand-surface-muted: 244 241 236;
@@ -54,17 +54,38 @@
   /* Solo se usa como hover de botones naranja con texto negro: en claro tiene que ACLARARSE (un naranja
      más oscuro dejaba el texto negro casi ilegible al pasar el cursor). */
   --c-brand-orange-dark: 249 115 22;
-  --c-brand-gold: 161 116 26;
+  --c-brand-gold: 154 110 22;
   --c-brand-gold-soft: 133 95 20;
   --c-brand-neon: 22 163 74;
   --c-brand-neon-soft: 21 128 61;
   --c-state-good: 5 150 105;
   --c-state-mid: 180 83 9;
   --c-state-low: 220 38 38;
-  --c-state-cool: 2 132 199;
+  --c-state-cool: 3 118 180;
   --c-state-hot: 234 88 12;
-  --c-over: 220 60 30;
+  --c-over: 200 45 20;
   --c-sleep: 109 40 217;
+}
+
+/* Tema claro: los colores de estado pálidos (verde, ámbar, rojo, azul 200-400 de Tailwind) están pensados para fondo oscuro y
+   sobre blanco no se leen (contraste 1,2 a 2:1). Aquí se oscurecen al tono 700, que da >= 4,5:1. Solo texto; los fondos con
+   transparencia (bg-emerald-400/15...) se quedan como están. */
+:root[data-theme='light'] .text-emerald-300,
+:root[data-theme='light'] .text-emerald-400 {
+  color: rgb(4 120 87);
+}
+:root[data-theme='light'] .text-amber-300,
+:root[data-theme='light'] .text-amber-400 {
+  color: rgb(180 83 9);
+}
+:root[data-theme='light'] .text-red-200\/80,
+:root[data-theme='light'] .text-red-300,
+:root[data-theme='light'] .text-red-400 {
+  color: rgb(185 28 28);
+}
+:root[data-theme='light'] .text-sky-300,
+:root[data-theme='light'] .text-sky-400 {
+  color: rgb(3 105 161);
 }
 
 body {
