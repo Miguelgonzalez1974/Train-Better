@@ -9,10 +9,12 @@ import {
   BUILDER_GROUPS,
   copyMeals,
   foodBounds,
+  gramsFromTyped,
   materialize,
   mealStatus,
   scaleMealItems,
   snapGrams,
+  stepGrams,
   totalsOf,
 } from './mealBuilder';
 import { buildShoppingList, planDayMeals, type MealPlanInput } from './mealPlan';
@@ -50,6 +52,43 @@ describe('grupos y limites del selector', () => {
     expect(snapGrams(food('avena'), 33)).toBe(35);
     expect(snapGrams(food('avena'), 1)).toBe(30);
     expect(snapGrams(food('wasa'), 500)).toBe(50);
+  });
+});
+
+describe('cantidades libres (tecleadas)', () => {
+  it('cualquier cantidad positiva vale: sin el mínimo ni el máximo del catálogo', () => {
+    expect(gramsFromTyped(food('avena'), 7)).toBe(7);
+    expect(gramsFromTyped(food('avena'), 37)).toBe(37);
+    expect(gramsFromTyped(food('arroz'), 1200)).toBe(1200);
+    expect(gramsFromTyped(food('avena'), 0.4)).toBe(1);
+  });
+
+  it('lo que no es un número positivo no se acepta', () => {
+    expect(gramsFromTyped(food('avena'), 0)).toBeNull();
+    expect(gramsFromTyped(food('avena'), -5)).toBeNull();
+    expect(gramsFromTyped(food('avena'), Number.NaN)).toBeNull();
+  });
+
+  it('lo que se cuenta por piezas se teclea en piezas enteras', () => {
+    const g = food('huevos').unit!.grams;
+    expect(gramsFromTyped(food('huevos'), 1)).toBe(g);
+    expect(gramsFromTyped(food('huevos'), 9)).toBe(9 * g);
+    expect(gramsFromTyped(food('huevos'), 2.4)).toBe(2 * g);
+  });
+
+  it('+/− saltan como el alimento pero bajan hasta 1 g y suben sin tope', () => {
+    expect(stepGrams(food('avena'), 37, -1)).toBe(32);
+    expect(stepGrams(food('avena'), 37, 1)).toBe(42);
+    expect(stepGrams(food('avena'), 3, -1)).toBe(1);
+    expect(stepGrams(food('arroz'), 1000, 1)).toBeGreaterThan(1000);
+    const g = food('huevos').unit!.grams;
+    expect(stepGrams(food('huevos'), g, -1)).toBe(g);
+    expect(stepGrams(food('huevos'), 8 * g, 1)).toBe(9 * g);
+  });
+
+  it('una cantidad fuera de los límites del catálogo no se toca al reescalar la comida', () => {
+    const items: CustomMealItem[] = [{ foodId: 'arroz', grams: 20 }];
+    expect(scaleMealItems(items, { carbs: 40 }, { carbs: 80 }, getFood)).toEqual(items);
   });
 });
 

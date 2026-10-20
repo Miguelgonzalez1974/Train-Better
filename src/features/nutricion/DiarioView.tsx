@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, Minus, Plus, X } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import { makeFoodResolver } from '../../engine/customFoods';
-import { foodBounds, snapGrams, totalsOf } from '../../engine/mealBuilder';
-import { fixedPortion, MEAL_LABEL, quantityText, type MealKey } from '../../engine/mealPlan';
+import { totalsOf } from '../../engine/mealBuilder';
+import { fixedPortion, MEAL_LABEL, type MealKey } from '../../engine/mealPlan';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import type { ExtraFoodEntry } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
@@ -10,6 +10,7 @@ import { SectionLabel } from '../shell/SectionLabel';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
 import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MacroRing } from './MacroRing';
+import { QuantityStepper } from './QuantityStepper';
 import { addDays, dayLabel, planFor, trainingHourFor, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
 
@@ -55,16 +56,13 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
     const items = e.items.flatMap((it, index) => {
       const food = resolve(it.foodId);
       if (!food) return [];
-      const units = food.unit ? Math.max(1, Math.round(it.grams / food.unit.grams)) : undefined;
-      const b = foodBounds(food);
-      return [{ index, food, grams: it.grams, text: quantityText(food, it.grams, units), min: b.min, max: b.max, fixed: b.min === b.max }];
+      return [{ index, food, grams: it.grams }];
     });
     return { entry: e, items, protein: t.protein, carbs: t.carbs };
   });
 
-  function step(entryId: string, item: { index: number; food: NonNullable<ReturnType<typeof resolve>>; grams: number }, dir: 1 | -1) {
-    const next = snapGrams(item.food, item.grams + dir * foodBounds(item.food).step);
-    updatePrefs((p) => withExtraItemGrams(p, iso, entryId, item.index, next));
+  function setGrams(entryId: string, itemIndex: number, grams: number) {
+    updatePrefs((p) => withExtraItemGrams(p, iso, entryId, itemIndex, grams));
   }
   const done = rows.reduce((acc, r) => ({ protein: acc.protein + r.protein, carbs: acc.carbs + r.carbs }), { protein: 0, carbs: 0 });
   const missing = { protein: Math.max(0, objective.protein - done.protein), carbs: Math.max(0, objective.carbs - done.carbs) };
@@ -190,29 +188,7 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
                     {items.map((it) => (
                       <li key={`${entry.id}-${it.index}`} className="flex items-center justify-between gap-2">
                         <span className="min-w-0 flex-1 text-sm leading-snug text-neutral-100">{it.food.name}</span>
-                        <span className="flex shrink-0 items-center gap-1">
-                          {!it.fixed && (
-                            <button
-                              onClick={() => step(entry.id, it, -1)}
-                              disabled={it.grams <= it.min}
-                              aria-label={`Menos ${it.food.name}`}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors hover:text-white disabled:opacity-30"
-                            >
-                              <Minus size={13} />
-                            </button>
-                          )}
-                          <span className="num min-w-[4rem] text-center text-xs font-semibold text-white">{it.text}</span>
-                          {!it.fixed && (
-                            <button
-                              onClick={() => step(entry.id, it, 1)}
-                              disabled={it.grams >= it.max}
-                              aria-label={`Más ${it.food.name}`}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors hover:text-white disabled:opacity-30"
-                            >
-                              <Plus size={13} />
-                            </button>
-                          )}
-                        </span>
+                        <QuantityStepper size="sm" food={it.food} grams={it.grams} onChange={(g) => setGrams(entry.id, it.index, g)} />
                       </li>
                     ))}
                   </ul>

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Minus, Plus, Search, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { FOODS } from '../../data/nutrition/foods';
 import type { CustomFood, CustomMealItem, ExtraFoodEntry, NutritionPrefs } from '../../data/athlete/types';
 import { customFoodToCatalogFood } from '../../engine/customFoods';
-import { BUILDER_GROUPS, builderFoods, foodBounds, snapGrams, totalsOf, type BuilderGroup } from '../../engine/mealBuilder';
-import { fixedPortion, quantityText } from '../../engine/mealPlan';
+import { BUILDER_GROUPS, builderFoods, totalsOf, type BuilderGroup } from '../../engine/mealBuilder';
+import { fixedPortion } from '../../engine/mealPlan';
+import { QuantityStepper } from './QuantityStepper';
 import { withExtra } from './nutritionData';
 
 function fmtHour(h: number): string {
@@ -55,13 +56,8 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
     setItems((prev) => [...prev, { foodId, grams: fixedPortion(food).grams }]);
   }
 
-  function step(index: number, dir: 1 | -1) {
-    const it = items[index];
-    const food = resolve(it.foodId);
-    if (!food) return;
-    const b = foodBounds(food);
-    const next = snapGrams(food, it.grams + dir * b.step);
-    setItems((prev) => prev.map((x, i) => (i === index ? { ...x, grams: next } : x)));
+  function setGrams(index: number, grams: number) {
+    setItems((prev) => prev.map((x, i) => (i === index ? { ...x, grams } : x)));
   }
 
   function confirm() {
@@ -86,33 +82,10 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
             {items.map((it, index) => {
               const food = resolve(it.foodId);
               if (!food) return null;
-              const b = foodBounds(food);
-              const units = food.unit ? Math.max(1, Math.round(it.grams / food.unit.grams)) : undefined;
-              const fixed = b.min === b.max;
               return (
                 <li key={`${it.foodId}-${index}`} className="flex items-center gap-2 py-2.5">
-                  <span className="flex-1 text-sm text-neutral-100">{food.name}</span>
-                  {!fixed && (
-                    <button
-                      onClick={() => step(index, -1)}
-                      disabled={it.grams <= b.min}
-                      aria-label={`Menos ${food.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors hover:text-white disabled:opacity-30"
-                    >
-                      <Minus size={14} />
-                    </button>
-                  )}
-                  <span className="num min-w-[4.5rem] text-center text-sm font-semibold text-white">{quantityText(food, it.grams, units)}</span>
-                  {!fixed && (
-                    <button
-                      onClick={() => step(index, 1)}
-                      disabled={it.grams >= b.max}
-                      aria-label={`Más ${food.name}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors hover:text-white disabled:opacity-30"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  )}
+                  <span className="min-w-0 flex-1 text-sm leading-snug text-neutral-100">{food.name}</span>
+                  <QuantityStepper food={food} grams={it.grams} onChange={(g) => setGrams(index, g)} />
                   <button
                     onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}
                     aria-label={`Quitar ${food.name}`}

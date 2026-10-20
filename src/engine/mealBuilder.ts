@@ -93,6 +93,26 @@ export function snapGrams(food: Food, grams: number): number {
   return Math.max(b.min, Math.min(b.max, Math.round(g / b.step) * b.step));
 }
 
+/** Cantidad mínima que se puede apuntar a mano (gramos, ml o una pieza): sin tope por arriba. */
+export const MIN_TYPED_GRAMS = 1;
+
+/** Cantidad tras un toque de +/−: salta como el alimento (una pieza, 5 o 10 g) pero SIN los límites del catálogo. */
+export function stepGrams(food: Food, grams: number, dir: 1 | -1): number {
+  const { step } = foodBounds(food);
+  const min = food.unit ? food.unit.grams : MIN_TYPED_GRAMS;
+  return Math.max(min, Math.round(grams + dir * step));
+}
+
+/**
+ * Cantidad tecleada por el atleta → gramos (o ml) guardados. Los alimentos que se cuentan por piezas (huevos, tortitas)
+ * se teclean en piezas enteras; el resto, en gramos o ml enteros. Cualquier número positivo vale; null si no lo es.
+ */
+export function gramsFromTyped(food: Food, typed: number): number | null {
+  if (!Number.isFinite(typed) || typed <= 0) return null;
+  if (food.unit) return Math.max(1, Math.round(typed)) * food.unit.grams;
+  return Math.max(MIN_TYPED_GRAMS, Math.round(typed));
+}
+
 /** Proteína e hidratos que suman los alimentos (redondeados a gramos enteros). `resolve` incluye los alimentos propios del atleta si los hay. */
 export function totalsOf(items: CustomMealItem[], resolve: FoodResolver = getFood): { protein: number; carbs: number } {
   let p = 0;
@@ -237,6 +257,9 @@ export function scaleMealItems(
   return items.map((i) => {
     const f = resolve(i.foodId);
     if (!f || builderGroup(f) !== 'Hidrato' || !f.range) return i;
+    // Una cantidad tecleada fuera de los límites del catálogo se respeta tal cual.
+    const b = foodBounds(f);
+    if (i.grams < b.min || i.grams > b.max) return i;
     return { foodId: i.foodId, grams: snapGrams(f, i.grams * k) };
   });
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, CircleAlert, CircleCheck, Minus, Plus, RotateCcw, Search, Trash2, Utensils, X } from 'lucide-react';
+import { Check, CircleAlert, CircleCheck, Plus, RotateCcw, Search, Trash2, Utensils, X } from 'lucide-react';
 import { FOODS } from '../../data/nutrition/foods';
 import type { CustomFood, CustomMealItem } from '../../data/athlete/types';
 import { customFoodToCatalogFood } from '../../engine/customFoods';
@@ -8,17 +8,16 @@ import {
   BUILDER_GROUPS,
   builderFoods,
   builderGroup,
-  foodBounds,
   materialize,
   MEAL_STATE_LABEL,
   mealStatus,
-  snapGrams,
   totalsOf,
   type BuilderGroup,
 } from '../../engine/mealBuilder';
-import { macrosOf, quantityText, type PlannedMeal } from '../../engine/mealPlan';
+import { macrosOf, type PlannedMeal } from '../../engine/mealPlan';
 import { formatServing } from '../../engine/nutritionPlan';
 import { MacroRing } from './MacroRing';
+import { QuantityStepper } from './QuantityStepper';
 
 const STATUS_STYLE = {
   ok: { box: 'bg-emerald-500/10 text-emerald-300', Icon: CircleCheck },
@@ -82,13 +81,8 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
     commit([...items, { foodId, grams: autoGrams(food, items, target, resolve) }]);
   }
 
-  function step(index: number, dir: 1 | -1) {
-    const it = items[index];
-    const food = resolve(it.foodId);
-    if (!food) return;
-    const b = foodBounds(food);
-    const next = snapGrams(food, it.grams + dir * b.step);
-    commit(items.map((x, i) => (i === index ? { ...x, grams: next } : x)));
+  function setGrams(index: number, grams: number) {
+    commit(items.map((x, i) => (i === index ? { ...x, grams } : x)));
   }
 
   const chosen = new Set(items.map((i) => i.foodId));
@@ -185,10 +179,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
                 {items.map((it, index) => {
                   const food = resolve(it.foodId);
                   if (!food) return null;
-                  const b = foodBounds(food);
-                  const units = food.unit ? Math.max(1, Math.round(it.grams / food.unit.grams)) : undefined;
                   const m = macrosOf(food, it.grams);
-                  const fixed = b.min === b.max;
                   return (
                     <li key={`${it.foodId}-${index}`} className="py-2.5">
                       <div className="flex items-start justify-between gap-2">
@@ -206,29 +197,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
                           {builderGroup(food)}
                           {m.p >= 1 || m.c >= 1 ? ` · ${Math.round(m.p)} g prot · ${Math.round(m.c)} g hid.` : ''}
                         </p>
-                        <div className="flex items-center gap-1">
-                          {!fixed && (
-                            <button
-                              onClick={() => step(index, -1)}
-                              disabled={it.grams <= b.min}
-                              aria-label={`Menos ${food.name}`}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors hover:text-white disabled:opacity-30"
-                            >
-                              <Minus size={14} />
-                            </button>
-                          )}
-                          <span className="num min-w-[4.5rem] text-center text-sm font-semibold text-white">{quantityText(food, it.grams, units)}</span>
-                          {!fixed && (
-                            <button
-                              onClick={() => step(index, 1)}
-                              disabled={it.grams >= b.max}
-                              aria-label={`Más ${food.name}`}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-colors hover:text-white disabled:opacity-30"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          )}
-                        </div>
+                        <QuantityStepper food={food} grams={it.grams} onChange={(g) => setGrams(index, g)} />
                       </div>
                     </li>
                   );
