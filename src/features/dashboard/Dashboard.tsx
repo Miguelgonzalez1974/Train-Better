@@ -42,6 +42,7 @@ import { ThemeToggle } from '../shell/ThemeToggle';
 import { ImbalancesCard } from './ImbalancesCard';
 import { computeImbalances } from '../../engine/imbalances';
 import { ResponseProfileCard } from './ResponseProfileCard';
+import { LoadsCard } from './LoadsCard';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
@@ -478,6 +479,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
                 )}
               </p>
             )}
+
+            <LoadsCard
+              history={history}
+              prLog={profile.prLog ?? []}
+              setFeedbackLog={profile.setFeedbackLog ?? []}
+              bodyweightLog={profile.bodyweightLog ?? []}
+              workLog={profile.workLog ?? []}
+              prs={profile.prs}
+            />
 
             {/* El perfil de respuesta no tiene medidor: es una actividad continua del coach (calibrando cómo respondes). Ya colapsa sola a una frase. */}
             <ResponseProfileCard

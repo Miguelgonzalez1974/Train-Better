@@ -28,13 +28,13 @@ const RESPONSE_FAST_SESSIONS = 14;
 const RESPONSE_FAST_SETFEEL = 16;
 
 /** Feedback de la 1ª serie: valoraciones minimas por levantamiento y cuantas de las mas recientes se promedian. */
-const SETFEEL_MIN_OBS = 4;
+export const SETFEEL_MIN_OBS = 4;
 const SETFEEL_RECENT = 8;
 /** Cada punto de sensacion media (justo = 0, "muy duro" = +2) mueve la carga de trabajo ~3%, acotado a [-6%, +4%]. */
 const SETFEEL_KG_PER_POINT = 0.03;
 
 /** Registro cuantitativo "hice X kg x Y @ RPE Z": series minimas por lift y cuantas de las recientes se promedian. */
-const SETLOAD_MIN_OBS = 3;
+export const SETLOAD_MIN_OBS = 3;
 const SETLOAD_RECENT = 6;
 /** Cuanto puede mover la carga la calibracion por e1RM medido — mas ancho tras `confident`. */
 const SETLOAD_CLAMP_PRE = 0.05;
