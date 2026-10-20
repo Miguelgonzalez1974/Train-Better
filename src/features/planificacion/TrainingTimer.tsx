@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Timer, Pause, Play, RotateCcw, X, Minus, Plus, Maximize2, Minimize2 } from 'lucide-react';
 import { readClockRuns, recordClockStop } from './workoutClockResult';
 
@@ -166,7 +166,7 @@ function RoundBadge({ text, borderClass }: { text: string; borderClass: string }
 type ClockTone = 'neon' | 'gold' | 'orange';
 const TONE_TEXT: Record<ClockTone, string> = { neon: 'text-brand-neon', gold: 'text-brand-gold', orange: 'text-brand-orange' };
 const TONE_BG: Record<ClockTone, string> = { neon: 'bg-brand-neon', gold: 'bg-brand-gold', orange: 'bg-brand-orange' };
-const TONE_TINT: Record<ClockTone, string> = { neon: 'bg-brand-neon/20', gold: 'bg-brand-gold/20', orange: 'bg-brand-orange/25' };
+const TONE_TINT: Record<ClockTone, string> = { neon: 'bg-brand-neon/25', gold: 'bg-brand-gold/25', orange: 'bg-brand-orange/30' };
 
 interface FullscreenClockProps {
   label: string;
@@ -183,64 +183,83 @@ interface FullscreenClockProps {
 }
 
 /**
+ * Colores FIJOS del tema oscuro para la pantalla completa. El tema claro cambia `white`, los grises y los colores de marca
+ * (a oscuros), pero esta pantalla es siempre negra: sin esto el texto sale gris oscuro sobre negro. Se pisan solo aquí,
+ * con las variables del tema (un poco más vivos el dorado y el naranja, para leerlos de lejos).
+ */
+const CLOCK_COLORS = {
+  colorScheme: 'dark',
+  '--c-white': '255 255 255',
+  '--c-n-100': '255 255 255',
+  '--c-n-200': '245 245 245',
+  '--c-n-300': '229 229 229',
+  '--c-n-400': '212 212 212',
+  '--c-n-500': '163 163 163',
+  '--c-n-600': '115 115 115',
+  '--c-brand-orange': '255 122 26',
+  '--c-brand-gold': '250 204 21',
+  '--c-brand-neon': '74 222 128',
+} as CSSProperties;
+
+/**
  * Reloj a pantalla completa para verlo de lejos (el móvil apoyado en el suelo o la pared): la cifra ocupa toda la
- * pantalla, apaisado se pone al lado el contador de rondas y los botones van abajo, grandes. Es la misma máquina del
- * reloj de siempre; esto solo cambia cómo se ve.
+ * pantalla, apaisado se pone al lado el contador de rondas y los botones van abajo, grandes y con colores sólidos. Es la
+ * misma máquina del reloj de siempre; esto solo cambia cómo se ve.
  */
 function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extras, rounds, onClose }: FullscreenClockProps) {
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-black p-4" role="dialog" aria-label="Reloj a pantalla completa">
+    <div className="fixed inset-0 z-[60] flex flex-col gap-2 bg-black p-4" style={CLOCK_COLORS} role="dialog" aria-label="Reloj a pantalla completa">
       <div aria-hidden="true" className={`pointer-events-none absolute inset-0 transition-colors duration-300 ${tint ? TONE_TINT[tone] : ''}`} />
-      <div className="relative flex items-center justify-between gap-3">
+      <div className="relative z-10 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className={`truncate text-lg font-bold uppercase tracking-[0.14em] ${TONE_TEXT[tone]}`}>{label}</p>
-          {sub && <p className="truncate text-base font-semibold text-neutral-300">{sub}</p>}
+          <p className={`truncate text-2xl font-extrabold uppercase tracking-[0.12em] ${TONE_TEXT[tone]}`}>{label}</p>
+          {sub && <p className="truncate text-lg font-semibold text-white">{sub}</p>}
         </div>
-        <button onClick={onClose} aria-label="Salir de pantalla completa" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-neutral-200 active:bg-white/20">
-          <Minimize2 size={20} />
+        <button onClick={onClose} aria-label="Salir de pantalla completa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-white active:bg-white/30">
+          <Minimize2 size={22} />
         </button>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col items-stretch gap-3 landscape:flex-row">
-        <div className="flex min-h-0 flex-1 items-center justify-center">
-          <p className="font-bold leading-none tabular-nums text-white" style={{ fontSize: 'min(46vh, 26vw)' }} aria-live="off">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col items-stretch gap-3 landscape:flex-row">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center">
+          <p className="font-black leading-none tabular-nums text-white" style={{ fontSize: 'min(48vh, 27vw)' }} aria-live="off">
             {time}
           </p>
         </div>
         {rounds && (
-          <div className="flex shrink-0 items-stretch gap-2 landscape:w-[30%] landscape:flex-col">
-            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl bg-white/5 py-2" aria-live="polite">
-              <span className="font-bold leading-none tabular-nums text-white" style={{ fontSize: 'min(24vh, 18vw)' }}>
+          <div className="flex shrink-0 items-stretch gap-2 landscape:w-[32%] landscape:flex-col">
+            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border-2 border-white/30 py-2" aria-live="polite">
+              <span className="font-black leading-none tabular-nums text-white" style={{ fontSize: 'min(22vh, 18vw)' }}>
                 {rounds.value}
               </span>
-              <span className="mt-1 text-xs font-semibold uppercase tracking-wider text-neutral-500">rondas</span>
+              <span className="mt-1 text-sm font-bold uppercase tracking-wider text-neutral-300">rondas</span>
             </div>
-            <div className="flex flex-[1.2] gap-2">
-              <button onClick={rounds.onSub} aria-label="Restar ronda" className="flex w-14 items-center justify-center rounded-2xl bg-white/5 text-neutral-400 active:bg-white/15">
-                <Minus size={22} strokeWidth={2.5} />
+            <div className="flex flex-[1.3] gap-2">
+              <button onClick={rounds.onSub} aria-label="Restar ronda" className="flex w-16 items-center justify-center rounded-2xl border-2 border-white/30 text-white active:bg-white/20">
+                <Minus size={26} strokeWidth={3} />
               </button>
-              <button onClick={rounds.onAdd} aria-label="Sumar ronda" className="flex flex-1 flex-col items-center justify-center rounded-2xl bg-brand-neon/20 text-brand-neon active:bg-brand-neon/40">
-                <span className="text-5xl font-bold leading-none">+1</span>
-                <span className="mt-1 text-xs font-medium opacity-80">ronda</span>
+              <button onClick={rounds.onAdd} aria-label="Sumar ronda" className="flex flex-1 flex-col items-center justify-center rounded-2xl bg-brand-neon text-black active:opacity-80">
+                <span className="text-6xl font-black leading-none">+1</span>
+                <span className="mt-1 text-sm font-bold">ronda</span>
               </button>
             </div>
           </div>
         )}
       </div>
 
-      <div className="relative flex items-stretch gap-2">
+      <div className="relative z-10 flex items-stretch gap-2">
         {extras?.map((e) => (
-          <button key={e.label} onClick={e.onClick} className="rounded-2xl bg-white/10 px-5 py-4 text-base font-semibold text-neutral-200 active:bg-white/20">
+          <button key={e.label} onClick={e.onClick} className="rounded-2xl border-2 border-white/30 px-6 py-4 text-lg font-bold text-white active:bg-white/20">
             {e.label}
           </button>
         ))}
-        <button onClick={primary.onClick} className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-xl font-bold text-black active:opacity-80 ${TONE_BG[tone]}`}>
-          {primary.running ? <Pause size={24} strokeWidth={2.5} /> : <Play size={24} strokeWidth={2.5} />}
+        <button onClick={primary.onClick} className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-2xl font-extrabold text-black active:opacity-80 ${TONE_BG[tone]}`}>
+          {primary.running ? <Pause size={26} strokeWidth={3} /> : <Play size={26} strokeWidth={3} />}
           {primary.label}
         </button>
         {onReset && (
-          <button onClick={onReset} aria-label="Reiniciar" className="rounded-2xl bg-white/10 px-5 py-4 text-neutral-200 active:bg-white/20">
-            <RotateCcw size={22} strokeWidth={2.25} />
+          <button onClick={onReset} aria-label="Reiniciar" className="rounded-2xl border-2 border-white/30 px-5 py-4 text-white active:bg-white/20">
+            <RotateCcw size={24} strokeWidth={2.5} />
           </button>
         )}
       </div>
@@ -691,6 +710,8 @@ export function TrainingTimer() {
   // (iPhone), el panel a toda la ventana hace lo mismo.
   const enterFullscreen = () => {
     setFullscreen(true);
+    // El móvil apoyado y lejos: que la pantalla no se apague mientras está el reloj a pantalla completa.
+    if (screenLockOn) wakeLock.request();
     try {
       void document.documentElement.requestFullscreen?.().catch(() => undefined);
       void (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape')?.catch(() => undefined);
@@ -700,6 +721,7 @@ export function TrainingTimer() {
   };
   const exitFullscreen = () => {
     setFullscreen(false);
+    if (!workoutRunning && !emomRunning && !tabataRunning) wakeLock.release();
     try {
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
       screen.orientation?.unlock?.();
@@ -862,7 +884,7 @@ export function TrainingTimer() {
         <div className="flex flex-1 gap-0.5 rounded-lg bg-white/5 p-0.5">
           <button
             onClick={() => setMode('rest')}
-            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 whitespace-nowrap rounded-md py-2 text-[11px] font-semibold uppercase tracking-tight transition-colors duration-200 ${
               mode === 'rest' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -870,7 +892,7 @@ export function TrainingTimer() {
           </button>
           <button
             onClick={() => setMode('workout')}
-            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 whitespace-nowrap rounded-md py-2 text-[11px] font-semibold uppercase tracking-tight transition-colors duration-200 ${
               mode === 'workout' ? 'bg-brand-neon text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -878,7 +900,7 @@ export function TrainingTimer() {
           </button>
           <button
             onClick={() => setMode('emom')}
-            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 whitespace-nowrap rounded-md py-2 text-[11px] font-semibold uppercase tracking-tight transition-colors duration-200 ${
               mode === 'emom' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -886,7 +908,7 @@ export function TrainingTimer() {
           </button>
           <button
             onClick={() => setMode('tabata')}
-            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 whitespace-nowrap rounded-md py-2 text-[11px] font-semibold uppercase tracking-tight transition-colors duration-200 ${
               mode === 'tabata' ? 'bg-brand-orange text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
