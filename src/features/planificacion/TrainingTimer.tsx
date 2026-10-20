@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Timer, Pause, Play, RotateCcw, X, Minus, Plus } from 'lucide-react';
+import { Timer, Pause, Play, RotateCcw, X, Minus, Plus, Maximize2, Minimize2 } from 'lucide-react';
 import { readClockRuns, recordClockStop } from './workoutClockResult';
 
 const PRESETS = [60, 90, 120, 180];
@@ -163,6 +163,90 @@ function RoundBadge({ text, borderClass }: { text: string; borderClass: string }
   );
 }
 
+type ClockTone = 'neon' | 'gold' | 'orange';
+const TONE_TEXT: Record<ClockTone, string> = { neon: 'text-brand-neon', gold: 'text-brand-gold', orange: 'text-brand-orange' };
+const TONE_BG: Record<ClockTone, string> = { neon: 'bg-brand-neon', gold: 'bg-brand-gold', orange: 'bg-brand-orange' };
+const TONE_TINT: Record<ClockTone, string> = { neon: 'bg-brand-neon/20', gold: 'bg-brand-gold/20', orange: 'bg-brand-orange/25' };
+
+interface FullscreenClockProps {
+  label: string;
+  sub?: string;
+  time: string;
+  tone: ClockTone;
+  /** Colorea el fondo entero (Tabata: trabajo/descanso; terminado): se distingue de lejos sin leer nada. */
+  tint?: boolean;
+  primary: { label: string; running: boolean; onClick: () => void };
+  onReset?: () => void;
+  extras?: { label: string; onClick: () => void }[];
+  rounds?: { value: number; onAdd: () => void; onSub: () => void };
+  onClose: () => void;
+}
+
+/**
+ * Reloj a pantalla completa para verlo de lejos (el móvil apoyado en el suelo o la pared): la cifra ocupa toda la
+ * pantalla, apaisado se pone al lado el contador de rondas y los botones van abajo, grandes. Es la misma máquina del
+ * reloj de siempre; esto solo cambia cómo se ve.
+ */
+function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extras, rounds, onClose }: FullscreenClockProps) {
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black p-4" role="dialog" aria-label="Reloj a pantalla completa">
+      <div aria-hidden="true" className={`pointer-events-none absolute inset-0 transition-colors duration-300 ${tint ? TONE_TINT[tone] : ''}`} />
+      <div className="relative flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`truncate text-lg font-bold uppercase tracking-[0.14em] ${TONE_TEXT[tone]}`}>{label}</p>
+          {sub && <p className="truncate text-base font-semibold text-neutral-300">{sub}</p>}
+        </div>
+        <button onClick={onClose} aria-label="Salir de pantalla completa" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-neutral-200 active:bg-white/20">
+          <Minimize2 size={20} />
+        </button>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 flex-col items-stretch gap-3 landscape:flex-row">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <p className="font-bold leading-none tabular-nums text-white" style={{ fontSize: 'min(46vh, 26vw)' }} aria-live="off">
+            {time}
+          </p>
+        </div>
+        {rounds && (
+          <div className="flex shrink-0 items-stretch gap-2 landscape:w-[30%] landscape:flex-col">
+            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl bg-white/5 py-2" aria-live="polite">
+              <span className="font-bold leading-none tabular-nums text-white" style={{ fontSize: 'min(24vh, 18vw)' }}>
+                {rounds.value}
+              </span>
+              <span className="mt-1 text-xs font-semibold uppercase tracking-wider text-neutral-500">rondas</span>
+            </div>
+            <div className="flex flex-[1.2] gap-2">
+              <button onClick={rounds.onSub} aria-label="Restar ronda" className="flex w-14 items-center justify-center rounded-2xl bg-white/5 text-neutral-400 active:bg-white/15">
+                <Minus size={22} strokeWidth={2.5} />
+              </button>
+              <button onClick={rounds.onAdd} aria-label="Sumar ronda" className="flex flex-1 flex-col items-center justify-center rounded-2xl bg-brand-neon/20 text-brand-neon active:bg-brand-neon/40">
+                <span className="text-5xl font-bold leading-none">+1</span>
+                <span className="mt-1 text-xs font-medium opacity-80">ronda</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="relative flex items-stretch gap-2">
+        {extras?.map((e) => (
+          <button key={e.label} onClick={e.onClick} className="rounded-2xl bg-white/10 px-5 py-4 text-base font-semibold text-neutral-200 active:bg-white/20">
+            {e.label}
+          </button>
+        ))}
+        <button onClick={primary.onClick} className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-xl font-bold text-black active:opacity-80 ${TONE_BG[tone]}`}>
+          {primary.running ? <Pause size={24} strokeWidth={2.5} /> : <Play size={24} strokeWidth={2.5} />}
+          {primary.label}
+        </button>
+        {onReset && (
+          <button onClick={onReset} aria-label="Reiniciar" className="rounded-2xl bg-white/10 px-5 py-4 text-neutral-200 active:bg-white/20">
+            <RotateCcw size={22} strokeWidth={2.25} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 /** Fila de ajuste ±paso para la configuración del Tabata (trabajo/descanso/rondas). */
 function TabataConfigRow({
   label,
@@ -226,6 +310,7 @@ function TabataConfigRow({
  */
 export function TrainingTimer() {
   const [expanded, setExpanded] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [mode, setMode] = useState<TimerMode>('rest');
   const wakeLock = useWakeLock();
   const [screenLockOn, setScreenLockOn] = useState<boolean>(readScreenLockPref);
@@ -592,13 +677,108 @@ export function TrainingTimer() {
     setExpanded(true);
   };
 
+  // Con el reloj a pantalla completa la página de detrás no se desplaza.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [fullscreen]);
+
+  // Pantalla completa: la misma máquina de siempre, vista grande. Pide la pantalla completa del navegador si puede y, si no
+  // (iPhone), el panel a toda la ventana hace lo mismo.
+  const enterFullscreen = () => {
+    setFullscreen(true);
+    try {
+      void document.documentElement.requestFullscreen?.().catch(() => undefined);
+      void (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape')?.catch(() => undefined);
+    } catch {
+      /* sin pantalla completa del navegador, queda el panel a toda la ventana */
+    }
+  };
+  const exitFullscreen = () => {
+    setFullscreen(false);
+    try {
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+      screen.orientation?.unlock?.();
+    } catch {
+      /* nada que soltar */
+    }
+  };
+
+  if (fullscreen && expanded) {
+    const common = { onClose: exitFullscreen };
+    if (preStartFor === mode) {
+      return <FullscreenClock {...common} label="Prepárate" sub="toca para empezar ya" time={String(preStartRemaining)} tone="orange" primary={{ label: 'Empezar ya', running: false, onClick: skipPreStart }} />;
+    }
+    if (mode === 'rest') {
+      return (
+        <FullscreenClock
+          {...common}
+          label="Descanso"
+          time={mmss(remaining)}
+          tone={done ? 'orange' : 'gold'}
+          tint={done}
+          primary={{ label: running ? 'Pausa' : done ? 'Otra vez' : 'Empezar', running, onClick: toggle }}
+          onReset={reset}
+          extras={[
+            { label: '−15', onClick: () => adjust(-15) },
+            { label: '+15', onClick: () => adjust(15) },
+          ]}
+        />
+      );
+    }
+    if (mode === 'workout') {
+      return (
+        <FullscreenClock
+          {...common}
+          label="Entreno"
+          time={mmss(workoutElapsed)}
+          tone="neon"
+          primary={{ label: workoutRunning ? 'Pausa' : workoutElapsed > 0 ? 'Reanudar' : 'Empezar', running: workoutRunning, onClick: handleWorkoutButton }}
+          onReset={resetWorkout}
+          rounds={{ value: rounds, onAdd: () => setRounds((r) => r + 1), onSub: () => setRounds((r) => Math.max(0, r - 1)) }}
+        />
+      );
+    }
+    if (mode === 'emom') {
+      return (
+        <FullscreenClock
+          {...common}
+          label={emomDone ? '¡EMOM completo!' : emomRound > 0 ? `Minuto ${emomRound} de ${emomTotalRounds}` : `EMOM · ${emomTotalRounds} rondas`}
+          sub={emomRound === 0 && !emomDone ? `cada ${emomInterval}s` : undefined}
+          time={emomDone ? `${emomTotalRounds}/${emomTotalRounds}` : mmss(emomRemaining)}
+          tone={emomDone ? 'orange' : 'gold'}
+          tint={emomDone}
+          primary={{ label: emomRunning ? 'Pausa' : emomDone ? 'Otra vez' : emomRound > 0 ? 'Reanudar' : 'Empezar', running: emomRunning, onClick: toggleEmom }}
+          onReset={resetEmom}
+        />
+      );
+    }
+    const working = tabataPhase === 'work';
+    return (
+      <FullscreenClock
+        {...common}
+        label={tabataDone ? '¡Tabata completo!' : tabataRound === 0 ? `Tabata · ${tabataTotalRounds} rondas` : working ? 'Trabajo' : 'Descanso'}
+        sub={tabataDone ? 'Bien hecho' : tabataRound > 0 ? `Ronda ${tabataRound} de ${tabataTotalRounds}` : `${tabataWork}s trabajo / ${tabataRest}s descanso`}
+        time={tabataDone ? `${tabataTotalRounds}/${tabataTotalRounds}` : mmss(tabataRemaining)}
+        tone={tabataDone || working ? 'orange' : 'gold'}
+        tint={tabataRound > 0 || tabataDone}
+        primary={{ label: tabataRunning ? 'Pausa' : tabataDone ? 'Otra vez' : tabataRound > 0 ? 'Reanudar' : 'Empezar', running: tabataRunning, onClick: toggleTabata }}
+        onReset={resetTabata}
+      />
+    );
+  }
+
   if (!expanded) {
     if (preStartFor) {
       return (
         <button
           onClick={() => openTo(preStartFor)}
           aria-label="Cuenta atrás de inicio"
-          className="fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+          className="fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
         >
           {preStartRemaining}
         </button>
@@ -609,7 +789,7 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo('rest')}
           aria-label="Cronómetro de descanso"
-          className={`fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full px-4 text-xl font-bold shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             done ? 'animate-pulse bg-brand-orange text-black' : 'bg-brand-gold text-black'
           }`}
         >
@@ -622,7 +802,7 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo('workout')}
           aria-label={`Reloj de entreno${rounds > 0 ? `, ronda ${rounds}` : ''}`}
-          className="fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full bg-brand-neon px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+          className="fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full bg-brand-neon px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
         >
           {mmss(workoutElapsed)}
           {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-neon" />}
@@ -634,7 +814,7 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo('emom')}
           aria-label="Reloj EMOM"
-          className={`fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             emomDone ? 'animate-pulse bg-brand-orange' : 'bg-brand-gold'
           }`}
         >
@@ -650,7 +830,7 @@ export function TrainingTimer() {
         <button
           onClick={() => openTo('tabata')}
           aria-label="Reloj Tabata"
-          className={`fixed bottom-24 right-4 z-40 flex h-20 min-w-20 items-center justify-center gap-1.5 rounded-full px-4 text-xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             tabataDone ? 'animate-pulse bg-brand-orange' : tabataPhase === 'work' ? 'bg-brand-orange' : 'bg-brand-gold'
           }`}
         >
@@ -677,12 +857,12 @@ export function TrainingTimer() {
   }
 
   return (
-    <div className="fixed bottom-24 right-4 z-40 w-80 rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6">
+    <div className="fixed bottom-24 right-4 z-40 w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex flex-1 gap-0.5 rounded-lg bg-white/5 p-0.5">
           <button
             onClick={() => setMode('rest')}
-            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
               mode === 'rest' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -690,7 +870,7 @@ export function TrainingTimer() {
           </button>
           <button
             onClick={() => setMode('workout')}
-            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
               mode === 'workout' ? 'bg-brand-neon text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -698,7 +878,7 @@ export function TrainingTimer() {
           </button>
           <button
             onClick={() => setMode('emom')}
-            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
               mode === 'emom' ? 'bg-brand-gold text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
@@ -706,13 +886,16 @@ export function TrainingTimer() {
           </button>
           <button
             onClick={() => setMode('tabata')}
-            className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-200 ${
+            className={`flex-1 rounded-md py-2 text-xs font-semibold uppercase tracking-wide transition-colors duration-200 ${
               mode === 'tabata' ? 'bg-brand-orange text-black' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
             Tabata
           </button>
         </div>
+        <button onClick={enterFullscreen} className="shrink-0 text-neutral-400 hover:text-white" aria-label="Pantalla completa">
+          <Maximize2 size={17} />
+        </button>
         <button onClick={() => setExpanded(false)} className="shrink-0 text-neutral-500 hover:text-white" aria-label="Cerrar">
           <X size={16} />
         </button>
@@ -720,8 +903,8 @@ export function TrainingTimer() {
 
       {preStartFor === mode ? (
         <button onClick={skipPreStart} className="flex w-full flex-col items-center gap-1 py-2" aria-label="Saltar cuenta atrás y empezar ya">
-          <span className="text-xs font-bold uppercase tracking-wide text-brand-orange">Prepárate</span>
-          <span className="text-8xl font-bold tabular-nums text-white">{preStartRemaining}</span>
+          <span className="text-base font-bold uppercase tracking-wide text-brand-orange">Prepárate</span>
+          <span className="text-[10rem] font-bold leading-none tabular-nums text-white">{preStartRemaining}</span>
           <span className="my-2 flex gap-1">
             {Array.from({ length: PRE_START_SECONDS }, (_, i) => (
               <span
@@ -734,14 +917,14 @@ export function TrainingTimer() {
         </button>
       ) : mode === 'rest' ? (
         <>
-          <p className={`text-center text-5xl font-bold tabular-nums ${done ? 'text-brand-orange' : 'text-white'}`}>{mmss(remaining)}</p>
+          <p className={`py-1 text-center text-[5.5rem] font-bold leading-none tabular-nums ${done ? 'text-brand-orange' : 'text-white'}`}>{mmss(remaining)}</p>
 
           <div className="my-2.5 grid grid-cols-4 gap-1.5">
             {PRESETS.map((p) => (
               <button
                 key={p}
                 onClick={() => start(p)}
-                className={`rounded-lg py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                className={`rounded-lg py-2.5 text-sm font-semibold transition-colors duration-200 ${
                   duration === p ? 'bg-brand-gold text-black' : 'bg-white/5 text-neutral-400 hover:bg-white/10'
                 }`}
               >
@@ -751,27 +934,27 @@ export function TrainingTimer() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button onClick={() => adjust(-15)} className="rounded-lg bg-white/5 px-2 py-2 text-xs font-semibold text-neutral-300 hover:bg-white/10">
+            <button onClick={() => adjust(-15)} className="rounded-xl bg-white/5 px-3.5 py-3.5 text-sm font-semibold text-neutral-300 hover:bg-white/10">
               −15
             </button>
             <button
               onClick={toggle}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-orange py-2 text-sm font-bold text-black transition-colors duration-200 hover:bg-brand-orange-dark"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-orange py-3.5 text-base font-bold text-black transition-colors duration-200 hover:bg-brand-orange-dark"
             >
-              {running ? <Pause size={15} strokeWidth={2.5} /> : <Play size={15} strokeWidth={2.5} />}
+              {running ? <Pause size={19} strokeWidth={2.5} /> : <Play size={19} strokeWidth={2.5} />}
               {running ? 'Pausa' : done ? 'Otra vez' : 'Empezar'}
             </button>
-            <button onClick={() => adjust(15)} className="rounded-lg bg-white/5 px-2 py-2 text-xs font-semibold text-neutral-300 hover:bg-white/10">
+            <button onClick={() => adjust(15)} className="rounded-xl bg-white/5 px-3.5 py-3.5 text-sm font-semibold text-neutral-300 hover:bg-white/10">
               +15
             </button>
-            <button onClick={reset} className="rounded-lg bg-white/5 px-2 py-2 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
-              <RotateCcw size={15} strokeWidth={2.25} />
+            <button onClick={reset} className="rounded-xl bg-white/5 px-3.5 py-3.5 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
+              <RotateCcw size={18} strokeWidth={2.25} />
             </button>
           </div>
         </>
       ) : mode === 'workout' ? (
         <>
-          <p className="text-center text-5xl font-bold tabular-nums text-white">{mmss(workoutElapsed)}</p>
+          <p className="py-1 text-center text-[5.5rem] font-bold leading-none tabular-nums text-white">{mmss(workoutElapsed)}</p>
 
           <ScreenLockToggle screenLockOn={screenLockOn} supported={wakeLock.supported} onChange={setScreenLock} />
           <WakeLockStatusLine supported={wakeLock.supported} screenLockOn={screenLockOn} running={workoutRunning} held={wakeLock.held} />
@@ -782,34 +965,34 @@ export function TrainingTimer() {
             <button
               onClick={() => setRounds((r) => Math.max(0, r - 1))}
               aria-label="Restar ronda"
-              className="flex w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400 transition-colors hover:bg-white/10 active:bg-white/15"
+              className="flex w-14 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400 transition-colors hover:bg-white/10 active:bg-white/15"
             >
               <Minus size={18} strokeWidth={2.5} />
             </button>
-            <div className="flex flex-1 flex-col items-center justify-center rounded-xl bg-white/5 py-2" aria-live="polite">
-              <span className="text-6xl font-bold leading-none tabular-nums text-white">{rounds}</span>
-              <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">rondas</span>
+            <div className="flex flex-1 flex-col items-center justify-center rounded-xl bg-white/5 py-3" aria-live="polite">
+              <span className="text-8xl font-bold leading-none tabular-nums text-white">{rounds}</span>
+              <span className="mt-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-500">rondas</span>
             </div>
             <button
               onClick={() => setRounds((r) => r + 1)}
               aria-label="Sumar ronda"
-              className="flex min-h-[4.5rem] flex-[1.3] flex-col items-center justify-center rounded-xl bg-brand-neon/15 text-brand-neon transition-colors hover:bg-brand-neon/25 active:bg-brand-neon/35"
+              className="flex min-h-[7rem] flex-[1.3] flex-col items-center justify-center rounded-xl bg-brand-neon/15 text-brand-neon transition-colors hover:bg-brand-neon/25 active:bg-brand-neon/35"
             >
-              <span className="text-3xl font-bold leading-none">+1</span>
-              <span className="mt-1 text-[10px] font-medium opacity-80">al acabar ronda</span>
+              <span className="text-5xl font-bold leading-none">+1</span>
+              <span className="mt-1.5 text-xs font-medium opacity-80">al acabar ronda</span>
             </button>
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleWorkoutButton}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-neon py-2 text-sm font-bold text-black transition-colors duration-200 hover:opacity-90"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-neon py-3.5 text-base font-bold text-black transition-colors duration-200 hover:opacity-90"
             >
-              {workoutRunning ? <Pause size={15} strokeWidth={2.5} /> : <Play size={15} strokeWidth={2.5} />}
+              {workoutRunning ? <Pause size={19} strokeWidth={2.5} /> : <Play size={19} strokeWidth={2.5} />}
               {workoutRunning ? 'Pausa' : workoutElapsed > 0 ? 'Reanudar' : 'Empezar'}
             </button>
-            <button onClick={resetWorkout} className="rounded-lg bg-white/5 px-2 py-2 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
-              <RotateCcw size={15} strokeWidth={2.25} />
+            <button onClick={resetWorkout} className="rounded-xl bg-white/5 px-3.5 py-3.5 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
+              <RotateCcw size={18} strokeWidth={2.25} />
             </button>
           </div>
           {!workoutRunning && workoutElapsed >= 1 && (
@@ -833,7 +1016,7 @@ export function TrainingTimer() {
               <p className={`text-center text-xl font-bold uppercase tracking-wide ${emomDone ? 'text-brand-orange' : 'text-brand-gold'}`}>
                 {emomDone ? '¡EMOM completo!' : `Minuto ${emomRound} de ${emomTotalRounds}`}
               </p>
-              <p className={`text-center text-5xl font-bold tabular-nums ${emomDone ? 'text-brand-orange' : 'text-white'}`}>
+              <p className={`py-1 text-center text-[5.5rem] font-bold leading-none tabular-nums ${emomDone ? 'text-brand-orange' : 'text-white'}`}>
                 {emomDone ? `${emomTotalRounds}/${emomTotalRounds}` : mmss(emomRemaining)}
               </p>
               <p className="mb-1 mt-1 text-center text-[11px] text-neutral-500">
@@ -848,13 +1031,13 @@ export function TrainingTimer() {
           <div className="mt-2.5 flex items-center gap-1.5">
             <button
               onClick={toggleEmom}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-gold py-2 text-sm font-bold text-black transition-colors duration-200 hover:opacity-90"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-gold py-3.5 text-base font-bold text-black transition-colors duration-200 hover:opacity-90"
             >
-              {emomRunning ? <Pause size={15} strokeWidth={2.5} /> : <Play size={15} strokeWidth={2.5} />}
+              {emomRunning ? <Pause size={19} strokeWidth={2.5} /> : <Play size={19} strokeWidth={2.5} />}
               {emomRunning ? 'Pausa' : emomDone ? 'Otra vez' : emomRound > 0 ? 'Reanudar' : 'Empezar'}
             </button>
-            <button onClick={resetEmom} className="rounded-lg bg-white/5 px-2 py-2 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
-              <RotateCcw size={15} strokeWidth={2.25} />
+            <button onClick={resetEmom} className="rounded-xl bg-white/5 px-3.5 py-3.5 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
+              <RotateCcw size={18} strokeWidth={2.25} />
             </button>
           </div>
         </>
@@ -876,7 +1059,7 @@ export function TrainingTimer() {
               <p className={`text-center text-xs font-bold uppercase tracking-wide ${tabataDone ? 'text-brand-orange' : tabataPhase === 'work' ? 'text-brand-orange' : 'text-brand-gold'}`}>
                 {tabataDone ? '¡Tabata completo!' : tabataPhase === 'work' ? 'Trabajo' : 'Descanso'}
               </p>
-              <p className={`text-center text-5xl font-bold tabular-nums ${tabataDone ? 'text-brand-orange' : 'text-white'}`}>
+              <p className={`py-1 text-center text-[5.5rem] font-bold leading-none tabular-nums ${tabataDone ? 'text-brand-orange' : 'text-white'}`}>
                 {tabataDone ? `${tabataTotalRounds}/${tabataTotalRounds}` : mmss(tabataRemaining)}
               </p>
               <p className="mb-1 mt-1 text-center text-xl font-bold text-neutral-200">
@@ -891,13 +1074,13 @@ export function TrainingTimer() {
           <div className="mt-2.5 flex items-center gap-1.5">
             <button
               onClick={toggleTabata}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-orange py-2 text-sm font-bold text-black transition-colors duration-200 hover:opacity-90"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-orange py-3.5 text-base font-bold text-black transition-colors duration-200 hover:opacity-90"
             >
-              {tabataRunning ? <Pause size={15} strokeWidth={2.5} /> : <Play size={15} strokeWidth={2.5} />}
+              {tabataRunning ? <Pause size={19} strokeWidth={2.5} /> : <Play size={19} strokeWidth={2.5} />}
               {tabataRunning ? 'Pausa' : tabataDone ? 'Otra vez' : tabataRound > 0 ? 'Reanudar' : 'Empezar'}
             </button>
-            <button onClick={resetTabata} className="rounded-lg bg-white/5 px-2 py-2 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
-              <RotateCcw size={15} strokeWidth={2.25} />
+            <button onClick={resetTabata} className="rounded-xl bg-white/5 px-3.5 py-3.5 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
+              <RotateCcw size={18} strokeWidth={2.25} />
             </button>
           </div>
         </>
