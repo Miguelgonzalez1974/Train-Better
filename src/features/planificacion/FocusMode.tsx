@@ -252,7 +252,7 @@ export function FocusMode({
               <div>
                 <div className="flex items-baseline gap-2">
                   {work.length > 1 && <span className="text-xs font-bold text-neutral-500">{String.fromCharCode(65 + wi)}</span>}
-                  <h2 className="text-2xl font-semibold leading-tight text-white">{resolveName(b.movementId)}</h2>
+                  <h2 className="text-3xl font-semibold leading-tight text-white">{resolveName(b.movementId)}</h2>
                 </div>
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
                   {b.loadKg ? (
@@ -261,8 +261,8 @@ export function FocusMode({
                         onClick={() => setProgressTarget({ movementId: b.movementId, targetKg: b.loadKg ?? 0 })}
                         className="flex items-baseline gap-1.5 text-brand-gold"
                       >
-                        <span className="text-4xl font-bold leading-none">{b.loadKg}</span>
-                        <span className="text-sm">kg</span>
+                        <span className="text-6xl font-bold leading-none">{b.loadKg}</span>
+                        <span className="text-xl font-semibold">kg</span>
                         <span className="ml-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-neutral-500">
                           <ChartSpline size={11} strokeWidth={2.25} />
                           progresión
@@ -270,12 +270,12 @@ export function FocusMode({
                       </button>
                     ) : (
                       <span className="flex items-baseline gap-1.5 text-brand-gold">
-                        <span className="text-4xl font-bold leading-none">{b.loadKg}</span>
-                        <span className="text-sm">kg</span>
+                        <span className="text-6xl font-bold leading-none">{b.loadKg}</span>
+                        <span className="text-xl font-semibold">kg</span>
                       </span>
                     )
                   ) : null}
-                  <span className="text-sm text-neutral-400">
+                  <span className="text-xl font-semibold text-neutral-300">
                     {b.sets ? `${b.sets} × ${b.reps}` : b.reps}
                     {b.tempo ? ` · tempo ${b.tempo}` : ''}
                   </span>
@@ -308,7 +308,7 @@ export function FocusMode({
                   };
                   return (
                     <>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                       {Array.from({ length: rowCount }, (_, s) => {
                         const n = s + 1;
                         const on = setIsDone(mid, n);
@@ -316,58 +316,58 @@ export function FocusMode({
                         return (
                           <div
                             key={n}
-                            className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${on ? 'bg-brand-neon/10' : 'bg-brand-surfaceMuted/50'}`}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${on ? 'bg-brand-neon/10' : 'bg-brand-surfaceMuted/50'}`}
                           >
                             <button
                               onClick={() => (on ? onClearWorkSet(mid, n) : onLogWorkSet(mid, blk, n, kg, reps))}
                               aria-label={`Serie ${n}${on ? ' hecha' : ''}`}
-                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
+                              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-base font-bold transition-colors ${
                                 on ? 'bg-brand-neon text-black' : 'border border-brand-border text-neutral-400'
                               }`}
                             >
-                              {on ? <Check size={14} strokeWidth={3} /> : n}
+                              {on ? <Check size={22} strokeWidth={3} /> : n}
                             </button>
-                            <span className="w-12 shrink-0 text-xs text-neutral-500">{singleLog ? 'Top' : `Serie ${n}`}</span>
+                            {singleLog && <span className="shrink-0 text-sm text-neutral-400">Top</span>}
                             {prescribed > 0 && (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <button
                                   onClick={() => bump(n, -2.5)}
                                   aria-label="Menos peso"
-                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10"
+                                  className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/10 text-neutral-200 hover:bg-white/15 active:bg-white/20"
                                 >
-                                  <Minus size={13} strokeWidth={2.5} />
+                                  <Minus size={20} strokeWidth={2.75} />
                                 </button>
                                 {liftHasPr(mid) ? (
                                   <button
                                     onClick={() => setProgressTarget({ movementId: mid, targetKg: kg })}
-                                    className="min-w-[54px] text-center text-sm font-bold text-brand-gold"
+                                    className="min-w-[84px] text-center text-2xl font-bold text-brand-gold"
                                   >
                                     {kg}
-                                    <span className="text-[10px] font-normal text-neutral-500"> kg</span>
+                                    <span className="text-sm font-medium text-neutral-400"> kg</span>
                                   </button>
                                 ) : (
-                                  <span className="min-w-[54px] text-center text-sm font-bold text-brand-gold">
+                                  <span className="min-w-[84px] text-center text-2xl font-bold text-brand-gold">
                                     {kg}
-                                    <span className="text-[10px] font-normal text-neutral-500"> kg</span>
+                                    <span className="text-sm font-medium text-neutral-400"> kg</span>
                                   </span>
                                 )}
                                 <button
                                   onClick={() => bump(n, 2.5)}
                                   aria-label="Más peso"
-                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10"
+                                  className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/10 text-neutral-200 hover:bg-white/15 active:bg-white/20"
                                 >
-                                  <Plus size={13} strokeWidth={2.5} />
+                                  <Plus size={20} strokeWidth={2.75} />
                                 </button>
                               </div>
                             )}
-                            {reps > 0 && <span className="ml-auto text-xs text-neutral-500">× {reps}</span>}
+                            {reps > 0 && <span className="ml-auto shrink-0 whitespace-nowrap text-xl font-semibold text-neutral-300">× {reps}</span>}
                           </div>
                         );
                       })}
                     </div>
                     {showFeel && (
                       <div className="rounded-xl bg-white/[0.04] p-3">
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">¿Cómo ha ido la primera?</p>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">¿Cómo ha ido la primera?</p>
                         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Cómo ha ido la primera serie">
                           {(Object.keys(SET_FEEL_LABEL) as SetFeel[]).map((feel) => (
                             <button
@@ -375,7 +375,7 @@ export function FocusMode({
                               role="radio"
                               aria-checked={picked === feel}
                               onClick={() => pickFeel(feel)}
-                              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                              className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors duration-200 ${
                                 picked === feel ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
                               }`}
                             >
