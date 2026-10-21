@@ -88,6 +88,13 @@
   color: rgb(3 105 161);
 }
 
+/* La página nunca se ensancha en horizontal: un elemento que se sale hacía el documento (y las capas fixed, como el modo
+   enfocado) más ancho que la pantalla del móvil. `clip` recorta sin crear un contenedor de scroll (no rompe el sticky). */
+html,
+body {
+  overflow-x: clip;
+}
+
 body {
   @apply bg-brand-bg text-neutral-100 font-sans;
   -webkit-font-smoothing: antialiased;

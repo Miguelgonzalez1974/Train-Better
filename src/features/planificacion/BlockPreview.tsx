@@ -86,9 +86,10 @@ function WodPreview({ results }: { results: SessionBlockResult[] }) {
               {groups.length > 1 && <span className="mr-1.5 text-xs font-medium text-neutral-500">Parte {part}</span>}
               {title}
             </p>
-            <div className="mt-1.5 flex items-center gap-2">
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
               {kind && (
-                <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-200">{kind}</span>
+                // Sin `shrink-0`: si el formato entero cae aquí ("4 sets cada 3 min for time, carga ascendente") la píldora tiene que poder partirse en vez de salirse de la tarjeta.
+                <span className="max-w-full rounded-lg bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-200">{kind}</span>
               )}
               {detail && <span className="min-w-0 truncate text-xs text-neutral-500">{detail}</span>}
             </div>

@@ -8,6 +8,7 @@ import { parseWorkingReps, SET_FEEL_LABEL } from '../../engine/setFeedback';
 import { adjustRemainingSets } from '../../engine/setAdjust';
 import { localizeWodText } from '../../engine/wodUnits';
 import { fmtKgValue } from '../../lib/format';
+import { useVisibleViewport } from '../../lib/useVisibleViewport';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
@@ -146,9 +147,12 @@ export function FocusMode({
   const kgFor = (movementId: string, n: number, prescribed: number) =>
     perSetKg[`${movementId}:${n}`] ?? loggedKg(movementId, n) ?? prescribed;
 
+  // La capa ocupa lo que se VE (no la ventana "layout", que en el móvil puede ser mayor que la pantalla).
+  const visible = useVisibleViewport();
+
   if (groups.length === 0) {
     return (
-      <div className="fixed inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-brand-bg p-6 text-center">
+      <div className="fixed inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-brand-bg p-6 text-center" style={visible ?? undefined}>
         <p className="text-neutral-300">No hay bloques que mostrar en esta sesión.</p>
         <button onClick={onExit} className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black">
           Salir
@@ -470,7 +474,7 @@ export function FocusMode({
         : renderChecklist(group.entries);
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-brand-bg">
+    <div className="fixed inset-0 z-30 flex flex-col bg-brand-bg" style={visible ?? undefined}>
       <div className="flex items-center gap-3 border-b border-brand-border/70 px-4 py-3">
         <button
           onClick={onExit}
