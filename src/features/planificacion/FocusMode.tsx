@@ -249,7 +249,9 @@ export function FocusMode({
           // Formatos de oly de serie única (single del día, EMOM): una sola fila de registro para
           // guardar el peso realmente movido, con el mismo camino a `workLog` que el stepper.
           const singleLog = Boolean(b.logAsSingle) && sets <= 1;
-          const rowCount = singleLog ? 1 : sets;
+          // Rampa u ola (5-3-1…): cada serie con sus propias reps y su propio peso; la última es la de trabajo.
+          const plan = b.setPlan && b.setPlan.length >= 2 ? b.setPlan : undefined;
+          const rowCount = plan ? plan.length : singleLog ? 1 : sets;
           const fb = setFeedbackByIndex.get(e.index);
           return (
             <div key={e.index} className="flex flex-col gap-3">
@@ -280,24 +282,29 @@ export function FocusMode({
                     )
                   ) : null}
                   <span className="text-xl font-semibold text-neutral-300">
-                    {b.sets ? `${b.sets} × ${b.reps}` : b.reps}
+                    {plan ? `${plan.length} series · ${plan.map((p) => p.reps).join('-')}` : b.sets ? `${b.sets} × ${b.reps}` : b.reps}
                     {b.tempo ? ` · tempo ${b.tempo}` : ''}
                   </span>
+                  {plan && <span className="text-sm text-neutral-400">la última es la de trabajo</span>}
                 </div>
               </div>
-              {(sets > 1 || singleLog) &&
+              {(plan || sets > 1 || singleLog) &&
                 (() => {
                   const mid = b.movementId;
                   const blk = b.block === 'oly' ? 'oly' : 'strength';
-                  const reps = parseWorkingReps(b.reps ?? '') ?? 0;
+                  const workReps = parseWorkingReps(b.reps ?? '') ?? 0;
                   const prescribed = b.loadKg ?? 0;
+                  // Reps y peso previstos de la serie n: los de su paso de la rampa, o los de siempre si son series rectas.
+                  const repsOf = (n: number) => (plan ? plan[n - 1].reps : workReps);
+                  const plannedKg = (n: number) => (plan ? plan[n - 1].kg : prescribed);
                   const bump = (n: number, delta: number) => {
-                    const next = Math.max(0, Math.round((kgFor(mid, n, prescribed) + delta) * 4) / 4);
+                    const next = Math.max(0, Math.round((kgFor(mid, n, plannedKg(n)) + delta) * 4) / 4);
                     setPerSetKg((p) => ({ ...p, [`${mid}:${n}`]: next }));
-                    if (setIsDone(mid, n)) onLogWorkSet(mid, blk, n, next, reps);
+                    if (setIsDone(mid, n)) onLogWorkSet(mid, blk, n, next, repsOf(n));
                   };
                   // Tras la primera serie: cómo ha ido ajusta el peso de las que quedan (sugerencia: los +/- siguen mandando).
-                  const showFeel = !singleLog && rowCount >= 2 && prescribed > 0 && setIsDone(mid, 1);
+                  // En una rampa la primera es de aproximación y cada serie lleva su peso: ahí no se reajusta.
+                  const showFeel = !plan && !singleLog && rowCount >= 2 && prescribed > 0 && setIsDone(mid, 1);
                   const picked = feelByMovement[mid];
                   const adjustment = picked ? adjustRemainingSets({ prescribedKg: prescribed, feel: picked, canRaise, sets: rowCount }) : null;
                   const pickFeel = (feel: SetFeel) => {
@@ -316,7 +323,8 @@ export function FocusMode({
                       {Array.from({ length: rowCount }, (_, s) => {
                         const n = s + 1;
                         const on = setIsDone(mid, n);
-                        const kg = kgFor(mid, n, prescribed);
+                        const kg = kgFor(mid, n, plannedKg(n));
+                        const reps = repsOf(n);
                         return (
                           <div
                             key={n}

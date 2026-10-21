@@ -82,6 +82,8 @@ export interface ResolvedLadderLift {
   reps: string;
   /** Carga de esa última serie, ya con autorregulación (salvo `isMaxAttempt`) y redondeo a disco. */
   loadKg: number;
+  /** Todas las series de la escalera, en orden, con sus reps y su carga (cada paso con `sets` > 1 se repite). */
+  setPlan: { reps: number; kg: number }[];
   /** Etiqueta del lift, sin prefijo de programa — el caller compone el `format` final. */
   liftLabel: string;
   tempo?: string;
@@ -115,6 +117,7 @@ export function resolveLadderDay(
       });
       const lastStep = lift.steps[lift.steps.length - 1];
       const lastLine = stepLines[stepLines.length - 1];
+      const setPlan = lift.steps.flatMap((step, i) => Array.from({ length: step.sets }, () => ({ reps: step.reps, kg: stepLines[i].load })));
       const ladderText = `Escalera: ${stepLines.map((l) => `${l.percentLabel} ${l.setsLabel} @ ${l.load} kg`).join(', ')}.`;
       const complexNote =
         lift.complexMovementIds && lift.complexMovementIds.length > 0
@@ -134,6 +137,7 @@ export function resolveLadderDay(
         sets: lastStep.sets,
         reps: String(lastStep.reps),
         loadKg: lastLine.load,
+        setPlan,
         liftLabel: lift.label,
         tempo: lift.tempo,
         complexMovementIds: lift.complexMovementIds,

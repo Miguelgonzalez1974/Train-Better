@@ -470,6 +470,12 @@ export interface SessionBlockResult {
    * stepper multiserie, y el bloque entra en la tarjeta de RPE. Bloques strength y oly.
    */
   logAsSingle?: boolean;
+  /**
+   * Plan serie a serie de una rampa o de una ola (5-3-1, "75/5 82/3 88/1 78/5…"): las repeticiones y el peso de CADA serie,
+   * en orden. Sin esto solo se conoce la serie final (`sets` × `reps` @ `loadKg`) y el atleta no sabe cuánto hacer en las
+   * de aproximación. `loadKg` y `reps` siguen siendo los de la serie de trabajo (la última). Solo fuerza y oly.
+   */
+  setPlan?: { reps: number; kg: number }[];
   /** Marca series rectas de oly encadenadas sin soltar la barra (touch-and-go) — pastilla "T&G" junto a series/reps. Ausente = reset entre reps (default). Solo bloque oly. */
   repStyle?: 'touch-and-go';
   /** Rol que cubre esta entrada dentro del superset de accesorio (ver `AccessoryRole` en generateSession.ts) — permite bloquear el movimiento de ese rol al planificar la semana. Solo bloque accessory, ausente en el fallback de pool agotado. */
@@ -514,7 +520,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 75;
+export const SESSION_GEN_VERSION = 76;
 
 /** Color del día según cómo llegas (ver `engine/dayLight.ts`): verde = a por todas, ámbar = mantener sin acumular, rojo = recuperar. */
 export type DayLightColor = 'verde' | 'ambar' | 'rojo';

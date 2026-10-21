@@ -647,6 +647,13 @@ const STRENGTH_SCHEME_LABEL: Record<StrengthSchemeStyle, string> = {
   emom: 'E2MOM 10 min — carga creciente',
 };
 
+/** La rampa "5-3-1": reps de cada serie y qué fracción de la carga final lleva (la última es la serie de trabajo). */
+const STRENGTH_RAMP_STEPS = [
+  { reps: 5, fraction: 0.87 },
+  { reps: 3, fraction: 0.94 },
+  { reps: 1, fraction: 1 },
+] as const;
+
 const STRENGTH_SCHEME_NOTE: Record<StrengthSchemeStyle, string> = {
   straightSets: '',
   ascendingLadder: 'Las primeras series son de aproximación — sube la carga en cada una hasta la serie final, la que de verdad cuenta.',
@@ -1129,6 +1136,7 @@ function buildStrengthBlock(
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
+    const topKg = roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor);
     return {
       blocks: withSuperset({
         block: 'strength',
@@ -1136,7 +1144,9 @@ function buildStrengthBlock(
         format: STRENGTH_SCHEME_LABEL.ascendingLadder,
         sets: 3,
         reps: '5-3-1',
-        loadKg: roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor),
+        loadKg: topKg,
+        // Una ola: 5 reps con ~87 % de la carga final, 3 con ~94 % y 1 con la final (la que cuenta).
+        setPlan: STRENGTH_RAMP_STEPS.map((step) => ({ reps: step.reps, kg: step.fraction === 1 ? topKg : roundToNearestPlate(topKg * step.fraction) })),
         notes,
       }),
       pattern,
@@ -4844,6 +4854,7 @@ export function generateStrengthProgramSession(
       sets: lift.sets,
       reps: lift.reps,
       loadKg: lift.loadKg,
+      setPlan: lift.setPlan,
       format: lift.format,
       notes: `${lift.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`,
     }));
@@ -4887,6 +4898,7 @@ export function generateStrengthProgramSession(
       sets: lift.sets,
       reps: lift.reps,
       loadKg: lift.loadKg,
+      setPlan: lift.setPlan,
       format: lift.format,
       notes: `${lift.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`,
     }));

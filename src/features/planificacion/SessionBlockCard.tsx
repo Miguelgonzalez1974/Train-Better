@@ -63,6 +63,22 @@ function StatBox({ value, label }: { value: string | number; label: string }) {
   );
 }
 
+/** Una rampa u ola serie a serie: "5 × 159 kg → 3 × 171,5 kg → 1 × 182,5 kg"; la última (la de trabajo) resaltada. */
+function SetPlanLine({ plan }: { plan: { reps: number; kg: number }[] }) {
+  return (
+    <ol className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-neutral-400" aria-label="Series de la rampa">
+      {plan.map((s, i) => (
+        <li key={i} className="flex items-center gap-1.5">
+          {i > 0 && <span aria-hidden="true">→</span>}
+          <span className={i === plan.length - 1 ? 'font-bold text-brand-gold' : 'font-medium text-neutral-300'}>
+            <span className="num">{s.reps}</span> × <span className="num">{String(s.kg).replace('.', ',')}</span> kg
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function FormatBadge({ format }: { format: string }) {
   return (
     <span className="mb-2 inline-block rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
@@ -658,6 +674,11 @@ function ComplexCard({
                       {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
                     </div>
                   )}
+                  {entry.setPlan && entry.setPlan.length >= 2 && (
+                    <div className="ml-7">
+                      <SetPlanLine plan={entry.setPlan} />
+                    </div>
+                  )}
                   <div className="ml-7">
                     <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
                   </div>
@@ -920,6 +941,7 @@ function EntryRow({
           {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
         </div>
       )}
+      {entry.setPlan && entry.setPlan.length >= 2 && <SetPlanLine plan={entry.setPlan} />}
       <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
       {feedback && onRateSet && index !== undefined && (
         <div className="mt-2">

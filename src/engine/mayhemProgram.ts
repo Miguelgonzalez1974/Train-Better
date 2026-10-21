@@ -630,6 +630,8 @@ export interface MayhemDayResult {
     sets: number;
     reps: string;
     loadKg?: number;
+    /** Plan serie a serie cuando el levantamiento es una escalera u ola (reps y carga de cada serie). */
+    setPlan?: { reps: number; kg: number }[];
     format: string;
     notes: string;
     /** true si el levantamiento es un intento de 1RM real / MAX OUT — el día no lleva circuito de core. */
@@ -659,6 +661,8 @@ function resolveMayhemLift(lift: MayhemLift, prs: PersonalRecords, autoregFactor
     });
     const last = steps[steps.length - 1];
     const lastLoad = roundToNearestPlate(base * last.percent * factor);
+    // Cada serie de la escalera con sus reps y su peso (un paso con varias series se repite): lo que el atleta ve y registra.
+    const setPlan = steps.flatMap((s) => Array.from({ length: s.sets }, () => ({ reps: s.reps, kg: roundToNearestPlate(base * s.percent * factor) })));
     return {
       movementId: lift.movementId,
       prKey: lift.prKey,
@@ -666,6 +670,7 @@ function resolveMayhemLift(lift: MayhemLift, prs: PersonalRecords, autoregFactor
       sets: lift.sets ?? last.sets,
       reps: lift.reps ?? String(last.reps),
       loadKg: lastLoad,
+      setPlan,
       format,
       notes: `Escalera: ${lines.join(', ')}.${complexNote}${extraNote}`,
     };

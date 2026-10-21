@@ -495,7 +495,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       if (!prev) return prev;
       const next: DailySession = {
         ...prev,
-        blocks: prev.blocks.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+        // Si se tocan series, reps o carga a mano, el plan serie a serie de la rampa ya no vale: se quita y vuelve el esquema simple.
+        blocks: prev.blocks.map((b, i) =>
+          i === index ? { ...b, ...patch, ...('sets' in patch || 'reps' in patch || 'loadKg' in patch ? { setPlan: undefined } : {}) } : b,
+        ),
         editedByAthlete: true,
       };
       athleteRepository.saveCachedSession(next);
