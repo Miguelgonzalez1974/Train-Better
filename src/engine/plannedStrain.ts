@@ -71,7 +71,12 @@ const OVER_MARGIN = 3;
 const UNDER_MARGIN = 8;
 
 export function planFit(planned: PlannedStrain, target: Pick<StrainTarget, 'low' | 'high'>): { fit: PlanFit; diff: number } {
-  if (planned.strain > target.high + OVER_MARGIN) return { fit: 'se-pasa', diff: planned.strain - target.high };
-  if (planned.strain < target.low - UNDER_MARGIN) return { fit: 'se-queda-corta', diff: target.low - planned.strain };
+  return strainFit(planned.strain, target);
+}
+
+/** Dónde cae un esfuerzo (previsto o real) respecto al objetivo, con los mismos márgenes que la sesión de hoy: así la tira de la semana y la sesión nunca se contradicen. */
+export function strainFit(strain: number, target: Pick<StrainTarget, 'low' | 'high'>): { fit: PlanFit; diff: number } {
+  if (strain > target.high + OVER_MARGIN) return { fit: 'se-pasa', diff: strain - target.high };
+  if (strain < target.low - UNDER_MARGIN) return { fit: 'se-queda-corta', diff: target.low - strain };
   return { fit: 'dentro', diff: 0 };
 }

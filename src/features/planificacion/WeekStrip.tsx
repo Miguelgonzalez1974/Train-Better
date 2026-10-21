@@ -4,12 +4,13 @@ import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/period
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import type { AthleteProfile, DailySession, Goal, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, DailySession, DayLightInfo, Goal, SessionHistoryEntry } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ensureWeekLocked } from './weeklyLock';
 import { wodResultsOf } from '../../engine/wodScoring';
-import { estimatePlannedStrain } from '../../engine/plannedStrain';
+import { estimatePlannedStrain, strainFit } from '../../engine/plannedStrain';
+import { buildStrainTarget } from '../../engine/strainTarget';
 import { dayStrain } from '../../engine/strain';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -31,6 +32,18 @@ function startOfWeek(date: Date): Date {
 
 function formatShort(date: Date): string {
   return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(date);
+}
+
+/** Lo que se dibuja de cada día de la semana. */
+interface WeekDay {
+  kind: 'done' | 'missed' | 'planned' | 'rest';
+  /** Esfuerzo (0-100): el real si está hecho, el previsto si no. */
+  strain: number;
+  emphasis?: 'fuerza' | 'metcon';
+  /** Color del semáforo de hoy (solo hoy y con el check-in hecho). */
+  light?: DayLightInfo['color'];
+  /** Franja del objetivo del día; `estimated` = aún no está fijado (día que falta o hoy sin check-in). */
+  band?: { low: number; high: number; estimated: boolean };
 }
 
 interface WeekStripProps {
@@ -99,19 +112,33 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
    */
   const days = useMemo(
     () =>
-      weekDates.map((date, index) => {
+      weekDates.map((date, index): WeekDay => {
         const dateIso = toLocalIsoDate(date);
         const entry = history.find((h) => h.date === dateIso);
         const isTrainingDay = getDayPlan(index, trainingDaysPerWeek).isTrainingDay;
-        if (entry) return { kind: 'done' as const, strain: dayStrain(entry) ?? 0, emphasis: undefined, light: undefined };
-        if (dateIso < todayIso) return { kind: isTrainingDay ? ('missed' as const) : ('rest' as const), strain: 0, emphasis: undefined, light: undefined };
+        // La franja es el objetivo del día. El de ayer y el de hoy es el que se fijó por la mañana; el de los días que faltan
+        // no existe todavía (se fija con el check-in de ese día) y se estima con lo que se sabe hoy.
+        const stored = profile.strainTargets?.[dateIso];
+        const futureOrToday = dateIso >= todayIso;
+        const band = stored ?? (futureOrToday ? buildStrainTarget(profile, history, dateIso) : undefined);
+        const bandInfo = band ? { low: band.low, high: band.high, estimated: dateIso > todayIso || band.provisional } : undefined;
+        if (entry) return { kind: 'done', strain: dayStrain(entry) ?? 0, band: bandInfo };
+        if (dateIso < todayIso) return { kind: isTrainingDay ? 'missed' : 'rest', strain: 0, band: isTrainingDay ? bandInfo : undefined };
         const session = isTrainingDay ? sessionFor(date) : null;
-        if (!session || session.isRestDay) return { kind: 'rest' as const, strain: 0, emphasis: undefined, light: undefined };
+        if (!session || session.isRestDay) return { kind: 'rest', strain: 0 };
         const planned = estimatePlannedStrain(session, history);
-        return { kind: 'planned' as const, strain: planned?.strain ?? 0, emphasis: session.dayEmphasis, light: dateIso === todayIso ? session.dayLight?.color : undefined };
+        return { kind: 'planned', strain: planned?.strain ?? 0, emphasis: session.dayEmphasis, light: dateIso === todayIso ? session.dayLight?.color : undefined, band: bandInfo };
       }),
     [weekOffset, profile, history, goals],
   );
+
+  // Eje vertical común a toda la semana: de unos 12 puntos bajo lo más bajo a unos 10 sobre lo más alto (franjas incluidas),
+  // para que las barras y las franjas de distintos días se comparen y no queden aplastadas.
+  const axis = useMemo(() => {
+    const values = days.flatMap((d) => [d.band?.low, d.band?.high, d.kind === 'done' || d.kind === 'planned' ? d.strain : undefined]).filter((v): v is number => v !== undefined);
+    if (values.length === 0) return { lo: 0, hi: 100 };
+    return { lo: Math.max(0, Math.floor((Math.min(...values) - 12) / 5) * 5), hi: Math.min(100, Math.ceil((Math.max(...values) + 10) / 5) * 5) };
+  }, [days]);
 
   return (
     <div className="py-1">
@@ -153,25 +180,35 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           const dateIso = toLocalIsoDate(date);
           const isToday = dateIso === todayIso;
           const isSelected = expanded === index;
-          // Cada día cuenta tres cosas: el número (qué día es), una barra de esfuerzo (real si ya se hizo, previsto si no) y
-          // abajo qué fue: hecho (tic), no registrado (anillo rojo), previsto (fuerza o metcon) o descanso (luna).
-          // Hoy, con el check-in hecho, la barra toma el color del semáforo.
-          const barColor =
-            day.kind === 'done'
-              ? 'rgb(var(--c-brand-neon))'
-              : day.light
-                ? `rgb(var(--c-state-${day.light === 'verde' ? 'good' : day.light === 'ambar' ? 'mid' : 'low'}))`
-                : isToday
-                  ? 'rgb(var(--c-brand-orange))'
-                  : 'rgb(var(--c-brand-gold) / 0.7)';
+          // Cada día cuenta: la barra de esfuerzo (real si ya se hizo, previsto si no) sobre una franja que es el objetivo del día,
+          // el número exacto y abajo qué fue: hecho (tic), no registrado (anillo rojo), previsto (fuerza o metcon) o descanso (luna).
+          // El color dice dónde cae respecto al objetivo: dentro (verde si está hecho, dorado si es previsto), te pasas (coral)
+          // o por debajo (azul), con los mismos márgenes que la sesión de hoy.
           const hasBar = day.kind === 'done' || day.kind === 'planned';
+          // Solo se juzga contra un objetivo REAL (fijado por la mañana). La franja estimada de los días que faltan es una
+          // referencia: no sabe, por ejemplo, que es semana de descarga, así que no pinta de "por debajo" lo que toca suave.
+          const fit = hasBar && day.band && !day.band.estimated ? strainFit(day.strain, day.band).fit : 'dentro';
+          const barColor =
+            fit === 'se-pasa'
+              ? 'rgb(var(--c-over))'
+              : fit === 'se-queda-corta'
+                ? 'rgb(var(--c-state-cool))'
+                : day.kind === 'done'
+                  ? 'rgb(var(--c-brand-neon))'
+                  : isToday
+                    ? 'rgb(var(--c-brand-orange))'
+                    : 'rgb(var(--c-brand-gold) / 0.85)';
+          const y = (v: number) => (Math.min(axis.hi, Math.max(axis.lo, v)) - axis.lo) / Math.max(1, axis.hi - axis.lo);
+          const BAR_H = 56;
+          const bandWord = day.band ? `objetivo ${day.band.low}–${day.band.high}${day.band.estimated ? ' (estimado)' : ''}` : '';
+          const fitWord = fit === 'se-pasa' ? ' · te pasas' : fit === 'se-queda-corta' ? ' · por debajo' : '';
           const text =
             day.kind === 'done'
-              ? `Completado · esfuerzo ${day.strain}`
+              ? `Completado · esfuerzo ${day.strain}${bandWord ? ` · ${bandWord}` : ''}${fitWord}`
               : day.kind === 'missed'
-                ? 'No registrado'
+                ? `No registrado${bandWord ? ` · ${bandWord}` : ''}`
                 : day.kind === 'planned'
-                  ? `Esfuerzo previsto ~${day.strain}${day.emphasis === 'metcon' ? ' · foco metcon' : day.emphasis === 'fuerza' ? ' · día de fuerza' : ''}`
+                  ? `Esfuerzo previsto ~${day.strain}${bandWord ? ` · ${bandWord}` : ''}${fitWord}${day.emphasis === 'metcon' ? ' · foco metcon' : day.emphasis === 'fuerza' ? ' · día de fuerza' : ''}`
                   : 'Descanso';
           return (
             <button
@@ -188,9 +225,19 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               }`}
             >
               <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
-              <span className={`num text-sm font-bold leading-none ${isToday ? 'text-brand-orange' : 'text-white'}`}>{date.getDate()}</span>
-              <span className="relative my-0.5 flex h-9 w-2.5 items-end overflow-hidden rounded-full bg-white/[0.08]" aria-hidden="true">
-                {hasBar && <span className="w-full rounded-full" style={{ height: `${Math.max(14, Math.min(100, day.strain))}%`, background: barColor }} />}
+              <span className="relative my-0.5 flex w-full justify-center" style={{ height: BAR_H }} aria-hidden="true">
+                {day.band && (
+                  <span
+                    className={`absolute inset-x-1 rounded ${day.band.estimated ? 'bg-white/[0.05] ring-1 ring-white/10' : 'bg-white/[0.10]'}`}
+                    style={{ bottom: y(day.band.low) * BAR_H, height: Math.max(3, (y(day.band.high) - y(day.band.low)) * BAR_H) }}
+                  />
+                )}
+                <span className="relative flex w-2.5 items-end overflow-hidden rounded-full bg-white/[0.08]" style={{ height: BAR_H }}>
+                  {hasBar && <span className="w-full rounded-full" style={{ height: `${Math.max(8, y(day.strain) * 100)}%`, background: barColor }} />}
+                </span>
+              </span>
+              <span className={`num text-xs font-bold leading-none ${hasBar ? '' : 'text-neutral-500'}`} style={hasBar ? { color: barColor } : undefined} aria-hidden="true">
+                {hasBar ? `${day.kind === 'planned' ? '~' : ''}${day.strain}` : '–'}
               </span>
               <span className="flex h-4 items-center justify-center" aria-hidden="true">
                 {day.kind === 'done' ? (
