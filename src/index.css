@@ -9,8 +9,10 @@
   --c-n-200: 229 229 229;
   --c-n-300: 212 212 212;
   --c-n-400: 163 163 163;
-  --c-n-500: 115 115 115;
-  --c-n-600: 82 82 82;
+  /* Los dos grises más tenues se usan para etiquetas y notas pequeñas: sobre el fondo oscuro tienen que dar al menos 4,5:1
+     (antes 115 daba ~3,9 y 82 daba ~2,4, y esas notas casi no se leían). Se mantiene el orden: 400 > 500 > 600. */
+  --c-n-500: 146 146 146;
+  --c-n-600: 130 130 130;
   --c-brand-bg: 10 9 8;
   --c-brand-surface: 23 19 16;
   --c-brand-surface-muted: 31 26 21;
