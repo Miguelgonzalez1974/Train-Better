@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Dumbbell, Moon, Trash2, Zap } from 'lucide-react';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
@@ -9,6 +9,8 @@ import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ensureWeekLocked } from './weeklyLock';
 import { wodResultsOf } from '../../engine/wodScoring';
+import { estimatePlannedStrain } from '../../engine/plannedStrain';
+import { dayStrain } from '../../engine/strain';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -55,14 +57,9 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     return d;
   });
 
-  const expandedPreview = useMemo<DailySession | null>(() => {
-    if (expanded === null) return null;
-    const date = weekDates[expanded];
+  /** La sesión prevista de un día aún sin registrar: la cacheada o, si no la hay, la generada y sellada. */
+  const sessionFor = (date: Date): DailySession | null => {
     const dateIso = toLocalIsoDate(date);
-    if (dateIso === todayIso) return null;
-    if (history.some((h) => h.date === dateIso)) return null;
-    if (dateIso < todayIso) return null;
-
     const cached = athleteRepository.getCachedSession(dateIso);
     // Ignora una sesión periodizada huérfana (su macro/programa se borró) —se limpia de verdad al
     // borrar la estructura— o generada por una versión anterior del motor (se regenera abajo,
@@ -84,7 +81,37 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     const fresh = generateSessionForDate(lockedProfile, history, date, goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;
+  };
+
+  const expandedPreview = useMemo<DailySession | null>(() => {
+    if (expanded === null) return null;
+    const date = weekDates[expanded];
+    const dateIso = toLocalIsoDate(date);
+    if (dateIso === todayIso) return null;
+    if (history.some((h) => h.date === dateIso)) return null;
+    if (dateIso < todayIso) return null;
+    return sessionFor(date);
   }, [expanded, weekOffset, profile, history, goals]);
+
+  /**
+   * Lo que se pinta en cada día de un vistazo: qué fue (hecho, no registrado, previsto, descanso), cuánto esfuerzo (real si
+   * ya se hizo, previsto si no: la misma estimación de la sesión de hoy) y de qué va (fuerza o metcon).
+   */
+  const days = useMemo(
+    () =>
+      weekDates.map((date, index) => {
+        const dateIso = toLocalIsoDate(date);
+        const entry = history.find((h) => h.date === dateIso);
+        const isTrainingDay = getDayPlan(index, trainingDaysPerWeek).isTrainingDay;
+        if (entry) return { kind: 'done' as const, strain: dayStrain(entry) ?? 0, emphasis: undefined, light: undefined };
+        if (dateIso < todayIso) return { kind: isTrainingDay ? ('missed' as const) : ('rest' as const), strain: 0, emphasis: undefined, light: undefined };
+        const session = isTrainingDay ? sessionFor(date) : null;
+        if (!session || session.isRestDay) return { kind: 'rest' as const, strain: 0, emphasis: undefined, light: undefined };
+        const planned = estimatePlannedStrain(session, history);
+        return { kind: 'planned' as const, strain: planned?.strain ?? 0, emphasis: session.dayEmphasis, light: dateIso === todayIso ? session.dayLight?.color : undefined };
+      }),
+    [weekOffset, profile, history, goals],
+  );
 
   return (
     <div className="py-1">
@@ -121,20 +148,37 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
       <div className="flex items-stretch gap-1.5">
       <div className="flex min-w-0 flex-1 justify-between gap-1">
         {DAY_LABELS.map((label, index) => {
-          const plan = getDayPlan(index, trainingDaysPerWeek);
-          const dateIso = toLocalIsoDate(weekDates[index]);
+          const day = days[index];
+          const date = weekDates[index];
+          const dateIso = toLocalIsoDate(date);
           const isToday = dateIso === todayIso;
           const isSelected = expanded === index;
-          // El punto ya no es solo "¿tocaba entrenar?" — refleja lo que de verdad pasó ese día:
-          // completado (hay registro), no registrado (tocaba y ya paso sin marcar), pendiente
-          // (tocaba pero es hoy o futuro) o descanso (no era día de entreno).
-          const isCompleted = history.some((h) => h.date === dateIso);
-          const isMissed = !isCompleted && plan.isTrainingDay && dateIso < todayIso;
+          // Cada día cuenta tres cosas: el número (qué día es), una barra de esfuerzo (real si ya se hizo, previsto si no) y
+          // abajo qué fue: hecho (tic), no registrado (anillo rojo), previsto (fuerza o metcon) o descanso (luna).
+          // Hoy, con el check-in hecho, la barra toma el color del semáforo.
+          const barColor =
+            day.kind === 'done'
+              ? 'rgb(var(--c-brand-neon))'
+              : day.light
+                ? `rgb(var(--c-state-${day.light === 'verde' ? 'good' : day.light === 'ambar' ? 'mid' : 'low'}))`
+                : isToday
+                  ? 'rgb(var(--c-brand-orange))'
+                  : 'rgb(var(--c-brand-gold) / 0.7)';
+          const hasBar = day.kind === 'done' || day.kind === 'planned';
+          const text =
+            day.kind === 'done'
+              ? `Completado · esfuerzo ${day.strain}`
+              : day.kind === 'missed'
+                ? 'No registrado'
+                : day.kind === 'planned'
+                  ? `Esfuerzo previsto ~${day.strain}${day.emphasis === 'metcon' ? ' · foco metcon' : day.emphasis === 'fuerza' ? ' · día de fuerza' : ''}`
+                  : 'Descanso';
           return (
             <button
               key={label}
               onClick={() => setExpanded((prev) => (prev === index ? null : index))}
-              title={isCompleted ? 'Completado' : isMissed ? 'No registrado' : undefined}
+              title={text}
+              aria-label={`${label} ${date.getDate()}: ${text}`}
               className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-xs transition-all duration-200 ${
                 isSelected
                   ? 'bg-brand-gold/15 ring-1 ring-brand-gold'
@@ -143,18 +187,26 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                     : 'bg-white/[0.03] hover:bg-white/[0.06]'
               }`}
             >
-              <span className="font-medium text-neutral-300">{label}</span>
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  isCompleted
-                    ? 'bg-brand-neon shadow-[0_0_4px_rgba(57,255,20,0.8)]'
-                    : isMissed
-                      ? 'border border-red-500/50 bg-transparent'
-                      : plan.isTrainingDay
-                        ? 'bg-brand-gold'
-                        : 'bg-neutral-700'
-                }`}
-              />
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
+              <span className={`num text-sm font-bold leading-none ${isToday ? 'text-brand-orange' : 'text-white'}`}>{date.getDate()}</span>
+              <span className="relative my-0.5 flex h-9 w-2.5 items-end overflow-hidden rounded-full bg-white/[0.08]" aria-hidden="true">
+                {hasBar && <span className="w-full rounded-full" style={{ height: `${Math.max(14, Math.min(100, day.strain))}%`, background: barColor }} />}
+              </span>
+              <span className="flex h-4 items-center justify-center" aria-hidden="true">
+                {day.kind === 'done' ? (
+                  <Check size={14} strokeWidth={3} className="text-brand-neon" />
+                ) : day.kind === 'missed' ? (
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-red-500/60" />
+                ) : day.kind === 'planned' ? (
+                  day.emphasis === 'metcon' ? (
+                    <Zap size={13} strokeWidth={2.5} className="text-brand-orange" />
+                  ) : (
+                    <Dumbbell size={13} strokeWidth={2.5} className="text-brand-gold" />
+                  )
+                ) : (
+                  <Moon size={12} strokeWidth={2.5} className="text-neutral-500" />
+                )}
+              </span>
             </button>
           );
         })}
