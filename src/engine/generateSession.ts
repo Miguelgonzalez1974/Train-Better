@@ -1208,9 +1208,18 @@ function primerLoadFactor(primerId: string): number {
  * foco de recepción no lo llevan.
  */
 const OLY_PULL_IDS: Record<OlyFamily, string[]> = {
-  snatch: ['snatch-pull', 'snatch-high-pull', 'snatch-deadlift'],
-  clean: ['clean-pull', 'clean-high-pull', 'clean-deadlift'],
+  // Sin snatch/clean deadlift: el atleta prefiere el muscle snatch / muscle clean, que ahora salen más como primer del complejo
+  // (ver `OLY_PRIMER_MUSCLE_CHANCE`). El tirón sobrecargado se queda en pull y high-pull.
+  snatch: ['snatch-pull', 'snatch-high-pull'],
+  clean: ['clean-pull', 'clean-high-pull'],
 };
+
+/**
+ * Probabilidad de que el primer técnico del complejo sea el MUSCLE (snatch o clean) en cada semana del meso. El sesgo semanal
+ * original lo dejaba solo en las semanas 1 y 4 entre otros siete drills; aquí se adelanta (no es todo el tiempo: el resto de
+ * drills —tall, power, hang, balance— siguen entrando) y también aparece, menos, en power y en levantamiento completo.
+ */
+const OLY_PRIMER_MUSCLE_CHANCE: Record<1 | 2 | 3 | 4, number> = { 1: 0.6, 2: 0.5, 3: 0.3, 4: 0.7 };
 
 /** % del PR del levantamiento al que se hace la tracción, por semana de meso (0 = no se programa). */
 const OLY_PULL_PERCENT: Record<1 | 2 | 3 | 4, number> = { 1: 0.9, 2: 0.95, 3: 1.05, 4: 0 };
@@ -1616,7 +1625,11 @@ function buildOlyBlock(
     ? primerCandidates.filter((m) => RECEIVING_PRIMER_IDS[family].includes(m.id))
     : [];
   // Sesgo por semana de meso: técnica ancha -> power -> completo -> descarga (ver OLY_PRIMER_WEEK_BIAS).
-  const weekPrimers = primerCandidates.filter((m) => OLY_PRIMER_WEEK_BIAS[week].test(m.id));
+  const musclePrimers = primerCandidates.filter((m) => /^muscle-/.test(m.id));
+  // El sorteo del muscle usa su propio generador (fecha + familia), no el rng general del día: así no desplaza el resto de
+  // sorteos (familia, tirones, WOD…) y el reparto de la semana sigue igual salvo el primer del complejo.
+  const muscleFirst = musclePrimers.length > 0 && seededRng(`oly-muscle|${toLocalIsoDate(date)}|${family}`)() < OLY_PRIMER_MUSCLE_CHANCE[week];
+  const weekPrimers = muscleFirst ? musclePrimers : primerCandidates.filter((m) => OLY_PRIMER_WEEK_BIAS[week].test(m.id));
   const primerPool =
     receivingPrimers.length > 0 ? receivingPrimers : weekPrimers.length > 0 ? weekPrimers : primerCandidates;
   const primerMovement = pickVaried(primerPool, recentIds);

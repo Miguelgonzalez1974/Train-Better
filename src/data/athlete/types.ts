@@ -514,7 +514,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 74;
+export const SESSION_GEN_VERSION = 75;
 
 /** Color del día según cómo llegas (ver `engine/dayLight.ts`): verde = a por todas, ámbar = mantener sin acumular, rojo = recuperar. */
 export type DayLightColor = 'verde' | 'ambar' | 'rojo';
