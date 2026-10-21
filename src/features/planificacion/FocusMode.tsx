@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
+import type { DailySession, PainFlag, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { parseWorkingReps, SET_FEEL_LABEL } from '../../engine/setFeedback';
@@ -16,6 +16,7 @@ import { BLOCK_ORDER } from './DaySessionBlocks';
 import { MovementProgressModal } from './MovementProgressModal';
 import type { MovementProgressData } from './LoadStat';
 import { RpeCheckIn } from './RpeCheckIn';
+import { SwapButton } from './SwapMovement';
 
 /** Sub-set de `adjustableSetBlocks` de Planificacion — lo justo para renderizar el check-in de RPE. */
 export interface FocusSetFeedback {
@@ -40,6 +41,10 @@ interface FocusModeProps {
   canRaise: boolean;
   /** Cómo fue la primera serie de un levantamiento (índice de su bloque): se guarda para calibrar al coach. */
   onFeel: (index: number, feel: SetFeel) => void;
+  /** Molestias activas hoy: las alternativas de un cambio de movimiento no incluyen lo que duele. */
+  painFlags: PainFlag[];
+  /** Cambia un movimiento del bloque por una alternativa (el padre lo guarda en la sesión de hoy). */
+  onSwap: (index: number, patch: Partial<SessionBlockResult>) => void;
   onExit: () => void;
   onFinish: () => void;
 }
@@ -109,9 +114,20 @@ export function FocusMode({
   onClearWorkSet,
   canRaise,
   onFeel,
+  painFlags,
+  onSwap,
   onExit,
   onFinish,
 }: FocusModeProps) {
+  // Cambio de movimiento: el contexto para calcular alternativas y cómo estaba cada entrada antes (para "Deshacer").
+  const swapCtx = useMemo(() => ({ prs: progress.prs, variantPrs: progress.variantPrs, painFlags, todayIso: session.date }), [progress.prs, progress.variantPrs, painFlags, session.date]);
+  // Deshacer: el bloque guarda cómo era (`swapOrigin`), así que vale también tras recargar la app.
+  const undoSwap = (index: number, entry: SessionBlockResult) => {
+    const o = entry.swapOrigin;
+    if (!o) return;
+    onSwap(index, { movementId: o.movementId, scaledFrom: o.scaledFrom, reps: o.reps, loadKg: o.loadKg, setPlan: o.setPlan, swapOrigin: undefined });
+  };
+  const hasLoggedSets = (movementId: string) => todayWorkLog.some((w) => w.movementId === movementId);
   // Un paso por bloque; el WOD de un dia de doble WOD se parte en dos pasos (parte 1 y parte 2), cada uno
   // con sus movimientos, para que el atleta los haga y cronometre por separado.
   const groups = useMemo(
@@ -185,10 +201,10 @@ export function FocusMode({
               const key = `${i}:${e.index}:0`;
               const on = doneSets[key];
               return (
+                <div key={e.index} className="flex items-center gap-2">
                 <button
-                  key={e.index}
                   onClick={() => toggleSet(key)}
-                  className="flex items-start gap-3 rounded-xl bg-brand-surfaceMuted/60 p-3.5 text-left transition-colors hover:bg-brand-surfaceMuted active:bg-brand-surfaceMuted"
+                  className="flex min-w-0 flex-1 items-start gap-3 rounded-xl bg-brand-surfaceMuted/60 p-3.5 text-left transition-colors hover:bg-brand-surfaceMuted active:bg-brand-surfaceMuted"
                 >
                   <span
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
@@ -212,8 +228,15 @@ export function FocusMode({
                     {e.entry.notes && (
                       <span className="mt-1 block text-sm leading-relaxed text-neutral-400">{noteHead(e.entry.notes).head}</span>
                     )}
+                    {e.entry.scaledFrom && (
+                      <span className="mt-1 block text-xs text-neutral-400">← {e.entry.scaledFrom}</span>
+                    )}
                   </span>
                 </button>
+                {!on && (
+                  <SwapButton entry={e.entry} index={e.index} ctx={swapCtx} onSwap={onSwap} />
+                )}
+                </div>
               );
             })}
           </div>
@@ -256,10 +279,21 @@ export function FocusMode({
           return (
             <div key={e.index} className="flex flex-col gap-3">
               <div>
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-center gap-2">
                   {work.length > 1 && <span className="text-xs font-bold text-neutral-500">{String.fromCharCode(65 + wi)}</span>}
-                  <h2 className="text-3xl font-semibold leading-tight text-white">{resolveName(b.movementId)}</h2>
+                  <h2 className="min-w-0 flex-1 text-3xl font-semibold leading-tight text-white">{resolveName(b.movementId)}</h2>
+                  <SwapButton entry={b} index={e.index} ctx={swapCtx} disabled={hasLoggedSets(b.movementId)} onSwap={onSwap} />
                 </div>
+                {b.scaledFrom && (
+                  <p className="mt-1 flex items-center gap-2 text-sm text-neutral-400">
+                    <span>← en lugar de {b.scaledFrom}</span>
+                    {b.swapOrigin && !hasLoggedSets(b.movementId) && (
+                      <button onClick={() => undoSwap(e.index, b)} className="font-semibold text-brand-gold underline decoration-dotted">
+                        Deshacer
+                      </button>
+                    )}
+                  </p>
+                )}
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
                   {b.loadKg ? (
                     liftHasPr(b.movementId) ? (
@@ -340,7 +374,7 @@ export function FocusMode({
                               {on ? <Check size={22} strokeWidth={3} /> : n}
                             </button>
                             {singleLog && <span className="shrink-0 text-sm text-neutral-400">Top</span>}
-                            {prescribed > 0 && (
+                            {(prescribed > 0 || plan) && (
                               <div className="flex min-w-[9.5rem] flex-1 items-center gap-1">
                                 <button
                                   onClick={() => bump(n, -2.5)}
@@ -354,12 +388,12 @@ export function FocusMode({
                                     onClick={() => setProgressTarget({ movementId: mid, targetKg: kg })}
                                     className="min-w-0 flex-1 whitespace-nowrap text-center text-[clamp(1rem,5.6vw,1.5rem)] font-bold text-brand-gold"
                                   >
-                                    {kg}
+                                    {kg > 0 ? kg : '–'}
                                     <span className="hidden text-sm font-medium text-neutral-400 min-[340px]:inline"> kg</span>
                                   </button>
                                 ) : (
                                   <span className="min-w-0 flex-1 whitespace-nowrap text-center text-[clamp(1rem,5.6vw,1.5rem)] font-bold text-brand-gold">
-                                    {kg}
+                                    {kg > 0 ? kg : '–'}
                                     <span className="hidden text-sm font-medium text-neutral-400 min-[340px]:inline"> kg</span>
                                   </span>
                                 )}
@@ -437,14 +471,38 @@ export function FocusMode({
           <h2 className="text-3xl font-semibold leading-tight text-white">{wod?.name ?? 'Benchmark'}</h2>
           {(first.format || wod?.format) && <p className="text-lg font-semibold leading-snug text-brand-orange">{localizeWodText((first.format || wod?.format) as string)}</p>}
           {wod && wod.movements.length > 0 && (
-            <p className="text-base leading-relaxed text-neutral-200">
-              {wod.movements
-                .map((m) => {
-                  const kg = first.benchmarkLoads?.[m];
-                  return `${resolveName(first.benchmarkSwaps?.[m] ?? m)}${kg ? ` (tu carga ${fmtKgValue(kg)} kg)` : ''}`;
-                })
-                .join(' · ')}
-            </p>
+            <ul className="flex flex-col divide-y divide-white/5">
+              {wod.movements.map((m) => {
+                const swapped = first.benchmarkSwaps?.[m];
+                const kg = first.benchmarkLoads?.[m];
+                // En un WOD real no se toca el formato oficial: la sustitución solo se anota por movimiento (`benchmarkSwaps`).
+                const setSwap = (toId: string | undefined) => {
+                  const swaps = { ...first.benchmarkSwaps };
+                  if (toId) swaps[m] = toId;
+                  else delete swaps[m];
+                  onSwap(entries[0].index, { benchmarkSwaps: swaps });
+                };
+                return (
+                  <li key={m} className="flex items-center gap-2 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-lg font-medium leading-snug text-white">
+                        {resolveName(swapped ?? m)}
+                        {kg && !swapped ? <span className="ml-2 text-base font-normal text-neutral-300">(tu carga {fmtKgValue(kg)} kg)</span> : null}
+                      </p>
+                      {swapped && (
+                        <p className="flex items-center gap-2 text-xs text-neutral-400">
+                          <span>← en lugar de {resolveName(m)}</span>
+                          <button onClick={() => setSwap(undefined)} className="font-semibold text-brand-gold underline decoration-dotted">
+                            Deshacer
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                    <SwapButton entry={{ block: 'wod', movementId: swapped ?? m }} index={entries[0].index} ctx={swapCtx} onSwap={(_, patch) => setSwap(patch.movementId)} />
+                  </li>
+                );
+              })}
+            </ul>
           )}
           {first.notes && <FocusNote text={first.notes} />}
           {wodTimerHint}
@@ -457,15 +515,23 @@ export function FocusMode({
         {first.format && <p className="text-lg font-semibold leading-snug text-brand-orange">{first.format}</p>}
         <ul className="flex flex-col divide-y divide-white/5">
           {entries.map((e) => (
-            <li key={e.index} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-3">
-              <span className="min-w-[8rem] flex-1 text-lg font-medium text-white">
-                {resolveName(e.entry.movementId)}
-                {e.entry.scaledFrom ? <span className="ml-1.5 text-xs text-neutral-400">← {e.entry.scaledFrom}</span> : null}
-              </span>
-              <span className="ml-auto max-w-full text-right text-base font-semibold text-neutral-200 [overflow-wrap:anywhere]">
-                {e.entry.reps}
-                {e.entry.loadKg ? ` · ${e.entry.loadKg} ${loadUnitLabel(e.entry.movementId, e.entry.block)}` : ''}
-              </span>
+            <li key={e.index} className="flex items-center gap-2 py-2.5">
+              <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <span className="min-w-[8rem] flex-1 text-lg font-medium text-white">
+                  {resolveName(e.entry.movementId)}
+                  {e.entry.scaledFrom ? <span className="ml-1.5 text-xs text-neutral-400">← {e.entry.scaledFrom}</span> : null}
+                  {e.entry.swapOrigin && (
+                    <button onClick={() => undoSwap(e.index, e.entry)} className="ml-2 text-xs font-semibold text-brand-gold underline decoration-dotted">
+                      Deshacer
+                    </button>
+                  )}
+                </span>
+                <span className="ml-auto max-w-full text-right text-base font-semibold text-neutral-200 [overflow-wrap:anywhere]">
+                  {e.entry.reps}
+                  {e.entry.loadKg ? ` · ${e.entry.loadKg} ${loadUnitLabel(e.entry.movementId, e.entry.block)}` : ''}
+                </span>
+              </div>
+              <SwapButton entry={e.entry} index={e.index} ctx={swapCtx} onSwap={onSwap} />
             </li>
           ))}
         </ul>

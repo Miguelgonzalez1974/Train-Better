@@ -65,6 +65,14 @@ function StatBox({ value, label }: { value: string | number; label: string }) {
 
 /** Una rampa u ola serie a serie: "5 × 159 kg → 3 × 171,5 kg → 1 × 182,5 kg"; la última (la de trabajo) resaltada. */
 function SetPlanLine({ plan }: { plan: { reps: number; kg: number }[] }) {
+  // Sin pesos (un movimiento cambiado a mancuernas, p. ej.): solo las repeticiones de cada serie.
+  if (plan.every((s) => !s.kg)) {
+    return (
+      <p className="mt-2 text-xs font-medium text-neutral-300" aria-label="Series de la rampa">
+        {plan.map((s) => s.reps).join(' → ')} <span className="text-neutral-400">reps · peso a tu elección</span>
+      </p>
+    );
+  }
   return (
     <ol className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-neutral-400" aria-label="Series de la rampa">
       {plan.map((s, i) => (

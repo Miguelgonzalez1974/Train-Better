@@ -476,6 +476,11 @@ export interface SessionBlockResult {
    * de aproximación. `loadKg` y `reps` siguen siendo los de la serie de trabajo (la última). Solo fuerza y oly.
    */
   setPlan?: { reps: number; kg: number }[];
+  /**
+   * Cómo era el bloque ANTES de cambiar su movimiento a mano en el modo enfocado: permite "Deshacer" aunque se recargue la app.
+   * Solo guarda lo que el cambio toca (movimiento, reps, carga, plan serie a serie y el escalado previo).
+   */
+  swapOrigin?: { movementId: string; reps?: string; loadKg?: number; setPlan?: { reps: number; kg: number }[]; scaledFrom?: string };
   /** Marca series rectas de oly encadenadas sin soltar la barra (touch-and-go) — pastilla "T&G" junto a series/reps. Ausente = reset entre reps (default). Solo bloque oly. */
   repStyle?: 'touch-and-go';
   /** Rol que cubre esta entrada dentro del superset de accesorio (ver `AccessoryRole` en generateSession.ts) — permite bloquear el movimiento de ese rol al planificar la semana. Solo bloque accessory, ausente en el fallback de pool agotado. */

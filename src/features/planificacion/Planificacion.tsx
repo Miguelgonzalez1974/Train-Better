@@ -497,7 +497,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         ...prev,
         // Si se tocan series, reps o carga a mano, el plan serie a serie de la rampa ya no vale: se quita y vuelve el esquema simple.
         blocks: prev.blocks.map((b, i) =>
-          i === index ? { ...b, ...patch, ...('sets' in patch || 'reps' in patch || 'loadKg' in patch ? { setPlan: undefined } : {}) } : b,
+          i === index ? { ...b, ...patch, ...(!('setPlan' in patch) && ('sets' in patch || 'reps' in patch || 'loadKg' in patch) ? { setPlan: undefined } : {}) } : b,
         ),
         editedByAthlete: true,
       };
@@ -905,6 +905,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           onClearWorkSet={handleClearWorkSet}
           canRaise={session.dayLight?.color !== 'ambar' && activePainFlags.length === 0}
           onFeel={handleFeelSet}
+          painFlags={activePainFlags}
+          onSwap={handleUpdateEntry}
           onExit={() => setFocusMode(false)}
           onFinish={() => {
             setFocusMode(false);
