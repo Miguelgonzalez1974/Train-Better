@@ -43,6 +43,7 @@ import { ImbalancesCard } from './ImbalancesCard';
 import { computeImbalances } from '../../engine/imbalances';
 import { ResponseProfileCard } from './ResponseProfileCard';
 import { LoadsCard } from './LoadsCard';
+import { StrengthEvolutionCard } from './StrengthEvolutionCard';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
@@ -445,13 +446,21 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             )}
 
             {strengthOpen && (
-              <div ref={strengthRef}>
+              <div ref={strengthRef} className="flex flex-col gap-4">
                 <PersonalRecordsCard
                   prs={profile.prs}
                   trends={prTrends}
                   prLog={profile.prLog ?? []}
                   macroStartIso={getActiveMacrocycle(profile.macrocycles, todayIso)?.startDate}
                   bodyweightKg={latestBodyweightKg}
+                />
+                <StrengthEvolutionCard
+                  prs={profile.prs}
+                  prLog={profile.prLog ?? []}
+                  setFeedbackLog={profile.setFeedbackLog ?? []}
+                  workLog={profile.workLog ?? []}
+                  bodyweightKg={latestBodyweightKg}
+                  todayIso={todayIso}
                 />
               </div>
             )}
