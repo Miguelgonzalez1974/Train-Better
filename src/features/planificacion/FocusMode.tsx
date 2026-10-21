@@ -70,12 +70,12 @@ function FocusNote({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const { head, hasMore } = noteHead(text);
   return (
-    <span className="mt-1 block whitespace-pre-line text-xs leading-relaxed text-neutral-500">
+    <span className="mt-1 block whitespace-pre-line text-sm leading-relaxed text-neutral-400">
       {open ? text : head}
       {hasMore && (
         <button
           onClick={() => setOpen((o) => !o)}
-          className="ml-1.5 align-baseline text-[11px] font-semibold text-neutral-400 transition-colors hover:text-brand-gold"
+          className="ml-1.5 align-baseline text-xs font-semibold text-neutral-300 transition-colors hover:text-brand-gold"
         >
           {open ? 'menos' : 'ver más'}
         </button>
@@ -180,7 +180,7 @@ export function FocusMode({
       <div className="flex flex-col gap-4">
         {bySub.map((grp, gi) => (
           <div key={gi} className="flex flex-col gap-2">
-            {grp.sub && <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{grp.sub}</p>}
+            {grp.sub && <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{grp.sub}</p>}
             {grp.items.map((e) => {
               const key = `${i}:${e.index}:0`;
               const on = doneSets[key];
@@ -188,29 +188,29 @@ export function FocusMode({
                 <button
                   key={e.index}
                   onClick={() => toggleSet(key)}
-                  className="flex items-start gap-3 rounded-xl bg-brand-surfaceMuted/60 p-3 text-left transition-colors hover:bg-brand-surfaceMuted"
+                  className="flex items-start gap-3 rounded-xl bg-brand-surfaceMuted/60 p-3.5 text-left transition-colors hover:bg-brand-surfaceMuted active:bg-brand-surfaceMuted"
                 >
                   <span
-                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                       on ? 'bg-brand-neon text-black' : 'border border-brand-border text-neutral-500'
                     }`}
                   >
-                    {on ? <Check size={13} strokeWidth={3} /> : ''}
+                    {on ? <Check size={20} strokeWidth={3} /> : ''}
                   </span>
-                  <span className="flex-1">
+                  <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-baseline gap-x-2">
-                      <span className={`font-semibold ${on ? 'text-neutral-500 line-through' : 'text-white'}`}>
+                      <span className={`text-lg font-semibold leading-snug ${on ? 'text-neutral-500 line-through' : 'text-white'}`}>
                         {resolveName(e.entry.movementId)}
                       </span>
-                      {e.entry.reps && <span className="text-xs text-neutral-500">{e.entry.reps}</span>}
+                      {e.entry.reps && <span className="text-base font-medium text-neutral-300">{e.entry.reps}</span>}
                       {e.entry.loadKg ? (
-                        <span className="text-xs text-neutral-500">
+                        <span className="text-base font-medium text-neutral-300">
                           · {e.entry.loadKg} {loadUnitLabel(e.entry.movementId, e.entry.block)}
                         </span>
                       ) : null}
                     </span>
                     {e.entry.notes && (
-                      <span className="mt-1 block text-xs leading-relaxed text-neutral-500">{noteHead(e.entry.notes).head}</span>
+                      <span className="mt-1 block text-sm leading-relaxed text-neutral-400">{noteHead(e.entry.notes).head}</span>
                     )}
                   </span>
                 </button>
@@ -229,12 +229,12 @@ export function FocusMode({
       <div className="flex flex-col gap-5">
         {prep.length > 0 && (
           <div className="rounded-xl bg-brand-surfaceMuted/70 p-3.5">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-brand-gold/80">{prep[0].entry.subgroup}</p>
-            <ul className="flex flex-col gap-1.5 text-sm text-neutral-300">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-gold">{prep[0].entry.subgroup}</p>
+            <ul className="flex flex-col gap-2 text-base text-neutral-200">
               {prep.map((e) => (
-                <li key={e.index} className="flex justify-between gap-3">
-                  <span>{resolveName(e.entry.movementId)}</span>
-                  <span className="shrink-0 text-neutral-500">
+                <li key={e.index} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                  <span className="min-w-[8rem] flex-1">{resolveName(e.entry.movementId)}</span>
+                  <span className="ml-auto max-w-full text-right text-neutral-400 [overflow-wrap:anywhere]">
                     {e.entry.reps}
                     {e.entry.loadKg ? ` · ${e.entry.loadKg} kg` : ''}
                   </span>
@@ -396,6 +396,7 @@ export function FocusMode({
               {b.notes && <FocusNote text={b.notes} />}
               {fb && (
                 <RpeCheckIn
+                  large
                   movementName={fb.movementName}
                   topSet={fb.topSet}
                   loggedRpe={fb.loggedRpe}
@@ -406,16 +407,16 @@ export function FocusMode({
             </div>
           );
         })}
-        <p className="flex items-center gap-1.5 text-[11px] text-neutral-600">
-          <Timer size={12} strokeWidth={2.25} /> Descansa entre series con el cronómetro (abajo a la derecha).
+        <p className="flex items-center gap-1.5 text-xs text-neutral-500">
+          <Timer size={14} strokeWidth={2.25} /> Descansa entre series con el cronómetro (abajo a la derecha).
         </p>
       </div>
     );
   };
 
   const wodTimerHint = (
-    <p className="flex items-center gap-1.5 text-[11px] text-neutral-600">
-      <Timer size={12} strokeWidth={2.25} /> Cronometra el WOD con el reloj de entreno (abajo a la derecha).
+    <p className="flex items-center gap-1.5 text-xs text-neutral-500">
+      <Timer size={14} strokeWidth={2.25} /> Cronometra el WOD con el reloj de entreno (abajo a la derecha).
     </p>
   );
 
@@ -425,10 +426,10 @@ export function FocusMode({
       const wod = benchmarkWorkouts.find((w) => w.id === first.movementId.replace('benchmark:', ''));
       return (
         <div className="flex flex-col gap-3">
-          <h2 className="text-2xl font-semibold leading-tight text-white">{wod?.name ?? 'Benchmark'}</h2>
-          {(first.format || wod?.format) && <p className="text-sm font-semibold text-brand-orange">{localizeWodText((first.format || wod?.format) as string)}</p>}
+          <h2 className="text-3xl font-semibold leading-tight text-white">{wod?.name ?? 'Benchmark'}</h2>
+          {(first.format || wod?.format) && <p className="text-lg font-semibold leading-snug text-brand-orange">{localizeWodText((first.format || wod?.format) as string)}</p>}
           {wod && wod.movements.length > 0 && (
-            <p className="text-sm text-neutral-300">
+            <p className="text-base leading-relaxed text-neutral-200">
               {wod.movements
                 .map((m) => {
                   const kg = first.benchmarkLoads?.[m];
@@ -444,16 +445,16 @@ export function FocusMode({
     }
     return (
       <div className="flex flex-col gap-3">
-        {first.title && <h2 className="text-2xl font-semibold leading-tight text-white">{first.title}</h2>}
-        {first.format && <p className="text-sm font-semibold text-brand-orange">{first.format}</p>}
+        {first.title && <h2 className="text-3xl font-semibold leading-tight text-white">{first.title}</h2>}
+        {first.format && <p className="text-lg font-semibold leading-snug text-brand-orange">{first.format}</p>}
         <ul className="flex flex-col divide-y divide-white/5">
           {entries.map((e) => (
-            <li key={e.index} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2.5">
-              <span className="min-w-[8rem] flex-1 text-base text-white">
+            <li key={e.index} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-3">
+              <span className="min-w-[8rem] flex-1 text-lg font-medium text-white">
                 {resolveName(e.entry.movementId)}
-                {e.entry.scaledFrom ? <span className="ml-1.5 text-[10px] text-neutral-500">← {e.entry.scaledFrom}</span> : null}
+                {e.entry.scaledFrom ? <span className="ml-1.5 text-xs text-neutral-400">← {e.entry.scaledFrom}</span> : null}
               </span>
-              <span className="ml-auto max-w-full text-right text-sm text-neutral-400 [overflow-wrap:anywhere]">
+              <span className="ml-auto max-w-full text-right text-base font-semibold text-neutral-200 [overflow-wrap:anywhere]">
                 {e.entry.reps}
                 {e.entry.loadKg ? ` · ${e.entry.loadKg} ${loadUnitLabel(e.entry.movementId, e.entry.block)}` : ''}
               </span>
@@ -494,7 +495,7 @@ export function FocusMode({
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-40 pt-6">
-        <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${BLOCK_ACCENT[group.block]}`}>
+        <p className={`text-sm font-bold uppercase tracking-[0.14em] ${BLOCK_ACCENT[group.block]}`}>
           {BLOCK_LABEL[group.block]}
           {group.part ? ` · Parte ${group.part} de 2` : ''}
         </p>

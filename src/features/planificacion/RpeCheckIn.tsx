@@ -12,6 +12,8 @@ interface RpeCheckInProps {
   loggedRpe: number | null;
   estimated1rm?: number;
   onRate: (rpe: number) => void;
+  /** Versión grande para el modo enfocado (se mira de lejos y se toca con la mano mojada). */
+  large?: boolean;
 }
 
 /**
@@ -32,14 +34,14 @@ const shellDone = 'rounded-xl border-l-2 border-brand-neon/40 bg-gradient-to-br 
  * derivada de una sensación cualitativa. El RPE sigue alimentando `estimateE1RMFromRpe` y
  * `responseProfile` igual que antes.
  */
-export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRate }: RpeCheckInProps) {
+export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRate, large = false }: RpeCheckInProps) {
   const [editing, setEditing] = useState(false);
 
   if (loggedRpe != null && !editing) {
     return (
       <div className={shellDone}>
         <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-[11px] text-neutral-300">
+          <span className={`flex items-center gap-1.5 text-neutral-300 ${large ? 'text-sm' : 'text-[11px]'}`}>
             <TrendingUp size={12} strokeWidth={2.5} className="shrink-0 text-brand-neon" />
             {movementName && <span className="font-semibold text-white">{movementName}: </span>}
             {topSet.kg} kg × {topSet.reps} @ RPE {loggedRpe}
@@ -51,7 +53,7 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
           </span>
           <button
             onClick={() => setEditing(true)}
-            className="flex shrink-0 items-center gap-1 rounded-md border border-brand-border px-1.5 py-0.5 text-[10px] font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+            className={`flex shrink-0 items-center gap-1 rounded-md border border-brand-border font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold ${large ? 'px-3 py-2 text-xs' : 'px-1.5 py-0.5 text-[10px]'}`}
           >
             <Pencil size={10} strokeWidth={2.5} />
             Editar
@@ -63,11 +65,11 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
 
   return (
     <div className={shellPending}>
-      <p className="mb-2.5 text-xs font-semibold text-neutral-200">
+      <p className={`mb-2.5 font-semibold text-neutral-200 ${large ? 'text-base' : 'text-xs'}`}>
         {movementName && `${movementName}: `}
         {topSet.kg} kg × {topSet.reps} — ¿a qué RPE?
       </p>
-      <div className="flex flex-wrap gap-1.5">
+      <div className={large ? 'grid grid-cols-5 gap-1.5' : 'flex flex-wrap gap-1.5'}>
         {RPE_CHECKIN_OPTIONS.map((rpe) => (
           <button
             key={rpe}
@@ -75,14 +77,14 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
               onRate(rpe);
               setEditing(false);
             }}
-            className="flex flex-col items-center rounded-lg border border-brand-border bg-white/[0.03] px-2.5 py-1.5 transition-colors duration-200 hover:border-brand-gold hover:bg-white/[0.06]"
+            className={`flex flex-col items-center rounded-lg border border-brand-border bg-white/[0.03] transition-colors duration-200 hover:border-brand-gold hover:bg-white/[0.06] active:bg-white/10 ${large ? 'px-1 py-2.5' : 'px-2.5 py-1.5'}`}
           >
-            <span className="text-sm font-bold text-white">{rpe}</span>
-            <span className="text-[9px] text-neutral-500">{SET_FEEL_LABEL[feelFromRpe(rpe)]}</span>
+            <span className={`font-bold text-white ${large ? 'text-xl' : 'text-sm'}`}>{rpe}</span>
+            <span className={`text-neutral-400 ${large ? 'text-[10px]' : 'text-[9px]'}`}>{SET_FEEL_LABEL[feelFromRpe(rpe)]}</span>
           </button>
         ))}
       </div>
-      <p className="mt-2.5 flex items-start gap-1.5 text-[10px] text-neutral-600">
+      <p className={`mt-2.5 flex items-start gap-1.5 text-neutral-500 ${large ? 'text-xs' : 'text-[10px]'}`}>
         <Brain size={11} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-neon" />
         Calibra la carga futura de este levantamiento.
       </p>
