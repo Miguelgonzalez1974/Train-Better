@@ -208,7 +208,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               : day.kind === 'missed'
                 ? `No registrado${bandWord ? ` · ${bandWord}` : ''}`
                 : day.kind === 'planned'
-                  ? `Esfuerzo previsto ~${day.strain}${bandWord ? ` · ${bandWord}` : ''}${fitWord}${day.emphasis === 'metcon' ? ' · foco metcon' : day.emphasis === 'fuerza' ? ' · día de fuerza' : ''}`
+                  ? `Esfuerzo previsto ~${day.strain}${bandWord ? ` · ${bandWord}` : ''}${fitWord}${day.emphasis === 'metcon' ? ' · foco metcon' : day.emphasis === 'fuerza' ? ' · día de fuerza' : ' · día mixto'}`
                   : 'Descanso';
           return (
             <button
@@ -245,10 +245,16 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                 ) : day.kind === 'missed' ? (
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-red-500/60" />
                 ) : day.kind === 'planned' ? (
+                  // Pesa = fuerza, rayo = metcon, y los días mixtos (fuerza y WOD en equilibrio) llevan los dos juntos.
                   day.emphasis === 'metcon' ? (
                     <Zap size={13} strokeWidth={2.5} className="text-brand-orange" />
-                  ) : (
+                  ) : day.emphasis === 'fuerza' ? (
                     <Dumbbell size={13} strokeWidth={2.5} className="text-brand-gold" />
+                  ) : (
+                    <span className="flex items-center gap-px">
+                      <Dumbbell size={10} strokeWidth={2.5} className="text-brand-gold" />
+                      <Zap size={10} strokeWidth={2.5} className="text-brand-orange" />
+                    </span>
                   )
                 ) : (
                   <Moon size={12} strokeWidth={2.5} className="text-neutral-500" />
