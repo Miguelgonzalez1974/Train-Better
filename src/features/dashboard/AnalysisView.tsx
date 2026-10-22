@@ -1,0 +1,377 @@
+import { useMemo, useState } from 'react';
+import { ChevronDown, Dumbbell, Fingerprint, Scale } from 'lucide-react';
+import type { AthleteProfile, PersonalRecords, SessionHistoryEntry } from '../../data/athlete/types';
+import { analysisHeadline } from '../../engine/analysisHeadline';
+import type { ImbalanceGroup } from '../../engine/imbalances';
+import { buildLoadRows, type LoadRow } from '../../engine/loadLearning';
+import { buildPrSeries, summarisePrProgress } from '../../engine/progressSeries';
+import { computeResponseProfile, RESPONSE_MIN_WEEKS, type LiftResponse } from '../../engine/responseProfile';
+import { buildStrengthEvolution, RANGE_LABEL, type EvolutionRange } from '../../engine/strengthEvolution';
+import { EnergyDomainsCard } from './EnergyDomainsCard';
+import { EvolutionChart, fmtKg } from './EvolutionChart';
+import { ImbalancesCard } from './ImbalancesCard';
+import { PR_ROWS } from './PersonalRecordsCard';
+import { ResponseProfileCard } from './ResponseProfileCard';
+import type { MonthlyStats } from './stats';
+
+type AnalysisTab = 'fuerza' | 'equilibrio' | 'coach';
+
+const RANGES: EvolutionRange[] = ['8s', '6m', 'todo'];
+const OLYMPIC_KEYS: (keyof PersonalRecords)[] = ['snatch', 'cleanAndJerk'];
+const STRENGTH_KEYS: (keyof PersonalRecords)[] = ['backSquat', 'benchPress', 'deadlift'];
+
+const comma = (n: number | string) => String(n).replace('.', ',');
+const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${comma(Math.abs(n))}`;
+
+/** El ajuste del coach a la carga de un levantamiento, en una palabra corta y su color. */
+function adjustMeta(row: LoadRow | undefined): { text: string; className: string } {
+  if (!row || row.source === null) return { text: 'sin datos', className: 'text-neutral-500' };
+  if (row.direction === 'igual') return { text: 'sin cambios', className: 'text-neutral-300' };
+  return { text: `${signed(row.adjustPct)} %`, className: row.direction === 'sube' ? 'text-emerald-400' : 'text-amber-400' };
+}
+
+/** El ritmo de progreso de un levantamiento: la tasa mensual, o la palabra cuando no avanza. */
+function paceMeta(lift: LiftResponse | undefined): { text: string; className: string } {
+  if (!lift) return { text: 'sin datos', className: 'text-neutral-500' };
+  if (lift.tier === 'regresion') return { text: 'en caída', className: 'text-red-400' };
+  if (lift.tier === 'lento') return { text: 'estancado', className: 'text-amber-400' };
+  const rate = Math.round(lift.ratePerMonthPct * 10) / 10;
+  return { text: `${signed(rate)} %/mes`, className: lift.tier === 'rapido' ? 'text-emerald-400' : 'text-neutral-300' };
+}
+
+const HEADLINE_DOT = { good: 'bg-emerald-400', warn: 'bg-amber-400', neutral: 'bg-neutral-500' } as const;
+
+function TabButton({ active, onClick, label, value, hint, hintClass }: { active: boolean; onClick: () => void; label: string; value: string; hint: string; hintClass: string }) {
+  return (
+    <button
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`flex min-w-0 flex-col items-start gap-0.5 rounded-xl px-3 py-2.5 text-left transition-colors ${active ? 'bg-white/[0.09]' : 'bg-white/[0.03] hover:bg-white/[0.06]'}`}
+    >
+      <span className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-neutral-400'}`}>{label}</span>
+      <span className="num text-lg font-bold leading-tight text-white">{value}</span>
+      <span className={`truncate text-[10px] font-semibold ${hintClass}`}>{hint}</span>
+    </button>
+  );
+}
+
+/**
+ * El Análisis: un titular con lo importante y tres pestañas (Fuerza, Equilibrio, Coach) que enseñan una cosa cada una, en vez de
+ * una pila de tarjetas. Solo reordena lo que ya se calcula en otros sitios; no cambia nada de lo que programa el coach.
+ */
+export function AnalysisView({
+  profile,
+  history,
+  imbalanceGroups,
+  strengthRatio,
+  energyAdherencePct,
+  bodyweightKg,
+  stats,
+  todayIso,
+}: {
+  profile: AthleteProfile;
+  history: SessionHistoryEntry[];
+  imbalanceGroups: ImbalanceGroup[];
+  strengthRatio: number | null;
+  energyAdherencePct: number | null;
+  bodyweightKg?: number;
+  stats: MonthlyStats;
+  todayIso: string;
+}) {
+  const [tab, setTab] = useState<AnalysisTab>('fuerza');
+  const [liftKey, setLiftKey] = useState<keyof PersonalRecords>('backSquat');
+  const [range, setRange] = useState<EvolutionRange>('6m');
+  const [energyOpen, setEnergyOpen] = useState(true);
+  const [imbalancesOpen, setImbalancesOpen] = useState(true);
+
+  const { prs } = profile;
+  const prLog = profile.prLog ?? [];
+  const setFeedbackLog = profile.setFeedbackLog ?? [];
+  const workLog = profile.workLog ?? [];
+  const bodyweightLog = profile.bodyweightLog ?? [];
+
+  const response = useMemo(
+    () => computeResponseProfile(history, prLog, new Date(), setFeedbackLog, bodyweightLog, workLog, prs),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [history, profile.prLog, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, prs],
+  );
+  const loadRows = useMemo(() => buildLoadRows(prs, response, setFeedbackLog), [prs, response, setFeedbackLog]);
+  const desbalances = imbalanceGroups.filter((g) => g.status === 'desbalance').length;
+  const equilibrados = imbalanceGroups.filter((g) => g.status === 'equilibrado').length;
+  const headline = useMemo(
+    () => analysisHeadline({ loadRows, perLift: response.perLift, desbalances, equilibrados }),
+    [loadRows, response.perLift, desbalances, equilibrados],
+  );
+
+  // Cuántos levantamientos han subido su PR desde el primer test registrado.
+  const rising = useMemo(
+    () => PR_ROWS.filter(({ key }) => (summarisePrProgress(buildPrSeries(prLog, key))?.deltaKg ?? 0) > 0).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [profile.prLog],
+  );
+
+  const evo = useMemo(
+    () => buildStrengthEvolution(liftKey, prs, prLog, setFeedbackLog, workLog, todayIso, range),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [liftKey, prs, profile.prLog, profile.setFeedbackLog, profile.workLog, todayIso, range],
+  );
+  const liftLabel = PR_ROWS.find((r) => r.key === liftKey)?.label ?? liftKey;
+  const adjust = adjustMeta(loadRows.find((r) => r.key === liftKey));
+  const adjustRow = loadRows.find((r) => r.key === liftKey);
+  const pace = paceMeta(response.perLift.find((l) => l.key === liftKey));
+  const ratio = bodyweightKg ? comma((evo.currentPr / bodyweightKg).toFixed(1)) : null;
+
+  const sum = (keys: (keyof PersonalRecords)[]) => keys.reduce((s, k) => s + (prs[k] || 0), 0);
+  const olympic = sum(OLYMPIC_KEYS);
+  const strength = sum(STRENGTH_KEYS);
+  const weeks = Math.floor(response.dataWeeks);
+
+  const strengthHint = rising > 0 ? { text: `▲ ${rising} subiendo`, cls: 'text-emerald-400' } : { text: 'estable', cls: 'text-neutral-500' };
+  const balanceHint =
+    desbalances > 0
+      ? { text: `⚠ ${desbalances} ${desbalances === 1 ? 'desbalance' : 'desbalances'}`, cls: 'text-amber-400' }
+      : equilibrados > 0
+        ? { text: '● bien', cls: 'text-emerald-400' }
+        : { text: 'sin datos', cls: 'text-neutral-500' };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Titular: lo importante en una o dos frases y los totales del mes. */}
+      <section className="rounded-2xl bg-white/[0.03] p-4" aria-label="Resumen del análisis">
+        <div className="flex items-start gap-2.5">
+          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${HEADLINE_DOT[headline.tone]}`} aria-hidden="true" />
+          <p className="text-[13px] leading-relaxed text-neutral-200">{headline.sentences.join(' ')}</p>
+        </div>
+        {stats.diasEntrenados > 0 && (
+          <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
+            <div>
+              <dd className="num text-base font-bold text-white">{stats.diasEntrenados}</dd>
+              <dt className="text-[10px] text-neutral-500">días entrenados</dt>
+            </div>
+            <div>
+              <dd className="num text-base font-bold text-white">
+                {stats.diasRx}/{stats.diasEntrenados}
+              </dd>
+              <dt className="text-[10px] text-neutral-500">Rx</dt>
+            </div>
+            <div>
+              <dd className="num text-base font-bold text-white">{stats.rpeMedio !== null ? comma(stats.rpeMedio.toFixed(1)) : '—'}</dd>
+              <dt className="text-[10px] text-neutral-500">RPE medio</dt>
+            </div>
+          </dl>
+        )}
+      </section>
+
+      <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Análisis">
+        <TabButton
+          active={tab === 'fuerza'}
+          onClick={() => setTab('fuerza')}
+          label="Fuerza"
+          value={strengthRatio !== null ? `${comma(strengthRatio.toFixed(1))}×` : '—'}
+          hint={strengthHint.text}
+          hintClass={strengthHint.cls}
+        />
+        <TabButton
+          active={tab === 'equilibrio'}
+          onClick={() => setTab('equilibrio')}
+          label="Equilibrio"
+          value={energyAdherencePct !== null ? `${energyAdherencePct}%` : '—'}
+          hint={balanceHint.text}
+          hintClass={balanceHint.cls}
+        />
+        <TabButton
+          active={tab === 'coach'}
+          onClick={() => setTab('coach')}
+          label="Coach"
+          value={response.confident ? 'Activo' : `${weeks}/${RESPONSE_MIN_WEEKS}`}
+          hint={response.confident ? 'aprende de ti' : 'aprendiendo'}
+          hintClass={response.confident ? 'text-brand-neon' : 'text-neutral-500'}
+        />
+      </div>
+
+      {tab === 'fuerza' && (
+        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Levantamiento">
+            {PR_ROWS.map((r) => (
+              <button
+                key={r.key}
+                role="tab"
+                aria-selected={liftKey === r.key}
+                onClick={(e) => {
+                  setLiftKey(r.key);
+                  e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+                }}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  liftKey === r.key ? 'bg-brand-gold text-black' : 'bg-white/[0.06] text-neutral-300 hover:bg-white/10'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          <section className="rounded-2xl bg-white/[0.03] p-4" aria-label={`Evolución de ${liftLabel}`}>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs text-neutral-400">{liftLabel} · tu PR</p>
+                <p className="num text-3xl font-bold leading-tight text-white">
+                  {fmtKg(evo.currentPr)} <span className="text-sm font-medium text-neutral-400">kg</span>
+                </p>
+                {ratio && <p className="text-[11px] text-neutral-500">×{ratio} tu peso</p>}
+              </div>
+              <div className="flex flex-col items-end gap-1 text-right">
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                    evo.prDeltaKg > 0 ? 'bg-brand-neon/15 text-brand-neon' : evo.prDeltaKg < 0 ? 'bg-brand-orange/15 text-brand-orange' : 'bg-white/[0.06] text-neutral-300'
+                  }`}
+                >
+                  {signed(Math.round(evo.prDeltaKg * 10) / 10)} kg {range === 'todo' ? 'desde el inicio' : `en ${RANGE_LABEL[range].toLowerCase()}`}
+                </span>
+                {evo.latestE1rm !== null && (
+                  <span className="text-xs text-neutral-400">
+                    1RM estimado hoy <span className="num font-bold text-brand-neon">{fmtKg(evo.latestE1rm)} kg</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3">
+              {evo.hasData ? (
+                <EvolutionChart evo={evo} />
+              ) : (
+                <p className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-4 text-center text-xs leading-relaxed text-neutral-400">
+                  Todavía no hay datos de {liftLabel} en este periodo. El gráfico se llena con tus tests de PR y con las series que registras en el modo enfocado.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex gap-1 rounded-lg bg-white/5 p-0.5" role="tablist" aria-label="Periodo">
+                {RANGES.map((r) => (
+                  <button
+                    key={r}
+                    role="tab"
+                    aria-selected={range === r}
+                    onClick={() => setRange(r)}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${range === r ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
+                  >
+                    {RANGE_LABEL[r]}
+                  </button>
+                ))}
+              </div>
+              <p className="flex items-center gap-3 text-[11px] text-neutral-400">
+                <span className="flex items-center gap-1">
+                  <span className="h-0.5 w-3.5 rounded-full bg-brand-gold" /> PR
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-brand-neon" /> 1RM estimado
+                </span>
+              </p>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+                <p className="text-[10px] font-semibold text-neutral-500">Ajuste del coach</p>
+                <p className={`num text-sm font-bold ${adjust.className}`}>{adjust.text}</p>
+                {adjustRow && adjustRow.source !== null && (
+                  <p className="text-[10px] text-neutral-500">
+                    {adjustRow.reference} → {adjustRow.estimated} kg
+                  </p>
+                )}
+              </div>
+              <div className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+                <p className="text-[10px] font-semibold text-neutral-500">Ritmo</p>
+                <p className={`num text-sm font-bold ${pace.className}`}>{pace.text}</p>
+              </div>
+            </div>
+          </section>
+
+          <details className="group rounded-2xl bg-white/[0.03]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-[13px] font-semibold text-white [&::-webkit-details-marker]:hidden">
+              Todos los levantamientos
+              <ChevronDown size={16} className="text-neutral-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="px-4 pb-4">
+              <table className="w-full text-left text-[11px]">
+                <thead>
+                  <tr className="text-neutral-500">
+                    <th className="pb-1.5 font-semibold">Levantamiento</th>
+                    <th className="pb-1.5 text-right font-semibold">PR</th>
+                    <th className="pb-1.5 text-right font-semibold">Ajuste</th>
+                    <th className="pb-1.5 text-right font-semibold">Ritmo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PR_ROWS.map(({ key, label }) => {
+                    const a = adjustMeta(loadRows.find((r) => r.key === key));
+                    const p = paceMeta(response.perLift.find((l) => l.key === key));
+                    return (
+                      <tr key={key} className="border-t border-white/5">
+                        <td className="py-1.5 text-neutral-300">{label}</td>
+                        <td className="num py-1.5 text-right font-semibold text-white">{fmtKg(prs[key])}</td>
+                        <td className={`num py-1.5 text-right font-semibold ${a.className}`}>{a.text}</td>
+                        <td className={`num py-1.5 text-right font-semibold ${p.className}`}>{p.text}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Olímpico', kg: olympic, hint: 'Snatch + C&J' },
+                  { label: 'Fuerza', kg: strength, hint: 'Sentadilla + banca + peso muerto' },
+                ].map((t) => (
+                  <div key={t.label} className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+                    <p className="text-[10px] font-semibold text-neutral-500">{t.label}</p>
+                    <p className="num text-sm font-bold text-white">
+                      {fmtKg(t.kg)} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+                    </p>
+                    <p className="text-[10px] text-neutral-500">
+                      {bodyweightKg && t.kg > 0 ? `×${comma((t.kg / bodyweightKg).toFixed(1))} tu peso · ` : ''}
+                      {t.hint}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {!bodyweightKg && (
+                <p className="mt-2 flex items-center gap-1.5 text-[10px] text-neutral-500">
+                  <Scale size={11} aria-hidden="true" /> Registra tu peso corporal para ver las marcas en veces tu peso.
+                </p>
+              )}
+            </div>
+          </details>
+        </div>
+      )}
+
+      {tab === 'equilibrio' && (
+        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
+          <EnergyDomainsCard profile={profile} history={history} collapsed={!energyOpen} onToggleCollapsed={() => setEnergyOpen((v) => !v)} />
+          <ImbalancesCard groups={imbalanceGroups} collapsed={!imbalancesOpen} onToggleCollapsed={() => setImbalancesOpen((v) => !v)} />
+        </div>
+      )}
+
+      {tab === 'coach' && (
+        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
+          <p className="flex items-center gap-2 px-1 text-[11px] leading-snug text-neutral-500">
+            <Fingerprint size={13} className="shrink-0" aria-hidden="true" />
+            Lo que el coach ha aprendido de cómo respondes y cómo lo aplica a tu programación.
+          </p>
+          <ResponseProfileCard
+            history={history}
+            prLog={prLog}
+            setFeedbackLog={setFeedbackLog}
+            bodyweightLog={bodyweightLog}
+            workLog={workLog}
+            prs={prs}
+            defaultOpen
+          />
+          <p className="flex items-center gap-2 px-1 text-[11px] leading-snug text-neutral-500">
+            <Dumbbell size={13} className="shrink-0" aria-hidden="true" />
+            Los ajustes de carga por levantamiento están en la pestaña Fuerza.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

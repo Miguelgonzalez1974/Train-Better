@@ -96,6 +96,7 @@ export function ResponseProfileCard({
   bodyweightLog,
   workLog,
   prs,
+  defaultOpen = false,
 }: {
   history: SessionHistoryEntry[];
   prLog: PrLogEntry[];
@@ -103,8 +104,10 @@ export function ResponseProfileCard({
   bodyweightLog: BodyweightEntry[];
   workLog: WorkSetEntry[];
   prs: PersonalRecords;
+  /** Sale desplegada (en vez de la frase de una línea): para cuando la tarjeta es lo único de su pestaña. */
+  defaultOpen?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(!defaultOpen);
   const profile = useMemo(
     () => computeResponseProfile(history, prLog, new Date(), setFeedbackLog, bodyweightLog, workLog, prs),
     [history, prLog, setFeedbackLog, bodyweightLog, workLog, prs],
