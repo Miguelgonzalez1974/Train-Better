@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, Dumbbell, Fingerprint, Scale } from 'lucide-react';
 import type { AthleteProfile, PersonalRecords, SessionHistoryEntry } from '../../data/athlete/types';
 import { analysisHeadline } from '../../engine/analysisHeadline';
+import { competitionTile, rpeTrend, topRiser } from '../../engine/analysisStats';
+import { computeMonthPlan } from '../../engine/monthPlan';
 import type { ImbalanceGroup } from '../../engine/imbalances';
 import { buildLoadRows, type LoadRow } from '../../engine/loadLearning';
 import { buildPrSeries, summarisePrProgress } from '../../engine/progressSeries';
@@ -40,6 +42,46 @@ function paceMeta(lift: LiftResponse | undefined): { text: string; className: st
 }
 
 const HEADLINE_DOT = { good: 'bg-emerald-400', warn: 'bg-amber-400', neutral: 'bg-neutral-500' } as const;
+
+/** Nombre corto de cada levantamiento para caber en una casilla de la fila de arriba. */
+const SHORT_LIFT: Record<string, string> = {
+  backSquat: 'B. Squat',
+  frontSquat: 'F. Squat',
+  deadlift: 'Deadlift',
+  benchPress: 'Bench',
+  strictPress: 'Strict',
+  snatch: 'Snatch',
+  clean: 'Clean',
+  cleanAndJerk: 'C&J',
+};
+
+interface StatTileProps {
+  value: string;
+  /** La palabra de debajo del número (la que dice si va bien o mal). */
+  note: string;
+  label: string;
+  tone: 'good' | 'warn' | 'neutral' | 'gold';
+  /** Nombre en vez de cifra: letra algo más pequeña para que quepa. */
+  small?: boolean;
+  highlight?: boolean;
+}
+
+const TILE_TONE: Record<StatTileProps['tone'], string> = {
+  good: 'text-emerald-400',
+  warn: 'text-amber-400',
+  neutral: 'text-neutral-400',
+  gold: 'text-brand-gold',
+};
+
+function StatTile({ value, note, label, tone, small, highlight }: StatTileProps) {
+  return (
+    <div className={`min-w-0 rounded-xl px-1 pb-2 pt-2.5 ${highlight ? 'bg-brand-gold/15' : 'bg-white/[0.035]'}`}>
+      <p className={`num truncate font-extrabold leading-tight ${small ? 'pt-0.5 text-[13px]' : 'text-[15px]'} ${tone === 'gold' ? 'text-brand-gold' : 'text-white'}`}>{value}</p>
+      <p className={`mt-0.5 text-[10px] font-bold leading-tight ${TILE_TONE[tone]}`}>{note}</p>
+      <p className="mt-0.5 text-[9.5px] leading-tight text-neutral-500">{label}</p>
+    </div>
+  );
+}
 
 function TabButton({ active, onClick, label, value, hint, hintClass }: { active: boolean; onClick: () => void; label: string; value: string; hint: string; hintClass: string }) {
   return (
@@ -127,6 +169,40 @@ export function AnalysisView({
   const strength = sum(STRENGTH_KEYS);
   const weeks = Math.floor(response.dataWeeks);
 
+  // La fila de cifras de arriba.
+  const monthPlan = useMemo(() => computeMonthPlan(profile, history, new Date()), [profile, history]);
+  const riser = useMemo(
+    () => topRiser(prLog, PR_ROWS.map((r) => r.key)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [profile.prLog],
+  );
+  const trend = rpeTrend(stats.rpeMedioSemana, stats.rpeMedio);
+  const compTile = useMemo(() => competitionTile(profile.goals, new Date(), profile.trainingDaysPerWeek), [profile.goals, profile.trainingDaysPerWeek]);
+  const tiles: StatTileProps[] = [
+    monthPlan.pct === null
+      ? { value: '—', note: 'sin días aún', label: 'sesiones plan', tone: 'neutral' }
+      : { value: `${monthPlan.done}/${monthPlan.planned}`, note: `${monthPlan.pct} %`, label: 'sesiones plan', tone: monthPlan.pct >= 80 ? 'good' : monthPlan.pct >= 60 ? 'neutral' : 'warn' },
+    riser
+      ? { value: SHORT_LIFT[riser.key] ?? riser.key, note: `▲ +${Math.round(riser.deltaPct)} %`, label: 'más ha subido', tone: 'good', small: true }
+      : { value: '—', note: 'sin subidas', label: 'más ha subido', tone: 'neutral' },
+    stats.rpeMedioSemana === null
+      ? { value: '—', note: 'sin sesiones', label: 'RPE semana', tone: 'neutral' }
+      : {
+          value: comma(stats.rpeMedioSemana.toFixed(1)),
+          note: trend === 'duro' ? 'más duro' : trend === 'suave' ? 'más suave' : 'igual',
+          label: 'RPE semana',
+          tone: trend === 'duro' ? 'warn' : trend === 'suave' ? 'good' : 'neutral',
+        },
+    stats.diasEntrenados === 0
+      ? { value: '—', note: 'sin sesiones', label: 'WODs Rx', tone: 'neutral' }
+      : { value: `${stats.diasRx}/${stats.diasEntrenados}`, note: response.rx.trend === 'bajando' ? 'escalas más' : 'sin escalar', label: 'WODs Rx', tone: response.rx.trend === 'bajando' ? 'warn' : 'neutral' },
+  ];
+  if (compTile) tiles.push({ value: compTile.value, note: compTile.word, label: 'competición', tone: 'gold', highlight: compTile.close });
+  const rpeNote =
+    stats.rpeMedioSemana !== null && stats.rpeMedio !== null
+      ? `RPE: esfuerzo medio de tus sesiones esta semana (${comma(stats.rpeMedioSemana.toFixed(1))}) frente a la media del mes (${comma(stats.rpeMedio.toFixed(1))}). WODs Rx: los que hiciste como estaban prescritos, sin escalar.`
+      : null;
+
   const strengthHint = rising > 0 ? { text: `▲ ${rising} subiendo`, cls: 'text-emerald-400' } : { text: 'estable', cls: 'text-neutral-500' };
   const balanceHint =
     desbalances > 0
@@ -137,30 +213,22 @@ export function AnalysisView({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Titular: lo importante en una o dos frases y los totales del mes. */}
+      {/* Las cifras del mes de un vistazo: cumples el plan, qué sube, cuánto aprietas, cuánto escalas y cuánto falta para competir. */}
+      <div>
+        <div className={`grid gap-1.5 text-center ${compTile ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          {tiles.map((t) => (
+            <StatTile key={t.label} {...t} />
+          ))}
+        </div>
+        {rpeNote && <p className="mt-2 px-0.5 text-[11px] leading-relaxed text-neutral-500">{rpeNote}</p>}
+      </div>
+
+      {/* Titular: lo importante en una o dos frases. */}
       <section className="rounded-2xl bg-white/[0.03] p-4" aria-label="Resumen del análisis">
         <div className="flex items-start gap-2.5">
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${HEADLINE_DOT[headline.tone]}`} aria-hidden="true" />
           <p className="text-[13px] leading-relaxed text-neutral-200">{headline.sentences.join(' ')}</p>
         </div>
-        {stats.diasEntrenados > 0 && (
-          <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-white/5 pt-3 text-center">
-            <div>
-              <dd className="num text-base font-bold text-white">{stats.diasEntrenados}</dd>
-              <dt className="text-[10px] text-neutral-500">días entrenados</dt>
-            </div>
-            <div>
-              <dd className="num text-base font-bold text-white">
-                {stats.diasRx}/{stats.diasEntrenados}
-              </dd>
-              <dt className="text-[10px] text-neutral-500">Rx</dt>
-            </div>
-            <div>
-              <dd className="num text-base font-bold text-white">{stats.rpeMedio !== null ? comma(stats.rpeMedio.toFixed(1)) : '—'}</dd>
-              <dt className="text-[10px] text-neutral-500">RPE medio</dt>
-            </div>
-          </dl>
-        )}
       </section>
 
       <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Análisis">
