@@ -44,7 +44,7 @@ const PHASE_WORD: Record<CompetitionPhase, string> = {
   activacion: 'activación',
   vispera: 'víspera',
   evento: 'compites',
-  post: 'recuperación',
+  post: 'recupera',
 };
 
 /** La cuenta atrás de la competición, o null si no hay ninguna por delante ni acabada de pasar. */

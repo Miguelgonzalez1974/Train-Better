@@ -75,10 +75,10 @@ const TILE_TONE: Record<StatTileProps['tone'], string> = {
 
 function StatTile({ value, note, label, tone, small, highlight }: StatTileProps) {
   return (
-    <div className={`min-w-0 rounded-xl px-1 pb-2 pt-2.5 ${highlight ? 'bg-brand-gold/15' : 'bg-white/[0.035]'}`}>
-      <p className={`num truncate font-extrabold leading-tight ${small ? 'pt-0.5 text-[13px]' : 'text-[15px]'} ${tone === 'gold' ? 'text-brand-gold' : 'text-white'}`}>{value}</p>
-      <p className={`mt-0.5 text-[10px] font-bold leading-tight ${TILE_TONE[tone]}`}>{note}</p>
-      <p className="mt-0.5 text-[9.5px] leading-tight text-neutral-500">{label}</p>
+    <div className={`min-w-0 rounded-xl px-0.5 pb-1.5 pt-2 ${highlight ? 'bg-brand-gold/15' : 'bg-white/[0.035]'}`}>
+      <p className={`num truncate font-extrabold leading-tight ${small ? 'pt-px text-[11px]' : 'text-[13px]'} ${tone === 'gold' ? 'text-brand-gold' : 'text-white'}`}>{value}</p>
+      <p className={`mt-0.5 text-[9px] font-bold leading-tight ${TILE_TONE[tone]}`}>{note}</p>
+      <p className="mt-0.5 text-[8.5px] leading-tight text-neutral-500">{label}</p>
     </div>
   );
 }
@@ -215,7 +215,7 @@ export function AnalysisView({
     <div className="flex flex-col gap-4">
       {/* Las cifras del mes de un vistazo: cumples el plan, qué sube, cuánto aprietas, cuánto escalas y cuánto falta para competir. */}
       <div>
-        <div className={`grid gap-1.5 text-center ${compTile ? 'grid-cols-5' : 'grid-cols-4'}`}>
+        <div className={`grid gap-1 text-center ${compTile ? 'grid-cols-5' : 'grid-cols-4'}`}>
           {tiles.map((t) => (
             <StatTile key={t.label} {...t} />
           ))}
