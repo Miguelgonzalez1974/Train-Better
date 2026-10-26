@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { ChevronDown, Dumbbell, Fingerprint, Scale } from 'lucide-react';
 import type { AthleteProfile, PersonalRecords, SessionHistoryEntry } from '../../data/athlete/types';
 import { analysisHeadline } from '../../engine/analysisHeadline';
@@ -279,7 +279,7 @@ export function AnalysisView({
             ))}
           </div>
 
-          <section className="rounded-2xl bg-white/[0.03] p-4" aria-label={`Evolución de ${liftLabel}`}>
+          <section className="pb-1" aria-label={`Evolución de ${liftLabel}`}>
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-xs text-neutral-400">{liftLabel} · tu PR</p>
@@ -308,7 +308,7 @@ export function AnalysisView({
               {evo.hasData ? (
                 <EvolutionChart evo={evo} />
               ) : (
-                <p className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-4 text-center text-xs leading-relaxed text-neutral-400">
+                <p className="border-y border-white/10 px-3 py-4 text-center text-xs leading-relaxed text-neutral-400">
                   Todavía no hay datos de {liftLabel} en este periodo. El gráfico se llena con tus tests de PR y con las series que registras en el modo enfocado.
                 </p>
               )}
@@ -338,8 +338,8 @@ export function AnalysisView({
               </p>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+            <div className="mt-4 grid grid-cols-[1fr_1px_1fr] gap-3.5 border-t border-white/10 pt-3.5">
+              <div>
                 <p className="text-[10px] font-semibold text-neutral-500">Ajuste del coach</p>
                 <p className={`num text-sm font-bold ${adjust.className}`}>{adjust.text}</p>
                 {adjustRow && adjustRow.source !== null && (
@@ -348,19 +348,20 @@ export function AnalysisView({
                   </p>
                 )}
               </div>
-              <div className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+              <div className="bg-white/10" aria-hidden="true" />
+              <div>
                 <p className="text-[10px] font-semibold text-neutral-500">Ritmo</p>
                 <p className={`num text-sm font-bold ${pace.className}`}>{pace.text}</p>
               </div>
             </div>
           </section>
 
-          <details className="group rounded-2xl bg-white/[0.03]">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-[13px] font-semibold text-white [&::-webkit-details-marker]:hidden">
+          <details className="group border-t border-white/10 pt-1">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-3 text-[13px] font-semibold text-white [&::-webkit-details-marker]:hidden">
               Todos los levantamientos
               <ChevronDown size={16} className="text-neutral-500 transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
-            <div className="px-4 pb-4">
+            <div className="pb-2">
               <table className="w-full text-left text-[11px]">
                 <thead>
                   <tr className="text-neutral-500">
@@ -385,21 +386,24 @@ export function AnalysisView({
                   })}
                 </tbody>
               </table>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-[1fr_1px_1fr] gap-3.5 border-t border-white/10 pt-3.5">
                 {[
                   { label: 'Olímpico', kg: olympic, hint: 'Snatch + C&J' },
                   { label: 'Fuerza', kg: strength, hint: 'Sentadilla + banca + peso muerto' },
-                ].map((t) => (
-                  <div key={t.label} className="rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
-                    <p className="text-[10px] font-semibold text-neutral-500">{t.label}</p>
-                    <p className="num text-sm font-bold text-white">
-                      {fmtKg(t.kg)} <span className="text-[10px] font-normal text-neutral-500">kg</span>
-                    </p>
-                    <p className="text-[10px] text-neutral-500">
-                      {bodyweightKg && t.kg > 0 ? `×${comma((t.kg / bodyweightKg).toFixed(1))} tu peso · ` : ''}
-                      {t.hint}
-                    </p>
-                  </div>
+                ].map((t, i) => (
+                  <Fragment key={t.label}>
+                    {i === 1 && <div className="bg-white/10" aria-hidden="true" />}
+                    <div>
+                      <p className="text-[10px] font-semibold text-neutral-500">{t.label}</p>
+                      <p className="num text-sm font-bold text-white">
+                        {fmtKg(t.kg)} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+                      </p>
+                      <p className="text-[10px] text-neutral-500">
+                        {bodyweightKg && t.kg > 0 ? `×${comma((t.kg / bodyweightKg).toFixed(1))} tu peso · ` : ''}
+                        {t.hint}
+                      </p>
+                    </div>
+                  </Fragment>
                 ))}
               </div>
               {!bodyweightKg && (
@@ -413,7 +417,7 @@ export function AnalysisView({
       )}
 
       {tab === 'equilibrio' && (
-        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
+        <div className="animate-section-in flex flex-col divide-y divide-white/10 motion-reduce:animate-none">
           <EnergyDomainsCard profile={profile} history={history} collapsed={!energyOpen} onToggleCollapsed={() => setEnergyOpen((v) => !v)} />
           <ImbalancesCard groups={imbalanceGroups} collapsed={!imbalancesOpen} onToggleCollapsed={() => setImbalancesOpen((v) => !v)} />
         </div>

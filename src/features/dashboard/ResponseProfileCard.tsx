@@ -119,11 +119,10 @@ export function ResponseProfileCard({
   const bw = bodyweightLine(profile.bodyweight);
 
   return (
-    <section className="card overflow-hidden p-0">
-      <button onClick={() => setCollapsed((prev) => !prev)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-surfaceMuted">
-          <span className="absolute inset-0 animate-pulse rounded-xl bg-brand-neon/20 blur-md" />
-          <Fingerprint size={16} strokeWidth={2.25} className="relative text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.6)]" />
+    <section className="overflow-hidden">
+      <button onClick={() => setCollapsed((prev) => !prev)} className="flex w-full items-center gap-3 py-3 text-left">
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10">
+          <Fingerprint size={16} strokeWidth={2.25} className="relative text-brand-neon" />
         </span>
         <span className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-sm font-semibold text-white">Perfil de respuesta</span>
@@ -139,8 +138,8 @@ export function ResponseProfileCard({
       </button>
 
       {collapsed && (
-        <div className="border-t border-white/5 px-3.5 pb-3.5 pt-3">
-          <div className="flex items-center gap-3 rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+        <div className="border-t border-white/10 pb-3 pt-3">
+          <div className="flex items-center gap-3 pl-12">
             <Activity size={14} strokeWidth={2.5} className="shrink-0 text-brand-neon" />
             <p className="text-xs leading-relaxed text-neutral-300">
               {profile.confident
@@ -154,7 +153,7 @@ export function ResponseProfileCard({
       )}
 
       {!collapsed && (
-        <div className="flex flex-col gap-3 border-t border-white/5 px-3.5 pb-3.5 pt-3">
+        <div className="flex flex-col gap-3 border-t border-white/10 pb-3 pt-3">
           {!profile.confident && (
             <div>
               <p className="mb-1.5 text-[11px] text-neutral-500">

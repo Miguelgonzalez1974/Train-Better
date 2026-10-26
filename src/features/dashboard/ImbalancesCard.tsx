@@ -86,11 +86,10 @@ export function ImbalancesCard({
   const previewMeta = STATUS_META[previewGroup.status];
 
   return (
-    <section className="card overflow-hidden p-0">
-      <button onClick={onToggleCollapsed} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-surfaceMuted">
-          <span className="absolute inset-0 animate-pulse rounded-xl bg-brand-neon/20 blur-md" />
-          <GitCompare size={16} strokeWidth={2.25} className="relative text-brand-neon drop-shadow-[0_0_4px_rgba(57,255,20,0.6)]" />
+    <section className="overflow-hidden">
+      <button onClick={onToggleCollapsed} className="flex w-full items-center gap-3 py-3 text-left">
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10">
+          <GitCompare size={16} strokeWidth={2.25} className="relative text-brand-neon" />
         </span>
         <span className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-sm font-semibold text-white">Desequilibrios</span>
@@ -116,8 +115,8 @@ export function ImbalancesCard({
         no hace falta desplegar para saber si hay algo que mirar.
       */}
       {collapsed && (
-        <div className="border-t border-white/5 px-3.5 pb-3.5 pt-3">
-          <div className="flex items-center justify-between gap-3 rounded-xl bg-brand-surfaceMuted/80 px-3 py-2.5">
+        <div className="border-t border-white/10 pb-3 pt-3">
+          <div className="flex items-center justify-between gap-3 pl-12">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-white">{previewGroup.label}</p>
               <p className="truncate text-xs text-neutral-500">{previewGroup.note}</p>
@@ -128,7 +127,7 @@ export function ImbalancesCard({
       )}
 
       {!collapsed && (
-        <div className="flex flex-col gap-3 border-t border-white/5 px-3.5 pb-3.5 pt-3">
+        <div className="flex flex-col gap-3 border-t border-white/10 pb-3 pt-3">
           {groups.map((group) => (
             <GroupRow key={group.key} group={group} />
           ))}
