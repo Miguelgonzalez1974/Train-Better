@@ -1,12 +1,9 @@
 import { daysBetweenIso, niceAxis, type StrengthEvolution } from '../../engine/strengthEvolution';
+import { fmtDay } from './ChartKit';
 
 const W = 320;
 const H = 200;
 const PAD = { l: 32, r: 38, t: 14, b: 22 };
-
-function fmtDay(iso: string, withYear = false): string {
-  return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', ...(withYear ? { year: '2-digit' } : {}) }).format(new Date(`${iso}T12:00:00`));
-}
 
 export function fmtKg(n: number): string {
   return String(Math.round(n * 10) / 10).replace('.', ',');

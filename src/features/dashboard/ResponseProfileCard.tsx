@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Fingerprint, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
+import { Term } from '../shell/Term';
 import type { BodyweightEntry, PersonalRecords, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from '../../data/athlete/types';
 import {
   computeResponseProfile,
@@ -170,7 +171,9 @@ export function ResponseProfileCard({
           )}
 
           <div className="border-l-2 border-brand-neon/40 py-1 pl-3">
-            <p className="text-[13px] font-semibold text-white">RPE</p>
+            <p className="text-[13px] font-semibold text-white">
+              <Term k="rpe">RPE</Term>
+            </p>
             <p className="text-[11px] leading-relaxed text-neutral-400">{rpeLine(profile.rpe)}</p>
           </div>
 

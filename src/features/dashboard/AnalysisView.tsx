@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { ChevronDown, Dumbbell, Fingerprint, Scale } from 'lucide-react';
 import type { AthleteProfile, PersonalRecords, SessionHistoryEntry } from '../../data/athlete/types';
 import { analysisHeadline } from '../../engine/analysisHeadline';
@@ -13,6 +13,7 @@ import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { EvolutionChart, fmtKg } from './EvolutionChart';
 import { ImbalancesCard } from './ImbalancesCard';
 import { PR_ROWS } from './PersonalRecordsCard';
+import { Term } from '../shell/Term';
 import { ResponseProfileCard } from './ResponseProfileCard';
 import type { MonthlyStats } from './stats';
 
@@ -58,8 +59,10 @@ const SHORT_LIFT: Record<string, string> = {
 interface StatTileProps {
   value: string;
   /** La palabra de debajo del número (la que dice si va bien o mal). */
-  note: string;
+  note: ReactNode;
   label: string;
+  /** La etiqueta con algún término explicable (ver `Term`); si no se da, sale `label`. */
+  labelNode?: ReactNode;
   tone: 'good' | 'warn' | 'neutral' | 'gold';
   /** Nombre en vez de cifra: letra algo más pequeña para que quepa. */
   small?: boolean;
@@ -73,12 +76,12 @@ const TILE_TONE: Record<StatTileProps['tone'], string> = {
   gold: 'text-brand-gold',
 };
 
-function StatTile({ value, note, label, tone, small, highlight }: StatTileProps) {
+function StatTile({ value, note, label, labelNode, tone, small, highlight }: StatTileProps) {
   return (
     <div className={`min-w-0 rounded-xl px-0.5 pb-1.5 pt-2 ${highlight ? 'bg-brand-gold/15' : 'bg-white/[0.035]'}`}>
       <p className={`num truncate font-extrabold leading-tight ${small ? 'pt-px text-[11px]' : 'text-[13px]'} ${tone === 'gold' ? 'text-brand-gold' : 'text-white'}`}>{value}</p>
       <p className={`mt-0.5 text-[9px] font-bold leading-tight ${TILE_TONE[tone]}`}>{note}</p>
-      <p className="mt-0.5 text-[8.5px] leading-tight text-neutral-500">{label}</p>
+      <p className="mt-0.5 text-[8.5px] leading-tight text-neutral-500">{labelNode ?? label}</p>
     </div>
   );
 }
@@ -178,6 +181,16 @@ export function AnalysisView({
   );
   const trend = rpeTrend(stats.rpeMedioSemana, stats.rpeMedio);
   const compTile = useMemo(() => competitionTile(profile.goals, new Date(), profile.trainingDaysPerWeek), [profile.goals, profile.trainingDaysPerWeek]);
+  const rpeLabel = (
+    <>
+      <Term k="rpe">RPE</Term> semana
+    </>
+  );
+  const rxLabel = (
+    <>
+      WODs <Term k="rx">Rx</Term>
+    </>
+  );
   const tiles: StatTileProps[] = [
     monthPlan.pct === null
       ? { value: '—', note: 'sin días aún', label: 'sesiones plan', tone: 'neutral' }
@@ -186,18 +199,19 @@ export function AnalysisView({
       ? { value: SHORT_LIFT[riser.key] ?? riser.key, note: `▲ +${Math.round(riser.deltaPct)} %`, label: 'más ha subido', tone: 'good', small: true }
       : { value: '—', note: 'sin subidas', label: 'más ha subido', tone: 'neutral' },
     stats.rpeMedioSemana === null
-      ? { value: '—', note: 'sin sesiones', label: 'RPE semana', tone: 'neutral' }
+      ? { value: '—', note: 'sin sesiones', label: 'RPE semana', labelNode: rpeLabel, tone: 'neutral' }
       : {
           value: comma(stats.rpeMedioSemana.toFixed(1)),
           note: trend === 'duro' ? 'más duro' : trend === 'suave' ? 'más suave' : 'igual',
           label: 'RPE semana',
+          labelNode: rpeLabel,
           tone: trend === 'duro' ? 'warn' : trend === 'suave' ? 'good' : 'neutral',
         },
     stats.diasEntrenados === 0
-      ? { value: '—', note: 'sin sesiones', label: 'WODs Rx', tone: 'neutral' }
-      : { value: `${stats.diasRx}/${stats.diasEntrenados}`, note: response.rx.trend === 'bajando' ? 'escalas más' : 'sin escalar', label: 'WODs Rx', tone: response.rx.trend === 'bajando' ? 'warn' : 'neutral' },
+      ? { value: '—', note: 'sin sesiones', label: 'WODs Rx', labelNode: rxLabel, tone: 'neutral' }
+      : { value: `${stats.diasRx}/${stats.diasEntrenados}`, note: response.rx.trend === 'bajando' ? 'escalas más' : 'sin escalar', label: 'WODs Rx', labelNode: rxLabel, tone: response.rx.trend === 'bajando' ? 'warn' : 'neutral' },
   ];
-  if (compTile) tiles.push({ value: compTile.value, note: compTile.word, label: 'competición', tone: 'gold', highlight: compTile.close });
+  if (compTile) tiles.push({ value: compTile.value, note: compTile.word === 'taper' ? <Term k="taper">taper</Term> : compTile.word, label: 'competición', tone: 'gold', highlight: compTile.close });
   const rpeNote =
     stats.rpeMedioSemana !== null && stats.rpeMedio !== null
       ? `RPE: esfuerzo medio de tus sesiones esta semana (${comma(stats.rpeMedioSemana.toFixed(1))}) frente a la media del mes (${comma(stats.rpeMedio.toFixed(1))}). WODs Rx: los que hiciste como estaban prescritos, sin escalar.`
@@ -298,7 +312,7 @@ export function AnalysisView({
                 </span>
                 {evo.latestE1rm !== null && (
                   <span className="text-xs text-neutral-400">
-                    1RM estimado hoy <span className="num font-bold text-brand-neon">{fmtKg(evo.latestE1rm)} kg</span>
+                    <Term k="e1rm">1RM estimado</Term> hoy <span className="num font-bold text-brand-neon">{fmtKg(evo.latestE1rm)} kg</span>
                   </span>
                 )}
               </div>

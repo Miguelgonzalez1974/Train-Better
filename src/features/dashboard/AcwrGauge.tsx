@@ -1,5 +1,6 @@
 import { Activity } from 'lucide-react';
 import { ACWR_ZONE_LABEL, type AcwrResult } from '../../engine/loadMetrics';
+import { Term } from '../shell/Term';
 import { Sparkline } from './Sparkline';
 
 const SCALE_MAX = 2;
@@ -59,7 +60,7 @@ export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (numbe
             <Activity size={18} strokeWidth={2.25} />
           </span>
           <div>
-            <p className="text-xs uppercase tracking-wide text-neutral-400">Carga aguda:crónica (ACWR)</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-400">Carga aguda:crónica (<Term k="acwr">ACWR</Term>)</p>
             {result.acwr !== null ? (
               <p className="text-2xl font-bold text-white">
                 {result.acwr.toFixed(2)} <span className={`text-sm font-semibold ${ZONE_TEXT_CLASS[result.zone]}`}>{ACWR_ZONE_LABEL[result.zone]}</span>
