@@ -1,6 +1,7 @@
 import type { DailySession, SessionHistoryEntry, StrainTarget } from '../data/athlete/types';
 import { estimateSessionMinutes } from '../lib/sessionDuration';
 import { strainFromSrpe } from './strain';
+import { HARDNESS_RPE_BUMP } from './hardness';
 
 /**
  * Esfuerzo PREVISTO de la sesión de hoy, para compararlo con el objetivo del día antes de empezar: duración estimada de
@@ -59,7 +60,9 @@ export function estimatePlannedStrain(session: DailySession, history: SessionHis
   if (session.isRestDay || session.source === 'custom' || session.blocks.length === 0) return null;
   const minutes = estimateSessionMinutes(session);
   if (minutes <= 0) return null;
-  const rpe = expectedRpe(session, history);
+  // Una sesión a la que el atleta subió la dureza se espera más dura: +0,15 de RPE por nivel si es más volumen (los minutos ya
+  // suben), +0,35 si es más intensidad (mismo volumen, más carga).
+  const rpe = expectedRpe(session, history) + (session.hardness ? HARDNESS_RPE_BUMP[session.hardnessMode ?? 'volume'] * session.hardness : 0);
   const raw = strainFromSrpe(rpe * minutes);
   return { strain: Math.max(0, Math.min(100, raw + bias)), rpe, minutes, bias };
 }

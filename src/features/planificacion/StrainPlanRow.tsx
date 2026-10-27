@@ -1,3 +1,4 @@
+import { Flame } from 'lucide-react';
 import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
 
@@ -20,6 +21,7 @@ export function StrainPlanRow({
   canSwapWod,
   onSwapWod,
   onLighter,
+  onHarder,
 }: {
   planned: PlannedStrain;
   target: StrainTarget;
@@ -28,6 +30,8 @@ export function StrainPlanRow({
   canSwapWod: boolean;
   onSwapWod: () => void;
   onLighter: () => void;
+  /** Subir la dureza de hoy (ver `HardnessControl`): solo si hoy se puede y aún no se ha subido. */
+  onHarder?: () => void;
 }) {
   const color = FIT_COLOR[fit];
   return (
@@ -37,6 +41,16 @@ export function StrainPlanRow({
         <span className="num font-semibold text-neutral-200">{target.low}–{target.high}</span>
         {fit === 'se-pasa' && <span style={{ color }}> · se pasa {diff}</span>}
       </p>
+      {onHarder && (
+        <div>
+          <button
+            onClick={onHarder}
+            className="flex items-center gap-1.5 rounded-full border border-brand-orange/40 bg-brand-orange/10 px-3 py-1.5 text-xs font-bold text-brand-orange transition-colors duration-200 hover:bg-brand-orange/20"
+          >
+            <Flame size={13} strokeWidth={2.5} aria-hidden="true" /> Más dura
+          </button>
+        </div>
+      )}
       {fit === 'se-pasa' && (
         <div className="flex flex-wrap gap-2">
           {canSwapWod && (

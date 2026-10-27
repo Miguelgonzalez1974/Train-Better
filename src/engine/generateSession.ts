@@ -50,7 +50,8 @@ import {
 } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { buildOlyWavePlan, pickOlyWaveTemplate } from './olyWaves';
-import { buildComplexBlock, buildComplexPool, complexNote, pickComplex, type ComplexPool } from './olyComplexes';
+import { buildComplexBlock, buildComplexPool, COMPLEX_WEEK_SETS, complexNote, pickComplex, type ComplexPool } from './olyComplexes';
+import { HARDNESS_LOAD, HARDNESS_OLY_SETS, HARDNESS_SETS, HARDNESS_WOD_VOLUME, hardnessMode, type HardnessLevel } from './hardness';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
@@ -1117,7 +1118,7 @@ function buildStrengthBlock(
   if (style === 'emom' && emomPartner && emomPartnerMovement && (week === 1 || week === 2)) {
     const reps = STRENGTH_EMOM_REPS[week];
     const startPercent = scheme.percent - STRENGTH_EMOM_STEP * (STRENGTH_EMOM_ROUNDS - 1) * 0.75;
-    const factors = autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor;
+    const factors = autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * (dose.hardLoad ?? 1);
     const loads = Array.from({ length: STRENGTH_EMOM_ROUNDS }, (_, i) =>
       roundToNearestPlate(currentPR * (startPercent + STRENGTH_EMOM_STEP * i) * factors),
     );
@@ -1138,7 +1139,7 @@ function buildStrengthBlock(
 
   if (style === 'ascendingLadder') {
     const topPercent = Math.min(scheme.percent + 0.08, 0.92);
-    const topKg = roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor);
+    const topKg = roundToNearestPlate(currentPR * topPercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * (dose.hardLoad ?? 1));
     return {
       blocks: withSuperset({
         block: 'strength',
@@ -1165,7 +1166,7 @@ function buildStrengthBlock(
         format: STRENGTH_SCHEME_LABEL.volumeSets,
         sets: setsFor(scheme.sets + 1),
         reps: String(scheme.reps + 4),
-        loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * dose.strengthLoad),
+        loadKg: roundToNearestPlate(currentPR * volumePercent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * dose.strengthLoad * (dose.hardLoad ?? 1)),
         notes,
         ...(tempo ? { tempo } : {}),
       }),
@@ -1174,7 +1175,7 @@ function buildStrengthBlock(
     };
   }
 
-  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * dose.strengthLoad);
+  const loadKg = roundToNearestPlate(currentPR * scheme.percent * autoregFactor * reintroFactor * fatigueFactor * setFeelFactor * bwFactor * dose.strengthLoad * (dose.hardLoad ?? 1));
   return {
     blocks: withSuperset({
       block: 'strength',
@@ -1298,6 +1299,8 @@ function buildOlyBlock(
   complexPool: ComplexPool | null = null,
   /** Complejo bloqueado para hoy por la planificación semanal (`weeklyLocks`): se respeta si sigue en la librería y no está oculto. */
   lockedComplexId?: string,
+  /** Series extra del levantamiento principal (y del complejo) cuando el atleta ha subido la dureza de hoy (ver `engine/hardness.ts`). */
+  extraSets = 0,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -1488,7 +1491,7 @@ function buildOlyBlock(
   const bwFactor = bodyweightLoadFactor(responseProfile);
   const bwNote = bwFactor < 1 ? ' Vienes perdiendo peso corporal — bajamos un poco la carga hasta que se estabilice.' : '';
   const loadKg = roundToNearestPlate(
-    resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor * dose.strengthLoad,
+    resolveOlyPR(movement, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor * dose.strengthLoad * (dose.hardLoad ?? 1),
   );
   // Igual que en fuerza: la nota del bloque solo lleva lo de ESTE levantamiento (esquema, objetivo,
   // sensación previa, foco de recepción, rampa/reintro/fatiga). El "por qué hoy" de la sesión
@@ -1514,7 +1517,7 @@ function buildOlyBlock(
   const straightEntry: SessionBlockResult = {
     block: 'oly',
     movementId: movement.id,
-    sets: scheme.sets,
+    sets: scheme.sets + extraSets,
     reps: String(scheme.reps),
     loadKg,
     notes: baseNote,
@@ -1619,7 +1622,8 @@ function buildOlyBlock(
         week,
         prs,
         variantPrs,
-        dayFactor: autoregFactor * dose.strengthLoad,
+        dayFactor: autoregFactor * dose.strengthLoad * (dose.hardLoad ?? 1),
+        sets: extraSets > 0 ? COMPLEX_WEEK_SETS[week] + extraSets : undefined,
         notes: `${scheme.coachNote} ${complexNote(picked, (id) => getMovementById(id)?.name ?? id)}${receivingTag}${reintroNote}${fatigueNote}${rampNote}`,
       });
       if (complexEntry) {
@@ -1952,6 +1956,8 @@ interface DayDose {
   strengthSets: number;
   /** Multiplicador (pequeño) sobre la carga de fuerza. */
   strengthLoad: number;
+  /** Más carga que ha pedido el atleta (dureza en modo intensidad, ver `engine/hardness.ts`): 1 o ausente = sin cambio. Solo fuerza y oly. */
+  hardLoad?: number;
   /** Intensidad relativa del dia, para las notas. */
   dayIntensity: DayIntensity;
 }
@@ -3902,7 +3908,7 @@ function buildFridayOlyBlock(ctx: {
             ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
             : '';
     const mainLoadKg = roundToNearestPlate(
-      resolveOlyPR(main, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor * ctx.dose.strengthLoad,
+      resolveOlyPR(main, prs, family, variantPrs) * scheme.percent * autoregFactor * setFeelFactor * bwFactor * ctx.dose.strengthLoad * (ctx.dose.hardLoad ?? 1),
     );
 
     // Calentamiento de barra propio para esta familia (grip y posiciones distintas de la otra) — misma
@@ -4474,15 +4480,33 @@ function generateDailySessionCore(
   const soreCut = !testDayFocus && plannedPattern !== null && soreStrong.has(plannedPattern);
   const amberToday = light?.color === 'ambar' && !testDayFocus;
   const greenPush = light?.color === 'verde' && !testDayFocus && !comp && week !== 4;
-  const wodDose: DayDose = amberToday
+  const wodDoseSoft: DayDose = amberToday
     ? { ...wodDoseBase, wodVolume: clampDose(wodDoseBase.wodVolume * AMBER_WOD_VOLUME, 0.5, 1.3) }
     : greenPush
       ? { ...wodDoseBase, wodVolume: clampDose(wodDoseBase.wodVolume * GREEN_WOD_VOLUME, 0.6, 1.3) }
       : wodDoseBase;
-  const strengthOlyDose: DayDose =
+  const strengthOlyDoseSoft: DayDose =
     amberToday || soreCut
       ? { ...strengthOlyDoseBase, strengthSets: clampDose(strengthOlyDoseBase.strengthSets * AMBER_STRENGTH_SETS, 0.4, 1.18) }
       : strengthOlyDoseBase;
+
+  // Dureza que ha pedido el atleta para hoy (ver `engine/hardness.ts`): lejos de la competición y fuera de la descarga sube el volumen
+  // (series y rondas); con competición cerca o en descarga sube la carga y deja el volumen igual. No en un test de máximos, un día
+  // ligero (activación, simulacro) ni la víspera: ahí no se ofrece. Va DESPUÉS del semáforo: lo pedido manda sobre el recorte ámbar.
+  const requestedHardness: HardnessLevel =
+    profile.hardness?.[dateIso] && !testDayFocus && !technicalLight && !comp?.recoverySession && !comp?.simulacro ? profile.hardness[dateIso] : 0;
+  const hardMode = hardnessMode({ competition: Boolean(comp), week });
+  const hardVolume = requestedHardness > 0 && hardMode === 'volume';
+  const hardIntensity = requestedHardness > 0 && hardMode === 'intensity';
+  const wodDose: DayDose = hardVolume
+    ? { ...wodDoseSoft, wodVolume: clampDose(wodDoseSoft.wodVolume * HARDNESS_WOD_VOLUME[requestedHardness], 0.6, 1.6) }
+    : wodDoseSoft;
+  const strengthOlyDose: DayDose = hardVolume
+    ? { ...strengthOlyDoseSoft, strengthSets: clampDose(strengthOlyDoseSoft.strengthSets * HARDNESS_SETS[requestedHardness], 0.4, 2) }
+    : hardIntensity
+      ? { ...strengthOlyDoseSoft, hardLoad: HARDNESS_LOAD[requestedHardness] }
+      : strengthOlyDoseSoft;
+  const hardOlySets = hardVolume ? HARDNESS_OLY_SETS[requestedHardness] : 0;
 
   // Movimiento de fuerza/oly bloqueado para hoy por la planificacion semanal (ver
   // AthleteProfile.weeklyLocks / planWeekLocks) — si no hay bloqueo para esta fecha, undefined, y
@@ -4493,15 +4517,17 @@ function generateDailySessionCore(
   const weekLock = storedLock && Boolean(storedLock.split) === weeklySplit ? storedLock : undefined;
 
   // Autorregulacion del WOD: mismas señales que fuerza/oly, solo hacia abajo (ver getWodLoadFactor).
-  const wodLoadFactor = getWodLoadFactor(
-    combineAutoregFactors(
-      getAutoregFactor(acwrZone),
-      getRpeAutoregFactor(history, date, responseProfile.rpe.reliability).factor,
-      getReadinessFactor(readinessCheck).factor,
-      clampResponseBias(responseProfile.rpe.bias),
-    ),
-    Math.min(strengthRampFactor, olyRampFactor),
-  );
+  // Con la dureza en modo intensidad (competición cerca o descarga) las cargas del WOD suben un poco.
+  const wodLoadFactor =
+    getWodLoadFactor(
+      combineAutoregFactors(
+        getAutoregFactor(acwrZone),
+        getRpeAutoregFactor(history, date, responseProfile.rpe.reliability).factor,
+        getReadinessFactor(readinessCheck).factor,
+        clampResponseBias(responseProfile.rpe.bias),
+      ),
+      Math.min(strengthRampFactor, olyRampFactor),
+    ) * (hardIntensity ? HARDNESS_LOAD[requestedHardness] : 1);
 
   // Dia de doble WOD (ver `doubleWodSlot`): solo acondicionamiento, dos piezas.
   //  - Hoy tiene que ser posible: sin descarga, ACWR alto, poca disponibilidad, test, taper ni rampa de
@@ -4613,6 +4639,7 @@ function generateDailySessionCore(
       ? buildComplexPool(profile.customComplexes, profile.complexPrefs)
       : null,
     weekLock?.olyComplexId,
+    hardOlySets,
   );
 
   // El accesorio se decide ANTES que el WOD: no depende de el, y asi el WOD (que si es flexible; el
@@ -4777,6 +4804,9 @@ function generateDailySessionCore(
         emphasisNote,
         crowdTrimNote,
         progressionNote,
+        requestedHardness > 0
+          ? `Dureza +${requestedHardness} porque lo pediste: ${hardMode === 'volume' ? 'más series y rondas' : 'más carga con el mismo volumen'}.`
+          : undefined,
         intensityNote,
         energyReason,
         lockReason,
@@ -4799,6 +4829,7 @@ function generateDailySessionCore(
     isRestDay: false,
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
     ...(light ? { dayLight: light } : {}),
+    ...(requestedHardness === 1 || requestedHardness === 2 ? { hardness: requestedHardness, hardnessMode: hardMode } : {}),
     ...(soreCut && !amberToday ? { soreStrengthCut: true } : {}),
     deloadReason,
     deloadNote,

@@ -322,6 +322,8 @@ export interface AthleteProfile {
   strengthPrograms?: StrengthProgram[];
   /** Complejos de halterofilia creados por el atleta (ver `data/complexes.ts`): entran en el mismo sorteo que los de fábrica. */
   customComplexes?: OlyComplex[];
+  /** Dureza que el atleta pidió para cada día (1 = «+1», 2 = «+2»; 0 o ausente = como lo programó el coach; el 0 se guarda para que «volver a normal» se sincronice). Ver `engine/hardness.ts`. */
+  hardness?: Record<string, 0 | 1 | 2>;
   /** Favoritos (salen más) y ocultos (no salen) de la librería de complejos, por id. */
   complexPrefs?: { favorites: string[]; hidden: string[] };
   /** Avisos activos de molestia/dolor (ver [[PainFlag]]) — el motor evita el patron de movimiento asociado mientras esten vigentes. */
@@ -544,7 +546,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 78;
+export const SESSION_GEN_VERSION = 79;
 
 /** Color del día según cómo llegas (ver `engine/dayLight.ts`): verde = a por todas, ámbar = mantener sin acumular, rojo = recuperar. */
 export type DayLightColor = 'verde' | 'ambar' | 'rojo';
@@ -562,6 +564,12 @@ export interface DailySession {
   blocks: SessionBlockResult[];
   /** El semáforo de hoy (solo si hiciste el check-in y hay nota de preparación): cambia la estructura de la sesión, no solo la carga. */
   dayLight?: DayLightInfo;
+  /**
+   * El atleta subió la dureza de hoy (`AthleteProfile.hardness`): 1 = «+1», 2 = «+2». `hardnessMode` dice qué significó: más volumen
+   * (series, rondas) o, con una competición cerca o en descarga, más intensidad (carga) con el mismo volumen. Ver `engine/hardness.ts`.
+   */
+  hardness?: 1 | 2;
+  hardnessMode?: 'volume' | 'intensity';
   /** Agujetas fuertes en la zona del patrón de fuerza de hoy: la fuerza lleva una serie menos (y el WOD evita esos movimientos). */
   soreStrengthCut?: boolean;
   /** Sello de `SESSION_GEN_VERSION` con el que se genero — lo pone `saveCachedSession`. Ausente en sesiones cacheadas antes de introducir el sello (se tratan como version 0). */

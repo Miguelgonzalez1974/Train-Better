@@ -24,6 +24,15 @@ describe('sincronización de los complejos propios', () => {
     expect((merged.customComplexes ?? []).map((c) => c.id)).toEqual(['b']);
   });
 
+  it('la dureza pedida por día se une por fecha, gana el local y «volver a normal» (0) también', () => {
+    const merged = mergeProfile(
+      profile({ hardness: { '2026-03-02': 2, '2026-03-03': 1 } }),
+      profile({ hardness: { '2026-03-02': 0, '2026-03-04': 1 } }),
+    );
+    expect(merged.hardness).toEqual({ '2026-03-02': 0, '2026-03-03': 1, '2026-03-04': 1 });
+    expect(mergeProfile(profile({}), profile({})).hardness).toBeUndefined();
+  });
+
   it('favoritos y ocultos: gana el local, y si no hay se toma el remoto', () => {
     const remote = profile({ complexPrefs: { favorites: ['x'], hidden: [] } });
     expect(mergeProfile(remote, profile({ complexPrefs: { favorites: ['y'], hidden: ['z'] } })).complexPrefs).toEqual({ favorites: ['y'], hidden: ['z'] });

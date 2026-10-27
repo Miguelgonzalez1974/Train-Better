@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy, Library } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy, Library, Flame } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
+import { HardnessChip, HardnessSheet } from './HardnessControl';
+import { hardnessAvailable, type HardnessLevel } from '../../engine/hardness';
 import type {
   AthleteProfile,
   DailySession,
@@ -186,6 +188,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   const [focusMode, setFocusMode] = useState(false);
   const [showDiary, setShowDiary] = useState(false);
   const [showComplexes, setShowComplexes] = useState(false);
+  const [showHardness, setShowHardness] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(60);
@@ -281,6 +284,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     [session, history, alreadyCompletedToday, strainBias],
   );
   const planFitResult = plannedStrain && strainTarget ? planFit(plannedStrain, strainTarget) : null;
+  // Se puede subir la dureza de hoy (ver `engine/hardness.ts`): una sesión normal de entreno todavía sin registrar.
+  const canHarder = Boolean(session && !alreadyCompletedToday && hardnessAvailable(session));
   // Partes de WOD de hoy (1 en un dia normal, 2 en un dia de doble WOD) y como se puntua cada una.
   const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
   const wodScoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(
@@ -564,6 +569,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
       if (date > todayIso) athleteRepository.deleteCachedSession(date);
     }
     setProfile(athleteRepository.getProfile());
+  }
+
+  /** Guarda la dureza pedida para hoy y rehace la sesión con ella (0 = volver a como la programó el coach). */
+  function handleApplyHardness(level: HardnessLevel) {
+    handleSaveProfile({ ...profile, hardness: { ...(profile.hardness ?? {}), [todayIso]: level } });
+    setShowHardness(false);
   }
 
   function handleActivateReturnRamp() {
@@ -1117,6 +1128,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                 { label: editMode ? 'Terminar edición' : 'Editar sesión', Icon: editMode ? Check : Pencil, onSelect: () => setEditMode((prev) => !prev) },
                 ...(alreadyCompletedToday || !hasWodBlock ? [] : [{ label: 'Otro WOD', Icon: RefreshCw, onSelect: handleRegenerate }]),
                 { label: 'Cambiar tipo de sesión', Icon: Brain, onSelect: () => setShowTypePicker(true) },
+                ...(canHarder ? [{ label: session.hardness ? 'Cambiar la dureza' : 'Subir la dureza', Icon: Flame, onSelect: () => setShowHardness(true) }] : []),
                 { label: 'Librería de complejos', Icon: Library, onSelect: () => setShowComplexes(true) },
                 {
                   label: activePainFlags.length > 0 ? 'Molestias activas' : '¿Algo te molesta hoy?',
@@ -1153,6 +1165,25 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           canSwapWod={hasWodBlock}
           onSwapWod={handleRegenerate}
           onLighter={() => handlePickType('recovery')}
+          onHarder={canHarder && !session.hardness ? () => setShowHardness(true) : undefined}
+        />
+      )}
+
+      {/* La dureza que has pedido para hoy, con cambiar y volver a normal. */}
+      {session.hardness && !alreadyCompletedToday && !editMode && (
+        <HardnessChip session={session} onChange={() => setShowHardness(true)} onReset={() => handleApplyHardness(0)} />
+      )}
+
+      {showHardness && (
+        <HardnessSheet
+          profile={profile}
+          history={history}
+          session={session}
+          target={strainTarget}
+          strainBias={strainBias}
+          todayIso={todayIso}
+          onApply={handleApplyHardness}
+          onClose={() => setShowHardness(false)}
         />
       )}
 
