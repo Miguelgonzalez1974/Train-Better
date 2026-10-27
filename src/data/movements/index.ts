@@ -7,6 +7,7 @@ import { accessoryMovements } from './accessory';
 import { skillMovements } from './skill';
 import { warmupMovements } from './warmup';
 import { cooldownMovements } from './cooldown';
+import { builtinComplexNameFromLogId, isComplexLogId } from '../complexes';
 
 export * from './types';
 export { benchmarkWorkouts } from './benchmarkWods';
@@ -39,6 +40,8 @@ export function resolveMovementDisplayName(id: string): string {
     const benchId = id.slice('benchmark:'.length);
     return benchmarkWorkouts.find((w) => w.id === benchId)?.name ?? benchId;
   }
+  // Un complejo de fábrica anotado en el registro de series (`complex:<id>`); los propios no están aquí y salen como "Complejo".
+  if (isComplexLogId(id)) return builtinComplexNameFromLogId(id) ?? 'Complejo propio';
   return movementsById.get(id)?.name ?? id;
 }
 

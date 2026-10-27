@@ -1,5 +1,5 @@
 import type { MovementPattern } from '../data/movements/types';
-import { doubleWodDayIndex, type OlyFamily } from './periodization';
+import { doubleWodDayIndex, isStrengthOnlyDay, type OlyFamily } from './periodization';
 import { stalledOlyFamily, stalledStrengthPattern, type ResponseProfile } from './responseProfile';
 import { PHASE_DOMINANT_ENERGY, type EnergySystem, type WodDomain } from './wodDomains';
 
@@ -31,6 +31,9 @@ export interface MicrocyclePlan {
   /** `true` en el último día de oly de la semana: ese día cierra combinando snatch y clean&jerk
    *  (estilo Day 5 de Mayhem Burgener). Solo se marca si la semana tuvo ≥2 días de oly separados. */
   olyCombined: boolean[];
+  /** `true` en el día de la semana que lleva un complejo de oly: el primer día de cada familia (una vez snatch y una vez clean),
+   *  sin contar el día combinado. Ver `engine/olyComplexes.ts`. */
+  olyComplex?: boolean[];
   /** Sistema energetico del WOD por `trainingDayIndex` — rota alrededor del dominante de la fase para
    *  que dos dias seguidos no repitan estimulo metabolico. Los slots sin WOD (recuperacion de n=6)
    *  llevan el dominante como relleno inocuo. */
@@ -443,6 +446,15 @@ export function buildMicrocyclePlan(input: {
     olyCombined[strengthSlots[strengthSlots.length - 1]] = true;
   }
 
+  // Complejos de oly: una vez a la semana de cada familia, en el primer día de oly de esa familia (el día combinado ya cierra con un
+  // toque de la otra, y el de solo fuerza no lleva oly).
+  const olyComplex: boolean[] = Array.from({ length: n }, () => false);
+  const olyDays = strengthSlots.filter((idx) => !isStrengthOnlyDay(n, idx));
+  for (const fam of ['snatch', 'clean'] as const) {
+    const first = olyDays.find((idx) => olyFamily[idx] === fam && !olyCombined[idx]);
+    if (first !== undefined) olyComplex[first] = true;
+  }
+
   // Rotacion de dominios energeticos: la fase fija el sistema dominante y los dias de WOD rotan a su
   // alrededor para no encadenar el mismo estimulo metabolico dos dias seguidos. PRNG propio (ver
   // `planEnergySystems`), independiente del flujo de fuerza/oly.
@@ -454,5 +466,5 @@ export function buildMicrocyclePlan(input: {
   // Dominio que manda en el WOD de cada dia (ver `planWodDomains`).
   const wodDomain = planWodDomains(n, energySystem);
 
-  return { weekNumber, phase, strengthPattern, olyFamily, olyCombined, energySystem, wodDomain, dayIntensity };
+  return { weekNumber, phase, strengthPattern, olyFamily, olyCombined, olyComplex, energySystem, wodDomain, dayIntensity };
 }

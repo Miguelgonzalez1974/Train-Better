@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } 
 import type { Block } from '../../data/movements/types';
 import type { DailySession, PainFlag, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
+import { complexLogId } from '../../data/complexes';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { parseWorkingReps, SET_FEEL_LABEL } from '../../engine/setFeedback';
 import { adjustRemainingSets } from '../../engine/setAdjust';
@@ -283,9 +284,22 @@ export function FocusMode({
               <div>
                 <div className="flex items-center gap-2">
                   {work.length > 1 && <span className="text-xs font-bold text-neutral-500">{String.fromCharCode(65 + wi)}</span>}
-                  <h2 className="min-w-0 flex-1 text-3xl font-semibold leading-tight text-white">{resolveName(b.movementId)}</h2>
-                  <SwapButton entry={b} index={e.index} ctx={swapCtx} disabled={hasLoggedSets(b.movementId)} onSwap={onSwap} />
+                  <h2 className="min-w-0 flex-1 text-3xl font-semibold leading-tight text-white">{b.complex?.name ?? resolveName(b.movementId)}</h2>
+                  {!b.complex && <SwapButton entry={b} index={e.index} ctx={swapCtx} disabled={hasLoggedSets(b.movementId)} onSwap={onSwap} />}
                 </div>
+                {b.complex && (
+                  <ol className="mt-2 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Pasos del complejo">
+                    {b.complex.steps.map((s, si) => (
+                      <li key={si} className="flex items-center gap-1.5">
+                        {si > 0 && <span aria-hidden="true" className="text-neutral-600">→</span>}
+                        <span className="rounded-lg bg-white/[0.07] px-2.5 py-1.5 font-semibold text-neutral-100">
+                          {resolveName(s.movementId)}
+                          <span className="ml-1.5 font-bold text-brand-gold">×{s.reps}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
                 {b.scaledFrom && (
                   <p className="mt-1 flex items-center gap-2 text-sm text-neutral-400">
                     <span>← en lugar de {b.scaledFrom}</span>
@@ -298,7 +312,7 @@ export function FocusMode({
                 )}
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
                   {b.loadKg ? (
-                    liftHasPr(b.movementId) ? (
+                    liftHasPr(b.movementId) && !b.complex ? (
                       <button
                         onClick={() => setProgressTarget({ movementId: b.movementId, targetKg: b.loadKg ?? 0 })}
                         className="flex flex-wrap items-baseline gap-x-1.5 text-brand-gold"
@@ -318,15 +332,16 @@ export function FocusMode({
                     )
                   ) : null}
                   <span className="text-xl font-semibold text-neutral-300">
-                    {plan && waveSize ? `${plan.length / waveSize} olas · ${b.reps}` : plan ? `${plan.length} series · ${plan.map((p) => p.reps).join('-')}` : b.sets ? `${b.sets} × ${b.reps}` : b.reps}
+                    {b.complex ? `${b.sets} series · ${b.reps}` : plan && waveSize ? `${plan.length / waveSize} olas · ${b.reps}` : plan ? `${plan.length} series · ${plan.map((p) => p.reps).join('-')}` : b.sets ? `${b.sets} × ${b.reps}` : b.reps}
                     {b.tempo ? ` · tempo ${b.tempo}` : ''}
                   </span>
-                  {plan && <span className="text-sm text-neutral-400">{waveSize ? 'la última serie es la fuerte del día' : 'la última es la de trabajo'}</span>}
+                  {plan && <span className="text-sm text-neutral-400">{b.complex ? 'cada serie es el complejo entero' : waveSize ? 'la última serie es la fuerte del día' : 'la última es la de trabajo'}</span>}
                 </div>
               </div>
               {(plan || sets > 1 || singleLog) &&
                 (() => {
-                  const mid = b.movementId;
+                  // Un complejo se anota con su propia clave: no cuenta para el 1RM estimado de ningún levantamiento.
+                  const mid = b.complex ? complexLogId(b.complex.id) : b.movementId;
                   const blk = b.block === 'oly' ? 'oly' : 'strength';
                   const workReps = parseWorkingReps(b.reps ?? '') ?? 0;
                   const prescribed = b.loadKg ?? 0;
@@ -411,7 +426,7 @@ export function FocusMode({
                                 </button>
                               </div>
                             )}
-                            {reps > 0 && <span className="ml-auto shrink-0 whitespace-nowrap text-lg font-semibold text-neutral-300">× {reps}</span>}
+                            {reps > 0 && <span className="ml-auto shrink-0 whitespace-nowrap text-lg font-semibold text-neutral-300">{b.complex ? b.reps : `× ${reps}`}</span>}
                           </div>
                           </Fragment>
                         );

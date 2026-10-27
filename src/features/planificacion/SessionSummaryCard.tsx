@@ -1,6 +1,7 @@
 import { Flame, CalendarCheck2, TrendingUp, PartyPopper } from 'lucide-react';
 import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
+import { complexLogId } from '../../data/complexes';
 import { fmtKg, fmtNumber } from '../../lib/format';
 import { buildWodRecapLines } from '../../engine/wodScoring';
 import { NutritionTip } from './NutritionTip';
@@ -62,11 +63,11 @@ function buildRecapLines(
   }
 
   const olyEntries = session.blocks.filter((b) => b.block === 'oly' && !b.subgroup);
-  const olyMain = olyEntries[olyEntries.length - 1];
+  const olyMain = olyEntries.find((b) => b.complex) ?? olyEntries[olyEntries.length - 1];
   if (olyMain) {
-    const name = getMovementById(olyMain.movementId)?.name;
+    const name = olyMain.complex?.name ?? getMovementById(olyMain.movementId)?.name;
     if (name) {
-      const logged = workSummary(workLog, olyMain.movementId, olyMain.sets ?? 0);
+      const logged = workSummary(workLog, olyMain.complex ? complexLogId(olyMain.complex.id) : olyMain.movementId, olyMain.sets ?? 0);
       const scheme =
         logged ??
         [

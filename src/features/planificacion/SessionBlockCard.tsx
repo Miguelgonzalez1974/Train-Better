@@ -42,6 +42,9 @@ const NAME_STEP = 'text-sm font-semibold text-white'; // pasos de lista (calenta
 
 /** Índice de la entrada del complejo cuya carga es la protagonista — la más pesada que no sea el primer técnico ("2-3"). */
 function complexHeroIdx(complex: SessionBlockResult[]): number {
+  // Un día de complejo: la protagonista es la serie del complejo, no el tirón que va después.
+  const complexIdx = complex.findIndex((e) => e.complex);
+  if (complexIdx >= 0) return complexIdx;
   let best = -1;
   let bestKg = -1;
   complex.forEach((e, i) => {
@@ -64,7 +67,7 @@ function StatBox({ value, label }: { value: string | number; label: string }) {
 }
 
 /** Una rampa u ola serie a serie: "5 × 159 kg → 3 × 171,5 kg → 1 × 182,5 kg"; la última (la de trabajo) resaltada. */
-function SetPlanLine({ plan, waveSize }: { plan: { reps: number; kg: number }[]; waveSize?: number }) {
+function SetPlanLine({ plan, waveSize, notation }: { plan: { reps: number; kg: number }[]; waveSize?: number; /** Complejo: lo que se enseña en lugar de las repeticiones ("1+2+1"). */ notation?: string }) {
   // Varias olas seguidas: una línea por ola, con su nombre; la última serie de la última ola es la fuerte del día.
   if (waveSize && waveSize >= 2 && plan.length > waveSize && plan.length % waveSize === 0 && plan.some((s) => s.kg)) {
     const waves = Array.from({ length: plan.length / waveSize }, (_, w) => plan.slice(w * waveSize, (w + 1) * waveSize));
@@ -88,6 +91,27 @@ function SetPlanLine({ plan, waveSize }: { plan: { reps: number; kg: number }[];
       </div>
     );
   }
+  // Complejo: las series seguidas con el mismo peso se agrupan ("3 × 45 kg → 2 × 47,5 kg"); cada serie es el complejo entero.
+  if (notation && plan.some((s) => s.kg)) {
+    const groups: { count: number; kg: number }[] = [];
+    for (const s of plan) {
+      const last = groups[groups.length - 1];
+      if (last && last.kg === s.kg) last.count++;
+      else groups.push({ count: 1, kg: s.kg });
+    }
+    return (
+      <ol className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-neutral-400" aria-label="Series del complejo">
+        {groups.map((g, i) => (
+          <li key={i} className="flex items-center gap-1.5">
+            {i > 0 && <span aria-hidden="true">→</span>}
+            <span className={i === groups.length - 1 ? 'font-bold text-brand-gold' : 'font-medium text-neutral-300'}>
+              <span className="num">{g.count}</span> × <span className="num">{String(g.kg).replace('.', ',')}</span> kg
+            </span>
+          </li>
+        ))}
+      </ol>
+    );
+  }
   // Sin pesos (un movimiento cambiado a mancuernas, p. ej.): solo las repeticiones de cada serie.
   if (plan.every((s) => !s.kg)) {
     return (
@@ -102,7 +126,24 @@ function SetPlanLine({ plan, waveSize }: { plan: { reps: number; kg: number }[];
         <li key={i} className="flex items-center gap-1.5">
           {i > 0 && <span aria-hidden="true">→</span>}
           <span className={i === plan.length - 1 ? 'font-bold text-brand-gold' : 'font-medium text-neutral-300'}>
-            <span className="num">{s.reps}</span> × <span className="num">{String(s.kg).replace('.', ',')}</span> kg
+            <span className="num">{notation ?? s.reps}</span> × <span className="num">{String(s.kg).replace('.', ',')}</span> kg
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Los pasos de un complejo en orden: "Clean ×1 → Front Squat ×2 → Jerk ×1". */
+function ComplexSteps({ steps, className = '' }: { steps: { movementId: string; reps: number }[]; className?: string }) {
+  return (
+    <ol className={`mt-2 flex flex-wrap items-center gap-1.5 text-xs ${className}`} aria-label="Pasos del complejo">
+      {steps.map((s, i) => (
+        <li key={i} className="flex items-center gap-1.5">
+          {i > 0 && <span aria-hidden="true" className="text-neutral-600">→</span>}
+          <span className="rounded-md bg-white/[0.06] px-2 py-1 font-semibold text-neutral-200">
+            {getMovementById(s.movementId)?.name ?? s.movementId}
+            <span className="ml-1 font-bold text-brand-gold">×{s.reps}</span>
           </span>
         </li>
       ))}
@@ -689,7 +730,7 @@ function ComplexCard({
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
                       {String.fromCharCode(65 + idx)}
                     </span>
-                    <p className={NAME_MAIN}>{movement.name}</p>
+                    <p className={NAME_MAIN}>{entry.complex?.name ?? movement.name}</p>
                   </div>
                   {entry.format && (
                     <div className="ml-7 mt-1">
@@ -706,7 +747,7 @@ function ComplexCard({
                           kg={entry.loadKg}
                           movementId={entry.movementId}
                           block={entry.block}
-                          progress={progress}
+                          progress={entry.complex ? undefined : progress}
                           size={isHero ? 'lg' : 'sm'}
                         />
                       ) : null}
@@ -716,11 +757,11 @@ function ComplexCard({
                   )}
                   {entry.setPlan && entry.setPlan.length >= 2 && (
                     <div className="ml-7">
-                      <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} />
+                      <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} notation={entry.complex ? entry.reps : undefined} />
                     </div>
                   )}
                   <div className="ml-7">
-                    <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
+                    {!entry.complex && <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />}
                   </div>
 
                   {feedback && onRateSet && feedbackIndex !== undefined && (
@@ -737,7 +778,7 @@ function ComplexCard({
                   {/* La explicación de este levantamiento (volumen/intensidad/técnica) vive en la pestaña
                       Task de toda la sesión, no aquí — antes salía siempre abierta y era la que más
                       scroll daba. */}
-                  <StandardHint standard={movement.standard} className="ml-7" />
+                  {entry.complex ? <ComplexSteps steps={entry.complex.steps} className="ml-7" /> : <StandardHint standard={movement.standard} className="ml-7" />}
                 </div>
               );
             })
@@ -962,7 +1003,7 @@ function EntryRow({
   return (
     <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
       {entry.format && <FormatBadge format={entry.format} />}
-      <p className={NAME_MAIN}>{movement.name}</p>
+      <p className={NAME_MAIN}>{entry.complex?.name ?? movement.name}</p>
 
       {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -973,7 +1014,7 @@ function EntryRow({
               kg={entry.loadKg}
               movementId={entry.movementId}
               block={entry.block}
-              progress={progress}
+              progress={entry.complex ? undefined : progress}
               size={isMainLift ? 'lg' : 'sm'}
             />
           ) : null}
@@ -981,8 +1022,8 @@ function EntryRow({
           {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
         </div>
       )}
-      {entry.setPlan && entry.setPlan.length >= 2 && <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} />}
-      <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
+      {entry.setPlan && entry.setPlan.length >= 2 && <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} notation={entry.complex ? entry.reps : undefined} />}
+      {!entry.complex && <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />}
       {feedback && onRateSet && index !== undefined && (
         <div className="mt-2">
           <RpeCheckIn
@@ -993,7 +1034,7 @@ function EntryRow({
           />
         </div>
       )}
-      <StandardHint standard={movement.standard} />
+      {entry.complex ? <ComplexSteps steps={entry.complex.steps} /> : <StandardHint standard={movement.standard} />}
     </div>
   );
 }

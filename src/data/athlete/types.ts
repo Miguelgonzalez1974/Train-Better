@@ -1,4 +1,5 @@
 import type { Block, MovementPattern } from '../movements/types';
+import type { OlyComplex } from '../complexes';
 
 export interface PersonalRecords {
   backSquat: number;
@@ -319,6 +320,10 @@ export interface AthleteProfile {
    * primero de la lista, igual que macrocycles.
    */
   strengthPrograms?: StrengthProgram[];
+  /** Complejos de halterofilia creados por el atleta (ver `data/complexes.ts`): entran en el mismo sorteo que los de fábrica. */
+  customComplexes?: OlyComplex[];
+  /** Favoritos (salen más) y ocultos (no salen) de la librería de complejos, por id. */
+  complexPrefs?: { favorites: string[]; hidden: string[] };
   /** Avisos activos de molestia/dolor (ver [[PainFlag]]) — el motor evita el patron de movimiento asociado mientras esten vigentes. */
   painFlags?: PainFlag[];
   /** Rampa de vuelta activa (ver [[IntensityRamp]]), si el atleta configuro una. */
@@ -396,6 +401,8 @@ export interface AthleteProfile {
     {
       strengthMovementId?: string;
       olyMovementId?: string;
+      /** Complejo de oly bloqueado para este día (ver `data/complexes.ts`): el día de complejo no bloquea un movimiento suelto sino el complejo entero. */
+      olyComplexId?: string;
       /** Movimiento bloqueado por rol de accesorio (ver `AccessoryRole` en generateSession.ts) — unión inline para no acoplar esta capa al motor. */
       accessoryMovements?: Partial<
         Record<'unilateralLeg' | 'plyo' | 'posterior' | 'hPush' | 'vPush' | 'hPull' | 'vPull', string>
@@ -483,6 +490,12 @@ export interface SessionBlockResult {
    */
   waveSize?: number;
   /**
+   * Complejo de halterofilia de este bloque (ver `data/complexes.ts`): cada serie son todos sus pasos seguidos, con `reps` como
+   * notación ("1+2+1"). `movementId` es el primer paso (para que el resto de la app lo trate como un bloque de oly más), pero las
+   * series se registran con la clave `complex:<id>` y no cuentan para el 1RM estimado. Solo bloque oly.
+   */
+  complex?: { id: string; name: string; steps: { movementId: string; reps: number }[] };
+  /**
    * Cómo era el bloque ANTES de cambiar su movimiento a mano en el modo enfocado: permite "Deshacer" aunque se recargue la app.
    * Solo guarda lo que el cambio toca (movimiento, reps, carga, plan serie a serie y el escalado previo).
    */
@@ -531,7 +544,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 77;
+export const SESSION_GEN_VERSION = 78;
 
 /** Color del día según cómo llegas (ver `engine/dayLight.ts`): verde = a por todas, ámbar = mantener sin acumular, rojo = recuperar. */
 export type DayLightColor = 'verde' | 'ambar' | 'rojo';

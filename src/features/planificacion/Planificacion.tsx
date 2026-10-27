@@ -111,6 +111,8 @@ export interface E1rmSuggestion {
 function isAdjustableSetBlock(b: SessionBlockResult): boolean {
   if (b.block !== 'strength' && b.block !== 'oly') return false;
   if (b.movementId.startsWith('benchmark:')) return false;
+  // Un complejo no calibra al coach: encadenar pesa menos que cada levantamiento y falsearía su 1RM estimado.
+  if (b.complex) return false;
   // Los formatos de oly de serie única (single del día, EMOM) no llevan `sets` pero sí registran
   // el peso real y valoran esfuerzo — entran por `logAsSingle`.
   if ((b.sets === undefined || b.sets < 2) && !b.logAsSingle) return false;
@@ -497,7 +499,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         ...prev,
         // Si se tocan series, reps o carga a mano, el plan serie a serie de la rampa ya no vale: se quita y vuelve el esquema simple.
         blocks: prev.blocks.map((b, i) =>
-          i === index ? { ...b, ...patch, ...(!('setPlan' in patch) && ('sets' in patch || 'reps' in patch || 'loadKg' in patch) ? { setPlan: undefined, waveSize: undefined } : {}) } : b,
+          i === index ? { ...b, ...patch, ...(!('setPlan' in patch) && ('sets' in patch || 'reps' in patch || 'loadKg' in patch) ? { setPlan: undefined, waveSize: undefined } : {}), ...('movementId' in patch ? { complex: undefined } : {}) } : b,
         ),
         editedByAthlete: true,
       };

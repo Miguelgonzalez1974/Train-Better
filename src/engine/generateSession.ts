@@ -50,6 +50,8 @@ import {
 } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { buildOlyWavePlan, pickOlyWaveTemplate } from './olyWaves';
+import { buildComplexBlock, buildComplexPool, pickComplex, type ComplexPool } from './olyComplexes';
+import { complexNotation } from '../data/complexes';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
@@ -1293,6 +1295,10 @@ function buildOlyBlock(
    * pico ni taper de una competición, ni en un día ligero, ámbar o con agujetas fuertes (donde ya se recorta el volumen).
    */
   allowWaves = false,
+  /** Si hoy toca complejo (el primer día de cada familia de la semana): la librería de la que elegir; null = hoy no (ver `olyComplexes.ts`). */
+  complexPool: ComplexPool | null = null,
+  /** Complejo bloqueado para hoy por la planificación semanal (`weeklyLocks`): se respeta si sigue en la librería y no está oculto. */
+  lockedComplexId?: string,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -1406,8 +1412,9 @@ function buildOlyBlock(
     const receivingFocusForBias = imbalanceBias.receivingFamilies.includes(family);
 
     const fullLiftIdsForBias = family === 'snatch' ? ['snatch'] : ['clean-and-jerk', 'clean'];
-    let candidates = getMovementsByBlock('oly').filter((m) =>
-      family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk'),
+    // Sin snatch/clean deadlift como levantamiento de trabajo (el atleta prefiere el muscle y los tirones; ver `OLY_PULL_IDS`).
+    let candidates = getMovementsByBlock('oly').filter(
+      (m) => (family === 'snatch' ? m.id.includes('snatch') : m.id.includes('clean') || m.id.includes('jerk')) && m.id !== 'snatch-deadlift' && m.id !== 'clean-deadlift',
     );
 
     const isEarlyWeek = week <= 2 && !receivingFocusForBias;
@@ -1580,6 +1587,53 @@ function buildOlyBlock(
     };
   }
 
+  // Complejo (el primer día de cada familia de la semana, ver `weekPlan.olyComplex`): sustituye al levantamiento principal. Sorteo propio
+  // (fecha + familia) para no mover ningún otro; el resto del bloque —primer técnico, calentamiento y tirón— se mantiene.
+  let complexEntry: SessionBlockResult | null = null;
+  if (complexPool && !isTestDay) {
+    // Con un aviso de molestia (rodilla, hombro…) fuera los complejos con algún paso que cargue esa zona (sentadillas, saltos…).
+    const safePool: ComplexPool = {
+      ...complexPool,
+      all: complexPool.all.filter((x) =>
+        x.steps.every((s) => {
+          const m = getMovementById(s.movementId);
+          return !m || !avoidsMovement(avoidedPatterns, m);
+        }),
+      ),
+    };
+    const draw = seededRng(`oly-complex|${toLocalIsoDate(date)}|${family}`);
+    const hiddenIds = new Set(complexPool.hidden);
+    const forced = lockedComplexId ? safePool.all.find((x) => x.id === lockedComplexId && !hiddenIds.has(x.id)) : undefined;
+    const picked =
+      forced ??
+      pickComplex({
+        family,
+        week,
+        pool: safePool,
+        recentMovementIds: recentIds,
+        receivingFocus,
+        draw,
+      });
+    if (picked) {
+      const stepsText = picked.steps.map((s) => `${s.reps > 1 ? `${s.reps} ` : ''}${getMovementById(s.movementId)?.name ?? s.movementId}`).join(' + ');
+      complexEntry = buildComplexBlock({
+        complex: picked,
+        week,
+        prs,
+        variantPrs,
+        dayFactor: autoregFactor * dose.strengthLoad,
+        notes:
+          `${scheme.coachNote} Complejo ${complexNotation(picked)}: ${stepsText}, sin soltar la barra entre pasos. ` +
+          `El peso lo marca el paso más flojo; las series de la segunda mitad suben un escalón. Descansa 2-3 min entre series.${receivingTag}${reintroNote}${fatigueNote}${rampNote}`,
+      });
+      if (complexEntry) {
+        mainEntry = complexEntry;
+        reasons.push(`Hoy toca un complejo de ${family === 'snatch' ? 'snatch' : 'clean'} (${picked.name}).`);
+      }
+    }
+  }
+  const complexStepIds = new Set(complexEntry?.complex?.steps.map((s) => s.movementId) ?? []);
+
   // Tracción por encima del levantamiento, DESPUÉS del trabajo principal (patrón Mayhem/haltero):
   // tirón alto o deadlift del lift a un % igual o superior al del levantamiento. No en descarga ni
   // en días de foco de recepción. `excludeId` es el primer del complejo, para no repetir movimiento.
@@ -1588,7 +1642,7 @@ function buildOlyBlock(
     if (pullPercent <= 0) return [];
     const pullPool = OLY_PULL_IDS[family]
       .map((id) => getMovementById(id))
-      .filter((m): m is Movement => m !== undefined && m.id !== movement.id && m.id !== excludeId);
+      .filter((m): m is Movement => m !== undefined && m.id !== movement.id && m.id !== excludeId && !complexStepIds.has(m.id));
     const pullMovement = pickVaried(pullPool, recentIds);
     if (!pullMovement) return [];
     const pullLoadKg = roundToNearestPlate(
@@ -1636,16 +1690,17 @@ function buildOlyBlock(
   // en caliente): Burgener con PVC segun la familia -> complejo de barra vacia -> rampa de carga en
   // 3-4 series hasta el primer peso de trabajo. Nada de movilidad/articular aqui: eso ya se hizo
   // arriba. Ver `buildWarmupBlock` para el reparto por fases.
+  const workingKg = complexEntry?.loadKg ?? loadKg;
   const barbellPrimer: SessionBlockResult[] = [
     {
       block: 'oly',
       movementId: family === 'snatch' ? 'burgener-warmup-snatch' : 'burgener-warmup-clean',
       subgroup: 'Calentamiento de barra',
       reps: 'PVC · 3-5 reps/posición',
-      notes: `Ya vienes en caliente del WOD — aquí solo barra, sin movilidad. Burgener con PVC y complejo de barra vacía, y luego sube en 3-4 series hasta tu primer peso de trabajo (${loadKg} kg). Prioriza posiciones y velocidad de codos, no la carga.`,
+      notes: `Ya vienes en caliente del WOD — aquí solo barra, sin movilidad. Burgener con PVC y complejo de barra vacía, y luego sube en 3-4 series hasta tu primer peso de trabajo (${workingKg} kg). Prioriza posiciones y velocidad de codos, no la carga.`,
     },
     { block: 'oly', movementId: 'barbell-warmup-complex', subgroup: 'Calentamiento de barra', reps: '2-3 rondas' },
-    { block: 'oly', movementId: 'movement-specific-primer', subgroup: 'Calentamiento de barra', reps: '3-4 series ascendentes', loadKg },
+    { block: 'oly', movementId: 'movement-specific-primer', subgroup: 'Calentamiento de barra', reps: '3-4 series ascendentes', loadKg: workingKg },
   ];
 
   // Complejo real de oly: un primer tecnico (hang, muscle, pull, balance...) antes del levantamiento
@@ -1657,7 +1712,7 @@ function buildOlyBlock(
   // de jerk suelto — un "tall jerk" o "jerk balance" antes de un complejo de snatch/clean no pega y
   // ademas saturaba el pool de la familia clean (todos los dias salia el mismo).
   const primerCandidates = familyPool.filter(
-    (m) => m.id !== movement.id && m.progressionOf && !/jerk/.test(m.id),
+    (m) => m.id !== movement.id && !complexStepIds.has(m.id) && m.progressionOf && !/jerk/.test(m.id),
   );
   // Con foco de recepcion, el primer se elige entre drills de recibir abajo (solo el snatch tiene
   // versiones de recepcion puras en el catalogo; el clean se apoya solo en el sesgo de arriba).
@@ -1681,8 +1736,8 @@ function buildOlyBlock(
   const primerEntry: SessionBlockResult = {
     block: 'oly',
     movementId: primerMovement.id,
-    // En un día de olas el primer técnico se queda en 3 series: el volumen del día lo ponen las olas.
-    sets: waveDay ? Math.min(3, scheme.sets) : scheme.sets,
+    // En un día de olas o de complejo el primer técnico se queda en 3 series: el volumen del día lo pone lo principal.
+    sets: waveDay || complexEntry ? Math.min(3, scheme.sets) : scheme.sets,
     reps: '2-3',
     notes: `Primer técnico antes del levantamiento principal — prioriza posición, no peso.${
       receivingPrimers.length > 0 ? ' Hoy es un drill de recepción: recibe lo más abajo posible.' : OLY_PRIMER_PHASE_NOTE[week]
@@ -4340,6 +4395,7 @@ function generateDailySessionCore(
   const plannedPattern = isDoubleSlotToday ? null : microPlan.strengthPattern[dayPlan.trainingDayIndex] ?? null;
   const plannedFamily = isDoubleSlotToday ? null : microPlan.olyFamily[dayPlan.trainingDayIndex] ?? null;
   const plannedOlyCombined = microPlan.olyCombined[dayPlan.trainingDayIndex] ?? false;
+  const plannedOlyComplex = isDoubleSlotToday ? false : microPlan.olyComplex?.[dayPlan.trainingDayIndex] ?? false;
   const plannedEnergy = microPlan.energySystem[dayPlan.trainingDayIndex] ?? null;
   const plannedDomain = microPlan.wodDomain[dayPlan.trainingDayIndex] ?? null;
 
@@ -4555,6 +4611,12 @@ function generateDailySessionCore(
     weekLock?.olyMovementId,
     // Olas = más series: no con competición cerca (pico o taper), ni en día ligero, ámbar o con agujetas fuertes.
     !comp && !technicalLight && !amberToday && !soreCut,
+    // Complejo: el primer día de cada familia de la semana, con las mismas reglas que las olas (más series = no con competición cerca,
+    // ni en día ligero, ámbar o con agujetas fuertes) y sin un movimiento de oly bloqueado por la planificación semanal.
+    plannedOlyComplex && !comp && !technicalLight && !amberToday && !soreCut
+      ? buildComplexPool(profile.customComplexes, profile.complexPrefs)
+      : null,
+    weekLock?.olyComplexId,
   );
 
   // El accesorio se decide ANTES que el WOD: no depende de el, y asi el WOD (que si es flexible; el
@@ -5152,7 +5214,9 @@ export function planWeekLocks(
     const strengthMovementId = session.blocks.find((b) => b.block === 'strength')?.movementId;
     // El primer tecnico del complejo de oly ("2-3" reps) no es el levantamiento principal — se salta
     // para no bloquear el dia a un movimiento de calentamiento en vez del lift de verdad.
-    const olyMovementId = session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
+    // Un día de complejo bloquea el complejo (no su primer paso como si fuera el levantamiento del día).
+    const olyComplexId = session.blocks.find((b) => b.block === 'oly' && b.complex)?.complex?.id;
+    const olyMovementId = olyComplexId ? undefined : session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
     const accessoryEntries = session.blocks.filter(
       (b): b is typeof b & { accessoryRole: AccessoryRole } => b.block === 'accessory' && Boolean(b.accessoryRole),
     );
@@ -5171,8 +5235,8 @@ export function planWeekLocks(
     // Un dia de doble WOD (solo acondicionamiento) no lleva ni fuerza ni oly: se bloquea igualmente para
     // que ese dia no cambie de estructura (doble <-> normal) al regenerarse.
     const doubleWod = session.doubleWod ? true : undefined;
-    if (strengthMovementId || olyMovementId || accessoryMovements || wodBenchmarkId || doubleWod) {
-      locks[dateIso] = { strengthMovementId, olyMovementId, accessoryMovements, wodBenchmarkId, doubleWod, doubleDecided: isDoubleWodEnabled() ? true : undefined, split: usesWeeklySplit(profile) ? true : undefined, plannedOn: options?.plannedOn };
+    if (strengthMovementId || olyMovementId || olyComplexId || accessoryMovements || wodBenchmarkId || doubleWod) {
+      locks[dateIso] = { strengthMovementId, olyMovementId, olyComplexId, accessoryMovements, wodBenchmarkId, doubleWod, doubleDecided: isDoubleWodEnabled() ? true : undefined, split: usesWeeklySplit(profile) ? true : undefined, plannedOn: options?.plannedOn };
     }
     workingHistory = [...workingHistory, toHistoryEntry(session, 'rx', 7, 60)];
   }
@@ -5291,7 +5355,8 @@ function cachedSessionDisagreesWithLock(session: DailySession, lock: WeeklyLock)
   // El oly del viernes de doble WOD es fijo (Squat Snatch + Clean & Jerk, ver `buildFridayOlyBlock`),
   // no un movimiento "elegido" que el bloqueo semanal pudiera fijar — un `olyMovementId` heredado de
   // una planificacion anterior al doble (dia normal, una sola familia) no tiene nada que decir aqui.
-  if (lock.olyMovementId && !session.doubleWod) {
+  // Un día de complejo no se compara por movimiento: lo decide el complejo bloqueado (y un veto del día puede dejarlo sin complejo).
+  if (lock.olyMovementId && !session.doubleWod && !session.blocks.some((b) => b.block === 'oly' && b.complex)) {
     const id = session.blocks.find((b) => b.block === 'oly' && !b.subgroup && b.reps !== '2-3')?.movementId;
     if (id && id !== lock.olyMovementId) return true;
   }
@@ -5393,7 +5458,8 @@ export function toHistoryEntry(
   return {
     date: session.date,
     mesocycleWeek: session.mesocycleWeek,
-    movementIds: session.blocks.map((b) => b.movementId),
+    // Un complejo aporta todos sus pasos: así el sorteo de variedad sabe que se han usado hace poco.
+    movementIds: session.blocks.flatMap((b) => (b.complex ? b.complex.steps.map((s) => s.movementId) : [b.movementId])),
     rxOrScaled,
     rpe,
     durationMin,

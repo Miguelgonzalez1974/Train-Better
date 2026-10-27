@@ -43,10 +43,11 @@ function LiftPreview({ block, results, progress }: { block: Block; results: Sess
   const main = list[0];
   const rest = list.slice(1).map((e) => nameOf(e.movementId));
   const extra = block === 'oly' && rest.length > 0 ? `+ ${rest.length} más` : rest.length > 0 ? `+ ${rest.join(' · ')}` : '';
-  const pct = pctOfOneRm(main, progress);
+  // Un complejo no tiene un 1RM propio: no se enseña el % de ningún levantamiento.
+  const pct = main.complex ? null : pctOfOneRm(main, progress);
   return (
     <>
-      <p className="mt-1 truncate text-[17px] font-semibold leading-tight text-white">{nameOf(main.movementId)}</p>
+      <p className="mt-1 truncate text-[17px] font-semibold leading-tight text-white">{main.complex?.name ?? nameOf(main.movementId)}</p>
       <div className="mt-2 flex items-center gap-1.5">
         {main.sets ? (
           main.waveSize && main.waveSize >= 2 && main.sets > main.waveSize && main.sets % main.waveSize === 0 ? (
@@ -55,8 +56,8 @@ function LiftPreview({ block, results, progress }: { block: Block; results: Sess
             <Mini value={main.sets} label="series" />
           )
         ) : null}
-        {main.reps ? <Mini value={main.reps} label="reps" /> : null}
-        {main.loadKg ? <Mini value={fmtKgValue(main.loadKg)} label={loadUnitLabel(main.movementId, block)} accent /> : null}
+        {main.reps ? <Mini value={main.reps} label={main.complex ? 'complejo' : 'reps'} /> : null}
+        {main.loadKg ? <Mini value={fmtKgValue(main.loadKg)} label={main.complex ? 'kg' : loadUnitLabel(main.movementId, block)} accent /> : null}
         {extra && <span className="ml-1 min-w-0 truncate text-xs text-neutral-500">{extra}</span>}
       </div>
       {pct !== null && (
