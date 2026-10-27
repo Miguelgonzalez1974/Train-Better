@@ -4,6 +4,7 @@ import type { AthleteProfile, PersonalRecords, SessionHistoryEntry } from '../..
 import { analysisHeadline } from '../../engine/analysisHeadline';
 import { competitionTile, rpeTrend, topRiser } from '../../engine/analysisStats';
 import { computeMonthPlan } from '../../engine/monthPlan';
+import { learnHardness } from '../../engine/hardnessLearning';
 import type { ImbalanceGroup } from '../../engine/imbalances';
 import { buildLoadRows, type LoadRow } from '../../engine/loadLearning';
 import { buildPrSeries, summarisePrProgress } from '../../engine/progressSeries';
@@ -142,6 +143,8 @@ export function AnalysisView({
     [history, profile.prLog, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, prs],
   );
   const loadRows = useMemo(() => buildLoadRows(prs, response, setFeedbackLog), [prs, response, setFeedbackLog]);
+  // Cómo aguantas la dureza que subes (se enseña en la pestaña Coach).
+  const hardness = useMemo(() => learnHardness(profile, history, todayIso), [profile, history, todayIso]);
   const desbalances = imbalanceGroups.filter((g) => g.status === 'desbalance').length;
   const equilibrados = imbalanceGroups.filter((g) => g.status === 'equilibrado').length;
   const headline = useMemo(
@@ -451,6 +454,7 @@ export function AnalysisView({
             workLog={workLog}
             prs={prs}
             defaultOpen
+            hardness={hardness}
           />
           <p className="flex items-center gap-2 px-1 text-[11px] leading-snug text-neutral-500">
             <Dumbbell size={13} className="shrink-0" aria-hidden="true" />

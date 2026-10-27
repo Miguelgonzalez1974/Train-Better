@@ -1,4 +1,4 @@
-import { Flame } from 'lucide-react';
+import { Flame, Lightbulb } from 'lucide-react';
 import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
 
@@ -22,6 +22,7 @@ export function StrainPlanRow({
   onSwapWod,
   onLighter,
   onHarder,
+  suggestion,
 }: {
   planned: PlannedStrain;
   target: StrainTarget;
@@ -32,6 +33,8 @@ export function StrainPlanRow({
   onLighter: () => void;
   /** Subir la dureza de hoy (ver `HardnessControl`): solo si hoy se puede y aún no se ha subido. */
   onHarder?: () => void;
+  /** Una sugerencia del coach para subirla hoy, con lo que sabe de ti (ver `suggestHardness`). Solo con `onHarder`. */
+  suggestion?: string;
 }) {
   const color = FIT_COLOR[fit];
   return (
@@ -41,6 +44,12 @@ export function StrainPlanRow({
         <span className="num font-semibold text-neutral-200">{target.low}–{target.high}</span>
         {fit === 'se-pasa' && <span style={{ color }}> · se pasa {diff}</span>}
       </p>
+      {onHarder && suggestion && (
+        <p className="flex items-start gap-1.5 text-xs leading-relaxed text-brand-gold">
+          <Lightbulb size={13} strokeWidth={2.25} className="mt-0.5 shrink-0" aria-hidden="true" />
+          {suggestion}
+        </p>
+      )}
       {onHarder && (
         <div>
           <button

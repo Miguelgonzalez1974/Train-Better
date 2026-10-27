@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Fingerprint, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
 import { Term } from '../shell/Term';
+import type { HardnessLearning, ToleranceTier } from '../../engine/hardnessLearning';
 import type { BodyweightEntry, PersonalRecords, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from '../../data/athlete/types';
 import {
   computeResponseProfile,
@@ -15,6 +16,13 @@ const TIER_META: Record<LiftTier, { label: string; className: string; Icon: type
   normal: { label: 'progresa', className: 'text-neutral-300', Icon: TrendingUp },
   lento: { label: 'estancado', className: 'text-amber-400', Icon: Minus },
   regresion: { label: 'en caída', className: 'text-red-400', Icon: TrendingDown },
+};
+
+const TOLERANCE_META: Record<ToleranceTier, { label: string; className: string }> = {
+  aguanta: { label: 'la aguantas', className: 'text-emerald-400' },
+  regular: { label: 'va regular', className: 'text-neutral-300' },
+  paga: { label: 'la pagas', className: 'text-amber-400' },
+  'sin-datos': { label: 'aún pocos datos', className: 'text-neutral-500' },
 };
 
 function fmtRate(pct: number): string {
@@ -98,6 +106,7 @@ export function ResponseProfileCard({
   workLog,
   prs,
   defaultOpen = false,
+  hardness,
 }: {
   history: SessionHistoryEntry[];
   prLog: PrLogEntry[];
@@ -107,6 +116,8 @@ export function ResponseProfileCard({
   prs: PersonalRecords;
   /** Sale desplegada (en vez de la frase de una línea): para cuando la tarjeta es lo único de su pestaña. */
   defaultOpen?: boolean;
+  /** Lo que ha aprendido el coach de cómo aguantas la dureza que subes (ver `engine/hardnessLearning.ts`). */
+  hardness?: HardnessLearning;
 }) {
   const [collapsed, setCollapsed] = useState(!defaultOpen);
   const profile = useMemo(
@@ -232,6 +243,34 @@ export function ResponseProfileCard({
             <div className="border-l-2 border-brand-neon/40 py-1 pl-3">
               <p className="text-[13px] font-semibold text-white">Escalado</p>
               <p className="text-[11px] leading-relaxed text-neutral-400">{rx}</p>
+            </div>
+          )}
+
+          {hardness && hardness.evaluated > 0 && (
+            <div className="border-l-2 border-brand-neon/40 py-1 pl-3">
+              <p className="text-[13px] font-semibold text-white">Dureza de la sesión</p>
+              <p className="mb-1 text-[11px] leading-relaxed text-neutral-500">Cómo te sienta subirla: el esfuerzo del día y cómo llegas a la mañana siguiente.</p>
+              <ul className="flex flex-col gap-1">
+                {([1, 2] as const).map((l) => {
+                  const t = hardness.byLevel[l];
+                  if (t.n === 0) return null;
+                  const meta = TOLERANCE_META[t.tier];
+                  return (
+                    <li key={l} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-neutral-300">Más dura +{l}</span>
+                      <span className={`font-semibold ${meta.className}`}>
+                        {meta.label}
+                        <span className="font-normal text-neutral-500"> · {t.bien} de {t.n} bien</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {Math.abs(hardness.bias) >= 3 && (
+                <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">
+                  Tus días con la dureza subida salen ~{Math.abs(hardness.bias)} puntos de esfuerzo {hardness.bias > 0 ? 'por encima' : 'por debajo'} de lo previsto: el coach lo corrige en la previsión.
+                </p>
+              )}
             </div>
           )}
 

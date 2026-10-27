@@ -338,6 +338,7 @@ export function mergeProfile(
     ),
     complexPrefs: local.complexPrefs ?? remote.complexPrefs,
     // Dureza pedida por día: union por fecha, gana el local en la misma fecha (el 0 de «volver a normal» también gana), solo las recientes.
+    hardnessLog: remote.hardnessLog || local.hardnessLog ? mergeByKey(remote.hardnessLog, local.hardnessLog, (e) => e.date, (e) => e.date, 120) : undefined,
     hardness: remote.hardness || local.hardness ? pruneByProximityToToday({ ...(remote.hardness ?? {}), ...(local.hardness ?? {}) }, 60) : undefined,
     // Un aviso de dolor con `clearedDate` = "el atleta lo quito"; esa version gana sobre la que aun lo tiene activo.
     painFlags: mergeByKey(

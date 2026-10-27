@@ -72,13 +72,31 @@ export interface HardnessAdvice {
   text: string;
   /** Pide un paso más de confirmación antes de aplicar. */
   confirm: boolean;
+  /** Lo que el coach sabe de ti para esta situación y nivel (ver `hardnessLearning.ts`), si ya hay datos. */
+  personal?: string;
+}
+
+/** Lo que ha aprendido el coach de cómo aguantas este nivel en esta situación (ver `personalHardnessNote`). */
+export interface HardnessPersonal {
+  tier: 'aguanta' | 'regular' | 'paga';
+  line: string;
 }
 
 /**
  * Lo que dice el coach al elegir un nivel. `fit` es dónde cae el esfuerzo previsto con ese nivel frente al objetivo de hoy
  * (`se-pasa` si lo supera con margen). Siempre es un aviso, nunca un bloqueo.
  */
-export function hardnessAdvice(level: HardnessLevel, ctx: HardnessContext, fit: 'dentro' | 'se-pasa' | 'se-queda-corta'): HardnessAdvice {
+export function hardnessAdvice(level: HardnessLevel, ctx: HardnessContext, fit: 'dentro' | 'se-pasa' | 'se-queda-corta', personal?: HardnessPersonal | null): HardnessAdvice {
+  const base = generalAdvice(level, ctx, fit);
+  if (level === 0 || !personal) return base;
+  // Lo que sabe de ti manda sobre el aviso general: si lo pagas, el aviso sube de tono y pide confirmación; si lo aguantas, lo dice.
+  const tone: HardnessAdvice['tone'] = personal.tier === 'paga' ? 'strong' : base.tone;
+  // Techo personal: si el +2 te ha salido caro, el coach lo desaconseja aunque la regla general lo permitiera.
+  const title = personal.tier === 'paga' && level === 2 ? 'Mejor no' : base.title;
+  return { ...base, title, tone, confirm: base.confirm || personal.tier === 'paga', personal: personal.line };
+}
+
+function generalAdvice(level: HardnessLevel, ctx: HardnessContext, fit: 'dentro' | 'se-pasa' | 'se-queda-corta'): HardnessAdvice {
   if (level === 0) return { tone: 'good', title: 'Como te lo programó el coach', text: 'Es lo que tiene calculado para hoy con tu preparación.', confirm: false };
   const s = hardnessSituation(ctx);
   const days = ctx.daysToEvent;

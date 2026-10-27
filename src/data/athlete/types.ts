@@ -324,6 +324,8 @@ export interface AthleteProfile {
   customComplexes?: OlyComplex[];
   /** Dureza que el atleta pidió para cada día (1 = «+1», 2 = «+2»; 0 o ausente = como lo programó el coach; el 0 se guarda para que «volver a normal» se sincronice). Ver `engine/hardness.ts`. */
   hardness?: Record<string, 0 | 1 | 2>;
+  /** Lo que se sabía al subir la dureza de un día (situación, previsión, objetivo, preparación): con ello el coach aprende cómo lo aguantas. Ver `engine/hardnessLearning.ts`. */
+  hardnessLog?: HardnessLogEntry[];
   /** Favoritos (salen más) y ocultos (no salen) de la librería de complejos, por id. */
   complexPrefs?: { favorites: string[]; hidden: string[] };
   /** Avisos activos de molestia/dolor (ver [[PainFlag]]) — el motor evita el patron de movimiento asociado mientras esten vigentes. */
@@ -547,6 +549,24 @@ export interface SessionBlockResult {
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
 export const SESSION_GEN_VERSION = 79;
+
+/** Un día en que el atleta subió la dureza: lo que se sabía en ese momento, para compararlo después con lo que pasó. */
+export interface HardnessLogEntry {
+  /** Día de la sesión (ISO). */
+  date: string;
+  level: 1 | 2;
+  /** Más volumen o más intensidad (ver `engine/hardness.ts`). */
+  mode: 'volume' | 'intensity';
+  /** En qué situación se subió: normal, ámbar, pico, taper o descarga. */
+  situation: 'normal' | 'ambar' | 'pico' | 'taper' | 'descarga';
+  /** Esfuerzo que se previó con ese nivel, ya sin la corrección aprendida de la dureza (null si no se pudo estimar). */
+  predicted: number | null;
+  /** Objetivo de esfuerzo del día en ese momento. */
+  targetLow: number | null;
+  targetHigh: number | null;
+  /** Preparación con la que se calculó el objetivo (0-100), si se sabía. */
+  readiness: number | null;
+}
 
 /** Color del día según cómo llegas (ver `engine/dayLight.ts`): verde = a por todas, ámbar = mantener sin acumular, rojo = recuperar. */
 export type DayLightColor = 'verde' | 'ambar' | 'rojo';

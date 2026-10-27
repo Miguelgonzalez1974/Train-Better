@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Flame, RotateCcw, ShieldAlert, ThumbsUp, TriangleAlert } from 'lucide-react';
-import type { AthleteProfile, DailySession, SessionHistoryEntry, StrainTarget } from '../../data/athlete/types';
+import type { AthleteProfile, DailySession, HardnessLogEntry, SessionHistoryEntry, StrainTarget } from '../../data/athlete/types';
 import { generateSessionForDate } from '../../engine/generateSession';
-import { hardnessAdvice, hardnessChanges, hardnessMode, type HardnessAdvice, type HardnessContext, type HardnessLevel } from '../../engine/hardness';
-import { estimatePlannedStrain, planFit, type PlanFit } from '../../engine/plannedStrain';
+import { hardnessAdvice, hardnessChanges, hardnessMode, hardnessSituation, type HardnessAdvice, type HardnessContext, type HardnessLevel } from '../../engine/hardness';
+import { learnHardness, personalHardnessNote } from '../../engine/hardnessLearning';
+import { estimatePlannedStrain, strainFit, type PlanFit } from '../../engine/plannedStrain';
 import { Modal } from '../shell/Modal';
 
 const FIT_COLOR: Record<PlanFit, string> = {
@@ -48,6 +49,9 @@ export function HardnessChip({ session, onChange, onReset }: { session: DailySes
   );
 }
 
+/** Lo que se sabía al aplicar un nivel: se guarda para que el coach aprenda cómo lo aguantas (ver `engine/hardnessLearning.ts`). */
+export type HardnessApplyInfo = Pick<HardnessLogEntry, 'mode' | 'situation' | 'predicted' | 'targetLow' | 'targetHigh' | 'readiness'>;
+
 interface SheetProps {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
@@ -55,7 +59,7 @@ interface SheetProps {
   target: StrainTarget | null;
   strainBias: number;
   todayIso: string;
-  onApply: (level: HardnessLevel) => void;
+  onApply: (level: HardnessLevel, info: HardnessApplyInfo) => void;
   onClose: () => void;
 }
 
@@ -69,27 +73,35 @@ export function HardnessSheet({ profile, history, session, target, strainBias, t
   const [step, setStep] = useState<1 | 2>(1);
   useEffect(() => setStep(1), [level]);
 
-  // La sesión de hoy con cada nivel (se generan al abrir) y su esfuerzo previsto.
+  // Lo que el coach ha aprendido de cómo aguantas la dureza (ver `engine/hardnessLearning.ts`).
+  const learning = useMemo(() => learnHardness(profile, history, todayIso), [profile, history, todayIso]);
+  // La sesión de hoy con cada nivel (se generan al abrir) y su esfuerzo previsto; con la corrección aprendida si hay datos.
   const previews = useMemo(
     () =>
       ([0, 1, 2] as const).map((l) => {
         const s = generateSessionForDate({ ...profile, hardness: { ...(profile.hardness ?? {}), [todayIso]: l } }, history, new Date(), profile.goals);
         const planned = estimatePlannedStrain(s, history, strainBias);
-        const fit = planned && target ? planFit(planned, target).fit : 'dentro';
-        return { level: l, strain: planned ? Math.round(planned.strain) : null, fit: fit as PlanFit };
+        const raw = planned ? Math.round(planned.strain) : null;
+        const shown = raw === null ? null : Math.max(0, Math.min(100, raw + (l > 0 ? learning.bias : 0)));
+        const fit = shown !== null && target ? strainFit(shown, target).fit : 'dentro';
+        return { level: l, raw, strain: shown, fit: fit as PlanFit };
       }),
-    [profile, history, todayIso, strainBias, target],
+    [profile, history, todayIso, strainBias, target, learning.bias],
   );
   const current = previews[level];
   const ctx = hardnessContextOf(session);
   const mode = hardnessMode({ competition: Boolean(session.competition), week: session.mesocycleWeek });
-  const advice = hardnessAdvice(level, ctx, current.fit);
+  const situation = hardnessSituation(ctx);
+  const personal = level > 0 ? personalHardnessNote(learning, situation, level as 1 | 2) : null;
+  const advice = hardnessAdvice(level, ctx, current.fit, personal);
   const tone = TONE[advice.tone];
   const needsConfirm = advice.confirm && level > 0;
   const pos = (v: number) => `${Math.min(97, Math.max(3, (v / GAUGE_MAX) * 100))}%`;
 
   const primary = () => {
-    if (level === 0 || !needsConfirm || step === 2) return onApply(level);
+    if (level === 0 || !needsConfirm || step === 2) {
+      return onApply(level, { mode, situation, predicted: current.raw, targetLow: target?.low ?? null, targetHigh: target?.high ?? null, readiness: target?.readiness ?? null });
+    }
     setStep(2);
   };
 
@@ -158,6 +170,7 @@ export function HardnessSheet({ profile, history, session, target, strainBias, t
           <div>
             <p className="font-bold text-white">{advice.title}</p>
             <p className="text-neutral-300">{advice.text}</p>
+            {advice.personal && <p className="mt-1.5 border-t border-white/10 pt-1.5 font-medium text-white">{advice.personal}</p>}
           </div>
         </div>
 

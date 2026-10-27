@@ -3,8 +3,9 @@ import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, Cale
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
-import { HardnessChip, HardnessSheet } from './HardnessControl';
-import { hardnessAvailable, type HardnessLevel } from '../../engine/hardness';
+import { HardnessChip, HardnessSheet, hardnessContextOf, type HardnessApplyInfo } from './HardnessControl';
+import { hardnessAvailable, hardnessSituation, type HardnessLevel } from '../../engine/hardness';
+import { learnHardness, suggestHardness } from '../../engine/hardnessLearning';
 import type {
   AthleteProfile,
   DailySession,
@@ -279,13 +280,31 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     setStrainTarget(next.strainTargets?.[todayIso] ?? null);
   }, [todayIso]);
   const strainBias = useMemo(() => learnStrain(profile, history, todayIso).bias, [profile, history, todayIso]);
+  // Lo que el coach ha aprendido de cómo aguantas la dureza que subes (ver engine/hardnessLearning.ts): corrige la previsión de un día subido.
+  const hardnessLearn = useMemo(() => learnHardness(profile, history, todayIso), [profile, history, todayIso]);
   const plannedStrain = useMemo(
-    () => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history, strainBias) : null),
-    [session, history, alreadyCompletedToday, strainBias],
+    () => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history, strainBias + (session.hardness ? hardnessLearn.bias : 0)) : null),
+    [session, history, alreadyCompletedToday, strainBias, hardnessLearn.bias],
   );
   const planFitResult = plannedStrain && strainTarget ? planFit(plannedStrain, strainTarget) : null;
   // Se puede subir la dureza de hoy (ver `engine/hardness.ts`): una sesión normal de entreno todavía sin registrar.
   const canHarder = Boolean(session && !alreadyCompletedToday && hardnessAvailable(session));
+  // El coach te sugiere subirla solo si ya sabe que la aguantas en esta situación (ver `suggestHardness`).
+  const hardnessSuggestion = useMemo(
+    () =>
+      session && canHarder && !session.hardness
+        ? suggestHardness({
+            learning: hardnessLearn,
+            situation: hardnessSituation(hardnessContextOf(session)),
+            light: session.dayLight?.color === 'verde' ? 'verde' : session.dayLight?.color === 'ambar' ? 'ambar' : null,
+            offered: true,
+            planned: plannedStrain ? plannedStrain.strain : null,
+            target: strainTarget,
+            todayIso,
+          })
+        : null,
+    [session, canHarder, hardnessLearn, plannedStrain, strainTarget, todayIso],
+  );
   // Partes de WOD de hoy (1 en un dia normal, 2 en un dia de doble WOD) y como se puntua cada una.
   const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
   const wodScoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(
@@ -572,8 +591,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   }
 
   /** Guarda la dureza pedida para hoy y rehace la sesión con ella (0 = volver a como la programó el coach). */
-  function handleApplyHardness(level: HardnessLevel) {
-    handleSaveProfile({ ...profile, hardness: { ...(profile.hardness ?? {}), [todayIso]: level } });
+  function handleApplyHardness(level: HardnessLevel, info?: HardnessApplyInfo) {
+    // Se apunta lo que se sabía al subirla (situación, previsión, objetivo): el coach lo compara después con lo que pasó.
+    const rest = (profile.hardnessLog ?? []).filter((e) => e.date !== todayIso);
+    const hardnessLog = level > 0 && info ? [...rest, { date: todayIso, level: level as 1 | 2, ...info }].slice(-120) : rest;
+    handleSaveProfile({ ...profile, hardness: { ...(profile.hardness ?? {}), [todayIso]: level }, hardnessLog });
     setShowHardness(false);
   }
 
@@ -1166,6 +1188,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           onSwapWod={handleRegenerate}
           onLighter={() => handlePickType('recovery')}
           onHarder={canHarder && !session.hardness ? () => setShowHardness(true) : undefined}
+          suggestion={hardnessSuggestion?.text}
         />
       )}
 
