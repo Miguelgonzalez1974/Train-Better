@@ -22,6 +22,7 @@ export interface SyncBase {
   macrocycles?: string[];
   goals?: string[];
   strengthPrograms?: string[];
+  customComplexes?: string[];
   customFoods?: string[];
   /** `fecha|id` de cada apunte del diario de nutricion. */
   extraFoods?: string[];
@@ -41,6 +42,7 @@ export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistor
     macrocycles: profile.macrocycles.map((m) => m.id),
     goals: profile.goals.map((g) => g.id),
     strengthPrograms: (profile.strengthPrograms ?? []).map((p) => p.id),
+    customComplexes: (profile.customComplexes ?? []).map((c) => c.id),
     customFoods: (profile.nutritionPrefs?.customFoods ?? []).map((f) => f.id),
     extraFoods: Object.entries(profile.nutritionPrefs?.extraFoods ?? {}).flatMap(([iso, list]) => list.map((e) => `${iso}|${e.id}`)),
     workLog: (profile.workLog ?? []).map(workKey),
@@ -325,6 +327,16 @@ export function mergeProfile(
       remote.strengthPrograms,
       local.strengthPrograms,
     ),
+    // Los complejos propios se unen por id (gana el local si el mismo id cambió en los dos sitios); lo borrado no vuelve. Favoritos y
+    // ocultos son preferencias: gana el local si las ha tocado en este dispositivo.
+    customComplexes: dropDeleted(
+      mergeByKey(remote.customComplexes, local.customComplexes, (c) => c.id, (c) => c.id, 999),
+      (c) => c.id,
+      base?.customComplexes,
+      remote.customComplexes,
+      local.customComplexes,
+    ),
+    complexPrefs: local.complexPrefs ?? remote.complexPrefs,
     // Un aviso de dolor con `clearedDate` = "el atleta lo quito"; esa version gana sobre la que aun lo tiene activo.
     painFlags: mergeByKey(
       remote.painFlags,

@@ -145,6 +145,48 @@ export interface BuildComplexInput {
   /** Producto de los ajustes del día (preparación, carga aguda…): ya calculado por el bloque de oly. */
   dayFactor: number;
   notes: string;
+  /** Si se da, las series que lleva (un cambio de complejo en la sesión conserva las del día). */
+  sets?: number;
+}
+
+/** Nombre de un paso con sus repeticiones, para las notas ("2 Front Squat"). */
+function stepText(s: { movementId: string; reps: number }, nameOf: (id: string) => string): string {
+  return `${s.reps > 1 ? `${s.reps} ` : ''}${nameOf(s.movementId)}`;
+}
+
+/** La nota del coach de un complejo: qué es cada serie y cómo se carga. */
+export function complexNote(complex: Pick<OlyComplex, 'steps'>, nameOf: (id: string) => string): string {
+  return (
+    `Complejo ${complexNotation(complex)}: ${complex.steps.map((s) => stepText(s, nameOf)).join(' + ')}, sin soltar la barra entre pasos. ` +
+    `El peso lo marca el paso más flojo; las series de la segunda mitad suben un escalón. Descansa 2-3 min entre series.`
+  );
+}
+
+/**
+ * Lo que cambia en un bloque de complejo al cambiarlo por otro (en el modo enfocado): el complejo, su peso y sus series. Conserva el
+ * ajuste del día (preparación, carga aguda…) que llevaba el complejo anterior, deshaciendo lo que ponía la semana y el propio
+ * complejo, y las series que ya tenía.
+ */
+export function swapComplexPatch(
+  current: SessionBlockResult,
+  next: OlyComplex,
+  week: 1 | 2 | 3 | 4,
+  prs: Prs,
+  variantPrs: Variants,
+  nameOf: (id: string) => string,
+  currentComplex?: OlyComplex,
+): Partial<SessionBlockResult> | null {
+  const curBase = currentComplex ? complexBaseKg(currentComplex, prs, variantPrs) : null;
+  const dayFactor = curBase && current.loadKg ? current.loadKg / (curBase * COMPLEX_WEEK_LOAD[week]) : 1;
+  const block = buildComplexBlock({ complex: next, week, prs, variantPrs, dayFactor, sets: current.sets, notes: complexNote(next, nameOf) });
+  if (!block) return null;
+  return { movementId: block.movementId, reps: block.reps, loadKg: block.loadKg, setPlan: block.setPlan, complex: block.complex, notes: block.notes };
+}
+
+/** El peso orientativo de un complejo para una semana del bloque (sin los ajustes del día), o null si no se puede valorar. */
+export function complexPreviewKg(complex: OlyComplex, week: 1 | 2 | 3 | 4, prs: Prs, variantPrs?: Variants): number | null {
+  const base = complexBaseKg(complex, prs, variantPrs);
+  return base === null ? null : Math.max(2.5, roundToNearestPlate(base * COMPLEX_WEEK_LOAD[week]));
 }
 
 /** El bloque de oly con el complejo, o null si algún paso no se puede valorar con tus marcas. */
@@ -153,7 +195,7 @@ export function buildComplexBlock(input: BuildComplexInput): SessionBlockResult 
   const base = complexBaseKg(complex, prs, variantPrs);
   if (base === null) return null;
   const topKg = Math.max(2.5, roundToNearestPlate(base * COMPLEX_WEEK_LOAD[week] * dayFactor));
-  const sets = COMPLEX_WEEK_SETS[week];
+  const sets = input.sets ?? COMPLEX_WEEK_SETS[week];
   // Las series de la segunda mitad suben un escalón: se entra en calor con el peso de salida y se acaba en el fuerte.
   const stepUp = Math.max(2.5, roundToNearestPlate(topKg * 0.04));
   const firstKg = Math.max(2.5, topKg - stepUp);

@@ -18,6 +18,8 @@ import { MovementProgressModal } from './MovementProgressModal';
 import type { MovementProgressData } from './LoadStat';
 import { RpeCheckIn } from './RpeCheckIn';
 import { SwapButton } from './SwapMovement';
+import { ComplexSwapButton } from './ComplexSwap';
+import type { ComplexPool } from '../../engine/olyComplexes';
 
 /** Sub-set de `adjustableSetBlocks` de Planificacion — lo justo para renderizar el check-in de RPE. */
 export interface FocusSetFeedback {
@@ -46,6 +48,9 @@ interface FocusModeProps {
   painFlags: PainFlag[];
   /** Cambia un movimiento del bloque por una alternativa (el padre lo guarda en la sesión de hoy). */
   onSwap: (index: number, patch: Partial<SessionBlockResult>) => void;
+  /** La librería de complejos (fábrica + propios, favoritos y ocultos) y la semana del bloque, para cambiar el complejo del día. */
+  complexPool: ComplexPool;
+  complexWeek: 1 | 2 | 3 | 4;
   onExit: () => void;
   onFinish: () => void;
 }
@@ -117,6 +122,8 @@ export function FocusMode({
   onFeel,
   painFlags,
   onSwap,
+  complexPool,
+  complexWeek,
   onExit,
   onFinish,
 }: FocusModeProps) {
@@ -285,7 +292,20 @@ export function FocusMode({
                 <div className="flex items-center gap-2">
                   {work.length > 1 && <span className="text-xs font-bold text-neutral-500">{String.fromCharCode(65 + wi)}</span>}
                   <h2 className="min-w-0 flex-1 text-3xl font-semibold leading-tight text-white">{b.complex?.name ?? resolveName(b.movementId)}</h2>
-                  {!b.complex && <SwapButton entry={b} index={e.index} ctx={swapCtx} disabled={hasLoggedSets(b.movementId)} onSwap={onSwap} />}
+                  {b.complex ? (
+                    <ComplexSwapButton
+                      entry={b}
+                      index={e.index}
+                      pool={complexPool}
+                      week={complexWeek}
+                      prs={progress.prs}
+                      variantPrs={progress.variantPrs}
+                      disabled={hasLoggedSets(complexLogId(b.complex.id))}
+                      onSwap={onSwap}
+                    />
+                  ) : (
+                    <SwapButton entry={b} index={e.index} ctx={swapCtx} disabled={hasLoggedSets(b.movementId)} onSwap={onSwap} />
+                  )}
                 </div>
                 {b.complex && (
                   <ol className="mt-2 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Pasos del complejo">

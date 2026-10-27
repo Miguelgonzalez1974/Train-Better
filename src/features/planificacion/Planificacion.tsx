@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy, Library } from 'lucide-react';
+import type { OlyComplex } from '../../data/complexes';
+import { buildComplexPool } from '../../engine/olyComplexes';
+import { ComplexLibrary } from './ComplexLibrary';
 import type {
   AthleteProfile,
   DailySession,
@@ -182,6 +185,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [showDiary, setShowDiary] = useState(false);
+  const [showComplexes, setShowComplexes] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(60);
@@ -255,6 +259,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     () => ({ prs: profile.prs, variantPrs: profile.variantPrs, prLog: profile.prLog ?? [], workLog }),
     [profile.prs, profile.variantPrs, profile.prLog, workLog],
   );
+  // La librería de complejos (fábrica + propios, favoritos y ocultos) y la semana del bloque de hoy (la 2 si hoy no cae en un bloque).
+  const complexPool = useMemo(() => buildComplexPool(profile.customComplexes, profile.complexPrefs), [profile.customComplexes, profile.complexPrefs]);
+  const complexWeek: 1 | 2 | 3 | 4 = session && session.mesocycleWeek >= 1 && session.mesocycleWeek <= 4 ? (session.mesocycleWeek as 1 | 2 | 3 | 4) : 2;
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
   // Objetivo de esfuerzo de hoy (el de la mañana, ver `engine/strainTarget.ts`): lo fija el Dashboard al contestar el
   // check-in; aquí se lee (y se fija si entras antes aquí) para comparar con la sesión prevista.
@@ -499,7 +506,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         ...prev,
         // Si se tocan series, reps o carga a mano, el plan serie a serie de la rampa ya no vale: se quita y vuelve el esquema simple.
         blocks: prev.blocks.map((b, i) =>
-          i === index ? { ...b, ...patch, ...(!('setPlan' in patch) && ('sets' in patch || 'reps' in patch || 'loadKg' in patch) ? { setPlan: undefined, waveSize: undefined } : {}), ...('movementId' in patch ? { complex: undefined } : {}) } : b,
+          i === index ? { ...b, ...patch, ...(!('setPlan' in patch) && ('sets' in patch || 'reps' in patch || 'loadKg' in patch) ? { setPlan: undefined, waveSize: undefined } : {}), ...('movementId' in patch && !('complex' in patch) ? { complex: undefined } : {}) } : b,
         ),
         editedByAthlete: true,
       };
@@ -544,6 +551,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     // guardar el perfil no debe materializar una sesion cuando se esta esperando a que el
     // atleta elija que hacer hoy (sin macrociclo activo).
     if (session) setSession(generateAndCache(newProfile));
+  }
+
+  /**
+   * Guarda los complejos propios y los favoritos y ocultos de la librería. No regenera la sesión de hoy (podría estar a medias o
+   * editada a mano): solo se descartan las vistas previas de los días siguientes para que se recalculen con la librería nueva.
+   */
+  function handleSaveComplexes(next: { customComplexes: OlyComplex[]; complexPrefs: { favorites: string[]; hidden: string[] } }) {
+    const fresh = athleteRepository.getProfile();
+    athleteRepository.saveProfile({ ...fresh, customComplexes: next.customComplexes, complexPrefs: next.complexPrefs });
+    for (const date of Object.keys(athleteRepository.getProfile().sessionCache ?? {})) {
+      if (date > todayIso) athleteRepository.deleteCachedSession(date);
+    }
+    setProfile(athleteRepository.getProfile());
   }
 
   function handleActivateReturnRamp() {
@@ -909,6 +929,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           onFeel={handleFeelSet}
           painFlags={activePainFlags}
           onSwap={handleUpdateEntry}
+          complexPool={complexPool}
+          complexWeek={complexWeek}
           onExit={() => setFocusMode(false)}
           onFinish={() => {
             setFocusMode(false);
@@ -923,6 +945,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         onSaveProfile={handleSaveProfile}
         trailing={<CoachNoticesButton count={noticeSummary.count} actionable={noticeSummary.actionable} onClick={() => setShowNotices(true)} />}
       />
+
+      {showComplexes && (
+        <ComplexLibrary profile={profile} workLog={workLog} week={complexWeek} onSave={handleSaveComplexes} onClose={() => setShowComplexes(false)} />
+      )}
 
       {showDiary && (
         <TrainingDiary
@@ -1091,6 +1117,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                 { label: editMode ? 'Terminar edición' : 'Editar sesión', Icon: editMode ? Check : Pencil, onSelect: () => setEditMode((prev) => !prev) },
                 ...(alreadyCompletedToday || !hasWodBlock ? [] : [{ label: 'Otro WOD', Icon: RefreshCw, onSelect: handleRegenerate }]),
                 { label: 'Cambiar tipo de sesión', Icon: Brain, onSelect: () => setShowTypePicker(true) },
+                { label: 'Librería de complejos', Icon: Library, onSelect: () => setShowComplexes(true) },
                 {
                   label: activePainFlags.length > 0 ? 'Molestias activas' : '¿Algo te molesta hoy?',
                   Icon: Bandage,

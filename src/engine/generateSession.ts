@@ -50,8 +50,7 @@ import {
 } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
 import { buildOlyWavePlan, pickOlyWaveTemplate } from './olyWaves';
-import { buildComplexBlock, buildComplexPool, pickComplex, type ComplexPool } from './olyComplexes';
-import { complexNotation } from '../data/complexes';
+import { buildComplexBlock, buildComplexPool, complexNote, pickComplex, type ComplexPool } from './olyComplexes';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
@@ -1615,16 +1614,13 @@ function buildOlyBlock(
         draw,
       });
     if (picked) {
-      const stepsText = picked.steps.map((s) => `${s.reps > 1 ? `${s.reps} ` : ''}${getMovementById(s.movementId)?.name ?? s.movementId}`).join(' + ');
       complexEntry = buildComplexBlock({
         complex: picked,
         week,
         prs,
         variantPrs,
         dayFactor: autoregFactor * dose.strengthLoad,
-        notes:
-          `${scheme.coachNote} Complejo ${complexNotation(picked)}: ${stepsText}, sin soltar la barra entre pasos. ` +
-          `El peso lo marca el paso más flojo; las series de la segunda mitad suben un escalón. Descansa 2-3 min entre series.${receivingTag}${reintroNote}${fatigueNote}${rampNote}`,
+        notes: `${scheme.coachNote} ${complexNote(picked, (id) => getMovementById(id)?.name ?? id)}${receivingTag}${reintroNote}${fatigueNote}${rampNote}`,
       });
       if (complexEntry) {
         mainEntry = complexEntry;
