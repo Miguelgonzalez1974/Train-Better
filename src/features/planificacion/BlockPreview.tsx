@@ -20,7 +20,7 @@ function nameOf(id: string): string {
 function Mini({ value, label, accent }: { value: ReactNode; label: string; accent?: boolean }) {
   return (
     <span className={`flex min-w-[2.9rem] flex-col items-center rounded-lg px-2 py-1 ${accent ? 'bg-brand-neon/10 ring-1 ring-brand-neon/30' : 'bg-black/20'}`}>
-      <span className="num text-[15px] font-semibold leading-tight text-white">{value}</span>
+      <span className="num whitespace-nowrap text-[15px] font-semibold leading-tight text-white">{value}</span>
       <span className={`text-[9px] uppercase tracking-wide ${accent ? 'text-brand-neon/80' : 'text-neutral-500'}`}>{label}</span>
     </span>
   );
@@ -48,7 +48,13 @@ function LiftPreview({ block, results, progress }: { block: Block; results: Sess
     <>
       <p className="mt-1 truncate text-[17px] font-semibold leading-tight text-white">{nameOf(main.movementId)}</p>
       <div className="mt-2 flex items-center gap-1.5">
-        {main.sets ? <Mini value={main.sets} label="series" /> : null}
+        {main.sets ? (
+          main.waveSize && main.waveSize >= 2 && main.sets > main.waveSize && main.sets % main.waveSize === 0 ? (
+            <Mini value={main.sets / main.waveSize} label="olas" />
+          ) : (
+            <Mini value={main.sets} label="series" />
+          )
+        ) : null}
         {main.reps ? <Mini value={main.reps} label="reps" /> : null}
         {main.loadKg ? <Mini value={fmtKgValue(main.loadKg)} label={loadUnitLabel(main.movementId, block)} accent /> : null}
         {extra && <span className="ml-1 min-w-0 truncate text-xs text-neutral-500">{extra}</span>}

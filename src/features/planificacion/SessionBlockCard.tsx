@@ -64,7 +64,30 @@ function StatBox({ value, label }: { value: string | number; label: string }) {
 }
 
 /** Una rampa u ola serie a serie: "5 × 159 kg → 3 × 171,5 kg → 1 × 182,5 kg"; la última (la de trabajo) resaltada. */
-function SetPlanLine({ plan }: { plan: { reps: number; kg: number }[] }) {
+function SetPlanLine({ plan, waveSize }: { plan: { reps: number; kg: number }[]; waveSize?: number }) {
+  // Varias olas seguidas: una línea por ola, con su nombre; la última serie de la última ola es la fuerte del día.
+  if (waveSize && waveSize >= 2 && plan.length > waveSize && plan.length % waveSize === 0 && plan.some((s) => s.kg)) {
+    const waves = Array.from({ length: plan.length / waveSize }, (_, w) => plan.slice(w * waveSize, (w + 1) * waveSize));
+    return (
+      <div className="mt-2 flex flex-col gap-1" aria-label="Olas">
+        {waves.map((wave, w) => (
+          <div key={w} className="flex items-center gap-2 text-xs text-neutral-400">
+            <span className="w-9 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Ola {w + 1}</span>
+            <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              {wave.map((s, i) => (
+                <li key={i} className="flex items-center gap-1.5">
+                  {i > 0 && <span aria-hidden="true">→</span>}
+                  <span className={w === waves.length - 1 && i === wave.length - 1 ? 'font-bold text-brand-gold' : 'font-medium text-neutral-300'}>
+                    <span className="num">{s.reps}</span> × <span className="num">{String(s.kg).replace('.', ',')}</span> kg
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    );
+  }
   // Sin pesos (un movimiento cambiado a mancuernas, p. ej.): solo las repeticiones de cada serie.
   if (plan.every((s) => !s.kg)) {
     return (
@@ -85,6 +108,15 @@ function SetPlanLine({ plan }: { plan: { reps: number; kg: number }[] }) {
       ))}
     </ol>
   );
+}
+
+/** El recuadro de "series" de un bloque; con varias olas dice cuántas olas y no el total de series. */
+function SetsStat({ entry }: { entry: { sets?: number; waveSize?: number } }) {
+  if (!entry.sets) return null;
+  if (entry.waveSize && entry.waveSize >= 2 && entry.sets % entry.waveSize === 0 && entry.sets > entry.waveSize) {
+    return <StatBox value={entry.sets / entry.waveSize} label="olas" />;
+  }
+  return <StatBox value={entry.sets} label="series" />;
 }
 
 function FormatBadge({ format }: { format: string }) {
@@ -667,7 +699,7 @@ function ComplexCard({
 
                   {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
                     <div className="ml-7 mt-1.5 flex flex-wrap items-center gap-1.5">
-                      {entry.sets && <StatBox value={entry.sets} label="series" />}
+                      <SetsStat entry={entry} />
                       {entry.reps && <StatBox value={entry.reps} label="reps" />}
                       {entry.loadKg ? (
                         <LoadStat
@@ -684,7 +716,7 @@ function ComplexCard({
                   )}
                   {entry.setPlan && entry.setPlan.length >= 2 && (
                     <div className="ml-7">
-                      <SetPlanLine plan={entry.setPlan} />
+                      <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} />
                     </div>
                   )}
                   <div className="ml-7">
@@ -934,7 +966,7 @@ function EntryRow({
 
       {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {entry.sets && <StatBox value={entry.sets} label="series" />}
+          <SetsStat entry={entry} />
           {entry.reps && <StatBox value={entry.reps} label="reps" />}
           {entry.loadKg ? (
             <LoadStat
@@ -949,7 +981,7 @@ function EntryRow({
           {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
         </div>
       )}
-      {entry.setPlan && entry.setPlan.length >= 2 && <SetPlanLine plan={entry.setPlan} />}
+      {entry.setPlan && entry.setPlan.length >= 2 && <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} />}
       <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />
       {feedback && onRateSet && index !== undefined && (
         <div className="mt-2">

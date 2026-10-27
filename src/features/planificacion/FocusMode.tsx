@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, PainFlag, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
@@ -274,6 +274,8 @@ export function FocusMode({
           const singleLog = Boolean(b.logAsSingle) && sets <= 1;
           // Rampa u ola (5-3-1…): cada serie con sus propias reps y su propio peso; la última es la de trabajo.
           const plan = b.setPlan && b.setPlan.length >= 2 ? b.setPlan : undefined;
+          // Varias olas seguidas: las series se agrupan bajo "Ola 1", "Ola 2"… (`waveSize` = series de cada ola).
+          const waveSize = plan && b.waveSize && b.waveSize >= 2 && plan.length > b.waveSize && plan.length % b.waveSize === 0 ? b.waveSize : undefined;
           const rowCount = plan ? plan.length : singleLog ? 1 : sets;
           const fb = setFeedbackByIndex.get(e.index);
           return (
@@ -316,10 +318,10 @@ export function FocusMode({
                     )
                   ) : null}
                   <span className="text-xl font-semibold text-neutral-300">
-                    {plan ? `${plan.length} series · ${plan.map((p) => p.reps).join('-')}` : b.sets ? `${b.sets} × ${b.reps}` : b.reps}
+                    {plan && waveSize ? `${plan.length / waveSize} olas · ${b.reps}` : plan ? `${plan.length} series · ${plan.map((p) => p.reps).join('-')}` : b.sets ? `${b.sets} × ${b.reps}` : b.reps}
                     {b.tempo ? ` · tempo ${b.tempo}` : ''}
                   </span>
-                  {plan && <span className="text-sm text-neutral-400">la última es la de trabajo</span>}
+                  {plan && <span className="text-sm text-neutral-400">{waveSize ? 'la última serie es la fuerte del día' : 'la última es la de trabajo'}</span>}
                 </div>
               </div>
               {(plan || sets > 1 || singleLog) &&
@@ -360,8 +362,11 @@ export function FocusMode({
                         const kg = kgFor(mid, n, plannedKg(n));
                         const reps = repsOf(n);
                         return (
+                          <Fragment key={n}>
+                          {waveSize && s % waveSize === 0 && (
+                            <p className={`text-xs font-bold uppercase tracking-[0.14em] text-neutral-500 ${s > 0 ? 'mt-2' : ''}`}>Ola {s / waveSize + 1}</p>
+                          )}
                           <div
-                            key={n}
                             className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-2.5 py-2 ${on ? 'bg-brand-neon/10' : 'bg-brand-surfaceMuted/50'}`}
                           >
                             <button
@@ -408,6 +413,7 @@ export function FocusMode({
                             )}
                             {reps > 0 && <span className="ml-auto shrink-0 whitespace-nowrap text-lg font-semibold text-neutral-300">× {reps}</span>}
                           </div>
+                          </Fragment>
                         );
                       })}
                     </div>

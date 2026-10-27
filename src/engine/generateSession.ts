@@ -49,6 +49,7 @@ import {
   type OlyFamily,
 } from './periodization';
 import { OLY_WEEK_SCHEMES, roundToNearestPlate, STRENGTH_WEEK_SCHEMES } from './oneRepMaxTables';
+import { buildOlyWavePlan, pickOlyWaveTemplate } from './olyWaves';
 import { getRecentMovementIds, pickLeastRecentlyUsed, pickManyVaried, pickVaried, pickVariedWithPreference } from './variability';
 import { getGoalProgress, isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
@@ -1287,6 +1288,11 @@ function buildOlyBlock(
    * calculandose fresca como siempre.
    */
   lockedMovementId?: string,
+  /**
+   * Hoy puede salir el levantamiento principal en olas (ver `olyWaves.ts`). Lo decide la sesión: olas = más series, así que no en
+   * pico ni taper de una competición, ni en un día ligero, ámbar o con agujetas fuertes (donde ya se recorta el volumen).
+   */
+  allowWaves = false,
 ): { blocks: SessionBlockResult[]; reasons: string[] } {
   // El snatch y el clean & jerk cargan hombro y cadera a la vez por naturaleza — no hay una
   // variante "segura" dentro de oly si cualquiera de las dos zonas tiene un aviso activo, asi que
@@ -1550,6 +1556,30 @@ function buildOlyBlock(
     mainEntry = straightEntry;
   }
 
+  // De vez en cuando, el levantamiento principal va en olas (ver `olyWaves.ts`): 2-3 mini-rampas seguidas, cada una más alta que la
+  // anterior, y la última serie es la carga fuerte del día. Sorteo propio (fecha + familia) que se gasta siempre igual: decidir esto
+  // no mueve ningún otro sorteo, y los de arriba (EMOM, singles) se hacen igual aunque luego las olas los releven.
+  const waveTemplate = pickOlyWaveTemplate(week, seededRng(`oly-waves|${toLocalIsoDate(date)}|${family}`));
+  const waveDay = Boolean(waveTemplate) && allowWaves && !receivingFocus;
+  if (waveDay && waveTemplate) {
+    const topKg = roundToNearestPlate((loadKg * waveTemplate.topPct) / scheme.percent);
+    const { setPlan, waveSize, stepKg } = buildOlyWavePlan(topKg, waveTemplate);
+    mainEntry = {
+      block: 'oly',
+      movementId: movement.id,
+      format: `Olas · ${waveTemplate.waves} × ${waveTemplate.pattern}`,
+      sets: setPlan.length,
+      reps: waveTemplate.pattern,
+      loadKg: topKg,
+      setPlan,
+      waveSize,
+      notes:
+        `${baseNote} ${waveTemplate.waves} olas de ${waveTemplate.pattern}: en cada ola las repeticiones bajan y el peso sube, y la siguiente arranca ${stepKg} kg por encima. ` +
+        `La última serie (${topKg} kg) es la carga fuerte del día; descansa 2-3 min entre series y algo más entre olas.`,
+      ...(Math.max(...waveTemplate.reps) >= 2 ? { repStyle: 'touch-and-go' as const } : {}),
+    };
+  }
+
   // Tracción por encima del levantamiento, DESPUÉS del trabajo principal (patrón Mayhem/haltero):
   // tirón alto o deadlift del lift a un % igual o superior al del levantamiento. No en descarga ni
   // en días de foco de recepción. `excludeId` es el primer del complejo, para no repetir movimiento.
@@ -1651,7 +1681,8 @@ function buildOlyBlock(
   const primerEntry: SessionBlockResult = {
     block: 'oly',
     movementId: primerMovement.id,
-    sets: scheme.sets,
+    // En un día de olas el primer técnico se queda en 3 series: el volumen del día lo ponen las olas.
+    sets: waveDay ? Math.min(3, scheme.sets) : scheme.sets,
     reps: '2-3',
     notes: `Primer técnico antes del levantamiento principal — prioriza posición, no peso.${
       receivingPrimers.length > 0 ? ' Hoy es un drill de recepción: recibe lo más abajo posible.' : OLY_PRIMER_PHASE_NOTE[week]
@@ -4522,6 +4553,8 @@ function generateDailySessionCore(
       : strengthOlyDose,
     plannedOlyCombined,
     weekLock?.olyMovementId,
+    // Olas = más series: no con competición cerca (pico o taper), ni en día ligero, ámbar o con agujetas fuertes.
+    !comp && !technicalLight && !amberToday && !soreCut,
   );
 
   // El accesorio se decide ANTES que el WOD: no depende de el, y asi el WOD (que si es flexible; el

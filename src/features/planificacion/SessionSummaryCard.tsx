@@ -68,7 +68,13 @@ function buildRecapLines(
     if (name) {
       const logged = workSummary(workLog, olyMain.movementId, olyMain.sets ?? 0);
       const scheme =
-        logged ?? [olyMain.sets && `${olyMain.sets}×${olyMain.reps}`, olyMain.loadKg && fmtKg(olyMain.loadKg)].filter(Boolean).join(' · ');
+        logged ??
+        [
+          olyMain.sets && (olyMain.waveSize && olyMain.sets > olyMain.waveSize ? `${olyMain.sets / olyMain.waveSize} olas ${olyMain.reps}` : `${olyMain.sets}×${olyMain.reps}`),
+          olyMain.loadKg && fmtKg(olyMain.loadKg),
+        ]
+          .filter(Boolean)
+          .join(' · ');
       lines.push({ label: 'Oly', detail: scheme ? `${name} — ${scheme}` : name });
     }
   }

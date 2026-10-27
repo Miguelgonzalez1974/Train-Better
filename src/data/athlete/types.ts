@@ -477,6 +477,12 @@ export interface SessionBlockResult {
    */
   setPlan?: { reps: number; kg: number }[];
   /**
+   * Series de cada ola cuando `setPlan` son varias olas seguidas (p. ej. 3 = olas de 5-3-1: `setPlan` trae 6 series para 2 olas).
+   * Solo sirve para agrupar y rotular las series ("Ola 1", "Ola 2"); la carga y las repeticiones ya están en `setPlan`. Ausente en
+   * una rampa de una sola ola.
+   */
+  waveSize?: number;
+  /**
    * Cómo era el bloque ANTES de cambiar su movimiento a mano en el modo enfocado: permite "Deshacer" aunque se recargue la app.
    * Solo guarda lo que el cambio toca (movimiento, reps, carga, plan serie a serie y el escalado previo).
    */
@@ -525,7 +531,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 76;
+export const SESSION_GEN_VERSION = 77;
 
 /** Color del día según cómo llegas (ver `engine/dayLight.ts`): verde = a por todas, ámbar = mantener sin acumular, rojo = recuperar. */
 export type DayLightColor = 'verde' | 'ambar' | 'rojo';
