@@ -93,6 +93,12 @@ export function DayStatusRow({ session, planned, target, fit, painFlags, onRemov
             )}{' '}
             Duración estimada <b className="num text-white">{Math.round(planned.minutes)} min</b>.
           </p>
+          {/* Sin semáforo (aún sin check-in) el «por qué» de la sesión vive aquí. */}
+          {!session.dayLight && onShowReasons && (
+            <button onClick={onShowReasons} className="mt-2 block font-semibold text-brand-gold underline decoration-dotted">
+              Por qué tu sesión es así hoy →
+            </button>
+          )}
           {f === 'se-pasa' && (
             <div className="mt-2 flex flex-wrap gap-2">
               {canSwapWod && (

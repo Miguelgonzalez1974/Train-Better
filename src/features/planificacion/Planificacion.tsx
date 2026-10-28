@@ -1081,7 +1081,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             <h1 className="text-3xl font-semibold tracking-tight text-white">
               {session.competition?.eventDay ? 'Día de competición' : session.isRestDay ? 'Día de descanso' : todayWeekdayLabel}
             </h1>
-            {(session.coachReasons?.length ?? 0) > 0 && (
+            {/* El «por qué» de la sesión vive en las casillas de esfuerzo y semáforo; este botón solo queda donde no hay casillas. */}
+            {(session.coachReasons?.length ?? 0) > 0 && !(!session.isRestDay && !editMode && (plannedStrain || session.dayLight)) && (
               <button
                 onClick={() => setShowReasons(true)}
                 title="Por qué tu sesión es así hoy"
