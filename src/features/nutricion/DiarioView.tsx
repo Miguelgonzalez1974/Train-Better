@@ -183,7 +183,7 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
             {rows.map(({ entry, items, protein, carbs }) => (
               <li key={entry.id} className="flex items-start gap-2 py-3">
                 <div className="min-w-0 flex-1">
-                  {entry.id.startsWith('menu-') && <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">{MEAL_LABEL[entry.id.slice(5) as MealKey] ?? 'Menú'}</p>}
+                  {entry.id.startsWith('menu-') && <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">{MEAL_LABEL[entry.id.slice(5) as MealKey] ?? 'Menú'}</p>}
                   <ul className="flex flex-col gap-1.5">
                     {items.map((it) => (
                       <li key={`${entry.id}-${it.index}`} className="flex items-center justify-between gap-2">

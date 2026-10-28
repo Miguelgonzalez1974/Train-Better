@@ -179,7 +179,7 @@ export function SeasonPlannerModal({ open, profile, initialTargetDate, onClose, 
                 <div className="ml-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-white">{b.label}</p>
-                    <span className="text-[10px] text-neutral-500">{b.totalWeeks} sem.</span>
+                    <span className="text-[11px] text-neutral-500">{b.totalWeeks} sem.</span>
                   </div>
                   <p className="text-[11px] text-neutral-400">
                     {b.startDate} <ArrowRight size={9} className="mx-0.5 inline" /> {b.endDate}
@@ -188,14 +188,14 @@ export function SeasonPlannerModal({ open, profile, initialTargetDate, onClose, 
                     {b.phaseWeeks.map((w, pi) => {
                       const Icon = PHASE_ICON[pi];
                       return (
-                        <span key={pi} className="flex items-center gap-1 text-[10px] text-neutral-500">
+                        <span key={pi} className="flex items-center gap-1 text-[11px] text-neutral-500">
                           <Icon size={10} strokeWidth={2.5} />
                           {w}s {PHASE_SHORT[pi]}
                         </span>
                       );
                     })}
                   </div>
-                  <p className="mt-1 text-[10px] text-neutral-600">{b.focusNote}</p>
+                  <p className="mt-1 text-[11px] text-neutral-600">{b.focusNote}</p>
                 </div>
                 {i < plan.blocks.length - 1 && (
                   <div className="mt-1 flex justify-center text-neutral-700">

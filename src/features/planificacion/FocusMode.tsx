@@ -339,7 +339,7 @@ export function FocusMode({
                       >
                         <span className="text-6xl font-bold leading-none">{b.loadKg}</span>
                         <span className="text-xl font-semibold">kg</span>
-                        <span className="ml-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-neutral-500">
+                        <span className="ml-1 flex items-center gap-1 text-[11px] uppercase tracking-wide text-neutral-500">
                           <ChartSpline size={11} strokeWidth={2.25} />
                           progresión
                         </span>

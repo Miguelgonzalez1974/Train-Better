@@ -67,10 +67,10 @@ export function EnergyDomainsCard({
         </span>
         <span className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-sm font-semibold text-white">Dominios energéticos</span>
-          <span className="rounded-full bg-brand-neon/15 px-2 py-0.5 text-[10px] font-bold text-brand-neon">
+          <span className="rounded-full bg-brand-neon/15 px-2 py-0.5 text-[11px] font-bold text-brand-neon">
             {fresh ? `${balance.totalPlanned} WOD planificados` : `${balance.totalDone}/${balance.totalPlanned} sesiones`}
           </span>
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-neutral-400">{balance.phaseLabel}</span>
+          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-bold text-neutral-400">{balance.phaseLabel}</span>
         </span>
         {collapsed ? (
           <ChevronDown size={16} className="shrink-0 text-neutral-500" />
@@ -98,7 +98,7 @@ export function EnergyDomainsCard({
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Sistema energético</p>
-              <p className="text-[10px] text-neutral-600">{fresh ? 'planificadas' : 'hechas / planificadas'}</p>
+              <p className="text-[11px] text-neutral-600">{fresh ? 'planificadas' : 'hechas / planificadas'}</p>
             </div>
             <div className="flex flex-col gap-2">
               {balance.energy.map((e) => (
@@ -111,7 +111,7 @@ export function EnergyDomainsCard({
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-[10px] text-neutral-600">
+            <p className="mt-2 text-[11px] text-neutral-600">
               {fresh
                 ? 'Barras = días de WOD que el bloque prescribe por sistema. Se irán llenando según entrenes.'
                 : `Adherencia del bloque: ${adherencePct}%. Los días de benchmark no cuentan aquí.`}

@@ -117,7 +117,7 @@ export function SleepTab({
             </div>
             <div className="mt-1.5 flex gap-1">
               {days.map((d) => (
-                <span key={d.iso} className={`flex-1 text-center text-[10px] ${d.iso === dayIso ? 'font-semibold text-white' : 'text-neutral-600'}`}>
+                <span key={d.iso} className={`flex-1 text-center text-[11px] ${d.iso === dayIso ? 'font-semibold text-white' : 'text-neutral-600'}`}>
                   {initialOf(d.iso)}
                 </span>
               ))}

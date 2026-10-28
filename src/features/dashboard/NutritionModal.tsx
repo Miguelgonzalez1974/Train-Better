@@ -265,7 +265,7 @@ export function NutritionModal({ profile, history, bodyweightLog, onClose, onOpe
                   title={`${NUTRITION_DAY_LABEL[d.type]}: ${n.carbsG.min}-${n.carbsG.max} g de carbohidrato`}
                 >
                   <span className="text-[11px] font-bold">{d.letter}</span>
-                  <span className="num text-[10px] leading-tight">
+                  <span className="num text-[11px] leading-tight">
                     {n.carbsG.min}-{n.carbsG.max}
                   </span>
                 </div>

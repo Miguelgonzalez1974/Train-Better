@@ -63,7 +63,7 @@ export function ProgramRing({ row }: { row: ProgressRow }) {
       ) : (
         <p className="w-full truncate text-[11px] leading-tight text-neutral-400">{row.label}</p>
       )}
-      {phase && <p className="w-full truncate text-[10px] leading-tight text-neutral-600">{phase}</p>}
+      {phase && <p className="w-full truncate text-[11px] leading-tight text-neutral-600">{phase}</p>}
     </div>
   );
 }

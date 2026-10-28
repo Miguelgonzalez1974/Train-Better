@@ -224,7 +224,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                     : 'bg-white/[0.03] hover:bg-white/[0.06]'
               }`}
             >
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
               <span className="relative my-0.5 flex w-full justify-center" style={{ height: BAR_H }} aria-hidden="true">
                 {day.band && (
                   <span

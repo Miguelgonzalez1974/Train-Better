@@ -80,7 +80,7 @@ export function CompleteSessionPanel({
                 <li key={label} className="flex items-center gap-2">
                   {i > 0 && <span className={`h-px w-5 ${step >= i ? 'bg-brand-orange' : 'bg-white/15'}`} />}
                   <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
                       done ? 'bg-brand-orange text-black' : current ? 'bg-brand-orange/20 text-brand-orange ring-1 ring-brand-orange' : 'bg-white/10 text-neutral-500'
                     }`}
                   >
@@ -114,7 +114,7 @@ export function CompleteSessionPanel({
                 {isDouble ? `WOD · parte ${part} de 2` : 'WOD'}
                 {targets[part] && <span className="ml-2 font-normal text-neutral-500">objetivo {targets[part]}</span>}
                 {clockParts.includes(part) && (
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] font-medium text-neutral-300">
                     <Timer size={10} aria-hidden /> del reloj
                   </span>
                 )}

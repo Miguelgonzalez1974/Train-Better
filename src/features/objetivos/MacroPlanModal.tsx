@@ -68,7 +68,7 @@ export function MacroPlanModal({ macro, prs, onClose }: MacroPlanModalProps) {
               <MapPin size={13} strokeWidth={2.5} className="-mt-1 text-white drop-shadow-[0_0_3px_rgba(0,0,0,0.9)]" />
             </div>
           </div>
-          {isBeforeStart && <p className="-mt-2 text-center text-[10px] text-neutral-500">Aún no ha empezado</p>}
+          {isBeforeStart && <p className="-mt-2 text-center text-[11px] text-neutral-500">Aún no ha empezado</p>}
         </div>
 
         {/* Leyenda de tipos de fase */}
@@ -114,9 +114,9 @@ export function MacroPlanModal({ macro, prs, onClose }: MacroPlanModalProps) {
                     phase.phaseIndex === plan.currentPhaseIndex ? 'border-white/30 bg-white/[0.06]' : 'border-brand-border'
                   }`}
                 >
-                  <span className="text-[9px] uppercase tracking-wide text-neutral-500">{Math.round(phase.percent * 100)}%</span>
+                  <span className="text-[11px] uppercase tracking-wide text-neutral-500">{Math.round(phase.percent * 100)}%</span>
                   <span className="text-sm font-semibold text-white">{phase.referenceLoadKg}</span>
-                  <span className="text-[9px] text-neutral-600">kg</span>
+                  <span className="text-[11px] text-neutral-600">kg</span>
                 </div>
               ))}
           </div>

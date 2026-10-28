@@ -155,11 +155,11 @@ export function DayRing({
     <section>
       {checkIn && <div className="mb-4">{checkIn}</div>}
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3.5">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
         {/* Preparación */}
         <div className="flex flex-col items-end text-right">
           <button onClick={() => onOpenTab('preparacion')} className="flex flex-col items-end">
-            <span className="whitespace-nowrap text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: prepTint }}>
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: prepTint }}>
               Preparación
             </span>
             <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: prepTint }}>
@@ -169,7 +169,7 @@ export function DayRing({
           </button>
           {hasLoad ? (
             <button onClick={() => onOpenTab('carga')} className="mt-3 flex flex-col items-end">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-neutral-500">Carga</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500">Carga</span>
               <span className="flex items-center gap-1 text-sm font-semibold text-neutral-200">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ZONE_COLOR[acwr.zone] }} />
                 {ZONE_WORD[acwr.zone]}
@@ -181,7 +181,7 @@ export function DayRing({
         </div>
 
         {/* Los dos anillos */}
-        <div className="relative aspect-square w-[min(50vw,10.25rem)]">
+        <div className="relative aspect-square w-[min(44vw,9.5rem)]">
           <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" role="img" aria-label={`Preparación ${total ?? 'sin datos'}, esfuerzo ${shown ?? 'sin datos'}, objetivo ${target.low} a ${target.high}`}>
             <g transform="rotate(-90 50 50)">
               {/* Objetivo: corchete fino por fuera, de tu mínimo a tu máximo */}
@@ -212,14 +212,14 @@ export function DayRing({
             </g>
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-neutral-500">{centerLabel}</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500">{centerLabel}</span>
           </div>
         </div>
 
         {/* Esfuerzo y objetivo */}
         <div className="flex flex-col items-start text-left">
           <button onClick={() => onOpenTab('esfuerzo')} className="flex flex-col items-start">
-            <span className="whitespace-nowrap text-[9px] font-semibold uppercase tracking-[0.08em]" style={{ color: EFFORT }}>
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: EFFORT }}>
               Esfuerzo
             </span>
             <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: beyond > 0 ? OVER : EFFORT }}>
@@ -227,7 +227,7 @@ export function DayRing({
             </span>
           </button>
           <button onClick={() => onOpenTab('esfuerzo')} className="mt-3 flex flex-col items-start">
-            <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-neutral-500">Objetivo</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500">Objetivo</span>
             <span className="num text-sm font-semibold text-neutral-200">
               {target.low}–{target.high}
             </span>

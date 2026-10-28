@@ -331,7 +331,7 @@ export function Objetivos() {
               <span className="relative">
                 <tab.Icon size={17} strokeWidth={2.25} className={isActive ? 'text-white' : ''} />
                 {count > 0 && (
-                  <span className="absolute -right-2.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-brand-gold px-0.5 text-[9px] font-bold text-black">
+                  <span className="absolute -right-2.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-brand-gold px-0.5 text-[11px] font-bold text-black">
                     {count}
                   </span>
                 )}
@@ -479,12 +479,12 @@ export function Objetivos() {
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-white">{m.label}</p>
                           {activeProgram ? (
-                            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-300">
+                            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-300">
                               <PauseCircle size={10} strokeWidth={2.5} />
                               En pausa
                             </span>
                           ) : (
-                            <span className="shrink-0 whitespace-nowrap rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-semibold text-good">Activo ahora</span>
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-semibold text-good">Activo ahora</span>
                           )}
                         </div>
                         <p className="text-xs text-neutral-400">
@@ -519,7 +519,7 @@ export function Objetivos() {
                         {m.phaseWeeks[0]}s acum. · {m.phaseWeeks[1]}s intens. · {m.phaseWeeks[2]}s pico · {m.phaseWeeks[3]}s descarga
                       </p>
                     )}
-                    <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                    <div className="flex items-center justify-between text-[11px] text-neutral-500">
                       <span>
                         Semana {weekNow} de {totalWeeks}
                       </span>
@@ -546,7 +546,7 @@ export function Objetivos() {
                     <p className="text-sm font-medium text-neutral-200">{m.label}</p>
                     <p className="text-xs text-neutral-500">Empieza en {daysRemaining(m.startDate)} días</p>
                   </div>
-                  <span className="rounded-full bg-info/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-info">Próximo</span>
+                  <span className="rounded-full bg-info/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-info">Próximo</span>
                   <button
                     onClick={() => setPlanMacro(m)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-gold/40 text-brand-gold transition-colors duration-200 hover:bg-brand-gold/10"
@@ -575,7 +575,7 @@ export function Objetivos() {
                   <Check size={12} strokeWidth={2.5} />
                 </span>
                 <p className="flex-1 text-xs text-neutral-500">{m.label}</p>
-                <span className="text-[10px] text-neutral-600">Finalizado</span>
+                <span className="text-[11px] text-neutral-600">Finalizado</span>
                 <button
                   onClick={() => deleteMacro(m.id)}
                   aria-label={`Eliminar ${m.label}`}
@@ -802,7 +802,7 @@ export function Objetivos() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-white">{meta.label}</p>
-                          <span className="rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-semibold text-good">
+                          <span className="rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-semibold text-good">
                             Activo ahora
                           </span>
                         </div>
@@ -826,8 +826,8 @@ export function Objetivos() {
                   </div>
                   {todayFormat && (
                     <div className="ml-1.5 mt-2.5 flex items-center gap-1.5">
-                      <span className="text-[10px] text-neutral-500">Hoy:</span>
-                      <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-200">
+                      <span className="text-[11px] text-neutral-500">Hoy:</span>
+                      <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-200">
                         {todayFormat}
                       </span>
                     </div>
@@ -848,7 +848,7 @@ export function Objetivos() {
                       {liftsLabel} · empieza en {daysRemaining(p.startDate)} días
                     </p>
                   </div>
-                  <span className="rounded-full bg-info/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-info">Próximo</span>
+                  <span className="rounded-full bg-info/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-info">Próximo</span>
                   <button
                     onClick={() => setProgramDraft(p)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5"
@@ -873,7 +873,7 @@ export function Objetivos() {
                 <p className="flex-1 text-xs text-neutral-500">
                   {meta.label} — {liftsLabel}
                 </p>
-                <span className="text-[10px] text-neutral-600">Finalizado</span>
+                <span className="text-[11px] text-neutral-600">Finalizado</span>
                 <button
                   onClick={() => deleteStrengthProgram(p.id)}
                   aria-label="Eliminar programa"
@@ -1208,7 +1208,7 @@ export function Objetivos() {
                     {meta.label}
                     {movement ? ` — ${movement.name}` : ''}
                   </p>
-                  <span className="text-[10px] text-neutral-600">Vencido</span>
+                  <span className="text-[11px] text-neutral-600">Vencido</span>
                   <button
                     onClick={() => setGoalDraft(g)}
                     aria-label="Editar objetivo"
@@ -1242,7 +1242,7 @@ export function Objetivos() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white">{meta.label}</p>
                         {isUrgent && (
-                          <span className="flex items-center gap-1.5 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warn">
+                          <span className="flex items-center gap-1.5 rounded-full bg-warn/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warn">
                             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warn" />
                             {remaining === 0 ? 'Hoy' : remaining === 1 ? '1 día' : `${remaining} días`}
                           </span>
@@ -1271,7 +1271,7 @@ export function Objetivos() {
                   </div>
                 </div>
                 <div className="ml-1.5 mt-2.5">
-                  <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                  <div className="flex items-center justify-between text-[11px] text-neutral-500">
                     <span>
                       {row?.sublabel} · <span className="capitalize">{g.emphasis}</span>
                     </span>

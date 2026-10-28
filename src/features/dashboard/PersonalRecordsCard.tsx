@@ -52,7 +52,7 @@ function TrajectoryRowView({ row, macroStartIso }: { row: TrajectoryRow; macroSt
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-[13px] font-semibold text-white">{row.label}</p>
         <p className="shrink-0 text-sm font-bold text-white">
-          {row.prog.currentKg} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+          {row.prog.currentKg} <span className="text-[11px] font-normal text-neutral-500">kg</span>
         </p>
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
@@ -119,7 +119,7 @@ export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso, bodywei
       <div className="mb-3 flex items-center gap-2">
         <SectionLabel className="flex-1">Fuerza</SectionLabel>
         {gainers > 0 && (
-          <span className="rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-bold text-good">{gainers} subiendo</span>
+          <span className="rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-bold text-good">{gainers} subiendo</span>
         )}
       </div>
       <div className="grid grid-cols-4 gap-2">
@@ -134,8 +134,8 @@ export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso, bodywei
                 </span>
               )}
               <span className="num text-[15px] font-semibold leading-none text-white">{prs[key]}</span>
-              <span className="text-[9px] text-neutral-500">{bodyweightKg ? `×${times(prs[key], bodyweightKg)}` : 'kg'}</span>
-              <span className="mt-0.5 text-[9px] leading-tight text-neutral-400">{label}</span>
+              <span className="text-[11px] text-neutral-500">{bodyweightKg ? `×${times(prs[key], bodyweightKg)}` : 'kg'}</span>
+              <span className="mt-0.5 text-[11px] leading-tight text-neutral-400">{label}</span>
             </div>
           );
         })}
@@ -148,19 +148,19 @@ export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso, bodywei
       */}
       <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/5 pt-3">
         <div className="flex items-center justify-between rounded-lg bg-brand-surfaceMuted/80 px-3 py-2">
-          <span className="text-[10px] text-neutral-400">Total Olímpico</span>
+          <span className="text-[11px] text-neutral-400">Total Olímpico</span>
           <span className="text-sm font-bold text-white">
-            {prs.snatch + prs.cleanAndJerk} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+            {prs.snatch + prs.cleanAndJerk} <span className="text-[11px] font-normal text-neutral-500">kg</span>
           </span>
         </div>
         <div className="flex items-center justify-between rounded-lg bg-brand-surfaceMuted/80 px-3 py-2">
-          <span className="text-[10px] text-neutral-400">Total de Fuerza</span>
+          <span className="text-[11px] text-neutral-400">Total de Fuerza</span>
           <span className="flex flex-col items-end text-sm font-bold leading-tight text-white">
             <span>
-              {prs.backSquat + prs.benchPress + prs.deadlift} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+              {prs.backSquat + prs.benchPress + prs.deadlift} <span className="text-[11px] font-normal text-neutral-500">kg</span>
             </span>
             {bodyweightKg ? (
-              <span className="text-[10px] font-normal text-neutral-400">×{times(prs.backSquat + prs.benchPress + prs.deadlift, bodyweightKg)} tu peso</span>
+              <span className="text-[11px] font-normal text-neutral-400">×{times(prs.backSquat + prs.benchPress + prs.deadlift, bodyweightKg)} tu peso</span>
             ) : null}
           </span>
         </div>

@@ -78,7 +78,7 @@ function DiaryRow({ entry, sets, onDelete }: { entry: SessionHistoryEntry; sets:
               {weekdayFmt.format(date)} {dayFmt.format(date)}
             </span>
             <span
-              className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+              className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
                 entry.rxOrScaled === 'rx' ? 'bg-brand-gold/20 text-brand-gold' : 'bg-white/10 text-neutral-300'
               }`}
             >
@@ -86,7 +86,7 @@ function DiaryRow({ entry, sets, onDelete }: { entry: SessionHistoryEntry; sets:
             </span>
             <span className="text-[11px] text-neutral-500">RPE {entry.rpe}</span>
             {wodResultsOf(entry).map(({ part, result }) => (
-              <span key={part} className="rounded-md bg-brand-orange/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-orange">
+              <span key={part} className="rounded-md bg-brand-orange/15 px-1.5 py-0.5 text-[11px] font-semibold text-brand-orange">
                 {entry.wodResult2 ? `P${part} ` : ''}
                 {result.value}
               </span>
@@ -174,7 +174,7 @@ export function TrainingDiary({ history, workLog, trainingDatesLog, onDeleteEntr
         ].map((s) => (
           <div key={s.label} className="rounded-lg bg-brand-surfaceMuted/80 px-3 py-2">
             <p className="text-lg font-bold leading-none text-white">{s.value}</p>
-            <p className="mt-1 text-[10px] text-neutral-500">{s.label}</p>
+            <p className="mt-1 text-[11px] text-neutral-500">{s.label}</p>
           </div>
         ))}
       </div>

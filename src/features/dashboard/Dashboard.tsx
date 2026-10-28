@@ -227,7 +227,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               <StructureIcon size={17} strokeWidth={2.25} />
               {goalRows.length > 0 && (
                 <span
-                  className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-bold"
+                  className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[11px] font-bold"
                   style={{ background: structureColor, color: '#171310' }}
                 >
                   {goalRows.length}

@@ -245,7 +245,7 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
                     <p className="text-lg font-bold leading-none text-white">
                       {volumeTrend.thisWeekKg.toLocaleString('es')} <span className="text-xs font-normal text-neutral-500">kg</span>
                     </p>
-                    <p className="mt-0.5 text-[10px] text-neutral-500">esta semana</p>
+                    <p className="mt-0.5 text-[11px] text-neutral-500">esta semana</p>
                   </div>
                   <Sparkline
                     values={volumeSeries.map((p) => p.tonnageKg)}

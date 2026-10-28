@@ -43,10 +43,10 @@ export function MacroRing({ label, value, target, size = 92, compact = false, st
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={`num font-semibold leading-none tracking-tight text-white ${size >= 110 ? 'text-4xl' : compact ? 'text-[11px]' : 'text-2xl'}`}>{value}</span>
-          {!compact && <span className="mt-1 text-[10px] text-neutral-500">de {target} g</span>}
+          {!compact && <span className="mt-1 text-[11px] text-neutral-500">de {target} g</span>}
         </div>
       </div>
-      {!compact && <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>}
+      {!compact && <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>}
     </div>
   );
 }

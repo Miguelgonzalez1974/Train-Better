@@ -32,7 +32,7 @@ export function WeekEffortChart({ points, selectedIso, todayIso, onSelect }: { p
         <div className="pointer-events-none absolute left-7 right-0 top-0" style={{ height: H }} aria-hidden="true">
           {[100, 50, 0].map((g) => (
             <div key={g} className={`absolute inset-x-0 border-t border-white/10 ${g === 0 ? '' : 'border-dashed'}`} style={{ bottom: `${g}%` }}>
-              <span className="num absolute right-full top-0 mr-1.5 -translate-y-1/2 text-[9px] text-neutral-500">{g}</span>
+              <span className="num absolute right-full top-0 mr-1.5 -translate-y-1/2 text-[11px] text-neutral-500">{g}</span>
             </div>
           ))}
         </div>
@@ -52,7 +52,7 @@ export function WeekEffortChart({ points, selectedIso, todayIso, onSelect }: { p
                   {p.real !== null && (
                     <>
                       <span className="absolute inset-x-[22%] bottom-0 rounded-md" style={{ height: `${Math.max(3, p.real)}%`, backgroundColor: over ? OVER : EFFORT }} />
-                      <span className="num absolute inset-x-0 text-center text-[9px] font-bold text-neutral-300" style={{ bottom: `calc(${Math.max(3, p.real)}% + 3px)` }}>
+                      <span className="num absolute inset-x-0 text-center text-[11px] font-bold text-neutral-300" style={{ bottom: `calc(${Math.max(3, p.real)}% + 3px)` }}>
                         {Math.round(p.real)}
                       </span>
                     </>
@@ -69,7 +69,7 @@ export function WeekEffortChart({ points, selectedIso, todayIso, onSelect }: { p
                   )}
                 </span>
                 <span className={`mt-2 text-[11px] font-semibold ${selected ? 'text-white' : 'text-neutral-500'}`}>{initialOf(p.iso)}</span>
-                <span className={`num text-[10px] ${selected ? 'text-neutral-300' : 'text-neutral-600'}`}>{dayNum(p.iso)}</span>
+                <span className={`num text-[11px] ${selected ? 'text-neutral-300' : 'text-neutral-600'}`}>{dayNum(p.iso)}</span>
                 <span className={`mt-1 h-1 w-1 rounded-full ${p.iso === todayIso ? 'bg-white' : 'bg-transparent'}`} aria-hidden="true" />
               </button>
             );

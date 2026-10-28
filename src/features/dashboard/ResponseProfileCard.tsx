@@ -139,9 +139,9 @@ export function ResponseProfileCard({
         <span className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-sm font-semibold text-white">Perfil de respuesta</span>
           {profile.confident ? (
-            <span className="rounded-full bg-brand-neon/15 px-2 py-0.5 text-[10px] font-bold text-brand-neon">activo</span>
+            <span className="rounded-full bg-brand-neon/15 px-2 py-0.5 text-[11px] font-bold text-brand-neon">activo</span>
           ) : (
-            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-neutral-400">
+            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-bold text-neutral-400">
               aprendiendo · {weeks}/{RESPONSE_MIN_WEEKS} sem
             </span>
           )}

@@ -1412,7 +1412,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
               <span>
                 <span className="flex items-center gap-2">
                   <span className="block text-sm font-semibold text-white">Programación del coach</span>
-                  <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">Recomendado</span>
+                  <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[11px] font-semibold text-brand-bg">Recomendado</span>
                 </span>
                 <span className="block text-xs text-neutral-400">Vuelve a lo que toca hoy según tu macrociclo.</span>
               </span>
@@ -1464,7 +1464,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
               <span className="flex items-center gap-2">
                 <CalendarCheck2 size={16} strokeWidth={2.25} className="shrink-0 text-brand-gold" />
                 <span className="text-sm font-semibold text-white">Lo que tocaría hoy</span>
-                <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[10px] font-semibold text-brand-bg">De tu macrociclo</span>
+                <span className="rounded-full bg-brand-gold px-2 py-0.5 text-[11px] font-semibold text-brand-bg">De tu macrociclo</span>
               </span>
               <span className="w-full rounded-lg bg-black/25 px-2.5 py-2 text-xs text-neutral-300">
                 {macroWodPreview[0].format ?? 'WOD del ciclo (en pausa)'}

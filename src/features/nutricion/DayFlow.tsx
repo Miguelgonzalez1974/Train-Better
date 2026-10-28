@@ -40,14 +40,14 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
           <div className="absolute inset-x-0 top-8 h-0.5 rounded-full bg-white/15" />
           {trainingHour !== null && (
             <div className="absolute bottom-4 top-0 border-l-2 border-dashed border-brand-orange/80" style={{ left: `${pos(trainingHour)}%` }}>
-              <span className="absolute -top-0.5 left-1.5 flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold text-brand-orange">
+              <span className="absolute -top-0.5 left-1.5 flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-brand-orange">
                 <Dumbbell size={10} aria-hidden="true" /> {fmt(trainingHour)}
               </span>
             </div>
           )}
           {nowHour !== null && (
             <div className="absolute bottom-5 top-4 w-0.5 rounded-full bg-white/50" style={{ left: `${pos(nowHour)}%` }}>
-              <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[9px] text-neutral-400">ahora</span>
+              <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-neutral-400">ahora</span>
             </div>
           )}
           {meals.map((m) => (
@@ -68,7 +68,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
                   </span>
                 </button>
               </div>
-              <span className="num absolute top-14 -translate-x-1/2 whitespace-nowrap text-[9px] text-neutral-500" style={{ left: `${pos(m.hour)}%` }}>
+              <span className="num absolute top-14 -translate-x-1/2 whitespace-nowrap text-[11px] text-neutral-500" style={{ left: `${pos(m.hour)}%` }}>
                 {fmt(m.hour)}
               </span>
             </Fragment>
@@ -84,7 +84,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
             </div>
           ))}
         </div>
-        <div className="mx-3 mt-0.5 flex justify-between text-[10px] text-neutral-600">
+        <div className="mx-3 mt-0.5 flex justify-between text-[11px] text-neutral-600">
           <span>07:00</span>
           <span>15:00</span>
           <span>23:00</span>

@@ -78,13 +78,13 @@ export function TrendCard({ series }: { series: (days: number) => TrendDay[] }) 
         <div className="flex gap-5">
           <div className="text-right">
             <p className="num text-xl font-semibold leading-none text-white">{(sel ? sel.strain : avgStrain) ?? '—'}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-wide text-neutral-500">Esfuerzo</p>
+            <p className="mt-1 text-[11px] uppercase tracking-wide text-neutral-500">Esfuerzo</p>
           </div>
           <div className="text-right">
             <p className="num text-xl font-semibold leading-none" style={{ color: 'rgb(var(--c-state-good))' }}>
               {(sel ? sel.recovery : avgRecovery) ?? '—'}
             </p>
-            <p className="mt-1 text-[10px] uppercase tracking-wide text-neutral-500">Preparación</p>
+            <p className="mt-1 text-[11px] uppercase tracking-wide text-neutral-500">Preparación</p>
           </div>
         </div>
       </div>
@@ -123,7 +123,7 @@ export function TrendCard({ series }: { series: (days: number) => TrendDay[] }) 
         <p className="py-8 text-center text-xs text-neutral-500">Todavía no hay datos de estos días.</p>
       )}
 
-      <div className="mt-2 flex items-center justify-between text-[10px] text-neutral-600">
+      <div className="mt-2 flex items-center justify-between text-[11px] text-neutral-600">
         <span>{fmtDay(data[0].date)}</span>
         <span className="flex items-center gap-3">
           <span className="flex items-center gap-1.5">

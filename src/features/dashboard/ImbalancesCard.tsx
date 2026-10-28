@@ -20,7 +20,7 @@ function GroupBars({ group }: { group: ImbalanceGroup }) {
         const barColor = bar.flagged ? 'rgb(var(--c-state-low))' : '#d4af37';
         return (
           <div key={bar.label} className="flex flex-1 flex-col items-center gap-1.5">
-            <span className={`text-[10px] font-semibold ${bar.flagged ? 'text-bad' : 'text-white'}`}>
+            <span className={`text-[11px] font-semibold ${bar.flagged ? 'text-bad' : 'text-white'}`}>
               {bar.value !== null ? bar.value : '—'}
             </span>
             {bar.value !== null ? (
@@ -28,7 +28,7 @@ function GroupBars({ group }: { group: ImbalanceGroup }) {
             ) : (
               <div className="w-5 rounded-t border border-dashed border-white/15" style={{ height }} />
             )}
-            <span className="text-center text-[9px] leading-tight text-neutral-500">{bar.label}</span>
+            <span className="text-center text-[11px] leading-tight text-neutral-500">{bar.label}</span>
           </div>
         );
       })}
@@ -44,7 +44,7 @@ function GroupRow({ group }: { group: ImbalanceGroup }) {
     <div className="border-l-2 py-1.5 pl-3" style={{ borderColor: meta.borderColor }}>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <p className="text-[13px] font-semibold text-white">{group.label}</p>
-        <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold ${meta.badgeClass}`}>{meta.label}</span>
+        <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold ${meta.badgeClass}`}>{meta.label}</span>
       </div>
       {hasAnyBarData && <GroupBars group={group} />}
       <p className="text-[11px] leading-relaxed text-neutral-400">{group.note}</p>
@@ -94,13 +94,13 @@ export function ImbalancesCard({
         <span className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-sm font-semibold text-white">Desequilibrios</span>
           {desbalanceCount > 0 && (
-            <span className="rounded-full bg-bad/15 px-2 py-0.5 text-[10px] font-bold text-bad">{desbalanceCount} desbalance{desbalanceCount > 1 ? 's' : ''}</span>
+            <span className="rounded-full bg-bad/15 px-2 py-0.5 text-[11px] font-bold text-bad">{desbalanceCount} desbalance{desbalanceCount > 1 ? 's' : ''}</span>
           )}
           {equilibradoCount > 0 && (
-            <span className="rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-bold text-good">{equilibradoCount} equilibrado{equilibradoCount > 1 ? 's' : ''}</span>
+            <span className="rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-bold text-good">{equilibradoCount} equilibrado{equilibradoCount > 1 ? 's' : ''}</span>
           )}
           {faltanCount > 0 && (
-            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-neutral-400">{faltanCount} sin datos</span>
+            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] font-bold text-neutral-400">{faltanCount} sin datos</span>
           )}
         </span>
         {collapsed ? (

@@ -248,10 +248,10 @@ export function DayStatusRow({ session, planned, target, fit, painFlags, onRemov
               {t.value}
               {t.dot && <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: GOLD }} aria-hidden="true" />}
             </span>
-            <span className="mt-0.5 block truncate text-[10px] font-bold leading-tight text-neutral-400" style={t.color ? { color: t.color } : undefined}>
+            <span className="mt-0.5 block truncate text-[11px] font-bold leading-tight text-neutral-400" style={t.color ? { color: t.color } : undefined}>
               {t.note || ' '}
             </span>
-            <span className="mt-0.5 block truncate text-[9.5px] leading-tight text-neutral-500">{t.label}</span>
+            <span className="mt-0.5 block truncate text-[11px] leading-tight text-neutral-500">{t.label}</span>
           </button>
         ))}
       </div>

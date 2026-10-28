@@ -54,7 +54,7 @@ const greeting = () => {
   return h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches';
 };
 
-const LABEL = 'text-[10.5px] font-semibold uppercase tracking-[0.1em] text-neutral-500';
+const LABEL = 'text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500';
 
 function Section({ icon, label, color, aside, children, className = '' }: { icon: ReactNode; label: string; color?: string; aside?: ReactNode; children: ReactNode; className?: string }) {
   return (

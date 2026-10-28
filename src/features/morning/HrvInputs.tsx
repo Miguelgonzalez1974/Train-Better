@@ -15,7 +15,7 @@ const parse = (text: string): number | null => {
 function Field({ label, unit, value, placeholder, invalid, onChange, mode }: { label: string; unit: string; value: string; placeholder: string; invalid: boolean; onChange: (v: string) => void; mode: 'decimal' | 'numeric' }) {
   return (
     <label className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-neutral-500">{label}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500">{label}</span>
       <span className={`flex items-baseline justify-center gap-1 rounded-lg border bg-white/[0.04] px-1.5 py-1 ${invalid ? 'border-[rgb(var(--c-state-low))]' : 'border-white/10 focus-within:border-white/30'}`}>
         <input
           value={value}
@@ -26,7 +26,7 @@ function Field({ label, unit, value, placeholder, invalid, onChange, mode }: { l
           aria-invalid={invalid}
           className="num w-full min-w-0 bg-transparent text-center text-base font-semibold text-neutral-100 outline-none placeholder:font-normal placeholder:text-neutral-600"
         />
-        <span className="text-[10.5px] text-neutral-500">{unit}</span>
+        <span className="text-[11px] text-neutral-500">{unit}</span>
       </span>
     </label>
   );
@@ -78,7 +78,7 @@ export function HrvInputs({
 
   return (
     <div className="border-t border-white/[0.07] pt-2">
-      <p className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-neutral-500">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-neutral-500">
         <HeartPulse size={12} aria-hidden="true" />
         HRV y pulso
       </p>
@@ -110,7 +110,7 @@ export function HrvInputs({
           }}
         />
       </div>
-      <p className="mt-1 text-[10.5px] leading-snug text-neutral-500" style={line.color ? { color: line.color } : undefined}>
+      <p className="mt-1 text-[11px] leading-snug text-neutral-500" style={line.color ? { color: line.color } : undefined}>
         {line.text}
       </p>
     </div>

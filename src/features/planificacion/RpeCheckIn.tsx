@@ -53,7 +53,7 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
           </span>
           <button
             onClick={() => setEditing(true)}
-            className={`flex shrink-0 items-center gap-1 rounded-md border border-brand-border font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold ${large ? 'px-3 py-2 text-xs' : 'px-1.5 py-0.5 text-[10px]'}`}
+            className={`flex shrink-0 items-center gap-1 rounded-md border border-brand-border font-semibold text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold ${large ? 'px-3 py-2 text-xs' : 'px-1.5 py-0.5 text-[11px]'}`}
           >
             <Pencil size={10} strokeWidth={2.5} />
             Editar
@@ -80,11 +80,11 @@ export function RpeCheckIn({ movementName, topSet, loggedRpe, estimated1rm, onRa
             className={`flex flex-col items-center rounded-lg border border-brand-border bg-white/[0.03] transition-colors duration-200 hover:border-brand-gold hover:bg-white/[0.06] active:bg-white/10 ${large ? 'px-1 py-2.5' : 'px-2.5 py-1.5'}`}
           >
             <span className={`font-bold text-white ${large ? 'text-xl' : 'text-sm'}`}>{rpe}</span>
-            <span className={`text-neutral-400 ${large ? 'text-[10px]' : 'text-[9px]'}`}>{SET_FEEL_LABEL[feelFromRpe(rpe)]}</span>
+            <span className={`text-neutral-400 ${large ? 'text-[11px]' : 'text-[11px]'}`}>{SET_FEEL_LABEL[feelFromRpe(rpe)]}</span>
           </button>
         ))}
       </div>
-      <p className={`mt-2.5 flex items-start gap-1.5 text-neutral-500 ${large ? 'text-xs' : 'text-[10px]'}`}>
+      <p className={`mt-2.5 flex items-start gap-1.5 text-neutral-500 ${large ? 'text-xs' : 'text-[11px]'}`}>
         <Brain size={11} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-neon" />
         Calibra la carga futura de este levantamiento.
       </p>

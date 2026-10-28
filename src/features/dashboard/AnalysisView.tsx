@@ -81,8 +81,8 @@ function StatTile({ value, note, label, labelNode, tone, small, highlight }: Sta
   return (
     <div className={`min-w-0 rounded-xl px-0.5 pb-1.5 pt-2 ${highlight ? 'bg-brand-gold/15' : 'bg-white/[0.035]'}`}>
       <p className={`num truncate font-extrabold leading-tight ${small ? 'pt-px text-[11px]' : 'text-[13px]'} ${tone === 'gold' ? 'text-brand-gold' : 'text-white'}`}>{value}</p>
-      <p className={`mt-0.5 text-[9px] font-bold leading-tight ${TILE_TONE[tone]}`}>{note}</p>
-      <p className="mt-0.5 text-[8.5px] leading-tight text-neutral-500">{labelNode ?? label}</p>
+      <p className={`mt-0.5 text-[11px] font-bold leading-tight ${TILE_TONE[tone]}`}>{note}</p>
+      <p className="mt-0.5 text-[11px] leading-tight text-neutral-500">{labelNode ?? label}</p>
     </div>
   );
 }
@@ -97,7 +97,7 @@ function TabButton({ active, onClick, label, value, hint, hintClass }: { active:
     >
       <span className={`text-[11px] font-semibold ${active ? 'text-white' : 'text-neutral-400'}`}>{label}</span>
       <span className="num text-lg font-bold leading-tight text-white">{value}</span>
-      <span className={`truncate text-[10px] font-semibold ${hintClass}`}>{hint}</span>
+      <span className={`truncate text-[11px] font-semibold ${hintClass}`}>{hint}</span>
     </button>
   );
 }
@@ -357,17 +357,17 @@ export function AnalysisView({
 
             <div className="mt-4 grid grid-cols-[1fr_1px_1fr] gap-3.5 border-t border-white/10 pt-3.5">
               <div>
-                <p className="text-[10px] font-semibold text-neutral-500">Ajuste del coach</p>
+                <p className="text-[11px] font-semibold text-neutral-500">Ajuste del coach</p>
                 <p className={`num text-sm font-bold ${adjust.className}`}>{adjust.text}</p>
                 {adjustRow && adjustRow.source !== null && (
-                  <p className="text-[10px] text-neutral-500">
+                  <p className="text-[11px] text-neutral-500">
                     {adjustRow.reference} → {adjustRow.estimated} kg
                   </p>
                 )}
               </div>
               <div className="bg-white/10" aria-hidden="true" />
               <div>
-                <p className="text-[10px] font-semibold text-neutral-500">Ritmo</p>
+                <p className="text-[11px] font-semibold text-neutral-500">Ritmo</p>
                 <p className={`num text-sm font-bold ${pace.className}`}>{pace.text}</p>
               </div>
             </div>
@@ -411,11 +411,11 @@ export function AnalysisView({
                   <Fragment key={t.label}>
                     {i === 1 && <div className="bg-white/10" aria-hidden="true" />}
                     <div>
-                      <p className="text-[10px] font-semibold text-neutral-500">{t.label}</p>
+                      <p className="text-[11px] font-semibold text-neutral-500">{t.label}</p>
                       <p className="num text-sm font-bold text-white">
-                        {fmtKg(t.kg)} <span className="text-[10px] font-normal text-neutral-500">kg</span>
+                        {fmtKg(t.kg)} <span className="text-[11px] font-normal text-neutral-500">kg</span>
                       </p>
-                      <p className="text-[10px] text-neutral-500">
+                      <p className="text-[11px] text-neutral-500">
                         {bodyweightKg && t.kg > 0 ? `×${comma((t.kg / bodyweightKg).toFixed(1))} tu peso · ` : ''}
                         {t.hint}
                       </p>
@@ -424,7 +424,7 @@ export function AnalysisView({
                 ))}
               </div>
               {!bodyweightKg && (
-                <p className="mt-2 flex items-center gap-1.5 text-[10px] text-neutral-500">
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] text-neutral-500">
                   <Scale size={11} aria-hidden="true" /> Registra tu peso corporal para ver las marcas en veces tu peso.
                 </p>
               )}

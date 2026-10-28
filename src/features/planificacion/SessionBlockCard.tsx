@@ -62,7 +62,7 @@ function StatBox({ value, label }: { value: string | number; label: string }) {
   return (
     <div className="flex flex-col border-l border-white/10 px-4 first:border-l-0 first:pl-0">
       <span className="num whitespace-nowrap text-xl font-extrabold leading-none text-white">{value}</span>
-      <span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{label}</span>
+      <span className="mt-1 text-[11px] font-bold uppercase tracking-wide text-neutral-500">{label}</span>
     </div>
   );
 }
@@ -76,7 +76,7 @@ function SetPlanLine({ plan, waveSize, notation }: { plan: { reps: number; kg: n
       <div className="mt-2 flex flex-col gap-1" aria-label="Olas">
         {waves.map((wave, w) => (
           <div key={w} className="flex items-center gap-2 text-xs text-neutral-400">
-            <span className="w-9 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Ola {w + 1}</span>
+            <span className="w-9 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Ola {w + 1}</span>
             <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
               {wave.map((s, i) => (
                 <li key={i} className="flex items-center gap-1.5">
@@ -163,7 +163,7 @@ function SetsStat({ entry }: { entry: { sets?: number; waveSize?: number } }) {
 
 function FormatBadge({ format }: { format: string }) {
   return (
-    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.06em] text-brand-gold">{format}</span>
+    <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-[0.06em] text-brand-gold">{format}</span>
   );
 }
 
@@ -408,7 +408,7 @@ function BenchmarkWodCard({
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-semibold text-white">{displayMovement.name}</p>
                 {swappedTo && (
-                  <p className="mt-0.5 text-[10px] text-neutral-400">en vez de {getMovementById(movementId)?.name}</p>
+                  <p className="mt-0.5 text-[11px] text-neutral-400">en vez de {getMovementById(movementId)?.name}</p>
                 )}
                 {!swappedTo && entry.benchmarkLoads?.[movementId] ? (
                   <p className="mt-0.5 text-[11px] font-medium text-brand-neon/90">Tu carga: {fmtKgValue(entry.benchmarkLoads[movementId])} kg</p>
@@ -507,7 +507,7 @@ function CustomWodCard({
           return (
             <Fragment key={`${entry.movementId}-${idx}`}>
               {roundLabel && idx % roundSize === 0 && (
-                <p className="pt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-600 first:pt-0">
+                <p className="pt-2 text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-600 first:pt-0">
                   {roundLabel} {idx / roundSize + 1}
                 </p>
               )}
@@ -520,7 +520,7 @@ function CustomWodCard({
                 <div className="min-w-[8rem] flex-1">
                   {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. */}
                   <p className={`${NAME_STEP} break-words`}>{movement.name}</p>
-                  {entry.scaledFrom && <p className="mt-0.5 text-[10px] text-neutral-400">Escalado desde {entry.scaledFrom}</p>}
+                  {entry.scaledFrom && <p className="mt-0.5 text-[11px] text-neutral-400">Escalado desde {entry.scaledFrom}</p>}
                 </div>
                 {entry.reps && (
                   <span className="num ml-auto max-w-full text-right text-sm text-neutral-300 [overflow-wrap:anywhere]">
@@ -1117,7 +1117,7 @@ function MovementSearchPicker({ value, onSelect }: { value: string; onSelect: (m
               className="flex w-full flex-col items-start px-3 py-2 text-left transition-colors duration-200 hover:bg-white/5"
             >
               <span className="text-sm font-medium text-white">{m.name}</span>
-              <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+              <span className="text-[11px] uppercase tracking-wide text-neutral-500">
                 {m.blocks.map((b) => BLOCK_META[b].label).join(' · ')}
               </span>
             </button>
@@ -1361,7 +1361,7 @@ export function SessionBlockCard({
           >
             <BlockTile block={block} size={34} active={indexMode.open} />
             <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>
               {!indexMode.open && indexMode.preview}
             </span>
             <ChevronDown size={14} strokeWidth={2.25} className={`shrink-0 text-neutral-600 transition-transform duration-200 ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />

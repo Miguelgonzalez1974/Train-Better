@@ -7,7 +7,7 @@ function Stat({ value, label, sub }: { value: ReactNode; label: string; sub?: st
     <div className="flex flex-col items-center gap-0.5">
       <p className="num text-2xl font-semibold leading-none tracking-tight text-white">{value}</p>
       <p className="text-[11px] text-neutral-400">{label}</p>
-      {sub && <p className="text-[10px] text-neutral-600">{sub}</p>}
+      {sub && <p className="text-[11px] text-neutral-600">{sub}</p>}
     </div>
   );
 }

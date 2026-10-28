@@ -86,7 +86,7 @@ export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (numbe
             dotClassName={ZONE_SPARKLINE_CLASS[result.zone].dot}
             className="h-10 w-full"
           />
-          <p className="mt-1 text-[10px] text-neutral-500">Tendencia — últimos {trendValues.length} días con datos</p>
+          <p className="mt-1 text-[11px] text-neutral-500">Tendencia — últimos {trendValues.length} días con datos</p>
         </div>
       )}
 
@@ -106,7 +106,7 @@ export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (numbe
               <div className="h-full bg-bad/75" style={{ width: '25%' }} />
             </div>
           </div>
-          <p className="mt-1 whitespace-nowrap text-[10px] text-neutral-600">Vista previa de tu escala de zonas.</p>
+          <p className="mt-1 whitespace-nowrap text-[11px] text-neutral-600">Vista previa de tu escala de zonas.</p>
         </div>
       )}
 
@@ -133,7 +133,7 @@ export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (numbe
             {SCALE_TICKS.map((tick) => (
               <span
                 key={tick}
-                className="absolute top-full mt-1.5 -translate-x-1/2 text-[10px] text-neutral-500"
+                className="absolute top-full mt-1.5 -translate-x-1/2 text-[11px] text-neutral-500"
                 style={{ left: `${(tick / SCALE_MAX) * 100}%` }}
               >
                 {tick}

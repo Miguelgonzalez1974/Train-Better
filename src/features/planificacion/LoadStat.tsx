@@ -51,7 +51,7 @@ export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadS
     return (
       <div className={col}>
         <span className={numClass}>{fmtKgValue(kg)}</span>
-        <span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{loadUnitLabel(movementId, block)}</span>
+        <span className="mt-1 text-[11px] font-bold uppercase tracking-wide text-neutral-500">{loadUnitLabel(movementId, block)}</span>
       </div>
     );
   }
@@ -71,7 +71,7 @@ export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadS
           {fmtKgValue(displayKg)}
           <ChartSpline size={13} strokeWidth={2.5} className="text-brand-neon/70" aria-hidden="true" />
         </span>
-        <span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{todaySet ? 'kg real · ver' : 'kg · ver'}</span>
+        <span className="mt-1 text-[11px] font-bold uppercase tracking-wide text-neutral-500">{todaySet ? 'kg real · ver' : 'kg · ver'}</span>
       </button>
       {open && progress && movementId && (
         <MovementProgressModal

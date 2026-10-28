@@ -148,7 +148,7 @@ export function OnboardingWizard({ onDone }: OnboardingWizardProps) {
                     }`}
                   >
                     <span className="text-xl font-bold">{d}</span>
-                    <span className="text-[10px] text-neutral-500">días</span>
+                    <span className="text-[11px] text-neutral-500">días</span>
                   </button>
                 ))}
               </div>

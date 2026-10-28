@@ -113,7 +113,7 @@ function WodPreview({ results }: { results: SessionBlockResult[] }) {
             <div className={PREVIEW_FIG}>
               {kind && (
                 // Puede partirse en varias líneas: si el formato entero cae aquí ("4 sets cada 3 min for time, carga ascendente") no debe salirse de la fila.
-                <span className="max-w-full text-[10px] font-extrabold uppercase tracking-[0.06em] text-brand-gold">{kind}</span>
+                <span className="max-w-full text-[11px] font-extrabold uppercase tracking-[0.06em] text-brand-gold">{kind}</span>
               )}
             </div>
             {detail && <p className="mt-0.5 truncate text-xs text-neutral-500">{detail}</p>}

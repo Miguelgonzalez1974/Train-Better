@@ -70,7 +70,7 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
                       style={{ height: `${pct}%` }}
                     />
                   </div>
-                  <span className={`text-[9px] ${isToday ? 'font-bold text-brand-neon' : 'text-neutral-600'}`}>{dayNum}</span>
+                  <span className={`text-[11px] ${isToday ? 'font-bold text-brand-neon' : 'text-neutral-600'}`}>{dayNum}</span>
                 </div>
               );
             })}

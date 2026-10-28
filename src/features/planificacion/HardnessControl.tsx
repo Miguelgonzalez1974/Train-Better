@@ -98,14 +98,14 @@ export function HardnessSheet({ profile, history, session, target, strainBias, t
               className={`flex flex-col items-center rounded-xl border-[1.5px] px-1 py-2.5 transition-colors ${level === l ? 'border-brand-orange bg-brand-orange/10' : 'border-transparent bg-white/[0.06] hover:bg-white/10'}`}
             >
               <span className="text-base font-bold text-white">{l === 0 ? 'Normal' : `+${l}`}</span>
-              <span className="text-[10px] font-semibold text-neutral-500">{l === 0 ? 'como programado' : mode === 'volume' ? (l === 1 ? 'un poco más' : 'bastante más') : l === 1 ? '+2,5 % carga' : '+5 % carga'}</span>
+              <span className="text-[11px] font-semibold text-neutral-500">{l === 0 ? 'como programado' : mode === 'volume' ? (l === 1 ? 'un poco más' : 'bastante más') : l === 1 ? '+2,5 % carga' : '+5 % carga'}</span>
             </button>
           ))}
         </div>
 
         {current.strain !== null && target && (
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-500">Esfuerzo previsto</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">Esfuerzo previsto</p>
             <div className="relative my-2 h-3 rounded-full bg-white/[0.07]">
               <div
                 className="absolute inset-y-0 rounded-full border border-brand-neon/50 bg-brand-neon/25"
@@ -118,7 +118,7 @@ export function HardnessSheet({ profile, history, session, target, strainBias, t
                 aria-hidden="true"
               />
             </div>
-            <div className="flex justify-between text-[10px] text-neutral-500">
+            <div className="flex justify-between text-[11px] text-neutral-500">
               <span>0</span>
               <span>
                 objetivo {target.low}–{target.high}
@@ -138,7 +138,7 @@ export function HardnessSheet({ profile, history, session, target, strainBias, t
           <ul className="border-t border-white/10">
             {hardnessChanges(level as 1 | 2, mode).map((c) => (
               <li key={c.label} className="flex gap-3 border-b border-white/10 py-2 text-[13px]">
-                <span className="w-[74px] shrink-0 pt-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-neutral-500">{c.label}</span>
+                <span className="w-[74px] shrink-0 pt-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-neutral-500">{c.label}</span>
                 <span className="text-neutral-300">{c.text}</span>
               </li>
             ))}

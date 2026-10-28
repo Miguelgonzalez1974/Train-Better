@@ -123,7 +123,7 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
                     <div className="w-full rounded-md transition-all duration-500" style={{ height: `${Math.max(12, d.score)}%`, background: recoveryColor(d.score) }} />
                   )}
                 </div>
-                <span className="text-[10px] text-neutral-500">{DAY_INITIAL[weekday]}</span>
+                <span className="text-[11px] text-neutral-500">{DAY_INITIAL[weekday]}</span>
               </div>
             );
           })}
