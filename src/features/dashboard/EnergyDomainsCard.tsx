@@ -8,7 +8,7 @@ const SYSTEM_COLOR: Record<EnergySystem, string> = {
   'base-aerobica': '#38bdf8',
   umbral: '#d4af37',
   potencia: '#fb7185',
-  recuperacion: '#34d399',
+  recuperacion: '#4ade80',
 };
 
 const TRIFECTA_COLOR = '#a78bfa';

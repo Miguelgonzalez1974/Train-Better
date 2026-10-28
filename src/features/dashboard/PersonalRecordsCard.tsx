@@ -20,7 +20,7 @@ export const PR_ROWS: { key: keyof PersonalRecords; label: string }[] = [
 
 const TREND_META: Record<PrTrendDirection, { Icon: typeof TrendingUp; className: string }> = {
   subida: { Icon: TrendingUp, className: 'text-brand-neon' },
-  bajada: { Icon: TrendingDown, className: 'text-brand-orange' },
+  bajada: { Icon: TrendingDown, className: 'text-warn' },
   estable: { Icon: Minus, className: 'text-neutral-500' },
 };
 
@@ -41,12 +41,12 @@ function fmtDate(iso: string): string {
 }
 
 const GAIN = { stroke: 'stroke-brand-neon', area: 'fill-brand-neon/10', dot: 'fill-brand-neon' };
-const LOSS = { stroke: 'stroke-brand-orange', area: 'fill-brand-orange/10', dot: 'fill-brand-orange' };
+const LOSS = { stroke: 'stroke-warn', area: 'fill-warn/10', dot: 'fill-warn' };
 const FLAT = { stroke: 'stroke-neutral-500', area: 'fill-white/[0.04]', dot: 'fill-neutral-500' };
 
 function TrajectoryRowView({ row, macroStartIso }: { row: TrajectoryRow; macroStartIso?: string }) {
   const c = row.prog.deltaKg > 0 ? GAIN : row.prog.deltaKg < 0 ? LOSS : FLAT;
-  const deltaClass = row.prog.deltaKg > 0 ? 'text-brand-neon' : row.prog.deltaKg < 0 ? 'text-brand-orange' : 'text-neutral-500';
+  const deltaClass = row.prog.deltaKg > 0 ? 'text-brand-neon' : row.prog.deltaKg < 0 ? 'text-warn' : 'text-neutral-500';
   return (
     <div className="border-l-2 border-white/10 py-1.5 pl-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -67,7 +67,7 @@ function TrajectoryRowView({ row, macroStartIso }: { row: TrajectoryRow; macroSt
           )}
         </span>
         {macroStartIso && row.prog.sinceDeltaKg != null && row.prog.sinceDeltaKg !== 0 && (
-          <span className={row.prog.sinceDeltaKg > 0 ? 'text-brand-neon' : 'text-brand-orange'}>
+          <span className={row.prog.sinceDeltaKg > 0 ? 'text-brand-neon' : 'text-warn'}>
             {fmtDelta(row.prog.sinceDeltaKg)} <span className="text-neutral-500">este bloque</span>
           </span>
         )}
@@ -119,7 +119,7 @@ export function PersonalRecordsCard({ prs, trends, prLog, macroStartIso, bodywei
       <div className="mb-3 flex items-center gap-2">
         <SectionLabel className="flex-1">Fuerza</SectionLabel>
         {gainers > 0 && (
-          <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">{gainers} subiendo</span>
+          <span className="rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-bold text-good">{gainers} subiendo</span>
         )}
       </div>
       <div className="grid grid-cols-4 gap-2">

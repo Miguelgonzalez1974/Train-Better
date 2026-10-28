@@ -146,7 +146,7 @@ export function SeasonPlannerModal({ open, profile, initialTargetDate, onClose, 
         )}
 
         {rangeTooShort && (
-          <p className="rounded-lg border border-brand-orange/40 bg-brand-orange/[0.06] p-3 text-xs text-brand-orange">
+          <p className="rounded-lg border border-warn/40 bg-warn/[0.06] p-3 text-xs text-warn">
             El rango es demasiado corto para una temporada. Crea un macrociclo suelto con el botón «Nuevo».
           </p>
         )}
@@ -206,7 +206,7 @@ export function SeasonPlannerModal({ open, profile, initialTargetDate, onClose, 
             ))}
 
             {overlap && (
-              <p className="rounded-lg border border-brand-orange/40 bg-brand-orange/[0.06] p-3 text-xs text-brand-orange">
+              <p className="rounded-lg border border-warn/40 bg-warn/[0.06] p-3 text-xs text-warn">
                 Algún bloque se solapa con un macrociclo que ya tienes. Ajusta la fecha de inicio o borra el
                 macrociclo que estorba antes de guardar.
               </p>

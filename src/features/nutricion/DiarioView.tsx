@@ -199,7 +199,7 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
                 <button
                   onClick={() => updatePrefs((p) => withoutExtra(p, iso, entry.id))}
                   aria-label="Quitar"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-bad/10 hover:text-bad"
                 >
                   <X size={15} />
                 </button>

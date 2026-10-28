@@ -57,8 +57,8 @@ export function AdminInviteUser() {
           {status === 'sending' ? 'Enviando...' : 'Invitar'}
         </button>
       </form>
-      {status === 'sent' && <p className="text-xs text-emerald-400">Invitación enviada.</p>}
-      {status === 'error' && <p className="text-xs text-red-400">{errorMsg}</p>}
+      {status === 'sent' && <p className="text-xs text-good">Invitación enviada.</p>}
+      {status === 'error' && <p className="text-xs text-bad">{errorMsg}</p>}
     </div>
   );
 }

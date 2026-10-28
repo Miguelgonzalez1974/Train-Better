@@ -36,7 +36,7 @@ const HAND_TAB_LABEL: Record<NutritionDayType, string> = { descanso: 'Descanso',
 const TREND_STYLE: Record<WeightTrendStatus, string> = {
   'sin-datos': 'text-neutral-400',
   rapido: 'text-brand-orange',
-  'en-objetivo': 'text-emerald-400',
+  'en-objetivo': 'text-good',
   lento: 'text-brand-gold',
   'sin-perdida': 'text-brand-gold',
 };
@@ -106,9 +106,9 @@ function HandGuide({
               {m.tag && <p className="text-[11px] text-neutral-500">{m.tag}</p>}
             </div>
             <div className="flex flex-wrap gap-1.5 text-xs text-neutral-200">
-              <span className="flex items-center gap-1 rounded-md bg-red-400/10 px-2 py-1"><Hand size={13} className="text-red-300" aria-hidden="true" />{formatServing(m.palms, 'palma', 'palmas')}</span>
+              <span className="flex items-center gap-1 rounded-md bg-bad/10 px-2 py-1"><Hand size={13} className="text-bad" aria-hidden="true" />{formatServing(m.palms, 'palma', 'palmas')}</span>
               <span className="flex items-center gap-1 rounded-md bg-brand-gold/10 px-2 py-1"><Grab size={13} className="text-brand-gold" aria-hidden="true" />{formatServing(m.fists, 'puño', 'puños')}</span>
-              {m.thumb && <span className="flex items-center gap-1 rounded-md bg-emerald-400/10 px-2 py-1"><ThumbsUp size={13} className="text-emerald-300" aria-hidden="true" />1 pulgar</span>}
+              {m.thumb && <span className="flex items-center gap-1 rounded-md bg-good/10 px-2 py-1"><ThumbsUp size={13} className="text-good" aria-hidden="true" />1 pulgar</span>}
             </div>
           </li>
         ))}

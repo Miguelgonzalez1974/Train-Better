@@ -14,7 +14,7 @@ const NEUTRAL = '#525252';
 export const ZONE_TOKEN: Record<AcwrResult['zone'], string> = {
   baja: '--c-state-cool',
   optima: '--c-state-good',
-  moderada: '--c-state-hot',
+  moderada: '--c-state-mid',
   alta: '--c-state-low',
 };
 export const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
@@ -243,7 +243,7 @@ export function DayRing({
           <button
             onClick={onAdjust}
             className="flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-colors duration-200 hover:bg-white/5"
-            style={{ borderColor: 'rgb(var(--c-over) / 0.6)', color: OVER }}
+            style={{ borderColor: 'rgb(var(--c-state-mid) / 0.6)', color: OVER }}
           >
             Ajustar sesión <ArrowRight size={13} aria-hidden="true" />
           </button>

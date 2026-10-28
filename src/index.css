@@ -23,15 +23,14 @@
   --c-brand-gold-soft: 233 207 122;
   --c-brand-neon: 74 222 128;
   --c-brand-neon-soft: 134 239 172;
-  /* Colores de ESTADO (recuperación, carga): bien / regular / mal / poca carga. En claro se oscurecen para que el texto y
-     los anillos se lean sobre fondo blanco. */
-  --c-state-good: 52 211 153;
+  /* Colores de ESTADO: UN tono por significado en toda la app. bien (verde, el mismo que el "hecho" de marca) / atención
+     (ámbar: te pasas un poco, molestia, aviso) / mal (rojo) / información (azul: poca carga, datos neutros). El naranja de
+     marca queda solo para acciones y el dorado para el coach. En claro se oscurecen para leerse sobre fondo blanco. En las
+     clases de Tailwind: good / warn / bad / info (text-good, bg-warn/15, border-bad/30…). */
+  --c-state-good: 74 222 128;
   --c-state-mid: 251 191 36;
   --c-state-low: 248 113 113;
   --c-state-cool: 56 189 248;
-  --c-state-hot: 249 115 22;
-  /* Esfuerzo del Dashboard: coral para el tramo que rebasa el máximo del objetivo (el esfuerzo en sí es azul, --c-state-cool). */
-  --c-over: 255 107 74;
   /* Sueño: un violeta suave, para que no se confunda con el azul del esfuerzo. */
   --c-sleep: 167 139 250;
 }
@@ -58,36 +57,15 @@
   --c-brand-orange-dark: 249 115 22;
   --c-brand-gold: 154 110 22;
   --c-brand-gold-soft: 133 95 20;
-  --c-brand-neon: 22 163 74;
+  /* El mismo verde para el "hecho" de marca y el estado "bien": lo bastante oscuro para leerse sobre blanco y lo bastante claro
+     para llevar texto negro encima (botones verdes). */
+  --c-brand-neon: 22 140 68;
   --c-brand-neon-soft: 21 128 61;
-  --c-state-good: 5 150 105;
+  --c-state-good: 22 140 68;
   --c-state-mid: 180 83 9;
-  --c-state-low: 220 38 38;
-  --c-state-cool: 3 118 180;
-  --c-state-hot: 234 88 12;
-  --c-over: 200 45 20;
+  --c-state-low: 200 30 30;
+  --c-state-cool: 3 105 161;
   --c-sleep: 109 40 217;
-}
-
-/* Tema claro: los colores de estado pálidos (verde, ámbar, rojo, azul 200-400 de Tailwind) están pensados para fondo oscuro y
-   sobre blanco no se leen (contraste 1,2 a 2:1). Aquí se oscurecen al tono 700, que da >= 4,5:1. Solo texto; los fondos con
-   transparencia (bg-emerald-400/15...) se quedan como están. */
-:root[data-theme='light'] .text-emerald-300,
-:root[data-theme='light'] .text-emerald-400 {
-  color: rgb(4 120 87);
-}
-:root[data-theme='light'] .text-amber-300,
-:root[data-theme='light'] .text-amber-400 {
-  color: rgb(180 83 9);
-}
-:root[data-theme='light'] .text-red-200\/80,
-:root[data-theme='light'] .text-red-300,
-:root[data-theme='light'] .text-red-400 {
-  color: rgb(185 28 28);
-}
-:root[data-theme='light'] .text-sky-300,
-:root[data-theme='light'] .text-sky-400 {
-  color: rgb(3 105 161);
 }
 
 /* La página nunca se ensancha en horizontal: un elemento que se sale hacía el documento (y las capas fixed, como el modo

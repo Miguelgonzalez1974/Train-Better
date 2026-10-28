@@ -28,7 +28,7 @@ interface MovementProgressModalProps {
 }
 
 function pctColor(pct: number): string {
-  if (pct >= 88) return '#39ff14';
+  if (pct >= 88) return 'rgb(var(--c-state-good))';
   if (pct >= 80) return '#cfeecb';
   return '#8a827a';
 }
@@ -74,7 +74,7 @@ function SessionBars({ series, oneRepMax }: { series: MovementSessionPoint[]; on
         const showPct = p.pct != null && (i === 0 || i === n - 1);
         return (
           <g key={p.date}>
-            <rect x={x} y={top} width={barW} height={Math.max(BASELINE - top, 2)} rx="3" fill={recent ? '#39ff14' : '#2f6b2a'} />
+            <rect x={x} y={top} width={barW} height={Math.max(BASELINE - top, 2)} rx="3" fill={recent ? 'rgb(var(--c-state-good))' : '#2f6b2a'} />
             {showPct && (
               <text x={x + barW / 2} y={top - 5} textAnchor="middle" fontSize="11" fill="#cfeecb">
                 {p.pct}%
@@ -154,7 +154,7 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
             {prProgress && gained !== 0 && (
               <span
                 className={`ml-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                  gained > 0 ? 'bg-brand-neon/15 text-brand-neon' : 'bg-brand-orange/15 text-brand-orange'
+                  gained > 0 ? 'bg-good/15 text-good' : 'bg-warn/15 text-warn'
                 }`}
               >
                 {gained > 0 ? <TrendingUp size={11} strokeWidth={2.75} /> : <TrendingDown size={11} strokeWidth={2.75} />}
@@ -234,7 +234,7 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
                 <div className="mb-1.5 flex items-center justify-between">
                   <p className="text-[11px] uppercase tracking-wide text-neutral-500">Volumen semanal</p>
                   {volumeTrend.deltaPct != null && volumeTrend.deltaPct !== 0 && (
-                    <span className={`text-[11px] font-semibold ${volumeTrend.deltaPct > 0 ? 'text-brand-neon' : 'text-brand-orange'}`}>
+                    <span className={`text-[11px] font-semibold ${volumeTrend.deltaPct > 0 ? 'text-good' : 'text-warn'}`}>
                       {volumeTrend.deltaPct > 0 ? '+' : ''}
                       {volumeTrend.deltaPct}% vs. semana anterior
                     </span>

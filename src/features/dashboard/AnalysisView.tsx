@@ -31,19 +31,19 @@ const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${comma(Math.a
 function adjustMeta(row: LoadRow | undefined): { text: string; className: string } {
   if (!row || row.source === null) return { text: 'sin datos', className: 'text-neutral-500' };
   if (row.direction === 'igual') return { text: 'sin cambios', className: 'text-neutral-300' };
-  return { text: `${signed(row.adjustPct)} %`, className: row.direction === 'sube' ? 'text-emerald-400' : 'text-amber-400' };
+  return { text: `${signed(row.adjustPct)} %`, className: row.direction === 'sube' ? 'text-good' : 'text-warn' };
 }
 
 /** El ritmo de progreso de un levantamiento: la tasa mensual, o la palabra cuando no avanza. */
 function paceMeta(lift: LiftResponse | undefined): { text: string; className: string } {
   if (!lift) return { text: 'sin datos', className: 'text-neutral-500' };
-  if (lift.tier === 'regresion') return { text: 'en caída', className: 'text-red-400' };
-  if (lift.tier === 'lento') return { text: 'estancado', className: 'text-amber-400' };
+  if (lift.tier === 'regresion') return { text: 'en caída', className: 'text-bad' };
+  if (lift.tier === 'lento') return { text: 'estancado', className: 'text-warn' };
   const rate = Math.round(lift.ratePerMonthPct * 10) / 10;
-  return { text: `${signed(rate)} %/mes`, className: lift.tier === 'rapido' ? 'text-emerald-400' : 'text-neutral-300' };
+  return { text: `${signed(rate)} %/mes`, className: lift.tier === 'rapido' ? 'text-good' : 'text-neutral-300' };
 }
 
-const HEADLINE_DOT = { good: 'bg-emerald-400', warn: 'bg-amber-400', neutral: 'bg-neutral-500' } as const;
+const HEADLINE_DOT = { good: 'bg-good', warn: 'bg-warn', neutral: 'bg-neutral-500' } as const;
 
 /** Nombre corto de cada levantamiento para caber en una casilla de la fila de arriba. */
 const SHORT_LIFT: Record<string, string> = {
@@ -71,8 +71,8 @@ interface StatTileProps {
 }
 
 const TILE_TONE: Record<StatTileProps['tone'], string> = {
-  good: 'text-emerald-400',
-  warn: 'text-amber-400',
+  good: 'text-good',
+  warn: 'text-warn',
   neutral: 'text-neutral-400',
   gold: 'text-brand-gold',
 };
@@ -220,12 +220,12 @@ export function AnalysisView({
       ? `RPE: esfuerzo medio de tus sesiones esta semana (${comma(stats.rpeMedioSemana.toFixed(1))}) frente a la media del mes (${comma(stats.rpeMedio.toFixed(1))}). WODs Rx: los que hiciste como estaban prescritos, sin escalar.`
       : null;
 
-  const strengthHint = rising > 0 ? { text: `▲ ${rising} subiendo`, cls: 'text-emerald-400' } : { text: 'estable', cls: 'text-neutral-500' };
+  const strengthHint = rising > 0 ? { text: `▲ ${rising} subiendo`, cls: 'text-good' } : { text: 'estable', cls: 'text-neutral-500' };
   const balanceHint =
     desbalances > 0
-      ? { text: `⚠ ${desbalances} ${desbalances === 1 ? 'desbalance' : 'desbalances'}`, cls: 'text-amber-400' }
+      ? { text: `⚠ ${desbalances} ${desbalances === 1 ? 'desbalance' : 'desbalances'}`, cls: 'text-warn' }
       : equilibrados > 0
-        ? { text: '● bien', cls: 'text-emerald-400' }
+        ? { text: '● bien', cls: 'text-good' }
         : { text: 'sin datos', cls: 'text-neutral-500' };
 
   return (
@@ -308,7 +308,7 @@ export function AnalysisView({
               <div className="flex flex-col items-end gap-1 text-right">
                 <span
                   className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                    evo.prDeltaKg > 0 ? 'bg-brand-neon/15 text-brand-neon' : evo.prDeltaKg < 0 ? 'bg-brand-orange/15 text-brand-orange' : 'bg-white/[0.06] text-neutral-300'
+                    evo.prDeltaKg > 0 ? 'bg-brand-neon/15 text-brand-neon' : evo.prDeltaKg < 0 ? 'bg-warn/15 text-warn' : 'bg-white/[0.06] text-neutral-300'
                   }`}
                 >
                   {signed(Math.round(evo.prDeltaKg * 10) / 10)} kg {range === 'todo' ? 'desde el inicio' : `en ${RANGE_LABEL[range].toLowerCase()}`}

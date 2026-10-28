@@ -4,16 +4,16 @@ const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 
 /** Cómo se llama cada nivel de esfuerzo y cómo se pinta (de verde suave a rojo máximo). */
 const RPE_META: Record<number, { label: string; hint: string; color: string }> = {
-  1: { label: 'Muy suave', hint: 'Apenas lo has notado.', color: '#34d399' },
-  2: { label: 'Muy suave', hint: 'Apenas lo has notado.', color: '#34d399' },
-  3: { label: 'Suave', hint: 'Podrías haber hecho bastante más.', color: '#34d399' },
+  1: { label: 'Muy suave', hint: 'Apenas lo has notado.', color: '#4ade80' },
+  2: { label: 'Muy suave', hint: 'Apenas lo has notado.', color: '#4ade80' },
+  3: { label: 'Suave', hint: 'Podrías haber hecho bastante más.', color: '#4ade80' },
   4: { label: 'Suave', hint: 'Podrías haber hecho bastante más.', color: '#a3e635' },
-  5: { label: 'Moderado', hint: 'Trabajo sólido, con margen de sobra.', color: '#d4af37' },
-  6: { label: 'Moderado', hint: 'Trabajo sólido, con margen de sobra.', color: '#d4af37' },
+  5: { label: 'Moderado', hint: 'Trabajo sólido, con margen de sobra.', color: '#fbbf24' },
+  6: { label: 'Moderado', hint: 'Trabajo sólido, con margen de sobra.', color: '#fbbf24' },
   7: { label: 'Duro', hint: 'Cansado, pero te quedaban unas 3 repeticiones en reserva.', color: '#fb923c' },
   8: { label: 'Muy duro', hint: 'Te quedaban 2 repeticiones, como mucho.', color: '#f97316' },
-  9: { label: 'Casi al límite', hint: 'Te quedaba 1 repetición.', color: '#ef4444' },
-  10: { label: 'Máximo', hint: 'No había una más. Todo fuera.', color: '#ef4444' },
+  9: { label: 'Casi al límite', hint: 'Te quedaba 1 repetición.', color: '#f87171' },
+  10: { label: 'Máximo', hint: 'No había una más. Todo fuera.', color: '#f87171' },
 };
 
 /** Diez botones de color con la descripción del nivel elegido debajo. Lo usan el cierre de sesión y el registro rápido ("Hice otra cosa"). */

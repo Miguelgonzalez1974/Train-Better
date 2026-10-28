@@ -206,9 +206,9 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
           {activePainFlags.map((flag) => (
             <div
               key={flag.id}
-              className="flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-400/5 px-3 py-2 text-sm text-red-300"
+              className="flex items-center gap-2 rounded-lg border border-bad/25 bg-bad/5 px-3 py-2 text-sm text-bad"
             >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-bad" />
               <span className="flex-1">
                 {PAIN_AREA_LABEL[flag.area]} — {flag.until ? `hasta el ${flag.until}` : 'hasta que lo quites'}
               </span>
@@ -216,7 +216,7 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
                 type="button"
                 onClick={() => onRemovePainFlag(flag.id)}
                 title="Quitar aviso"
-                className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-500 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-400"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-500 transition-colors duration-200 hover:bg-bad/10 hover:text-bad"
               >
                 <X size={13} />
               </button>
@@ -249,7 +249,7 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
         )}
       </div>
 
-      <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+      <div className="mt-2 rounded-lg border border-bad/20 bg-bad/5 p-3">
         <p className="text-xs text-neutral-400">
           Empezar en blanco: borra historial de sesiones, sesiones ya registradas y PRs, para elegir libremente el tipo de sesión
           sin datos previos condicionando al Coach IA.
@@ -258,7 +258,7 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
           type="button"
           onClick={handleResetTrainingData}
           disabled={resetting}
-          className="mt-2 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-2 rounded-lg border border-bad/40 px-3 py-1.5 text-xs font-semibold text-bad transition-colors hover:bg-bad/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {resetting ? 'Borrando…' : 'Reiniciar datos de entrenamiento'}
         </button>

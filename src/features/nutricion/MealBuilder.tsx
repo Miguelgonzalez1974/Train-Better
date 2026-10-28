@@ -20,9 +20,9 @@ import { MacroRing } from './MacroRing';
 import { QuantityStepper } from './QuantityStepper';
 
 const STATUS_STYLE = {
-  ok: { box: 'bg-emerald-500/10 text-emerald-300', Icon: CircleCheck },
+  ok: { box: 'bg-good/10 text-good', Icon: CircleCheck },
   low: { box: 'bg-brand-gold/10 text-brand-gold', Icon: CircleAlert },
-  over: { box: 'bg-brand-orange/10 text-brand-orange', Icon: CircleAlert },
+  over: { box: 'bg-warn/10 text-warn', Icon: CircleAlert },
 } as const;
 
 function handRange(x: number): { lo: number; hi: number } {
@@ -150,7 +150,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
           {/* Objetivo de la toma */}
           <div className="rounded-xl border border-brand-border bg-brand-surfaceMuted/60 p-3.5">
             <div className="flex items-center justify-around">
-              <MacroRing label="Proteína" value={totals.protein} target={target.protein} strokeClass="stroke-red-400" />
+              <MacroRing label="Proteína" value={totals.protein} target={target.protein} strokeClass="stroke-bad" />
               <MacroRing label="Hidratos" value={totals.carbs} target={target.carbs} strokeClass="stroke-brand-gold" />
             </div>
             <p className="mt-2.5 flex justify-center" role="status" aria-label={status.text}>
@@ -187,7 +187,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
                         <button
                           onClick={() => commit(items.filter((_, i) => i !== index))}
                           aria-label={`Quitar ${food.name}`}
-                          className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                          className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-bad/10 hover:text-bad"
                         >
                           <X size={15} />
                         </button>
@@ -273,7 +273,7 @@ export function MealBuilder({ meal, autoMeal, excludedFoodIds, customFoods, done
         onClick={onToggleDone}
         aria-pressed={done}
         className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
-          done ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300' : 'border-brand-gold bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20'
+          done ? 'border-good/40 bg-good/15 text-good' : 'border-brand-gold bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20'
         }`}
       >
         {done && <Check size={16} strokeWidth={3} aria-hidden="true" />}

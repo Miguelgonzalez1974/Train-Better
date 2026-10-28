@@ -182,7 +182,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           const isSelected = expanded === index;
           // Cada día cuenta: la barra de esfuerzo (real si ya se hizo, previsto si no) sobre una franja que es el objetivo del día,
           // el número exacto y abajo qué fue: hecho (tic), no registrado (anillo rojo), previsto (fuerza o metcon) o descanso (luna).
-          // El color dice dónde cae respecto al objetivo: dentro (verde si está hecho, dorado si es previsto), te pasas (coral)
+          // El color dice dónde cae respecto al objetivo: dentro (verde si está hecho, gris si es previsto), te pasas (ámbar)
           // o por debajo (azul), con los mismos márgenes que la sesión de hoy.
           const hasBar = day.kind === 'done' || day.kind === 'planned';
           // Solo se juzga contra un objetivo REAL (fijado por la mañana). La franja estimada de los días que faltan es una
@@ -190,14 +190,14 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           const fit = hasBar && day.band && !day.band.estimated ? strainFit(day.strain, day.band).fit : 'dentro';
           const barColor =
             fit === 'se-pasa'
-              ? 'rgb(var(--c-over))'
+              ? 'rgb(var(--c-state-mid))'
               : fit === 'se-queda-corta'
                 ? 'rgb(var(--c-state-cool))'
                 : day.kind === 'done'
                   ? 'rgb(var(--c-brand-neon))'
                   : isToday
                     ? 'rgb(var(--c-brand-orange))'
-                    : 'rgb(var(--c-brand-gold) / 0.85)';
+                    : 'rgb(var(--c-n-300) / 0.7)';
           const y = (v: number) => (Math.min(axis.hi, Math.max(axis.lo, v)) - axis.lo) / Math.max(1, axis.hi - axis.lo);
           const BAR_H = 56;
           const bandWord = day.band ? `objetivo ${day.band.low}–${day.band.high}${day.band.estimated ? ' (estimado)' : ''}` : '';
@@ -243,7 +243,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                 {day.kind === 'done' ? (
                   <Check size={14} strokeWidth={3} className="text-brand-neon" />
                 ) : day.kind === 'missed' ? (
-                  <span className="h-2.5 w-2.5 rounded-full border-2 border-red-500/60" />
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-bad/60" />
                 ) : day.kind === 'planned' ? (
                   // Pesa = fuerza, rayo = metcon, y los días mixtos (fuerza y WOD en equilibrio) llevan los dos juntos.
                   day.emphasis === 'metcon' ? (
@@ -302,7 +302,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                         onDeleteHistoryEntry(dateIso);
                         setExpanded(null);
                       }}
-                      className="mt-2 flex items-center gap-1.5 self-start rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors duration-200 hover:border-red-500/60 hover:bg-red-500/20"
+                      className="mt-2 flex items-center gap-1.5 self-start rounded-lg border border-bad/30 bg-bad/10 px-3 py-1.5 text-xs font-semibold text-bad transition-colors duration-200 hover:border-bad/60 hover:bg-bad/20"
                     >
                       <Trash2 size={14} />
                       Borrar esta sesión

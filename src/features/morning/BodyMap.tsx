@@ -18,7 +18,7 @@ const ZONES: { id: SoreZoneId; x: number; y: number }[] = [
   { id: 'gemelo-d', x: 96, y: 224 },
 ];
 
-export const SORE_COLOR: Record<SoreLevelNum, string> = { 1: 'rgb(var(--c-state-mid))', 2: 'rgb(var(--c-state-hot))' };
+export const SORE_COLOR: Record<SoreLevelNum, string> = { 1: 'rgb(var(--c-state-mid))', 2: 'rgb(var(--c-state-low))' };
 const LEVEL_WORD: Record<SoreLevelNum | 0, string> = { 0: 'sin agujetas', 1: 'agujetas leves', 2: 'agujetas fuertes' };
 
 const BODY_FILL = 'rgb(var(--c-white) / 0.07)';

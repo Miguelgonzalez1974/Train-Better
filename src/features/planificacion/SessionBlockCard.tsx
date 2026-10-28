@@ -1208,7 +1208,7 @@ function EditableBlockEntries({
                 <button
                   onClick={() => onRemoveEntry!(index)}
                   aria-label={`Quitar ${currentMovement?.name ?? 'movimiento'}`}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-400"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors duration-200 hover:bg-bad/10 hover:text-bad"
                 >
                   <Trash2 size={14} strokeWidth={2.25} />
                 </button>

@@ -61,7 +61,7 @@ export function DayFlow({ flow, onOpenMeal, onAddExtra, onRemoveExtra }: DayFlow
                 >
                   <span
                     className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors duration-300 ${
-                      m.done ? 'border-emerald-400 bg-emerald-400' : 'border-white/30 bg-brand-surface hover:border-white'
+                      m.done ? 'border-good bg-good' : 'border-white/30 bg-brand-surface hover:border-white'
                     }`}
                   >
                     {m.done && <Check size={11} strokeWidth={3.5} className="text-black" aria-hidden="true" />}
@@ -126,7 +126,7 @@ function ExtraRow({ extra, onRemove }: { extra: FlowExtra; onRemove: () => void 
       <span className="num shrink-0 text-[11px] text-neutral-500">
         {extra.protein} g · {extra.carbs} g
       </span>
-      <button onClick={onRemove} aria-label={`Quitar ${extra.label}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400">
+      <button onClick={onRemove} aria-label={`Quitar ${extra.label}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-bad/10 hover:text-bad">
         <X size={14} />
       </button>
     </div>

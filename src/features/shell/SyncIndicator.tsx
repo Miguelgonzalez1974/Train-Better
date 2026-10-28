@@ -16,7 +16,7 @@ export function SyncIndicator() {
   return (
     <div
       className={`fixed right-3 top-3 z-40 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-lg backdrop-blur ${
-        isError ? 'bg-red-500/15 text-red-300 ring-1 ring-red-400/40' : 'bg-brand-surface/90 text-neutral-400'
+        isError ? 'bg-bad/15 text-bad ring-1 ring-bad/40' : 'bg-brand-surface/90 text-neutral-400'
       }`}
       title={isError ? 'No se pudo sincronizar — se reintenta en el próximo cambio' : 'Sincronizando…'}
     >

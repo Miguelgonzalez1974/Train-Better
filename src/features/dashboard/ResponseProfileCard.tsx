@@ -12,16 +12,16 @@ import {
 } from '../../engine/responseProfile';
 
 const TIER_META: Record<LiftTier, { label: string; className: string; Icon: typeof TrendingUp }> = {
-  rapido: { label: 'progresa rápido', className: 'text-emerald-400', Icon: TrendingUp },
+  rapido: { label: 'progresa rápido', className: 'text-good', Icon: TrendingUp },
   normal: { label: 'progresa', className: 'text-neutral-300', Icon: TrendingUp },
-  lento: { label: 'estancado', className: 'text-amber-400', Icon: Minus },
-  regresion: { label: 'en caída', className: 'text-red-400', Icon: TrendingDown },
+  lento: { label: 'estancado', className: 'text-warn', Icon: Minus },
+  regresion: { label: 'en caída', className: 'text-bad', Icon: TrendingDown },
 };
 
 const TOLERANCE_META: Record<ToleranceTier, { label: string; className: string }> = {
-  aguanta: { label: 'la aguantas', className: 'text-emerald-400' },
+  aguanta: { label: 'la aguantas', className: 'text-good' },
   regular: { label: 'va regular', className: 'text-neutral-300' },
-  paga: { label: 'la pagas', className: 'text-amber-400' },
+  paga: { label: 'la pagas', className: 'text-warn' },
   'sin-datos': { label: 'aún pocos datos', className: 'text-neutral-500' },
 };
 
@@ -52,10 +52,10 @@ function recoveryLine(rec: ResponseProfile['recovery']): string | null {
 function setFeelDescriptor(c: SetFeelCalibration): { text: string; className: string } {
   const pct = Math.round(Math.abs(c.loadFactor - 1) * 100);
   if (c.feelBias >= 0.6) {
-    return { text: pct > 0 ? `suele costarte · −${pct}% de carga` : 'suele costarte', className: 'text-amber-400' };
+    return { text: pct > 0 ? `suele costarte · −${pct}% de carga` : 'suele costarte', className: 'text-warn' };
   }
   if (c.feelBias <= -0.4) {
-    return { text: pct > 0 ? `te sobra margen · +${pct}% de carga` : 'te sobra margen', className: 'text-emerald-400' };
+    return { text: pct > 0 ? `te sobra margen · +${pct}% de carga` : 'te sobra margen', className: 'text-good' };
   }
   return { text: 'va al punto', className: 'text-neutral-300' };
 }
@@ -73,11 +73,11 @@ function bodyweightLine(bw: ResponseProfile['bodyweight']): { text: string; clas
   if (bw.trend === 'bajando') {
     return {
       text: `Estás perdiendo peso (~${pct}%/semana) durante un bloque de fuerza — el coach baja un poco la carga hasta que se estabilice.`,
-      className: 'text-amber-400',
+      className: 'text-warn',
     };
   }
   if (bw.trend === 'subiendo') {
-    return { text: `Estás ganando peso (~${pct}%/semana) — buena base para ganar fuerza.`, className: 'text-emerald-400' };
+    return { text: `Estás ganando peso (~${pct}%/semana) — buena base para ganar fuerza.`, className: 'text-good' };
   }
   return { text: 'Tu peso corporal se mantiene estable.', className: 'text-neutral-400' };
 }

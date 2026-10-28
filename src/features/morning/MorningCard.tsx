@@ -18,7 +18,6 @@ import { commitMorning, type MorningResult } from './morningCommit';
 const GOOD = 'rgb(var(--c-state-good))';
 const MID = 'rgb(var(--c-state-mid))';
 const LOW = 'rgb(var(--c-state-low))';
-const HOT = 'rgb(var(--c-state-hot))';
 const SLEEP = 'rgb(var(--c-sleep))';
 const DEFAULT_HOURS = 7.5;
 
@@ -34,7 +33,7 @@ const FOLLOW_UP: { value: PainFollowUp; label: string }[] = [
   { value: 'paso', label: 'Ya pasó' },
 ];
 
-const TONE_COLOR: Record<MorningTone, string> = { good: GOOD, mid: MID, warn: HOT, bad: LOW, sleep: SLEEP, info: EFFORT, neutral: 'rgb(var(--c-n-400))' };
+const TONE_COLOR: Record<MorningTone, string> = { good: GOOD, mid: MID, warn: MID, bad: LOW, sleep: SLEEP, info: EFFORT, neutral: 'rgb(var(--c-n-400))' };
 const LINE_ICON: Record<MorningIcon, typeof Check> = {
   'trend-up': TrendingUp,
   'trend-down': TrendingDown,
@@ -299,9 +298,9 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
             </Section>
 
             {activeFlags.map((flag) => (
-              <section key={flag.id} className="flex items-center gap-2.5 rounded-2xl border bg-white/[0.03] px-3 py-2.5" style={{ borderColor: 'rgb(var(--c-state-hot) / 0.4)' }} aria-label={`Molestia: ${PAIN_AREA_LABEL[flag.area]}`}>
+              <section key={flag.id} className="flex items-center gap-2.5 rounded-2xl border bg-white/[0.03] px-3 py-2.5" style={{ borderColor: 'rgb(var(--c-state-mid) / 0.4)' }} aria-label={`Molestia: ${PAIN_AREA_LABEL[flag.area]}`}>
                 <div className="shrink-0">
-                  <p className={`flex items-center gap-1.5 ${LABEL}`} style={{ color: HOT }}>
+                  <p className={`flex items-center gap-1.5 ${LABEL}`} style={{ color: MID }}>
                     <AlertTriangle size={12} aria-hidden="true" />
                     Molestia
                   </p>
@@ -324,7 +323,7 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
                           })
                         }
                         className={`h-[34px] flex-1 rounded-full border px-1 text-[12.5px] font-medium transition-colors duration-200 ${on ? 'font-semibold text-black' : 'border-white/10 text-neutral-400 hover:text-white'}`}
-                        style={on ? { backgroundColor: HOT, borderColor: HOT } : undefined}
+                        style={on ? { backgroundColor: MID, borderColor: MID } : undefined}
                       >
                         {label}
                       </button>

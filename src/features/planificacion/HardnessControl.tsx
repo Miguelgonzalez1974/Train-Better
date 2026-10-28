@@ -9,14 +9,14 @@ import { Modal } from '../shell/Modal';
 
 const FIT_COLOR: Record<PlanFit, string> = {
   dentro: 'rgb(var(--c-state-good))',
-  'se-pasa': 'rgb(var(--c-state-hot))',
+  'se-pasa': 'rgb(var(--c-state-mid))',
   'se-queda-corta': 'rgb(var(--c-state-cool))',
 };
 const FIT_WORD: Record<PlanFit, string> = { dentro: 'dentro de tu objetivo', 'se-pasa': 'por encima de tu objetivo', 'se-queda-corta': 'por debajo de tu objetivo' };
 const TONE: Record<HardnessAdvice['tone'], { box: string; Icon: typeof ThumbsUp; icon: string }> = {
   good: { box: 'bg-brand-neon/10', Icon: ThumbsUp, icon: 'text-brand-neon' },
-  warn: { box: 'bg-amber-400/10', Icon: TriangleAlert, icon: 'text-amber-400' },
-  strong: { box: 'bg-red-400/10', Icon: ShieldAlert, icon: 'text-red-400' },
+  warn: { box: 'bg-warn/10', Icon: TriangleAlert, icon: 'text-warn' },
+  strong: { box: 'bg-bad/10', Icon: ShieldAlert, icon: 'text-bad' },
 };
 const GAUGE_MAX = 80;
 
@@ -160,7 +160,7 @@ export function HardnessSheet({ profile, history, session, target, strainBias, t
           </button>
           <button
             onClick={primary}
-            className={`rounded-full px-4 py-2.5 text-xs font-extrabold text-black transition-colors ${needsConfirm && step === 2 ? 'bg-amber-400' : 'bg-brand-orange'} hover:brightness-110`}
+            className={`rounded-full px-4 py-2.5 text-xs font-extrabold text-black transition-colors ${needsConfirm && step === 2 ? 'bg-warn' : 'bg-brand-orange'} hover:brightness-110`}
           >
             {level === 0 ? 'Dejarla normal' : needsConfirm ? (step === 2 ? 'Entendido, hacerla más dura' : 'Continuar') : 'Hacerla más dura'}
           </button>

@@ -338,7 +338,7 @@ function ComplexEditor({
                     <ArrowDown size={13} />
                   </button>
                 </div>
-                <button onClick={() => setSteps(steps.filter((_, k) => k !== i))} disabled={steps.length <= 2} aria-label="Quitar paso" className="shrink-0 text-neutral-500 hover:text-red-400 disabled:opacity-20">
+                <button onClick={() => setSteps(steps.filter((_, k) => k !== i))} disabled={steps.length <= 2} aria-label="Quitar paso" className="shrink-0 text-neutral-500 hover:text-bad disabled:opacity-20">
                   <X size={16} />
                 </button>
               </li>
@@ -397,7 +397,7 @@ function ComplexEditor({
 
         <div className="flex items-center gap-2">
           {initial && (
-            <button onClick={() => onDelete(initial.id)} className="flex items-center gap-1 rounded-lg px-3 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-400/10">
+            <button onClick={() => onDelete(initial.id)} className="flex items-center gap-1 rounded-lg px-3 py-2.5 text-xs font-semibold text-bad hover:bg-bad/10">
               <Trash2 size={14} /> Borrar
             </button>
           )}

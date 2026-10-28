@@ -98,13 +98,13 @@ export function CoachNoticesBody(props: CoachNoticesProps) {
   return (
     <div className="flex flex-col gap-2.5">
       {activePainFlags.map((flag) => (
-        <div key={flag.id} className={`${rowClass} border-red-400 items-center`}>
-          <span className="flex-1 text-red-300">
+        <div key={flag.id} className={`${rowClass} border-bad items-center`}>
+          <span className="flex-1 text-bad">
             Evitando {PAIN_AREA_LABEL[flag.area].toLowerCase()} — {formatPainUntil(flag.until)}
           </span>
           <button
             onClick={() => onRemovePainFlag(flag.id)}
-            className="shrink-0 text-xs text-neutral-400 underline decoration-dotted transition-colors duration-200 hover:text-red-300"
+            className="shrink-0 text-xs text-neutral-400 underline decoration-dotted transition-colors duration-200 hover:text-bad"
           >
             Quitar
           </button>
@@ -149,11 +149,11 @@ export function CoachNoticesBody(props: CoachNoticesProps) {
       )}
 
       {macroReviewSuggestion && (
-        <div className={`${rowClass} ${macroReviewSuggestion.kind === 'extend-phase' ? 'border-brand-orange' : 'border-brand-gold'}`}>
+        <div className={`${rowClass} ${macroReviewSuggestion.kind === 'extend-phase' ? 'border-warn' : 'border-brand-gold'}`}>
           <Map
             size={14}
             strokeWidth={2.25}
-            className={`mt-0.5 shrink-0 ${macroReviewSuggestion.kind === 'extend-phase' ? 'text-brand-orange' : 'text-brand-gold'}`}
+            className={`mt-0.5 shrink-0 ${macroReviewSuggestion.kind === 'extend-phase' ? 'text-warn' : 'text-brand-gold'}`}
           />
           <div className="flex-1">
             <p className="text-neutral-200">{macroReviewSuggestion.headline}</p>
@@ -202,10 +202,10 @@ export function CoachNoticesBody(props: CoachNoticesProps) {
       )}
 
       {retestHeadsUp && (
-        <div className={`${rowClass} border-sky-400`}>
-          <Target size={14} strokeWidth={2.25} className="mt-0.5 shrink-0 text-sky-400" />
+        <div className={`${rowClass} border-info`}>
+          <Target size={14} strokeWidth={2.25} className="mt-0.5 shrink-0 text-info" />
           <p className="flex-1 text-neutral-200">
-            Tu próximo día de benchmark toca <span className="font-semibold text-sky-300">retest de {retestHeadsUp.name}</span> — tu
+            Tu próximo día de benchmark toca <span className="font-semibold text-info">retest de {retestHeadsUp.name}</span> — tu
             marca del {formatShortDate(retestHeadsUp.prevDate)} fue {retestHeadsUp.prevValue}.{' '}
             {retestHeadsUp.lowerIsBetter ? 'A bajar ese tiempo.' : 'A superar esa marca.'}
           </p>
@@ -235,9 +235,9 @@ export function PainChips({ flags, onRemove }: { flags: PainFlag[]; onRemove: (i
   return (
     <div className="flex flex-wrap gap-2">
       {flags.map((flag) => (
-        <span key={flag.id} className="inline-flex items-center gap-2 rounded-full bg-red-400/10 py-1 pl-3 pr-2 text-xs text-red-300">
+        <span key={flag.id} className="inline-flex items-center gap-2 rounded-full bg-bad/10 py-1 pl-3 pr-2 text-xs text-bad">
           Evitando {PAIN_AREA_LABEL[flag.area].toLowerCase()} · {formatPainUntil(flag.until)}
-          <button onClick={() => onRemove(flag.id)} className="rounded-full px-1.5 py-0.5 font-semibold text-red-200/80 transition-colors hover:bg-red-400/20 hover:text-red-100">
+          <button onClick={() => onRemove(flag.id)} className="rounded-full px-1.5 py-0.5 font-semibold text-bad/80 transition-colors hover:bg-bad/20 hover:text-bad">
             Quitar
           </button>
         </span>

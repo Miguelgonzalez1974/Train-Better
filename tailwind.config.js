@@ -38,6 +38,12 @@ export default {
           500: 'rgb(var(--c-n-500) / <alpha-value>)',
           600: 'rgb(var(--c-n-600) / <alpha-value>)',
         },
+        // Colores de ESTADO: un tono por significado en toda la app (bien / atención / mal / información). Los valores, por tema,
+        // viven en `src/index.css` (--c-state-*). El naranja de marca (`brand.orange`) es solo de acción; el dorado, del coach.
+        good: 'rgb(var(--c-state-good) / <alpha-value>)',
+        warn: 'rgb(var(--c-state-mid) / <alpha-value>)',
+        bad: 'rgb(var(--c-state-low) / <alpha-value>)',
+        info: 'rgb(var(--c-state-cool) / <alpha-value>)',
         brand: {
           bg: 'rgb(var(--c-brand-bg) / <alpha-value>)',
           surface: 'rgb(var(--c-brand-surface) / <alpha-value>)',

@@ -181,7 +181,7 @@ export function AlimentosView({ shared }: { shared: NutritionShared }) {
                   <button
                     onClick={() => updatePrefs((p) => withoutCustomFood(p, f.id))}
                     aria-label={`Borrar ${f.name}`}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-bad/10 hover:text-bad"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -205,7 +205,7 @@ export function AlimentosView({ shared }: { shared: NutritionShared }) {
                 onClick={() => toggleTag(tag)}
                 aria-pressed={active}
                 className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  active ? 'border-red-400/50 bg-red-400/10 text-red-300' : 'border-brand-border text-neutral-400 hover:text-white'
+                  active ? 'border-bad/50 bg-bad/10 text-bad' : 'border-brand-border text-neutral-400 hover:text-white'
                 }`}
               >
                 {active ? 'Sin ' : ''}
@@ -215,7 +215,7 @@ export function AlimentosView({ shared }: { shared: NutritionShared }) {
           })}
         </div>
         {emptyRoles.length > 0 && (
-          <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-orange/10 p-2.5 text-xs text-brand-orange">
+          <p className="mt-3 flex items-start gap-2 rounded-lg bg-warn/10 p-2.5 text-xs text-warn">
             <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
             Te quedas sin {emptyRoles.map((r) => ROLE_LABEL[r]).join(', ')}: esas comidas de los menús saldrán incompletas.
           </p>
@@ -248,7 +248,7 @@ export function AlimentosView({ shared }: { shared: NutritionShared }) {
                           onClick={() => toggleFood(f.id)}
                           aria-pressed={out}
                           className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                            out ? 'border-red-400/50 bg-red-400/10 text-red-300' : 'border-brand-border text-neutral-400 hover:text-white'
+                            out ? 'border-bad/50 bg-bad/10 text-bad' : 'border-brand-border text-neutral-400 hover:text-white'
                           }`}
                         >
                           {out ? 'Fuera' : 'No lo como'}

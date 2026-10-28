@@ -120,7 +120,7 @@ function DiaryRow({ entry, sets, onDelete }: { entry: SessionHistoryEntry; sets:
             onClick={() => {
               if (window.confirm(`¿Borrar la sesión del ${entry.date}? Esto no se puede deshacer.`)) onDelete();
             }}
-            className="flex items-center gap-1.5 self-start rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold text-red-400 transition-colors duration-200 hover:border-red-500/60 hover:bg-red-500/20"
+            className="flex items-center gap-1.5 self-start rounded-lg border border-bad/30 bg-bad/10 px-2.5 py-1 text-[11px] font-semibold text-bad transition-colors duration-200 hover:border-bad/60 hover:bg-bad/20"
           >
             <Trash2 size={12} />
             Borrar

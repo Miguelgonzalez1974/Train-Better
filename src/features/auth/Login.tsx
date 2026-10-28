@@ -67,7 +67,7 @@ export function Login() {
               {status === 'sending' ? 'Enviando...' : 'Enviar enlace de acceso'}
             </button>
             {status === 'error' && (
-              <p className="text-xs text-red-400">
+              <p className="text-xs text-bad">
                 No se pudo enviar el enlace. Inténtalo de nuevo en unos segundos.
               </p>
             )}

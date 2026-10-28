@@ -23,7 +23,7 @@ export function MacroRing({ label, value, target, size = 92, compact = false, st
   const ratio = target > 0 ? value / target : 0;
   const covered = ratio >= 0.9 && ratio <= 1.15;
   const over = ratio > 1.15;
-  const colorClass = over ? 'stroke-brand-orange' : covered ? 'stroke-emerald-400' : 'stroke-white';
+  const colorClass = over ? 'stroke-warn' : covered ? 'stroke-good' : 'stroke-white';
   const dash = Math.min(1, ratio) * circ;
   return (
     <div className="flex flex-col items-center gap-1.5" role="img" aria-label={`${label}: ${value} de ${target} gramos`}>

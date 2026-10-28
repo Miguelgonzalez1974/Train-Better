@@ -8,41 +8,41 @@ const SCALE_MAX = 2;
 const SCALE_TICKS = [0, 0.8, 1.3, 1.5, 2];
 
 const ZONE_TEXT_CLASS: Record<AcwrResult['zone'], string> = {
-  baja: 'text-sky-400',
-  optima: 'text-emerald-400',
-  moderada: 'text-brand-orange',
-  alta: 'text-red-400',
+  baja: 'text-info',
+  optima: 'text-good',
+  moderada: 'text-warn',
+  alta: 'text-bad',
 };
 
 /** Halo alrededor del marcador y fondo de la etiqueta flotante, a juego con la zona actual. */
 const ZONE_MARKER_CLASS: Record<AcwrResult['zone'], string> = {
-  baja: 'shadow-[0_0_0_5px_rgba(56,189,248,0.35),0_0_12px_2px_rgba(56,189,248,0.5)]',
-  optima: 'shadow-[0_0_0_5px_rgba(52,211,153,0.35),0_0_12px_2px_rgba(52,211,153,0.5)]',
-  moderada: 'shadow-[0_0_0_5px_rgba(249,115,22,0.35),0_0_12px_2px_rgba(249,115,22,0.5)]',
-  alta: 'shadow-[0_0_0_5px_rgba(239,68,68,0.35),0_0_12px_2px_rgba(239,68,68,0.5)]',
+  baja: 'shadow-[0_0_0_5px_rgb(var(--c-state-cool)/0.35),0_0_12px_2px_rgb(var(--c-state-cool)/0.5)]',
+  optima: 'shadow-[0_0_0_5px_rgb(var(--c-state-good)/0.35),0_0_12px_2px_rgb(var(--c-state-good)/0.5)]',
+  moderada: 'shadow-[0_0_0_5px_rgb(var(--c-state-mid)/0.35),0_0_12px_2px_rgb(var(--c-state-mid)/0.5)]',
+  alta: 'shadow-[0_0_0_5px_rgb(var(--c-state-low)/0.35),0_0_12px_2px_rgb(var(--c-state-low)/0.5)]',
 };
 
 const ZONE_LABEL_CLASS: Record<AcwrResult['zone'], string> = {
-  baja: 'bg-sky-400 text-sky-950',
-  optima: 'bg-emerald-400 text-emerald-950',
-  moderada: 'bg-brand-orange text-black',
-  alta: 'bg-red-400 text-red-950',
+  baja: 'bg-info text-brand-bg',
+  optima: 'bg-good text-brand-bg',
+  moderada: 'bg-warn text-brand-bg',
+  alta: 'bg-bad text-brand-bg',
 };
 
 /** Icono de cabecera a juego con la zona actual — categoria "riesgo/fatiga", la unica tarjeta cuyo estado real cambia de significado (verde no es igual de bueno que rojo), asi que el acento fijo naranja de las demas no le pega. */
 const ZONE_ICON_CLASS: Record<AcwrResult['zone'], string> = {
-  baja: 'bg-sky-400/15 text-sky-400',
-  optima: 'bg-emerald-400/15 text-emerald-400',
-  moderada: 'bg-brand-orange/15 text-brand-orange',
-  alta: 'bg-red-400/15 text-red-400',
+  baja: 'bg-info/15 text-info',
+  optima: 'bg-good/15 text-good',
+  moderada: 'bg-warn/15 text-warn',
+  alta: 'bg-bad/15 text-bad',
 };
 
 /** Mismo color que el icono/marcador de la zona actual, aplicado a la linea de tendencia. */
 const ZONE_SPARKLINE_CLASS: Record<AcwrResult['zone'], { stroke: string; area: string; dot: string }> = {
-  baja: { stroke: 'stroke-sky-400', area: 'fill-sky-400/10', dot: 'fill-sky-400' },
-  optima: { stroke: 'stroke-emerald-400', area: 'fill-emerald-400/10', dot: 'fill-emerald-400' },
-  moderada: { stroke: 'stroke-brand-orange', area: 'fill-brand-orange/10', dot: 'fill-brand-orange' },
-  alta: { stroke: 'stroke-red-400', area: 'fill-red-400/10', dot: 'fill-red-400' },
+  baja: { stroke: 'stroke-info', area: 'fill-info/10', dot: 'fill-info' },
+  optima: { stroke: 'stroke-good', area: 'fill-good/10', dot: 'fill-good' },
+  moderada: { stroke: 'stroke-warn', area: 'fill-warn/10', dot: 'fill-warn' },
+  alta: { stroke: 'stroke-bad', area: 'fill-bad/10', dot: 'fill-bad' },
 };
 
 export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (number | null)[] }) {
@@ -100,10 +100,10 @@ export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (numbe
         <div className="mx-1 mt-1.5">
           <div className="h-1.5 overflow-hidden rounded-full opacity-50">
             <div className="flex h-full">
-              <div className="h-full bg-sky-500/55" style={{ width: '40%' }} />
-              <div className="h-full bg-emerald-500/55" style={{ width: '25%' }} />
-              <div className="h-full bg-brand-orange/70" style={{ width: '10%' }} />
-              <div className="h-full bg-red-500/75" style={{ width: '25%' }} />
+              <div className="h-full bg-info/55" style={{ width: '40%' }} />
+              <div className="h-full bg-good/55" style={{ width: '25%' }} />
+              <div className="h-full bg-warn/70" style={{ width: '10%' }} />
+              <div className="h-full bg-bad/75" style={{ width: '25%' }} />
             </div>
           </div>
           <p className="mt-1 whitespace-nowrap text-[10px] text-neutral-600">Vista previa de tu escala de zonas.</p>
@@ -114,10 +114,10 @@ export function AcwrGauge({ result, trend }: { result: AcwrResult; trend: (numbe
         <div className="mx-1 mt-8">
           <div className="relative h-4">
             <div className="absolute inset-0 flex overflow-hidden rounded-full">
-              <div className="h-full bg-sky-500/55" style={{ width: '40%' }} />
-              <div className="h-full bg-emerald-500/55" style={{ width: '25%' }} />
-              <div className="h-full bg-brand-orange/70" style={{ width: '10%' }} />
-              <div className="h-full bg-red-500/75" style={{ width: '25%' }} />
+              <div className="h-full bg-info/55" style={{ width: '40%' }} />
+              <div className="h-full bg-good/55" style={{ width: '25%' }} />
+              <div className="h-full bg-warn/70" style={{ width: '10%' }} />
+              <div className="h-full bg-bad/75" style={{ width: '25%' }} />
             </div>
             <div className="absolute top-1/2 -translate-y-1/2" style={{ left: `${markerPercent}%` }}>
               <div className={`h-4 w-4 -translate-x-1/2 rounded-full bg-white ${ZONE_MARKER_CLASS[result.zone]}`} />

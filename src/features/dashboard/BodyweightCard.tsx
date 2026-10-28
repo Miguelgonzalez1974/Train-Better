@@ -32,7 +32,7 @@ export function BodyweightCard({ log, onChange, embedded = false }: BodyweightCa
   }
 
   const TrendIcon = delta === null || Math.abs(delta) < 0.1 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
-  const trendClass = delta === null || Math.abs(delta) < 0.1 ? 'text-neutral-500' : delta > 0 ? 'text-brand-orange' : 'text-emerald-400';
+  const trendClass = delta === null || Math.abs(delta) < 0.1 ? 'text-neutral-500' : delta > 0 ? 'text-brand-orange' : 'text-good';
 
   const Wrapper = embedded ? 'div' : 'section';
 

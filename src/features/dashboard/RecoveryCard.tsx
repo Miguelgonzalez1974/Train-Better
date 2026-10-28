@@ -105,7 +105,7 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
         )}
         {readiness.pain.count > 0 && (
           <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-            <HeartPulse size={12} className="shrink-0 text-red-400" aria-hidden="true" />
+            <HeartPulse size={12} className="shrink-0 text-bad" aria-hidden="true" />
             Molestia activa ({readiness.pain.areas.join(', ')}): resta {readiness.pain.penalty} puntos a la nota.
           </p>
         )}

@@ -114,7 +114,7 @@ export function MenuDiaView({ shared, iso, onChangeIso }: MenuDiaViewProps) {
         {plan.meals.map((m) => {
           const eaten = isMenuEaten(prefs, iso, m.key);
           return (
-            <li key={m.key} className={`rounded-2xl p-3.5 transition-colors ${eaten ? 'bg-emerald-400/[0.07]' : 'bg-white/[0.03]'}`}>
+            <li key={m.key} className={`rounded-2xl p-3.5 transition-colors ${eaten ? 'bg-good/[0.07]' : 'bg-white/[0.03]'}`}>
               <button onClick={() => setOpenMeal(m.key)} className="block w-full text-left" aria-label={`${MEAL_LABEL[m.key]}: ver o cambiar`}>
                 <p className="flex items-baseline gap-2">
                   <span className="text-sm font-semibold text-white">{m.label}</span>
@@ -131,7 +131,7 @@ export function MenuDiaView({ shared, iso, onChangeIso }: MenuDiaViewProps) {
                 onClick={() => toggleEat(m.key)}
                 aria-pressed={eaten}
                 className={`mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                  eaten ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300' : 'border-brand-border text-neutral-300 hover:border-brand-gold hover:text-white'
+                  eaten ? 'border-good/40 bg-good/15 text-good' : 'border-brand-border text-neutral-300 hover:border-brand-gold hover:text-white'
                 }`}
               >
                 {eaten ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}

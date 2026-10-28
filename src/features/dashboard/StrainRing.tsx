@@ -1,4 +1,4 @@
-﻿import { ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
 import type { StrainStatus } from '../../engine/strain';
@@ -20,7 +20,7 @@ export interface StrainView {
 
 /** El esfuerzo es azul (su color en todo el Dashboard) y pasa a coral cuando rebasa el máximo del objetivo. */
 export const ACCENT = 'rgb(var(--c-state-cool))';
-export const OVER = 'rgb(var(--c-over))';
+export const OVER = 'rgb(var(--c-state-mid))';
 const NEUTRAL = 'rgb(var(--c-white) / 0.5)';
 
 const STATUS_COLOR: Record<StrainStatus, string> = {

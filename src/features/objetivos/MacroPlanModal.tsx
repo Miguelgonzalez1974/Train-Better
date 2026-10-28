@@ -14,7 +14,7 @@ const PHASE_COLOR: Record<1 | 2 | 3 | 4, string> = {
   1: '#38bdf8',
   2: '#d4af37',
   3: '#f97316',
-  4: '#39ff14',
+  4: '#4ade80',
 };
 
 const PHASE_ICON: Record<1 | 2 | 3 | 4, LucideIcon> = {

@@ -9,7 +9,7 @@ import { PainChips } from './CoachNotices';
 
 const FIT_COLOR: Record<PlanFit, string> = {
   dentro: 'rgb(var(--c-state-good))',
-  'se-pasa': 'rgb(var(--c-state-hot))',
+  'se-pasa': 'rgb(var(--c-state-mid))',
   'se-queda-corta': 'rgb(var(--c-state-cool))',
 };
 const GOLD = 'rgb(var(--c-brand-gold))';
@@ -241,7 +241,7 @@ export function DayStatusRow({ session, planned, target, fit, painFlags, onRemov
             onClick={() => setOpen(open === t.id ? null : t.id)}
             aria-expanded={open === t.id}
             className={`min-w-0 rounded-xl border-[1.5px] px-1 pb-2 pt-2.5 transition-colors ${open === t.id ? 'border-brand-gold' : 'border-transparent'} ${
-              t.tone === 'alert' ? 'bg-amber-400/10' : t.tone === 'gold' ? 'bg-brand-gold/10' : 'bg-white/[0.05] hover:bg-white/[0.08]'
+              t.tone === 'alert' ? 'bg-warn/10' : t.tone === 'gold' ? 'bg-brand-gold/10' : 'bg-white/[0.05] hover:bg-white/[0.08]'
             }`}
           >
             <span className={`num block truncate font-extrabold leading-tight ${tight ? 'text-[13px]' : 'text-[15px]'} ${t.tone === 'muted' ? 'text-neutral-500' : 'text-white'}`} style={t.tone === 'gold' ? { color: GOLD } : undefined}>

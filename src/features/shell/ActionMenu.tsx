@@ -83,7 +83,7 @@ export function ActionMenu({ items, label = 'Más acciones', active = false, ale
         }`}
       >
         <MoreHorizontal size={18} strokeWidth={2.25} className={busy ? 'animate-pulse' : ''} />
-        {alert && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-400 ring-2 ring-brand-bg" />}
+        {alert && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-bad ring-2 ring-brand-bg" />}
       </button>
       {open && (
         <div
@@ -102,7 +102,7 @@ export function ActionMenu({ items, label = 'Más acciones', active = false, ale
                 onSelect();
               }}
               className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-sm outline-none transition-colors focus-visible:bg-white/[0.08] hover:bg-white/[0.06] ${
-                tone === 'danger' ? 'text-red-400' : 'text-neutral-200'
+                tone === 'danger' ? 'text-bad' : 'text-neutral-200'
               }`}
             >
               <Icon size={15} strokeWidth={2.25} className={tone === 'danger' ? '' : 'text-neutral-400'} />

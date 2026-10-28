@@ -1146,7 +1146,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
         {!session.isRestDay && (
           <div className="flex w-full items-center gap-2 sm:max-w-xl">
             {alreadyCompletedToday && (
-              <div className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-400/10 px-3 py-2.5 text-sm font-semibold text-emerald-300 ring-1 ring-emerald-400/30 sm:flex-none">
+              <div className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-good/10 px-3 py-2.5 text-sm font-semibold text-good ring-1 ring-good/30 sm:flex-none">
                 <CheckCircle2 size={15} strokeWidth={2.5} />
                 Sesión completada
               </div>
@@ -1509,11 +1509,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                 onClick={() => setPainAreaDraft(area)}
                 className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors duration-200 ${
                   painAreaDraft === area
-                    ? 'border-[1.5px] border-red-400 bg-red-400/10 text-white'
-                    : 'border border-brand-border bg-white/[0.03] text-neutral-300 hover:border-red-400/50'
+                    ? 'border-[1.5px] border-bad bg-bad/10 text-white'
+                    : 'border border-brand-border bg-white/[0.03] text-neutral-300 hover:border-bad/50'
                 }`}
               >
-                <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
+                <span className="h-2 w-2 shrink-0 rounded-full bg-bad" />
                 {PAIN_AREA_LABEL[area]}
               </button>
             ))}
@@ -1527,7 +1527,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                   key={opt.value}
                   onClick={() => setPainDurationDraft(opt.value)}
                   className={`flex-1 rounded-lg px-2 py-2 text-center text-xs font-semibold transition-colors duration-200 ${
-                    painDurationDraft === opt.value ? 'bg-red-400 text-red-950' : 'border border-brand-border bg-white/[0.03] text-neutral-300'
+                    painDurationDraft === opt.value ? 'bg-bad text-brand-bg' : 'border border-brand-border bg-white/[0.03] text-neutral-300'
                   }`}
                 >
                   {opt.label}
@@ -1538,7 +1538,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
 
           <button
             onClick={handleSavePainFlag}
-            className="rounded-xl bg-red-400 px-4 py-2.5 text-sm font-semibold text-red-950 transition-all duration-200 hover:bg-red-300"
+            className="rounded-xl bg-bad px-4 py-2.5 text-sm font-semibold text-brand-bg transition-all duration-200 hover:brightness-110"
           >
             Guardar aviso
           </button>

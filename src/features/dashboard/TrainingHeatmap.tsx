@@ -26,9 +26,9 @@ function trainedBucketClass(rpe: number): string {
 }
 
 const CELL_CLASS: Record<Exclude<CellKind, 'trained' | 'future'>, string> = {
-  rest: 'bg-sky-500/15',
-  recovery: 'bg-emerald-500/50',
-  missed: 'border border-red-500/40 bg-transparent',
+  rest: 'bg-info/15',
+  recovery: 'bg-good/50',
+  missed: 'border border-bad/40 bg-transparent',
   offSeason: 'bg-white/[0.04]',
 };
 
@@ -165,13 +165,13 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: T
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-neutral-500">
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm bg-sky-500/15" /> Descanso
+          <span className="h-3 w-3 rounded-sm bg-info/15" /> Descanso
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm bg-emerald-500/50" /> Recuperación
+          <span className="h-3 w-3 rounded-sm bg-good/50" /> Recuperación
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm border border-red-500/40" /> No registrado
+          <span className="h-3 w-3 rounded-sm border border-bad/40" /> No registrado
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-sm bg-white/[0.04]" /> Mantenimiento

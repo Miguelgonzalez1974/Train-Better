@@ -89,7 +89,7 @@ export function SemanaView({ shared, onOpenDay }: SemanaViewProps) {
                       <li key={m.key} className="flex items-start gap-2 text-xs">
                         <span
                           className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-300 ${
-                            done ? 'border-emerald-400 bg-emerald-400' : 'border-white/20'
+                            done ? 'border-good bg-good' : 'border-white/20'
                           }`}
                           aria-hidden="true"
                         >

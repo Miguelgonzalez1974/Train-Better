@@ -388,7 +388,7 @@ export function Objetivos() {
                   )}
                   {nextMacroSuggestion.weakPointLabel && (
                     <li className="flex items-start gap-1.5">
-                      <AlertTriangle size={11} strokeWidth={2.5} className="mt-0.5 shrink-0 text-brand-orange" />
+                      <AlertTriangle size={11} strokeWidth={2.5} className="mt-0.5 shrink-0 text-warn" />
                       <span>
                         Tu punto más flojo ahora mismo: <span className="text-neutral-300">{nextMacroSuggestion.weakPointLabel}</span> — tenlo
                         en cuenta al repartir las fases.
@@ -484,7 +484,7 @@ export function Objetivos() {
                               En pausa
                             </span>
                           ) : (
-                            <span className="shrink-0 whitespace-nowrap rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Activo ahora</span>
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-semibold text-good">Activo ahora</span>
                           )}
                         </div>
                         <p className="text-xs text-neutral-400">
@@ -546,7 +546,7 @@ export function Objetivos() {
                     <p className="text-sm font-medium text-neutral-200">{m.label}</p>
                     <p className="text-xs text-neutral-500">Empieza en {daysRemaining(m.startDate)} días</p>
                   </div>
-                  <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-400">Próximo</span>
+                  <span className="rounded-full bg-info/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-info">Próximo</span>
                   <button
                     onClick={() => setPlanMacro(m)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-gold/40 text-brand-gold transition-colors duration-200 hover:bg-brand-gold/10"
@@ -706,7 +706,7 @@ export function Objetivos() {
               )}
 
               {macroDraft.phaseWeeks && remainingDeloadWeeks(macroDraft) < 1 && (
-                <p className="text-xs text-brand-orange">
+                <p className="text-xs text-warn">
                   Acumulación + intensificación + pico ya ocupan todo el macrociclo — no queda semana para descarga.
                   Alarga el macro o reduce alguna fase.
                 </p>
@@ -802,7 +802,7 @@ export function Objetivos() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-white">{meta.label}</p>
-                          <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                          <span className="rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-semibold text-good">
                             Activo ahora
                           </span>
                         </div>
@@ -848,7 +848,7 @@ export function Objetivos() {
                       {liftsLabel} · empieza en {daysRemaining(p.startDate)} días
                     </p>
                   </div>
-                  <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-400">Próximo</span>
+                  <span className="rounded-full bg-info/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-info">Próximo</span>
                   <button
                     onClick={() => setProgramDraft(p)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:bg-white/5"
@@ -986,7 +986,7 @@ export function Objetivos() {
                     );
                   })}
                 </div>
-                {programDraft.lifts.length === 0 && <p className="mt-1.5 text-xs text-brand-orange">Elige al menos un levantamiento.</p>}
+                {programDraft.lifts.length === 0 && <p className="mt-1.5 text-xs text-warn">Elige al menos un levantamiento.</p>}
               </div>
             )}
 
@@ -1242,8 +1242,8 @@ export function Objetivos() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white">{meta.label}</p>
                         {isUrgent && (
-                          <span className="flex items-center gap-1.5 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+                          <span className="flex items-center gap-1.5 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warn">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warn" />
                             {remaining === 0 ? 'Hoy' : remaining === 1 ? '1 día' : `${remaining} días`}
                           </span>
                         )}

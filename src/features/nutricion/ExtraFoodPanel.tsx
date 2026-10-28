@@ -89,7 +89,7 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
                   <button
                     onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}
                     aria-label={`Quitar ${food.name}`}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-bad/10 hover:text-bad"
                   >
                     <X size={15} />
                   </button>

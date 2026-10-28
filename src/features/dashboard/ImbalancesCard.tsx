@@ -2,8 +2,8 @@ import { ChevronDown, ChevronUp, GitCompare } from 'lucide-react';
 import type { ImbalanceGroup, ImbalanceStatus } from '../../engine/imbalances';
 
 const STATUS_META: Record<ImbalanceStatus, { label: string; badgeClass: string; borderColor: string }> = {
-  desbalance: { label: 'Gran desbalance', badgeClass: 'bg-red-500/15 text-red-400', borderColor: '#ef4444' },
-  equilibrado: { label: 'Equilibrado', badgeClass: 'bg-emerald-500/15 text-emerald-400', borderColor: '#34d399' },
+  desbalance: { label: 'Gran desbalance', badgeClass: 'bg-bad/15 text-bad', borderColor: 'rgb(var(--c-state-low))' },
+  equilibrado: { label: 'Equilibrado', badgeClass: 'bg-good/15 text-good', borderColor: 'rgb(var(--c-state-good))' },
   'faltan-datos': { label: 'Faltan datos', badgeClass: 'bg-white/[0.06] text-neutral-400', borderColor: '#52525b' },
 };
 
@@ -17,10 +17,10 @@ function GroupBars({ group }: { group: ImbalanceGroup }) {
     <div className="mb-2 flex items-end gap-3 px-1" style={{ height: MAX_BAR_HEIGHT + 28 }}>
       {group.bars.map((bar) => {
         const height = bar.value !== null ? Math.max((bar.value / max) * MAX_BAR_HEIGHT, 6) : MAX_BAR_HEIGHT * 0.35;
-        const barColor = bar.flagged ? '#ef4444' : '#d4af37';
+        const barColor = bar.flagged ? 'rgb(var(--c-state-low))' : '#d4af37';
         return (
           <div key={bar.label} className="flex flex-1 flex-col items-center gap-1.5">
-            <span className={`text-[10px] font-semibold ${bar.flagged ? 'text-red-300' : 'text-white'}`}>
+            <span className={`text-[10px] font-semibold ${bar.flagged ? 'text-bad' : 'text-white'}`}>
               {bar.value !== null ? bar.value : '—'}
             </span>
             {bar.value !== null ? (
@@ -94,10 +94,10 @@ export function ImbalancesCard({
         <span className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-sm font-semibold text-white">Desequilibrios</span>
           {desbalanceCount > 0 && (
-            <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold text-red-400">{desbalanceCount} desbalance{desbalanceCount > 1 ? 's' : ''}</span>
+            <span className="rounded-full bg-bad/15 px-2 py-0.5 text-[10px] font-bold text-bad">{desbalanceCount} desbalance{desbalanceCount > 1 ? 's' : ''}</span>
           )}
           {equilibradoCount > 0 && (
-            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-400">{equilibradoCount} equilibrado{equilibradoCount > 1 ? 's' : ''}</span>
+            <span className="rounded-full bg-good/15 px-2 py-0.5 text-[10px] font-bold text-good">{equilibradoCount} equilibrado{equilibradoCount > 1 ? 's' : ''}</span>
           )}
           {faltanCount > 0 && (
             <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-neutral-400">{faltanCount} sin datos</span>
