@@ -35,10 +35,8 @@ export const HARDNESS_RPE_BUMP: Record<HardnessMode, number> = { volume: 0.15, i
  * que ya son cortos y técnicos por la competición (activación y simulacro), ni la víspera o el propio día; tampoco con el semáforo en
  * rojo (la sesión ya es de recuperación) ni si el día ya está registrado.
  */
-export function hardnessAvailable(session: Pick<DailySession, 'isRestDay' | 'source' | 'blocks' | 'competition' | 'dayLight'> & { dayEmphasis?: DailySession['dayEmphasis'] }): boolean {
+export function hardnessAvailable(session: Pick<DailySession, 'isRestDay' | 'source' | 'blocks' | 'competition' | 'dayLight'>): boolean {
   if (session.isRestDay || session.source === 'custom' || session.blocks.length === 0) return false;
-  // Un día «técnico-ligero» (solo metcon: fuerza y oly ya van recortadas y el WOD es el foco) no se sube.
-  if (session.dayEmphasis === 'metcon') return false;
   if (session.dayLight?.color === 'rojo') return false;
   const phase = session.competition?.phase;
   if (phase === 'vispera' || phase === 'evento' || phase === 'activacion' || phase === 'post') return false;

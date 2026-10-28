@@ -4491,10 +4491,11 @@ function generateDailySessionCore(
       : strengthOlyDoseBase;
 
   // Dureza que ha pedido el atleta para hoy (ver `engine/hardness.ts`): lejos de la competición y fuera de la descarga sube el volumen
-  // (series y rondas); con competición cerca o en descarga sube la carga y deja el volumen igual. No en un test de máximos, un día
-  // ligero (activación, simulacro) ni la víspera: ahí no se ofrece. Va DESPUÉS del semáforo: lo pedido manda sobre el recorte ámbar.
+  // (series y rondas); con competición cerca o en descarga sube la carga y deja el volumen igual. No en un test de máximos, la
+  // activación, el simulacro ni la víspera: ahí no se ofrece. Un día técnico-ligero (solo metcon) sí admite subirlo: el WOD es el foco.
+  // Va DESPUÉS del semáforo: lo pedido manda sobre el recorte ámbar.
   const requestedHardness: HardnessLevel =
-    profile.hardness?.[dateIso] && !testDayFocus && !technicalLight && !comp?.recoverySession && !comp?.simulacro ? profile.hardness[dateIso] : 0;
+    profile.hardness?.[dateIso] && !testDayFocus && !comp?.recoverySession && !comp?.simulacro && comp?.phase !== 'activacion' ? profile.hardness[dateIso] : 0;
   const hardMode = hardnessMode({ competition: Boolean(comp), week });
   const hardVolume = requestedHardness > 0 && hardMode === 'volume';
   const hardIntensity = requestedHardness > 0 && hardMode === 'intensity';
