@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { hardnessAdvice, hardnessAvailable, hardnessChanges, hardnessMode, hardnessSituation } from './hardness';
+import { hardnessAdvice, hardnessAvailable, hardnessChanges, hardnessMode, hardnessSituation, hardnessUnavailableReason } from './hardness';
 import { generateSessionForDate, isRealWodSelectionEnabled, setRealWodSelectionEnabled } from './generateSession';
 import { estimatePlannedStrain } from './plannedStrain';
 import { consecutiveDates, makeProfile } from './__fixtures';
@@ -36,6 +36,23 @@ describe('reglas de la dureza', () => {
   it('los cambios que se enseñan dependen del modo', () => {
     expect(hardnessChanges(1, 'volume').find((c) => c.label === 'Fuerza')?.text).toBe('una serie más');
     expect(hardnessChanges(2, 'intensity').find((c) => c.label === 'Fuerza')?.text).toBe('mismas series, +5 % de carga');
+  });
+
+  it('cuando no se ofrece, dice por qué (y no dice nada en descanso)', () => {
+    const block = { block: 'strength' as const, movementId: 'back-squat', sets: 4, reps: '5', loadKg: 100 };
+    const ok = { isRestDay: false, source: 'generated' as const, blocks: [block], competition: undefined, dayLight: undefined };
+    expect(hardnessUnavailableReason(ok)).toBeNull();
+    expect(hardnessUnavailableReason({ ...ok, isRestDay: true })).toBeNull();
+    const comp = (phase: NonNullable<DailySession['competition']>['phase'], extra = {}) => ({ ...ok, competition: { phase, label: '', guidance: '', daysToEvent: 3, ...extra } });
+    expect(hardnessUnavailableReason(comp('pico', { simulacro: true }))).toMatch(/simulacro/);
+    expect(hardnessUnavailableReason(comp('activacion'))).toMatch(/activación/);
+    expect(hardnessUnavailableReason(comp('vispera'))).toMatch(/víspera/);
+    expect(hardnessUnavailableReason({ ...ok, dayLight: { color: 'rojo', reasons: [] } })).toMatch(/rojo/);
+    expect(hardnessUnavailableReason({ ...ok, blocks: [{ ...block, format: 'Test 1RM' }] })).toMatch(/test/);
+    // Siempre que se explica, es porque no se ofrece.
+    for (const s of [comp('pico', { simulacro: true }), comp('activacion'), comp('vispera'), { ...ok, dayLight: { color: 'rojo' as const, reasons: [] } }]) {
+      expect(hardnessAvailable(s)).toBe(false);
+    }
   });
 
   it('se ofrece solo en un día normal de entreno', () => {

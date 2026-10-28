@@ -45,6 +45,22 @@ export function hardnessAvailable(session: Pick<DailySession, 'isRestDay' | 'sou
   return true;
 }
 
+/**
+ * Por qué hoy NO se ofrece «más dura», en una frase, o null si se ofrece o si no hay nada que explicar (descanso, sesión propia): así el
+ * atleta no se queda buscando un botón que no está.
+ */
+export function hardnessUnavailableReason(session: Pick<DailySession, 'isRestDay' | 'source' | 'blocks' | 'competition' | 'dayLight'>): string | null {
+  if (session.isRestDay || session.source === 'custom' || session.blocks.length === 0) return null;
+  const c = session.competition;
+  if (c?.simulacro) return 'Hoy no se puede subir: es el simulacro de competición y se mide tal cual para decidir tu taper.';
+  if (c?.phase === 'activacion') return 'Hoy no se puede subir: es la activación, una sesión corta y técnica para llegar fresco.';
+  if (c?.phase === 'vispera') return 'Hoy no se puede subir: es la víspera, descanso activo.';
+  if (c?.phase === 'post') return 'Hoy no se puede subir: estás recuperando tras la competición.';
+  if (session.dayLight?.color === 'rojo') return 'Hoy no se puede subir: tu semáforo está en rojo y la sesión es de recuperación.';
+  if (session.blocks.some((b) => b.format === 'Test 1RM')) return 'Hoy no se puede subir: es un día de test de máximos.';
+  return null;
+}
+
 export type HardnessSituation = 'normal' | 'ambar' | 'pico' | 'taper' | 'descarga';
 
 export interface HardnessContext {

@@ -4,7 +4,7 @@ import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
 import { HardnessChip, HardnessSheet, hardnessContextOf, type HardnessApplyInfo } from './HardnessControl';
-import { hardnessAvailable, hardnessSituation, type HardnessLevel } from '../../engine/hardness';
+import { hardnessAvailable, hardnessSituation, hardnessUnavailableReason, type HardnessLevel } from '../../engine/hardness';
 import { learnHardness, suggestHardness } from '../../engine/hardnessLearning';
 import type {
   AthleteProfile,
@@ -1190,6 +1190,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           onHarder={canHarder && !session.hardness ? () => setShowHardness(true) : undefined}
           suggestion={hardnessSuggestion?.text}
         />
+      )}
+
+      {/* Si hoy no se puede subir la dureza, el porqué (para no quedarse buscando el botón). */}
+      {!canHarder && !alreadyCompletedToday && !editMode && hardnessUnavailableReason(session) && (
+        <p className="flex items-start gap-1.5 text-xs leading-relaxed text-neutral-500">
+          <Flame size={13} strokeWidth={2.25} className="mt-0.5 shrink-0" aria-hidden="true" />
+          {hardnessUnavailableReason(session)}
+        </p>
       )}
 
       {/* La dureza que has pedido para hoy, con cambiar y volver a normal. */}
