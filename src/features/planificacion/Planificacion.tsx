@@ -3,7 +3,8 @@ import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, Cale
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
-import { HardnessChip, HardnessSheet, hardnessContextOf, type HardnessApplyInfo } from './HardnessControl';
+import { HardnessSheet, hardnessContextOf, type HardnessApplyInfo } from './HardnessControl';
+import { DayStatusRow } from './DayStatusRow';
 import { hardnessAvailable, hardnessSituation, hardnessUnavailableReason, type HardnessLevel } from '../../engine/hardness';
 import { learnHardness, suggestHardness } from '../../engine/hardnessLearning';
 import type {
@@ -64,10 +65,7 @@ import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
-import { DayShapeChips } from '../shell/blockMeta';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
-import { StrainPlanRow } from './StrainPlanRow';
-import { DayLightPill } from '../shell/DayLightPill';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
@@ -76,7 +74,6 @@ import {
   CoachNoticesBody,
   CoachNoticesButton,
   CoachReasonsList,
-  PainChips,
   summarizeNotices,
   type CoachNoticesProps,
 } from './CoachNotices';
@@ -1078,7 +1075,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
 
       {session && (
       <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-semibold tracking-tight text-white">
@@ -1125,8 +1122,28 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
             )}
           </div>
         </div>
+        {/* El estado del día en una fila de casillas tocables (esfuerzo, semáforo, dureza, competición, molestias). */}
+        {!session.isRestDay && !editMode && (
+          <DayStatusRow
+            session={session}
+            planned={plannedStrain}
+            target={strainTarget}
+            fit={planFitResult}
+            painFlags={activePainFlags}
+            onRemovePain={handleRemovePainFlag}
+            hardness={
+              alreadyCompletedToday
+                ? null
+                : { available: canHarder, reason: hardnessUnavailableReason(session), suggestion: hardnessSuggestion?.text, onOpen: () => setShowHardness(true), onReset: () => handleApplyHardness(0) }
+            }
+            canSwapWod={hasWodBlock}
+            onSwapWod={handleRegenerate}
+            onLighter={() => handlePickType('recovery')}
+            onShowReasons={(session.coachReasons?.length ?? 0) > 0 ? () => setShowReasons(true) : null}
+          />
+        )}
         {!session.isRestDay && (
-          <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="flex w-full items-center gap-2 sm:max-w-xl">
             {alreadyCompletedToday && (
               <div className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-400/10 px-3 py-2.5 text-sm font-semibold text-emerald-300 ring-1 ring-emerald-400/30 sm:flex-none">
                 <CheckCircle2 size={15} strokeWidth={2.5} />
@@ -1166,44 +1183,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
           </div>
         )}
       </div>
-      {!session.isRestDay && <DayShapeChips session={session} variant="text" />}
-      {!session.isRestDay && <PainChips flags={activePainFlags} onRemove={handleRemovePainFlag} />}
       {regenNote && <p className="text-xs text-neutral-500">{regenNote}</p>}
-
-      {/* El semáforo de hoy (solo con el check-in hecho): el color y por qué, junto a lo que cambia en la sesión. */}
-      {session.dayLight && !session.isRestDay && !editMode && (
-        <div className="flex flex-col items-start gap-1.5">
-          <DayLightPill light={session.dayLight} />
-          <p className="text-xs text-neutral-500">{session.dayLight.reasons.join(' · ')}</p>
-        </div>
-      )}
-
-      {plannedStrain && strainTarget && planFitResult && !editMode && (
-        <StrainPlanRow
-          planned={plannedStrain}
-          target={strainTarget}
-          fit={planFitResult.fit}
-          diff={planFitResult.diff}
-          canSwapWod={hasWodBlock}
-          onSwapWod={handleRegenerate}
-          onLighter={() => handlePickType('recovery')}
-          onHarder={canHarder && !session.hardness ? () => setShowHardness(true) : undefined}
-          suggestion={hardnessSuggestion?.text}
-        />
-      )}
-
-      {/* Si hoy no se puede subir la dureza, el porqué (para no quedarse buscando el botón). */}
-      {!canHarder && !alreadyCompletedToday && !editMode && hardnessUnavailableReason(session) && (
-        <p className="flex items-start gap-1.5 text-xs leading-relaxed text-neutral-500">
-          <Flame size={13} strokeWidth={2.25} className="mt-0.5 shrink-0" aria-hidden="true" />
-          {hardnessUnavailableReason(session)}
-        </p>
-      )}
-
-      {/* La dureza que has pedido para hoy, con cambiar y volver a normal. */}
-      {session.hardness && !alreadyCompletedToday && !editMode && (
-        <HardnessChip session={session} onChange={() => setShowHardness(true)} onReset={() => handleApplyHardness(0)} />
-      )}
 
       {showHardness && (
         <HardnessSheet

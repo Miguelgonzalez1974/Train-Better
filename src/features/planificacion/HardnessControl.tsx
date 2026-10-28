@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Flame, RotateCcw, ShieldAlert, ThumbsUp, TriangleAlert } from 'lucide-react';
+import { ShieldAlert, ThumbsUp, TriangleAlert } from 'lucide-react';
 import type { AthleteProfile, DailySession, HardnessLogEntry, SessionHistoryEntry, StrainTarget } from '../../data/athlete/types';
 import { generateSessionForDate } from '../../engine/generateSession';
 import { hardnessAdvice, hardnessChanges, hardnessMode, hardnessSituation, type HardnessAdvice, type HardnessContext, type HardnessLevel } from '../../engine/hardness';
@@ -27,26 +27,6 @@ export function hardnessContextOf(session: DailySession): HardnessContext {
     daysToEvent: session.competition?.daysToEvent ?? null,
     deload: session.mesocycleWeek === 4,
   };
-}
-
-/** La marca de «Más dura +1» en la sesión de hoy, con cambiar y volver a normal. */
-export function HardnessChip({ session, onChange, onReset }: { session: DailySession; onChange: () => void; onReset: () => void }) {
-  if (!session.hardness) return null;
-  const text = session.hardnessMode === 'intensity' ? 'más carga, mismo volumen' : 'más series y rondas';
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-      <span className="flex items-center gap-1.5 font-bold text-brand-orange">
-        <Flame size={13} strokeWidth={2.5} aria-hidden="true" /> Más dura +{session.hardness}
-        <span className="font-medium text-neutral-400">· {text}</span>
-      </span>
-      <button onClick={onChange} className="font-semibold text-neutral-400 underline decoration-dotted hover:text-brand-gold">
-        Cambiar
-      </button>
-      <button onClick={onReset} className="flex items-center gap-1 font-semibold text-neutral-400 hover:text-brand-gold">
-        <RotateCcw size={11} strokeWidth={2.5} aria-hidden="true" /> Volver a normal
-      </button>
-    </div>
-  );
 }
 
 /** Lo que se sabía al aplicar un nivel: se guarda para que el coach aprenda cómo lo aguantas (ver `engine/hardnessLearning.ts`). */
