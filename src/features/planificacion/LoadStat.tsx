@@ -21,20 +21,21 @@ interface LoadStatProps {
   kg: number;
   movementId?: string;
   block?: Block;
-  /** Datos del atleta para el popup de progresión — si faltan, el recuadro es solo lectura. */
+  /** Datos del atleta para el popup de progresión — si faltan, la cifra es solo lectura. */
   progress?: MovementProgressData;
   /** `lg` = la carga es la cifra protagonista del bloque (levantamiento principal). */
   size?: 'sm' | 'lg';
 }
 
 /**
- * El recuadro "kg" de una serie. En fuerza y oly con 1RM propio es tocable y abre la progresión del
- * movimiento (`MovementProgressModal`) — el atleta ve su 1RM y cómo de cerca lo trabaja sesión a
- * sesión. En el resto de bloques es un StatBox normal, sin interacción.
+ * La columna "kg" de una serie: cifra en verde sin recuadro, como las demás columnas de la prescripción (series | reps | kg). En
+ * fuerza y oly con 1RM propio es tocable y abre la progresión del movimiento (`MovementProgressModal`) — el atleta ve su 1RM y
+ * cómo de cerca lo trabaja sesión a sesión; el icono de la gráfica avisa de que se puede tocar. En el resto de bloques es una
+ * columna normal, sin interacción.
  *
  * El número que se muestra prioriza lo REAL sobre lo prescrito: si ya hay una serie de hoy
  * registrada en el modo enfocado para este movimiento, se enseña esa carga (con la etiqueta "kg
- * real"), no la que mandó el coach — antes, una vez entrenado, el recuadro se quedaba fijo en la
+ * real"), no la que mandó el coach — antes, una vez entrenado, la cifra se quedaba fija en la
  * prescripción original aunque el atleta hubiera levantado otra cosa, lo cual confundía sobre si lo
  * que se veía era el plan o lo que de verdad se hizo.
  */
@@ -43,14 +44,14 @@ export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadS
   const movement = movementId ? getMovementById(movementId) : undefined;
   const interactive =
     Boolean(progress) && (block === 'strength' || block === 'oly') && Boolean(movement && resolveLiftPrKey(movement));
-  const lg = size === 'lg';
-  const numClass = lg ? 'num text-3xl font-semibold leading-none' : 'num text-base font-semibold';
+  const numClass = `num whitespace-nowrap font-extrabold leading-none text-brand-neon ${size === 'lg' ? 'text-[22px]' : 'text-xl'}`;
+  const col = 'flex flex-col border-l border-white/10 px-4 first:border-l-0 first:pl-0';
 
   if (!interactive) {
     return (
-      <div className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5">
-        <span className={numClass + ' text-white'}>{fmtKgValue(kg)}</span>
-        <span className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">{loadUnitLabel(movementId, block)}</span>
+      <div className={col}>
+        <span className={numClass}>{fmtKgValue(kg)}</span>
+        <span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{loadUnitLabel(movementId, block)}</span>
       </div>
     );
   }
@@ -63,16 +64,14 @@ export function LoadStat({ kg, movementId, block, progress, size = 'sm' }: LoadS
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`flex flex-col items-center rounded-lg bg-brand-neon/10 ring-1 ring-brand-neon/30 transition-colors duration-200 hover:bg-brand-neon/20 hover:ring-brand-neon/60 ${
-          lg ? 'px-3 py-2' : 'min-w-[3.5rem] px-2.5 py-1.5'
-        }`}
+        className={`${col} text-left transition-opacity duration-200 hover:opacity-80`}
         aria-label={`Ver progresión de ${movement?.name ?? 'este movimiento'}`}
       >
-        <span className={`flex items-center gap-1.5 text-white ${numClass}`}>
+        <span className={`flex items-center gap-1.5 ${numClass}`}>
           {fmtKgValue(displayKg)}
-          <ChartSpline size={lg ? 15 : 13} strokeWidth={2.5} className="text-brand-neon" />
+          <ChartSpline size={13} strokeWidth={2.5} className="text-brand-neon/70" aria-hidden="true" />
         </span>
-        <span className="mt-0.5 text-[10px] uppercase tracking-wide text-brand-neon/80">{todaySet ? 'kg real · ver' : 'kg · ver'}</span>
+        <span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{todaySet ? 'kg real · ver' : 'kg · ver'}</span>
       </button>
       {open && progress && movementId && (
         <MovementProgressModal

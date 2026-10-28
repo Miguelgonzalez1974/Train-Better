@@ -93,10 +93,10 @@ export function DaySessionBlocks({
       {showingTask ? (
         <SessionTaskView sections={taskSections} />
       ) : !editable ? (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col">
           <button
             onClick={() => setOpenBlocks(openBlocks.size === blocksWithResults.length ? new Set() : new Set(blocksWithResults.map((g) => g.block)))}
-            className="mb-1 ml-auto block text-[11px] font-medium text-neutral-500 transition-colors duration-200 hover:text-neutral-300"
+            className="mb-2 ml-auto block text-[11px] font-medium text-neutral-500 transition-colors duration-200 hover:text-neutral-300"
           >
             {openBlocks.size === blocksWithResults.length ? 'Cerrar todo' : 'Abrir todo'}
           </button>

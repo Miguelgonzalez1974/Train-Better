@@ -57,11 +57,12 @@ function complexHeroIdx(complex: SessionBlockResult[]): number {
   return best;
 }
 
+/** Una columna de la prescripción (series | reps | kg…): cifra y etiqueta sin recuadro, separadas por una línea fina. */
 function StatBox({ value, label }: { value: string | number; label: string }) {
   return (
-    <div className="flex min-w-[3.5rem] flex-col items-center rounded-lg bg-black/20 px-2.5 py-1.5">
-      <span className="num text-base font-semibold text-white">{value}</span>
-      <span className="text-[10px] uppercase tracking-wide text-neutral-500">{label}</span>
+    <div className="flex flex-col border-l border-white/10 px-4 first:border-l-0 first:pl-0">
+      <span className="num whitespace-nowrap text-xl font-extrabold leading-none text-white">{value}</span>
+      <span className="mt-1 text-[10px] font-bold uppercase tracking-wide text-neutral-500">{label}</span>
     </div>
   );
 }
@@ -162,9 +163,7 @@ function SetsStat({ entry }: { entry: { sets?: number; waveSize?: number } }) {
 
 function FormatBadge({ format }: { format: string }) {
   return (
-    <span className="mb-2 inline-block rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
-      {format}
-    </span>
+    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.06em] text-brand-gold">{format}</span>
   );
 }
 
@@ -232,10 +231,10 @@ function StandardHint({ standard, className = '' }: { standard?: string; classNa
     <div className={className}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="mt-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-600 transition-colors hover:text-neutral-400"
+        className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-neutral-500 transition-colors hover:text-neutral-300"
       >
-        <Info size={9} strokeWidth={2.75} />
-        {open ? 'ocultar' : 'cómo se hace'}
+        <Info size={11} strokeWidth={2.5} />
+        {open ? 'Ocultar' : 'Cómo se hace'}
       </button>
       {open && <p className="mt-1 text-xs leading-relaxed text-neutral-500">{standard}</p>}
     </div>
@@ -396,7 +395,7 @@ function BenchmarkWodCard({
   if (!wod) return null;
 
   return (
-    <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
+    <div className="py-0.5">
       <p className={NAME_HEADLINE}>{wod.name}</p>
       <p className="text-sm text-neutral-300">{localizeWodText(wod.format)}</p>
       <div className="mt-2 flex flex-col divide-y divide-white/5 border-y border-white/5">
@@ -495,7 +494,7 @@ function CustomWodCard({
   const roundSize = 2; // par movimiento-principal + movimiento-fijo, ver `ROUND_LABEL_BY_KIND`.
 
   return (
-    <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
+    <div className="py-0.5">
       {part ? <WodPartLabel part={part} /> : null}
       {title && <p className={`mb-1 ${NAME_HEADLINE}`}>"{title}"</p>}
       {format && <FormatBadge format={format} />}
@@ -568,7 +567,7 @@ function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
   const active = groups[activeIdx] ?? groups[0];
 
   return (
-    <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
+    <div className="py-0.5">
       {groups.length > 1 && (
         <div className="mb-3 flex gap-0.5 rounded-lg bg-white/5 p-0.5">
           {groups.map((group, gi) => (
@@ -611,7 +610,7 @@ function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
 /** Bloque cool down: una sola rutina que se enlaza en orden, no una tarjeta por estiramiento. */
 function CooldownRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
   return (
-    <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
+    <div className="py-0.5">
       <p className="mb-3 text-xs text-neutral-500">Enlaza estos pasos en orden, sin prisa, para bajar pulsaciones.</p>
       <div className="flex flex-col gap-3">
         {entries.map((entry, idx) => {
@@ -665,7 +664,7 @@ function ComplexCard({
   const isPairedFormat = complex.length === 2 && Boolean(complex[0].format) && complex[0].format === complex[1].format;
 
   return (
-    <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
+    <div className="py-0.5">
       <div className="flex flex-col gap-3">
         {prep.length > 0 && (
           <div>
@@ -692,7 +691,9 @@ function ComplexCard({
                           <p className={NAME_STEP}>{movement.name}</p>
                           {entry.reps && <span className="text-xs text-neutral-500">{entry.reps}</span>}
                           {entry.loadKg ? (
-                            <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                            <div className="flex">
+                              <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                            </div>
                           ) : null}
                         </div>
                         <StandardHint standard={movement.standard} />
@@ -739,7 +740,7 @@ function ComplexCard({
                   )}
 
                   {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
-                    <div className="ml-7 mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <div className="ml-7 mt-2 flex flex-wrap items-center gap-y-2">
                       <SetsStat entry={entry} />
                       {entry.reps && <StatBox value={entry.reps} label="reps" />}
                       {entry.loadKg ? (
@@ -752,7 +753,11 @@ function ComplexCard({
                         />
                       ) : null}
                       {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
-                      {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
+                      {entry.repStyle === 'touch-and-go' && (
+                        <span className="pl-4">
+                          <RepStyleBadge />
+                        </span>
+                      )}
                     </div>
                   )}
                   {entry.setPlan && entry.setPlan.length >= 2 && (
@@ -903,7 +908,9 @@ function PairedFormatEntry({
                     {entry.reps && repsLabel(entry.reps)}
                   </span>
                   {entry.loadKg ? (
-                    <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                    <div className="flex">
+                      <LoadStat kg={entry.loadKg} movementId={entry.movementId} block={entry.block} progress={progress} />
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -947,7 +954,7 @@ function AccessoryGroupCard({ entries }: { entries: SessionBlockResult[] }) {
       {groups.map((group, gi) => (
         <div
           key={gi}
-          className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted"
+          className="py-0.5"
         >
           {group.format && <FormatBadge format={group.format} />}
           <div className="flex flex-col gap-2.5">
@@ -1001,12 +1008,12 @@ function EntryRow({
   // Esta tarjeta sirve fuerza/oly de un solo levantamiento, skill y el accesorio sin format — los tres
   // bloques que la pestaña Task de la sesión ya cubre, así que su nota ya no sale aquí.
   return (
-    <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5 transition-colors duration-200 hover:bg-brand-surfaceMuted">
+    <div className="py-0.5">
       {entry.format && <FormatBadge format={entry.format} />}
       <p className={NAME_MAIN}>{entry.complex?.name ?? movement.name}</p>
 
       {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-y-2">
           <SetsStat entry={entry} />
           {entry.reps && <StatBox value={entry.reps} label="reps" />}
           {entry.loadKg ? (
@@ -1019,7 +1026,11 @@ function EntryRow({
             />
           ) : null}
           {entry.tempo && <StatBox value={entry.tempo} label="tempo" />}
-          {entry.repStyle === 'touch-and-go' && <RepStyleBadge />}
+          {entry.repStyle === 'touch-and-go' && (
+            <span className="pl-4">
+              <RepStyleBadge />
+            </span>
+          )}
         </div>
       )}
       {entry.setPlan && entry.setPlan.length >= 2 && <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} notation={entry.complex ? entry.reps : undefined} />}
@@ -1308,8 +1319,6 @@ export function SessionBlockCard({
 }: SessionBlockCardProps) {
   if (results.length === 0) return null;
   const asIndex = Boolean(indexMode) && !editable;
-  // Fuerza, WOD y oly son los protagonistas del dia (tarjeta con fondo); el resto son filas finas.
-  const hero = asIndex && (block === 'strength' || block === 'wod' || block === 'oly');
   const { label, Icon, accent } = BLOCK_META[block];
   const accentClasses = ACCENT_CLASSES[accent];
   const isBenchmarkWod = block === 'wod' && results[0].movementId.startsWith('benchmark:');
@@ -1338,30 +1347,24 @@ export function SessionBlockCard({
   const [open, setOpen] = useState(false);
 
   return (
-    <div
-      className={
-        asIndex
-          ? hero
-            ? 'rounded-2xl bg-white/[0.045] ring-1 ring-white/[0.06]'
-            : ''
-          : `relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`
-      }
-    >
+    // Los bloques de la sesión son una sola superficie plana: cada uno una fila separada de la anterior por una línea fina, igual
+    // plegado que abierto y sea cual sea el bloque (fuerza, WOD, calentamiento…).
+    <div className={asIndex ? 'border-t border-white/10 first:border-t-0' : `relative pl-4 ${isLast ? 'pb-0' : 'pb-6'}`}>
       {!asIndex && <span className={`absolute bottom-1 left-0 top-0.5 w-[3px] ${accentClasses.bar}`} />}
 
-      <div className={asIndex && indexMode?.open ? (hero ? 'px-3 pb-3' : 'pb-3') : undefined}>
+      <div>
         {asIndex && indexMode ? (
           <button
             onClick={indexMode.onToggle}
             aria-expanded={indexMode.open}
-            className={hero ? 'flex w-full items-start gap-3.5 p-4 text-left' : 'flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.03]'}
+            className={`flex w-full items-center gap-3 pt-3.5 text-left transition-opacity duration-200 hover:opacity-90 ${indexMode.open ? 'pb-2.5' : 'pb-3.5'}`}
           >
-            <BlockTile block={block} size={hero ? 40 : 30} active={indexMode.open} />
+            <BlockTile block={block} size={34} active={indexMode.open} />
             <span className="min-w-0 flex-1">
-              <span className={`block font-semibold uppercase tracking-[0.14em] ${hero ? 'text-[11px] text-neutral-500' : 'text-[10px] text-neutral-500'}`}>{label}</span>
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>
               {!indexMode.open && indexMode.preview}
             </span>
-            <ChevronDown size={14} strokeWidth={2.25} className={`shrink-0 text-neutral-600 transition-transform duration-200 ${hero ? 'mt-1' : ''} ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />
+            <ChevronDown size={14} strokeWidth={2.25} className={`shrink-0 text-neutral-600 transition-transform duration-200 ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />
           </button>
         ) : collapsible ? (
           <button
@@ -1381,7 +1384,9 @@ export function SessionBlockCard({
           </p>
         )}
 
-        {(asIndex ? Boolean(indexMode?.open) : !collapsible || open) && (editable && onUpdateEntry && entryIndices ? (
+        {(asIndex ? Boolean(indexMode?.open) : !collapsible || open) && (
+        <div className={asIndex ? 'pb-4 pl-[46px]' : undefined}>
+        {editable && onUpdateEntry && entryIndices ? (
           wodGroups.length > 1 ? (
             // Dia de doble WOD en edicion: cada parte se edita por separado (los movimientos que se anadan o
             // quiten quedan dentro de su parte).
@@ -1476,7 +1481,9 @@ export function SessionBlockCard({
               </div>
             ))}
           </div>
-        ))}
+        )}
+        </div>
+        )}
       </div>
     </div>
   );
