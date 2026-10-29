@@ -22,8 +22,8 @@ import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } 
 import { DayRows, type NutritionSummary } from './DayRows';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
-import { buildPastDayView, buildReadinessSeries, buildTrendPoints, buildWeekWindow } from './pastDay';
-import { ReadinessTrendChart, WeekEffortChart } from './WeekCharts';
+import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
+import { ReadinessTrendChart } from './WeekCharts';
 import { WeekTrendCard } from './WeekTrendCard';
 import { HrvChart } from './HrvChart';
 import { SleepTab } from './SleepHabits';
@@ -133,13 +133,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     };
   }, [latestBodyweightKg, profile.nutritionPrefs, profile.sessionCache, history, dayIso, isToday, todaySession]);
   // Datos de las gráficas de las pestañas (solo se calculan al abrirlas).
-  const weekPoints = useMemo(
-    () => (tab === 'esfuerzo' ? buildWeekWindow(profile, history, dayIso, todayIso, strainView) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tab, profile, history, dayIso, todayIso, strainView.planned?.strain, strainView.target],
-  );
-  // La tendencia del Resumen: los días que terminan en el elegido (se calcula al dibujarla, para el rango que se pida).
-  const buildTrend = useCallback((days: number) => buildTrendPoints(profile, history, dayIso, todayIso, days), [profile, history, dayIso, todayIso]);
+  // Los datos de la tendencia (pestaña Esfuerzo): se calculan al dibujarla, para el rango que se pida. Hoy lleva el esfuerzo previsto.
+  const plannedToday = strainView.planned?.strain ?? null;
+  const buildTrend = useCallback((days: number) => buildTrendPoints(profile, history, dayIso, todayIso, days, plannedToday), [profile, history, dayIso, todayIso, plannedToday]);
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
   const loadKnown = shown.acwr.acwr !== null && !shown.acwr.coldStart;
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
@@ -307,15 +303,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             onNavigateToNutricion={onNavigateToNutricion}
             onOpenAnalysis={() => setAnalysisOpen(true)}
           />
-
-          {/* Tu semana: el esfuerzo y la preparación sobre los mismos días. */}
-          <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} onSelect={setDayIso} />
         </>
       )}
 
       {tab === 'esfuerzo' && (
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
-          <WeekEffortChart points={weekPoints} selectedIso={dayIso} todayIso={todayIso} onSelect={setDayIso} />
+          <WeekTrendCard build={buildTrend} selectedIso={dayIso} onSelect={setDayIso} />
           <div className="rounded-2xl bg-white/[0.03] p-5">
             <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
           </div>

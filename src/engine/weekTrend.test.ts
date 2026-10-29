@@ -7,6 +7,7 @@ const day = (n: number, strain: number | null, readiness: number | null, target:
   strain,
   readiness,
   target,
+  planned: null,
 });
 
 describe('weekTrend', () => {

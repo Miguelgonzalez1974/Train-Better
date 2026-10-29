@@ -12,6 +12,8 @@ export interface TrendPoint {
   target: { low: number; high: number } | null;
   /** Preparación de esa mañana (0-100), o null si no se pudo calcular. */
   readiness: number | null;
+  /** Solo hoy, si aún no has entrenado: el esfuerzo que cuesta la sesión prevista. */
+  planned: number | null;
 }
 
 export type ReadinessBand = 'good' | 'mid' | 'low';

@@ -1,4 +1,4 @@
-import type { AthleteProfile, SessionHistoryEntry, StrainTarget } from '../../data/athlete/types';
+import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { computeAcwr, getAcwrTrend, type AcwrResult } from '../../engine/loadMetrics';
 import { computeReadinessScore, type ReadinessScore } from '../../engine/readinessScore';
 import { dayStrain, strainStatus } from '../../engine/strain';
@@ -11,37 +11,6 @@ function isoAddDays(iso: string, delta: number): string {
   const d = new Date(`${iso}T12:00:00`);
   d.setDate(d.getDate() + delta);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** Un día de la gráfica semanal: su objetivo, el esfuerzo real (o el previsto de hoy) y si entrenó. */
-export interface WeekDayPoint {
-  iso: string;
-  target: StrainTarget | null;
-  real: number | null;
-  /** Solo hoy, si aún no has entrenado: el esfuerzo que cuesta la sesión prevista. */
-  planned: number | null;
-}
-
-/**
- * Los 7 días que terminan en `endIso` (el día elegido) con el objetivo y el esfuerzo de cada uno: el objetivo es el
- * guardado esa mañana (o, si falta y hubo sesión, el que se habría pedido) y el esfuerzo, el real. Hoy suma el previsto.
- */
-export function buildWeekWindow(
-  profile: AthleteProfile,
-  history: SessionHistoryEntry[],
-  endIso: string,
-  todayIso: string,
-  todayStrain: StrainView,
-): WeekDayPoint[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const iso = isoAddDays(endIso, i - 6);
-    const entry = history.find((h) => h.date === iso);
-    const real = dayStrain(entry);
-    const stored = profile.strainTargets?.[iso];
-    const target = iso > todayIso ? null : stored ?? (entry || iso === todayIso ? buildStrainTarget(profile, history, iso) : null);
-    const planned = iso === todayIso && real === null ? todayStrain.planned?.strain ?? null : null;
-    return { iso, target: iso === todayIso ? todayStrain.target : target, real, planned };
-  });
 }
 
 /** La preparación de cada uno de los últimos `days` días hasta `endIso` (null si ese día no se puede calcular). */
@@ -59,7 +28,7 @@ export function buildReadinessSeries(profile: AthleteProfile, history: SessionHi
  * porque un descanso también es un dato; null hoy antes de entrenar y antes de empezar a usar la app), el objetivo de ese día y la
  * preparación con la que se llegó (calculada con lo que se sabía esa mañana).
  */
-export function buildTrendPoints(profile: AthleteProfile, history: SessionHistoryEntry[], dayIso: string, todayIso: string, days: number): TrendPoint[] {
+export function buildTrendPoints(profile: AthleteProfile, history: SessionHistoryEntry[], dayIso: string, todayIso: string, days: number, plannedToday: number | null = null): TrendPoint[] {
   // La ventana termina hoy y no se mueve al tocar un día (así se puede recorrer la semana sin que cambie de sitio); solo se desplaza
   // hacia atrás si el día elegido en el Dashboard cae antes de su inicio.
   const endIso = dayIso < isoAddDays(todayIso, -(days - 1)) ? dayIso : todayIso;
@@ -81,7 +50,7 @@ export function buildTrendPoints(profile: AthleteProfile, history: SessionHistor
             painFlags: profile.painFlags,
             today: new Date(`${iso}T12:00:00`),
           }).total;
-    return { iso, strain, target: target ? { low: target.low, high: target.high } : null, readiness };
+    return { iso, strain, target: target ? { low: target.low, high: target.high } : null, readiness, planned: iso === todayIso && strain === null ? plannedToday : null };
   });
 }
 
