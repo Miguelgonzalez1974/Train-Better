@@ -91,7 +91,12 @@ import { resolveCompetitionDay } from './taperPlan';
 import { sustainedLowReadiness } from './readinessTrend';
 import { PREHAB_GROUP_LABEL, prehabNeeds, prehabNote, prehabTag, type PrehabNeed } from './prehab';
 import { localizeWodText } from './wodUnits';
-import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type SelectionContext } from './wodSelection';
+import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type RankedWod, type SelectionContext } from './wodSelection';
+import { DEFAULT_WOD_EFFORT_MODE, KEEP_IF_FIT_ATLEAST, MIN_FIT_GAIN, effortFitScore, rerankByEffort } from './wodEffort';
+import { getWodProfile } from './wodProfile';
+import { estimatePlannedStrain } from './plannedStrain';
+import { buildStrainTarget } from './strainTarget';
+import { learnStrain } from './strainLearning';
 import { historyStamp, lastHistoryDate, painStamp } from '../data/athlete/historyStamp';
 import { suggestAccessoryLoadKg, type AccessoryLoadContext } from './accessoryLoads';
 import {
@@ -2121,6 +2126,19 @@ function pickRealWodUnparted(a: Parameters<typeof pickRealWod>[0]): { blocks: Se
   const sequence = rankedSequence(ranked, seededRng(`wod-pick:${wodSeedKey}:${a.part ?? 0}`));
   const pick = sequence.length > 0 ? sequence[wodVariant % sequence.length] : null;
   if (!pick) return null;
+  const served = serveRealWod(pick, ctx, a);
+  // Se recuerda la elección de un día de un solo WOD: después de generar toda la sesión se puede ver si otro candidato encaja mejor con el esfuerzo de hoy.
+  if (served && !a.part) lastRealPick = { a, ctx, ranked, served };
+  return served;
+}
+
+type RealWodArgs = Parameters<typeof pickRealWod>[0];
+
+/** La última elección de WOD real del día que se está generando (un día de un solo WOD), con lo necesario para servir otro candidato. */
+let lastRealPick: { a: RealWodArgs; ctx: SelectionContext; ranked: RankedWod[]; served: { blocks: SessionBlockResult[]; reasons: string[]; wod: CatalogWod } } | null = null;
+
+/** Los bloques y las razones de servir `pick` como WOD del día (PushJerk estructurado con las cargas del coach; el resto, como tarjeta con su formato). */
+function serveRealWod(pick: RankedWod, ctx: SelectionContext, a: RealWodArgs): { blocks: SessionBlockResult[]; reasons: string[]; wod: CatalogWod } | null {
   const wod = pick.wod;
   const reasons = [`Hoy toca un WOD real de la programación de ${SOURCE_LABEL[wod.source]} (${wod.name}), no uno generado.`, ...explainChoice(pick, ctx)];
   if (a.loadFactor < 0.99) reasons.push(`Las cargas van recortadas un ${Math.round((1 - a.loadFactor) * 100)} % por cómo llegas hoy.`);
@@ -5151,20 +5169,90 @@ export function generateSessionForDate(
   const variant = !planningPass && activeMacro && !activeProgram ? (profile.regenVariants?.[dateIso] ?? 0) : 0;
   const prevVariant = wodVariant;
   const prevSeedKey = wodSeedKey;
+  const prevPick = lastRealPick;
   wodVariant = variant;
   wodSeedKey = seedKey;
+  lastRealPick = null;
   try {
-    const session = withSeededRng(seedKey, () => {
+    const generated = withSeededRng(seedKey, () => {
       if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
       return activeMacro
         ? generateDailySession(profile, history, activeMacro, date, goals)
         : generateOffSeasonSession(profile, history, date);
     });
+    const session = applyWodEffort(generated, profile, history, dateIso);
     return variant > 0 ? { ...session, regenVariant: variant } : session;
   } finally {
     wodVariant = prevVariant;
     wodSeedKey = prevSeedKey;
+    lastRealPick = prevPick;
   }
+}
+
+/**
+ * Elegir el WOD por el esfuerzo de hoy (ver `wodEffort.ts`): con la sesión entera ya generada se mira qué WOD, de los que ya
+ * encajaban, deja el esfuerzo previsto dentro del objetivo del día. En modo `shadow` (el de por defecto) solo se cuenta en las
+ * razones del día lo que se habría elegido; en `on` se sirve ese WOD. No toca los días especiales de la competición (simulacro,
+ * activación, víspera, evento, recuperación), los dobles WOD, las sesiones propias ni la pasada de planificación de la semana.
+ */
+function applyWodEffort(session: DailySession, profile: AthleteProfile, history: SessionHistoryEntry[], dateIso: string): DailySession {
+  const mode = profile.wodEffortMode ?? DEFAULT_WOD_EFFORT_MODE;
+  const pick = lastRealPick;
+  if (mode === 'off' || !pick || planningPass) return session;
+  if (session.isRestDay || session.doubleWod || session.source === 'custom') return session;
+  const comp = session.competition;
+  if (comp && (comp.simulacro || comp.eventDay || comp.phase === 'activacion' || comp.phase === 'vispera' || comp.phase === 'evento' || comp.phase === 'post')) return session;
+  // La sesión debe seguir llevando el WOD que se eligió (una regla posterior pudo cambiarlo).
+  const servedId = pick.served.wod.id;
+  const wodBlocks = session.blocks.filter((b) => b.block === 'wod');
+  if (wodBlocks.length === 0 || !wodBlocks.some((b) => b.wodCatalogId === servedId || (b.wodLibraryId !== undefined && `lib:${b.wodLibraryId}` === servedId))) return session;
+
+  const planned = estimatePlannedStrain(session, history, learnStrain(profile, history, dateIso).bias);
+  const current = getWodProfile(servedId);
+  if (!planned || !current || current.expectedMin === null) return session;
+  const target = profile.strainTargets?.[dateIso] ?? buildStrainTarget(profile, history, dateIso);
+  const candidates = rerankByEffort(pick.ranked, planned, target, current, getWodProfile);
+  if (candidates.length === 0) return session;
+  // Si el WOD de siempre ya deja el esfuerzo dentro del objetivo (o a un paso), no se toca: solo se cambia lo que de verdad no encaja.
+  const currentFit = effortFitScore(planned.strain, target);
+  let chosen: ReturnType<typeof rerankByEffort>[number] | undefined;
+  if (currentFit < KEEP_IF_FIT_ATLEAST) {
+    // Mismo sorteo ponderado y misma semilla que la elección de siempre, pero sobre la puntuación que incluye el esfuerzo.
+    const byId = new Map(candidates.map((c) => [c.ranked.wod.id, c]));
+    const sequence = rankedSequence(candidates.map((c) => ({ ...c.ranked, score: c.combined })), seededRng(`wod-pick:${wodSeedKey}:0`));
+    const slot = sequence.length > 0 ? sequence[wodVariant % sequence.length] : null;
+    const better = slot ? byId.get(slot.wod.id) : undefined;
+    // Solo si el elegido encaja claramente mejor que el actual (no por un punto de diferencia).
+    if (better && better.fit >= currentFit + MIN_FIT_GAIN) chosen = better;
+  }
+  chosen ??= candidates.find((c) => c.ranked.wod.id === servedId) ?? candidates[0];
+
+  const range = `${target.low}–${target.high}`;
+  const nameOf = (w: CatalogWod) => w.name;
+  const now = Math.round(planned.strain);
+  const same = chosen.ranked.wod.id === servedId;
+  const chosenStrain = chosen.strain === null ? null : Math.round(chosen.strain);
+  const baseReasons = session.coachReasons ?? [];
+
+  if (mode === 'shadow') {
+    const line = same
+      ? `Prueba de esfuerzo: este WOD ya encaja con tu objetivo de hoy (${range}); esfuerzo previsto ~${now}.`
+      : `Prueba de esfuerzo (aún no se aplica): con tu objetivo de hoy (${range}) y un esfuerzo previsto de ~${now}, el coach habría elegido ${nameOf(chosen.ranked.wod)} (~${chosenStrain ?? '?'}) en lugar de ${nameOf(pick.served.wod)}.`;
+    return { ...session, coachReasons: [...baseReasons, line] };
+  }
+
+  if (same) return { ...session, coachReasons: [...baseReasons, `El WOD encaja con tu objetivo de esfuerzo de hoy (${range}); esfuerzo previsto ~${now}.`] };
+  const served = serveRealWod(chosen.ranked, pick.ctx, pick.a);
+  if (!served) return session;
+  const first = session.blocks.findIndex((b) => b.block === 'wod');
+  const blocks = [...session.blocks.slice(0, first), ...served.blocks, ...session.blocks.slice(first).filter((b) => b.block !== 'wod')];
+  const oldReasons = new Set(pick.served.reasons);
+  const reasons = [
+    ...baseReasons.filter((r) => !oldReasons.has(r)),
+    ...served.reasons,
+    `Elegido por tu esfuerzo de hoy: objetivo ${range}, con este WOD el esfuerzo previsto es ~${chosenStrain ?? now} (con ${nameOf(pick.served.wod)} sería ~${now}).`,
+  ];
+  return { ...session, blocks, coachReasons: Array.from(new Set(reasons)) };
 }
 
 /**

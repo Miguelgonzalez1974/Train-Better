@@ -30,7 +30,13 @@ const VARIANT_PR_FIELDS: { key: keyof VariantPersonalRecords; label: string }[] 
 type WodSourceId = NonNullable<AthleteProfile['wodSources']>[number];
 
 /** Las programaciones que se pueden marcar; "Clásicos" incluye también las piezas de programaciones menores. */
-const WOD_SOURCE_OPTIONS: { key: string; label: string; sources: WodSourceId[] }[] = [
+const EFFORT_MODE_OPTIONS: { key: NonNullable<AthleteProfile['wodEffortMode']>; label: string; hint: string }[] = [
+  { key: 'off', label: 'Apagado', hint: 'El WOD se elige como siempre: por duración, energía, dominio y molestias.' },
+  { key: 'shadow', label: 'Prueba', hint: 'El coach calcula qué WOD dejaría tu esfuerzo previsto dentro del objetivo de hoy y lo cuenta en «por qué tu sesión es así», pero sirve el de siempre.' },
+  { key: 'on', label: 'Activo', hint: 'Si el WOD previsto te sacaría de tu objetivo de esfuerzo, el coach sirve otro de los que ya encajaban que sí lo respeta.' },
+];
+
+const WOD_SOURCE_OPTIONS:{ key: string; label: string; sources: WodSourceId[] }[] = [
   { key: 'pushjerk', label: 'PushJerk', sources: ['pushjerk'] },
   { key: 'mayhem', label: 'CrossFit Mayhem', sources: ['mayhem'] },
   { key: 'comptrain', label: 'CompTrain', sources: ['comptrain'] },
@@ -197,6 +203,32 @@ export function PerfilRapido({ profile, onSave, onRemovePainFlag }: PerfilRapido
         </div>
         <span className="text-[11px] text-neutral-600">
           El coach elige el WOD de cada día entre las programaciones marcadas. Si dejas pocas, algún día puede recurrir a un WOD generado.
+        </span>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-xs text-neutral-400">Elegir el WOD por tu esfuerzo de hoy</legend>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Elegir el WOD por tu esfuerzo de hoy">
+          {EFFORT_MODE_OPTIONS.map((opt) => {
+            const on = (draft.wodEffortMode ?? 'shadow') === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setDraft((prev) => ({ ...prev, wodEffortMode: opt.key === 'shadow' ? undefined : opt.key }))}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
+                  on ? 'border-white/40 bg-white/10 text-white' : 'border-white/10 text-neutral-500 hover:bg-white/5'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <span className="text-[11px] text-neutral-600">
+          {EFFORT_MODE_OPTIONS.find((o) => o.key === (draft.wodEffortMode ?? 'shadow'))?.hint} Nunca toca el simulacro, la activación ni la víspera de la competición.
         </span>
       </fieldset>
 

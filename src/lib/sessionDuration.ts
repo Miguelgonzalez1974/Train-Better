@@ -1,4 +1,5 @@
 import type { DailySession, SessionBlockResult } from '../data/athlete/types';
+import { getWodProfile } from '../engine/wodProfile';
 
 /**
  * Duración ORIENTATIVA de una sesión, en minutos — para que el atleta sepa cuánto le va a llevar
@@ -6,8 +7,14 @@ import type { DailySession, SessionBlockResult } from '../data/athlete/types';
  * del motor (objetivo del WOD, etc.): una heurística razonable, no un cronómetro.
  */
 
-/** Minutos de una pieza de WOD a partir de su `format` (si lleva la cifra) o su `wodTarget` (si es de tiempo). */
+/**
+ * Minutos de una pieza de WOD: los del perfil del catálogo si es un WOD real (duración declarada o modelo por movimiento; un Fran
+ * son 5 min, no los 12 de un metcon medio), o, si no, a partir de su `format` (si lleva la cifra) o su `wodTarget` (si es de tiempo).
+ */
 function wodPartMinutes(entry: SessionBlockResult): number {
+  const catalogId = entry.wodCatalogId ?? (entry.wodLibraryId ? `lib:${entry.wodLibraryId}` : undefined);
+  const profiled = catalogId ? getWodProfile(catalogId)?.expectedMin : null;
+  if (profiled) return Math.round(profiled);
   const format = entry.format ?? '';
   const explicitMin = format.match(/(\d+)\s*min/i);
   if (explicitMin) return Number(explicitMin[1]);

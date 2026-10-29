@@ -314,6 +314,7 @@ export function mergeProfile(
     trainingDaysPerWeek: localIsFresh ? remote.trainingDaysPerWeek : local.trainingDaysPerWeek,
     strengthSplit: (localIsFresh ? remote.strengthSplit : local.strengthSplit) ?? remote.strengthSplit,
     wodSources: (localIsFresh ? remote.wodSources : local.wodSources) ?? remote.wodSources,
+    wodEffortMode: (localIsFresh ? remote.wodEffortMode : local.wodEffortMode) ?? remote.wodEffortMode,
     onboardedAt: local.onboardedAt ?? remote.onboardedAt,
     intensityRamp: mergeRamp(remote, local, localIsFresh, base),
 

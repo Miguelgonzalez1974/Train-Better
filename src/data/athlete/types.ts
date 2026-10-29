@@ -389,6 +389,12 @@ export interface AthleteProfile {
    */
   wodSources?: ('pushjerk' | 'mayhem' | 'comptrain' | 'invictus' | 'clasicos' | 'otros')[];
   /**
+   * Elegir el WOD del día por tu esfuerzo de hoy (ver `engine/wodEffort.ts`): `off` = como antes; `shadow` (por defecto, ausente) = el
+   * coach calcula qué WOD habría elegido para dejar el esfuerzo previsto dentro del objetivo y lo cuenta en las razones del día, pero
+   * sirve el de siempre; `on` = sirve el elegido por esfuerzo.
+   */
+  wodEffortMode?: 'off' | 'shadow' | 'on';
+  /**
    * Movimiento de fuerza/oly (y, si aplica, accesorio por rol / benchmark del día de test) bloqueado
    * para ese día, por fecha ISO — decidido una vez al planificar la semana (ver `planWeekLocks` en
    * generateSession.ts) para que "qué toca" no cambie solo entre una vista y otra; la carga/series
