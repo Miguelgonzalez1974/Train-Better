@@ -308,7 +308,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
 
       {tab === 'esfuerzo' && (
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
-          <WeekTrendCard build={buildTrend} selectedIso={dayIso} onSelect={setDayIso} />
+          <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} onSelect={setDayIso} />
           <div className="rounded-2xl bg-white/[0.03] p-5">
             <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
           </div>

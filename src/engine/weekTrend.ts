@@ -48,12 +48,13 @@ export interface TrendBins {
   readiness: [number, number, number];
 }
 
-export function trendBins(points: TrendPoint[]): TrendBins {
+/** `todayIso`: hoy el día no ha terminado, así que un esfuerzo bajo todavía no cuenta como "debajo" (puede que aún falte sesión). */
+export function trendBins(points: TrendPoint[], todayIso?: string): TrendBins {
   const effort: [number, number, number] = [0, 0, 0];
   const readiness: [number, number, number] = [0, 0, 0];
   for (const p of points) {
     const fit = effortFit(p);
-    if (fit === 'below') effort[0]++;
+    if (fit === 'below' && p.iso !== todayIso) effort[0]++;
     else if (fit === 'within') effort[1]++;
     else if (fit === 'over') effort[2]++;
     if (p.readiness !== null) {
@@ -63,7 +64,6 @@ export function trendBins(points: TrendPoint[]): TrendBins {
   }
   return { effort, readiness };
 }
-
 const DAY_NAME = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 function dayWord(iso: string, long: boolean): string {
@@ -71,8 +71,11 @@ function dayWord(iso: string, long: boolean): string {
   return long ? `el ${name} ${Number(iso.slice(8, 10))}` : `el ${name}`;
 }
 
-/** Una frase que lee la semana: dónde empujaste de más con poca preparación, o que vas acompasado. null si hay pocos datos. */
-export function trendSentence(points: TrendPoint[]): string | null {
+/**
+ * Una frase que lee la semana: dónde empujaste de más con poca preparación, si te quedaste corto con el cuerpo listo, o que vas
+ * acompasado. null si hay pocos datos. Hoy (`todayIso`) no se juzga por debajo: el día no ha terminado.
+ */
+export function trendSentence(points: TrendPoint[], todayIso?: string): string | null {
   if (dataDays(points) < MIN_TREND_DAYS) return null;
   const long = points.length > 7;
   const trained = points.filter((p) => p.strain !== null && p.strain > 0 && p.target);
@@ -92,7 +95,25 @@ export function trendSentence(points: TrendPoint[]): string | null {
   const known = points.filter((p) => p.readiness !== null).map((p) => p.readiness!);
   const avg = known.length > 0 ? Math.round(known.reduce((s, v) => s + v, 0) / known.length) : null;
   if (trained.length === 0) return avg !== null ? `Sin sesiones en estos días. Tu preparación media es ${avg} %.` : 'Sin sesiones en estos días.';
-  if (avg !== null && avg >= 65) return 'Esfuerzo dentro de tu objetivo y buena preparación: así se gana forma.';
-  if (avg !== null && avg <= 40) return 'Esfuerzo dentro de tu objetivo, pero llegas justo de preparación: cuida el sueño y el descanso.';
+  const good = avg !== null && avg >= 65;
+  const tired = avg !== null && avg <= 40;
+
+  // Solo los días ya cerrados: hoy, si va por debajo, aún puede cambiar.
+  const closed = trained.filter((p) => !(p.iso === todayIso && p.strain! < p.target!.low));
+  if (closed.length === 0) return 'Hoy llevas poco esfuerzo, pero el día no ha terminado.';
+  const below = closed.filter((p) => p.strain! < p.target!.low);
+  const within = closed.length - below.length - over.length;
+  if (below.length > 0) {
+    const days = below.length === 1 ? 'un día' : `${below.length} días`;
+    if (below.length > within) {
+      if (good) return `Te quedaste por debajo del objetivo ${days}: con tan buena preparación hay margen para apretar un poco más.`;
+      if (tired) return `Te quedaste por debajo del objetivo ${days}, lo normal con la preparación justa.`;
+      return `Te quedaste por debajo del objetivo ${days}.`;
+    }
+    const who = below.length === 1 ? `${dayWord(below[0].iso, long)}, que quedó por debajo` : `${days} por debajo`;
+    return `Esfuerzo dentro de tu objetivo salvo ${who}${good ? ': había margen para más.' : '.'}`;
+  }
+  if (good) return 'Esfuerzo dentro de tu objetivo y buena preparación: así se gana forma.';
+  if (tired) return 'Esfuerzo dentro de tu objetivo, pero llegas justo de preparación: cuida el sueño y el descanso.';
   return 'Esfuerzo dentro de tu objetivo y preparación normal: una semana equilibrada.';
 }

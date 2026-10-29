@@ -29,13 +29,14 @@ const AXIS_OPACITY = 0.75;
  * esfuerzo previsto de hoy sale como un anillo discontinuo hasta que entrenas. Arriba, una frase que lee la semana; abajo, cuántos
  * días cayeron en cada tramo. Tocar un día lo elige en todo el Dashboard.
  */
-export function WeekTrendCard({ build, selectedIso, onSelect }: { build: (days: number) => TrendPoint[]; selectedIso: string; onSelect: (iso: string) => void }) {
+export function WeekTrendCard({ build, selectedIso, todayIso, onSelect }: { build: (days: number) => TrendPoint[]; selectedIso: string; todayIso: string; onSelect: (iso: string) => void }) {
   const [range, setRange] = useState(7);
   const points = useMemo(() => build(range), [build, range]);
   const n = points.length;
   const enough = dataDays(points) >= MIN_TREND_DAYS;
-  const sentence = useMemo(() => trendSentence(points), [points]);
-  const bins = useMemo(() => trendBins(points), [points]);
+  const sentence = useMemo(() => trendSentence(points, todayIso), [points, todayIso]);
+  const bins = useMemo(() => trendBins(points, todayIso), [points, todayIso]);
+  const [help, setHelp] = useState(false);
   const showHistograms = dataDays(points) >= MIN_HISTOGRAM_DAYS;
   const selectedIndex = points.findIndex((p) => p.iso === selectedIso);
   const selected = selectedIndex >= 0 ? points[selectedIndex] : null;
@@ -62,7 +63,10 @@ export function WeekTrendCard({ build, selectedIso, onSelect }: { build: (days: 
   // El día elegido: lo real, o lo previsto si aún no hay esfuerzo (hoy antes de entrenar).
   const shownStrain = selected ? (selected.strain ?? selected.planned ?? null) : null;
   const isPlanned = Boolean(selected && selected.strain === null && selected.planned !== null);
-  const shownFit = selected && shownStrain !== null ? effortFit({ strain: shownStrain, target: selected.target }) : 'unknown';
+  const fit = selected && shownStrain !== null ? effortFit({ strain: shownStrain, target: selected.target }) : 'unknown';
+  // Hoy el día no ha terminado: un esfuerzo bajo es lo que llevas, no un veredicto.
+  const todayRunning = Boolean(selected && selected.iso === todayIso && !isPlanned && fit === 'below');
+  const shownFit: EffortFit = todayRunning ? 'unknown' : fit;
 
   return (
     <section className="rounded-2xl bg-white/[0.03] p-5" aria-label="Esfuerzo y preparación de la semana">
@@ -116,7 +120,7 @@ export function WeekTrendCard({ build, selectedIso, onSelect }: { build: (days: 
                   </p>
                   <p className="mt-1.5 text-[11px] uppercase tracking-[0.1em] text-neutral-500">
                     {isPlanned ? 'Previsto' : 'Esfuerzo'}
-                    {FIT_WORD[shownFit] ? ` · ${FIT_WORD[shownFit]}` : ''}
+                    {todayRunning ? ' · hasta ahora' : FIT_WORD[shownFit] ? ` · ${FIT_WORD[shownFit]}` : ''}
                   </p>
                 </div>
                 <div className="text-right">
@@ -200,8 +204,21 @@ export function WeekTrendCard({ build, selectedIso, onSelect }: { build: (days: 
 
           {showHistograms && (
             <div className="mt-5 grid grid-cols-2 gap-6 border-t border-white/[0.07] pt-4">
-              <Histogram title="Esfuerzo" counts={bins.effort} colors={[BLUE, GOOD, MID]} labels={['debajo', 'dentro', 'encima']} />
-              <Histogram title="Preparación" counts={bins.readiness} colors={[LOW, MID, GOOD]} labels={['0–40', '41–64', '65–100']} />
+              <Histogram title="Esfuerzo" caption={`${sum(bins.effort)} de ${n} días con sesión`} counts={bins.effort} colors={[BLUE, GOOD, MID]} labels={['debajo', 'dentro', 'encima']} />
+              <Histogram title="Preparación" caption={`${sum(bins.readiness)} de ${n} días`} counts={bins.readiness} colors={[LOW, MID, GOOD]} labels={['0–40', '41–64', '65–100']} />
+            </div>
+          )}
+          {showHistograms && (
+            <div className="mt-3">
+              <button onClick={() => setHelp((h) => !h)} aria-expanded={help} className="text-[11px] font-medium text-neutral-500 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-300">
+                {help ? 'Ocultar' : '¿Cómo se leen las barras?'}
+              </button>
+              {help && (
+                <p className="mt-2 text-[12px] leading-relaxed text-neutral-400">
+                  Cada cuadradito es un día. <b className="font-semibold text-neutral-200">Esfuerzo</b> cuenta solo los días con sesión, según cayeron frente al objetivo de ese día (hoy no se juzga hasta que termina).{' '}
+                  <b className="font-semibold text-neutral-200">Preparación</b> cuenta cada día con su nota. Lo ideal: esfuerzo en «dentro» y la pila de preparación hacia la derecha, en verde.
+                </p>
+              )}
             </div>
           )}
 
@@ -228,12 +245,15 @@ export function WeekTrendCard({ build, selectedIso, onSelect }: { build: (days: 
 }
 
 /** Cuántos días cayeron en cada tramo, como columnas de cuadraditos finos (uno por día). */
-function Histogram({ title, counts, colors, labels }: { title: string; counts: [number, number, number]; colors: string[]; labels: string[] }) {
+const sum = (c: number[]) => c.reduce((s, v) => s + v, 0);
+
+function Histogram({ title, caption, counts, colors, labels }: { title: string; caption: string; counts: [number, number, number]; colors: string[]; labels: string[] }) {
   const max = Math.max(1, ...counts);
   const unit = Math.min(10, 52 / max);
   return (
     <div>
       <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">{title}</p>
+      <p className="mt-0.5 text-[11px] text-neutral-500">{caption}</p>
       <div className="mt-2.5 grid h-14 grid-cols-3 items-end gap-1.5">
         {counts.map((c, i) => (
           <div key={i} className="flex flex-col-reverse gap-px" aria-label={`${labels[i]}: ${c} ${c === 1 ? 'día' : 'días'}`}>

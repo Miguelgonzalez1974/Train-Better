@@ -55,6 +55,31 @@ describe('weekTrend', () => {
     expect(trendSentence(pts)).toContain('así se gana forma');
   });
 
+  it('hoy no se cuenta por debajo mientras el día no ha terminado', () => {
+    // Una semana como la real: cuatro descansos, dentro dos días y hoy con poco esfuerzo registrado.
+    const pts = [day(1, 0, 63), day(2, 0, 73), day(3, 0, 69), day(4, 0, 72), day(5, 55, 75), day(6, 60, 76), day(7, 21, 79)];
+    expect(trendBins(pts).effort).toEqual([1, 2, 0]);
+    expect(trendBins(pts, pts[6].iso).effort).toEqual([0, 2, 0]);
+    expect(trendSentence(pts, pts[6].iso)).toContain('así se gana forma');
+  });
+
+  it('si solo hay hoy con poco esfuerzo, no juzga el día', () => {
+    const pts = [day(1, 0, 63), day(2, 0, 73), day(3, 0, 69), day(4, 0, 72), day(7, 21, 79)];
+    expect(trendSentence(pts, pts[4].iso)).toContain('no ha terminado');
+  });
+
+  it('quedarse por debajo la mayoría de los días con buena preparación invita a apretar', () => {
+    const pts = [day(1, 20, 80), day(2, 25, 75), day(3, 55, 70), day(4, 0, 85)];
+    expect(trendSentence(pts)).toContain('margen para apretar');
+  });
+
+  it('un solo día por debajo entre varios dentro se nombra', () => {
+    const pts = [day(1, 55, 70), day(2, 60, 72), day(3, 58, 68), day(4, 20, 80)];
+    const s = trendSentence(pts)!;
+    expect(s).toContain('salvo el sábado');
+    expect(s).toContain('margen');
+  });
+
   it('pasarse con buena preparación no es una alarma', () => {
     const pts = [day(1, 70, 80), day(2, 72, 75), day(3, 50, 70), day(4, 55, 72)];
     expect(trendSentence(pts)).toContain('siempre llegando bien');
