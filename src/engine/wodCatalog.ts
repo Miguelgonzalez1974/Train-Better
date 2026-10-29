@@ -63,7 +63,7 @@ export interface CatalogWod {
 const midpoint = (a: number, b?: number) => (b === undefined ? a : (a + b) / 2);
 
 /** "9 min.", "10-12 min.", "sub 8 min.", "< 12 min." -> minutos; null si el objetivo no es un tiempo. */
-function parseGoalMinutes(goal: string | undefined): number | null {
+export function parseGoalMinutes(goal: string | undefined): number | null {
   if (!goal) return null;
   const m = goal.trim().match(/^(?:sub\s+|under\s+|<\s*)?(\d+)(?:\s*-\s*(\d+))?\s*min/i);
   return m ? midpoint(Number(m[1]), m[2] ? Number(m[2]) : undefined) : null;
