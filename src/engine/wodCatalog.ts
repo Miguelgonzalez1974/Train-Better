@@ -6,6 +6,7 @@ import { libraryWods, type LibraryWod } from '../data/library/libraryWods';
 import type { PainArea } from '../data/athlete/types';
 import { benchmarkConflictsWithPain, getAvoidedPatterns } from './painFlags';
 import { getWodDomain, type EnergySystem, type WodDomain } from './wodDomains';
+import { programmedBlocks, structureFromBenchmark } from './wodStructure';
 
 /**
  * Catálogo unificado de WODs de programaciones reales (PushJerk, Mayhem, CompTrain, Invictus y los clásicos), con cada
@@ -162,6 +163,12 @@ function benchmarkFormat(format: string, movementCount: number): CatalogFormat {
 function parseBenchmarkMinutes(wod: BenchmarkWorkout): { min: number; basis: DurationBasis } | null {
   if (wod.timeCapMinutes) return { min: wod.timeCapMinutes, basis: 'cap' };
   const f = wod.format;
+  // Bloques AMRAP con descanso ("5 rondas de AMRAP 3 con 1 min de descanso entre rondas", "AMRAP 10:00; descanso 2 min; AMRAP 10:00"): ver programmedBlocks.
+  const blocks = programmedBlocks(f);
+  if (blocks) return { min: blocks.minutes, basis: 'format' };
+  // Estaciones por tiempo ("3 rondas, 1 min por estación…") y demás formatos de duración fija que lee la estructura.
+  const read = structureFromBenchmark(f, wod.movements.filter((id) => getMovementById(id)), null);
+  if (read.fixedMinutes !== null) return { min: read.fixedMinutes, basis: 'format' };
   const series = f.match(SERIES_BLOCK);
   if (series) {
     const n = Number(series[1]);

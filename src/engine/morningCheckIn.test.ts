@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import {
   answersFromCheck,
   checkFromCard,
@@ -12,7 +12,7 @@ import {
 import { applyPainFollowUps, PAIN_BETTER_DAYS } from './painFlags';
 import { computeHrvPart } from './hrv';
 import { getReadinessFactor, scoreCheck } from './readiness';
-import { generateSessionForDate } from './generateSession';
+import { generateSessionForDate, isRealWodSelectionEnabled, setRealWodSelectionEnabled } from './generateSession';
 import { consecutiveDates, makeMacro, makeProfile } from './__fixtures';
 import type { PainFlag, ReadinessCheck, SessionBlockResult } from '../data/athlete/types';
 
@@ -105,6 +105,11 @@ describe('agujetas por zona', () => {
 });
 
 describe('agujetas y accesorio de hoy', () => {
+  // Prueban cómo el generador recorta el accesorio, no qué WOD real se elige: con la selección real encendida, el check-in bueno de la
+  // comparación puede cambiar el WOD del día y, con él, cuántos sorteos consume antes del accesorio (la selección real tiene sus tests aparte).
+  const REAL_WOD_INITIAL = isRealWodSelectionEnabled();
+  beforeAll(() => setRealWodSelectionEnabled(false));
+  afterAll(() => setRealWodSelectionEnabled(REAL_WOD_INITIAL));
   // Con 6 días a la semana hay días de accesorio con piernas; con 5, de empuje y tirón (los roles salen del plan de superseries).
   const mk = (n: 5 | 6) => makeProfile({ trainingDaysPerWeek: n, macrocycles: [makeMacro({ id: 'sore' })], bodyweightLog: [{ date: '2026-01-01', kg: 82 }] });
   const dates = consecutiveDates('2026-01-05', 140);

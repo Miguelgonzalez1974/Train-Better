@@ -289,6 +289,60 @@ function splitTopLevel(s: string): string[] {
   out.push(cur);
   return out;
 }
+/** Minutos de una cifra como "1:15", "3" o "1:30" (el tercer grupo son los segundos). */
+const clock = (min: string, sec?: string) => Number(min) + (sec ? Number(sec) / 60 : 0);
+
+/**
+ * Los bloques cronometrados de un WOD escrito en texto libre y el tiempo que ocupan con sus descansos: "5 rondas de AMRAP 3
+ * (1 min de descanso entre rondas)" = 19 min; "10 series de AMRAP 1:30 (descanso 30 seg entre series)" = 19,5; "AMRAP 10:00 …;
+ * descanso 2 min; AMRAP 10:00 …" = 22; "12 series de AMRAP 1:15 (nueva serie cada 3:00)" = 34,25.
+ * Devuelve null si no hay AMRAP o si el texto mezcla bloques con partes "for time", "hasta completar…" o ventanas de otro trabajo:
+ * ahí la duración no se puede saber y no se inventa.
+ */
+export function programmedBlocks(format: string): { minutes: number; restMinutes: number; blocks: number } | null {
+  const f = format.toLowerCase().replace(/\s+/g, ' ');
+  if (!/amrap/.test(f)) return null;
+  if (/for time|hasta completar|repetido hasta|ventana|tras trabajo|por parte/.test(f)) return null;
+  const blocks: number[] = [];
+  // "4 min AMRAP …" y "AMRAP 10:00 …" / "AMRAP 2-2-2-3": el número del AMRAP va antes o después; una cifra seguida de "m", "cal" o "/" es una distancia, no minutos.
+  for (const m of f.matchAll(/(\d+)(?::(\d{2}))?\s*min(?:utos)?\s*amrap/g)) blocks.push(clock(m[1], m[2]));
+  if (blocks.length === 0) {
+    for (const m of f.matchAll(/amrap\s*(\d+(?:-\d+)+|\d+)(?::(\d{2}))?(?![\d/]|\s*(?:m\b|cal|reps|metros|rondas))/g)) {
+      if (m[1].includes('-')) blocks.push(...m[1].split('-').map(Number));
+      else blocks.push(clock(m[1], m[2]));
+    }
+  }
+  if (blocks.length === 0) return null;
+  const rests: { min: number; between: boolean }[] = [];
+  for (const m of f.matchAll(/(?:descanso|rest)\s*(?:de\s*|:\s*)?(\d+)(?::(\d{2}))?\s*(seg|s\b|min)?|(\d+)\s*(seg|min)\w*\s*de\s*descanso/g)) {
+    const v = m[1] !== undefined ? clock(m[1], m[2]) : Number(m[4]);
+    const unit = (m[3] ?? m[5] ?? 'min').toLowerCase();
+    const after = f.slice((m.index ?? 0) + m[0].length, (m.index ?? 0) + m[0].length + 14);
+    rests.push({ min: unit.startsWith('s') ? v / 60 : v, between: /^\s*entre\s+(?:bloques|series|rondas|sets)/.test(after) });
+  }
+  // "3 series: 4 min AMRAP …, descanso 1:00, 4 min AMRAP …, descanso 3:00 entre series": cada serie lleva sus bloques y sus pausas.
+  const lead = f.match(/^(\d+)\s*(?:series|sets|rondas|rounds)\s*:/);
+  if (lead && blocks.length > 1) {
+    const n = Number(lead[1]);
+    const inner = blocks.reduce((s, b) => s + b, 0) + rests.filter((r) => !r.between).reduce((s, r) => s + r.min, 0);
+    const between = rests.filter((r) => r.between).reduce((s, r) => s + r.min, 0) * Math.max(0, n - 1);
+    return { minutes: n * inner + between, restMinutes: n * rests.filter((r) => !r.between).reduce((s, r) => s + r.min, 0) + between, blocks: n * blocks.length };
+  }
+  // "5 rondas de AMRAP 3", "5 rondas: AMRAP 2:00": el mismo bloque repetido.
+  const rep = blocks.length === 1 ? f.match(/(\d+)\s*(?:series|sets|rondas|rounds|bloques)[^a-z0-9]{0,3}(?:de\s*)?amrap/) : null;
+  const n = rep ? Number(rep[1]) : blocks.length;
+  const work = rep ? blocks[0] * n : blocks.reduce((s, b) => s + b, 0);
+  // Series que empiezan cada cierto tiempo: "(nueva serie cada 3:00)".
+  const every = f.match(/cada\s*(\d+):(\d{2})/);
+  if (rep && every && /nueva\s*(?:serie|ronda)/.test(f)) {
+    const period = clock(every[1], every[2]);
+    return { minutes: (n - 1) * period + blocks[0], restMinutes: (n - 1) * Math.max(0, period - blocks[0]), blocks: n };
+  }
+  // Una sola mención de descanso en un bloque repetido o "entre bloques": se aplica entre todos; varias, cada una una vez.
+  const between = rests.length === 1 && n > 1 && (rep !== null || rests[0].between);
+  const rest = between ? rests[0].min * (n - 1) : rests.reduce((s, r) => s + r.min, 0);
+  return { minutes: work + rest, restMinutes: rest, blocks: n };
+}
 /** Un texto cualquiera de benchmark -> estructura. `capMinutes`: tope declarado, si lo hay. */
 export function structureFromBenchmark(format: string, movementIds: string[], capMinutes: number | null): WodStructure {
   const f = format.replace(/\s+/g, ' ').trim();
@@ -299,29 +353,15 @@ export function structureFromBenchmark(format: string, movementIds: string[], ca
   let rounds = 1;
   let blockRest: number | null = null;
 
-  // "5 rondas de AMRAP 3 (1 min de descanso entre rondas)", "10 series de AMRAP 1:30 (descanso 30 seg entre series)": bloques cronometrados con pausa.
-  const block = lower.match(/(\d+)\s*(?:series|sets|rondas|rounds)\s*(?:de|of)\s*amrap\s*(\d+)(?::(\d+))?\s*(?:min)?/);
-  const amrap = lower.match(/amrap\s*(?:en\s*)?(\d+)\s*(?:min)?|(\d+)\s*min(?:utos)?\s*amrap/);
   const emom = lower.match(/e(\d)?mom\s*(?:durante\s*)?(\d+)|(\d+)\s*min(?:utos)?\s*e(\d)?mom/);
   // EMOM sin duración fija ("EMOM el máximo tiempo posible", "EMOM hasta completar…"): es un EMOM, pero los minutos no se saben.
   const openEmom = !emom && /\bemom\b/.test(lower);
   // "3 rondas, 1 min por estación (...), 1 min de descanso entre rondas": minutos = rondas x estaciones x minutos + descansos.
   const stations = lower.match(/(\d+)\s*rondas?[^:]*?(\d+)\s*min(?:uto)?s?\s*por\s*estaci[oó]n/);
   const roundsM = lower.match(/(\d+)\s*(?:rondas|rounds)/);
-  if (block) {
-    kind = 'interval';
-    const n = Number(block[1]);
-    const workMin = Number(block[2]) + (block[3] ? Number(block[3]) / 60 : 0);
-    const restM = lower.match(/descanso\s*(?:de\s*)?(\d+)(?::(\d+))?\s*(seg|s\b|min)?|(\d+)\s*(seg|min)\w*\s*de\s*descanso/);
-    let restMin = 0;
-    if (restM) {
-      const v = Number(restM[1] ?? restM[4]);
-      const unit = (restM[3] ?? restM[5] ?? (restM[2] ? 'min' : 'min')).toLowerCase();
-      restMin = restM[2] ? v + Number(restM[2]) / 60 : unit.startsWith('s') ? v / 60 : v;
-    }
-    fixedMinutes = n * workMin + Math.max(0, n - 1) * restMin;
-    blockRest = Math.max(0, n - 1) * restMin;
-  } else if (stations && movementIds.length > 0) {
+  // Bloques AMRAP con su descanso ("5 rondas de AMRAP 3 con 1 min de descanso entre rondas", "AMRAP 10:00; descanso 2 min; AMRAP 10:00").
+  const blocks = programmedBlocks(lower);
+  if (stations && movementIds.length > 0) {
     kind = 'interval';
     const roundsN = Number(stations[1]);
     const restBetween = Number(lower.match(/(\d+)\s*min(?:uto)?s?\s*de\s*descanso\s*entre\s*rondas/)?.[1] ?? 0);
@@ -331,11 +371,14 @@ export function structureFromBenchmark(format: string, movementIds: string[], ca
   } else if (emom) {
     kind = 'emom';
     fixedMinutes = Number(emom[2] ?? emom[3]);
-  } else if (amrap) {
+  } else if (blocks) {
+    kind = blocks.blocks > 1 ? 'interval' : 'amrap';
+    fixedMinutes = blocks.minutes;
+    blockRest = blocks.restMinutes;
+  } else if (/amrap/.test(lower)) {
+    // AMRAP mezclado con partes "for time" o con trabajo de otro tipo: es un AMRAP, pero el tiempo total no se sabe.
     kind = 'amrap';
-    fixedMinutes = Number(amrap[1] ?? amrap[2]);
   } else if (roundsM) rounds = Number(roundsM[1]);
-
   // Cuerpo: lo que va tras los dos puntos de la cabecera; si no hay, el texto entero.
   const colon = f.indexOf(':');
   const hasHeader = colon > 0 && colon < 70 && /for time|amrap|emom|rondas|rounds|reps|escalera|parejas|series|min/i.test(f.slice(0, colon));
