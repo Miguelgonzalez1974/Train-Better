@@ -4,6 +4,7 @@ import { computeReadinessScore, type ReadinessScore } from '../../engine/readine
 import { dayStrain, strainStatus } from '../../engine/strain';
 import type { StrainLearning } from '../../engine/strainLearning';
 import { buildStrainTarget } from '../../engine/strainTarget';
+import type { TrendPoint } from '../../engine/weekTrend';
 import type { StrainView } from './StrainRing';
 
 function isoAddDays(iso: string, delta: number): string {
@@ -50,6 +51,37 @@ export function buildReadinessSeries(profile: AthleteProfile, history: SessionHi
     const prior = history.filter((h) => h.date < iso);
     const score = computeReadinessScore({ readinessLog: profile.readinessLog, history: prior, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${iso}T12:00:00`) });
     return { iso, total: score.total };
+  });
+}
+
+/**
+ * Los `days` días que terminan hoy (o en el día elegido si queda fuera) para la gráfica de tendencia: esfuerzo real (0 en los días sin sesión desde que hay datos,
+ * porque un descanso también es un dato; null hoy antes de entrenar y antes de empezar a usar la app), el objetivo de ese día y la
+ * preparación con la que se llegó (calculada con lo que se sabía esa mañana).
+ */
+export function buildTrendPoints(profile: AthleteProfile, history: SessionHistoryEntry[], dayIso: string, todayIso: string, days: number): TrendPoint[] {
+  // La ventana termina hoy y no se mueve al tocar un día (así se puede recorrer la semana sin que cambie de sitio); solo se desplaza
+  // hacia atrás si el día elegido en el Dashboard cae antes de su inicio.
+  const endIso = dayIso < isoAddDays(todayIso, -(days - 1)) ? dayIso : todayIso;
+  const firstIso = [...history.map((h) => h.date), ...(profile.readinessLog ?? []).map((r) => r.date)].sort()[0] ?? todayIso;
+  return Array.from({ length: days }, (_, i) => {
+    const iso = isoAddDays(endIso, i - (days - 1));
+    const entry = history.find((h) => h.date === iso);
+    const real = dayStrain(entry);
+    const strain = real ?? (iso < todayIso && iso >= firstIso ? 0 : null);
+    const stored = profile.strainTargets?.[iso];
+    const target = iso > todayIso ? null : stored ?? (entry || iso === todayIso ? buildStrainTarget(profile, history, iso) : null);
+    const readiness =
+      iso > todayIso || iso < firstIso
+        ? null
+        : computeReadinessScore({
+            readinessLog: profile.readinessLog,
+            history: history.filter((h) => h.date < iso),
+            setFeedbackLog: profile.setFeedbackLog,
+            painFlags: profile.painFlags,
+            today: new Date(`${iso}T12:00:00`),
+          }).total;
+    return { iso, strain, target: target ? { low: target.low, high: target.high } : null, readiness };
   });
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Apple, ArrowRight, BarChart3, Flame, Gauge, Scale, Sun, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
@@ -22,8 +22,9 @@ import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } 
 import { DayRows, type NutritionSummary } from './DayRows';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
-import { buildPastDayView, buildReadinessSeries, buildWeekWindow } from './pastDay';
+import { buildPastDayView, buildReadinessSeries, buildTrendPoints, buildWeekWindow } from './pastDay';
 import { ReadinessTrendChart, WeekEffortChart } from './WeekCharts';
+import { WeekTrendCard } from './WeekTrendCard';
 import { HrvChart } from './HrvChart';
 import { SleepTab } from './SleepHabits';
 import { StrainDetail } from './StrainRing';
@@ -137,6 +138,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tab, profile, history, dayIso, todayIso, strainView.planned?.strain, strainView.target],
   );
+  // La tendencia del Resumen: los días que terminan en el elegido (se calcula al dibujarla, para el rango que se pida).
+  const buildTrend = useCallback((days: number) => buildTrendPoints(profile, history, dayIso, todayIso, days), [profile, history, dayIso, todayIso]);
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
   const loadKnown = shown.acwr.acwr !== null && !shown.acwr.coldStart;
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
@@ -304,6 +307,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             onNavigateToNutricion={onNavigateToNutricion}
             onOpenAnalysis={() => setAnalysisOpen(true)}
           />
+
+          {/* Tu semana: el esfuerzo y la preparación sobre los mismos días. */}
+          <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} onSelect={setDayIso} />
         </>
       )}
 
