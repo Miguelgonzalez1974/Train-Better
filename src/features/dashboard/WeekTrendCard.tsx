@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { MIN_HISTOGRAM_DAYS, MIN_TREND_DAYS, dataDays, effortFit, readinessBand, trendBins, trendSentence, type EffortFit, type ReadinessBand, type TrendPoint } from '../../engine/weekTrend';
+import { MIN_HISTOGRAM_DAYS, MIN_TREND_DAYS, dataDays, effortFit, readinessBand, trendBins, type EffortFit, type ReadinessBand, type TrendPoint } from '../../engine/weekTrend';
+import { trendSummary, type SummaryRow, type SummarySeg } from '../../engine/trendSummary';
 import { SectionLabel } from '../shell/SectionLabel';
 import { fmtDay, xTickIndexes } from './ChartKit';
 
@@ -29,12 +30,15 @@ const AXIS_OPACITY = 0.75;
  * esfuerzo previsto de hoy sale como un anillo discontinuo hasta que entrenas. Arriba, una frase que lee la semana; abajo, cuántos
  * días cayeron en cada tramo. Tocar un día lo elige en todo el Dashboard.
  */
-export function WeekTrendCard({ build, selectedIso, todayIso, onSelect }: { build: (days: number) => TrendPoint[]; selectedIso: string; todayIso: string; onSelect: (iso: string) => void }) {
+export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, onSelect }: { build: (days: number, offsetDays?: number) => TrendPoint[]; selectedIso: string; todayIso: string; competitionDays?: number | null; onSelect: (iso: string) => void }) {
   const [range, setRange] = useState(7);
   const points = useMemo(() => build(range), [build, range]);
   const n = points.length;
   const enough = dataDays(points) >= MIN_TREND_DAYS;
-  const sentence = useMemo(() => trendSentence(points, todayIso), [points, todayIso]);
+  // El periodo anterior, de la misma longitud, para comparar.
+  const prev = useMemo(() => build(range, range), [build, range]);
+  const summary = useMemo(() => trendSummary(points, prev, { range, todayIso, competitionDays }), [points, prev, range, todayIso, competitionDays]);
+  const [showMore, setShowMore] = useState(false);
   const bins = useMemo(() => trendBins(points, todayIso), [points, todayIso]);
   const [help, setHelp] = useState(false);
   const showHistograms = dataDays(points) >= MIN_HISTOGRAM_DAYS;
@@ -90,12 +94,23 @@ export function WeekTrendCard({ build, selectedIso, todayIso, onSelect }: { buil
         </div>
       ) : (
         <>
-          {sentence && (
+          {summary.headline && (
             <div className="mt-4 flex items-start gap-2.5">
               <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-neutral-300" aria-hidden="true">
                 <Sparkles size={12} strokeWidth={2.25} />
               </span>
-              <p className="text-[13px] leading-snug text-neutral-200">{sentence}</p>
+              <p className="text-[13px] leading-snug text-neutral-200">{summary.headline}</p>
+            </div>
+          )}
+          {summary.rows.length > 0 && (
+            <div className="mt-3.5 border-t border-white/[0.07]">
+              <SummaryRows rows={summary.rows} />
+              {showMore && summary.more.length > 0 && <SummaryRows rows={summary.more} />}
+              {summary.more.length > 0 && (
+                <button onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="mt-2.5 text-[11px] font-medium text-neutral-500 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-300">
+                  {showMore ? 'Ocultar' : 'Ver más'}
+                </button>
+              )}
             </div>
           )}
 
@@ -245,6 +260,37 @@ export function WeekTrendCard({ build, selectedIso, todayIso, onSelect }: { buil
 }
 
 /** Cuántos días cayeron en cada tramo, como columnas de cuadraditos finos (uno por día). */
+const DELTA_STYLE = { up: 'bg-good/10 text-good', eq: 'bg-white/[0.07] text-neutral-400', down: 'bg-warn/10 text-warn' } as const;
+const DELTA_MARK = { up: '▲', eq: '▬', down: '▼' } as const;
+
+function Seg({ seg }: { seg: SummarySeg }) {
+  if (typeof seg === 'string') return <>{seg}</>;
+  if ('b' in seg) return <b className="font-semibold text-white">{seg.b}</b>;
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-px text-[11px] font-semibold ${DELTA_STYLE[seg.delta]}`}>
+      {DELTA_MARK[seg.delta]} {seg.t}
+    </span>
+  );
+}
+
+/** Las líneas del resumen del coach: etiqueta pequeña a la izquierda, el dato a la derecha. */
+function SummaryRows({ rows }: { rows: SummaryRow[] }) {
+  return (
+    <>
+      {rows.map((row) => (
+        <div key={row.label} className="grid grid-cols-[5.6rem_1fr] items-baseline gap-2.5 border-b border-white/[0.07] py-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-neutral-500">{row.label}</p>
+          <p className="text-[13px] leading-snug text-neutral-200">
+            {row.segs.map((seg, i) => (
+              <Seg key={i} seg={seg} />
+            ))}
+          </p>
+        </div>
+      ))}
+    </>
+  );
+}
+
 const sum = (c: number[]) => c.reduce((s, v) => s + v, 0);
 
 function Histogram({ title, caption, counts, colors, labels }: { title: string; caption: string; counts: [number, number, number]; colors: string[]; labels: string[] }) {

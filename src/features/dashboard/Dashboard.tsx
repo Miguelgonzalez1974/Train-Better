@@ -135,7 +135,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Datos de las gráficas de las pestañas (solo se calculan al abrirlas).
   // Los datos de la tendencia (pestaña Esfuerzo): se calculan al dibujarla, para el rango que se pida. Hoy lleva el esfuerzo previsto.
   const plannedToday = strainView.planned?.strain ?? null;
-  const buildTrend = useCallback((days: number) => buildTrendPoints(profile, history, dayIso, todayIso, days, plannedToday), [profile, history, dayIso, todayIso, plannedToday]);
+  const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, history, dayIso, todayIso, days, plannedToday, offsetDays), [profile, history, dayIso, todayIso, plannedToday]);
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
   const loadKnown = shown.acwr.acwr !== null && !shown.acwr.coldStart;
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
@@ -308,7 +308,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
 
       {tab === 'esfuerzo' && (
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
-          <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} onSelect={setDayIso} />
+          <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} competitionDays={isToday ? (todaySession?.competition?.daysToEvent ?? null) : null} onSelect={setDayIso} />
           <div className="rounded-2xl bg-white/[0.03] p-5">
             <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
           </div>

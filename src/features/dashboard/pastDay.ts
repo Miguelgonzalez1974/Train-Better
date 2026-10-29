@@ -28,10 +28,10 @@ export function buildReadinessSeries(profile: AthleteProfile, history: SessionHi
  * porque un descanso también es un dato; null hoy antes de entrenar y antes de empezar a usar la app), el objetivo de ese día y la
  * preparación con la que se llegó (calculada con lo que se sabía esa mañana).
  */
-export function buildTrendPoints(profile: AthleteProfile, history: SessionHistoryEntry[], dayIso: string, todayIso: string, days: number, plannedToday: number | null = null): TrendPoint[] {
+export function buildTrendPoints(profile: AthleteProfile, history: SessionHistoryEntry[], dayIso: string, todayIso: string, days: number, plannedToday: number | null = null, offsetDays = 0): TrendPoint[] {
   // La ventana termina hoy y no se mueve al tocar un día (así se puede recorrer la semana sin que cambie de sitio); solo se desplaza
   // hacia atrás si el día elegido en el Dashboard cae antes de su inicio.
-  const endIso = dayIso < isoAddDays(todayIso, -(days - 1)) ? dayIso : todayIso;
+  const endIso = isoAddDays(dayIso < isoAddDays(todayIso, -(days - 1)) ? dayIso : todayIso, -offsetDays);
   const firstIso = [...history.map((h) => h.date), ...(profile.readinessLog ?? []).map((r) => r.date)].sort()[0] ?? todayIso;
   return Array.from({ length: days }, (_, i) => {
     const iso = isoAddDays(endIso, i - (days - 1));
