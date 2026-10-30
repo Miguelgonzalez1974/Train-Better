@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Activity, Apple, CalendarPlus, Check, ChevronRight, Moon, TrendingUp, Trophy } from 'lucide-react';
+import { Activity, CalendarPlus, Check, ChevronRight, Moon, TrendingUp, Trophy } from 'lucide-react';
 import { formToday, signed, type FormSeries } from '../../engine/formCurve';
 import { FORM_TONE, FormSpark } from './FormCurve';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
@@ -40,12 +40,6 @@ function buildPreviewLine(session: DailySession): string {
     }
   }
   return parts.length > 0 ? parts.join(' · ') : 'Sesión lista para entrenar';
-}
-
-/** Lo comido en el día frente a lo que toca: proteína e hidratos, en gramos. */
-export interface NutritionSummary {
-  protein: { done: number; target: number };
-  carbs: { done: number; target: number };
 }
 
 type BadgeTone = 'effort' | 'planned' | 'plannedOver' | 'over' | 'gold' | 'neutral';
@@ -97,18 +91,17 @@ const chevron = <ChevronRight size={16} className="mr-1 shrink-0 text-neutral-60
 /**
  * "Tu día" bajo el anillo, al estilo de las actividades de Whoop: una fila por cosa que cuenta, con una insignia de color a
  * la izquierda. La sesión lleva su esfuerzo (previsto con borde discontinuo; real, relleno y en coral si rebasa el
- * objetivo) y la nutrición el porcentaje de lo que toca. Sustituye a la tarjeta grande de "Hoy".
+ * objetivo), y la curva de forma y el análisis se abren en su ventana. La nutrición vive en el botón de arriba (con su %).
+ * Sustituye a la tarjeta grande de "Hoy".
  */
 export function DayRows({
   isToday,
   session,
   entry,
   strain,
-  nutrition,
   analysis,
   form,
   onNavigateToPlanificacion,
-  onNavigateToNutricion,
   onOpenForm,
   onOpenAnalysis,
 }: {
@@ -118,13 +111,11 @@ export function DayRows({
   /** Lo registrado el día elegido, si entrenaste. */
   entry: SessionHistoryEntry | undefined;
   strain: StrainView;
-  nutrition: NutritionSummary | null;
   /** Los tres datos del análisis, ya formateados: dominios energéticos, desequilibrios y fuerza (en ese orden). */
   analysis: [string, string, string] | string[];
   /** La serie de la curva de forma (solo hoy; null en un día pasado o sin historial). */
   form: FormSeries | null;
   onNavigateToPlanificacion: () => void;
-  onNavigateToNutricion: () => void;
   /** Abre la ventana con la curva de forma. */
   onOpenForm: () => void;
   /** Abre la ventana con el análisis completo. */
@@ -172,10 +163,6 @@ export function DayRows({
     sessionRow = <Row badge={<Badge tone="neutral"><CalendarPlus size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>} title="Elige qué entrenar hoy" sub="Sin macrociclo ni programa activo" right={chevron} onClick={onNavigateToPlanificacion} />;
   }
 
-  const pct = nutrition
-    ? Math.round(((Math.min(1, nutrition.protein.done / Math.max(1, nutrition.protein.target)) + Math.min(1, nutrition.carbs.done / Math.max(1, nutrition.carbs.target))) / 2) * 100)
-    : null;
-
   const formNow = form ? formToday(form) : null;
   const formRow = form ? (
     <Row
@@ -197,25 +184,6 @@ export function DayRows({
         </p>
       )}
       {sessionRow}
-      {nutrition && pct !== null && (
-        <Row
-          badge={
-            <Badge tone="neutral">
-              {pct}
-              <span className="text-[0.55em] font-medium">%</span>
-            </Badge>
-          }
-          title="Nutrición"
-          sub={
-            <>
-              <Apple size={11} className="mr-1 inline -translate-y-px" aria-hidden="true" />
-              P <span className="num">{nutrition.protein.done}</span>/{nutrition.protein.target} g · H <span className="num">{nutrition.carbs.done}</span>/{nutrition.carbs.target} g
-            </>
-          }
-          right={chevron}
-          onClick={onNavigateToNutricion}
-        />
-      )}
       {/* Tu forma: la curva de supercompensación; con poco historial dice cuánto falta para tenerla. */}
       {form && formRow}
       {/* Análisis: lo que no hace falta mirar cada día, con sus tres datos a la vista; la ventana trae el detalle. */}

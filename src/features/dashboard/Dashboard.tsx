@@ -18,7 +18,8 @@ import { toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { DayRing, ZONE_COLOR, ZONE_TOKEN, ZONE_WORD, type DashTab, type RingTarget } from './DayRing';
 import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
-import { DayRows, type NutritionSummary } from './DayRows';
+import { DayRows } from './DayRows';
+import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
 import { buildFormModel } from './formModel';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
@@ -132,6 +133,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       carbs: { done: eaten.reduce((s, e) => s + e.carbs, 0), target: Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2) },
     };
   }, [latestBodyweightKg, profile.nutritionPrefs, profile.sessionCache, history, dayIso, isToday, todaySession]);
+  const nutritionPercent = nutrition ? nutritionPct(nutrition) : null;
   // Datos de las gráficas de las pestañas (solo se calculan al abrirlas).
   // Los datos de la tendencia (pestaña Esfuerzo): se calculan al dibujarla, para el rango que se pida. Hoy lleva el esfuerzo previsto.
   const plannedToday = strainView.planned?.strain ?? null;
@@ -180,12 +182,22 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           >
             <Scale size={17} strokeWidth={2.25} />
           </button>
+          {/* Nutrición: el % de lo que llevas del día (proteína e hidratos) sobre el icono, para verlo sin abrir nada. */}
           <button
             onClick={() => setShowNutrition(true)}
-            title="Nutrición deportiva"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
+            title={nutritionPercent !== null ? `Nutrición · ${nutritionPercent} % de lo de ${isToday ? 'hoy' : dayLabel(dayIso, todayIso).toLowerCase()}` : 'Nutrición'}
+            aria-label={nutritionPercent !== null ? `Nutrición, ${nutritionPercent} por ciento` : 'Nutrición'}
+            className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
           >
             <Apple size={17} strokeWidth={2.25} />
+            {nutritionPercent !== null && (
+              <span
+                className="num absolute -right-2 -top-2 rounded-full px-1.5 text-[11px] font-bold leading-[16px]"
+                style={{ background: nutritionPercent >= 90 ? 'rgb(var(--c-state-good))' : 'rgb(var(--c-white) / 0.9)', color: 'rgb(var(--c-brand-bg))' }}
+              >
+                {nutritionPercent}%
+              </span>
+            )}
           </button>
           <button
             onClick={() => setShowVolume(true)}
@@ -242,6 +254,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           profile={profile}
           history={history}
           bodyweightLog={bodyweightLog}
+          progress={nutrition}
+          dayLabel={dayLabel(dayIso, todayIso)}
+          onOpenNutricion={() => {
+            setShowNutrition(false);
+            onNavigateToNutricion();
+          }}
           onClose={() => setShowNutrition(false)}
           onOpenBodyweight={() => {
             setShowNutrition(false);
@@ -297,12 +315,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             session={isToday ? todaySession : null}
             entry={shown.entry}
             strain={shown.strain}
-            nutrition={nutrition}
             analysis={analysisLabels}
             form={isToday && formModel.plan.sessions > 0 ? formModel.plan : null}
             onOpenForm={() => setFormOpen(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
-            onNavigateToNutricion={onNavigateToNutricion}
             onOpenAnalysis={() => setAnalysisOpen(true)}
           />
         </>
