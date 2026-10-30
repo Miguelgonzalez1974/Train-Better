@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { MIN_HISTOGRAM_DAYS, MIN_TREND_DAYS, dataDays, effortFit, readinessBand, trendBins, type EffortFit, type ReadinessBand, type TrendPoint } from '../../engine/weekTrend';
+import { MIN_TREND_DAYS, dataDays, effortFit, readinessBand, type EffortFit, type ReadinessBand, type TrendPoint } from '../../engine/weekTrend';
 import { trendSummary, type SummaryRow, type SummarySeg } from '../../engine/trendSummary';
 import { SectionLabel } from '../shell/SectionLabel';
 import { fmtDay, xTickIndexes } from './ChartKit';
@@ -39,9 +39,6 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
   const prev = useMemo(() => build(range, range), [build, range]);
   const summary = useMemo(() => trendSummary(points, prev, { range, todayIso, competitionDays }), [points, prev, range, todayIso, competitionDays]);
   const [showMore, setShowMore] = useState(false);
-  const bins = useMemo(() => trendBins(points, todayIso), [points, todayIso]);
-  const [help, setHelp] = useState(false);
-  const showHistograms = dataDays(points) >= MIN_HISTOGRAM_DAYS;
   const selectedIndex = points.findIndex((p) => p.iso === selectedIso);
   const selected = selectedIndex >= 0 ? points[selectedIndex] : null;
 
@@ -102,15 +99,17 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
               <p className="text-[13px] leading-snug text-neutral-200">{summary.headline}</p>
             </div>
           )}
+          {/* Solo la frase a la vista; las líneas con los números (días dentro del objetivo, medias, comparación) a un toque. */}
           {summary.rows.length > 0 && (
-            <div className="mt-3.5 border-t border-white/[0.07]">
-              <SummaryRows rows={summary.rows} />
-              {showMore && summary.more.length > 0 && <SummaryRows rows={summary.more} />}
-              {summary.more.length > 0 && (
-                <button onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="mt-2.5 text-[11px] font-medium text-neutral-500 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-300">
-                  {showMore ? 'Ocultar' : 'Ver más'}
-                </button>
+            <div className="mt-2.5">
+              {showMore && (
+                <div className="mb-1 border-t border-white/[0.07]">
+                  <SummaryRows rows={[...summary.rows, ...summary.more]} />
+                </div>
               )}
+              <button onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className="text-[11px] font-medium text-neutral-500 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-300">
+                {showMore ? 'Ocultar el detalle' : 'Ver el detalle'}
+              </button>
             </div>
           )}
 
@@ -217,26 +216,6 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
             ))}
           </svg>
 
-          {showHistograms && (
-            <div className="mt-5 grid grid-cols-2 gap-6 border-t border-white/[0.07] pt-4">
-              <Histogram title="Esfuerzo" caption={`${sum(bins.effort)} de ${n} días con sesión`} counts={bins.effort} colors={[BLUE, GOOD, MID]} labels={['debajo', 'dentro', 'encima']} />
-              <Histogram title="Preparación" caption={`${sum(bins.readiness)} de ${n} días`} counts={bins.readiness} colors={[LOW, MID, GOOD]} labels={['0–40', '41–64', '65–100']} />
-            </div>
-          )}
-          {showHistograms && (
-            <div className="mt-3">
-              <button onClick={() => setHelp((h) => !h)} aria-expanded={help} className="text-[11px] font-medium text-neutral-500 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-300">
-                {help ? 'Ocultar' : '¿Cómo se leen las barras?'}
-              </button>
-              {help && (
-                <p className="mt-2 text-[12px] leading-relaxed text-neutral-400">
-                  Cada cuadradito es un día. <b className="font-semibold text-neutral-200">Esfuerzo</b> cuenta solo los días con sesión, según cayeron frente al objetivo de ese día (hoy no se juzga hasta que termina).{' '}
-                  <b className="font-semibold text-neutral-200">Preparación</b> cuenta cada día con su nota. Lo ideal: esfuerzo en «dentro» y la pila de preparación hacia la derecha, en verde.
-                </p>
-              )}
-            </div>
-          )}
-
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-500">
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2 w-2 rounded-full border-[1.5px]" style={{ borderColor: BLUE }} aria-hidden="true" />
@@ -259,7 +238,6 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
   );
 }
 
-/** Cuántos días cayeron en cada tramo, como columnas de cuadraditos finos (uno por día). */
 const DELTA_STYLE = { up: 'bg-good/10 text-good', eq: 'bg-white/[0.07] text-neutral-400', down: 'bg-warn/10 text-warn' } as const;
 const DELTA_MARK = { up: '▲', eq: '▬', down: '▼' } as const;
 
@@ -288,32 +266,5 @@ function SummaryRows({ rows }: { rows: SummaryRow[] }) {
         </div>
       ))}
     </>
-  );
-}
-
-const sum = (c: number[]) => c.reduce((s, v) => s + v, 0);
-
-function Histogram({ title, caption, counts, colors, labels }: { title: string; caption: string; counts: [number, number, number]; colors: string[]; labels: string[] }) {
-  const max = Math.max(1, ...counts);
-  const unit = Math.min(10, 52 / max);
-  return (
-    <div>
-      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">{title}</p>
-      <p className="mt-0.5 text-[11px] text-neutral-500">{caption}</p>
-      <div className="mt-2.5 grid h-14 grid-cols-3 items-end gap-1.5">
-        {counts.map((c, i) => (
-          <div key={i} className="flex flex-col-reverse gap-px" aria-label={`${labels[i]}: ${c} ${c === 1 ? 'día' : 'días'}`}>
-            {Array.from({ length: c }, (_, k) => (
-              <span key={k} className="block rounded-[1.5px]" style={{ height: unit - 1, background: colors[i], opacity: 0.9 }} />
-            ))}
-          </div>
-        ))}
-      </div>
-      <div className="mt-1.5 grid grid-cols-3 gap-1.5 text-center text-[11px] leading-tight text-neutral-500">
-        {labels.map((l) => (
-          <span key={l}>{l}</span>
-        ))}
-      </div>
-    </div>
   );
 }

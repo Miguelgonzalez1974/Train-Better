@@ -311,9 +311,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {tab === 'esfuerzo' && (
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
           <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} competitionDays={isToday ? (todaySession?.competition?.daysToEvent ?? null) : null} onSelect={setDayIso} />
-          <div className="rounded-2xl bg-white/[0.03] p-5">
-            <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
-          </div>
+          <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
         </div>
       )}
       {tab === 'preparacion' && (

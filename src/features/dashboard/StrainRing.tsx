@@ -3,6 +3,7 @@ import type { StrainTarget } from '../../data/athlete/types';
 import type { PlannedStrain, PlanFit } from '../../engine/plannedStrain';
 import type { StrainStatus } from '../../engine/strain';
 import type { StrainLearning } from '../../engine/strainLearning';
+import { Fold } from '../shell/Fold';
 import { SectionLabel } from '../shell/SectionLabel';
 
 /** Todo lo que el medidor y su detalle necesitan saber del esfuerzo de hoy. */
@@ -69,90 +70,94 @@ export function StrainDetail({
 }) {
   const { target, planned, fit, real } = view;
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <SectionLabel>Esfuerzo de {dayLabel.toLowerCase()}</SectionLabel>
-        <p className="mt-1 text-[11px] text-neutral-500">
-          Anillo exterior (azul): tu esfuerzo. El corchete blanco de fuera marca tu objetivo, del mínimo al máximo; si el azul pasa de su final, te pasas.
-        </p>
-        <p className="mt-1.5 text-base font-semibold text-white">
-          Objetivo <span className="num">{target.low}–{target.high}</span>
-        </p>
-        <p className="mt-0.5 text-xs text-neutral-400">
-          {!isToday
-            ? 'Lo que se pedía ese día.'
-            : target.provisional && real === null
-              ? 'Provisional: haz el check-in y se fija.'
-              : 'Fijado esta mañana · no cambia durante el día.'}
-        </p>
-      </div>
-
-      {planned && fit && (
+    <>
+      <div className="flex flex-col gap-4 rounded-2xl bg-white/[0.03] p-5">
         <div>
+          <SectionLabel>Esfuerzo de {dayLabel.toLowerCase()}</SectionLabel>
+          <p className="mt-1.5 text-base font-semibold text-white">
+            Objetivo <span className="num">{target.low}–{target.high}</span>
+          </p>
+          <p className="mt-0.5 text-xs text-neutral-400">
+            {!isToday
+              ? 'Lo que se pedía ese día.'
+              : target.provisional && real === null
+                ? 'Provisional: haz el check-in y se fija.'
+                : 'Fijado esta mañana · no cambia durante el día.'}
+          </p>
+        </div>
+
+        {planned && fit && (
+          <div>
+            <p className="text-sm font-semibold" style={{ color: strainColor(view) }}>
+              Sesión prevista <span className="num">~{planned.strain}</span>
+              <span className="font-normal text-neutral-400">
+                {' · '}
+                {fit.fit === 'dentro'
+                  ? 'encaja con tu objetivo.'
+                  : fit.fit === 'se-pasa'
+                    ? `se pasa unos ${fit.diff} puntos.`
+                    : 'te deja margen: si te encuentras bien, puedes apretar un poco más.'}
+              </span>
+            </p>
+            <p className="mt-0.5 text-[11px] text-neutral-600">
+              Estimado con ~{planned.minutes} min y un RPE de {String(planned.rpe).replace('.', ',')}, como te suelen salir estas semanas.
+            </p>
+            {fit.fit === 'se-pasa' && (
+              <button
+                onClick={onAdjust}
+                className="mt-3 flex items-center gap-1.5 rounded-full border border-brand-border bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+              >
+                Ajustar sesión <ArrowRight size={13} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {real !== null && (
           <p className="text-sm font-semibold" style={{ color: strainColor(view) }}>
-            Sesión prevista <span className="num">~{planned.strain}</span>
+            Esfuerzo real <span className="num">{real}</span>
             <span className="font-normal text-neutral-400">
               {' · '}
-              {fit.fit === 'dentro'
-                ? 'encaja con tu objetivo.'
-                : fit.fit === 'se-pasa'
-                  ? `se pasa unos ${fit.diff} puntos.`
-                  : 'te deja margen: si te encuentras bien, puedes apretar un poco más.'}
+              {view.status === 'dentro'
+                ? 'justo lo que tocaba.'
+                : view.status === 'por-debajo'
+                  ? `${target.low - real} puntos por debajo del objetivo: ${isToday ? 'aún tenías margen' : 'había margen'}.`
+                  : `${real - target.high} puntos por encima del objetivo${isToday ? ': mañana, con cuidado.' : '.'}`}
             </span>
           </p>
-          <p className="mt-0.5 text-[11px] text-neutral-600">
-            Estimado con ~{planned.minutes} min y un RPE de {String(planned.rpe).replace('.', ',')}, como te suelen salir estas semanas.
-          </p>
-          {fit.fit === 'se-pasa' && (
-            <button
-              onClick={onAdjust}
-              className="mt-3 flex items-center gap-1.5 rounded-full border border-brand-border bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
-            >
-              Ajustar sesión <ArrowRight size={13} aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      )}
+        )}
 
-      {real !== null && (
-        <p className="text-sm font-semibold" style={{ color: strainColor(view) }}>
-          Esfuerzo real <span className="num">{real}</span>
-          <span className="font-normal text-neutral-400">
-            {' · '}
-            {view.status === 'dentro'
-              ? 'justo lo que tocaba.'
-              : view.status === 'por-debajo'
-                ? `${target.low - real} puntos por debajo del objetivo: ${isToday ? 'aún tenías margen' : 'había margen'}.`
-                : `${real - target.high} puntos por encima del objetivo${isToday ? ': mañana, con cuidado.' : '.'}`}
-          </span>
-        </p>
-      )}
-
-      <div>
-        <p className="text-xs font-medium text-neutral-300">Por qué este objetivo</p>
-        <ul className="mt-1.5 flex flex-col gap-1 text-xs leading-relaxed text-neutral-400">
+      </div>
+      {/* El porqué y lo aprendido, a un toque: no hace falta verlos cada día. */}
+      <Fold title="Por qué este objetivo">
+        <ul className="flex flex-col gap-1 text-xs leading-relaxed text-neutral-400">
           {target.reasons.map((r) => (
             <li key={r}>{r}</li>
           ))}
         </ul>
         <p className="mt-2 text-[11px] leading-relaxed text-neutral-600">Estimación del esfuerzo percibido (RPE × duración), no una medida fisiológica.</p>
-      </div>
-
-      <LearnedStrain learning={view.learning} />
-    </div>
+      </Fold>
+      {hasLearning(view.learning) && (
+        <Fold title="Lo que aprendo de ti">
+          <LearnedStrain learning={view.learning} />
+        </Fold>
+      )}
+    </>
   );
 }
 
 /** "Lo que aprendo": cómo te van saliendo los días frente al objetivo y cuánto se corrige la previsión. Solo con muestra suficiente. */
+function hasLearning({ outcomes, bias, biasSample }: StrainLearning): boolean {
+  return outcomes.total >= 3 || (biasSample >= 4 && Math.abs(bias) >= 3);
+}
+
 function LearnedStrain({ learning }: { learning: StrainLearning }) {
   const { outcomes, bias, biasSample } = learning;
   const showTally = outcomes.total >= 3;
   const showBias = biasSample >= 4 && Math.abs(bias) >= 3;
-  if (!showTally && !showBias) return null;
   return (
     <div>
-      <p className="text-xs font-medium text-neutral-300">Lo que aprendo de ti</p>
-      <ul className="mt-1.5 flex flex-col gap-1 text-xs leading-relaxed text-neutral-400">
+      <ul className="flex flex-col gap-1 text-xs leading-relaxed text-neutral-400">
         {showTally && (
           <li>
             Dentro del objetivo en <span className="num font-semibold text-neutral-200">{outcomes.dentro}</span> de tus últimos{' '}
