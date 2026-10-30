@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Minus, Plus } from 'lucide-react';
 import type { DailySession, RxOrScaled, SessionHistoryEntry, WodScoreType } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { toHistoryEntry } from '../../engine/generateSession';
@@ -7,7 +7,7 @@ import { EMPTY_WOD_FORM, buildWodResult, getWodParts, getWodScoreType, type WodR
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
-import { customDaySession, isHistorySorted, sortHistoryByDate } from './pastDayLog';
+import { customDaySession, isHistorySorted, liftKey, plannedLiftState, plannedLifts, sortHistoryByDate, workSetsFrom, type LiftState, type PlannedLift } from './pastDayLog';
 
 const longDay = (iso: string) => new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${iso}T12:00:00`));
 
@@ -46,7 +46,86 @@ export function LogPastDay({ dateIso, planned, onSaved }: { dateIso: string; pla
   return <OtherForm dateIso={dateIso} mesocycleWeek={planned?.mesocycleWeek ?? 1} onBack={usable ? () => setMode('choose') : undefined} onSaved={onSaved} />;
 }
 
+/**
+ * Las series de fuerza y halterofilia de ese día, ya rellenadas con lo previsto (peso y repeticiones de cada serie): se desmarca la que
+ * no se hizo y se corrige el peso de la que fue distinta. "Todo como estaba" las deja todas hechas. Se guardan con la fecha de ese día,
+ * con el mismo registro que el modo enfocado, así que el progreso, el 1RM estimado y las cargas aprendidas las ven igual.
+ */
+function LiftsStep({ lifts, state, onChange, onNext, onSkip, onBack }: { lifts: PlannedLift[]; state: LiftState; onChange: (next: LiftState) => void; onNext: () => void; onSkip: () => void; onBack: () => void }) {
+  const set = (key: string, patch: Partial<LiftState[string]>) => onChange({ ...state, [key]: { ...state[key], ...patch } });
+  const allDone = lifts.every((l) => l.rows.every((r) => state[liftKey(l.logId, r.set)]?.done));
+  return (
+    <div className="flex flex-col gap-4">
+      <button onClick={onBack} className="flex items-center gap-1 self-start text-xs font-semibold text-neutral-500 transition-colors hover:text-neutral-200">
+        <ArrowLeft size={13} /> Volver
+      </button>
+      <div>
+        <p className="text-lg font-semibold text-white">Series y pesos</p>
+        <p className="mt-0.5 text-xs text-neutral-500">Ya están rellenadas con lo previsto. Desmarca la que no hiciste y corrige el peso de la que fue distinta.</p>
+      </div>
+      {lifts.map((l) => (
+        <div key={l.logId} className="flex flex-col gap-1.5">
+          <p className="text-sm font-semibold text-neutral-200">{l.name}</p>
+          {l.rows.map((r) => {
+            const key = liftKey(l.logId, r.set);
+            const s = state[key] ?? { done: false, kg: r.kg };
+            return (
+              <div key={key} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${s.done ? 'bg-good/10' : 'bg-white/[0.04]'}`}>
+                <button
+                  onClick={() => set(key, { done: !s.done })}
+                  aria-label={`Serie ${r.set}${s.done ? ' hecha' : ''}`}
+                  aria-pressed={s.done}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${s.done ? 'bg-good text-brand-bg' : 'border border-brand-border text-neutral-400'}`}
+                >
+                  {s.done ? <Check size={18} strokeWidth={3} /> : r.set}
+                </button>
+                {r.kg > 0 || s.kg > 0 ? (
+                  <div className="flex flex-1 items-center justify-center gap-1">
+                    <button onClick={() => set(key, { kg: Math.max(0, Math.round((s.kg - 2.5) * 4) / 4) })} aria-label="Menos peso" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-neutral-200 hover:bg-white/15">
+                      <Minus size={16} strokeWidth={2.75} />
+                    </button>
+                    <span className="num min-w-[4.5rem] text-center text-base font-bold text-white">
+                      {s.kg} <span className="text-xs font-medium text-neutral-400">kg</span>
+                    </span>
+                    <button onClick={() => set(key, { kg: Math.round((s.kg + 2.5) * 4) / 4 })} aria-label="Más peso" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-neutral-200 hover:bg-white/15">
+                      <Plus size={16} strokeWidth={2.75} />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="flex-1 text-center text-xs text-neutral-500">sin peso</span>
+                )}
+                {r.reps > 0 && <span className="num shrink-0 text-sm font-semibold text-neutral-300">× {r.reps}</span>}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={onSkip} className="px-2 py-2 text-sm text-neutral-500 underline decoration-dotted transition-colors hover:text-neutral-200">
+          No apuntar las series
+        </button>
+        <div className="flex items-center gap-2">
+          {!allDone && (
+            <button onClick={() => onChange(plannedLiftState(lifts))} className="px-2 py-2 text-xs font-semibold text-neutral-400 transition-colors hover:text-white">
+              Todo como estaba
+            </button>
+          )}
+          <button onClick={onNext} className="flex items-center gap-1.5 rounded-lg bg-brand-orange px-5 py-2.5 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark">
+            Siguiente
+            <ArrowRight size={15} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; session: DailySession; onBack: () => void; onSaved: () => void }) {
+  const lifts = useMemo(() => plannedLifts(session), [session]);
+  const [stage, setStage] = useState<'lifts' | 'panel'>(lifts.length > 0 ? 'lifts' : 'panel');
+  const [liftState, setLiftState] = useState<LiftState>(() => plannedLiftState(lifts));
+  // "No apuntar las series" deja el día sin series ni pesos (solo el RPE, la duración y el WOD).
+  const [logLifts, setLogLifts] = useState(true);
   const wodParts = useMemo(() => getWodParts(session), [session]);
   const scoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(() => ({ 1: getWodScoreType(session, 1), 2: getWodScoreType(session, 2) }), [session]);
   const estimatedMin = useMemo(() => Math.min(120, Math.max(20, Math.round(estimateSessionMinutes(session) / 5) * 5)), [session]);
@@ -58,15 +137,36 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
 
   function confirm() {
     saveEntry(toHistoryEntry(session, rxOrScaled, rpe, durationMin, resultOf(1), undefined, wodParts.includes(2) ? resultOf(2) : undefined));
+    // Las series y los pesos, con la fecha de ese día y el mismo registro que el modo enfocado.
+    if (logLifts) for (const entry of workSetsFrom(dateIso, lifts, liftState)) athleteRepository.saveWorkSet(entry);
     // Se marca como "esto pasó de verdad", igual que al cerrar la sesión de hoy: otro dispositivo no la pisa al sincronizar.
     athleteRepository.saveCachedSession({ ...session, editedByAthlete: true });
     onSaved();
   }
 
+  if (stage === 'lifts') {
+    return (
+      <LiftsStep
+        lifts={lifts}
+        state={liftState}
+        onChange={setLiftState}
+        onNext={() => {
+          setLogLifts(true);
+          setStage('panel');
+        }}
+        onSkip={() => {
+          setLogLifts(false);
+          setStage('panel');
+        }}
+        onBack={onBack}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      <button onClick={onBack} className="flex items-center gap-1 self-start text-xs font-semibold text-neutral-500 transition-colors hover:text-neutral-200">
-        <ArrowLeft size={13} /> {longDay(dateIso)}
+      <button onClick={lifts.length > 0 ? () => setStage('lifts') : onBack} className="flex items-center gap-1 self-start text-xs font-semibold text-neutral-500 transition-colors hover:text-neutral-200">
+        <ArrowLeft size={13} /> {lifts.length > 0 ? 'Series y pesos' : longDay(dateIso)}
       </button>
       <CompleteSessionPanel
         wodParts={wodParts}
@@ -82,7 +182,7 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
         onDuration={setDurationMin}
         estimatedMin={estimatedMin}
         onConfirm={confirm}
-        onCancel={onBack}
+        onCancel={lifts.length > 0 ? () => setStage('lifts') : onBack}
       />
     </div>
   );
