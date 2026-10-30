@@ -36,11 +36,11 @@ function InsightRow({ insight }: { insight: LearnedInsight }) {
  * "Lo que aprendo de ti": qué factores del check-in suben de verdad el esfuerzo percibido de tus sesiones.
  * Solo informa — no cambia la nota ni la carga (ver `readinessLearning.ts`).
  */
-export function LearnedInsights({ learning }: { learning: ReadinessLearning }) {
+export function LearnedInsights({ learning, bare = false }: { learning: ReadinessLearning; bare?: boolean }) {
   const top = learning.insights[0];
   return (
     <div>
-      <SectionLabel className="mb-3">Lo que aprendo de ti</SectionLabel>
+      {!bare && <SectionLabel className="mb-3">Lo que aprendo de ti</SectionLabel>}
       {!learning.ready ? (
         <div className="flex flex-col gap-2">
           <div className="h-[3px] overflow-hidden rounded-full bg-white/[0.08]">

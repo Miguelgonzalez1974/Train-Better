@@ -54,11 +54,11 @@ function PartRow({ title, part }: { title: string; part: ReadinessPart }) {
  * De dónde sale la nota de recuperación: cómo te sientes (check-in) y cómo te está saliendo el entreno, más los
  * check-ins de la última semana. La carga (ACWR) va aparte, en el otro anillo.
  */
-export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
+export function RecoveryDetail({ readiness, inFold = false }: { readiness: ReadinessScore; inFold?: boolean }) {
   const r = readiness.checkins;
   return (
     <div className="flex flex-col gap-6">
-      <SectionLabel>Preparación</SectionLabel>
+      {!inFold && <SectionLabel>Preparación</SectionLabel>}
       <div className="flex flex-col gap-3.5">
         <PartRow title="Cómo te sientes" part={readiness.feel} />
         <PartRow title="Cómo te está saliendo" part={readiness.performance} />
@@ -128,7 +128,8 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
             );
           })}
         </div>
-        {r.axes.length > 0 && (
+        {/* Dentro del plegable los ejes ya están arriba, en las cuatro fichas de la pestaña. */}
+        {!inFold && r.axes.length > 0 && (
           <div className="mt-4 flex flex-col gap-2.5">
             {r.axes.map((axis) => {
               const pct = Math.round(((axis.score + 1) / 2) * 100);
@@ -144,8 +145,7 @@ export function RecoveryDetail({ readiness }: { readiness: ReadinessScore }) {
             })}
           </div>
         )}
-        {r.weakest && <p className="mt-4 text-xs leading-relaxed text-neutral-400">{WEAKEST_TIP[r.weakest.key]}</p>}
-      </div>
+        {r.weakest && <p className="mt-4 text-xs leading-relaxed text-neutral-400">{WEAKEST_TIP[r.weakest.key]}</p>}      </div>
 
       <p className="text-[11px] leading-relaxed text-neutral-600">
         Orientativo: mezcla lo que dices que sientes con cómo te salen las sesiones, y la carga acumulada solo resta cuando va alta. El coach ya ajusta los kilos de cada día con todo esto.

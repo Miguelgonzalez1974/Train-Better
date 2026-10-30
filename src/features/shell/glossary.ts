@@ -28,6 +28,14 @@ export const GLOSSARY = {
     title: 'HRV',
     text: 'Variabilidad de tu frecuencia cardiaca por la mañana. Si está dentro o por encima de tu rango normal, sueles estar recuperado.',
   },
+  fitness: {
+    title: 'Forma física',
+    text: 'Lo que has construido entrenando: sube despacio con las semanas y se va despacio si paras. Es la línea azul de la curva.',
+  },
+  supercompensacion: {
+    title: 'Supercompensación',
+    text: 'Tras cargar y descansar, el cuerpo se recupera y queda un poco por encima de donde estaba. Esa ventana, con la fatiga ya baja, es cuando mejor rindes.',
+  },
 } as const;
 
 export type GlossaryKey = keyof typeof GLOSSARY;

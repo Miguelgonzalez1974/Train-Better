@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { Activity, Apple, CalendarPlus, Check, ChevronRight, Moon, Trophy } from 'lucide-react';
+import { Activity, Apple, CalendarPlus, Check, ChevronRight, Moon, TrendingUp, Trophy } from 'lucide-react';
+import { formToday, signed, type FormSeries } from '../../engine/formCurve';
+import { FORM_TONE, FormSpark } from './FormCurve';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import type { DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -104,8 +106,10 @@ export function DayRows({
   strain,
   nutrition,
   analysis,
+  form,
   onNavigateToPlanificacion,
   onNavigateToNutricion,
+  onOpenForm,
   onOpenAnalysis,
 }: {
   isToday: boolean;
@@ -117,8 +121,12 @@ export function DayRows({
   nutrition: NutritionSummary | null;
   /** Los tres datos del análisis, ya formateados: dominios energéticos, desequilibrios y fuerza (en ese orden). */
   analysis: [string, string, string] | string[];
+  /** La serie de la curva de forma (solo hoy; null en un día pasado o sin historial). */
+  form: FormSeries | null;
   onNavigateToPlanificacion: () => void;
   onNavigateToNutricion: () => void;
+  /** Abre la ventana con la curva de forma. */
+  onOpenForm: () => void;
   /** Abre la ventana con el análisis completo. */
   onOpenAnalysis: () => void;
 }) {
@@ -168,6 +176,17 @@ export function DayRows({
     ? Math.round(((Math.min(1, nutrition.protein.done / Math.max(1, nutrition.protein.target)) + Math.min(1, nutrition.carbs.done / Math.max(1, nutrition.carbs.target))) / 2) * 100)
     : null;
 
+  const formNow = form ? formToday(form) : null;
+  const formRow = form ? (
+    <Row
+      badge={formNow ? <FormSpark series={form} tone={FORM_TONE[formNow.state]} /> : <Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
+      title={formNow ? `Tu forma ${signed(formNow.value)}` : 'Tu forma'}
+      sub={formNow ? formNow.sentence : `Aún poco historial: ${form.sessions} sesiones registradas`}
+      right={chevron}
+      onClick={onOpenForm}
+    />
+  ) : null;
+
   return (
     <section className="flex flex-col gap-2">
       <SectionLabel className="px-1">Tu día</SectionLabel>
@@ -197,6 +216,8 @@ export function DayRows({
           onClick={onNavigateToNutricion}
         />
       )}
+      {/* Tu forma: la curva de supercompensación; con poco historial dice cuánto falta para tenerla. */}
+      {form && formRow}
       {/* Análisis: lo que no hace falta mirar cada día, con sus tres datos a la vista; la ventana trae el detalle. */}
       <Row
         badge={

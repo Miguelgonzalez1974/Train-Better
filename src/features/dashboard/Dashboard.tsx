@@ -12,7 +12,6 @@ import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
-import { CheckInSummary } from './CheckInSummary';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -20,16 +19,15 @@ import { buildStructureRow, buildGoalRows } from './progressOverview';
 import { DayRing, ZONE_COLOR, ZONE_TOKEN, ZONE_WORD, type DashTab, type RingTarget } from './DayRing';
 import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows, type NutritionSummary } from './DayRows';
+import { FormView } from './FormCurve';
+import { buildFormModel } from './formModel';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
-import { ReadinessTrendChart } from './WeekCharts';
 import { WeekTrendCard } from './WeekTrendCard';
-import { HrvChart } from './HrvChart';
 import { SleepTab } from './SleepHabits';
 import { StrainDetail } from './StrainRing';
-import { RecoveryDetail } from './RecoveryCard';
-import { LearnedInsights } from './LearnedInsights';
+import { PreparationTab } from './PreparationTab';
 import { AcwrGauge } from './AcwrGauge';
 import { ConsistencyDetail } from './ConsistencyDetail';
 import { computeYearConsistency } from '../../engine/yearConsistency';
@@ -66,6 +64,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
@@ -78,6 +77,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const acwr = useMemo(() => computeAcwr(history), [history]);
   const acwrTrend = useMemo(() => getAcwrTrend(history), [history]);
   const todayIso = toLocalIsoDate(new Date());
+  const formModel = useMemo(() => buildFormModel(profile, history, todayIso), [profile, history, todayIso]);
   const structureRow = useMemo(() => buildStructureRow(profile, todayIso), [profile, todayIso]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
@@ -299,6 +299,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             strain={shown.strain}
             nutrition={nutrition}
             analysis={analysisLabels}
+            form={isToday && formModel.plan.sessions > 0 ? formModel.plan : null}
+            onOpenForm={() => setFormOpen(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
             onNavigateToNutricion={onNavigateToNutricion}
             onOpenAnalysis={() => setAnalysisOpen(true)}
@@ -315,20 +317,27 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </div>
       )}
       {tab === 'preparacion' && (
-        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
-          <ReadinessTrendChart series={readinessSeries} selectedIso={dayIso} onSelect={setDayIso} />
-          <HrvChart log={profile.readinessLog ?? []} dayIso={dayIso} />
-          <div className="flex flex-col gap-7 rounded-2xl bg-white/[0.03] p-5">
-            {isToday && todayReadiness && <CheckInSummary check={todayReadiness} onEdit={onOpenMorning} />}
-            <RecoveryDetail readiness={shown.readiness} />
-            <LearnedInsights learning={readinessLearning} />
-          </div>
-        </div>
+        <PreparationTab
+          readiness={shown.readiness}
+          series={readinessSeries}
+          dayIso={dayIso}
+          isToday={isToday}
+          log={profile.readinessLog ?? []}
+          todayCheck={todayReadiness}
+          learning={readinessLearning}
+          onSelect={setDayIso}
+          onOpenMorning={onOpenMorning}
+        />
       )}
       {tab === 'sueno' && (
         <div className="animate-section-in motion-reduce:animate-none">
           <SleepTab log={profile.readinessLog ?? []} dayIso={dayIso} todayIso={todayIso} learning={readinessLearning} onSelect={setDayIso} onOpenMorning={onOpenMorning} />
         </div>
+      )}
+      {formOpen && (
+        <Modal open onClose={() => setFormOpen(false)} title="Tu forma">
+          <FormView model={formModel} />
+        </Modal>
       )}
       {showLoad && (
         <Modal open onClose={() => setShowLoad(false)} title="Carga">
