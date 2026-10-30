@@ -886,6 +886,23 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
     setShowQuickLog(false);
   }
 
+  /**
+   * Se registró un día pasado que se había quedado sin apuntar (ver LogPastDay). El historial y el perfil (fechas de entreno, trabajo del día)
+   * se vuelven a leer, y la sesión de hoy se rehace si aún no se ha tocado: el coach ya sabe que ese día se entrenó (y no fue descanso).
+   */
+  function handleLoggedPastDay() {
+    const nextHistory = athleteRepository.getHistory();
+    const nextProfile = athleteRepository.getProfile();
+    setHistory(nextHistory);
+    setProfile(nextProfile);
+    setWorkLog(athleteRepository.getWorkLog());
+    if (session && !history.some((h) => h.date === session.date) && !session.editedByAthlete && session.source !== 'custom') {
+      const next = generateSessionForDate(nextProfile, nextHistory, new Date(), nextProfile.goals);
+      athleteRepository.saveCachedSession(next);
+      setSession(next);
+    }
+  }
+
   function handleDeleteTodaySession() {
     if (!session) return;
     if (!window.confirm('¿Borrar la sesión de hoy? Volverás a elegir qué hacer.')) return;
@@ -1021,6 +1038,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                   athleteRepository.deleteHistoryEntry(date);
                   setHistory(athleteRepository.getHistory());
                 }}
+                onLoggedDay={handleLoggedPastDay}
               />
               {history.length > 0 && (
                 <button

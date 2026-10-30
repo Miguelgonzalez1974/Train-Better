@@ -8,6 +8,7 @@ import type { AthleteProfile, DailySession, DayLightInfo, Goal, SessionHistoryEn
 import { Modal } from '../shell/Modal';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ensureWeekLocked } from './weeklyLock';
+import { LogPastDay } from './LogPastDay';
 import { wodResultsOf } from '../../engine/wodScoring';
 import { estimatePlannedStrain, strainFit } from '../../engine/plannedStrain';
 import { buildStrainTarget } from '../../engine/strainTarget';
@@ -53,14 +54,18 @@ interface WeekStripProps {
   today?: Date;
   /** Borra el registro de un dia pasado (por si se anoto por error) — el padre es quien posee `history`, asi que refresca su propio estado. */
   onDeleteHistoryEntry?: (date: string) => void;
+  /** Se registró un día pasado que se había quedado sin apuntar: el padre vuelve a leer el historial. */
+  onLoggedDay?: () => void;
   /** Botón fijo a la derecha de los siete días (el icono de nutrición de hoy). */
   trailing?: ReactNode;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, trailing }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, trailing }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
+  /** Día (índice de la semana) cuyo formulario de registro está abierto. */
+  const [loggingFor, setLoggingFor] = useState<number | null>(null);
   const todayIso = toLocalIsoDate(today);
   const monday = startOfWeek(today);
   monday.setDate(monday.getDate() + weekOffset * 7);
@@ -94,6 +99,15 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     const fresh = generateSessionForDate(lockedProfile, history, date, goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;
+  };
+
+  /** La sesión que había prevista para un día pasado sin registrar: la cacheada (la que se vio ese día) o, si no, la que se generó con el historial de entonces. */
+  const plannedForPast = (date: Date): DailySession | null => {
+    const dateIso = toLocalIsoDate(date);
+    const cached = athleteRepository.getCachedSession(dateIso);
+    if (cached && !isCachedSessionOrphaned(cached, profile, dateIso)) return cached;
+    if (!hasActiveTrainingStructure(profile, dateIso)) return null;
+    return generateSessionForDate(profile, history.filter((h) => h.date < dateIso), date, goals);
   };
 
   const expandedPreview = useMemo<DailySession | null>(() => {
@@ -276,7 +290,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           const isToday = dateIso === todayIso;
 
           return (
-            <Modal open onClose={() => setExpanded(null)} title={`${DAY_LABELS[expanded]} · ${dateIso}`}>
+            <Modal open onClose={() => { setExpanded(null); setLoggingFor(null); }} title={`${DAY_LABELS[expanded]} · ${dateIso}`}>
               {entry ? (
                 <div className="flex flex-col gap-2 text-sm">
                   <div className="flex items-center gap-2">
@@ -310,7 +324,29 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                   )}
                 </div>
               ) : isPast ? (
-                <p className="text-sm text-neutral-500">No registrado</p>
+                loggingFor === expanded && onLoggedDay ? (
+                  <LogPastDay
+                    dateIso={dateIso}
+                    planned={plannedForPast(date)}
+                    onSaved={() => {
+                      setLoggingFor(null);
+                      setExpanded(null);
+                      onLoggedDay();
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col items-start gap-3">
+                    <p className="text-sm text-neutral-500">No registrado</p>
+                    {onLoggedDay && (
+                      <button
+                        onClick={() => setLoggingFor(expanded)}
+                        className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
+                      >
+                        Registrar este día
+                      </button>
+                    )}
+                  </div>
+                )
               ) : isToday ? (
                 <p className="text-sm text-neutral-400">Consulta el detalle completo en «Sesión de hoy».</p>
               ) : expandedPreview?.isRestDay ? (
