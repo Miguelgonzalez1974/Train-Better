@@ -8,7 +8,7 @@
  */
 import type { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { dayStrain } from './strain';
-import { addDays, planLoads, steadyLoads, type CompetitionWindow } from './formCurve';
+import { POST_COMPETITION_DAYS, addDays, planLoads, steadyLoads, type CompetitionWindow } from './formCurve';
 import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, resolveMacrocyclePhase } from './periodization';
 
 /** Por qué un día tiene la carga que tiene: lo que el atleta entiende como causa de una ventana. */
@@ -26,20 +26,21 @@ const PHASE_FACTOR = { 1: 0.95, 2: 1, 3: 1.05, 4: 0.6 } as const;
 /** El día de recuperación activa (cardio suave) cuesta bastante menos que uno de entreno. */
 const RECOVERY_DAY_FACTOR = 0.3;
 const FALLBACK_TRAINING_LOAD = 50;
-const POST_COMPETITION_DAYS = 3;
 
 const isoToDate = (iso: string) => new Date(`${iso}T12:00:00`);
 const dayDiff = (fromIso: string, toIso: string) => Math.round((isoToDate(toIso).getTime() - isoToDate(fromIso).getTime()) / 86_400_000);
 
 /**
- * La carga de una semana tuya: el esfuerzo total de las últimas cuatro semanas entre cuatro, o null si no hay nada que medir.
+ * La carga de una semana tuya: el esfuerzo total de las cuatro semanas que acaban hoy (o en `untilIso`, si es antes) entre cuatro, o
+ * null si no hay nada que medir.
  * La previsión mantiene este volumen y lo reparte en los días de entreno de tu plan, así que si entrenas más días de los que dice el
  * plan, o más duro, la previsión no se queda corta.
  */
-export function typicalWeeklyLoad(history: SessionHistoryEntry[], todayIso: string): number | null {
-  const from = addDays(todayIso, -27);
+export function typicalWeeklyLoad(history: SessionHistoryEntry[], todayIso: string, untilIso: string = todayIso): number | null {
+  const end = untilIso < todayIso ? untilIso : todayIso;
+  const from = addDays(end, -27);
   const loads = new Map<string, number>();
-  for (const e of history) if (e.date >= from && e.date <= todayIso) loads.set(e.date, Math.max(loads.get(e.date) ?? 0, dayStrain(e) ?? 0));
+  for (const e of history) if (e.date >= from && e.date <= end) loads.set(e.date, Math.max(loads.get(e.date) ?? 0, dayStrain(e) ?? 0));
   const total = [...loads.values()].reduce((s, v) => s + v, 0);
   return total > 0 ? total / 4 : null;
 }
@@ -74,7 +75,10 @@ export function projectPlan(opts: {
   const { profile, history, todayIso, days, comp, taperScale } = opts;
   const macro = getActiveMacrocycle(profile.macrocycles ?? [], todayIso);
   const units = weekUnits(profile.trainingDaysPerWeek);
-  const perUnit = units > 0 ? (typicalWeeklyLoad(history, todayIso) ?? FALLBACK_TRAINING_LOAD * units) / units : 0;
+  // Tu semana normal se mide ANTES del taper: el recorte de los últimos días no es tu ritmo de siempre, y si contara, tras la competición
+  // la previsión te vería descansando semanas y la energía se iría al 100 %.
+  const until = comp && addDays(comp.eventStart, -8) < todayIso ? addDays(comp.eventStart, -8) : todayIso;
+  const perUnit = units > 0 ? (typicalWeeklyLoad(history, todayIso, until) ?? FALLBACK_TRAINING_LOAD * units) / units : 0;
 
   const base: number[] = [];
   const weekTag: (LoadTag | null)[] = [];

@@ -420,7 +420,7 @@ export function FormView({ model }: { model: FormModel }) {
           label="Próxima ventana"
           value={upcoming ? `${upcoming.peak}%` : '—'}
           tone={upcoming ? GOOD : INK}
-          sub={upcoming ? (upcoming.start === upcoming.end ? `${dayNum(upcoming.start)} ${shortDay(upcoming.start).split(' ').pop()}` : `${dayNum(upcoming.start)}–${dayNum(upcoming.end)} ${shortDay(upcoming.end).split(' ').pop()}`) : 'ninguna a la vista'}
+          sub={upcoming ? (upcoming.start === upcoming.end ? `${dayNum(upcoming.start)} ${shortDay(upcoming.start).split(' ').pop()}` : `${dayNum(upcoming.start)}–${dayNum(upcoming.end)} ${shortDay(upcoming.end).split(' ').pop()}`) : 'ninguna aún'}
         />
       </div>
 
@@ -459,8 +459,8 @@ export function FormView({ model }: { model: FormModel }) {
 
       <Fold title="Cómo se calcula">
         <p className="text-xs leading-relaxed text-neutral-400">
-          Cada sesión suma a tu <Term k="fitness">forma física</Term>, que sube y baja despacio, y a tu fatiga, que lo hace deprisa (míralas en la vista «Forma física y fatiga»). Tu forma es la diferencia, y la energía es esa forma pasada a una escala de 0 a 100: a tope desde el 80 %, cansado hasta el 35 %. Cuando la fatiga cae antes que la forma física queda un hueco a tu favor, la ventana de{' '}
-          <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Es una estimación a partir de tus sesiones; el check-in de cada mañana manda sobre ella.
+          Cada sesión suma a tu <Term k="fitness">forma física</Term>, que sube y baja despacio, y a tu fatiga, que lo hace deprisa (míralas en la vista «Forma física y fatiga»). Tu forma es la diferencia, y la energía es esa forma pasada a una escala de 0 a 100: a tope desde el {ENERGY_TOP} %, cansado hasta el {ENERGY_LOW} %. Entrenando siempre igual oscilas entre el 30 y el 70 % según el día de la semana; solo llegas a tope cuando bajas la carga unos días. Cuando la fatiga cae antes que la forma física queda un hueco a tu favor, la ventana de{' '}
+          <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Solo cuenta lo que apuntas: si haces bici, entrenos de equipo u otro deporte y no lo registras (vale «Registrar este día» con su RPE y duración), el cálculo te verá más descansado de lo que estás. Es una estimación; el check-in de cada mañana manda sobre ella.
         </p>
       </Fold>
     </div>

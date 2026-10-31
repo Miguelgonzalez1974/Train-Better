@@ -29,6 +29,12 @@ describe('typicalWeeklyLoad', () => {
   it('sin historial no hay nada que medir', () => {
     expect(typicalWeeklyLoad([], TODAY)).toBeNull();
   });
+  it('puede medirse hasta una fecha anterior (antes del taper)', () => {
+    const history = [...weekdayHistory().filter((e) => e.date < addDays(TODAY, -7)), ...weekdayHistory().filter((e) => e.date >= addDays(TODAY, -7)).map((e) => entry(e.date, 5, 30))];
+    const full = typicalWeeklyLoad(history, TODAY)!;
+    const before = typicalWeeklyLoad(history, TODAY, addDays(TODAY, -7))!;
+    expect(before).toBeGreaterThan(full);
+  });
 });
 
 describe('competitionTag', () => {
@@ -73,6 +79,15 @@ describe('projectPlan', () => {
     // El taper recorta frente a una semana normal.
     const normal = projectPlan({ profile, history: weekdayHistory(), todayIso: TODAY, days: 12, comp: null, taperScale: 0.6 }).loads;
     expect(loads[1]).toBeLessThan(normal[1]);
+  });
+
+  it('el taper de los últimos días no baja tu ritmo de siempre en la previsión de después', () => {
+    const comp: CompetitionWindow = { eventStart: addDays(TODAY, 6), eventEnd: addDays(TODAY, 7) };
+    // Entrenas normal hasta hace 3 días y entonces empieza un taper muy suave en la práctica.
+    const history = weekdayHistory().map((e) => (e.date >= addDays(TODAY, -3) ? entry(e.date, 4, 20) : e));
+    const { loads } = projectPlan({ profile, history, todayIso: TODAY, days: 20, comp, taperScale: 0.6 });
+    // Tras la competición y su recuperación (días 8-11) vuelves al volumen de antes del taper: un día de entreno normal pesa lo de siempre.
+    expect(Math.max(...loads.slice(12))).toBeGreaterThan(0.9 * sessionLoad);
   });
 
   it('mantiene tu volumen semanal aunque el plan tenga menos días de entreno que tú', () => {

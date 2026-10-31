@@ -23,16 +23,20 @@ export const MIN_SPAN_DAYS = 14;
 export const MIN_SESSIONS = 6;
 /**
  * La ENERGÍA: tu forma pasada a una escala de 0 a 100, que es como se cuenta al atleta (una batería: llena es ir a tope). Se calcula
- * sobre la forma relativa (forma / forma física: un mismo número pesa distinto con 20 de base que con 60): 55 es la mitad de la batería,
- * sin ventaja ni lastre, y cada 10 % de forma relativa mueve la energía 18 puntos.
+ * sobre la forma relativa (forma / forma física: un mismo número pesa distinto con 20 de base que con 60): 50 es la mitad de la batería,
+ * sin ventaja ni lastre, y cada 10 % de forma relativa mueve la energía unos 17 puntos. Entrenando siempre igual, la energía oscila
+ * entre unos 30 y 70 según el día de la semana (nunca "a tope" ni "cansado"): a tope solo llega al bajar la carga unos días, y el
+ * 100 % exige una forma un 30 % por encima de tu forma física, algo raro (tras una semana de descarga larga).
  */
-export const ENERGY_BASE = 55;
-export const ENERGY_SCALE = 180;
+export const ENERGY_BASE = 50;
+export const ENERGY_SCALE = 500 / 3;
 /** Desde esta energía se está a tope (en ventana de supercompensación), y hasta esta, cansado. */
-export const ENERGY_TOP = 80;
-export const ENERGY_LOW = 35;
+export const ENERGY_TOP = 75;
+export const ENERGY_LOW = 25;
 /** Carga que se supone a un día de competición en la previsión del plan. */
 export const COMPETITION_DAY_LOAD = 80;
+/** Días de recuperación tras la competición, con la carga recortada, antes de volver al ritmo normal. */
+export const POST_COMPETITION_DAYS = 3;
 
 export type FormState = 'ventana' | 'equilibrio' | 'cargado';
 
@@ -156,7 +160,8 @@ export function planLoads(steady: number[], todayIso: string, comp: CompetitionW
   return steady.map((load, i) => {
     const iso = addDays(todayIso, i + 1);
     if (iso >= comp.eventStart && iso <= comp.eventEnd) return COMPETITION_DAY_LOAD;
-    if (iso > comp.eventEnd) return Math.round(load * 0.4);
+    // Tras la competición, tres días de recuperación y se vuelve al ritmo normal (no todos los días siguientes).
+    if (iso > comp.eventEnd) return isoToDay(iso) - isoToDay(comp.eventEnd) <= POST_COMPETITION_DAYS ? Math.round(load * 0.4) : load;
     const toStart = isoToDay(comp.eventStart) - isoToDay(iso);
     if (toStart === 1) return Math.round(load * 0.15);
     if (toStart === 2) return Math.round(load * 0.4);

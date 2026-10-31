@@ -90,21 +90,31 @@ describe('buildFormSeries', () => {
 });
 
 describe('energyOf', () => {
-  it('pasa la forma a 0-100: sin ventaja ni lastre es algo más de la mitad', () => {
-    expect(energyOf(0, 40)).toBe(55);
-    expect(energyOf(8, 40)).toBeGreaterThan(80);
-    expect(energyOf(-8, 40)).toBeLessThan(35);
+  it('pasa la forma a 0-100: sin ventaja ni lastre es la mitad', () => {
+    expect(energyOf(0, 40)).toBe(50);
+    expect(energyOf(8, 40)).toBeGreaterThan(75);
+    expect(energyOf(-8, 40)).toBeLessThan(25);
   });
   it('se queda siempre entre 0 y 100', () => {
     expect(energyOf(500, 40)).toBe(100);
     expect(energyOf(-500, 40)).toBe(0);
   });
-  it('a tope desde 80 y cansado hasta 35, como se cuenta al atleta', () => {
-    // La forma relativa que da justo 80 y justo 35.
-    expect(formStateOf(((80 - 55) / 180) * 100, 100)).toBe('ventana');
-    expect(formStateOf(((79 - 55) / 180) * 100, 100)).toBe('equilibrio');
-    expect(formStateOf(((35 - 55) / 180) * 100, 100)).toBe('cargado');
-    expect(formStateOf(((36 - 55) / 180) * 100, 100)).toBe('equilibrio');
+  it('el 100 % es raro: pide una forma un 30 % por encima de tu forma física', () => {
+    expect(energyOf(20, 100)).toBeLessThan(100); // +20 %
+    expect(energyOf(30, 100)).toBe(100);
+  });
+  it('a tope desde 75 y cansado hasta 25, como se cuenta al atleta', () => {
+    // La forma relativa que da justo 75 y justo 25.
+    expect(formStateOf(((75 - 50) / (500 / 3)) * 100, 100)).toBe('ventana');
+    expect(formStateOf(((74 - 50) / (500 / 3)) * 100, 100)).toBe('equilibrio');
+    expect(formStateOf(((25 - 50) / (500 / 3)) * 100, 100)).toBe('cargado');
+    expect(formStateOf(((26 - 50) / (500 / 3)) * 100, 100)).toBe('equilibrio');
+  });
+  it('entrenando siempre igual nunca se está a tope ni cansado ni cerca del 100 %', () => {
+    const s = buildFormSeries({ history: steadyHistory(12, 7), todayIso: TODAY });
+    const energies = s.points.filter((p) => !p.future).map((p) => energyOf(p.form, p.fitness));
+    expect(Math.max(...energies)).toBeLessThan(75);
+    expect(Math.min(...energies)).toBeGreaterThan(25);
   });
 });
 
@@ -138,6 +148,14 @@ describe('previsión', () => {
     expect(plan[5]).toBe(80); // primer día
     expect(plan[6]).toBe(80); // segundo día
     expect(plan[7]).toBe(24); // después: recuperación
+  });
+
+  it('tras la competición solo recortan los tres días de recuperación y luego se vuelve al ritmo normal', () => {
+    const steady = Array.from({ length: 16 }, () => 60);
+    const plan = planLoads(steady, TODAY, comp, 0.6);
+    // La competición acaba en el día 7 (índice 6): índices 7, 8 y 9 son la recuperación.
+    expect([plan[7], plan[8], plan[9]]).toEqual([24, 24, 24]);
+    expect(plan.slice(10)).toEqual(Array.from({ length: 6 }, () => 60));
   });
 
   it('sin competición el plan es tu ritmo de siempre', () => {
