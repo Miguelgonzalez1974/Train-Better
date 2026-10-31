@@ -12,7 +12,6 @@ import {
   MAX_WINDOW_DAYS,
   planLoads,
   steadyLoads,
-  steadyWithCompetition,
   type CompetitionWindow,
 } from './formCurve';
 import { dayStrain } from './strain';
@@ -119,8 +118,6 @@ describe('previsión', () => {
     expect(plan[5]).toBe(80); // primer día
     expect(plan[6]).toBe(80); // segundo día
     expect(plan[7]).toBe(24); // después: recuperación
-    expect(steadyWithCompetition(steady, TODAY, comp)[5]).toBe(80);
-    expect(steadyWithCompetition(steady, TODAY, comp)[0]).toBe(60);
   });
 
   it('sin competición el plan es tu ritmo de siempre', () => {
@@ -129,7 +126,7 @@ describe('previsión', () => {
 
   it('tapering llega a la competición mejor que no bajar el ritmo', () => {
     const history = steadyHistory(8, 8);
-    const steady = steadyWithCompetition(steadyLoads(history, TODAY, 9), TODAY, comp);
+    const steady = steadyLoads(history, TODAY, 9).map((l, i) => (i === 5 || i === 6 ? 80 : l));
     const plan = planLoads(steadyLoads(history, TODAY, 9), TODAY, comp, 0.6);
     const withPlan = buildFormSeries({ history, todayIso: TODAY, future: plan });
     const noTaper = buildFormSeries({ history, todayIso: TODAY, future: steady });
@@ -194,21 +191,21 @@ describe('formDecision y formAdvice', () => {
   const history = steadyHistory(8, 8);
   const base = steadyLoads(history, TODAY, 9);
   const plan = buildFormSeries({ history, todayIso: TODAY, future: planLoads(base, TODAY, comp, 0.6) });
-  const steady = buildFormSeries({ history, todayIso: TODAY, future: steadyWithCompetition(base, TODAY, comp) });
 
-  it('con competición dice qué hacer y compara con no bajar la carga', () => {
-    const text = formDecision(plan, steady, comp, TODAY);
+  it('con competición dice cómo llegas el primer día y qué hacer', () => {
+    const text = formDecision(plan, comp, TODAY);
     expect(text).toContain('el 6 de noviembre');
-    expect(text).toMatch(/taper|plan/);
     expect(text).toMatch(/[+−]\d/);
+    expect(text).toMatch(/^(Sigue el plan|Con tu plan)/);
+    expect(text).not.toMatch(/si no bajas/);
   });
 
-  it('sin competición anuncia la próxima ventana o dice cómo conseguirla', () => {
+  it('sin competición anuncia la próxima ventana o dice que no hay ninguna', () => {
     const future = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     const rested = buildFormSeries({ history: steadyHistory(10, 8).filter((e) => e.date < addDays(TODAY, -6)), todayIso: TODAY, future });
-    expect(formDecision(rested, null, null, TODAY)).toMatch(/ventana/);
+    expect(formDecision(rested, null, TODAY)).toMatch(/ventana/);
     const hard = buildFormSeries({ history: steadyHistory(10, 8), todayIso: TODAY, future: [60, 60, 60, 60, 60, 60, 60, 60, 60, 60] });
-    expect(formDecision(hard, null, null, TODAY)).toMatch(/baja la carga/);
+    expect(formDecision(hard, null, TODAY)).toMatch(/no se abre ninguna ventana/);
   });
 
   it('el consejo de hoy cambia con el estado y con la cuenta atrás', () => {

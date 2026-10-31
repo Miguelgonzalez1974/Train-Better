@@ -1,17 +1,7 @@
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { TAPER_PARAMS } from '../../engine/competition';
 import { resolveCompetitionDay } from '../../engine/taperPlan';
-import {
-  FORECAST_DAYS,
-  addDays,
-  buildFormSeries,
-  formWindows,
-  steadyLoads,
-  steadyWithCompetition,
-  type CompetitionWindow,
-  type FormSeries,
-  type FormWindow,
-} from '../../engine/formCurve';
+import { FORECAST_DAYS, addDays, buildFormSeries, formWindows, type CompetitionWindow, type FormSeries, type FormWindow } from '../../engine/formCurve';
 import { projectPlan, type LoadTag } from '../../engine/formPlan';
 
 export interface FormModel {
@@ -20,10 +10,6 @@ export interface FormModel {
   comp: CompetitionWindow | null;
   /** Lo que traería tu plan: tu calendario, las descargas del macrociclo y el taper si hay competición. */
   plan: FormSeries;
-  /** Lo que pasaría sin bajar el ritmo; solo se enseña como comparación si hay competición. */
-  steady: FormSeries;
-  /** ¿Hay una comparación que enseñar (competición cerca)? */
-  hasScenarios: boolean;
   /** Las próximas ventanas con el plan (las que acaban después de hoy), de la más cercana a la más lejana. */
   windows: FormWindow[];
   /** Todas las ventanas de la curva, también las ya pasadas (para dibujarlas). */
@@ -32,18 +18,16 @@ export interface FormModel {
   tags: Map<string, LoadTag>;
 }
 
-/** Todo lo que necesitan la fila "Tu forma" y su ventana: el plan, la comparación sin bajar el ritmo, las ventanas y la competición. */
+/** Todo lo que necesitan la fila "Tu forma" y su ventana: el plan, las ventanas y la competición. */
 export function buildFormModel(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string): FormModel {
   const day = resolveCompetitionDay(profile, history, new Date(`${todayIso}T12:00:00`));
   const comp: CompetitionWindow | null = day && day.phase !== 'post' ? { eventStart: day.eventStart, eventEnd: day.eventEnd } : null;
   const taperScale = TAPER_PARAMS[day?.taperKind ?? 'estandar'].volumeScale;
   const projection = projectPlan({ profile, history, todayIso, days: FORECAST_DAYS, comp, taperScale });
   const plan = buildFormSeries({ history, todayIso, future: projection.loads });
-  const steadyBase = steadyLoads(history, todayIso, FORECAST_DAYS);
-  const steady = comp ? buildFormSeries({ history, todayIso, future: steadyWithCompetition(steadyBase, todayIso, comp) }) : plan;
   const tags = new Map<string, LoadTag>();
   projection.tags.forEach((t, i) => t && tags.set(addDays(todayIso, i + 1), t));
-  return { todayIso, comp, plan, steady, hasScenarios: comp !== null, windows: formWindows(plan, todayIso, comp?.eventStart), allWindows: formWindows(plan, undefined, comp?.eventStart), tags };
+  return { todayIso, comp, plan, windows: formWindows(plan, todayIso, comp?.eventStart), allWindows: formWindows(plan, undefined, comp?.eventStart), tags };
 }
 
 /** Por qué se abre una ventana, en palabras del atleta: mira las causas de los días justo antes de abrirse y, si no hay, un descanso. */

@@ -153,15 +153,6 @@ export function planLoads(steady: number[], todayIso: string, comp: CompetitionW
   });
 }
 
-/** "Sin bajar el ritmo" también compite el día de la competición. */
-export function steadyWithCompetition(steady: number[], todayIso: string, comp: CompetitionWindow | null): number[] {
-  if (!comp) return steady;
-  return steady.map((l, i) => {
-    const iso = addDays(todayIso, i + 1);
-    return iso >= comp.eventStart && iso <= comp.eventEnd ? COMPETITION_DAY_LOAD : l;
-  });
-}
-
 /** Cuántos días por delante se calculan (cinco semanas: lo que enseña el calendario de ventanas). */
 export const FORECAST_DAYS = 35;
 /** Hasta cuántos días por delante se mira para decir "tu próxima ventana" sin competición (más allá es solo orientativo). */
@@ -265,35 +256,25 @@ export function atCompetition(series: FormSeries, comp: CompetitionWindow | null
 }
 
 /**
- * La frase de decisión de la ventana. Con una competición cerca: qué hacer (seguir el plan, normalmente) y por qué, comparando cómo
- * llegarías con tu plan y sin bajar la carga. Sin competición: cuándo se abre tu próxima ventana, o qué hacer para que se abra.
+ * La frase de decisión de la ventana, sobre tu plan. Con una competición cerca: cómo llegas el primer día y qué hacer. Sin competición:
+ * cuándo se abre tu próxima ventana.
  */
-export function formDecision(plan: FormSeries, steady: FormSeries | null, comp: CompetitionWindow | null, todayIso: string): string {
-  const withPlan = atCompetition(plan, comp);
-  if (comp && withPlan) {
-    const when = `el ${longDate(comp.eventStart)}`;
-    const without = steady ? atCompetition(steady, comp) : null;
-    const planPart = `Con el taper llegas ${when} con una forma de ${signed(withPlan.form)}, ${FORM_STATE_WORD[withPlan.state]}`;
-    if (withPlan.state === 'ventana') {
-      return without && without.state !== 'ventana'
-        ? `Sigue el plan. ${planPart}; si no bajas la carga, llegarías con ${signed(without.form)}.`
-        : `Sigue el plan. ${planPart}.`;
-    }
-    if (without && without.form < withPlan.form) {
-      return `Con tu plan llegas ${when} con una forma de ${signed(withPlan.form)}, ${FORM_STATE_WORD[withPlan.state]}; sin bajar la carga serían ${signed(without.form)}. Respeta el taper y cuida el sueño.`;
-    }
-    return `Con tu plan llegas ${when} con una forma de ${signed(withPlan.form)}, ${FORM_STATE_WORD[withPlan.state]}.`;
+export function formDecision(plan: FormSeries, comp: CompetitionWindow | null, todayIso: string): string {
+  const atEvent = atCompetition(plan, comp);
+  if (comp && atEvent) {
+    const lead = `llegas el ${longDate(comp.eventStart)} con ${signed(atEvent.form)}, ${FORM_STATE_WORD[atEvent.state]}`;
+    if (atEvent.state === 'ventana') return `Sigue el plan: ${lead}.`;
+    if (atEvent.state === 'cargado') return `Con tu plan ${lead}: no añadas carga extra estos días.`;
+    return `Con tu plan ${lead}: respeta el taper y duerme bien.`;
   }
   const near = formWindows(plan, todayIso).find((w) => w.start <= addDays(todayIso, NEAR_DAYS));
   if (near) {
-    const open = near.start <= todayIso;
-    return open
-      ? `Tu ventana está abierta hasta el ${longDate(near.end)}, con una forma de hasta ${signed(near.peak)}: buen momento para empujar.`
-      : `Tu próxima ventana se abre el ${longDate(near.start)} y llega a ${signed(near.peak)} el ${longDate(near.peakIso)}: ahí es donde mejor rendirás.`;
+    return near.start <= todayIso
+      ? `Tu ventana está abierta hasta el ${longDate(near.end)}: buen momento para empujar.`
+      : `Tu próxima ventana va del ${longDate(near.start)} al ${longDate(near.end)}, con hasta ${signed(near.peak)}.`;
   }
-  return 'En las próximas dos semanas no se abre ninguna ventana con tu plan: para que aparezca, baja la carga unos días seguidos.';
+  return 'Con tu plan no se abre ninguna ventana en las próximas dos semanas.';
 }
-
 /** Qué hacer hoy, en una línea: según cómo estás y, si hay competición, en qué punto de la cuenta atrás. */
 export function formAdvice(state: FormState, comp: CompetitionWindow | null, todayIso: string): string {
   if (comp && todayIso >= comp.eventStart && todayIso <= comp.eventEnd) return 'Hoy compites: la forma ya está hecha. Dosifica y disfruta.';
