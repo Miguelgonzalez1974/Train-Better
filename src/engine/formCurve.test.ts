@@ -4,6 +4,7 @@ import {
   addDays,
   buildFormSeries,
   formMissing,
+  energyOf,
   formAdvice,
   formDecision,
   formStateOf,
@@ -85,6 +86,25 @@ describe('buildFormSeries', () => {
     const a = buildFormSeries({ history: steadyHistory(8), todayIso: TODAY });
     const b = buildFormSeries({ history: [...steadyHistory(8), entry(addDays(TODAY, 2), 10, 120)], todayIso: TODAY });
     expect(b.points[b.todayIndex].form).toBeCloseTo(a.points[a.todayIndex].form, 5);
+  });
+});
+
+describe('energyOf', () => {
+  it('pasa la forma a 0-100: sin ventaja ni lastre es algo más de la mitad', () => {
+    expect(energyOf(0, 40)).toBe(55);
+    expect(energyOf(8, 40)).toBeGreaterThan(80);
+    expect(energyOf(-8, 40)).toBeLessThan(35);
+  });
+  it('se queda siempre entre 0 y 100', () => {
+    expect(energyOf(500, 40)).toBe(100);
+    expect(energyOf(-500, 40)).toBe(0);
+  });
+  it('a tope desde 80 y cansado hasta 35, como se cuenta al atleta', () => {
+    // La forma relativa que da justo 80 y justo 35.
+    expect(formStateOf(((80 - 55) / 180) * 100, 100)).toBe('ventana');
+    expect(formStateOf(((79 - 55) / 180) * 100, 100)).toBe('equilibrio');
+    expect(formStateOf(((35 - 55) / 180) * 100, 100)).toBe('cargado');
+    expect(formStateOf(((36 - 55) / 180) * 100, 100)).toBe('equilibrio');
   });
 });
 
@@ -174,14 +194,15 @@ describe('formWindows', () => {
     expect(formWindows(s)).toHaveLength(0);
     const kept = formWindows(s, undefined, day);
     expect(kept).toHaveLength(1);
-    expect(kept[0]).toMatchObject({ start: day, end: day, days: 1, peak: 12 });
+    expect(kept[0]).toMatchObject({ start: day, end: day, days: 1, peak: energyOf(12, 50) });
   });
 
   it('el pico es el día de mejor forma de la ventana', () => {
     const s = buildFormSeries({ history: freshHistory(), todayIso: TODAY, future: [0, 0, 0, 0, 0, 0, 0] });
     for (const w of formWindows(s)) {
       const inside = s.points.filter((p) => p.iso >= w.start && p.iso <= w.end);
-      expect(w.peak).toBe(Math.round(Math.max(...inside.map((p) => p.form))));
+      const best = inside.reduce((b, p) => (p.form > b.form ? p : b), inside[0]);
+      expect(w.peak).toBe(energyOf(best.form, best.fitness));
     }
   });
 });
@@ -195,7 +216,7 @@ describe('formDecision y formAdvice', () => {
   it('con competición dice cómo llegas el primer día y qué hacer', () => {
     const text = formDecision(plan, comp, TODAY);
     expect(text).toContain('el 6 de noviembre');
-    expect(text).toMatch(/[+−]\d/);
+    expect(text).toMatch(/\d+ % de energía/);
     expect(text).toMatch(/^(Sigue el plan|Con tu plan)/);
     expect(text).not.toMatch(/si no bajas/);
   });

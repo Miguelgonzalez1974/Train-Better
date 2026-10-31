@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { CalendarPlus, Check, ChevronRight, Moon, TrendingUp, Trophy } from 'lucide-react';
-import { formToday, signed, type FormSeries } from '../../engine/formCurve';
-import { FORM_TONE, FormSpark } from './FormCurve';
+import { formToday, type FormSeries } from '../../engine/formCurve';
+import { EnergyBadge, FORM_TONE } from './FormCurve';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import type { DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -163,8 +163,8 @@ export function DayRows({
   const formNow = form ? formToday(form) : null;
   const formRow = form ? (
     <Row
-      badge={formNow ? <FormSpark series={form} tone={FORM_TONE[formNow.state]} /> : <Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
-      title={formNow ? `Tu forma ${signed(formNow.value)}` : 'Tu forma'}
+      badge={formNow ? <EnergyBadge value={formNow.value} tone={FORM_TONE[formNow.state]} /> : <Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
+      title={formNow ? `Tu forma · ${formNow.title.toLowerCase()}` : 'Tu forma'}
       sub={formNow ? (formNote ?? formNow.sentence) : `Aún poco historial: ${form.sessions} sesiones registradas`}
       right={chevron}
       onClick={onOpenForm}

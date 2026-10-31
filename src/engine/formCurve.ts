@@ -21,9 +21,16 @@ export const FATIGUE_TAU = 7;
 export const MIN_SPAN_DAYS = 14;
 /** Cuántas sesiones registradas hacen falta como mínimo. */
 export const MIN_SESSIONS = 6;
-/** Forma relativa (forma / forma física) desde la que se entra en la ventana de supercompensación, y hasta la que se va cargado. */
-export const WINDOW_FROM = 0.15;
-export const LOADED_UNTIL = -0.25;
+/**
+ * La ENERGÍA: tu forma pasada a una escala de 0 a 100, que es como se cuenta al atleta (una batería: llena es ir a tope). Se calcula
+ * sobre la forma relativa (forma / forma física: un mismo número pesa distinto con 20 de base que con 60): 55 es la mitad de la batería,
+ * sin ventaja ni lastre, y cada 10 % de forma relativa mueve la energía 18 puntos.
+ */
+export const ENERGY_BASE = 55;
+export const ENERGY_SCALE = 180;
+/** Desde esta energía se está a tope (en ventana de supercompensación), y hasta esta, cansado. */
+export const ENERGY_TOP = 80;
+export const ENERGY_LOW = 35;
 /** Carga que se supone a un día de competición en la previsión del plan. */
 export const COMPETITION_DAY_LOAD = 80;
 
@@ -58,10 +65,16 @@ function dayToIso(day: number): string {
 }
 export const addDays = (iso: string, delta: number) => dayToIso(isoToDay(iso) + delta);
 
-/** El estado de una forma, relativo a la forma física (un mismo número pesa distinto con 20 de base que con 60). */
-export function formStateOf(form: number, fitness: number): FormState {
+/** La energía (0-100) de una forma. */
+export function energyOf(form: number, fitness: number): number {
   const rel = form / Math.max(10, fitness);
-  return rel >= WINDOW_FROM ? 'ventana' : rel <= LOADED_UNTIL ? 'cargado' : 'equilibrio';
+  return Math.max(0, Math.min(100, Math.round(ENERGY_BASE + rel * ENERGY_SCALE)));
+}
+
+/** El estado de un día según su energía: a tope (ventana), cansado (cargado) o normal (equilibrio). */
+export function formStateOf(form: number, fitness: number): FormState {
+  const energy = energyOf(form, fitness);
+  return energy >= ENERGY_TOP ? 'ventana' : energy <= ENERGY_LOW ? 'cargado' : 'equilibrio';
 }
 
 export interface BuildInput {
@@ -171,7 +184,7 @@ export interface FormWindow {
   start: string;
   end: string;
   days: number;
-  /** El día de mejor forma de la ventana y cuánto vale. */
+  /** El día de mejor forma de la ventana y su energía (0-100) ese día. */
   peakIso: string;
   peak: number;
 }
@@ -195,7 +208,7 @@ export function formWindows(series: FormSeries, afterIso?: string, keepIso?: str
     if (run.length > MAX_WINDOW_DAYS) run = run.slice(0, MAX_WINDOW_DAYS);
     if (run.length >= MIN_WINDOW_DAYS || (keep && run.length > 0)) {
       const peak = run.reduce((b, p) => (p.form > b.form ? p : b), run[0]);
-      out.push({ start: run[0].iso, end: run[run.length - 1].iso, days: run.length, peakIso: peak.iso, peak: Math.round(peak.form) });
+      out.push({ start: run[0].iso, end: run[run.length - 1].iso, days: run.length, peakIso: peak.iso, peak: energyOf(peak.form, peak.fitness) });
     }
     run = [];
   };
@@ -218,29 +231,30 @@ export function stateByDay(series: FormSeries): Map<string, FormState> {
 
 export interface FormToday {
   state: FormState;
+  /** La energía de hoy (0-100). */
   value: number;
-  /** Titular corto ("Ventana abierta"). */
+  /** Titular corto ("A tope"). */
   title: string;
   /** Una frase de coach. */
   sentence: string;
 }
 
-const TITLE: Record<FormState, string> = { ventana: 'Ventana abierta', equilibrio: 'En equilibrio', cargado: 'Aún cargado' };
+const TITLE: Record<FormState, string> = { ventana: 'A tope', equilibrio: 'Normal', cargado: 'Cansado' };
 const SENTENCE: Record<FormState, string> = {
-  ventana: 'Ventana de supercompensación abierta: buen día para empujar.',
-  equilibrio: 'Ni cargado ni fresco: sigue el plan del día.',
-  cargado: 'Aún cargado: un día suave y entrarás en la ventana.',
+  ventana: 'Estás a tope: buen día para empujar.',
+  equilibrio: 'Ni a tope ni cansado: sigue el plan del día.',
+  cargado: 'Estás cansado: un día suave y recuperas energía.',
 };
-export const FORM_STATE_WORD: Record<FormState, string> = { ventana: 'en ventana', equilibrio: 'en equilibrio', cargado: 'aún cargado' };
+export const FORM_STATE_WORD: Record<FormState, string> = { ventana: 'a tope', equilibrio: 'normal', cargado: 'cansado' };
 
 export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(Math.round(n))}`;
 
-/** La forma de hoy; null si no hay datos suficientes (la fila dice cuánto falta). */
+/** La energía de hoy; null si no hay datos suficientes (la fila dice cuánto falta). */
 export function formToday(series: FormSeries): FormToday | null {
   if (!series.ready || series.todayIndex < 0) return null;
   const p = series.points[series.todayIndex];
   const state = formStateOf(p.form, p.fitness);
-  return { state, value: Math.round(p.form), title: TITLE[state], sentence: SENTENCE[state] };
+  return { state, value: energyOf(p.form, p.fitness), title: TITLE[state], sentence: SENTENCE[state] };
 }
 
 /** Lo que falta para tener curva: sesiones y días de historial. */
@@ -249,10 +263,10 @@ export function formMissing(series: FormSeries): { sessions: number; days: numbe
 }
 
 /** Cómo llegas el primer día de la competición con una serie, si ese día está en la previsión. */
-export function atCompetition(series: FormSeries, comp: CompetitionWindow | null): { form: number; state: FormState } | null {
+export function atCompetition(series: FormSeries, comp: CompetitionWindow | null): { energy: number; state: FormState } | null {
   if (!comp) return null;
   const p = series.points.find((x) => x.iso === comp.eventStart && x.future);
-  return p ? { form: Math.round(p.form), state: formStateOf(p.form, p.fitness) } : null;
+  return p ? { energy: energyOf(p.form, p.fitness), state: formStateOf(p.form, p.fitness) } : null;
 }
 
 /**
@@ -262,7 +276,7 @@ export function atCompetition(series: FormSeries, comp: CompetitionWindow | null
 export function formDecision(plan: FormSeries, comp: CompetitionWindow | null, todayIso: string): string {
   const atEvent = atCompetition(plan, comp);
   if (comp && atEvent) {
-    const lead = `llegas el ${longDate(comp.eventStart)} con ${signed(atEvent.form)}, ${FORM_STATE_WORD[atEvent.state]}`;
+    const lead = `llegas el ${longDate(comp.eventStart)} con el ${atEvent.energy} % de energía, ${FORM_STATE_WORD[atEvent.state]}`;
     if (atEvent.state === 'ventana') return `Sigue el plan: ${lead}.`;
     if (atEvent.state === 'cargado') return `Con tu plan ${lead}: no añadas carga extra estos días.`;
     return `Con tu plan ${lead}: respeta el taper y duerme bien.`;
@@ -271,7 +285,7 @@ export function formDecision(plan: FormSeries, comp: CompetitionWindow | null, t
   if (next) {
     if (next.start <= todayIso) return `Tu ventana está abierta hasta el ${longDate(next.end)}: buen momento para empujar.`;
     const far = next.start > addDays(todayIso, NEAR_DAYS) ? ' (aún lejos: orientativo)' : '';
-    return `Tu próxima ventana va del ${longDate(next.start)} al ${longDate(next.end)}, con hasta ${signed(next.peak)}${far}.`;
+    return `Tu próxima ventana va del ${longDate(next.start)} al ${longDate(next.end)}, con hasta el ${next.peak} % de energía${far}.`;
   }
   return 'Con tu plan no se abre ninguna ventana en las próximas semanas.';
 }
@@ -280,9 +294,9 @@ export function formAdvice(state: FormState, comp: CompetitionWindow | null, tod
   if (comp && todayIso >= comp.eventStart && todayIso <= comp.eventEnd) return 'Hoy compites: la forma ya está hecha. Dosifica y disfruta.';
   if (comp && todayIso < comp.eventStart) {
     const toStart = isoToDay(comp.eventStart) - isoToDay(todayIso);
-    if (toStart <= 7) return 'Estás en el taper: sin carga extra y a dormir bien. Cada día suave te acerca a tu ventana.';
+    if (toStart <= 7) return 'Estás en el taper: sin carga extra y a dormir bien. Cada día suave recarga tu batería.';
   }
-  if (state === 'ventana') return 'Estás en ventana: si el plan trae una sesión dura, es el momento de apretarla.';
-  if (state === 'cargado') return 'Aún cargado: hoy sin carga extra. Mueve lo justo y deja que la fatiga baje.';
-  return 'En equilibrio: sigue el plan del día, ni más ni menos.';
+  if (state === 'ventana') return 'Estás a tope: si el plan trae una sesión dura, es el momento de apretarla.';
+  if (state === 'cargado') return 'Estás cansado: hoy sin carga extra. Mueve lo justo y deja que la fatiga baje.';
+  return 'Energía normal: sigue el plan del día, ni más ni menos.';
 }
