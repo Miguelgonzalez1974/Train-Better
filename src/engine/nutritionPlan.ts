@@ -315,7 +315,7 @@ export function analyzeWeightTrend(log: BodyweightEntry[], todayIso: string, opt
       status: 'sin-datos',
       lossPctPerWeek: null,
       spanDays,
-      message: `Para valorar tu tendencia hacen falta al menos ${TREND_MIN_ENTRIES} pesajes repartidos en ${TREND_MIN_SPAN_DAYS} días o más (mejor por la mañana, en ayunas). Registra tu peso con el botón de la báscula.`,
+      message: `Para valorar tu tendencia hacen falta al menos ${TREND_MIN_ENTRIES} pesajes repartidos en ${TREND_MIN_SPAN_DAYS} días o más (mejor por la mañana, en ayunas). Registra tu peso con el botón de abajo.`,
     };
   }
   const xs = recent.map((e) => dayNumber(e.date));

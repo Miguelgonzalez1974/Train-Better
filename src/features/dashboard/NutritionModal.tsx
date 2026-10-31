@@ -334,24 +334,6 @@ export function NutritionModal({ profile, history, bodyweightLog, progress, dayL
               <p className="mt-1.5 text-[11px] text-neutral-500">Gramos de carbohidrato por día. Descanso y ligero, normal, carga alta (doble WOD o día fuerte). La proteína no cambia.</p>
             </div>
 
-            {/* Tendencia del peso */}
-            <div className="rounded-xl bg-brand-surfaceMuted/80 p-3.5">
-              <p className="text-sm font-semibold text-white">Tu tendencia de peso</p>
-              <p className={`mt-1 text-sm font-semibold ${TREND_STYLE[trend.status]}`}>
-                {TREND_TITLE[trend.status]}
-                {trend.lossPctPerWeek !== null && (
-                  <span className="ml-2 font-normal text-neutral-500">
-                    {trend.lossPctPerWeek >= 0 ? '−' : '+'}
-                    {Math.abs(trend.lossPctPerWeek).toFixed(1).replace('.', ',')} %/semana
-                  </span>
-                )}
-              </p>
-              <p className="mt-1.5 text-sm text-neutral-300">{trend.message}</p>
-              <button onClick={onOpenBodyweight} className="mt-2 text-xs font-semibold text-brand-gold underline decoration-dotted">
-                Registrar peso
-              </button>
-            </div>
-
             <Section title={VEGETABLES_ADVICE.title}>
               <p>{VEGETABLES_ADVICE.intro}</p>
               <ul className="flex list-disc flex-col gap-1 pl-4">
@@ -399,6 +381,32 @@ export function NutritionModal({ profile, history, bodyweightLog, progress, dayL
             <p className="border-t border-white/5 pt-3 text-xs leading-relaxed text-neutral-500">{NUTRITION_DISCLAIMER}</p>
           </div>
         </Fold>
+        {/* El peso, bajo la guía y a la vista: de él salen las cantidades por kilo y la tendencia. */}
+        <div className="flex flex-col gap-2.5 rounded-2xl bg-white/[0.04] p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-semibold text-white">Peso corporal</p>
+            <p className="num text-2xl font-extrabold leading-none text-white">
+              {String(kg).replace('.', ',')}
+              <span className="ml-1 text-sm font-bold text-neutral-500">kg</span>
+            </p>
+          </div>
+          <p className={`text-sm font-semibold ${TREND_STYLE[trend.status]}`}>
+            {TREND_TITLE[trend.status]}
+            {trend.lossPctPerWeek !== null && (
+              <span className="ml-2 font-normal text-neutral-500">
+                {trend.lossPctPerWeek >= 0 ? '−' : '+'}
+                {Math.abs(trend.lossPctPerWeek).toFixed(1).replace('.', ',')} %/semana
+              </span>
+            )}
+          </p>
+          <p className="text-[13px] leading-relaxed text-neutral-300">{trend.message}</p>
+          <button
+            onClick={onOpenBodyweight}
+            className="mt-1 flex items-center justify-center gap-1.5 rounded-full border border-brand-border bg-white/[0.04] px-3 py-2 text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <Scale size={13} strokeWidth={2.25} aria-hidden="true" /> Registrar peso
+          </button>
+        </div>
       </div>
     </Modal>
   );
