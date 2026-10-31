@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { Scale } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { NutritionPrefs } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -70,9 +71,22 @@ export function Nutricion() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-white">Nutrición</h1>
-        <p className="text-xs text-neutral-500">Menús sencillos para rendir mejor y perder grasa, ajustados a tu entreno.</p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-white">Nutrición</h1>
+          <p className="text-xs text-neutral-500">Menús sencillos para rendir mejor y perder grasa, ajustados a tu entreno.</p>
+        </div>
+        {/* El peso vive aquí (de él salen las cantidades): el último pesaje, y un toque para registrar otro. */}
+        {latest && (
+          <button
+            onClick={() => setShowWeight(true)}
+            aria-label={`Peso corporal, ${String(latest.kg).replace('.', ',')} kilos. Registrar peso`}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-brand-border px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+          >
+            <Scale size={13} strokeWidth={2.25} aria-hidden="true" />
+            <span className="num">{String(latest.kg).replace('.', ',')} kg</span>
+          </button>
+        )}
       </header>
 
       <div className="flex gap-0.5 rounded-xl bg-white/5 p-0.5" role="tablist" aria-label="Secciones de nutrición">

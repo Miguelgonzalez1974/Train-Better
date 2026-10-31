@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Activity, CalendarPlus, Check, ChevronRight, Moon, TrendingUp, Trophy } from 'lucide-react';
+import { CalendarPlus, Check, ChevronRight, Moon, TrendingUp, Trophy } from 'lucide-react';
 import { formToday, signed, type FormSeries } from '../../engine/formCurve';
 import { FORM_TONE, FormSpark } from './FormCurve';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
@@ -91,19 +91,17 @@ const chevron = <ChevronRight size={16} className="mr-1 shrink-0 text-neutral-60
 /**
  * "Tu día" bajo el anillo, al estilo de las actividades de Whoop: una fila por cosa que cuenta, con una insignia de color a
  * la izquierda. La sesión lleva su esfuerzo (previsto con borde discontinuo; real, relleno y en coral si rebasa el
- * objetivo), y la curva de forma y el análisis se abren en su ventana. La nutrición vive en el botón de arriba (con su %).
- * Sustituye a la tarjeta grande de "Hoy".
+ * objetivo) y la curva de forma se abre en su ventana. La nutrición y el análisis viven en los botones de arriba (la nutrición
+ * con su %). Sustituye a la tarjeta grande de "Hoy".
  */
 export function DayRows({
   isToday,
   session,
   entry,
   strain,
-  analysis,
   form,
   onNavigateToPlanificacion,
   onOpenForm,
-  onOpenAnalysis,
 }: {
   isToday: boolean;
   /** La sesión de hoy (null si ya entrenaste, no hay estructura activa o es otro día). */
@@ -111,15 +109,11 @@ export function DayRows({
   /** Lo registrado el día elegido, si entrenaste. */
   entry: SessionHistoryEntry | undefined;
   strain: StrainView;
-  /** Los tres datos del análisis, ya formateados: dominios energéticos, desequilibrios y fuerza (en ese orden). */
-  analysis: [string, string, string] | string[];
   /** La serie de la curva de forma (solo hoy; null en un día pasado o sin historial). */
   form: FormSeries | null;
   onNavigateToPlanificacion: () => void;
   /** Abre la ventana con la curva de forma. */
   onOpenForm: () => void;
-  /** Abre la ventana con el análisis completo. */
-  onOpenAnalysis: () => void;
 }) {
   const real = strain.real;
   const over = real !== null && real > strain.target.high;
@@ -186,22 +180,6 @@ export function DayRows({
       {sessionRow}
       {/* Tu forma: la curva de supercompensación; con poco historial dice cuánto falta para tenerla. */}
       {form && formRow}
-      {/* Análisis: lo que no hace falta mirar cada día, con sus tres datos a la vista; la ventana trae el detalle. */}
-      <Row
-        badge={
-          <Badge tone="neutral">
-            <Activity size={20} strokeWidth={2.25} aria-hidden="true" />
-          </Badge>
-        }
-        title="Análisis"
-        sub={
-          <>
-            Energía <span className="num">{analysis[0]}</span> · Equilibrio <span className="num">{analysis[1]}</span> · Fuerza <span className="num">{analysis[2]}</span>
-          </>
-        }
-        right={chevron}
-        onClick={onOpenAnalysis}
-      />
     </section>
   );
 }

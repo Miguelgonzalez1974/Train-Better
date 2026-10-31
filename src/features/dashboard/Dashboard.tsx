@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Apple, ArrowRight, BarChart3, Flame, Gauge, Scale, Sun, Target } from 'lucide-react';
+import { Activity, Apple, ArrowRight, BarChart3, Flame, Gauge, Sun, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -175,12 +175,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </div>
         <div className="flex items-center gap-2 self-end sm:self-auto">
           <ThemeToggle className="h-10 w-10" />
+          {/* Análisis: lo que cambia despacio (energía, equilibrio, fuerza relativa); la ventana trae el detalle. */}
           <button
-            onClick={() => setShowBodyweight(true)}
-            title="Peso corporal"
+            onClick={() => setAnalysisOpen(true)}
+            title={`Análisis · Energía ${analysisLabels[0]} · Equilibrio ${analysisLabels[1]} · Fuerza ${analysisLabels[2]}`}
+            aria-label="Análisis"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
           >
-            <Scale size={17} strokeWidth={2.25} />
+            <Activity size={17} strokeWidth={2.25} />
           </button>
           {/* Nutrición: el % de lo que llevas del día (proteína e hidratos) sobre el icono, para verlo sin abrir nada. */}
           <button
@@ -315,11 +317,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             session={isToday ? todaySession : null}
             entry={shown.entry}
             strain={shown.strain}
-            analysis={analysisLabels}
             form={isToday && formModel.plan.sessions > 0 ? formModel.plan : null}
             onOpenForm={() => setFormOpen(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
-            onOpenAnalysis={() => setAnalysisOpen(true)}
           />
         </>
       )}
