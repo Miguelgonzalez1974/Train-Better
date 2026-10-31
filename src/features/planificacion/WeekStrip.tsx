@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Check, ChevronLeft, ChevronRight, Dumbbell, Moon, Trash2, Zap } from 'lucide-react';
-import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import { addDaysIso, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
+import { buildFormModel } from '../dashboard/formModel';
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -67,6 +68,14 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
   /** Día (índice de la semana) cuyo formulario de registro está abierto. */
   const [loggingFor, setLoggingFor] = useState<number | null>(null);
   const todayIso = toLocalIsoDate(today);
+  // Los días en ventana de supercompensación (ver `Tu forma`): los que se pueden aprovechar para una sesión exigente.
+  const windowDays = useMemo(() => {
+    const model = buildFormModel(profile, history, todayIso);
+    const set = new Set<string>();
+    if (!model.plan.ready) return set;
+    for (const w of model.allWindows) for (let iso = w.start; iso <= w.end; iso = addDaysIso(iso, 1)) set.add(iso);
+    return set;
+  }, [profile, history, todayIso]);
   const monday = startOfWeek(today);
   monday.setDate(monday.getDate() + weekOffset * 7);
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -216,7 +225,8 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           const BAR_H = 56;
           const bandWord = day.band ? `objetivo ${day.band.low}–${day.band.high}${day.band.estimated ? ' (estimado)' : ''}` : '';
           const fitWord = fit === 'se-pasa' ? ' · te pasas' : fit === 'se-queda-corta' ? ' · por debajo' : '';
-          const text =
+          const inWindow = windowDays.has(dateIso);
+          const baseText =
             day.kind === 'done'
               ? `Completado · esfuerzo ${day.strain}${bandWord ? ` · ${bandWord}` : ''}${fitWord}`
               : day.kind === 'missed'
@@ -224,6 +234,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                 : day.kind === 'planned'
                   ? `Esfuerzo previsto ~${day.strain}${bandWord ? ` · ${bandWord}` : ''}${fitWord}${day.emphasis === 'metcon' ? ' · foco metcon' : day.emphasis === 'fuerza' ? ' · día de fuerza' : ' · día mixto'}`
                   : 'Descanso';
+          const text = inWindow ? `${baseText} · en ventana de forma` : baseText;
           return (
             <button
               key={label}
@@ -238,7 +249,10 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                     : 'bg-white/[0.03] hover:bg-white/[0.06]'
               }`}
             >
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</span>
+              <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+                {label}
+                {inWindow && <span className="h-1.5 w-1.5 rounded-full bg-good" aria-hidden="true" />}
+              </span>
               <span className="relative my-0.5 flex w-full justify-center" style={{ height: BAR_H }} aria-hidden="true">
                 {day.band && (
                   <span
@@ -280,6 +294,12 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
       </div>
       {trailing}
       </div>
+      {weekDates.some((d) => windowDays.has(toLocalIsoDate(d))) && (
+        <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-neutral-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-good" aria-hidden="true" />
+          ventana de forma: días en que llegas fresco
+        </p>
+      )}
 
       {expanded !== null &&
         (() => {

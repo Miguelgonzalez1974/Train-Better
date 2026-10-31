@@ -267,13 +267,13 @@ export function formDecision(plan: FormSeries, comp: CompetitionWindow | null, t
     if (atEvent.state === 'cargado') return `Con tu plan ${lead}: no añadas carga extra estos días.`;
     return `Con tu plan ${lead}: respeta el taper y duerme bien.`;
   }
-  const near = formWindows(plan, todayIso).find((w) => w.start <= addDays(todayIso, NEAR_DAYS));
-  if (near) {
-    return near.start <= todayIso
-      ? `Tu ventana está abierta hasta el ${longDate(near.end)}: buen momento para empujar.`
-      : `Tu próxima ventana va del ${longDate(near.start)} al ${longDate(near.end)}, con hasta ${signed(near.peak)}.`;
+  const next = formWindows(plan, todayIso)[0];
+  if (next) {
+    if (next.start <= todayIso) return `Tu ventana está abierta hasta el ${longDate(next.end)}: buen momento para empujar.`;
+    const far = next.start > addDays(todayIso, NEAR_DAYS) ? ' (aún lejos: orientativo)' : '';
+    return `Tu próxima ventana va del ${longDate(next.start)} al ${longDate(next.end)}, con hasta ${signed(next.peak)}${far}.`;
   }
-  return 'Con tu plan no se abre ninguna ventana en las próximas dos semanas.';
+  return 'Con tu plan no se abre ninguna ventana en las próximas semanas.';
 }
 /** Qué hacer hoy, en una línea: según cómo estás y, si hay competición, en qué punto de la cuenta atrás. */
 export function formAdvice(state: FormState, comp: CompetitionWindow | null, todayIso: string): string {

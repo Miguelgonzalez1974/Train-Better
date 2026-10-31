@@ -1,10 +1,10 @@
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Sparkles, Trophy, TrendingUp } from 'lucide-react';
 import { addDays, formAdvice, formDecision, formMissing, formToday, signed, stateByDay, type CompetitionWindow, type FormSeries, type FormState, type FormWindow } from '../../engine/formCurve';
 import { Fold } from '../shell/Fold';
 import { Term } from '../shell/Term';
 import { fmtDay, xTickIndexes } from './ChartKit';
-import { windowCause, type FormModel } from './formModel';
+import { shortDay, windowCause, type FormModel } from './formModel';
 
 const GOOD = 'rgb(var(--c-state-good))';
 const LOW = 'rgb(var(--c-state-low))';
@@ -44,43 +44,60 @@ export function FormSpark({ series, tone }: { series: FormSeries; tone: string }
   );
 }
 
-/** "jue 5 nov". */
-const shortDay = (iso: string) => new Intl.DateTimeFormat('es', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${iso}T12:00:00`)).replace(',', '').replace('.', '');
 const dayNum = (iso: string) => Number(iso.slice(8));
 
-/** El tramo que se dibuja: dos semanas atrás, hoy y tres semanas por delante. */
-function visible(series: FormSeries) {
+/**
+ * El tramo que se dibuja: dos semanas atrás, hoy y tres semanas por delante; si la próxima ventana queda más lejos, se alarga hasta
+ * incluirla (como mucho el final de la previsión) para que se vea cuándo vuelve.
+ */
+function visible(series: FormSeries, windows: FormWindow[]) {
   const t = series.todayIndex;
   const from = Math.max(0, t - PAST_DAYS);
-  return { pts: series.points.slice(from, t + FUTURE_DAYS + 1), todayIdx: t - from };
+  const todayIso = series.points[t]?.iso ?? '';
+  const next = windows.find((w) => w.start > todayIso);
+  const nextEnd = next ? series.points.findIndex((p) => p.iso === next.end) : -1;
+  const to = Math.min(series.points.length - 1, Math.max(t + FUTURE_DAYS, nextEnd + 1));
+  return { pts: series.points.slice(from, to + 1), todayIdx: t - from };
 }
 
 const W = 340;
 const PAD = { l: 10, r: 10 };
 
+type ChartMode = 'forma' | 'carga';
+
 /**
- * La curva de tu forma, una sola: por encima de la línea del cero estás fresco (verde) y por debajo, cargado (rojo). Lo ya vivido en
- * continuo y la previsión de tu plan en discontinuo. Las ventanas son franjas verdes y la competición una franja dorada con su
- * marcador sobre la curva y su etiqueta arriba, para encontrarla de un vistazo.
+ * La curva, en dos vistas sobre el mismo eje de tiempo. "Forma": una sola línea, verde por encima del cero (fresco) y roja por debajo
+ * (cargado). "Forma física y fatiga": las dos curvas de las que sale la forma; la ventana se abre donde la fatiga (ámbar) cae por debajo
+ * de la forma física (azul). En las dos: lo vivido en continuo y la previsión de tu plan en puntos, las ventanas como franjas verdes y
+ * la competición (si la hay) con una pastilla dorada arriba, una franja y un marcador sobre la curva, para encontrarla de un vistazo.
  */
-function FormChart({ plan, comp, windows }: { plan: FormSeries; comp: CompetitionWindow | null; windows: FormWindow[] }) {
+function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: CompetitionWindow | null; windows: FormWindow[]; mode: ChartMode }) {
   const id = useId().replace(/:/g, '');
-  const { pts, todayIdx: t } = useMemo(() => visible(plan), [plan]);
+  const { pts, todayIdx: t } = useMemo(() => visible(plan, windows), [plan, windows]);
   const n = pts.length;
   const H = 236;
   const plot = { y0: 40, y1: 196 };
   const step = (W - PAD.l - PAD.r) / Math.max(1, n - 1);
   const x = (i: number) => PAD.l + i * step;
+
+  // La escala de cada vista: la forma, simétrica alrededor del cero; o la forma física y la fatiga, ajustadas a su rango.
   const formMax = Math.max(...pts.map((p) => Math.abs(p.form)), 8) * 1.15;
   const zeroY = (plot.y0 + plot.y1) / 2;
-  const y = (v: number) => zeroY - (v / formMax) * ((plot.y1 - plot.y0) / 2);
+  const yForm = (v: number) => zeroY - (v / formMax) * ((plot.y1 - plot.y0) / 2);
+  const both = pts.flatMap((p) => [p.fitness, p.fatigue]);
+  const lo = Math.max(0, Math.min(...both) * 0.85);
+  const hi = Math.max(...both, 10) * 1.08;
+  const yLoad = (v: number) => plot.y1 - ((v - lo) / Math.max(1, hi - lo)) * (plot.y1 - plot.y0);
 
-  const line = (from: number, to: number) =>
+  const path = (value: (i: number) => number, from: number, to: number) =>
     pts
       .slice(from, to + 1)
-      .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(from + i).toFixed(1)} ${y(p.form).toFixed(1)}`)
+      .map((_, i) => `${i === 0 ? 'M' : 'L'}${x(from + i).toFixed(1)} ${value(from + i).toFixed(1)}`)
       .join(' ');
-  const area = `${line(0, n - 1)} L${x(n - 1).toFixed(1)} ${zeroY} L${x(0).toFixed(1)} ${zeroY} Z`;
+  const formAt = (i: number) => yForm(pts[i].form);
+  const fitAt = (i: number) => yLoad(pts[i].fitness);
+  const fatAt = (i: number) => yLoad(pts[i].fatigue);
+  const area = `${path(formAt, 0, n - 1)} L${x(n - 1).toFixed(1)} ${zeroY} L${x(0).toFixed(1)} ${zeroY} Z`;
 
   const idx = useMemo(() => new Map(pts.map((p, i) => [p.iso, i])), [pts]);
   const c0 = comp ? (idx.get(comp.eventStart) ?? -1) : -1;
@@ -97,9 +114,10 @@ function FormChart({ plan, comp, windows }: { plan: FormSeries; comp: Competitio
   const compLabel = comp ? `Competición · ${dayNum(comp.eventStart)}${comp.eventEnd !== comp.eventStart ? `–${dayNum(comp.eventEnd)}` : ''} ${fmtDay(comp.eventStart).split(' ').pop()}` : '';
   const pillW = compLabel.length * 6.4 + 22;
   const pillX = c0 >= 0 ? Math.min(Math.max(PAD.l, (x(c0) + x(c1)) / 2 - pillW / 2), W - PAD.r - pillW) : 0;
+  const dotted = { strokeDasharray: '1 5', strokeLinecap: 'round' as const };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img" aria-label={`Tu forma ${today ? signed(today.form) : ''}: dos semanas atrás y tres por delante, con tus ventanas de supercompensación${comp ? ' y la competición' : ''}.`}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img" aria-label={`${mode === 'forma' ? `Tu forma ${today ? signed(today.form) : ''}` : 'Tu forma física y tu fatiga'}: dos semanas atrás y la previsión de tu plan, con tus ventanas de supercompensación${comp ? ' y la competición' : ''}.`}>
       <defs>
         <clipPath id={`${id}up`}>
           <rect x={0} y={plot.y0 - 4} width={W} height={zeroY - plot.y0 + 4} />
@@ -117,7 +135,7 @@ function FormChart({ plan, comp, windows }: { plan: FormSeries; comp: Competitio
           </text>
         </g>
       ))}
-      {/* La competición: franja dorada, línea y marcador sobre la curva, y su etiqueta arriba. */}
+      {/* La competición: franja dorada, línea y etiqueta arriba (el marcador va sobre la curva). */}
       {c0 >= 0 && (
         <g>
           <rect x={x(c0) - step / 2} y={plot.y0 - 6} width={(c1 - c0 + 1) * step} height={plot.y1 - plot.y0 + 12} rx={7} fill={GOLD} fillOpacity={0.24} />
@@ -128,21 +146,48 @@ function FormChart({ plan, comp, windows }: { plan: FormSeries; comp: Competitio
           </text>
         </g>
       )}
-      {/* Fresco por encima del cero (verde), cargado por debajo (rojo). */}
-      <g clipPath={`url(#${id}up)`}>
-        <path d={area} fill={GOOD} fillOpacity={0.28} />
-      </g>
-      <g clipPath={`url(#${id}dn)`}>
-        <path d={area} fill={LOW} fillOpacity={0.28} />
-      </g>
-      <line x1={PAD.l} x2={W - PAD.r} y1={zeroY} y2={zeroY} stroke={INK} strokeOpacity={0.3} strokeWidth={1} />
-      <path d={line(0, t)} fill="none" stroke={INK} strokeOpacity={0.92} strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" />
-      {t < n - 1 && <path d={line(t, n - 1)} fill="none" stroke={INK} strokeOpacity={0.92} strokeWidth={2.25} strokeDasharray="1 5" strokeLinecap="round" />}
-      {c0 >= 0 && <circle cx={x(c0)} cy={y(pts[c0].form)} r={5.5} fill={GOLD} stroke="rgb(var(--c-brand-bg))" strokeWidth={2} />}
+
+      {mode === 'forma' ? (
+        <>
+          {/* Fresco por encima del cero (verde), cargado por debajo (rojo). */}
+          <g clipPath={`url(#${id}up)`}>
+            <path d={area} fill={GOOD} fillOpacity={0.28} />
+          </g>
+          <g clipPath={`url(#${id}dn)`}>
+            <path d={area} fill={LOW} fillOpacity={0.28} />
+          </g>
+          <line x1={PAD.l} x2={W - PAD.r} y1={zeroY} y2={zeroY} stroke={INK} strokeOpacity={0.3} strokeWidth={1} />
+          <path d={path(formAt, 0, t)} fill="none" stroke={INK} strokeOpacity={0.92} strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" />
+          {t < n - 1 && <path d={path(formAt, t, n - 1)} fill="none" stroke={INK} strokeOpacity={0.92} strokeWidth={2.25} {...dotted} />}
+          {c0 >= 0 && <circle cx={x(c0)} cy={formAt(c0)} r={5.5} fill={GOLD} stroke="rgb(var(--c-brand-bg))" strokeWidth={2} />}
+        </>
+      ) : (
+        <>
+          {[plot.y0, (plot.y0 + plot.y1) / 2, plot.y1].map((yy) => (
+            <line key={yy} x1={PAD.l} x2={W - PAD.r} y1={yy} y2={yy} stroke={INK} strokeOpacity={0.07} />
+          ))}
+          <path d={path(fitAt, 0, t)} fill="none" stroke={FIT} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={path(fatAt, 0, t)} fill="none" stroke={FAT} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+          {t < n - 1 && (
+            <>
+              <path d={path(fitAt, t, n - 1)} fill="none" stroke={FIT} strokeWidth={2.5} {...dotted} />
+              <path d={path(fatAt, t, n - 1)} fill="none" stroke={FAT} strokeWidth={2.5} {...dotted} />
+            </>
+          )}
+          {c0 >= 0 && <circle cx={x(c0)} cy={fatAt(c0)} r={5.5} fill={GOLD} stroke="rgb(var(--c-brand-bg))" strokeWidth={2} />}
+          {today && (
+            <>
+              <circle cx={x(t)} cy={fitAt(t)} r={4.5} fill={FIT} stroke="rgb(var(--c-brand-bg))" strokeWidth={2} />
+              <circle cx={x(t)} cy={fatAt(t)} r={4.5} fill={FAT} stroke="rgb(var(--c-brand-bg))" strokeWidth={2} />
+            </>
+          )}
+        </>
+      )}
+
       {today && (
         <g>
           <line x1={x(t)} x2={x(t)} y1={plot.y0 - 6} y2={plot.y1 + 6} stroke={INK} strokeOpacity={0.5} strokeDasharray="3 3" />
-          <circle cx={x(t)} cy={y(today.form)} r={5} fill={INK} stroke="rgb(var(--c-brand-bg))" strokeWidth={2} />
+          {mode === 'forma' && <circle cx={x(t)} cy={formAt(t)} r={5} fill={INK} stroke="rgb(var(--c-brand-bg))" strokeWidth={2} />}
           <text x={x(t)} y={H - 10} textAnchor="middle" fontSize={11} fontWeight={700} className="fill-white">
             hoy
           </text>
@@ -153,42 +198,6 @@ function FormChart({ plan, comp, windows }: { plan: FormSeries; comp: Competitio
           {fmtDay(pts[i].iso)}
         </text>
       ))}
-    </svg>
-  );
-}
-
-/** La forma física (azul) y la fatiga (ámbar), de las que sale la forma: el detalle que explica la curva, para el plegable. */
-function FormLines({ plan }: { plan: FormSeries }) {
-  const { pts, todayIdx: t } = useMemo(() => visible(plan), [plan]);
-  const n = pts.length;
-  const H = 104;
-  const step = (W - PAD.l - PAD.r) / Math.max(1, n - 1);
-  const x = (i: number) => PAD.l + i * step;
-  const all = pts.flatMap((p) => [p.fitness, p.fatigue]);
-  const lo = Math.max(0, Math.min(...all) * 0.85);
-  const hi = Math.max(...all, 10) * 1.08;
-  const y = (v: number) => 90 - ((v - lo) / Math.max(1, hi - lo)) * 76;
-  const path = (k: 'fitness' | 'fatigue', from: number, to: number) =>
-    pts
-      .slice(from, to + 1)
-      .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(from + i).toFixed(1)} ${y(p[k]).toFixed(1)}`)
-      .join(' ');
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img" aria-label="Forma física y fatiga de dos semanas atrás a tres por delante">
-      {[14, 52, 90].map((yy) => (
-        <line key={yy} x1={PAD.l} x2={W - PAD.r} y1={yy} y2={yy} stroke={INK} strokeOpacity={0.07} />
-      ))}
-      <path d={path('fitness', 0, t)} fill="none" stroke={FIT} strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" />
-      <path d={path('fatigue', 0, t)} fill="none" stroke={FAT} strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" />
-      {t < n - 1 && (
-        <>
-          <path d={path('fitness', t, n - 1)} fill="none" stroke={FIT} strokeWidth={2} strokeDasharray="1 5" strokeLinecap="round" />
-          <path d={path('fatigue', t, n - 1)} fill="none" stroke={FAT} strokeWidth={2} strokeDasharray="1 5" strokeLinecap="round" />
-        </>
-      )}
-      <line x1={x(t)} x2={x(t)} y1={8} y2={96} stroke={INK} strokeOpacity={0.4} strokeDasharray="3 3" />
-      <circle cx={x(t)} cy={y(pts[t].fitness)} r={3.5} fill={FIT} stroke="rgb(var(--c-brand-bg))" strokeWidth={1.5} />
-      <circle cx={x(t)} cy={y(pts[t].fatigue)} r={3.5} fill={FAT} stroke="rgb(var(--c-brand-bg))" strokeWidth={1.5} />
     </svg>
   );
 }
@@ -263,6 +272,7 @@ function Key({ color, label, shape = 'dot' }: { color: string; label: string; sh
  */
 export function FormView({ model }: { model: FormModel }) {
   const { plan, comp, todayIso } = model;
+  const [mode, setMode] = useState<ChartMode>('forma');
   const today = useMemo(() => formToday(plan), [plan]);
   const missing = formMissing(plan);
 
@@ -303,10 +313,34 @@ export function FormView({ model }: { model: FormModel }) {
       </section>
 
       <section aria-label="Curva de forma">
-        <FormChart plan={plan} comp={comp} windows={model.allWindows} />
+        {/* Dos vistas del mismo tiempo: la forma, o las dos curvas de las que sale. */}
+        <div role="group" aria-label="Qué curva ver" className="mb-3 flex rounded-full bg-white/[0.06] p-0.5 text-xs font-semibold">
+          {([['forma', 'Forma'], ['carga', 'Forma física y fatiga']] as const).map(([m, text]) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-full px-3 py-1.5 transition-colors duration-200 ${mode === m ? 'bg-white/[0.14] text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+        <FormChart plan={plan} comp={comp} windows={model.allWindows} mode={mode} />
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-400">
-          <Key color={GOOD} label="fresco / ventana" shape="bar" />
-          <Key color={LOW} label="cargado" shape="bar" />
+          {mode === 'forma' ? (
+            <>
+              <Key color={GOOD} label="fresco / ventana" shape="bar" />
+              <Key color={LOW} label="cargado" shape="bar" />
+            </>
+          ) : (
+            <>
+              <Key color={FIT} label="forma física" shape="bar" />
+              <Key color={FAT} label="fatiga" shape="bar" />
+              <Key color={GOOD} label="ventana" shape="bar" />
+            </>
+          )}
           {comp && <Key color={GOLD} label="competición" shape="bar" />}
           <Key color="rgb(var(--c-white) / 0.7)" label="previsión de tu plan" shape="dots" />
         </div>
@@ -346,17 +380,10 @@ export function FormView({ model }: { model: FormModel }) {
       </section>
 
       <Fold title="Cómo se calcula">
-        <div className="flex flex-col gap-3">
-          <FormLines plan={plan} />
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-400">
-            <Key color={FIT} label="forma física" shape="bar" />
-            <Key color={FAT} label="fatiga" shape="bar" />
-          </div>
-          <p className="text-xs leading-relaxed text-neutral-400">
-            Cada sesión suma a tu <Term k="fitness">forma física</Term>, que sube y baja despacio, y a tu fatiga, que lo hace deprisa. Tu forma es la diferencia: cuando la fatiga cae antes que la forma física queda un hueco a tu favor, la ventana de{' '}
-            <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Es una estimación a partir de tus sesiones; el check-in de cada mañana manda sobre ella.
-          </p>
-        </div>
+        <p className="text-xs leading-relaxed text-neutral-400">
+          Cada sesión suma a tu <Term k="fitness">forma física</Term>, que sube y baja despacio, y a tu fatiga, que lo hace deprisa (míralas en la vista «Forma física y fatiga»). Tu forma es la diferencia: cuando la fatiga cae antes que la forma física queda un hueco a tu favor, la ventana de{' '}
+          <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Es una estimación a partir de tus sesiones; el check-in de cada mañana manda sobre ella.
+        </p>
       </Fold>
     </div>
   );

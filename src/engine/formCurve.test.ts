@@ -208,6 +208,16 @@ describe('formDecision y formAdvice', () => {
     expect(formDecision(hard, null, TODAY)).toMatch(/no se abre ninguna ventana/);
   });
 
+  it('una ventana lejana se anuncia como orientativa', () => {
+    const future = [...Array.from({ length: 22 }, () => 70), ...Array.from({ length: 12 }, () => 0)];
+    const s = buildFormSeries({ history: steadyHistory(10, 8), todayIso: TODAY, future });
+    const next = formWindows(s, TODAY)[0];
+    expect(next).toBeDefined();
+    const text = formDecision(s, null, TODAY);
+    expect(text).toContain('Tu próxima ventana va del');
+    expect(text.includes('orientativo')).toBe(next.start > addDays(TODAY, 14));
+  });
+
   it('el consejo de hoy cambia con el estado y con la cuenta atrás', () => {
     expect(formAdvice('ventana', null, TODAY)).toMatch(/apretarla/);
     expect(formAdvice('cargado', null, TODAY)).toMatch(/sin carga extra/);

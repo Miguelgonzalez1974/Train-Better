@@ -100,6 +100,7 @@ export function DayRows({
   entry,
   strain,
   form,
+  formNote,
   onNavigateToPlanificacion,
   onOpenForm,
 }: {
@@ -111,6 +112,8 @@ export function DayRows({
   strain: StrainView;
   /** La serie de la curva de forma (solo hoy; null en un día pasado o sin historial). */
   form: FormSeries | null;
+  /** Lo que dice la fila sobre tus ventanas ("Próxima ventana en 5 días · jue 12 nov"); sin él, la frase de hoy. */
+  formNote?: string | null;
   onNavigateToPlanificacion: () => void;
   /** Abre la ventana con la curva de forma. */
   onOpenForm: () => void;
@@ -162,7 +165,7 @@ export function DayRows({
     <Row
       badge={formNow ? <FormSpark series={form} tone={FORM_TONE[formNow.state]} /> : <Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
       title={formNow ? `Tu forma ${signed(formNow.value)}` : 'Tu forma'}
-      sub={formNow ? formNow.sentence : `Aún poco historial: ${form.sessions} sesiones registradas`}
+      sub={formNow ? (formNote ?? formNow.sentence) : `Aún poco historial: ${form.sessions} sesiones registradas`}
       right={chevron}
       onClick={onOpenForm}
     />

@@ -21,7 +21,7 @@ import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } 
 import { DayRows } from './DayRows';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
-import { buildFormModel } from './formModel';
+import { buildFormModel, formRowNote } from './formModel';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
@@ -318,6 +318,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             entry={shown.entry}
             strain={shown.strain}
             form={isToday && formModel.plan.sessions > 0 ? formModel.plan : null}
+            formNote={formRowNote(formModel)}
             onOpenForm={() => setFormOpen(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
           />
