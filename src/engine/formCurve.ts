@@ -22,7 +22,7 @@ export const MIN_SPAN_DAYS = 14;
 /** Cuántas sesiones registradas hacen falta como mínimo. */
 export const MIN_SESSIONS = 6;
 /** Forma relativa (forma / forma física) desde la que se entra en la ventana de supercompensación, y hasta la que se va cargado. */
-export const WINDOW_FROM = 0.1;
+export const WINDOW_FROM = 0.15;
 export const LOADED_UNTIL = -0.25;
 /** Carga que se supone a un día de competición en la previsión del plan. */
 export const COMPETITION_DAY_LOAD = 80;
@@ -162,11 +162,63 @@ export function steadyWithCompetition(steady: number[], todayIso: string, comp: 
   });
 }
 
-/** Cuántos días enseñar hacia delante: hasta un par de días después de la competición si está cerca, y 10 en otro caso. */
-export function projectionDays(todayIso: string, comp: CompetitionWindow | null): number {
-  if (!comp) return 10;
-  const toEnd = isoToDay(comp.eventEnd) - isoToDay(todayIso);
-  return toEnd >= 0 && toEnd <= 21 ? toEnd + 2 : 10;
+/** Cuántos días por delante se calculan (cinco semanas: lo que enseña el calendario de ventanas). */
+export const FORECAST_DAYS = 35;
+/** Hasta cuántos días por delante se mira para decir "tu próxima ventana" sin competición (más allá es solo orientativo). */
+const NEAR_DAYS = 14;
+
+const MONTH = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+/** "6 de noviembre". */
+export const longDate = (iso: string) => `${Number(iso.slice(8, 10))} de ${MONTH[Number(iso.slice(5, 7)) - 1]}`;
+
+// ---------------------------------------------------------------------------------------------
+// Las ventanas: cuándo se abren (y vuelven a abrirse)
+// ---------------------------------------------------------------------------------------------
+
+/** Una ventana de supercompensación: varios días seguidos con la forma por encima del umbral. */
+export interface FormWindow {
+  start: string;
+  end: string;
+  days: number;
+  /** El día de mejor forma de la ventana y cuánto vale. */
+  peakIso: string;
+  peak: number;
+}
+
+/** Días seguidos que hacen falta para llamarlo ventana: un solo día suelto (un descanso suelto) no lo es. */
+export const MIN_WINDOW_DAYS = 2;
+/** Una ventana dura como mucho una semana: si la carga se queda baja más tiempo, ya no se supercompensa, se pierde forma. */
+export const MAX_WINDOW_DAYS = 7;
+
+/**
+ * Las ventanas de la serie, de más antigua a más nueva. Una ventana es una racha de al menos `MIN_WINDOW_DAYS` días (y como mucho
+ * `MAX_WINDOW_DAYS`, contados desde que se abre) con la forma por encima del umbral (ver `formStateOf`); cada vez que bajas la carga
+ * unos días puede abrirse una, y con la carga siempre alta no se abre ninguna. `afterIso` deja solo las que acaban después de esa
+ * fecha; `keepIso` conserva la ventana que contiene ese día aunque sea de un solo día (el primer día de una competición).
+ */
+export function formWindows(series: FormSeries, afterIso?: string, keepIso?: string): FormWindow[] {
+  const out: FormWindow[] = [];
+  let run: FormPoint[] = [];
+  const flush = () => {
+    const keep = keepIso !== undefined && run.some((p) => p.iso === keepIso);
+    if (run.length > MAX_WINDOW_DAYS) run = run.slice(0, MAX_WINDOW_DAYS);
+    if (run.length >= MIN_WINDOW_DAYS || (keep && run.length > 0)) {
+      const peak = run.reduce((b, p) => (p.form > b.form ? p : b), run[0]);
+      out.push({ start: run[0].iso, end: run[run.length - 1].iso, days: run.length, peakIso: peak.iso, peak: Math.round(peak.form) });
+    }
+    run = [];
+  };
+  for (const p of series.points) {
+    if (formStateOf(p.form, p.fitness) === 'ventana') run.push(p);
+    else flush();
+  }
+  flush();
+  return afterIso ? out.filter((w) => w.end > afterIso) : out;
+}
+
+/** El estado de cada día de la serie, por fecha (para pintar el calendario de ventanas). */
+export function stateByDay(series: FormSeries): Map<string, FormState> {
+  return new Map(series.points.map((p) => [p.iso, formStateOf(p.form, p.fitness)]));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -188,6 +240,7 @@ const SENTENCE: Record<FormState, string> = {
   equilibrio: 'Ni cargado ni fresco: sigue el plan del día.',
   cargado: 'Aún cargado: un día suave y entrarás en la ventana.',
 };
+export const FORM_STATE_WORD: Record<FormState, string> = { ventana: 'en ventana', equilibrio: 'en equilibrio', cargado: 'aún cargado' };
 
 export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(Math.round(n))}`;
 
@@ -204,30 +257,51 @@ export function formMissing(series: FormSeries): { sessions: number; days: numbe
   return { sessions: Math.max(0, MIN_SESSIONS - series.sessions), days: Math.max(0, MIN_SPAN_DAYS - series.spanDays) };
 }
 
-const DAY_NAME = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-const longDate = (iso: string) => new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long' }).format(new Date(`${iso}T12:00:00`));
+/** Cómo llegas el primer día de la competición con una serie, si ese día está en la previsión. */
+export function atCompetition(series: FormSeries, comp: CompetitionWindow | null): { form: number; state: FormState } | null {
+  if (!comp) return null;
+  const p = series.points.find((x) => x.iso === comp.eventStart && x.future);
+  return p ? { form: Math.round(p.form), state: formStateOf(p.form, p.fitness) } : null;
+}
 
 /**
- * La frase de la curva: con la competición cerca, cómo llegarías el primer día; si no, cuándo es tu mejor momento de los próximos
- * días. `scenario`: 'plan' (lo que tienes programado) o 'steady' (sin bajar el ritmo).
+ * La frase de decisión de la ventana. Con una competición cerca: qué hacer (seguir el plan, normalmente) y por qué, comparando cómo
+ * llegarías con tu plan y sin bajar la carga. Sin competición: cuándo se abre tu próxima ventana, o qué hacer para que se abra.
  */
-export function formSentence(series: FormSeries, scenario: 'plan' | 'steady', comp: CompetitionWindow | null): string {
-  const future = series.points.filter((p) => p.future);
-  if (future.length === 0) return formToday(series)?.sentence ?? '';
-  const lead = scenario === 'plan' ? 'Con tu plan' : 'Si no bajas el ritmo';
-  if (comp) {
-    const day = series.points.find((p) => p.iso === comp.eventStart && p.future);
-    if (day) {
-      const state = formStateOf(day.form, day.fitness);
-      const when = `el ${longDate(comp.eventStart)}`;
-      if (state === 'ventana') return `${lead} llegarías ${when} con una forma de ${signed(day.form)}: entrarías en la ventana de supercompensación justo el día de competir.`;
-      if (state === 'equilibrio') return `${lead} llegarías ${when} en equilibrio (forma ${signed(day.form)}): ni cargado ni en tu mejor punto.`;
-      return `${lead} llegarías ${when} con una forma de ${signed(day.form)}: todavía cargado. Conviene bajar la carga antes.`;
+export function formDecision(plan: FormSeries, steady: FormSeries | null, comp: CompetitionWindow | null, todayIso: string): string {
+  const withPlan = atCompetition(plan, comp);
+  if (comp && withPlan) {
+    const when = `el ${longDate(comp.eventStart)}`;
+    const without = steady ? atCompetition(steady, comp) : null;
+    const planPart = `Con el taper llegas ${when} con una forma de ${signed(withPlan.form)}, ${FORM_STATE_WORD[withPlan.state]}`;
+    if (withPlan.state === 'ventana') {
+      return without && without.state !== 'ventana'
+        ? `Sigue el plan. ${planPart}; si no bajas la carga, llegarías con ${signed(without.form)}.`
+        : `Sigue el plan. ${planPart}.`;
     }
+    if (without && without.form < withPlan.form) {
+      return `Con tu plan llegas ${when} con una forma de ${signed(withPlan.form)}, ${FORM_STATE_WORD[withPlan.state]}; sin bajar la carga serían ${signed(without.form)}. Respeta el taper y cuida el sueño.`;
+    }
+    return `Con tu plan llegas ${when} con una forma de ${signed(withPlan.form)}, ${FORM_STATE_WORD[withPlan.state]}.`;
   }
-  const best = future.reduce((b, p) => (p.form > b.form ? p : b), future[0]);
-  const state = formStateOf(best.form, best.fitness);
-  if (state === 'ventana') return `${lead} tu forma sube a ${signed(best.form)} el ${DAY_NAME[new Date(`${best.iso}T12:00:00`).getDay()]}: ese será tu mejor momento para empujar.`;
-  if (state === 'cargado') return `${lead} sigues cargado los próximos días (forma ${signed(best.form)} como mucho): conviene aflojar para entrar en la ventana.`;
-  return `${lead} tu forma se mantiene en equilibrio los próximos días.`;
+  const near = formWindows(plan, todayIso).find((w) => w.start <= addDays(todayIso, NEAR_DAYS));
+  if (near) {
+    const open = near.start <= todayIso;
+    return open
+      ? `Tu ventana está abierta hasta el ${longDate(near.end)}, con una forma de hasta ${signed(near.peak)}: buen momento para empujar.`
+      : `Tu próxima ventana se abre el ${longDate(near.start)} y llega a ${signed(near.peak)} el ${longDate(near.peakIso)}: ahí es donde mejor rendirás.`;
+  }
+  return 'En las próximas dos semanas no se abre ninguna ventana con tu plan: para que aparezca, baja la carga unos días seguidos.';
+}
+
+/** Qué hacer hoy, en una línea: según cómo estás y, si hay competición, en qué punto de la cuenta atrás. */
+export function formAdvice(state: FormState, comp: CompetitionWindow | null, todayIso: string): string {
+  if (comp && todayIso >= comp.eventStart && todayIso <= comp.eventEnd) return 'Hoy compites: la forma ya está hecha. Dosifica y disfruta.';
+  if (comp && todayIso < comp.eventStart) {
+    const toStart = isoToDay(comp.eventStart) - isoToDay(todayIso);
+    if (toStart <= 7) return 'Estás en el taper: sin carga extra y a dormir bien. Cada día suave te acerca a tu ventana.';
+  }
+  if (state === 'ventana') return 'Estás en ventana: si el plan trae una sesión dura, es el momento de apretarla.';
+  if (state === 'cargado') return 'Aún cargado: hoy sin carga extra. Mueve lo justo y deja que la fatiga baje.';
+  return 'En equilibrio: sigue el plan del día, ni más ni menos.';
 }

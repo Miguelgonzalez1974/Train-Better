@@ -4,11 +4,13 @@ import {
   addDays,
   buildFormSeries,
   formMissing,
-  formSentence,
+  formAdvice,
+  formDecision,
   formStateOf,
   formToday,
+  formWindows,
+  MAX_WINDOW_DAYS,
   planLoads,
-  projectionDays,
   steadyLoads,
   steadyWithCompetition,
   type CompetitionWindow,
@@ -125,12 +127,6 @@ describe('previsión', () => {
     expect(planLoads([10, 20], TODAY, null)).toEqual([10, 20]);
   });
 
-  it('con la competición cerca la previsión llega hasta dos días después', () => {
-    expect(projectionDays(TODAY, comp)).toBe(9);
-    expect(projectionDays(TODAY, null)).toBe(10);
-    expect(projectionDays(TODAY, { eventStart: addDays(TODAY, 40), eventEnd: addDays(TODAY, 41) })).toBe(10);
-  });
-
   it('tapering llega a la competición mejor que no bajar el ritmo', () => {
     const history = steadyHistory(8, 8);
     const steady = steadyWithCompetition(steadyLoads(history, TODAY, 9), TODAY, comp);
@@ -142,25 +138,84 @@ describe('previsión', () => {
   });
 });
 
-describe('formSentence', () => {
-  it('con competición cuenta cómo se llega el primer día', () => {
-    const comp: CompetitionWindow = { eventStart: addDays(TODAY, 6), eventEnd: addDays(TODAY, 7) };
-    const history = steadyHistory(8, 8);
-    const future = planLoads(steadyLoads(history, TODAY, 9), TODAY, comp, 0.6);
-    const s = buildFormSeries({ history, todayIso: TODAY, future });
-    const text = formSentence(s, 'plan', comp);
-    expect(text).toMatch(/^Con tu plan llegarías el 6 de noviembre/);
-    expect(formSentence(s, 'steady', comp)).toMatch(/^Si no bajas el ritmo llegarías/);
+describe('formWindows', () => {
+  /** Una forma que sube a base de bajar la carga: semanas duras y luego una semana casi sin entrenar. */
+  function freshHistory(): SessionHistoryEntry[] {
+    const base = steadyHistory(10, 8);
+    return base.filter((e) => e.date < addDays(TODAY, -6));
+  }
+
+  it('una ventana necesita al menos dos días seguidos', () => {
+    const s = buildFormSeries({ history: freshHistory(), todayIso: TODAY, future: [0, 0, 0, 0, 0, 0, 0] });
+    const wins = formWindows(s);
+    expect(wins.length).toBeGreaterThan(0);
+    for (const w of wins) expect(w.days).toBeGreaterThanOrEqual(2);
   });
 
-  it('sin competición señala el mejor momento o dice que sigues cargado', () => {
-    const history = [...steadyHistory(8, 6), ...[5, 4, 3, 2, 1].map((b) => entry(addDays(TODAY, -b), 10, 100))];
-    const s = buildFormSeries({ history, todayIso: TODAY, future: [0, 0, 0, 0, 0, 0, 0] });
-    expect(formSentence(s, 'plan', null)).toMatch(/Con tu plan/);
+  it('un descanso suelto en medio de semanas duras no abre ventana', () => {
+    const s = buildFormSeries({ history: steadyHistory(10, 8), todayIso: TODAY, future: [60, 0, 60, 60, 0, 60, 60] });
+    expect(formWindows(s, TODAY)).toHaveLength(0);
   });
 
-  it('sin previsión devuelve la frase de hoy', () => {
-    const s = buildFormSeries({ history: steadyHistory(8), todayIso: TODAY });
-    expect(formSentence(s, 'plan', null)).toBe(formToday(s)!.sentence);
+  it('afterIso deja solo las ventanas que acaban después de esa fecha', () => {
+    const s = buildFormSeries({ history: freshHistory(), todayIso: TODAY, future: [0, 0, 0, 0, 0, 0, 0] });
+    const all = formWindows(s);
+    expect(formWindows(s, addDays(TODAY, 100))).toHaveLength(0);
+    expect(formWindows(s, addDays(TODAY, -100))).toHaveLength(all.length);
+  });
+
+  it('una ventana dura como mucho una semana, aunque la carga siga baja', () => {
+    const long = buildFormSeries({ history: freshHistory(), todayIso: TODAY, future: Array.from({ length: 30 }, () => 0) });
+    for (const w of formWindows(long)) expect(w.days).toBeLessThanOrEqual(MAX_WINDOW_DAYS);
+  });
+
+  it('keepIso conserva la ventana de ese día aunque sea de un solo día', () => {
+    const forms = [-5, -2, 12, -3, -6];
+    const points = forms.map((form, i) => ({ iso: addDays(TODAY, i), load: 0, fitness: 50, fatigue: 50 - form, form, future: i > 0 }));
+    const s = { points, todayIndex: 0, ready: true, sessions: 20, spanDays: 40 };
+    const day = addDays(TODAY, 2);
+    expect(formWindows(s)).toHaveLength(0);
+    const kept = formWindows(s, undefined, day);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toMatchObject({ start: day, end: day, days: 1, peak: 12 });
+  });
+
+  it('el pico es el día de mejor forma de la ventana', () => {
+    const s = buildFormSeries({ history: freshHistory(), todayIso: TODAY, future: [0, 0, 0, 0, 0, 0, 0] });
+    for (const w of formWindows(s)) {
+      const inside = s.points.filter((p) => p.iso >= w.start && p.iso <= w.end);
+      expect(w.peak).toBe(Math.round(Math.max(...inside.map((p) => p.form))));
+    }
+  });
+});
+
+describe('formDecision y formAdvice', () => {
+  const comp: CompetitionWindow = { eventStart: addDays(TODAY, 6), eventEnd: addDays(TODAY, 7) };
+  const history = steadyHistory(8, 8);
+  const base = steadyLoads(history, TODAY, 9);
+  const plan = buildFormSeries({ history, todayIso: TODAY, future: planLoads(base, TODAY, comp, 0.6) });
+  const steady = buildFormSeries({ history, todayIso: TODAY, future: steadyWithCompetition(base, TODAY, comp) });
+
+  it('con competición dice qué hacer y compara con no bajar la carga', () => {
+    const text = formDecision(plan, steady, comp, TODAY);
+    expect(text).toContain('el 6 de noviembre');
+    expect(text).toMatch(/taper|plan/);
+    expect(text).toMatch(/[+−]\d/);
+  });
+
+  it('sin competición anuncia la próxima ventana o dice cómo conseguirla', () => {
+    const future = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const rested = buildFormSeries({ history: steadyHistory(10, 8).filter((e) => e.date < addDays(TODAY, -6)), todayIso: TODAY, future });
+    expect(formDecision(rested, null, null, TODAY)).toMatch(/ventana/);
+    const hard = buildFormSeries({ history: steadyHistory(10, 8), todayIso: TODAY, future: [60, 60, 60, 60, 60, 60, 60, 60, 60, 60] });
+    expect(formDecision(hard, null, null, TODAY)).toMatch(/baja la carga/);
+  });
+
+  it('el consejo de hoy cambia con el estado y con la cuenta atrás', () => {
+    expect(formAdvice('ventana', null, TODAY)).toMatch(/apretarla/);
+    expect(formAdvice('cargado', null, TODAY)).toMatch(/sin carga extra/);
+    expect(formAdvice('equilibrio', null, TODAY)).toMatch(/sigue el plan/);
+    expect(formAdvice('cargado', comp, TODAY)).toMatch(/taper/);
+    expect(formAdvice('ventana', comp, addDays(TODAY, 6))).toMatch(/Hoy compites/);
   });
 });
