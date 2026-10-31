@@ -35,9 +35,9 @@ export const FORM_TONE: Record<FormState, string> = { ventana: GOOD, equilibrio:
 /** El color de una barra: normal en gris, para que lo que importa (a tope y cansado) destaque. */
 const BAR_TONE: Record<FormState, string> = { ventana: GOOD, equilibrio: 'rgb(var(--c-white) / 0.4)', cargado: LOW };
 
-/** Cuántos días se dibujan hacia atrás y, como mínimo, hacia delante. */
-const PAST_DAYS = 14;
-const FUTURE_DAYS = 28;
+/** El gráfico enseña dos semanas que avanzan con los días: tres atrás (para ver de dónde vienes), hoy y diez por delante. */
+const PAST_DAYS = 3;
+const FUTURE_DAYS = 10;
 
 /**
  * La insignia de la fila "Tu forma": una pequeña batería (el recuadro se llena de abajo arriba según tu energía de hoy) con el número
@@ -69,36 +69,33 @@ function Battery({ value, tone }: { value: number; tone: string }) {
 
 const dayNum = (iso: string) => Number(iso.slice(8));
 
-/**
- * El tramo que se dibuja: dos semanas atrás, hoy y cuatro semanas por delante; si la próxima ventana queda más lejos, se alarga hasta
- * incluirla (como mucho el final de la previsión) para que se vea cuándo vuelve.
- */
-function visible(series: FormSeries, windows: FormWindow[]) {
+/** El tramo que se dibuja: dos semanas que avanzan con los días (la ventana se desplaza cada día con "hoy"). Más allá, el calendario. */
+function visible(series: FormSeries) {
   const t = series.todayIndex;
   const from = Math.max(0, t - PAST_DAYS);
-  const todayIso = series.points[t]?.iso ?? '';
-  const next = windows.find((w) => w.start > todayIso);
-  const nextEnd = next ? series.points.findIndex((p) => p.iso === next.end) : -1;
-  const to = Math.min(series.points.length - 1, Math.max(t + FUTURE_DAYS, nextEnd + 1));
-  return { pts: series.points.slice(from, to + 1), todayIdx: t - from };
+  return { pts: series.points.slice(from, t + FUTURE_DAYS + 1), todayIdx: t - from };
 }
+
+const WEEKDAY_INITIAL = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const weekdayInitial = (iso: string) => WEEKDAY_INITIAL[(new Date(`${iso}T12:00:00`).getDay() + 6) % 7];
 
 const W = 340;
 const PAD = { l: 10, r: 10 };
-const H = 330;
+const H = 346;
 const P1 = { y0: 50, y1: 150 }; // las curvas
 const P2 = { y0: 178, y1: 290 }; // las barras de energía
 
 type ChartMode = 'energia' | 'fisica';
 
 /**
- * Dos paneles sobre el mismo tiempo. Arriba, tu forma física (azul) y tu fatiga (ámbar), con su nombre escrito junto a la línea; abajo,
- * una barra de energía por día (verde a tope, gris normal, roja cansado) con la zona "a tope" marcada y los números clave escritos
- * sobre las barras. Lo previsto va más claro (barras) o en puntos (curvas). Las ventanas son franjas verdes que cruzan los dos paneles
- * y la competición, una franja dorada con su pastilla arriba. En la vista "Forma física y fatiga" las curvas ocupan todo el alto.
+ * Dos paneles sobre dos semanas que avanzan con los días. Arriba, tu forma física (azul) y tu fatiga (ámbar), con su nombre escrito
+ * junto a la línea; abajo, una barra de energía por día (verde a tope, gris normal, roja cansado) con su porcentaje escrito encima y
+ * la zona "a tope" marcada. Bajo cada barra, la letra del día y su número (hoy, resaltado). Lo previsto va más claro (barras) o en
+ * puntos (curvas). Las ventanas son franjas verdes que cruzan los dos paneles y la competición, una franja dorada con su pastilla
+ * arriba. En la vista "Forma física y fatiga" las curvas ocupan todo el alto.
  */
 function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: CompetitionWindow | null; windows: FormWindow[]; mode: ChartMode }) {
-  const { pts, todayIdx: t } = useMemo(() => visible(plan, windows), [plan, windows]);
+  const { pts, todayIdx: t } = useMemo(() => visible(plan), [plan]);
   const n = pts.length;
   const step = (W - PAD.l - PAD.r) / Math.max(1, n - 1);
   const x = (i: number) => PAD.l + i * step;
@@ -128,9 +125,6 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
     return a !== undefined && b !== undefined && !(c0 >= 0 && a <= c1 && b >= c0) ? [[a, b]] : [];
   });
   const today = pts[t];
-  // La siguiente ventana que no es la de la competición, para escribir su número sobre la barra.
-  const nextWin = windows.find((w) => w.start > (today?.iso ?? '') && !(comp && w.start <= comp.eventEnd && w.end >= addDays(comp.eventStart, -2)));
-  const nextIdx = nextWin ? (idx.get(nextWin.peakIso) ?? -1) : -1;
 
   // La pastilla de la competición: arriba, centrada en su franja y sin salirse del dibujo.
   const compLabel = comp ? `Competición · ${dayNum(comp.eventStart)}${comp.eventEnd !== comp.eventStart ? `–${dayNum(comp.eventEnd)}` : ''} ${fmtDay(comp.eventStart).split(' ').pop()}` : '';
@@ -138,13 +132,6 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
   const pillX = c0 >= 0 ? Math.min(Math.max(PAD.l, (x(c0) + x(c1)) / 2 - pillW / 2), W - PAD.r - pillW) : 0;
   const dotted = { strokeDasharray: '1 5', strokeLinecap: 'round' as const };
 
-  // Un número escrito sobre una barra, con un borde del color del fondo para leerse sobre las demás.
-  const label = (i: number, color: string) => (
-    <text key={`l${i}`} x={x(i)} y={yBar(energy[i]) - 7} textAnchor="middle" fontSize={12} fontWeight={800} fill={color} stroke={SURFACE} strokeWidth={3.5} paintOrder="stroke">
-      {energy[i]}%
-    </text>
-  );
-  const axisDates = [0, Math.round((n - 1) / 2), n - 1].filter((i) => Math.abs(i - t) >= 5 && (c0 < 0 || Math.abs(i - c0) >= 4));
   const peakFat = Math.min(...pts.slice(0, t + 1).map((p) => yLine(p.fatigue)));
 
   return (
@@ -199,40 +186,58 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
           <line x1={PAD.l} x2={W - PAD.r} y1={P2.y1} y2={P2.y1} stroke={INK} strokeOpacity={0.25} />
           {pts.map((p, i) => {
             const isComp = c0 >= 0 && i >= c0 && i <= c1;
-            const bw = Math.max(3, step * 0.66);
+            const bw = Math.max(3, step * 0.7);
+            const state = stateOfEnergy(energy[i]);
             return (
-              <rect
-                key={p.iso}
-                x={x(i) - bw / 2}
-                y={yBar(energy[i])}
-                width={bw}
-                height={Math.max(1.5, P2.y1 - yBar(energy[i]))}
-                rx={2}
-                fill={isComp ? GOLD : BAR_TONE[stateOfEnergy(energy[i])]}
-                fillOpacity={p.future ? 0.55 : 0.95}
-              />
+              <g key={p.iso}>
+                <rect
+                  x={x(i) - bw / 2}
+                  y={yBar(energy[i])}
+                  width={bw}
+                  height={Math.max(1.5, P2.y1 - yBar(energy[i]))}
+                  rx={3}
+                  fill={isComp ? GOLD : BAR_TONE[state]}
+                  fillOpacity={p.future ? 0.55 : 0.95}
+                />
+                {/* El porcentaje de cada día, escrito sobre su barra. */}
+                <text
+                  x={x(i)}
+                  y={yBar(energy[i]) - 5}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fontWeight={i === t ? 800 : 700}
+                  fill={isComp ? GOLD : state === 'equilibrio' ? INK : FORM_TONE[state]}
+                  fillOpacity={state === 'equilibrio' && !isComp && i !== t ? 0.7 : 1}
+                  stroke={SURFACE}
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                >
+                  {energy[i]}
+                </text>
+              </g>
             );
           })}
-          {today && label(t, FORM_TONE[stateOfEnergy(energy[t])])}
-          {c0 >= 0 && label(c0, GOLD)}
-          {nextIdx >= 0 && nextIdx !== c0 && label(nextIdx, GOOD)}
         </>
       )}
 
-      {/* Hoy y las fechas. */}
-      {today && (
-        <g>
-          <line x1={x(t)} x2={x(t)} y1={P1.y0 - 8} y2={bottom + 6} stroke={INK} strokeOpacity={0.5} strokeDasharray="3 3" />
-          <text x={x(t)} y={bottom + 22} textAnchor="middle" fontSize={11} fontWeight={700} className="fill-white">
-            hoy
-          </text>
-        </g>
-      )}
-      {axisDates.map((i) => (
-        <text key={pts[i].iso} x={x(i)} y={bottom + 22} fontSize={11} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} className="fill-neutral-500">
-          {fmtDay(pts[i].iso)}
-        </text>
-      ))}
+      {/* Hoy, y bajo cada barra la letra del día y su número: así se ve qué día es cada una según avanzan los días. */}
+      {today && <line x1={x(t)} x2={x(t)} y1={P1.y0 - 8} y2={bottom + 6} stroke={INK} strokeOpacity={0.5} strokeDasharray="3 3" />}
+      {pts.map((p, i) => {
+        const isToday = i === t;
+        const isComp = c0 >= 0 && i >= c0 && i <= c1;
+        const color = isComp ? GOLD : isToday ? INK : 'rgb(var(--c-n-500))';
+        return (
+          <g key={`d${p.iso}`}>
+            {isToday && <rect x={x(i) - step * 0.46} y={bottom + 8} width={step * 0.92} height={30} rx={8} fill={INK} fillOpacity={0.14} />}
+            <text x={x(i)} y={bottom + 22} textAnchor="middle" fontSize={11} fontWeight={isToday ? 800 : 600} fill={color}>
+              {isToday ? 'hoy' : weekdayInitial(p.iso)}
+            </text>
+            <text x={x(i)} y={bottom + 35} textAnchor="middle" fontSize={11} fontWeight={isToday || isComp ? 800 : 500} fill={color}>
+              {dayNum(p.iso)}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -255,6 +260,7 @@ function WindowCalendar({ model }: { model: FormModel }) {
     }
     return set;
   }, [model.allWindows]);
+  const energyByDay = useMemo(() => new Map(plan.points.map((p) => [p.iso, energyOf(p.form, p.fitness)])), [plan]);
   const monday = addDays(todayIso, -((new Date(`${todayIso}T12:00:00`).getDay() + 6) % 7));
   const cells = Array.from({ length: 35 }, (_, i) => addDays(monday, i));
   return (
@@ -276,14 +282,22 @@ function WindowCalendar({ model }: { model: FormModel }) {
             : tired
               ? { background: 'rgb(var(--c-state-low) / 0.14)', color: LOW }
               : undefined;
+        const energy = energyByDay.get(iso);
+        // El número del día arriba y su energía (%) debajo, en el color de su estado.
+        const energyColor = isComp ? GOLD : win ? GOOD : tired ? LOW : undefined;
         return (
           <div
             key={iso}
-            className={`num flex h-7 items-center justify-center rounded-md text-[11px] ${style ? '' : 'bg-white/[0.045] text-neutral-400'} ${past ? 'opacity-45' : ''} ${iso === todayIso ? 'outline outline-[1.5px] outline-white/70' : ''}`}
+            className={`num flex h-11 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] leading-none ${style ? '' : 'bg-white/[0.045] text-neutral-400'} ${past ? 'opacity-45' : ''} ${iso === todayIso ? 'outline outline-[1.5px] outline-white/70' : ''}`}
             style={style}
-            aria-label={`${shortDay(iso)}${isComp ? ', competición' : win ? ', a tope' : ''}`}
+            aria-label={`${shortDay(iso)}${energy !== undefined ? `, energía ${energy} %` : ''}${isComp ? ', competición' : win ? ', a tope' : ''}`}
           >
-            {dayNum(iso)}
+            <span className="opacity-80">{dayNum(iso)}</span>
+            {energy !== undefined && (
+              <span className="text-[12px] font-bold" style={energyColor ? { color: energyColor } : undefined}>
+                {energy}%
+              </span>
+            )}
           </div>
         );
       })}
