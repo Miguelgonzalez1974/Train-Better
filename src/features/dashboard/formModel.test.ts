@@ -9,7 +9,7 @@ const win = (start: number, end: number, peak = 10): FormWindow => ({ start: add
 
 function model(over: Partial<FormModel> = {}): FormModel {
   const windows = over.windows ?? [];
-  return { todayIso: TODAY, comp: null, plan, windows, allWindows: over.allWindows ?? windows, tags: new Map<string, LoadTag>(), trainingDaysPerWeek: 4, ...over };
+  return { todayIso: TODAY, comp: null, plan, windows, allWindows: over.allWindows ?? windows, tags: new Map<string, LoadTag>(), trainingDaysPerWeek: 4, recentSessions: [], ...over };
 }
 
 describe('formRowNote', () => {

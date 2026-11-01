@@ -1,5 +1,5 @@
-import type { AthleteProfile, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
-import { getReadinessCheckForDate } from '../../engine/readiness';
+import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
+import { recentSessionCosts, type SessionCostRow } from '../../engine/sessionCost';
 import { TAPER_PARAMS } from '../../engine/competition';
 import { resolveCompetitionDay } from '../../engine/taperPlan';
 import { FORECAST_DAYS, addDays, buildFormSeries, formWindows, type CompetitionWindow, type FormSeries, type FormWindow } from '../../engine/formCurve';
@@ -17,8 +17,8 @@ export interface FormModel {
   allWindows: FormWindow[];
   /** Qué explica la carga de cada día que viene (taper, competición, recuperación, descarga). */
   tags: Map<string, LoadTag>;
-  /** El check-in de hoy, si lo has hecho (suma o resta a la energía de hoy). */
-  todayCheck?: ReadinessCheck;
+  /** Las últimas sesiones con lo que dice su RPE y lo que cuestan de verdad (ver `engine/sessionCost.ts`). */
+  recentSessions: SessionCostRow[];
   /** Días de entreno a la semana del plan (para marcar en la cinta los entrenos que caen dentro de una ventana). */
   trainingDaysPerWeek: AthleteProfile['trainingDaysPerWeek'];
 }
@@ -32,8 +32,16 @@ export function buildFormModel(profile: AthleteProfile, history: SessionHistoryE
   const plan = buildFormSeries({ history, todayIso, future: projection.loads, checks: profile.readinessLog });
   const tags = new Map<string, LoadTag>();
   projection.tags.forEach((t, i) => t && tags.set(addDays(todayIso, i + 1), t));
-  const todayCheck = getReadinessCheckForDate(profile.readinessLog, todayIso);
-  return { todayIso, comp, plan, windows: formWindows(plan, todayIso, comp?.eventStart), allWindows: formWindows(plan, undefined, comp?.eventStart), tags, todayCheck, trainingDaysPerWeek: profile.trainingDaysPerWeek };
+  return {
+    todayIso,
+    comp,
+    plan,
+    windows: formWindows(plan, todayIso, comp?.eventStart),
+    allWindows: formWindows(plan, undefined, comp?.eventStart),
+    tags,
+    recentSessions: recentSessionCosts(history, todayIso, 3),
+    trainingDaysPerWeek: profile.trainingDaysPerWeek,
+  };
 }
 
 /** "jue 5 nov". */

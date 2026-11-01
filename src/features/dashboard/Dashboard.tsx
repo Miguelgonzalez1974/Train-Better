@@ -357,6 +357,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               setFormOpen(false);
               onOpenMorning();
             }}
+            onOpenSleep={() => {
+              setFormOpen(false);
+              setTab('sueno');
+            }}
           />
         </Modal>
       )}

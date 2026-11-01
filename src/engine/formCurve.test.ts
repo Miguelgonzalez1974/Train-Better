@@ -4,9 +4,10 @@ import {
   addDays,
   buildFormSeries,
   formMissing,
-  CHECKIN_MAX_ADJUST,
-  checkInAdjust,
-  checkInSummary,
+  SLEEP_MAX_BONUS,
+  SLEEP_MAX_PENALTY,
+  sleepAdjust,
+  sleepSummary,
   energyOf,
   formAdvice,
   pointEnergy,
@@ -122,59 +123,106 @@ describe('energyOf', () => {
   });
 });
 
-describe('check-in de la mañana', () => {
-  const check = (over: Partial<ReadinessCheck> = {}): ReadinessCheck => ({ date: TODAY, sleep: 'regular', soreness: 'leve', stress: 'medio', motivation: 'normal', ...over });
-  const best = check({ sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' });
-  const worst = check({ sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' });
+describe('sueño', () => {
+  const check = (date: string, over: Partial<ReadinessCheck> = {}): ReadinessCheck => ({ date, sleep: 'regular', soreness: 'leve', stress: 'medio', motivation: 'normal', ...over });
+  const byDate = (...cs: ReadinessCheck[]) => new Map(cs.map((c) => [c.date, c]));
 
-  it('suma hasta +15 si todo va bien, resta hasta −15 si todo va mal y no mueve nada si es normal', () => {
-    expect(checkInAdjust(best)).toBe(CHECKIN_MAX_ADJUST);
-    expect(checkInAdjust(worst)).toBe(-CHECKIN_MAX_ADJUST);
-    expect(checkInAdjust(check())).toBe(0);
+  it('sin check-in de ese día no hay lectura', () => {
+    expect(sleepAdjust(byDate(check(addDays(TODAY, -1), { sleepHours: 8 })), TODAY)).toBeNull();
   });
 
-  it('un eje suelto mueve poco y una HRV baja cuenta como un eje en contra', () => {
-    expect(checkInAdjust(check({ sleep: 'bien' }))).toBe(4);
-    expect(checkInAdjust(check({ sleep: 'mal' }))).toBe(-4);
-    expect(checkInAdjust(check({ hrvVs: 'bajo' }))).toBe(-4);
+  it('7 h 30 ni suman ni restan; dormir más suma y dormir menos resta, con tope', () => {
+    const at = (h: number) => sleepAdjust(byDate(check(TODAY, { sleepHours: h })), TODAY)!.points;
+    expect(at(7.5)).toBe(0);
+    expect(at(8)).toBe(4);
+    expect(at(7)).toBe(-4);
+    expect(at(6)).toBe(-12);
+    expect(at(5)).toBe(-SLEEP_MAX_PENALTY);
+    expect(at(11)).toBe(SLEEP_MAX_BONUS);
   });
 
-  it('cada día pasado (y hoy) lleva el ajuste de su check-in; los futuros no', () => {
+  it('las dos noches anteriores pesan: la deuda de sueño se acumula', () => {
+    const fresh = sleepAdjust(byDate(check(TODAY, { sleepHours: 8 })), TODAY)!;
+    const debt = sleepAdjust(byDate(check(TODAY, { sleepHours: 8 }), check(addDays(TODAY, -1), { sleepHours: 5 }), check(addDays(TODAY, -2), { sleepHours: 5 })), TODAY)!;
+    expect(debt.nights).toBe(3);
+    expect(debt.avgHours).toBeCloseTo(6.5, 5); // 8·0,5 + 5·0,3 + 5·0,2
+    expect(debt.points).toBeLessThan(fresh.points);
+    expect(debt.points).toBe(-8);
+  });
+
+  it('si el check-in no lleva las horas, usa lo que respondiste sobre el sueño', () => {
+    expect(sleepAdjust(byDate(check(TODAY, { sleep: 'bien' })), TODAY)!.avgHours).toBe(8);
+    expect(sleepAdjust(byDate(check(TODAY, { sleep: 'mal' })), TODAY)!.points).toBe(-SLEEP_MAX_PENALTY);
+  });
+
+  it('solo cuenta el sueño: agujetas, estrés, ánimo y HRV no mueven la energía', () => {
+    const calm = sleepAdjust(byDate(check(TODAY, { sleepHours: 7.5 })), TODAY)!.points;
+    const rough = sleepAdjust(byDate(check(TODAY, { sleepHours: 7.5, soreness: 'alto', stress: 'alto', motivation: 'baja', hrvVs: 'bajo' })), TODAY)!.points;
+    expect(rough).toBe(calm);
+  });
+
+  it('cada día de la serie con check-in lleva su sueño; los futuros y los demás, 0', () => {
     const history = steadyHistory(8);
-    const s = buildFormSeries({ history, todayIso: TODAY, future: [0, 0], checks: [check({ date: addDays(TODAY, -1), ...{ sleep: 'mal', stress: 'alto' } }), best] });
+    const s = buildFormSeries({ history, todayIso: TODAY, future: [0, 0], checks: [check(addDays(TODAY, -1), { sleepHours: 6 }), check(TODAY, { sleepHours: 8 })] });
     const byIso = new Map(s.points.map((p) => [p.iso, p]));
-    expect(byIso.get(addDays(TODAY, -1))!.checkin).toBe(-8);
-    expect(byIso.get(TODAY)!.checkin).toBe(CHECKIN_MAX_ADJUST);
-    expect(byIso.get(addDays(TODAY, -2))!.checkin).toBe(0);
-    expect(byIso.get(addDays(TODAY, 1))!.checkin).toBe(0);
+    expect(byIso.get(TODAY)!.sleep).toBeLessThan(4); // 8 h hoy pero 6 h ayer: la media pesa
+    expect(byIso.get(TODAY)!.sleepNights).toBe(2);
+    expect(byIso.get(addDays(TODAY, -2))!.sleep).toBe(0);
+    expect(byIso.get(addDays(TODAY, 1))!.sleep).toBe(0);
   });
 
-  it('la energía del día es la de su carga más el check-in, entre 0 y 100', () => {
+  it('la energía del día es la de su carga más el sueño, entre 0 y 100', () => {
     const history = steadyHistory(8);
     const without = buildFormSeries({ history, todayIso: TODAY });
-    const withBest = buildFormSeries({ history, todayIso: TODAY, checks: [best] });
+    const withSleep = buildFormSeries({ history, todayIso: TODAY, checks: [check(TODAY, { sleepHours: 9 })] });
     const a = without.points[without.todayIndex];
-    const b = withBest.points[withBest.todayIndex];
+    const b = withSleep.points[withSleep.todayIndex];
     expect(a.form).toBeCloseTo(b.form, 9); // la carga no cambia
-    expect(pointEnergy(b)).toBe(Math.min(100, energyOf(a.form, a.fitness) + CHECKIN_MAX_ADJUST));
-    expect(pointEnergy({ form: 500, fitness: 40, checkin: 15 })).toBe(100);
-    expect(pointEnergy({ form: -500, fitness: 40, checkin: -15 })).toBe(0);
+    expect(pointEnergy(b)).toBe(Math.min(100, energyOf(a.form, a.fitness) + SLEEP_MAX_BONUS));
+    expect(pointEnergy({ form: 500, fitness: 40, sleep: 8 })).toBe(100);
+    expect(pointEnergy({ form: -500, fitness: 40, sleep: -15 })).toBe(0);
   });
 
-  it('un buen check-in puede subir un día de normal a a tope y uno malo bajarlo a cansado', () => {
-    // forma relativa que da 66 de energía por carga: con +15 pasa de 75 (a tope), con −15 baja a 51.
-    const form = ((66 - 50) / (500 / 3)) * 100;
-    expect(pointState({ form, fitness: 100 })).toBe('equilibrio');
-    expect(pointState({ form, fitness: 100, checkin: 15 })).toBe('ventana');
-    const tired = ((35 - 50) / (500 / 3)) * 100;
-    expect(pointState({ form: tired, fitness: 100 })).toBe('equilibrio');
-    expect(pointState({ form: tired, fitness: 100, checkin: -15 })).toBe('cargado');
+  it('el sueño puede subir un día de normal a a tope y bajarlo a cansado', () => {
+    const up = ((70 - 50) / (500 / 3)) * 100; // energía 70 por carga: +8 la deja en 78
+    expect(pointState({ form: up, fitness: 100 })).toBe('equilibrio');
+    expect(pointState({ form: up, fitness: 100, sleep: 8 })).toBe('ventana');
+    const down = ((35 - 50) / (500 / 3)) * 100;
+    expect(pointState({ form: down, fitness: 100 })).toBe('equilibrio');
+    expect(pointState({ form: down, fitness: 100, sleep: -15 })).toBe('cargado');
   });
 
-  it('resume lo que dijo el check-in en pocas palabras', () => {
-    expect(checkInSummary(best)).toBe('dormiste bien · estrés bajo · sin agujetas · con ganas');
-    expect(checkInSummary(check({ sleepHours: 7.5, stress: 'alto' }))).toBe('dormiste 7 h 30 · estrés alto');
-    expect(checkInSummary(worst)).toContain('agujetas fuertes');
+  it('resume el sueño en pocas palabras', () => {
+    expect(sleepSummary({ points: 4, avgHours: 8, nights: 3 })).toBe('8 h de media en 3 noches');
+    expect(sleepSummary({ points: -4, avgHours: 7, nights: 1 })).toBe('7 h esta noche');
+  });
+});
+
+describe('coste real de las sesiones en la serie', () => {
+  const heavy = (date: string): SessionHistoryEntry => ({ ...entry(date, 7, 60), wodCatalogId: 'bm:mayhem-453', strengthPattern: 'squat' });
+  const plain = (date: string): SessionHistoryEntry => entry(date, 7, 60);
+  const swap = (make: (d: string) => SessionHistoryEntry) => steadyHistory(8).map((e) => make(e.date));
+
+  it('las mismas sesiones con más coste real dejan menos energía que sin él', () => {
+    const light = buildFormSeries({ history: swap(plain), todayIso: TODAY });
+    const costly = buildFormSeries({ history: swap(heavy), todayIso: TODAY });
+    const a = light.points[light.todayIndex];
+    const b = costly.points[costly.todayIndex];
+    expect(b.load).toBeGreaterThanOrEqual(a.load);
+    // La energía "sin coste" es la misma carga pura en las dos series.
+    expect(b.energyNoCost).toBe(a.energyNoCost);
+  });
+
+  it('una sesión reciente más cara que su RPE resta energía respecto a la carga pura', () => {
+    const history = [...swap(plain).filter((e) => e.date < addDays(TODAY, -1)), heavy(addDays(TODAY, -1))];
+    const s = buildFormSeries({ history, todayIso: TODAY });
+    const p = s.points[s.todayIndex];
+    expect(energyOf(p.form, p.fitness)).toBeLessThan(p.energyNoCost!);
+  });
+
+  it('sin información de las sesiones el coste real no cambia nada', () => {
+    const s = buildFormSeries({ history: steadyHistory(8), todayIso: TODAY });
+    for (const p of s.points) expect(energyOf(p.form, p.fitness)).toBe(p.energyNoCost);
   });
 });
 

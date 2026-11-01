@@ -7,7 +7,7 @@
  * semanas, repartido en los días de entreno del plan. Es una ESTIMACIÓN: no genera las sesiones, solo su esfuerzo.
  */
 import type { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
-import { dayStrain } from './strain';
+import { effectiveLoad } from './sessionCost';
 import { POST_COMPETITION_DAYS, addDays, planLoads, steadyLoads, type CompetitionWindow } from './formCurve';
 import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, resolveMacrocyclePhase } from './periodization';
 
@@ -40,7 +40,7 @@ export function typicalWeeklyLoad(history: SessionHistoryEntry[], todayIso: stri
   const end = untilIso < todayIso ? untilIso : todayIso;
   const from = addDays(end, -27);
   const loads = new Map<string, number>();
-  for (const e of history) if (e.date >= from && e.date <= end) loads.set(e.date, Math.max(loads.get(e.date) ?? 0, dayStrain(e) ?? 0));
+  for (const e of history) if (e.date >= from && e.date <= end) loads.set(e.date, Math.max(loads.get(e.date) ?? 0, effectiveLoad(e)));
   const total = [...loads.values()].reduce((s, v) => s + v, 0);
   return total > 0 ? total / 4 : null;
 }

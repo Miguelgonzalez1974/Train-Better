@@ -14,7 +14,7 @@
  */
 import type { ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
 import { formatSleep } from './habits';
-import { scoreCheck } from './readiness';
+import { effectiveLoad } from './sessionCost';
 import { dayStrain } from './strain';
 
 export const FITNESS_TAU = 42;
@@ -51,8 +51,13 @@ export interface FormPoint {
   /** Forma al empezar el día: forma física menos fatiga, sin la carga de ese día. */
   form: number;
   future: boolean;
-  /** Lo que suma (o resta) a la energía el check-in de ese día, en puntos (0 sin check-in; los días futuros no tienen). */
-  checkin?: number;
+  /** Lo que suma (o resta) a la energía el sueño de esa noche y las dos anteriores, en puntos (0 sin check-in; los días futuros no tienen). */
+  sleep?: number;
+  /** Media de horas dormidas y noches que entran en ella (solo los días con check-in). */
+  sleepAvg?: number;
+  sleepNights?: number;
+  /** La energía (0-100) que tendría ese día con la carga pura (RPE × duración), sin el coste real de las sesiones. */
+  energyNoCost?: number;
 }
 
 export interface FormSeries {
@@ -87,47 +92,70 @@ export function formStateOf(form: number, fitness: number): FormState {
 }
 
 // ---------------------------------------------------------------------------------------------
-// El check-in de la mañana
+// El sueño
 // ---------------------------------------------------------------------------------------------
 
-/** Lo máximo que el check-in de una mañana suma o resta a la energía de ese día: la carga acumulada sigue pesando más que una noche. */
-export const CHECKIN_MAX_ADJUST = 15;
-/** Cada uno de los 4 ejes del check-in (sueño, agujetas, estrés, ánimo), de -1 a 1, mueve la energía este tanto. */
-const CHECKIN_POINTS_PER_AXIS = CHECKIN_MAX_ADJUST / 4;
+/** Las horas de sueño que ni suman ni restan: por encima recargas de más, por debajo debes sueño. */
+export const SLEEP_NEUTRAL_HOURS = 7.5;
+/** Puntos de energía por hora de más o de menos sobre esa referencia. */
+export const SLEEP_POINTS_PER_HOUR = 8;
+/** Dormir de sobra suma poco (no se acumula energía infinita); dormir poco puede restar bastante. */
+export const SLEEP_MAX_BONUS = 8;
+export const SLEEP_MAX_PENALTY = 15;
+/** Cuánto pesa cada noche: la de hoy más, y las dos anteriores un poco (la deuda de sueño se acumula). */
+const NIGHT_WEIGHTS = [0.5, 0.3, 0.2];
+/** Si el check-in no lleva las horas, lo que se supone para cada respuesta de sueño. */
+const AXIS_HOURS: Record<ReadinessCheck['sleep'], number> = { bien: 8, regular: 6.75, mal: 5.5 };
+
+export interface SleepReading {
+  /** Lo que suma (o resta) a la energía de ese día, en puntos. */
+  points: number;
+  /** Media (ponderada) de las horas dormidas en las noches que se conocen. */
+  avgHours: number;
+  /** Cuántas noches (1-3) entran en la media. */
+  nights: number;
+}
+
+/** Las horas de una noche: las anotadas o, si no, las que sugiere la respuesta de sueño del check-in. */
+export const nightHours = (check: ReadinessCheck): number => check.sleepHours ?? AXIS_HOURS[check.sleep];
 
 /**
- * Cuánto suma (o resta) a la energía de un día su check-in, en puntos de -15 a +15: la suma de los cuatro ejes (la misma que usa el
- * coach para el factor del día) y una HRV por debajo de tu rango como un eje más en contra. Dormir bien y llegar con ganas sube la
- * batería; dormir mal, con estrés o con agujetas fuertes la baja.
+ * Cuánto suma (o resta) el sueño a la energía de un día: la media ponderada de las horas de esa noche y las dos anteriores frente a 7 h 30,
+ * a 8 puntos por hora, de −15 a +8. Solo hay lectura si ese día tienes check-in (la noche de hoy es la que manda). Las horas vienen del
+ * check-in: lo de cómo te sientes (agujetas, estrés, ánimo) no entra, es de la Preparación.
  */
-export function checkInAdjust(check: ReadinessCheck): number {
-  const score = scoreCheck(check) + (check.hrvVs === 'bajo' ? -1 : 0);
-  const points = score * CHECKIN_POINTS_PER_AXIS;
+export function sleepAdjust(checkByDate: Map<string, ReadinessCheck>, iso: string): SleepReading | null {
+  const today = checkByDate.get(iso);
+  if (!today) return null;
+  let weight = 0;
+  let hours = 0;
+  let nights = 0;
+  NIGHT_WEIGHTS.forEach((w, back) => {
+    const check = back === 0 ? today : checkByDate.get(addDays(iso, -back));
+    if (!check) return;
+    weight += w;
+    hours += w * nightHours(check);
+    nights++;
+  });
+  const avgHours = hours / weight;
+  const raw = (avgHours - SLEEP_NEUTRAL_HOURS) * SLEEP_POINTS_PER_HOUR;
   // Redondeo simétrico: +7,5 y −7,5 valen lo mismo (Math.round tiraría el negativo hacia arriba).
-  return Math.max(-CHECKIN_MAX_ADJUST, Math.min(CHECKIN_MAX_ADJUST, Math.sign(points) * Math.round(Math.abs(points))));
+  const points = Math.max(-SLEEP_MAX_PENALTY, Math.min(SLEEP_MAX_BONUS, Math.sign(raw) * Math.round(Math.abs(raw))));
+  return { points, avgHours, nights };
 }
 
-/** Lo que dijo el check-in, en pocas palabras ("dormiste 8 h · sin agujetas · estrés bajo"), para explicar el ajuste. */
-export function checkInSummary(check: ReadinessCheck): string {
-  const parts: string[] = [];
-  parts.push(check.sleepHours !== undefined ? `dormiste ${formatSleep(check.sleepHours)}` : `dormiste ${check.sleep === 'bien' ? 'bien' : check.sleep === 'mal' ? 'mal' : 'regular'}`);
-  if (check.stress === 'alto') parts.push('estrés alto');
-  else if (check.stress === 'bajo') parts.push('estrés bajo');
-  if (check.soreness === 'alto') parts.push('agujetas fuertes');
-  else if (check.soreness === 'ninguno') parts.push('sin agujetas');
-  if (check.motivation === 'baja') parts.push('poco ánimo');
-  else if (check.motivation === 'alta') parts.push('con ganas');
-  if (check.hrvVs === 'bajo') parts.push('HRV baja');
-  return parts.join(' · ');
+/** "7 h 30 de media" o, con una sola noche, "7 h 30 esta noche". */
+export function sleepSummary(r: SleepReading): string {
+  return r.nights === 1 ? `${formatSleep(r.avgHours)} esta noche` : `${formatSleep(r.avgHours)} de media en ${r.nights} noches`;
 }
 
-/** La energía de un día: la de su carga más lo que suma o resta su check-in (0-100). */
-export function pointEnergy(p: Pick<FormPoint, 'form' | 'fitness' | 'checkin'>): number {
-  return Math.max(0, Math.min(100, energyOf(p.form, p.fitness) + (p.checkin ?? 0)));
+/** La energía de un día: la de su carga (con el coste real de las sesiones) más lo que suma o resta su sueño (0-100). */
+export function pointEnergy(p: Pick<FormPoint, 'form' | 'fitness' | 'sleep'>): number {
+  return Math.max(0, Math.min(100, energyOf(p.form, p.fitness) + (p.sleep ?? 0)));
 }
 
-/** El estado de un día con su check-in incluido. */
-export function pointState(p: Pick<FormPoint, 'form' | 'fitness' | 'checkin'>): FormState {
+/** El estado de un día con su sueño incluido. */
+export function pointState(p: Pick<FormPoint, 'form' | 'fitness' | 'sleep'>): FormState {
   return stateOfEnergy(pointEnergy(p));
 }
 
@@ -138,20 +166,24 @@ export interface BuildInput {
   pastDays?: number;
   /** Cargas previstas de los días que vienen, empezando por mañana. */
   future?: number[];
-  /** Los check-ins de la mañana: cada día con el suyo suma o resta a su energía (ver `checkInAdjust`). */
+  /** Los check-ins de la mañana: de ellos salen las horas de sueño que suman o restan a la energía de cada día (ver `sleepAdjust`). */
   checks?: ReadinessCheck[];
 }
 
 /**
  * La serie día a día: de los últimos `pastDays` días (o desde la primera sesión, si es más tarde) a los días de `future`. La forma
  * física y la fatiga arrancan en tu carga media de las dos primeras semanas de datos, así que no hay una subida falsa al principio.
+ * La carga de cada sesión incluye su coste real (`effectiveLoad`); en paralelo se calcula la carga "pura" (RPE × duración) para poder
+ * decir cuánto le suma o resta el coste real a la energía de cada día (`energyNoCost`).
  */
 export function buildFormSeries({ history, todayIso, pastDays = 28, future = [], checks = [] }: BuildInput): FormSeries {
   const checkByDate = new Map(checks.map((c) => [c.date, c]));
   const byDate = new Map<string, number>();
+  const rawByDate = new Map<string, number>();
   for (const e of history) {
     if (e.date > todayIso) continue;
-    byDate.set(e.date, Math.max(byDate.get(e.date) ?? 0, dayStrain(e) ?? 0));
+    byDate.set(e.date, Math.max(byDate.get(e.date) ?? 0, effectiveLoad(e)));
+    rawByDate.set(e.date, Math.max(rawByDate.get(e.date) ?? 0, dayStrain(e) ?? 0));
   }
   const dates = [...byDate.keys()].sort();
   const sessions = dates.length;
@@ -164,10 +196,15 @@ export function buildFormSeries({ history, todayIso, pastDays = 28, future = [],
   const firstDay = isoToDay(first);
   const seedDays = Math.min(14, spanDays + 1);
   let seedSum = 0;
-  for (let i = 0; i < seedDays; i++) seedSum += byDate.get(dayToIso(firstDay + i)) ?? 0;
-  const seed = seedSum / Math.max(1, seedDays);
-  let fitness = seed;
-  let fatigue = seed;
+  let rawSeedSum = 0;
+  for (let i = 0; i < seedDays; i++) {
+    seedSum += byDate.get(dayToIso(firstDay + i)) ?? 0;
+    rawSeedSum += rawByDate.get(dayToIso(firstDay + i)) ?? 0;
+  }
+  let fitness = seedSum / Math.max(1, seedDays);
+  let fatigue = fitness;
+  let rawFitness = rawSeedSum / Math.max(1, seedDays);
+  let rawFatigue = rawFitness;
   const dF = Math.exp(-1 / FITNESS_TAU);
   const dG = Math.exp(-1 / FATIGUE_TAU);
 
@@ -176,14 +213,28 @@ export function buildFormSeries({ history, todayIso, pastDays = 28, future = [],
   for (let day = firstDay; day <= today + future.length; day++) {
     const iso = dayToIso(day);
     const isFuture = day > today;
-    const load = isFuture ? Math.max(0, future[day - today - 1] ?? 0) : (byDate.get(iso) ?? 0);
+    const futureLoad = isFuture ? Math.max(0, future[day - today - 1] ?? 0) : 0;
+    const load = isFuture ? futureLoad : (byDate.get(iso) ?? 0);
+    const rawLoad = isFuture ? futureLoad : (rawByDate.get(iso) ?? 0);
     const form = fitness - fatigue; // al empezar el día
+    const rawForm = rawFitness - rawFatigue;
+    if (day >= windowStart) {
+      const reading = isFuture ? null : sleepAdjust(checkByDate, iso);
+      points.push({
+        iso,
+        load,
+        fitness,
+        fatigue,
+        form,
+        future: isFuture,
+        energyNoCost: energyOf(rawForm, rawFitness),
+        ...(reading ? { sleep: reading.points, sleepAvg: reading.avgHours, sleepNights: reading.nights } : { sleep: 0 }),
+      });
+    }
     fitness = fitness * dF + load * (1 - dF);
     fatigue = fatigue * dG + load * (1 - dG);
-    if (day >= windowStart) {
-      const check = isFuture ? undefined : checkByDate.get(iso);
-      points.push({ iso, load, fitness, fatigue, form, future: isFuture, checkin: check ? checkInAdjust(check) : 0 });
-    }
+    rawFitness = rawFitness * dF + rawLoad * (1 - dF);
+    rawFatigue = rawFatigue * dG + rawLoad * (1 - dG);
   }
   return { points, todayIndex: points.findIndex((p) => p.iso === todayIso), ready: sessions >= MIN_SESSIONS && spanDays >= MIN_SPAN_DAYS, sessions, spanDays };
 }
@@ -193,7 +244,7 @@ export function buildFormSeries({ history, todayIso, pastDays = 28, future = [],
  * últimas cuatro semanas (así los descansos siguen siendo descansos).
  */
 export function steadyLoads(history: SessionHistoryEntry[], todayIso: string, days: number): number[] {
-  const byDate = new Map(history.map((e) => [e.date, dayStrain(e) ?? 0]));
+  const byDate = new Map(history.map((e) => [e.date, effectiveLoad(e)]));
   return Array.from({ length: days }, (_, i) => {
     const target = isoToDay(todayIso) + i + 1;
     const same: number[] = [];
