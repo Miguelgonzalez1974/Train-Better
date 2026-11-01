@@ -11,11 +11,8 @@ import {
   pointState,
   signed,
   formAdvice,
-  formDecision,
   formMissing,
   formToday,
-  stateByDay,
-  FORM_STATE_WORD,
   type CompetitionWindow,
   type FormSeries,
   type FormState,
@@ -24,7 +21,8 @@ import {
 import { Fold } from '../shell/Fold';
 import { Term } from '../shell/Term';
 import { fmtDay } from './ChartKit';
-import { shortDay, windowCause, type FormModel } from './formModel';
+import { getDayPlan, getWeekdayIndex } from '../../engine/periodization';
+import { nextWindowInfo, shortDay, type FormModel } from './formModel';
 
 const GOOD = 'rgb(var(--c-state-good))';
 const LOW = 'rgb(var(--c-state-low))';
@@ -127,11 +125,14 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
   const idx = useMemo(() => new Map(pts.map((p, i) => [p.iso, i])), [pts]);
   const c0 = comp ? (idx.get(comp.eventStart) ?? -1) : -1;
   const c1 = comp ? (idx.get(comp.eventEnd) ?? c0) : -1;
-  const runs = windows.flatMap((w): Array<[number, number]> => {
+  const runs = windows.flatMap((w): Array<{ a: number; b: number; peak: number }> => {
     const a = idx.get(w.start);
     const b = idx.get(w.end);
-    return a !== undefined && b !== undefined && !(c0 >= 0 && a <= c1 && b >= c0) ? [[a, b]] : [];
+    return a !== undefined && b !== undefined && !(c0 >= 0 && a <= c1 && b >= c0) ? [{ a, b, peak: w.peak }] : [];
   });
+  // Los días en ventana (sin la competición) llevan borde verde, y el mejor día de cada ventana una ★.
+  const inRun = (i: number) => runs.some((r) => i >= r.a && i <= r.b);
+  const peakDays = new Set(windows.map((w) => w.peakIso));
   const today = pts[t];
 
   // La pastilla de la competición: arriba, centrada en su franja y sin salirse del dibujo.
@@ -144,15 +145,22 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img" aria-label={`Tu energía hoy ${today ? `${energy[t]} %` : ''}: dos semanas atrás y la previsión de tu plan, con tus ventanas de supercompensación${comp ? ' y la competición' : ''}.`}>
-      {/* Las ventanas: franjas verdes con su nombre. */}
-      {runs.map(([a, b]) => (
-        <g key={a}>
-          <rect x={x(a) - step / 2} y={P1.y0 - 8} width={(b - a + 1) * step} height={P2.y1 - P1.y0 + 16} rx={7} fill={GOOD} fillOpacity={0.1} />
-          <text x={x(a) + ((b - a) * step) / 2} y={P1.y0 - 14} textAnchor="middle" fontSize={11} fontWeight={700} fill={GOOD}>
-            ventana
-          </text>
-        </g>
-      ))}
+      {/* Las ventanas: una franja verde con un corchete arriba y su nombre con el pico. */}
+      {runs.map(({ a, b, peak }) => {
+        const left = x(a) - step * 0.4;
+        const right = x(b) + step * 0.4;
+        const text = `ventana · ${peak}%`;
+        const tx = Math.min(Math.max((left + right) / 2, PAD.l + text.length * 3.1), W - PAD.r - text.length * 3.1);
+        return (
+          <g key={a}>
+            <rect x={x(a) - step / 2} y={P1.y0 - 8} width={(b - a + 1) * step} height={P2.y1 - P1.y0 + 16} rx={7} fill={GOOD} fillOpacity={0.12} />
+            <path d={`M${left} ${P1.y0 - 10} V${P1.y0 - 16} H${right} V${P1.y0 - 10}`} fill="none" stroke={GOOD} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <text x={tx} y={P1.y0 - 22} textAnchor="middle" fontSize={11} fontWeight={800} fill={GOOD}>
+              {text}
+            </text>
+          </g>
+        );
+      })}
       {/* La competición: franja dorada, línea y su pastilla arriba. */}
       {c0 >= 0 && (
         <g>
@@ -210,6 +218,8 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
                   rx={3}
                   fill={isComp ? GOLD : BAR_TONE[state]}
                   fillOpacity={p.future ? 0.55 : 0.95}
+                  stroke={inRun(i) && !isComp ? GOOD : undefined}
+                  strokeWidth={inRun(i) && !isComp ? 1.5 : undefined}
                 />
                 {adj > 0 && high > low && <rect x={x(i) - bw / 2} y={yBar(high)} width={bw} height={yBar(low) - yBar(high)} rx={3} fill={SLEEP} fillOpacity={0.95} />}
                 {adj < 0 && high > low && <rect x={x(i) - bw / 2 + 0.75} y={yBar(high)} width={bw - 1.5} height={yBar(low) - yBar(high)} rx={3} fill="none" stroke={SLEEP} strokeWidth={1.5} strokeDasharray="3 2" />}
@@ -226,6 +236,7 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
                   strokeWidth={3}
                   paintOrder="stroke"
                 >
+                  {peakDays.has(p.iso) ? '★' : ''}
                   {energy[i]}
                 </text>
               </g>
@@ -261,64 +272,6 @@ function stateOfEnergy(e: number): FormState {
   return e >= ENERGY_TOP ? 'ventana' : e <= ENERGY_LOW ? 'cargado' : 'equilibrio';
 }
 
-const DAY_HEAD = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
-/** Cinco semanas desde el lunes de esta: cada día pintado como a tope (ventana), cansado, competición o normal. */
-function WindowCalendar({ model }: { model: FormModel }) {
-  const { plan, comp, todayIso } = model;
-  const states = useMemo(() => stateByDay(plan), [plan]);
-  const inWindow = useMemo(() => {
-    const set = new Set<string>();
-    for (const w of model.allWindows) {
-      for (let iso = w.start; iso <= w.end; iso = addDays(iso, 1)) set.add(iso);
-    }
-    return set;
-  }, [model.allWindows]);
-  const energyByDay = useMemo(() => new Map(plan.points.map((p) => [p.iso, pointEnergy(p)])), [plan]);
-  const monday = addDays(todayIso, -((new Date(`${todayIso}T12:00:00`).getDay() + 6) % 7));
-  const cells = Array.from({ length: 35 }, (_, i) => addDays(monday, i));
-  return (
-    <div className="grid grid-cols-7 gap-1" role="img" aria-label="Calendario de las próximas cinco semanas con tus ventanas de supercompensación">
-      {DAY_HEAD.map((d) => (
-        <p key={d} className="text-center text-[11px] leading-4 text-neutral-500">
-          {d}
-        </p>
-      ))}
-      {cells.map((iso) => {
-        const isComp = comp && iso >= comp.eventStart && iso <= comp.eventEnd;
-        const past = iso < todayIso;
-        const win = inWindow.has(iso);
-        const tired = !past && states.get(iso) === 'cargado';
-        const style = isComp
-          ? { background: 'rgb(var(--c-brand-gold) / 0.3)', color: GOLD, fontWeight: 700 }
-          : win
-            ? { background: 'rgb(var(--c-state-good) / 0.22)', color: GOOD, fontWeight: 700 }
-            : tired
-              ? { background: 'rgb(var(--c-state-low) / 0.14)', color: LOW }
-              : undefined;
-        const energy = energyByDay.get(iso);
-        // El número del día arriba y su energía (%) debajo, en el color de su estado.
-        const energyColor = isComp ? GOLD : win ? GOOD : tired ? LOW : undefined;
-        return (
-          <div
-            key={iso}
-            className={`num flex h-11 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] leading-none ${style ? '' : 'bg-white/[0.045] text-neutral-400'} ${past ? 'opacity-45' : ''} ${iso === todayIso ? 'outline outline-[1.5px] outline-white/70' : ''}`}
-            style={style}
-            aria-label={`${shortDay(iso)}${energy !== undefined ? `, energía ${energy} %` : ''}${isComp ? ', competición' : win ? ', a tope' : ''}`}
-          >
-            <span className="opacity-80">{dayNum(iso)}</span>
-            {energy !== undefined && (
-              <span className="text-[12px] font-bold" style={energyColor ? { color: energyColor } : undefined}>
-                {energy}%
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /** Un punto de color y su nombre, para la leyenda en una sola línea. */
 function Key({ color, label, shape = 'dot' }: { color: string; label: string; shape?: 'dot' | 'bar' | 'dots' }) {
   return (
@@ -348,23 +301,136 @@ function CalcLine({ label, sub, value, tone, total = false }: { label: string; s
   );
 }
 
-/** Una tarjeta pequeña con una cifra: hoy, la competición o la próxima ventana. */
-function Tile({ label, value, tone, sub }: { label: string; value: string; tone: string; sub: string }) {
+/**
+ * "Tu próxima ventana": la cuenta atrás hasta que se abre (o hasta cuándo dura si ya estás en ella), sus fechas, su pico y un consejo.
+ * Solo la primera ventana: cada una de las siguientes traerá su consejo cuando le toque.
+ */
+function NextWindowCard({ model }: { model: FormModel }) {
+  const info = nextWindowInfo(model);
+  if (!info) {
+    return (
+      <section className="rounded-2xl bg-white/[0.045] p-4" aria-label="Tu próxima ventana">
+        <p className="text-[15px] font-extrabold text-white">Ninguna ventana a la vista</p>
+        <p className="mt-1.5 text-[13px] leading-snug text-neutral-300">Con tu plan no se abre ninguna ventana en las próximas semanas. Se abren tras unos días de menos carga: un descanso, una descarga o un taper.</p>
+      </section>
+    );
+  }
+  const isComp = info.kind === 'competicion';
+  const tone = isComp ? GOLD : GOOD;
+  // La barrita de días hasta que se abre (solo si falta poco: con más, el título ya lo dice).
+  const dots = !info.open && info.daysToOpen <= 14 ? info.daysToOpen + 1 : 0;
   return (
-    <div className="rounded-[14px] bg-white/[0.05] px-2.5 py-2">
-      <p className="text-[11px] text-neutral-400">{label}</p>
-      <p className="num mt-0.5 text-lg font-extrabold leading-tight" style={{ color: tone }}>
-        {value}
+    <section
+      className="rounded-2xl border p-4"
+      style={{ borderColor: `color-mix(in srgb, ${tone} 30%, transparent)`, background: `linear-gradient(160deg, color-mix(in srgb, ${tone} 14%, transparent), color-mix(in srgb, ${tone} 3%, transparent))` }}
+      aria-label="Tu próxima ventana"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[17px] font-extrabold leading-tight text-white">{info.title}</p>
+          <p className="mt-1.5 text-[12px] leading-snug text-neutral-300">{info.detail}</p>
+        </div>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `color-mix(in srgb, ${tone} 18%, transparent)`, color: tone }}>
+          {isComp ? <Trophy size={18} strokeWidth={2.25} aria-hidden="true" /> : <TrendingUp size={18} strokeWidth={2.25} aria-hidden="true" />}
+        </span>
+      </div>
+      {dots > 0 && (
+        <div className="mt-3 flex items-center gap-1" aria-hidden="true">
+          {Array.from({ length: dots }, (_, i) => (
+            <span key={i} className="h-2 flex-1 rounded-full" style={{ background: i === dots - 1 ? tone : i === 0 ? 'rgb(var(--c-white) / 0.5)' : 'rgb(var(--c-white) / 0.12)' }} />
+          ))}
+        </div>
+      )}
+      <p className="mt-3 flex items-start gap-2 text-[13px] leading-snug text-neutral-200">
+        <Sparkles size={14} className="mt-0.5 shrink-0 text-brand-gold" aria-hidden="true" />
+        <span>{info.advice}</span>
       </p>
-      <p className="truncate text-[11px] text-neutral-400">{sub}</p>
-    </div>
+    </section>
+  );
+}
+
+const RIBBON = { W: 340, H: 196, pl: 8, pr: 8, top: 22, bottom: 176 };
+
+/**
+ * La cinta de 5 semanas: tu energía prevista como una línea, las ventanas como columnas verdes (la competición en dorado) con su pico y
+ * sus fechas debajo, y los entrenos de tu plan como puntos (verdes si caen dentro de una ventana). Para ver de un vistazo cuándo vuelve
+ * a abrirse una ventana y cuánto dura; más allá de dos semanas es orientativo.
+ */
+function FormRibbon({ model }: { model: FormModel }) {
+  const { plan, comp, todayIso } = model;
+  const pts = useMemo(() => plan.points.slice(plan.todayIndex, plan.todayIndex + 35), [plan]);
+  const n = pts.length;
+  const { W, H, pl, pr, top, bottom } = RIBBON;
+  const dx = (W - pl - pr) / Math.max(1, n);
+  const x = (i: number) => pl + i * dx;
+  const yE = (v: number) => 96 - v * 0.58;
+  const energy = pts.map((p) => pointEnergy(p));
+  const idx = useMemo(() => new Map(pts.map((p, i) => [p.iso, i])), [pts]);
+  const wins = model.windows.flatMap((w) => {
+    const a = Math.max(0, idx.get(w.start) ?? (w.start < todayIso ? 0 : -1));
+    const b = idx.get(w.end) ?? (w.end > (pts[n - 1]?.iso ?? '') ? n - 1 : -1);
+    return a >= 0 && b >= 0 ? [{ w, a, b, comp: Boolean(comp && w.start <= comp.eventEnd && w.end >= addDays(comp.eventStart, -2) && w.start >= addDays(comp.eventStart, -2)) }] : [];
+  });
+  const inWin = (i: number) => wins.find((q) => i >= q.a && i <= q.b);
+  const mondays = pts.map((p, i) => ({ p, i })).filter(({ p }) => new Date(`${p.iso}T12:00:00`).getDay() === 1);
+  const range = (a: number, b: number) => (a === b ? `${dayNum(pts[a].iso)}` : `${dayNum(pts[a].iso)}–${dayNum(pts[b].iso)}`);
+  const line = pts.map((_, i) => `${(x(i) + dx / 2).toFixed(1)},${yE(energy[i]).toFixed(1)}`);
+  const label = (a: number, b: number) => Math.min(Math.max(x(a) + ((b - a + 1) * dx) / 2, 24), W - 24);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full overflow-visible" role="img" aria-label="Tus próximas cinco semanas: energía prevista, ventanas de supercompensación y entrenos de tu plan">
+      {mondays.map(({ p, i }) => (
+        <g key={p.iso}>
+          <line x1={x(i)} x2={x(i)} y1={top} y2={bottom} stroke={INK} strokeOpacity={0.07} />
+          <text x={x(i) + 3} y={14} fontSize={11} className="fill-neutral-500">
+            {fmtDay(p.iso)}
+          </text>
+        </g>
+      ))}
+      {wins.map(({ w, a, b, comp: isComp }) => (
+        <rect key={w.start} x={x(a)} y={top} width={(b - a + 1) * dx} height={bottom - top} rx={6} fill={isComp ? GOLD : GOOD} fillOpacity={isComp ? 0.2 : 0.13} />
+      ))}
+      <path d={`M${x(0) + dx / 2},96 L${line.join(' L')} L${x(n - 1) + dx / 2},96 Z`} fill={INK} fillOpacity={0.07} />
+      <path d={`M${line.join(' L')}`} fill="none" stroke={INK} strokeOpacity={0.75} strokeWidth={1.8} strokeLinejoin="round" />
+      <line x1={pl} x2={W - pr} y1={yE(ENERGY_TOP)} y2={yE(ENERGY_TOP)} stroke={GOOD} strokeOpacity={0.5} strokeDasharray="2 3" />
+      <text x={W - pr - 2} y={yE(ENERGY_TOP) - 3} textAnchor="end" fontSize={11} fontWeight={700} fill={GOOD}>
+        a tope
+      </text>
+      <text x={pl + 2} y={118} fontSize={11} className="fill-neutral-500">
+        entrenos del plan
+      </text>
+      {pts.map((p, i) => {
+        if (!getDayPlan(getWeekdayIndex(new Date(`${p.iso}T12:00:00`)), model.trainingDaysPerWeek).isTrainingDay) return null;
+        const q = inWin(i);
+        return <circle key={p.iso} cx={x(i) + dx / 2} cy={134} r={3.4} fill={q ? (q.comp ? GOLD : GOOD) : INK} fillOpacity={q ? 1 : 0.42} />;
+      })}
+      {wins.map(({ w, a, b, comp: isComp }) => {
+        const c = isComp ? GOLD : GOOD;
+        return (
+          <g key={`b${w.start}`}>
+            <rect x={x(a) + 1} y={148} width={(b - a + 1) * dx - 2} height={8} rx={4} fill={c} />
+            <text x={label(a, b)} y={170} textAnchor="middle" fontSize={12} fontWeight={800} fill={c}>
+              {w.peak}%
+            </text>
+            <text x={label(a, b)} y={183} textAnchor="middle" fontSize={11} className="fill-neutral-400">
+              {range(a, b)}
+            </text>
+          </g>
+        );
+      })}
+      <line x1={x(0) + dx / 2} x2={x(0) + dx / 2} y1={top} y2={bottom} stroke={INK} strokeOpacity={0.6} strokeDasharray="3 3" />
+      <circle cx={x(0) + dx / 2} cy={yE(energy[0])} r={4} fill={INK} />
+      <text x={x(0) + dx / 2 + 4} y={34} fontSize={11} fontWeight={800} className="fill-white">
+        hoy
+      </text>
+    </svg>
   );
 }
 
 /**
- * La ventana "Tu forma", en forma de batería: arriba cuánta energía tienes hoy y qué hacer según tu plan; después el gráfico de dos
- * paneles (curvas y barras de energía), tres cifras clave, las próximas ventanas con su motivo y un calendario de cinco semanas para ver
- * cuándo vuelve a abrirse. Todo sale de tus sesiones y de tu plan: es una estimación y, pasadas dos semanas, orientativa.
+ * La ventana "Tu forma", en forma de batería: arriba cuánta energía tienes hoy (con de dónde sale y qué hacer), después cuándo se abre tu
+ * próxima ventana con su consejo, el gráfico de dos semanas (curvas y barras de energía) y la cinta de cinco semanas con las
+ * ventanas que vienen. Todo sale de tus sesiones, tu check-in y tu plan: es una estimación y, pasadas dos semanas, orientativa.
  */
 export function FormView({ model, onOpenMorning }: { model: FormModel; onOpenMorning?: () => void }) {
   const { plan, comp, todayIso } = model;
@@ -386,12 +452,6 @@ export function FormView({ model, onOpenMorning }: { model: FormModel; onOpenMor
   }
 
   const tone = FORM_TONE[today.state];
-  const windows = model.windows.slice(0, 3);
-  // La próxima ventana que no es la de la competición (esa ya tiene su propia tarjeta).
-  const upcoming = model.windows.find((w) => windowCause(w, model).kind !== 'competicion');
-  const week = plan.points[plan.todayIndex + 7];
-  const weekEnergy = week ? pointEnergy(week) : null;
-  const atEvent = comp ? plan.points.find((p) => p.iso === comp.eventStart && p.future) : undefined;
   const todayPoint = plan.points[plan.todayIndex];
   const prevPoint = plan.todayIndex > 0 ? plan.points[plan.todayIndex - 1] : undefined;
   const baseToday = energyOf(todayPoint.form, todayPoint.fitness);
@@ -401,21 +461,18 @@ export function FormView({ model, onOpenMorning }: { model: FormModel; onOpenMor
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Cuánta energía tienes y qué hacer, en una tarjeta con su batería. */}
+      {/* Cuánta energía tienes hoy, de dónde sale y qué hacer hoy. */}
       <section className="rounded-2xl border border-brand-gold/25 bg-gradient-to-br from-brand-gold/[0.13] to-brand-gold/[0.03] p-4" aria-label="Tu energía hoy">
         <div className="flex items-center gap-3.5">
           <Battery value={today.value} tone={tone} />
-          <div className="min-w-0">
-            <p className="flex items-baseline gap-2">
-              <span className="num text-4xl font-extrabold leading-none" style={{ color: tone }}>
-                {today.value}%
-              </span>
-              <span className="text-sm font-bold" style={{ color: tone }}>
-                {today.title} hoy
-              </span>
-            </p>
-            <p className="mt-1.5 text-[13px] font-semibold leading-snug text-white">{formDecision(plan, comp, todayIso)}</p>
-          </div>
+          <p className="flex items-baseline gap-2">
+            <span className="num text-4xl font-extrabold leading-none" style={{ color: tone }}>
+              {today.value}%
+            </span>
+            <span className="text-sm font-bold" style={{ color: tone }}>
+              {today.title} hoy
+            </span>
+          </p>
         </div>
         {/* De dónde sale el número: la carga acumulada y, si has hecho el check-in, lo que suma o resta. */}
         <div className="mt-3 flex flex-col gap-2 border-t border-white/[0.08] pt-3">
@@ -462,6 +519,8 @@ export function FormView({ model, onOpenMorning }: { model: FormModel; onOpenMor
         </section>
       )}
 
+      <NextWindowCard model={model} />
+
       <section aria-label="Gráfico de energía">
         <div role="group" aria-label="Qué ver" className="mb-3 flex rounded-full bg-white/[0.06] p-0.5 text-xs font-semibold">
           {([['energia', 'Energía'], ['fisica', 'Forma física y fatiga']] as const).map(([m, text]) => (
@@ -493,55 +552,17 @@ export function FormView({ model, onOpenMorning }: { model: FormModel; onOpenMor
             </>
           )}
           {comp && <Key color={GOLD} label="competición" shape="bar" />}
-          <span>{mode === 'energia' ? 'barras claras = previsión de tu plan' : 'puntos = previsión de tu plan'}</span>
+          <span>{mode === 'energia' ? 'barras claras = previsión · ★ mejor día de la ventana' : 'puntos = previsión de tu plan'}</span>
         </div>
       </section>
 
-      {/* Tres cifras clave: hoy, la competición (o dentro de una semana) y la próxima ventana. */}
-      <div className="grid grid-cols-3 gap-2">
-        <Tile label="Hoy" value={`${today.value}%`} tone={tone} sub={FORM_STATE_WORD[today.state]} />
-        {atEvent && comp ? (
-          <Tile label="Competición" value={`${pointEnergy(atEvent)}%`} tone={GOLD} sub={shortDay(comp.eventStart).split(' ').slice(1).join(' ')} />
-        ) : (
-          <Tile label="En 7 días" value={weekEnergy !== null ? `${weekEnergy}%` : '—'} tone={week ? FORM_TONE[stateOfEnergy(weekEnergy ?? 0)] : INK} sub={week ? shortDay(week.iso).split(' ').slice(1).join(' ') : 'sin previsión'} />
-        )}
-        <Tile
-          label="Próxima ventana"
-          value={upcoming ? `${upcoming.peak}%` : '—'}
-          tone={upcoming ? GOOD : INK}
-          sub={upcoming ? (upcoming.start === upcoming.end ? `${dayNum(upcoming.start)} ${shortDay(upcoming.start).split(' ').pop()}` : `${dayNum(upcoming.start)}–${dayNum(upcoming.end)} ${shortDay(upcoming.end).split(' ').pop()}`) : 'ninguna aún'}
-        />
-      </div>
-
-      {/* Cuándo vuelve: las próximas ventanas con su motivo, y el calendario de cinco semanas. */}
-      <section aria-label="Próximas ventanas" className="rounded-2xl bg-white/[0.035] px-4 pb-4 pt-3.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">Próximas ventanas</p>
-        {windows.length > 0 ? (
-          <ul>
-            {windows.map((w) => {
-              const cause = windowCause(w, model);
-              const isComp = cause.kind === 'competicion';
-              return (
-                <li key={w.start} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-white/[0.07] py-2.5 last:border-b-0">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: isComp ? 'rgb(var(--c-brand-gold) / 0.18)' : 'rgb(var(--c-state-good) / 0.14)', color: isComp ? GOLD : GOOD }}>
-                    {isComp ? <Trophy size={16} strokeWidth={2.25} aria-hidden="true" /> : <TrendingUp size={16} strokeWidth={2.25} aria-hidden="true" />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold text-white">{w.start === w.end ? shortDay(w.start) : `${shortDay(w.start)} → ${shortDay(w.end)}`}</span>
-                    <span className="block text-[11px] leading-snug text-neutral-400">{cause.label}</span>
-                  </span>
-                  <span className="num text-right text-base font-extrabold leading-none" style={{ color: isComp ? GOLD : GOOD }}>
-                    {w.peak}%
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="mt-2 text-[13px] leading-relaxed text-neutral-300">Con tu plan no se abre ninguna ventana en las próximas semanas.</p>
-        )}
-        <div className="mt-2.5">
-          <WindowCalendar model={model} />
+      <section aria-label="Las próximas semanas" className="rounded-2xl bg-white/[0.035] px-4 pb-4 pt-3.5">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">Cinta de ventanas · 5 semanas</p>
+        <FormRibbon model={model} />
+        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-400">
+          <Key color={GOOD} label="ventana" shape="bar" />
+          {comp && <Key color={GOLD} label="competición" shape="bar" />}
+          <span>● entreno de tu plan (en color si cae en ventana)</span>
         </div>
         <p className="mt-2 text-[11px] leading-snug text-neutral-500">Pasadas dos semanas es orientativo: cambia según cómo entrenes.</p>
       </section>
@@ -549,7 +570,7 @@ export function FormView({ model, onOpenMorning }: { model: FormModel; onOpenMor
       <Fold title="Cómo se calcula">
         <p className="text-xs leading-relaxed text-neutral-400">
           Cada sesión suma a tu <Term k="fitness">forma física</Term>, que sube y baja despacio, y a tu fatiga, que lo hace deprisa (míralas en la vista «Forma física y fatiga»). Tu forma es la diferencia, y la energía es esa forma pasada a una escala de 0 a 100: a tope desde el {ENERGY_TOP} %, cansado hasta el {ENERGY_LOW} %. Entrenando siempre igual oscilas entre el 30 y el 70 % según el día de la semana; solo llegas a tope cuando bajas la carga unos días. Cuando la fatiga cae antes que la forma física queda un hueco a tu favor, la ventana de{' '}
-          <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Solo cuenta lo que apuntas: si haces bici, entrenos de equipo u otro deporte y no lo registras (vale «Registrar este día» con su RPE y duración), el cálculo te verá más descansado de lo que estás. Además, el check-in de cada mañana suma o resta hasta {CHECKIN_MAX_ADJUST} puntos a la energía de ese día (sueño, agujetas, estrés y ánimo; en morado en el gráfico): una buena noche no borra una semana dura, pero se nota. La previsión de los días que vienen no lo incluye, porque aún no sabe cómo dormirás. Es una estimación.
+          <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Solo cuenta lo que apuntas: si haces bici, entrenos de equipo u otro deporte y no lo registras (vale «Registrar este día» con su RPE y duración), el cálculo te verá más descansado de lo que estás. Además, el check-in de cada mañana suma o resta hasta {CHECKIN_MAX_ADJUST} puntos a la energía de ese día (sueño, agujetas, estrés y ánimo; en morado en el gráfico): una buena noche no borra una semana dura, pero se nota. La previsión de los días que vienen no lo incluye, porque aún no sabes cómo dormirás. Es una estimación.
         </p>
       </Fold>
     </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, type FormSeries, type FormWindow } from '../../engine/formCurve';
 import type { LoadTag } from '../../engine/formPlan';
-import { formRowNote, windowCause, type FormModel } from './formModel';
+import { formRowNote, nextWindowInfo, windowCause, type FormModel } from './formModel';
 
 const TODAY = '2026-10-31';
 const plan: FormSeries = { points: [], todayIndex: 0, ready: true, sessions: 20, spanDays: 40 };
@@ -9,7 +9,7 @@ const win = (start: number, end: number, peak = 10): FormWindow => ({ start: add
 
 function model(over: Partial<FormModel> = {}): FormModel {
   const windows = over.windows ?? [];
-  return { todayIso: TODAY, comp: null, plan, windows, allWindows: over.allWindows ?? windows, tags: new Map<string, LoadTag>(), ...over };
+  return { todayIso: TODAY, comp: null, plan, windows, allWindows: over.allWindows ?? windows, tags: new Map<string, LoadTag>(), trainingDaysPerWeek: 4, ...over };
 }
 
 describe('formRowNote', () => {
@@ -30,6 +30,53 @@ describe('formRowNote', () => {
   it('si la próxima ventana es la de la competición lo dice', () => {
     const comp = { eventStart: addDays(TODAY, 6), eventEnd: addDays(TODAY, 7) };
     expect(formRowNote(model({ comp, windows: [win(5, 6)] }))).toMatch(/^Llegas en ventana a la competición · /);
+  });
+});
+
+describe('nextWindowInfo', () => {
+  const comp = { eventStart: addDays(TODAY, 6), eventEnd: addDays(TODAY, 7) };
+
+  it('sin ventanas no hay tarjeta', () => {
+    expect(nextWindowInfo(model())).toBeNull();
+  });
+
+  it('antes de abrirse: cuenta atrás y consejo de esperar', () => {
+    const info = nextWindowInfo(model({ windows: [win(4, 7)] }))!;
+    expect(info.open).toBe(false);
+    expect(info.daysToOpen).toBe(4);
+    expect(info.title).toBe('Tu próxima ventana se abre en 4 días');
+    expect(info.advice).toMatch(/aprieta tus sesiones más exigentes/);
+    expect(nextWindowInfo(model({ windows: [win(1, 3)] }))!.title).toBe('Tu próxima ventana se abre mañana');
+  });
+
+  it('con la ventana abierta dice hasta cuándo y aconseja apretar', () => {
+    const info = nextWindowInfo(model({ windows: [win(-1, 3)] }))!;
+    expect(info.open).toBe(true);
+    expect(info.daysToOpen).toBe(0);
+    expect(info.title).toMatch(/^Estás en ventana hasta el /);
+    expect(info.advice).toMatch(/apriétala ahora/);
+    expect(nextWindowInfo(model({ windows: [win(-2, 0)] }))!.title).toBe('Estás en ventana: es el último día');
+  });
+
+  it('la ventana de la competición aconseja no añadir carga', () => {
+    const before = nextWindowInfo(model({ comp, windows: [win(5, 7)] }))!;
+    expect(before.kind).toBe('competicion');
+    expect(before.advice).toMatch(/sin carga extra/);
+    // El día de la competición (hoy = su primer día) con la ventana abierta: dosifica y disfruta.
+    const during = nextWindowInfo(model({ comp, windows: [win(5, 7)], todayIso: addDays(TODAY, 6) }))!;
+    expect(during.open).toBe(true);
+    expect(during.advice).toMatch(/Hoy compites/);
+  });
+
+  it('una ventana lejana se anuncia como orientativa', () => {
+    expect(nextWindowInfo(model({ windows: [win(20, 23)] }))!.advice).toMatch(/orientativo/);
+    expect(nextWindowInfo(model({ windows: [win(5, 8)] }))!.advice).not.toMatch(/orientativo/);
+  });
+
+  it('el detalle lleva las fechas, el pico y el motivo', () => {
+    const info = nextWindowInfo(model({ windows: [win(4, 7, 82)] }))!;
+    expect(info.detail).toMatch(/hasta el 82 % de energía/);
+    expect(info.detail).toMatch(/Tras unos días de menos carga/);
   });
 });
 

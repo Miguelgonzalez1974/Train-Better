@@ -19,6 +19,8 @@ export interface FormModel {
   tags: Map<string, LoadTag>;
   /** El check-in de hoy, si lo has hecho (suma o resta a la energía de hoy). */
   todayCheck?: ReadinessCheck;
+  /** Días de entreno a la semana del plan (para marcar en la cinta los entrenos que caen dentro de una ventana). */
+  trainingDaysPerWeek: AthleteProfile['trainingDaysPerWeek'];
 }
 
 /** Todo lo que necesitan la fila "Tu forma" y su ventana: el plan, las ventanas y la competición. */
@@ -31,7 +33,7 @@ export function buildFormModel(profile: AthleteProfile, history: SessionHistoryE
   const tags = new Map<string, LoadTag>();
   projection.tags.forEach((t, i) => t && tags.set(addDays(todayIso, i + 1), t));
   const todayCheck = getReadinessCheckForDate(profile.readinessLog, todayIso);
-  return { todayIso, comp, plan, windows: formWindows(plan, todayIso, comp?.eventStart), allWindows: formWindows(plan, undefined, comp?.eventStart), tags, todayCheck };
+  return { todayIso, comp, plan, windows: formWindows(plan, todayIso, comp?.eventStart), allWindows: formWindows(plan, undefined, comp?.eventStart), tags, todayCheck, trainingDaysPerWeek: profile.trainingDaysPerWeek };
 }
 
 /** "jue 5 nov". */
@@ -52,6 +54,50 @@ export function formRowNote(model: FormModel): string | null {
   if (windowCause(next, model).kind === 'competicion') return `Llegas en ventana a la competición · ${shortDay(next.start)}`;
   const days = daysBetween(todayIso, next.start);
   return `Próxima ventana ${days === 1 ? 'mañana' : `en ${days} días`} · ${shortDay(next.start)}`;
+}
+
+/** La tarjeta "Tu próxima ventana": cuenta atrás y un consejo; solo la de la primera ventana, las demás traerán el suyo cuando toque. */
+export interface NextWindowInfo {
+  window: FormWindow;
+  open: boolean;
+  /** Días hasta que se abre (0 si ya está abierta). */
+  daysToOpen: number;
+  kind: 'competicion' | 'normal';
+  title: string;
+  detail: string;
+  advice: string;
+}
+
+/** Más allá de estos días la previsión es orientativa y la tarjeta lo dice. */
+const FAR_DAYS = 14;
+
+export function nextWindowInfo(model: FormModel): NextWindowInfo | null {
+  const { todayIso, windows, comp } = model;
+  const w = windows[0];
+  if (!w) return null;
+  const open = w.start <= todayIso;
+  const { kind, label } = windowCause(w, model);
+  const daysToOpen = open ? 0 : daysBetween(todayIso, w.start);
+  const range = w.start === w.end ? shortDay(w.start) : `${shortDay(w.start)} → ${shortDay(w.end)}`;
+  const title = open
+    ? w.end === todayIso
+      ? 'Estás en ventana: es el último día'
+      : `Estás en ventana hasta el ${shortDay(w.end)}`
+    : `Tu próxima ventana se abre ${daysToOpen === 1 ? 'mañana' : `en ${daysToOpen} días`}`;
+  const detail = `${range} · hasta el ${w.peak} % de energía · ${label}`;
+  const eventToday = comp && todayIso >= comp.eventStart && todayIso <= comp.eventEnd;
+  let advice: string;
+  if (kind === 'competicion') {
+    advice = eventToday
+      ? 'Hoy compites: dosifica y disfruta.'
+      : open
+        ? 'Estás a tope para la competición: no añadas carga y duerme bien.'
+        : 'Llegas a tope a la competición: sin carga extra y a dormir bien hasta entonces.';
+  } else {
+    advice = open ? 'Es tu momento: si el plan trae una sesión exigente, apriétala ahora.' : 'Cuando se abra, aprieta tus sesiones más exigentes. Hasta entonces, sigue el plan y duerme bien.';
+  }
+  if (daysToOpen > FAR_DAYS) advice += ' Aún queda: es orientativo.';
+  return { window: w, open, daysToOpen, kind, title, detail, advice };
 }
 
 /** Por qué se abre una ventana, en palabras del atleta: mira las causas de los días justo antes de abrirse y, si no hay, un descanso. */

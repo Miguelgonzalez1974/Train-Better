@@ -229,13 +229,6 @@ export function planLoads(steady: number[], todayIso: string, comp: CompetitionW
 
 /** Cuántos días por delante se calculan (cinco semanas: lo que enseña el calendario de ventanas). */
 export const FORECAST_DAYS = 35;
-/** Hasta cuántos días por delante se mira para decir "tu próxima ventana" sin competición (más allá es solo orientativo). */
-const NEAR_DAYS = 14;
-
-const MONTH = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-/** "6 de noviembre". */
-export const longDate = (iso: string) => `${Number(iso.slice(8, 10))} de ${MONTH[Number(iso.slice(5, 7)) - 1]}`;
-
 // ---------------------------------------------------------------------------------------------
 // Las ventanas: cuándo se abren (y vuelven a abrirse)
 // ---------------------------------------------------------------------------------------------
@@ -281,11 +274,6 @@ export function formWindows(series: FormSeries, afterIso?: string, keepIso?: str
   return afterIso ? out.filter((w) => w.end > afterIso) : out;
 }
 
-/** El estado de cada día de la serie, por fecha (para pintar el calendario de ventanas). */
-export function stateByDay(series: FormSeries): Map<string, FormState> {
-  return new Map(series.points.map((p) => [p.iso, pointState(p)]));
-}
-
 // ---------------------------------------------------------------------------------------------
 // Lo que se cuenta al atleta
 // ---------------------------------------------------------------------------------------------
@@ -306,8 +294,6 @@ const SENTENCE: Record<FormState, string> = {
   equilibrio: 'Ni a tope ni cansado: sigue el plan del día.',
   cargado: 'Estás cansado: un día suave y recuperas energía.',
 };
-export const FORM_STATE_WORD: Record<FormState, string> = { ventana: 'a tope', equilibrio: 'normal', cargado: 'cansado' };
-
 export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(Math.round(n))}`;
 
 /** La energía de hoy; null si no hay datos suficientes (la fila dice cuánto falta). */
@@ -323,33 +309,6 @@ export function formMissing(series: FormSeries): { sessions: number; days: numbe
   return { sessions: Math.max(0, MIN_SESSIONS - series.sessions), days: Math.max(0, MIN_SPAN_DAYS - series.spanDays) };
 }
 
-/** Cómo llegas el primer día de la competición con una serie, si ese día está en la previsión. */
-export function atCompetition(series: FormSeries, comp: CompetitionWindow | null): { energy: number; state: FormState } | null {
-  if (!comp) return null;
-  const p = series.points.find((x) => x.iso === comp.eventStart && x.future);
-  return p ? { energy: pointEnergy(p), state: pointState(p) } : null;
-}
-
-/**
- * La frase de decisión de la ventana, sobre tu plan. Con una competición cerca: cómo llegas el primer día y qué hacer. Sin competición:
- * cuándo se abre tu próxima ventana.
- */
-export function formDecision(plan: FormSeries, comp: CompetitionWindow | null, todayIso: string): string {
-  const atEvent = atCompetition(plan, comp);
-  if (comp && atEvent) {
-    const lead = `llegas el ${longDate(comp.eventStart)} con el ${atEvent.energy} % de energía, ${FORM_STATE_WORD[atEvent.state]}`;
-    if (atEvent.state === 'ventana') return `Sigue el plan: ${lead}.`;
-    if (atEvent.state === 'cargado') return `Con tu plan ${lead}: no añadas carga extra estos días.`;
-    return `Con tu plan ${lead}: respeta el taper y duerme bien.`;
-  }
-  const next = formWindows(plan, todayIso)[0];
-  if (next) {
-    if (next.start <= todayIso) return `Tu ventana está abierta hasta el ${longDate(next.end)}: buen momento para empujar.`;
-    const far = next.start > addDays(todayIso, NEAR_DAYS) ? ' (aún lejos: orientativo)' : '';
-    return `Tu próxima ventana va del ${longDate(next.start)} al ${longDate(next.end)}, con hasta el ${next.peak} % de energía${far}.`;
-  }
-  return 'Con tu plan no se abre ninguna ventana en las próximas semanas.';
-}
 /** Qué hacer hoy, en una línea: según cómo estás y, si hay competición, en qué punto de la cuenta atrás. */
 export function formAdvice(state: FormState, comp: CompetitionWindow | null, todayIso: string): string {
   if (comp && todayIso >= comp.eventStart && todayIso <= comp.eventEnd) return 'Hoy compites: la forma ya está hecha. Dosifica y disfruta.';

@@ -11,7 +11,6 @@ import {
   formAdvice,
   pointEnergy,
   pointState,
-  formDecision,
   formStateOf,
   formToday,
   formWindows,
@@ -286,37 +285,8 @@ describe('formWindows', () => {
   });
 });
 
-describe('formDecision y formAdvice', () => {
+describe('formAdvice', () => {
   const comp: CompetitionWindow = { eventStart: addDays(TODAY, 6), eventEnd: addDays(TODAY, 7) };
-  const history = steadyHistory(8, 8);
-  const base = steadyLoads(history, TODAY, 9);
-  const plan = buildFormSeries({ history, todayIso: TODAY, future: planLoads(base, TODAY, comp, 0.6) });
-
-  it('con competición dice cómo llegas el primer día y qué hacer', () => {
-    const text = formDecision(plan, comp, TODAY);
-    expect(text).toContain('el 6 de noviembre');
-    expect(text).toMatch(/\d+ % de energía/);
-    expect(text).toMatch(/^(Sigue el plan|Con tu plan)/);
-    expect(text).not.toMatch(/si no bajas/);
-  });
-
-  it('sin competición anuncia la próxima ventana o dice que no hay ninguna', () => {
-    const future = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    const rested = buildFormSeries({ history: steadyHistory(10, 8).filter((e) => e.date < addDays(TODAY, -6)), todayIso: TODAY, future });
-    expect(formDecision(rested, null, TODAY)).toMatch(/ventana/);
-    const hard = buildFormSeries({ history: steadyHistory(10, 8), todayIso: TODAY, future: [60, 60, 60, 60, 60, 60, 60, 60, 60, 60] });
-    expect(formDecision(hard, null, TODAY)).toMatch(/no se abre ninguna ventana/);
-  });
-
-  it('una ventana lejana se anuncia como orientativa', () => {
-    const future = [...Array.from({ length: 22 }, () => 70), ...Array.from({ length: 12 }, () => 0)];
-    const s = buildFormSeries({ history: steadyHistory(10, 8), todayIso: TODAY, future });
-    const next = formWindows(s, TODAY)[0];
-    expect(next).toBeDefined();
-    const text = formDecision(s, null, TODAY);
-    expect(text).toContain('Tu próxima ventana va del');
-    expect(text.includes('orientativo')).toBe(next.start > addDays(TODAY, 14));
-  });
 
   it('el consejo de hoy cambia con el estado y con la cuenta atrás', () => {
     expect(formAdvice('ventana', null, TODAY)).toMatch(/apretarla/);
