@@ -71,7 +71,8 @@ export interface FormSeries {
 }
 
 const DAY_MS = 86_400_000;
-const isoToDay = (iso: string) => Math.round(new Date(`${iso}T12:00:00`).getTime() / DAY_MS);
+/** El número de día de una fecha ISO, exacto en cualquier zona horaria (con `Date.UTC`, no con el mediodía local, que en UTC redondea mal). */
+const isoToDay = (iso: string) => Math.round(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / DAY_MS);
 function dayToIso(day: number): string {
   const d = new Date(day * DAY_MS);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
