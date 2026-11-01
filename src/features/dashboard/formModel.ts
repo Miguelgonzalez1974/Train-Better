@@ -1,4 +1,5 @@
-import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
+import { getReadinessCheckForDate } from '../../engine/readiness';
 import { TAPER_PARAMS } from '../../engine/competition';
 import { resolveCompetitionDay } from '../../engine/taperPlan';
 import { FORECAST_DAYS, addDays, buildFormSeries, formWindows, type CompetitionWindow, type FormSeries, type FormWindow } from '../../engine/formCurve';
@@ -16,6 +17,8 @@ export interface FormModel {
   allWindows: FormWindow[];
   /** Qué explica la carga de cada día que viene (taper, competición, recuperación, descarga). */
   tags: Map<string, LoadTag>;
+  /** El check-in de hoy, si lo has hecho (suma o resta a la energía de hoy). */
+  todayCheck?: ReadinessCheck;
 }
 
 /** Todo lo que necesitan la fila "Tu forma" y su ventana: el plan, las ventanas y la competición. */
@@ -24,10 +27,11 @@ export function buildFormModel(profile: AthleteProfile, history: SessionHistoryE
   const comp: CompetitionWindow | null = day && day.phase !== 'post' ? { eventStart: day.eventStart, eventEnd: day.eventEnd } : null;
   const taperScale = TAPER_PARAMS[day?.taperKind ?? 'estandar'].volumeScale;
   const projection = projectPlan({ profile, history, todayIso, days: FORECAST_DAYS, comp, taperScale });
-  const plan = buildFormSeries({ history, todayIso, future: projection.loads });
+  const plan = buildFormSeries({ history, todayIso, future: projection.loads, checks: profile.readinessLog });
   const tags = new Map<string, LoadTag>();
   projection.tags.forEach((t, i) => t && tags.set(addDays(todayIso, i + 1), t));
-  return { todayIso, comp, plan, windows: formWindows(plan, todayIso, comp?.eventStart), allWindows: formWindows(plan, undefined, comp?.eventStart), tags };
+  const todayCheck = getReadinessCheckForDate(profile.readinessLog, todayIso);
+  return { todayIso, comp, plan, windows: formWindows(plan, todayIso, comp?.eventStart), allWindows: formWindows(plan, undefined, comp?.eventStart), tags, todayCheck };
 }
 
 /** "jue 5 nov". */

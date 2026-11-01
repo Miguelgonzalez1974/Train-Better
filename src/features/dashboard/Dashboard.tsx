@@ -351,7 +351,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       )}
       {formOpen && (
         <Modal open onClose={() => setFormOpen(false)} title="Tu forma">
-          <FormView model={formModel} />
+          <FormView
+            model={formModel}
+            onOpenMorning={() => {
+              setFormOpen(false);
+              onOpenMorning();
+            }}
+          />
         </Modal>
       )}
       {showLoad && (

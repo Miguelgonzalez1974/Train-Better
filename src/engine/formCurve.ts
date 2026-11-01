@@ -12,7 +12,9 @@
  * Es una ESTIMACIÓN a partir de tus sesiones, no una medición: los tiempos son los típicos, no los tuyos, y el check-in de cada mañana
  * (la preparación) manda sobre ella. Por eso se enseña como orientación y con la previsión punteada.
  */
-import type { SessionHistoryEntry } from '../data/athlete/types';
+import type { ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
+import { formatSleep } from './habits';
+import { scoreCheck } from './readiness';
 import { dayStrain } from './strain';
 
 export const FITNESS_TAU = 42;
@@ -49,6 +51,8 @@ export interface FormPoint {
   /** Forma al empezar el día: forma física menos fatiga, sin la carga de ese día. */
   form: number;
   future: boolean;
+  /** Lo que suma (o resta) a la energía el check-in de ese día, en puntos (0 sin check-in; los días futuros no tienen). */
+  checkin?: number;
 }
 
 export interface FormSeries {
@@ -75,10 +79,56 @@ export function energyOf(form: number, fitness: number): number {
   return Math.max(0, Math.min(100, Math.round(ENERGY_BASE + rel * ENERGY_SCALE)));
 }
 
-/** El estado de un día según su energía: a tope (ventana), cansado (cargado) o normal (equilibrio). */
+const stateOfEnergy = (energy: number): FormState => (energy >= ENERGY_TOP ? 'ventana' : energy <= ENERGY_LOW ? 'cargado' : 'equilibrio');
+
+/** El estado de un día según la energía de su carga: a tope (ventana), cansado (cargado) o normal (equilibrio). */
 export function formStateOf(form: number, fitness: number): FormState {
-  const energy = energyOf(form, fitness);
-  return energy >= ENERGY_TOP ? 'ventana' : energy <= ENERGY_LOW ? 'cargado' : 'equilibrio';
+  return stateOfEnergy(energyOf(form, fitness));
+}
+
+// ---------------------------------------------------------------------------------------------
+// El check-in de la mañana
+// ---------------------------------------------------------------------------------------------
+
+/** Lo máximo que el check-in de una mañana suma o resta a la energía de ese día: la carga acumulada sigue pesando más que una noche. */
+export const CHECKIN_MAX_ADJUST = 15;
+/** Cada uno de los 4 ejes del check-in (sueño, agujetas, estrés, ánimo), de -1 a 1, mueve la energía este tanto. */
+const CHECKIN_POINTS_PER_AXIS = CHECKIN_MAX_ADJUST / 4;
+
+/**
+ * Cuánto suma (o resta) a la energía de un día su check-in, en puntos de -15 a +15: la suma de los cuatro ejes (la misma que usa el
+ * coach para el factor del día) y una HRV por debajo de tu rango como un eje más en contra. Dormir bien y llegar con ganas sube la
+ * batería; dormir mal, con estrés o con agujetas fuertes la baja.
+ */
+export function checkInAdjust(check: ReadinessCheck): number {
+  const score = scoreCheck(check) + (check.hrvVs === 'bajo' ? -1 : 0);
+  const points = score * CHECKIN_POINTS_PER_AXIS;
+  // Redondeo simétrico: +7,5 y −7,5 valen lo mismo (Math.round tiraría el negativo hacia arriba).
+  return Math.max(-CHECKIN_MAX_ADJUST, Math.min(CHECKIN_MAX_ADJUST, Math.sign(points) * Math.round(Math.abs(points))));
+}
+
+/** Lo que dijo el check-in, en pocas palabras ("dormiste 8 h · sin agujetas · estrés bajo"), para explicar el ajuste. */
+export function checkInSummary(check: ReadinessCheck): string {
+  const parts: string[] = [];
+  parts.push(check.sleepHours !== undefined ? `dormiste ${formatSleep(check.sleepHours)}` : `dormiste ${check.sleep === 'bien' ? 'bien' : check.sleep === 'mal' ? 'mal' : 'regular'}`);
+  if (check.stress === 'alto') parts.push('estrés alto');
+  else if (check.stress === 'bajo') parts.push('estrés bajo');
+  if (check.soreness === 'alto') parts.push('agujetas fuertes');
+  else if (check.soreness === 'ninguno') parts.push('sin agujetas');
+  if (check.motivation === 'baja') parts.push('poco ánimo');
+  else if (check.motivation === 'alta') parts.push('con ganas');
+  if (check.hrvVs === 'bajo') parts.push('HRV baja');
+  return parts.join(' · ');
+}
+
+/** La energía de un día: la de su carga más lo que suma o resta su check-in (0-100). */
+export function pointEnergy(p: Pick<FormPoint, 'form' | 'fitness' | 'checkin'>): number {
+  return Math.max(0, Math.min(100, energyOf(p.form, p.fitness) + (p.checkin ?? 0)));
+}
+
+/** El estado de un día con su check-in incluido. */
+export function pointState(p: Pick<FormPoint, 'form' | 'fitness' | 'checkin'>): FormState {
+  return stateOfEnergy(pointEnergy(p));
 }
 
 export interface BuildInput {
@@ -88,13 +138,16 @@ export interface BuildInput {
   pastDays?: number;
   /** Cargas previstas de los días que vienen, empezando por mañana. */
   future?: number[];
+  /** Los check-ins de la mañana: cada día con el suyo suma o resta a su energía (ver `checkInAdjust`). */
+  checks?: ReadinessCheck[];
 }
 
 /**
  * La serie día a día: de los últimos `pastDays` días (o desde la primera sesión, si es más tarde) a los días de `future`. La forma
  * física y la fatiga arrancan en tu carga media de las dos primeras semanas de datos, así que no hay una subida falsa al principio.
  */
-export function buildFormSeries({ history, todayIso, pastDays = 28, future = [] }: BuildInput): FormSeries {
+export function buildFormSeries({ history, todayIso, pastDays = 28, future = [], checks = [] }: BuildInput): FormSeries {
+  const checkByDate = new Map(checks.map((c) => [c.date, c]));
   const byDate = new Map<string, number>();
   for (const e of history) {
     if (e.date > todayIso) continue;
@@ -127,7 +180,10 @@ export function buildFormSeries({ history, todayIso, pastDays = 28, future = [] 
     const form = fitness - fatigue; // al empezar el día
     fitness = fitness * dF + load * (1 - dF);
     fatigue = fatigue * dG + load * (1 - dG);
-    if (day >= windowStart) points.push({ iso, load, fitness, fatigue, form, future: isFuture });
+    if (day >= windowStart) {
+      const check = isFuture ? undefined : checkByDate.get(iso);
+      points.push({ iso, load, fitness, fatigue, form, future: isFuture, checkin: check ? checkInAdjust(check) : 0 });
+    }
   }
   return { points, todayIndex: points.findIndex((p) => p.iso === todayIso), ready: sessions >= MIN_SESSIONS && spanDays >= MIN_SPAN_DAYS, sessions, spanDays };
 }
@@ -212,13 +268,13 @@ export function formWindows(series: FormSeries, afterIso?: string, keepIso?: str
     const keep = keepIso !== undefined && run.some((p) => p.iso === keepIso);
     if (run.length > MAX_WINDOW_DAYS) run = run.slice(0, MAX_WINDOW_DAYS);
     if (run.length >= MIN_WINDOW_DAYS || (keep && run.length > 0)) {
-      const peak = run.reduce((b, p) => (p.form > b.form ? p : b), run[0]);
-      out.push({ start: run[0].iso, end: run[run.length - 1].iso, days: run.length, peakIso: peak.iso, peak: energyOf(peak.form, peak.fitness) });
+      const peak = run.reduce((b, p) => (pointEnergy(p) > pointEnergy(b) ? p : b), run[0]);
+      out.push({ start: run[0].iso, end: run[run.length - 1].iso, days: run.length, peakIso: peak.iso, peak: pointEnergy(peak) });
     }
     run = [];
   };
   for (const p of series.points) {
-    if (formStateOf(p.form, p.fitness) === 'ventana') run.push(p);
+    if (pointState(p) === 'ventana') run.push(p);
     else flush();
   }
   flush();
@@ -227,7 +283,7 @@ export function formWindows(series: FormSeries, afterIso?: string, keepIso?: str
 
 /** El estado de cada día de la serie, por fecha (para pintar el calendario de ventanas). */
 export function stateByDay(series: FormSeries): Map<string, FormState> {
-  return new Map(series.points.map((p) => [p.iso, formStateOf(p.form, p.fitness)]));
+  return new Map(series.points.map((p) => [p.iso, pointState(p)]));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -258,8 +314,8 @@ export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(Math.rou
 export function formToday(series: FormSeries): FormToday | null {
   if (!series.ready || series.todayIndex < 0) return null;
   const p = series.points[series.todayIndex];
-  const state = formStateOf(p.form, p.fitness);
-  return { state, value: energyOf(p.form, p.fitness), title: TITLE[state], sentence: SENTENCE[state] };
+  const state = pointState(p);
+  return { state, value: pointEnergy(p), title: TITLE[state], sentence: SENTENCE[state] };
 }
 
 /** Lo que falta para tener curva: sesiones y días de historial. */
@@ -271,7 +327,7 @@ export function formMissing(series: FormSeries): { sessions: number; days: numbe
 export function atCompetition(series: FormSeries, comp: CompetitionWindow | null): { energy: number; state: FormState } | null {
   if (!comp) return null;
   const p = series.points.find((x) => x.iso === comp.eventStart && x.future);
-  return p ? { energy: energyOf(p.form, p.fitness), state: formStateOf(p.form, p.fitness) } : null;
+  return p ? { energy: pointEnergy(p), state: pointState(p) } : null;
 }
 
 /**

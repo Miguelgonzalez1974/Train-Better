@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionHistoryEntry } from '../data/athlete/types';
+import type { ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
 import {
   addDays,
   buildFormSeries,
   formMissing,
+  CHECKIN_MAX_ADJUST,
+  checkInAdjust,
+  checkInSummary,
   energyOf,
   formAdvice,
+  pointEnergy,
+  pointState,
   formDecision,
   formStateOf,
   formToday,
@@ -115,6 +120,62 @@ describe('energyOf', () => {
     const energies = s.points.filter((p) => !p.future).map((p) => energyOf(p.form, p.fitness));
     expect(Math.max(...energies)).toBeLessThan(75);
     expect(Math.min(...energies)).toBeGreaterThan(25);
+  });
+});
+
+describe('check-in de la mañana', () => {
+  const check = (over: Partial<ReadinessCheck> = {}): ReadinessCheck => ({ date: TODAY, sleep: 'regular', soreness: 'leve', stress: 'medio', motivation: 'normal', ...over });
+  const best = check({ sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' });
+  const worst = check({ sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' });
+
+  it('suma hasta +15 si todo va bien, resta hasta −15 si todo va mal y no mueve nada si es normal', () => {
+    expect(checkInAdjust(best)).toBe(CHECKIN_MAX_ADJUST);
+    expect(checkInAdjust(worst)).toBe(-CHECKIN_MAX_ADJUST);
+    expect(checkInAdjust(check())).toBe(0);
+  });
+
+  it('un eje suelto mueve poco y una HRV baja cuenta como un eje en contra', () => {
+    expect(checkInAdjust(check({ sleep: 'bien' }))).toBe(4);
+    expect(checkInAdjust(check({ sleep: 'mal' }))).toBe(-4);
+    expect(checkInAdjust(check({ hrvVs: 'bajo' }))).toBe(-4);
+  });
+
+  it('cada día pasado (y hoy) lleva el ajuste de su check-in; los futuros no', () => {
+    const history = steadyHistory(8);
+    const s = buildFormSeries({ history, todayIso: TODAY, future: [0, 0], checks: [check({ date: addDays(TODAY, -1), ...{ sleep: 'mal', stress: 'alto' } }), best] });
+    const byIso = new Map(s.points.map((p) => [p.iso, p]));
+    expect(byIso.get(addDays(TODAY, -1))!.checkin).toBe(-8);
+    expect(byIso.get(TODAY)!.checkin).toBe(CHECKIN_MAX_ADJUST);
+    expect(byIso.get(addDays(TODAY, -2))!.checkin).toBe(0);
+    expect(byIso.get(addDays(TODAY, 1))!.checkin).toBe(0);
+  });
+
+  it('la energía del día es la de su carga más el check-in, entre 0 y 100', () => {
+    const history = steadyHistory(8);
+    const without = buildFormSeries({ history, todayIso: TODAY });
+    const withBest = buildFormSeries({ history, todayIso: TODAY, checks: [best] });
+    const a = without.points[without.todayIndex];
+    const b = withBest.points[withBest.todayIndex];
+    expect(a.form).toBeCloseTo(b.form, 9); // la carga no cambia
+    expect(pointEnergy(b)).toBe(Math.min(100, energyOf(a.form, a.fitness) + CHECKIN_MAX_ADJUST));
+    expect(pointEnergy({ form: 500, fitness: 40, checkin: 15 })).toBe(100);
+    expect(pointEnergy({ form: -500, fitness: 40, checkin: -15 })).toBe(0);
+  });
+
+  it('un buen check-in puede subir un día de normal a a tope y uno malo bajarlo a cansado', () => {
+    // forma relativa que da 66 de energía por carga: con +15 pasa de 75 (a tope), con −15 baja a 51.
+    const form = ((66 - 50) / (500 / 3)) * 100;
+    expect(pointState({ form, fitness: 100 })).toBe('equilibrio');
+    expect(pointState({ form, fitness: 100, checkin: 15 })).toBe('ventana');
+    const tired = ((35 - 50) / (500 / 3)) * 100;
+    expect(pointState({ form: tired, fitness: 100 })).toBe('equilibrio');
+    expect(pointState({ form: tired, fitness: 100, checkin: -15 })).toBe('cargado');
+  });
+
+  it('resume lo que dijo el check-in en pocas palabras', () => {
+    expect(checkInSummary(best)).toBe('dormiste bien · estrés bajo · sin agujetas · con ganas');
+    expect(checkInSummary(check({ sleepHours: 7.5, stress: 'alto' }))).toBe('dormiste 7 h 30 · estrés alto');
+    expect(checkInSummary(worst)).toContain('agujetas fuertes');
   });
 });
 

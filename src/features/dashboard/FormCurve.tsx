@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Sparkles, Trophy, TrendingUp } from 'lucide-react';
+import { Sparkles, Sun, Trophy, TrendingUp } from 'lucide-react';
 import {
+  CHECKIN_MAX_ADJUST,
   ENERGY_LOW,
   ENERGY_TOP,
   addDays,
+  checkInSummary,
   energyOf,
+  pointEnergy,
+  pointState,
+  signed,
   formAdvice,
   formDecision,
   formMissing,
@@ -29,6 +34,8 @@ const GOLD = 'rgb(var(--c-brand-gold))';
 const INK = 'rgb(var(--c-white))';
 const BG = 'rgb(var(--c-brand-bg))';
 const SURFACE = 'rgb(var(--c-brand-surface))';
+/** El morado del check-in (el mismo del sueño en el resto de la app). */
+const SLEEP = 'rgb(var(--c-sleep))';
 
 /** El color de cada estado de la energía: a tope en verde, cansado en rojo y normal neutro. */
 export const FORM_TONE: Record<FormState, string> = { ventana: GOOD, equilibrio: 'rgb(var(--c-white) / 0.75)', cargado: LOW };
@@ -100,7 +107,8 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
   const step = (W - PAD.l - PAD.r) / Math.max(1, n - 1);
   const x = (i: number) => PAD.l + i * step;
   const bottom = P2.y1;
-  const energy = pts.map((p) => energyOf(p.form, p.fitness));
+  const energy = pts.map((p) => pointEnergy(p));
+  const baseEnergy = pts.map((p) => energyOf(p.form, p.fitness));
   const yBar = (v: number) => P2.y1 - (v / 100) * (P2.y1 - P2.y0);
 
   // La escala de las curvas: en la vista de energía ocupan el panel de arriba; en la otra, todo el alto.
@@ -188,21 +196,27 @@ function FormChart({ plan, comp, windows, mode }: { plan: FormSeries; comp: Comp
             const isComp = c0 >= 0 && i >= c0 && i <= c1;
             const bw = Math.max(3, step * 0.7);
             const state = stateOfEnergy(energy[i]);
+            // La barra es la carga; si hubo check-in, su tramo va aparte: sólido y morado si suma, recuadro discontinuo si resta.
+            const low = Math.min(baseEnergy[i], energy[i]);
+            const high = Math.max(baseEnergy[i], energy[i]);
+            const adj = p.checkin ?? 0;
             return (
               <g key={p.iso}>
                 <rect
                   x={x(i) - bw / 2}
-                  y={yBar(energy[i])}
+                  y={yBar(low)}
                   width={bw}
-                  height={Math.max(1.5, P2.y1 - yBar(energy[i]))}
+                  height={Math.max(1.5, P2.y1 - yBar(low))}
                   rx={3}
                   fill={isComp ? GOLD : BAR_TONE[state]}
                   fillOpacity={p.future ? 0.55 : 0.95}
                 />
+                {adj > 0 && high > low && <rect x={x(i) - bw / 2} y={yBar(high)} width={bw} height={yBar(low) - yBar(high)} rx={3} fill={SLEEP} fillOpacity={0.95} />}
+                {adj < 0 && high > low && <rect x={x(i) - bw / 2 + 0.75} y={yBar(high)} width={bw - 1.5} height={yBar(low) - yBar(high)} rx={3} fill="none" stroke={SLEEP} strokeWidth={1.5} strokeDasharray="3 2" />}
                 {/* El porcentaje de cada día, escrito sobre su barra. */}
                 <text
                   x={x(i)}
-                  y={yBar(energy[i]) - 5}
+                  y={yBar(high) - 5}
                   textAnchor="middle"
                   fontSize={11}
                   fontWeight={i === t ? 800 : 700}
@@ -260,7 +274,7 @@ function WindowCalendar({ model }: { model: FormModel }) {
     }
     return set;
   }, [model.allWindows]);
-  const energyByDay = useMemo(() => new Map(plan.points.map((p) => [p.iso, energyOf(p.form, p.fitness)])), [plan]);
+  const energyByDay = useMemo(() => new Map(plan.points.map((p) => [p.iso, pointEnergy(p)])), [plan]);
   const monday = addDays(todayIso, -((new Date(`${todayIso}T12:00:00`).getDay() + 6) % 7));
   const cells = Array.from({ length: 35 }, (_, i) => addDays(monday, i));
   return (
@@ -319,6 +333,21 @@ function Key({ color, label, shape = 'dot' }: { color: string; label: string; sh
   );
 }
 
+/** Una línea del desglose de la energía de hoy: nombre, de dónde sale y su valor. */
+function CalcLine({ label, sub, value, tone, total = false }: { label: string; sub?: string; value: string; tone?: string; total?: boolean }) {
+  return (
+    <div className={`grid grid-cols-[1fr_auto] items-baseline gap-3 ${total ? 'border-t border-dashed border-white/[0.18] pt-2' : ''}`}>
+      <span className={`text-[13px] ${total ? 'font-bold text-white' : 'text-neutral-200'}`} style={tone ? { color: tone } : undefined}>
+        {label}
+        {sub && <span className="mt-0.5 block text-[11px] font-normal text-neutral-400">{sub}</span>}
+      </span>
+      <span className={`num ${total ? 'text-lg font-extrabold text-white' : 'text-[15px] font-extrabold'}`} style={tone ? { color: tone } : undefined}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 /** Una tarjeta pequeña con una cifra: hoy, la competición o la próxima ventana. */
 function Tile({ label, value, tone, sub }: { label: string; value: string; tone: string; sub: string }) {
   return (
@@ -337,7 +366,7 @@ function Tile({ label, value, tone, sub }: { label: string; value: string; tone:
  * paneles (curvas y barras de energía), tres cifras clave, las próximas ventanas con su motivo y un calendario de cinco semanas para ver
  * cuándo vuelve a abrirse. Todo sale de tus sesiones y de tu plan: es una estimación y, pasadas dos semanas, orientativa.
  */
-export function FormView({ model }: { model: FormModel }) {
+export function FormView({ model, onOpenMorning }: { model: FormModel; onOpenMorning?: () => void }) {
   const { plan, comp, todayIso } = model;
   const [mode, setMode] = useState<ChartMode>('energia');
   const today = useMemo(() => formToday(plan), [plan]);
@@ -361,8 +390,14 @@ export function FormView({ model }: { model: FormModel }) {
   // La próxima ventana que no es la de la competición (esa ya tiene su propia tarjeta).
   const upcoming = model.windows.find((w) => windowCause(w, model).kind !== 'competicion');
   const week = plan.points[plan.todayIndex + 7];
-  const weekEnergy = week ? energyOf(week.form, week.fitness) : null;
+  const weekEnergy = week ? pointEnergy(week) : null;
   const atEvent = comp ? plan.points.find((p) => p.iso === comp.eventStart && p.future) : undefined;
+  const todayPoint = plan.points[plan.todayIndex];
+  const prevPoint = plan.todayIndex > 0 ? plan.points[plan.todayIndex - 1] : undefined;
+  const baseToday = energyOf(todayPoint.form, todayPoint.fitness);
+  const adjToday = todayPoint.checkin ?? 0;
+  // ¿Hay algún check-in a la vista en el gráfico? Entonces la leyenda explica el morado.
+  const anyCheckin = plan.points.slice(Math.max(0, plan.todayIndex - PAST_DAYS), plan.todayIndex + 1).some((p) => (p.checkin ?? 0) !== 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -382,11 +417,50 @@ export function FormView({ model }: { model: FormModel }) {
             <p className="mt-1.5 text-[13px] font-semibold leading-snug text-white">{formDecision(plan, comp, todayIso)}</p>
           </div>
         </div>
+        {/* De dónde sale el número: la carga acumulada y, si has hecho el check-in, lo que suma o resta. */}
+        <div className="mt-3 flex flex-col gap-2 border-t border-white/[0.08] pt-3">
+          <CalcLine label="Carga acumulada" sub={prevPoint && prevPoint.load > 0 ? 'ayer entrenaste: esa fatiga cuenta hoy' : 'sin carga ayer: amaneces descansado'} value={`${baseToday}%`} />
+          {model.todayCheck ? (
+            <CalcLine tone={SLEEP} label="Tu check-in de hoy" sub={checkInSummary(model.todayCheck)} value={adjToday === 0 ? '±0' : signed(adjToday)} />
+          ) : (
+            <div className="text-[12px] leading-snug text-neutral-400">
+              Sin check-in de hoy solo cuento la carga: dormir bien o mal no se nota.
+              {onOpenMorning && (
+                <button type="button" onClick={onOpenMorning} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-full border border-white/[0.16] bg-white/[0.05] px-3 py-2 text-xs font-semibold text-neutral-100 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold">
+                  <Sun size={13} aria-hidden="true" /> Hacer el check-in de hoy
+                </button>
+              )}
+            </div>
+          )}
+          {model.todayCheck && <CalcLine total label="Energía de hoy" value={`${today.value}%`} />}
+        </div>
         <p className="mt-3 flex items-start gap-2 border-t border-white/[0.08] pt-3 text-[13px] leading-snug text-neutral-300">
           <Sparkles size={14} className="mt-0.5 shrink-0 text-brand-gold" aria-hidden="true" />
           <span>{formAdvice(today.state, comp, todayIso)}</span>
         </p>
       </section>
+
+      {/* Ayer y hoy: así se entiende por qué un día de descanso puede amanecer con menos energía que el de ayer. */}
+      {prevPoint && (
+        <section className="flex items-center justify-around rounded-2xl bg-white/[0.045] px-4 py-3" aria-label="Ayer y hoy">
+          <div className="text-center">
+            <p className="text-[11px] text-neutral-400">Ayer · {shortDay(prevPoint.iso).split(' ').slice(0, 2).join(' ')}</p>
+            <p className="num text-2xl font-extrabold leading-tight" style={{ color: FORM_TONE[pointState(prevPoint)] }}>
+              {pointEnergy(prevPoint)}%
+            </p>
+          </div>
+          <span className="text-lg text-neutral-500" aria-hidden="true">
+            {today.value >= pointEnergy(prevPoint) ? '↗' : '↘'}
+          </span>
+          <div className="text-center">
+            <p className="text-[11px] text-neutral-400">Hoy · {shortDay(todayIso).split(' ').slice(0, 2).join(' ')}</p>
+            <p className="num text-2xl font-extrabold leading-tight" style={{ color: tone }}>
+              {today.value}%
+            </p>
+            {adjToday !== 0 && <p className="text-[11px] text-neutral-500">solo carga: {baseToday}%</p>}
+          </div>
+        </section>
+      )}
 
       <section aria-label="Gráfico de energía">
         <div role="group" aria-label="Qué ver" className="mb-3 flex rounded-full bg-white/[0.06] p-0.5 text-xs font-semibold">
@@ -409,6 +483,7 @@ export function FormView({ model }: { model: FormModel }) {
               <Key color={GOOD} label="a tope" shape="bar" />
               <Key color="rgb(var(--c-white) / 0.4)" label="normal" shape="bar" />
               <Key color={LOW} label="cansado" shape="bar" />
+              {anyCheckin && <Key color={SLEEP} label="tu check-in" shape="bar" />}
             </>
           ) : (
             <>
@@ -426,7 +501,7 @@ export function FormView({ model }: { model: FormModel }) {
       <div className="grid grid-cols-3 gap-2">
         <Tile label="Hoy" value={`${today.value}%`} tone={tone} sub={FORM_STATE_WORD[today.state]} />
         {atEvent && comp ? (
-          <Tile label="Competición" value={`${energyOf(atEvent.form, atEvent.fitness)}%`} tone={GOLD} sub={shortDay(comp.eventStart).split(' ').slice(1).join(' ')} />
+          <Tile label="Competición" value={`${pointEnergy(atEvent)}%`} tone={GOLD} sub={shortDay(comp.eventStart).split(' ').slice(1).join(' ')} />
         ) : (
           <Tile label="En 7 días" value={weekEnergy !== null ? `${weekEnergy}%` : '—'} tone={week ? FORM_TONE[stateOfEnergy(weekEnergy ?? 0)] : INK} sub={week ? shortDay(week.iso).split(' ').slice(1).join(' ') : 'sin previsión'} />
         )}
@@ -474,7 +549,7 @@ export function FormView({ model }: { model: FormModel }) {
       <Fold title="Cómo se calcula">
         <p className="text-xs leading-relaxed text-neutral-400">
           Cada sesión suma a tu <Term k="fitness">forma física</Term>, que sube y baja despacio, y a tu fatiga, que lo hace deprisa (míralas en la vista «Forma física y fatiga»). Tu forma es la diferencia, y la energía es esa forma pasada a una escala de 0 a 100: a tope desde el {ENERGY_TOP} %, cansado hasta el {ENERGY_LOW} %. Entrenando siempre igual oscilas entre el 30 y el 70 % según el día de la semana; solo llegas a tope cuando bajas la carga unos días. Cuando la fatiga cae antes que la forma física queda un hueco a tu favor, la ventana de{' '}
-          <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Solo cuenta lo que apuntas: si haces bici, entrenos de equipo u otro deporte y no lo registras (vale «Registrar este día» con su RPE y duración), el cálculo te verá más descansado de lo que estás. Es una estimación; el check-in de cada mañana manda sobre ella.
+          <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Solo cuenta lo que apuntas: si haces bici, entrenos de equipo u otro deporte y no lo registras (vale «Registrar este día» con su RPE y duración), el cálculo te verá más descansado de lo que estás. Además, el check-in de cada mañana suma o resta hasta {CHECKIN_MAX_ADJUST} puntos a la energía de ese día (sueño, agujetas, estrés y ánimo; en morado en el gráfico): una buena noche no borra una semana dura, pero se nota. La previsión de los días que vienen no lo incluye, porque aún no sabe cómo dormirás. Es una estimación.
         </p>
       </Fold>
     </div>
