@@ -75,11 +75,9 @@ interface WeekStripProps {
   onLoggedDay?: () => void;
   /** Se marcó o se quitó un descanso elegido: el padre vuelve a leer el perfil. */
   onRestChange?: () => void;
-  /** Botón fijo a la derecha de los siete días (el icono de nutrición de hoy). */
-  trailing?: ReactNode;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, onRestChange, trailing }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, onRestChange }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -320,7 +318,6 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           );
         })}
       </div>
-      {trailing}
       </div>
       {weekDates.some((d) => windowDays.has(toLocalIsoDate(d))) && (
         <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-neutral-500">

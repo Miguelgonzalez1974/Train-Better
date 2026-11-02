@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy, Library, Flame } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
@@ -11,7 +11,6 @@ import type {
   AthleteProfile,
   DailySession,
   Goal,
-  NutritionPrefs,
   PainArea,
   PersonalRecords,
   RxOrScaled,
@@ -78,7 +77,6 @@ import {
   type CoachNoticesProps,
 } from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
-import { NutritionDayButton } from './NutritionDayButton';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
@@ -167,11 +165,9 @@ function loadTodaySession(
 
 interface PlanificacionProps {
   onNavigateToObjetivos: () => void;
-  onNavigateToNutricion: () => void;
 }
 
-
-export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: PlanificacionProps) {
+export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const goals = profile.goals;
@@ -374,20 +370,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
 
   /** Misma percepción de esfuerzo, recortada para `SessionBlockCard`: ahí el check-in ya vive debajo
    * de su levantamiento, así que `index`/`movementName` no hacen falta. */
-  /** Peso más reciente del perfil — para el semáforo nutricional del día (sin peso no se muestra). */
-  const latestWeightKg = useMemo(
-    () => [...(profile.bodyweightLog ?? [])].sort((a, b) => a.date.localeCompare(b.date)).pop()?.kg ?? null,
-    [profile.bodyweightLog],
-  );
-
-  /** Guarda un cambio de preferencias de nutrición (releyendo el perfil por si otra pestaña o el sincronizador lo tocaron mientras tanto). */
-  const updateNutritionPrefs = useCallback((update: (p: NutritionPrefs) => NutritionPrefs) => {
-    const fresh = athleteRepository.getProfile();
-    const next = update(fresh.nutritionPrefs ?? {});
-    athleteRepository.saveProfile({ ...fresh, nutritionPrefs: next });
-    setProfile((prev) => ({ ...prev, nutritionPrefs: next }));
-  }, []);
-
   const sessionCardFeedbackByIndex = useMemo(
     () =>
       new Map(
@@ -1022,18 +1004,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                 profile={profile}
                 history={history}
                 goals={goals}
-                trailing={
-                  session ? (
-                    <NutritionDayButton
-                      session={session}
-                      weightKg={latestWeightKg}
-                      prefs={profile.nutritionPrefs}
-                      trainedToday={alreadyCompletedToday}
-                      onOpenNutrition={onNavigateToNutricion}
-                      updatePrefs={updateNutritionPrefs}
-                    />
-                  ) : undefined
-                }
                 onDeleteHistoryEntry={(date) => {
                   athleteRepository.deleteHistoryEntry(date);
                   setHistory(athleteRepository.getHistory());

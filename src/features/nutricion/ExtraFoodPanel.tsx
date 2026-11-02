@@ -45,7 +45,7 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
   const allFoods = useMemo(() => (customFoods.length === 0 ? FOODS : [...FOODS, ...customFoods.map(customFoodToCatalogFood)]), [customFoods]);
   const foodMap = useMemo(() => new Map(allFoods.map((f) => [f.id, f])), [allFoods]);
   const resolve = (id: string) => foodMap.get(id);
-  const foodsByGroup = useMemo(() => builderFoods(allFoods, prefs.excludedFoodIds ?? []), [allFoods, prefs.excludedFoodIds]);
+  const foodsByGroup = useMemo(() => builderFoods(allFoods, []), [allFoods]);
 
   const totals = totalsOf(items, resolve);
   const hour = parseTimeInput(hourText, defaultHour);

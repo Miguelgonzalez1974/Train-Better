@@ -10,6 +10,7 @@ import { SectionLabel } from '../shell/SectionLabel';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
 import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MacroRing } from './MacroRing';
+import { MisAlimentosPanel } from './MisAlimentosPanel';
 import { QuantityStepper } from './QuantityStepper';
 import { addDays, dayLabel, planFor, trainingHourFor, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
@@ -37,6 +38,7 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
   const [typeOverride, setTypeOverride] = useState<NutritionDayType | null>(null);
   const [changingType, setChangingType] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [myFoods, setMyFoods] = useState(false);
   useEffect(() => {
     setTypeOverride(null);
     setChangingType(false);
@@ -76,13 +78,12 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
       if (date < since) continue;
       for (const e of list) for (const it of e.items) count.set(it.foodId, (count.get(it.foodId) ?? 0) + 1);
     }
-    const excluded = new Set(prefs.excludedFoodIds ?? []);
     return [...count.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([id]) => resolve(id))
-      .filter((f): f is NonNullable<typeof f> => Boolean(f) && !excluded.has(f!.id))
+      .filter((f): f is NonNullable<typeof f> => Boolean(f))
       .slice(0, RECENT_COUNT);
-  }, [prefs.extraFoods, prefs.excludedFoodIds, todayIso, resolve]);
+  }, [prefs.extraFoods, todayIso, resolve]);
 
   const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
   function quickAdd(foodId: string) {
@@ -214,6 +215,23 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
           <ExtraFoodPanel prefs={prefs} updatePrefs={updatePrefs} iso={iso} defaultHour={iso === todayIso ? nowHour : 12} onDone={() => setAdding(false)} mode="diario" />
         </Modal>
       )}
+
+      {myFoods && (
+        <Modal open onClose={() => setMyFoods(false)} title="Mis alimentos">
+          <MisAlimentosPanel shared={shared} />
+        </Modal>
+      )}
+
+      <button
+        onClick={() => setMyFoods(true)}
+        className="flex items-center justify-between rounded-xl border border-brand-border px-3.5 py-3 text-left text-sm font-semibold text-neutral-200 transition-colors hover:border-brand-gold hover:text-white"
+      >
+        <span>
+          Mis alimentos
+          {(prefs.customFoods?.length ?? 0) > 0 && <span className="ml-1.5 text-xs font-normal text-neutral-500">· {prefs.customFoods?.length} creados</span>}
+        </span>
+        <ChevronRight size={16} className="text-neutral-500" aria-hidden="true" />
+      </button>
 
       <button onClick={onOpenGuide} className="flex items-center justify-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 hover:text-white">
         <BookOpen size={14} aria-hidden="true" /> Guía completa, tendencia de peso y fuentes

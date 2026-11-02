@@ -106,7 +106,7 @@ export default function App() {
             />
           )}
           {activeTab === 'planificacion' && (
-            <Planificacion key={dataVersion} onNavigateToObjetivos={() => setActiveTab('objetivos')} onNavigateToNutricion={() => setActiveTab('nutricion')} />
+            <Planificacion key={dataVersion} onNavigateToObjetivos={() => setActiveTab('objetivos')} />
           )}
           {activeTab === 'nutricion' && <Nutricion />}
           {activeTab === 'objetivos' && <Objetivos />}
