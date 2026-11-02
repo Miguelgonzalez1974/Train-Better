@@ -18,6 +18,24 @@ const base: DayAdviceInput = {
 };
 const advise = (over: Partial<DayAdviceInput>) => dayAdvice({ ...base, ...over });
 
+describe('el icono y el color del consejo', () => {
+  const green = { color: 'verde' as const, reasons: ['Preparación 78 %'] };
+  it('cada estado lleva su icono y su color', () => {
+    expect(advise({ session: session({ dayLight: green }), prep: 78 })).toMatchObject({ tone: 'good', icon: 'bolt' });
+    expect(advise({ session: session({ dayLight: green, mesocycleWeek: 4 }), prep: 78 })).toMatchObject({ tone: 'good', icon: 'check' });
+    expect(advise({ session: session({ dayLight: { color: 'ambar', reasons: ['x'] } }) })).toMatchObject({ tone: 'mid', icon: 'down' });
+    expect(advise({ session: session({ dayLight: { color: 'rojo', reasons: ['x'] } }) })).toMatchObject({ tone: 'bad', icon: 'alert' });
+    expect(advise({ hasCheckIn: false })).toMatchObject({ tone: 'info', icon: 'sun' });
+    expect(advise({ session: session({ competition: comp({ phase: 'taper' }) }) })).toMatchObject({ tone: 'good', icon: 'check' });
+  });
+
+  it('todo lo de la competición va en dorado con la copa', () => {
+    for (const c of [comp({ phase: 'evento', eventDay: true, daysToEvent: 0 }), comp({ phase: 'vispera', daysToEvent: 1 }), comp({ phase: 'activacion', daysToEvent: 2 }), comp({ phase: 'post', daysToEvent: -1 })]) {
+      expect(advise({ session: session({ competition: c }) })).toMatchObject({ tone: 'gold', icon: 'trophy' });
+    }
+  });
+});
+
 describe('el consejo del día', () => {
   it('sin nada especial: entrena como está previsto y dice cómo encaja con el objetivo', () => {
     const a = advise({});
@@ -90,8 +108,8 @@ describe('el consejo del día', () => {
 
   it('un día de descanso habla de recuperar según la preparación', () => {
     const rest = session({ isRestDay: true });
-    expect(advise({ session: rest, level: 'alta' })).toMatchObject({ lead: 'Hoy toca descansar.', tone: 'good' });
-    expect(advise({ session: rest, level: 'normal' }).tone).toBe('mid');
+    expect(advise({ session: rest, level: 'alta' })).toMatchObject({ lead: 'Hoy toca descansar.', tone: 'info', icon: 'moon' });
+    expect(advise({ session: rest, level: 'normal' }).reason).toContain('Vas normal de recuperación');
     expect(advise({ session: rest, level: 'baja' })).toMatchObject({ lead: 'Hoy toca recuperar.', tone: 'bad' });
     // una HRV baja hunde un día normal
     expect(advise({ session: rest, level: 'normal', hrvLow: true }).tone).toBe('bad');

@@ -2,12 +2,15 @@ import type { DailySession } from '../data/athlete/types';
 import type { RecoveryLevel } from './recovery';
 
 /**
- * El consejo del día para el Resumen: un verbo ("Baja el ritmo hoy.") y el motivo en una frase corta. No calcula nada propio:
- * lee lo que ya dicen los anillos y el semáforo del coach (para que nunca se contradigan) y escoge qué decir con este orden:
- * competición (el día, la víspera, la activación o el simulacro) → semáforo rojo → semáforo ámbar → molestia activa → semáforo
- * verde → sin semáforo (carga y preparación). Un día de descanso habla de recuperar.
+ * El consejo del día para el Resumen: un verbo ("Baja el ritmo hoy.") y el motivo en una frase corta, con un icono y un color
+ * de estado. No calcula nada propio: lee lo que ya dicen los anillos y el semáforo del coach (para que nunca se contradigan) y
+ * escoge qué decir con este orden: competición (el día, la víspera, la activación, el simulacro y el después) → semáforo rojo →
+ * semáforo ámbar → molestia activa → taper → semáforo verde → sin semáforo (carga y preparación). Un día de descanso habla de
+ * recuperar.
  */
-export type AdviceTone = 'good' | 'mid' | 'bad' | 'info';
+/** El color del consejo: verde/ámbar/rojo/azul son los de estado; el dorado es el de la competición. */
+export type AdviceTone = 'good' | 'mid' | 'bad' | 'info' | 'gold';
+export type AdviceIcon = 'check' | 'bolt' | 'down' | 'alert' | 'sun' | 'moon' | 'trophy';
 
 export interface DayAdvice {
   /** Lo que hacer, en pocas palabras y con punto final. */
@@ -15,6 +18,7 @@ export interface DayAdvice {
   /** Por qué, con los números que lo justifican. */
   reason: string;
   tone: AdviceTone;
+  icon: AdviceIcon;
 }
 
 export interface DayAdviceInput {
@@ -67,54 +71,57 @@ export function dayAdvice(input: DayAdviceInput): DayAdvice {
   // La competición manda: ese día, la víspera, la activación y el simulacro tienen su propio guion.
   if (comp) {
     if (comp.eventDay || comp.phase === 'evento') {
-      return { lead: 'Hoy compites.', reason: 'Calienta como un WOD, come y bebe lo de siempre y no pruebes nada nuevo.', tone: 'info' };
+      return { lead: 'Hoy compites.', reason: 'Calienta como un WOD, come y bebe lo de siempre y no pruebes nada nuevo.', tone: 'gold', icon: 'trophy' };
     }
     if (comp.phase === 'vispera') {
-      return { lead: 'Mañana compites: hoy no se entrena.', reason: 'Movilidad, cardio suave, dormir y comer bien.', tone: 'info' };
+      return { lead: 'Mañana compites: hoy no se entrena.', reason: 'Movilidad, cardio suave, dormir y comer bien.', tone: 'gold', icon: 'trophy' };
     }
     if (comp.simulacro) {
-      return { lead: 'Hoy es el simulacro.', reason: 'Trátalo como la competición y apunta cómo te sientes antes y mañana.', tone: 'info' };
+      return { lead: 'Hoy es el simulacro.', reason: 'Trátalo como la competición y apunta cómo te sientes antes y mañana.', tone: 'gold', icon: 'trophy' };
     }
     if (comp.phase === 'activacion') {
       const d = comp.daysToEvent;
-      return { lead: 'Sesión corta y técnica.', reason: `${d === 1 ? 'Mañana compites' : `Faltan ${d} días`}: mueves sangre y afinas sin cansarte.`, tone: 'info' };
+      return { lead: 'Sesión corta y técnica.', reason: `${d === 1 ? 'Mañana compites' : `Faltan ${d} días`}: mueves sangre y afinas sin cansarte.`, tone: 'gold', icon: 'trophy' };
     }
     if (comp.phase === 'post') {
-      return { lead: 'Muévete, no te vacíes.', reason: 'Tras competir, baja la carga unos días y después volvemos al plan.', tone: 'info' };
+      return { lead: 'Muévete, no te vacíes.', reason: 'Tras competir, baja la carga unos días y después volvemos al plan.', tone: 'gold', icon: 'trophy' };
     }
   }
 
   // Descanso (o nada previsto).
   if (!session || session.isRestDay) {
     const targetText = `Si entrenas, tu objetivo es ${target.low}–${target.high}.`;
-    if (!session) return { lead: 'Hoy no hay sesión prevista.', reason: targetText, tone: 'info' };
+    if (!session) return { lead: 'Hoy no hay sesión prevista.', reason: targetText, tone: 'info', icon: 'moon' };
     const low = level === 'baja' || (level === 'normal' && hrvLow);
-    if (level === null) return { lead: 'Hoy toca descansar.', reason: targetText, tone: 'info' };
-    if (low) return { lead: 'Hoy toca recuperar.', reason: sentence('Duerme y come bien, y nada de extras.', targetText), tone: 'bad' };
-    return level === 'alta'
-      ? { lead: 'Hoy toca descansar.', reason: sentence('Vas muy bien de recuperación.', targetText), tone: 'good' }
-      : { lead: 'Hoy toca descansar.', reason: sentence('Vas normal de recuperación: descansa tranquilo.', targetText), tone: 'mid' };
+    if (level === null) return { lead: 'Hoy toca descansar.', reason: targetText, tone: 'info', icon: 'moon' };
+    if (low) return { lead: 'Hoy toca recuperar.', reason: sentence('Duerme y come bien, y nada de extras.', targetText), tone: 'bad', icon: 'moon' };
+    return {
+      lead: 'Hoy toca descansar.',
+      reason: sentence(level === 'alta' ? 'Vas muy bien de recuperación.' : 'Vas normal de recuperación: descansa tranquilo.', targetText),
+      tone: 'info',
+      icon: 'moon',
+    };
   }
 
   const near = comp?.phase === 'taper' ? `A ${comp.daysToEvent} días de competir` : null;
 
   if (light?.color === 'rojo') {
-    return { lead: 'Hoy toca recuperar, no entrenar.', reason: `${withStop(light.reasons.join(', '))} El coach ha dejado una sesión de recuperación activa.`, tone: 'bad' };
+    return { lead: 'Hoy toca recuperar, no entrenar.', reason: `${withStop(light.reasons.join(', '))} El coach ha dejado una sesión de recuperación activa.`, tone: 'bad', icon: 'alert' };
   }
   if (light?.color === 'ambar') {
-    return { lead: 'Baja el ritmo hoy.', reason: `${withStop(light.reasons.join(', '))} El coach ya ha recortado la sesión.`, tone: 'mid' };
+    return { lead: 'Baja el ritmo hoy.', reason: `${withStop(light.reasons.join(', '))} El coach ya ha recortado la sesión.`, tone: 'mid', icon: 'down' };
   }
   if (painAreas.length > 0) {
     const where = joinAnd(painAreas.map((a) => PAIN_LABEL[a] ?? a));
-    return { lead: `Entrena, cuidando ${where}.`, reason: sentence('El coach evita los movimientos que la cargan.', fitText), tone: 'mid' };
+    return { lead: `Entrena, cuidando ${where}.`, reason: sentence('El coach evita los movimientos que la cargan.', fitText), tone: 'mid', icon: 'alert' };
   }
   if (comp?.phase === 'taper') {
-    return { lead: 'Entrena, pero sin pasarte.', reason: sentence(`${near}, el volumen ya baja: mantén la intensidad y no añadas nada.`, fitText), tone: 'good' };
+    return { lead: 'Entrena, pero sin pasarte.', reason: sentence(`${near}, el volumen ya baja: mantén la intensidad y no añadas nada.`, fitText), tone: 'good', icon: 'check' };
   }
   if (light?.color === 'verde') {
     const push = !comp && session.mesocycleWeek !== 4;
     const why = withStop(`Preparación ${prep ?? '—'} %${loadZone === 'optima' || loadZone === 'baja' ? ` y carga ${LOAD_WORD[loadZone]}` : ''}`);
-    return { lead: push ? 'Buen día para apretar.' : 'Llegas bien: a por la sesión.', reason: sentence(why, fitText), tone: 'good' };
+    return { lead: push ? 'Buen día para apretar.' : 'Llegas bien: a por la sesión.', reason: sentence(why, fitText), tone: 'good', icon: push ? 'bolt' : 'check' };
   }
 
   // Sin semáforo (aún sin check-in): solo hay carga y una preparación estimada.
@@ -126,8 +133,10 @@ export function dayAdvice(input: DayAdviceInput): DayAdvice {
   const provisional = !hasCheckIn && 'Aún sin check-in: esto sale solo de tu carga.';
   if (careful) {
     const cap = cause.length ? withStop(cause.join(' y ').replace(/^./, (c) => c.toUpperCase())) : '';
-    return { lead: 'Hoy, mejor con cuidado.', reason: sentence(cap, provisional, fitText), tone: 'mid' };
+    return { lead: 'Hoy, mejor con cuidado.', reason: sentence(cap, provisional, fitText), tone: 'mid', icon: 'alert' };
   }
   const reason = sentence(provisional, fitText) || (prep !== null ? `Preparación ${prep} %.` : '');
-  return { lead: 'Entrena como está previsto.', reason, tone: hasCheckIn ? 'good' : 'info' };
+  return hasCheckIn
+    ? { lead: 'Entrena como está previsto.', reason, tone: 'good', icon: 'check' }
+    : { lead: 'Entrena como está previsto.', reason, tone: 'info', icon: 'sun' };
 }

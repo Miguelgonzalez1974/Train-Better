@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowDown, ArrowRight, Check, CircleAlert, Moon, Sun, Trophy, Zap, type LucideIcon } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { DayAdvice } from '../../engine/dayAdvice';
 import type { ReadinessScore } from '../../engine/readinessScore';
@@ -93,7 +93,23 @@ const ADVICE_COLOR: Record<DayAdvice['tone'], string> = {
   mid: 'rgb(var(--c-state-mid))',
   bad: 'rgb(var(--c-state-low))',
   info: 'rgb(var(--c-state-cool))',
+  gold: 'rgb(var(--c-brand-gold))',
 };
+
+const ADVICE_ICON: Record<DayAdvice['icon'], LucideIcon> = {
+  check: Check,
+  bolt: Zap,
+  down: ArrowDown,
+  alert: CircleAlert,
+  sun: Sun,
+  moon: Moon,
+  trophy: Trophy,
+};
+
+function AdviceGlyph({ icon }: { icon: DayAdvice['icon'] }) {
+  const Icon = ADVICE_ICON[icon];
+  return <Icon size={14} strokeWidth={2.75} />;
+}
 
 /**
  * El estado del día al estilo Whoop: dos anillos completos (esfuerzo por fuera en azul, preparación por dentro con el color
@@ -231,19 +247,27 @@ export function DayRing({
         </div>
       </div>
 
-      {/* El consejo del día (solo hoy y antes de entrenar): el verbo con el color del estado y el motivo. Cerrado el día, o en un día pasado, el balance. */}
-      <p className="mx-auto mt-5 max-w-[23rem] text-center text-base leading-relaxed text-neutral-200">
-        {advice && isToday && real === null ? (
-          <>
+      {/* El consejo del día (solo hoy y antes de entrenar): una caja neutra con el icono y el verbo en el color del estado, y el motivo.
+          Cerrado el día, o en un día pasado, el balance de esfuerzo. */}
+      {advice && isToday && real === null ? (
+        <div className="mx-auto mt-5 flex max-w-[26rem] items-start gap-2.5 rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[13px] leading-relaxed">
+          <span
+            className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+            style={{ color: ADVICE_COLOR[advice.tone], backgroundColor: `color-mix(in srgb, ${ADVICE_COLOR[advice.tone]} 16%, transparent)` }}
+            aria-hidden="true"
+          >
+            <AdviceGlyph icon={advice.icon} />
+          </span>
+          <p className="text-neutral-300">
             <strong className="font-bold" style={{ color: ADVICE_COLOR[advice.tone] }}>
               {advice.lead}
             </strong>
             {advice.reason && <> {advice.reason}</>}
-          </>
-        ) : (
-          sentence(strain, isToday)
-        )}
-      </p>
+          </p>
+        </div>
+      ) : (
+        <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">{sentence(strain, isToday)}</p>
+      )}
 
       {/* Si la sesión de hoy se pasa del objetivo, la decisión está aquí, no escondida en otra pestaña. */}
       {onAdjust && isToday && real === null && strain.fit?.fit === 'se-pasa' && (
