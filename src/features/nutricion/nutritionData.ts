@@ -1,14 +1,11 @@
-import type { AthleteProfile, CustomFood, CustomMealItem, ExtraFoodEntry, NutritionPrefs, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, CustomFood, ExtraFoodEntry, NutritionPrefs, SessionHistoryEntry } from '../../data/athlete/types';
 import { makeFoodResolver } from '../../engine/customFoods';
 import { generateSessionForDate } from '../../engine/generateSession';
-import { applyCustomMeals, totalsOf } from '../../engine/mealBuilder';
-import type { ExtraInput } from '../../engine/dayFlow';
-import { defaultTrainingHour, planDayMeals, type DayMealPlan, type MealKey } from '../../engine/mealPlan';
-import { classifyNutritionDay, type NutritionDayType } from '../../engine/nutritionPlan';
+import { totalsOf } from '../../engine/mealBuilder';
+import { classifyNutritionDay, nutritionForDay, type NutritionDayType } from '../../engine/nutritionPlan';
 import { getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { resolveWeekLocks } from '../../engine/weekLocks';
 
-export const WEEKDAY_SHORT = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
 export const WEEKDAY_LONG = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
 export function parseIso(iso: string): Date {
@@ -52,38 +49,24 @@ export function computeWeekDays(profile: AthleteProfile, history: SessionHistory
   });
 }
 
-export function trainingHourFor(prefs: NutritionPrefs | undefined, iso: string): number {
-  const idx = getWeekdayIndex(parseIso(iso));
-  return prefs?.trainingHours?.[String(idx)] ?? defaultTrainingHour(idx);
+/** Lo que toca de proteína y de hidratos en un día: el punto medio del rango de cada uno (`nutritionForDay`), en gramos. */
+export function dayTarget(dayType: NutritionDayType, weightKg: number): { protein: number; carbs: number } {
+  const n = nutritionForDay(dayType, weightKg);
+  return { protein: Math.round((n.proteinG.min + n.proteinG.max) / 2), carbs: Math.round((n.carbsG.min + n.carbsG.max) / 2) };
 }
 
-/** El menú automático de un día, SIN aplicar lo que el atleta haya montado a mano — para comparar contra ello. */
-export function autoPlanFor(prefs: NutritionPrefs | undefined, iso: string, dayType: NutritionDayType, weightKg: number, trainingHour?: number): DayMealPlan {
-  return planDayMeals({
-    date: iso,
-    dayType,
-    weightKg,
-    trainingHour: trainingHour ?? trainingHourFor(prefs, iso),
-    prefs: { excludedFoodIds: prefs?.excludedFoodIds, swaps: prefs?.swaps },
-  });
-}
-
-/** Menú de un día: la sugerencia automática con las comidas que el atleta montó a mano ya aplicadas. */
-export function planFor(prefs: NutritionPrefs | undefined, iso: string, dayType: NutritionDayType, weightKg: number, trainingHour?: number): DayMealPlan {
-  const plan = autoPlanFor(prefs, iso, dayType, weightKg, trainingHour);
-  return applyCustomMeals(plan, prefs?.customMeals?.[iso], makeFoodResolver(prefs?.customFoods));
-}
-
-/** Los extras de un día (ver [[ExtraFoodEntry]]), ya con sus macros calculadas — listos para `computeDayFlow`. */
-export function extraInputsFor(prefs: NutritionPrefs | undefined, iso: string): ExtraInput[] {
+/** Lo apuntado en el diario de un día: cuántos apuntes hay y la proteína y los hidratos que suman. */
+export function eatenFor(prefs: NutritionPrefs | undefined, iso: string): { count: number; protein: number; carbs: number } {
   const entries = prefs?.extraFoods?.[iso] ?? [];
-  if (entries.length === 0) return [];
   const resolve = makeFoodResolver(prefs?.customFoods);
-  return entries.map((e) => {
+  let protein = 0;
+  let carbs = 0;
+  for (const e of entries) {
     const t = totalsOf(e.items, resolve);
-    const label = e.items.map((it) => resolve(it.foodId)?.name).filter((n): n is string => Boolean(n)).join(' + ') || 'Alimento';
-    return { id: e.id, label, hour: e.hour, protein: t.protein, carbs: t.carbs };
-  });
+    protein += t.protein;
+    carbs += t.carbs;
+  }
+  return { count: entries.length, protein, carbs };
 }
 
 /** Añade un extra al día. */
@@ -98,25 +81,6 @@ export function withoutExtra(prefs: NutritionPrefs, iso: string, entryId: string
   const all = { ...(prefs.extraFoods ?? {}) };
   all[iso] = (all[iso] ?? []).filter((e) => e.id !== entryId);
   return { ...prefs, extraFoods: all };
-}
-
-/** Id del apunte del diario que corresponde a una comida del menú ("la he comido"): uno por comida y día, así no se duplica. */
-export const menuEntryId = (meal: MealKey): string => `menu-${meal}`;
-
-/** La comida del menú ya está apuntada en el diario de ese día. */
-export function isMenuEaten(prefs: NutritionPrefs | undefined, iso: string, meal: MealKey): boolean {
-  return (prefs?.extraFoods?.[iso] ?? []).some((e) => e.id === menuEntryId(meal));
-}
-
-/** Apunta una comida del menú en el diario del día (sustituye el apunte anterior de esa comida si lo había). */
-export function withMenuEaten(prefs: NutritionPrefs, iso: string, meal: MealKey, hour: number, items: CustomMealItem[]): NutritionPrefs {
-  const without = withoutExtra(prefs, iso, menuEntryId(meal));
-  return withExtra(without, iso, { id: menuEntryId(meal), hour, items });
-}
-
-/** Quita del diario la comida del menú. */
-export function withoutMenuEaten(prefs: NutritionPrefs, iso: string, meal: MealKey): NutritionPrefs {
-  return withoutExtra(prefs, iso, menuEntryId(meal));
 }
 
 /** Cambia la cantidad de un alimento de un apunte del diario. */
@@ -142,36 +106,6 @@ export function withoutCustomFood(prefs: NutritionPrefs, foodId: string): Nutrit
       )
     : prefs.extraFoods;
   return { ...prefs, customFoods: (prefs.customFoods ?? []).filter((f) => f.id !== foodId), extraFoods };
-}
-
-type CustomMap = NonNullable<NutritionPrefs['customMeals']>;
-
-/** Preferencias con la comida `meal` de `iso` montada a mano (lista completa de alimentos). */
-export function withCustomMeal(prefs: NutritionPrefs, iso: string, meal: MealKey, items: CustomMealItem[]): NutritionPrefs {
-  const all: CustomMap = { ...(prefs.customMeals ?? {}) };
-  all[iso] = { ...(all[iso] ?? {}), [meal]: items };
-  return { ...prefs, customMeals: all };
-}
-
-/**
- * Preferencias sin lo montado a mano de una comida (`meal`) o del día entero (sin `meal`): vuelve la sugerencia
- * automática. La fecha se queda con un objeto vacío en vez de borrarse, para que la fusión entre dispositivos no
- * "reviva" lo que el otro dispositivo aún tuviera guardado.
- */
-export function withoutCustomMeal(prefs: NutritionPrefs, iso: string, meal?: MealKey): NutritionPrefs {
-  const all: CustomMap = { ...(prefs.customMeals ?? {}) };
-  if (meal) {
-    const day = { ...(all[iso] ?? {}) };
-    delete day[meal];
-    all[iso] = day;
-  } else {
-    all[iso] = {};
-  }
-  return { ...prefs, customMeals: all };
-}
-
-export function customMealCount(prefs: NutritionPrefs, iso: string): number {
-  return Object.keys(prefs.customMeals?.[iso] ?? {}).length;
 }
 
 /** "hoy", "mañana" o "lun 28 sep". */

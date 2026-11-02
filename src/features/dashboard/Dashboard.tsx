@@ -26,7 +26,7 @@ import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
 import { buildFormModel, formRowNote } from './formModel';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
-import { extraInputsFor, planFor, trainingHourFor } from '../nutricion/nutritionData';
+import { dayTarget, eatenFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
 import { WeekTrendCard } from './WeekTrendCard';
 import { SleepTab } from './SleepHabits';
@@ -127,14 +127,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     const dayEntry = history.find((h) => h.date === dayIso);
     const daySession = isToday ? (todaySession ?? athleteRepository.getCachedSession(dayIso)) : profile.sessionCache?.[dayIso];
     const dayType = daySession ? classifyNutritionDay(daySession) : dayEntry ? 'normal' : 'descanso';
-    const plan = planFor(prefs, dayIso, dayType, latestBodyweightKg, trainingHourFor(prefs, dayIso));
-    const eaten = extraInputsFor(prefs, dayIso);
+    const target = dayTarget(dayType, latestBodyweightKg);
+    const eaten = eatenFor(prefs, dayIso);
     // Un día pasado sin nada apuntado no muestra la fila (un 0 % no dice nada).
-    if (!isToday && eaten.length === 0) return null;
-    return {
-      protein: { done: eaten.reduce((s, e) => s + e.protein, 0), target: Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2) },
-      carbs: { done: eaten.reduce((s, e) => s + e.carbs, 0), target: Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2) },
-    };
+    if (!isToday && eaten.count === 0) return null;
+    return { protein: { done: eaten.protein, target: target.protein }, carbs: { done: eaten.carbs, target: target.carbs } };
   }, [latestBodyweightKg, profile.nutritionPrefs, profile.sessionCache, history, dayIso, isToday, todaySession]);
   const nutritionPercent = nutrition ? nutritionPct(nutrition) : null;
   // Datos de las gráficas de las pestañas (solo se calculan al abrirlas).
@@ -277,8 +274,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
       {showNutrition && (
         <NutritionModal
-          profile={profile}
           history={history}
+          deloadToday={Boolean(todaySession?.deloadReason)}
           bodyweightLog={bodyweightLog}
           progress={nutrition}
           dayLabel={dayLabel(dayIso, todayIso)}

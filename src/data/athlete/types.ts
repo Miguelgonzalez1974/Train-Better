@@ -238,8 +238,9 @@ export type SoreLevelNum = 1 | 2;
 export type HabitTag = 'alcohol' | 'cafeina' | 'cena-tarde' | 'pantallas' | 'viaje' | 'estres-trabajo' | 'siesta' | 'enfermo';
 
 /**
- * Preferencias del módulo de nutrición (menús del día/semana). Todo opcional: sin ellas se usa el catálogo
- * entero y el horario por defecto. Ver `src/engine/mealPlan.ts`.
+ * Preferencias del módulo de nutrición. Hoy solo se usan `customFoods` y `extraFoods` (el diario del día). Los demás
+ * campos son de los menús del día/semana, que ya no existen: se siguen guardando y sincronizando para no perder datos
+ * antiguos, pero ninguna pantalla los lee ni los escribe.
  */
 export interface NutritionPrefs {
   /** Ids del catálogo (`data/nutrition/foods.ts`) que el atleta no quiere ver en sus menús. */

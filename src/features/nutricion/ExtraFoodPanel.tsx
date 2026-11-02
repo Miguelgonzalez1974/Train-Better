@@ -3,8 +3,7 @@ import { Plus, Search, X } from 'lucide-react';
 import { FOODS } from '../../data/nutrition/foods';
 import type { CustomFood, CustomMealItem, ExtraFoodEntry, NutritionPrefs } from '../../data/athlete/types';
 import { customFoodToCatalogFood } from '../../engine/customFoods';
-import { BUILDER_GROUPS, builderFoods, totalsOf, type BuilderGroup } from '../../engine/mealBuilder';
-import { fixedPortion } from '../../engine/mealPlan';
+import { BUILDER_GROUPS, builderFoods, fixedPortion, totalsOf, type BuilderGroup } from '../../engine/mealBuilder';
 import { QuantityStepper } from './QuantityStepper';
 import { withExtra } from './nutritionData';
 

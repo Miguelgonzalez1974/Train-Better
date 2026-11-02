@@ -3,11 +3,10 @@ import { getFood, type Food, type FoodRole, type ShoppingCategory } from '../dat
 
 /**
  * Alimentos propios: el atleta solo da proteína e hidratos por 100 g (y el grupo donde quiere verlo). Este módulo
- * los convierte en un `Food` normal para poder usarlos con el resto del motor — montar comidas, extras del día y
- * lista de la compra — sin que el catálogo estático tenga que saber que existen.
+ * los convierte en un `Food` normal para poder usarlos al apuntar lo que comes, sin que el catálogo estático tenga que
+ * saber que existen.
  *
- * Deliberadamente NO entran en el menú automático (`generateSession`/`mealPlan`, que solo lee `data/nutrition/foods.ts`):
- * son para montar a mano o añadir como extra, nunca para que el motor los elija solo.
+ * Solo se usan al apuntar en el diario (`ExtraFoodPanel`): el catálogo estático (`data/nutrition/foods.ts`) no los lee.
  */
 
 export type FoodResolver = (id: string) => Food | undefined;
@@ -40,7 +39,7 @@ const GROUP_TO_ROLE: Record<CustomFoodGroup, FoodRole> = {
   Extra: 'extra',
 };
 
-/** Convierte un alimento propio en un `Food` del catálogo, para poder usarlo con `mealBuilder`/`mealPlan`. */
+/** Convierte un alimento propio en un `Food` del catálogo, para poder usarlo con `mealBuilder`. */
 export function customFoodToCatalogFood(cf: CustomFood): Food {
   return {
     id: cf.id,
@@ -57,9 +56,4 @@ export function makeFoodResolver(customFoods: CustomFood[] | undefined): FoodRes
   if (!customFoods || customFoods.length === 0) return getFood;
   const map = new Map(customFoods.map((cf) => [cf.id, customFoodToCatalogFood(cf)]));
   return (id: string) => map.get(id) ?? getFood(id);
-}
-
-/** true si el id no está en el catálogo estático (es propio del atleta o ya no existe). */
-export function isCustomFoodId(id: string): boolean {
-  return getFood(id) === undefined;
 }

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import { makeFoodResolver } from '../../engine/customFoods';
 import { totalsOf } from '../../engine/mealBuilder';
-import { fixedPortion, MEAL_LABEL, type MealKey } from '../../engine/mealPlan';
+import { fixedPortion } from '../../engine/mealBuilder';
 import { NUTRITION_DAY_LABEL, type NutritionDayType } from '../../engine/nutritionPlan';
 import type { ExtraFoodEntry } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
@@ -12,7 +12,7 @@ import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MacroRing } from './MacroRing';
 import { MisAlimentosPanel } from './MisAlimentosPanel';
 import { QuantityStepper } from './QuantityStepper';
-import { addDays, dayLabel, planFor, trainingHourFor, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
+import { addDays, dayLabel, dayTarget, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
 
 const DAY_TYPES: NutritionDayType[] = ['descanso', 'ligero', 'normal', 'alto'];
@@ -25,14 +25,13 @@ interface DiarioViewProps {
   shared: NutritionShared;
   iso: string;
   onChangeIso: (iso: string) => void;
-  onOpenGuide: () => void;
 }
 
 /**
  * Diario del día: dos anillos (proteína e hidratos) que se llenan según apuntas lo que comes, sin comida ni hora que
  * elegir. El objetivo es el del día según el entreno y tu peso. Lo apuntado se guarda como `extraFoods` del día.
  */
-export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioViewProps) {
+export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
   const { prefs, weightKg, todayIso, updatePrefs, getWeek } = shared;
   const day = getWeek(iso).find((d) => d.iso === iso);
   const [typeOverride, setTypeOverride] = useState<NutritionDayType | null>(null);
@@ -45,11 +44,7 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
   }, [iso]);
 
   const dayType = typeOverride ?? day?.type ?? 'normal';
-  const plan = useMemo(() => planFor(prefs, iso, dayType, weightKg, trainingHourFor(prefs, iso)), [prefs, iso, dayType, weightKg]);
-  const objective = {
-    protein: Math.round((plan.target.proteinG.min + plan.target.proteinG.max) / 2),
-    carbs: Math.round((plan.target.carbsG.min + plan.target.carbsG.max) / 2),
-  };
+  const objective = useMemo(() => dayTarget(dayType, weightKg), [dayType, weightKg]);
 
   const resolve = useMemo(() => makeFoodResolver(prefs.customFoods), [prefs.customFoods]);
   const entries = prefs.extraFoods?.[iso] ?? [];
@@ -184,7 +179,6 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
             {rows.map(({ entry, items, protein, carbs }) => (
               <li key={entry.id} className="flex items-start gap-2 py-3">
                 <div className="min-w-0 flex-1">
-                  {entry.id.startsWith('menu-') && <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">{MEAL_LABEL[entry.id.slice(5) as MealKey] ?? 'Menú'}</p>}
                   <ul className="flex flex-col gap-1.5">
                     {items.map((it) => (
                       <li key={`${entry.id}-${it.index}`} className="flex items-center justify-between gap-2">
@@ -233,9 +227,6 @@ export function DiarioView({ shared, iso, onChangeIso, onOpenGuide }: DiarioView
         <ChevronRight size={16} className="text-neutral-500" aria-hidden="true" />
       </button>
 
-      <button onClick={onOpenGuide} className="flex items-center justify-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-xs font-semibold text-neutral-300 hover:text-white">
-        <BookOpen size={14} aria-hidden="true" /> Guía completa, tendencia de peso y fuentes
-      </button>
       <p className="text-[11px] leading-relaxed text-neutral-600">
         Orientativo, no una dieta ni un consejo médico. Las cantidades son aproximadas (carne, pescado, arroz, pasta y patata, en crudo) y no cuentan calorías.
       </p>

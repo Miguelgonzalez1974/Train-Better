@@ -4,7 +4,6 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { NutritionPrefs } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { BodyweightCard } from '../dashboard/BodyweightCard';
-import { NutritionModal } from '../dashboard/NutritionModal';
 import { Modal } from '../shell/Modal';
 import { DiarioView } from './DiarioView';
 import { computeWeekDays, mondayOf, type WeekDay } from './nutritionData';
@@ -18,7 +17,6 @@ export function Nutricion() {
   const [profile, setProfile] = useState(() => athleteRepository.getProfile());
   const [history] = useState(() => athleteRepository.getHistory());
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
-  const [showGuide, setShowGuide] = useState(false);
   const [showWeight, setShowWeight] = useState(false);
   const todayIso = toLocalIsoDate(new Date());
   const [selectedIso, setSelectedIso] = useState(todayIso);
@@ -77,20 +75,7 @@ export function Nutricion() {
           </div>
         </div>
       ) : (
-        <DiarioView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} onOpenGuide={() => setShowGuide(true)} />
-      )}
-
-      {showGuide && (
-        <NutritionModal
-          profile={profile}
-          history={history}
-          bodyweightLog={bodyweightLog}
-          onClose={() => setShowGuide(false)}
-          onOpenBodyweight={() => {
-            setShowGuide(false);
-            setShowWeight(true);
-          }}
-        />
+        <DiarioView shared={shared} iso={selectedIso} onChangeIso={setSelectedIso} />
       )}
 
       {showWeight && (

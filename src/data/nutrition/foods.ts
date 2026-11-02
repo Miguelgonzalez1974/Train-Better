@@ -1,8 +1,8 @@
-﻿/**
+/**
  * Catálogo de alimentos de los menús. Valores por 100 g APROXIMADOS (USDA FoodData Central; varían con la marca
  * y la cocción). Carnes, pescados, arroz, pasta, patata, cuscús y avena van en CRUDO / seco (lo que se pesa al
  * comprar y al cocinar en tanda); legumbres y fiambre, tal como se compran. Son alimentos corrientes, de
- * supermercado y de cocina fácil — el motor (`engine/mealPlan.ts`) decide cuánto de cada uno.
+ * supermercado y de cocina fácil — las cantidades las apunta el atleta (`engine/mealBuilder.ts`).
  */
 
 /** Hueco que un alimento puede ocupar en una comida. */
@@ -24,27 +24,8 @@ export type FoodRole =
 
 export type ShoppingCategory = 'proteinas' | 'lacteos' | 'hidratos' | 'fruta' | 'verdura' | 'despensa';
 
-export const SHOPPING_CATEGORY_LABEL: Record<ShoppingCategory, string> = {
-  proteinas: 'Carne, pescado y fiambre',
-  lacteos: 'Huevos y lácteos',
-  hidratos: 'Arroz, pasta, pan y patata',
-  fruta: 'Fruta',
-  verdura: 'Verdura',
-  despensa: 'Despensa',
-};
-
-export const SHOPPING_CATEGORY_ORDER: ShoppingCategory[] = ['proteinas', 'lacteos', 'hidratos', 'fruta', 'verdura', 'despensa'];
-
-/** Etiquetas para excluir de golpe una familia entera (p. ej. "no tomo lácteos"). */
+/** Familia del alimento (carne, pescado, lácteo...). */
 export type FoodTag = 'lacteo' | 'pescado' | 'carne' | 'huevo' | 'gluten';
-
-export const FOOD_TAG_LABEL: Record<FoodTag, string> = {
-  lacteo: 'Lácteos',
-  pescado: 'Pescado',
-  carne: 'Carne',
-  huevo: 'Huevos',
-  gluten: 'Gluten',
-};
 
 export interface Food {
   id: string;
@@ -326,46 +307,8 @@ export const FOODS: Food[] = [
   { id: 'mozzarella', name: 'Mozzarella', roles: [], category: 'lacteos', per100: { p: 20, c: 2, f: 18 }, tags: ['lacteo'] },
 ];
 
-/**
- * Semanas de prueba: durante esa semana (lunes ISO) el menú incluye cada alimento de la lista al menos una vez, repartidos
- * por los días y las comidas donde encajan, en vez de esperar a que la rotación normal los saque. Sirve para probar los
- * alimentos recién añadidos. Fuera de esas semanas manda la rotación de siempre. Lo que el atleta haya cambiado a mano o
- * excluido manda sobre la prueba.
- */
-export const TRIAL_WEEKS: { monday: string; foodIds: string[] }[] = [
-  {
-    monday: '2026-09-28',
-    foodIds: [
-      'langostinos', 'sardinas', 'pollo-tiras', 'clara-huevo', 'centeno', 'crema-cacahuete', 'cacahuete-polvo', 'kefir', 'datiles',
-      'arandanos-secos', 'gelatina', 'infusion', 'jamon-serrano', 'queso-cabra', 'cheddar', 'anchoas', 'noquis', 'mazorca', 'galletas', 'bimbo', 'mermelada-light',
-    ],
-  },
-];
-
-/**
- * Básicos de despensa que no entran en los menús (no llevan macros que contar) pero el atleta quiere en su lista de
- * la compra: se activan en Ajustes y salen siempre en la sección Despensa.
- */
-export const STAPLES: { id: string; name: string; text: string }[] = [{ id: 'sacarina', name: 'Sacarina (edulcorante)', text: 'reponer si falta' }];
-
 const BY_ID = new Map(FOODS.map((f) => [f.id, f]));
 
 export function getFood(id: string): Food | undefined {
   return BY_ID.get(id);
 }
-
-/** Alimentos que pueden ocupar un hueco, en el orden del catálogo. */
-export function foodsForRole(role: FoodRole): Food[] {
-  return FOODS.filter((f) => f.roles.includes(role));
-}
-
-
-
-
-
-
-
-
-
-
-
