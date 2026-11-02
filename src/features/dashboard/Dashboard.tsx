@@ -12,6 +12,8 @@ import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
+import { dayAdvice } from '../../engine/dayAdvice';
+import { getActivePainFlags } from '../../engine/painFlags';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -141,6 +143,18 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
   const loadKnown = shown.acwr.acwr !== null && !shown.acwr.coldStart;
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
+  // El consejo de hoy: lee lo mismo que los anillos y el semáforo del coach, así que nunca los contradice.
+  const advice = dayAdvice({
+    session: todaySession,
+    hasCheckIn: Boolean(todayReadiness),
+    prep: readiness.total,
+    level: readiness.level,
+    loadZone: acwr.acwr !== null && !acwr.coldStart ? acwr.zone : null,
+    hrvLow: todayReadiness?.hrvVs === 'bajo' || readiness.hrv.hrPenalty > 0,
+    painAreas: getActivePainFlags(profile.painFlags, todayIso).map((f) => f.area),
+    fit: strainView.planned && strainView.fit ? { kind: strainView.fit.fit, planned: strainView.planned.strain, diff: strainView.fit.diff } : null,
+    target: strainTarget,
+  });
   // El check-in se hace en la tarjeta de la mañana (que sale al abrir la app): el Resumen solo guarda una pastilla si se dejó para
   // luego, y lo contestado se ve y se corrige en la pestaña Preparación.
 
@@ -301,6 +315,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
                 </div>
               ) : null
             }
+            advice={advice}
             strain={shown.strain}
             readiness={shown.readiness}
             acwr={shown.acwr}

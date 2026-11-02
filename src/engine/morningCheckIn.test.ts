@@ -7,7 +7,6 @@ import {
   restingHrBaseline,
   soreRoleLevels,
   soreSummary,
-  verdictFor,
 } from './morningCheckIn';
 import { applyPainFollowUps, PAIN_BETTER_DAYS } from './painFlags';
 import { computeHrvPart } from './hrv';
@@ -192,31 +191,6 @@ describe('seguimiento de los avisos de molestia', () => {
   it('"va mejor" no alarga un aviso que ya caducaba antes', () => {
     const soon: PainFlag = { id: 'x', area: 'codo-muneca', createdDate: '2026-03-08', until: '2026-03-11' };
     expect(applyPainFollowUps([soon], { x: 'mejor' }, D)[0].until).toBe('2026-03-11');
-  });
-});
-
-describe('cómo llegas a entrenar, en una frase', () => {
-  it('sale del nivel de la preparación y baja un escalón con una HRV o un pulso en contra', () => {
-    expect(verdictFor({ level: 'alta', day: 'training', hrvLow: false })).toEqual({ text: 'Llegas bien: buen día para apretar', tone: 'good' });
-    expect(verdictFor({ level: 'normal', day: 'training', hrvLow: false })?.tone).toBe('mid');
-    expect(verdictFor({ level: 'normal', day: 'training', hrvLow: true })?.tone).toBe('bad');
-    expect(verdictFor({ level: 'baja', day: 'training', hrvLow: false })?.text).toContain('Llegas justo');
-    // con la preparación alta, una HRV baja suelta no la hunde
-    expect(verdictFor({ level: 'alta', day: 'training', hrvLow: true })?.tone).toBe('good');
-  });
-
-  it('con semáforo manda sobre el nivel en un día de entreno, pero no en descanso', () => {
-    expect(verdictFor({ level: 'alta', day: 'training', hrvLow: false, light: 'ambar' })).toEqual({ text: 'Mantén el estímulo sin acumular', tone: 'mid' });
-    expect(verdictFor({ level: 'baja', day: 'training', hrvLow: false, light: 'verde' })?.tone).toBe('good');
-    expect(verdictFor({ level: 'normal', day: 'training', hrvLow: false, light: 'rojo' })).toEqual({ text: 'Hoy toca recuperar, no entrenar', tone: 'bad' });
-    expect(verdictFor({ level: 'alta', day: 'rest', hrvLow: false, light: 'rojo' })?.text).toBe('Vas muy bien de recuperación');
-  });
-
-  it('en descanso habla de recuperar, y sin nota o tras entrenar no dice nada', () => {
-    expect(verdictFor({ level: 'baja', day: 'rest', hrvLow: false })?.text).toContain('necesitas recuperar');
-    expect(verdictFor({ level: 'alta', day: 'rest', hrvLow: false })?.text).toBe('Vas muy bien de recuperación');
-    expect(verdictFor({ level: null, day: 'training', hrvLow: false })).toBeNull();
-    expect(verdictFor({ level: 'alta', day: 'trained', hrvLow: false })).toBeNull();
   });
 });
 

@@ -225,11 +225,6 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
                 Preparación
               </p>
               {result.light && <DayLightPill light={result.light} className="mt-3" />}
-              {result.verdict && (
-                <p className="mx-auto mt-2 max-w-[19rem] text-center text-[15px] font-semibold leading-snug" style={{ color: result.verdict.tone === 'good' ? GOOD : result.verdict.tone === 'bad' ? LOW : MID }}>
-                  {result.verdict.text}
-                </p>
-              )}
               <p className="mt-1 text-center text-[13px]">
                 {result.target ? (
                   <>

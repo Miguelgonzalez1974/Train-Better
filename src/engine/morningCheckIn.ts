@@ -213,41 +213,6 @@ export interface MorningLine {
   text: string;
 }
 
-export interface MorningVerdict {
-  text: string;
-  tone: 'good' | 'mid' | 'bad';
-}
-
-/**
- * La frase que resume cómo llegas a entrenar, a partir de la nota de preparación de hoy (su nivel), de si hay una HRV por debajo
- * de tu rango o un pulso alto, y de si hay sesión. Es lo primero que lees al terminar la tarjeta.
- */
-export function verdictFor(input: {
-  level: 'alta' | 'normal' | 'baja' | null;
-  day: 'training' | 'rest' | 'trained';
-  hrvLow: boolean;
-  /** El semáforo de hoy, si lo hay: en un día de entreno manda sobre el nivel. */
-  light?: DayLightColor | null;
-}): MorningVerdict | null {
-  const { level, day, hrvLow, light } = input;
-  if (level === null || day === 'trained') return null;
-  if (day === 'training' && light) {
-    // La cápsula del color ya dice "Día ámbar": la frase cuenta qué significa.
-    return light === 'verde'
-      ? { text: 'Llegas bien: a por la sesión', tone: 'good' }
-      : light === 'ambar'
-        ? { text: 'Mantén el estímulo sin acumular', tone: 'mid' }
-        : { text: 'Hoy toca recuperar, no entrenar', tone: 'bad' };
-  }
-  const low = level === 'baja' || (level === 'normal' && hrvLow);
-  if (day === 'rest') {
-    if (low) return { text: 'Hoy necesitas recuperar: duerme y come bien, y nada de extras', tone: 'bad' };
-    return level === 'alta' ? { text: 'Vas muy bien de recuperación', tone: 'good' } : { text: 'Vas normal de recuperación: descansa tranquilo', tone: 'mid' };
-  }
-  if (low) return { text: 'Llegas justo: entrena sin pasarte del objetivo y escucha al cuerpo', tone: 'bad' };
-  return level === 'alta' ? { text: 'Llegas bien: buen día para apretar', tone: 'good' } : { text: 'Llegas normal: entrena como está previsto', tone: 'mid' };
-}
-
 export interface MorningDescribeInput {
   check: ReadinessCheck;
   /** `training` = hay sesión por entrenar, `rest` = día de descanso, `trained` = hoy ya entrenaste. */

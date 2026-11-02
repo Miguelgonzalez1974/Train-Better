@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
+import type { DayAdvice } from '../../engine/dayAdvice';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { recoveryColor } from './RecoveryCard';
 import { ACCENT as EFFORT, OVER, type StrainView } from './StrainRing';
@@ -36,7 +37,7 @@ const circ = (r: number) => 2 * Math.PI * r;
 const STRONG = 'font-semibold text-neutral-100';
 
 /** La frase de debajo del anillo, en lenguaje natural: dónde estás frente a tu objetivo y qué hacer con ello. */
-function sentence(strain: StrainView, readiness: ReadinessScore, acwr: AcwrResult, isToday: boolean): ReactNode {
+function sentence(strain: StrainView, isToday: boolean): ReactNode {
   const { target, real, planned, fit, status } = strain;
   const range = (
     <strong className={STRONG}>
@@ -84,23 +85,15 @@ function sentence(strain: StrainView, readiness: ReadinessScore, acwr: AcwrResul
     first = <>Ese día no registraste sesión. Tu objetivo habría sido {range}.</>;
   }
 
-  const total = readiness.total;
-  const hasLoad = acwr.acwr !== null && !acwr.coldStart;
-  const second =
-    !isToday
-      ? null
-      : total !== null && total >= 65 && hasLoad && (acwr.zone === 'baja' || acwr.zone === 'optima')
-        ? 'Buen día para apretar.'
-        : (total !== null && total <= 40) || (hasLoad && acwr.zone === 'alta')
-          ? 'Hoy, mejor con cuidado.'
-          : null;
-  return (
-    <>
-      {first}
-      {second && <> {second}</>}
-    </>
-  );
+  return first;
 }
+
+const ADVICE_COLOR: Record<DayAdvice['tone'], string> = {
+  good: 'rgb(var(--c-state-good))',
+  mid: 'rgb(var(--c-state-mid))',
+  bad: 'rgb(var(--c-state-low))',
+  info: 'rgb(var(--c-state-cool))',
+};
 
 /**
  * El estado del día al estilo Whoop: dos anillos completos (esfuerzo por fuera en azul, preparación por dentro con el color
@@ -113,6 +106,7 @@ export function DayRing({
   acwr,
   strain,
   checkIn,
+  advice,
   centerLabel,
   isToday,
   onOpenTab,
@@ -122,6 +116,8 @@ export function DayRing({
   acwr: AcwrResult;
   strain: StrainView;
   checkIn?: ReactNode;
+  /** El consejo de hoy (ver `engine/dayAdvice.ts`); sin él, o en un día pasado, la frase habla del esfuerzo. */
+  advice?: DayAdvice | null;
   /** Lo que va en el centro del anillo: "Hoy", "Ayer" o el día. */
   centerLabel: string;
   isToday: boolean;
@@ -235,7 +231,19 @@ export function DayRing({
         </div>
       </div>
 
-      <p className="mx-auto mt-5 max-w-[22rem] text-center text-[13px] leading-relaxed text-neutral-400">{sentence(strain, readiness, acwr, isToday)}</p>
+      {/* El consejo del día (solo hoy y antes de entrenar): el verbo con el color del estado y el motivo. Cerrado el día, o en un día pasado, el balance. */}
+      <p className="mx-auto mt-5 max-w-[23rem] text-center text-base leading-relaxed text-neutral-200">
+        {advice && isToday && real === null ? (
+          <>
+            <strong className="font-bold" style={{ color: ADVICE_COLOR[advice.tone] }}>
+              {advice.lead}
+            </strong>
+            {advice.reason && <> {advice.reason}</>}
+          </>
+        ) : (
+          sentence(strain, isToday)
+        )}
+      </p>
 
       {/* Si la sesión de hoy se pasa del objetivo, la decisión está aquí, no escondida en otra pestaña. */}
       {onAdjust && isToday && real === null && strain.fit?.fit === 'se-pasa' && (

@@ -1,7 +1,7 @@
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DayLightInfo, PainFlag, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
 import { computeHrvStatus, hrvVsOf } from '../../engine/hrv';
-import { checkFromCard, describeMorning, verdictFor, type CardAnswers, type MorningDescribeInput, type MorningLine, type MorningVerdict } from '../../engine/morningCheckIn';
+import { checkFromCard, describeMorning, type CardAnswers, type MorningDescribeInput, type MorningLine } from '../../engine/morningCheckIn';
 import { simulacroDateFor } from '../../engine/competition';
 import { computeReadinessLearning, learnedScoreShift, type LearnedShift } from '../../engine/readinessLearning';
 import { assessSimulacro, resolveCompetitionDay } from '../../engine/taperPlan';
@@ -14,8 +14,6 @@ import { refreshTodaySession, resolveTodaySession } from '../dashboard/todaySess
 export interface MorningResult {
   /** El semáforo de hoy (null en descanso o si aún no hay nota de preparación). */
   light: DayLightInfo | null;
-  /** Cómo llegas a entrenar, en una frase (null si ya entrenaste hoy o aún no hay nota). */
-  verdict: MorningVerdict | null;
   /** Nota de preparación de hoy con lo que acabas de contar (null si aún no hay datos para calcularla). */
   readiness: number | null;
   /** Objetivo de esfuerzo de hoy; null en días de descanso o si ya entrenaste. */
@@ -101,6 +99,5 @@ function buildResult(
     learned,
     soreStrengthCut: Boolean(session?.soreStrengthCut),
   });
-  const hrvLow = check.hrvVs === 'bajo' || score.hrv.hrPenalty > 0;
-  return { light: dayLight, verdict: verdictFor({ level: score.level, day, hrvLow, light: dayLight?.color ?? null }), readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
+  return { light: dayLight, readiness: score.total, target: day === 'training' && stored ? { low: stored.low, high: stored.high } : null, day, changes, notes };
 }
