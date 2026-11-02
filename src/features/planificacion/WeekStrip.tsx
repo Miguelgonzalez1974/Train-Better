@@ -14,6 +14,7 @@ import { wodResultsOf } from '../../engine/wodScoring';
 import { estimatePlannedStrain, strainFit } from '../../engine/plannedStrain';
 import { buildStrainTarget } from '../../engine/strainTarget';
 import { dayStrain } from '../../engine/strain';
+import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -36,9 +37,24 @@ function formatShort(date: Date): string {
   return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).format(date);
 }
 
+/** Botón discreto con la luna para marcar (o quitar) un descanso elegido. */
+function RestButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-300 transition-colors duration-200 hover:bg-white/[0.08]"
+    >
+      <Moon size={13} strokeWidth={2.5} aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
+
 /** Lo que se dibuja de cada día de la semana. */
 interface WeekDay {
   kind: 'done' | 'missed' | 'planned' | 'rest';
+  /** Descanso que el atleta marcó a propósito ("Hoy descanso"), no el que toca por la plantilla. */
+  chosen?: boolean;
   /** Esfuerzo (0-100): el real si está hecho, el previsto si no. */
   strain: number;
   emphasis?: 'fuerza' | 'metcon';
@@ -57,11 +73,13 @@ interface WeekStripProps {
   onDeleteHistoryEntry?: (date: string) => void;
   /** Se registró un día pasado que se había quedado sin apuntar: el padre vuelve a leer el historial. */
   onLoggedDay?: () => void;
+  /** Se marcó o se quitó un descanso elegido: el padre vuelve a leer el perfil. */
+  onRestChange?: () => void;
   /** Botón fijo a la derecha de los siete días (el icono de nutrición de hoy). */
   trailing?: ReactNode;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, trailing }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, onRestChange, trailing }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -76,6 +94,13 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     for (const w of model.allWindows) for (let iso = w.start; iso <= w.end; iso = addDaysIso(iso, 1)) set.add(iso);
     return set;
   }, [profile, history, todayIso]);
+  /** Marca o quita el descanso elegido de un día (se guarda en el perfil y el padre lo relee). */
+  const setRest = (iso: string, on: boolean) => {
+    const current = athleteRepository.getProfile();
+    athleteRepository.saveProfile(on ? withRestMarked(current, iso) : withRestUnmarked(current, iso));
+    setExpanded(null);
+    onRestChange?.();
+  };
   const monday = startOfWeek(today);
   monday.setDate(monday.getDate() + weekOffset * 7);
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -146,6 +171,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
         const band = stored ?? (futureOrToday ? buildStrainTarget(profile, history, dateIso) : undefined);
         const bandInfo = band ? { low: band.low, high: band.high, estimated: dateIso > todayIso || band.provisional } : undefined;
         if (entry) return { kind: 'done', strain: dayStrain(entry) ?? 0, band: bandInfo };
+        if (dateIso <= todayIso && isRestMarked(profile.restDates, dateIso)) return { kind: 'rest', strain: 0, chosen: true };
         if (dateIso < todayIso) return { kind: isTrainingDay ? 'missed' : 'rest', strain: 0, band: isTrainingDay ? bandInfo : undefined };
         const session = isTrainingDay ? sessionFor(date) : null;
         if (!session || session.isRestDay) return { kind: 'rest', strain: 0 };
@@ -233,7 +259,9 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                 ? `No registrado${bandWord ? ` · ${bandWord}` : ''}`
                 : day.kind === 'planned'
                   ? `Esfuerzo previsto ~${day.strain}${bandWord ? ` · ${bandWord}` : ''}${fitWord}${day.emphasis === 'metcon' ? ' · foco metcon' : day.emphasis === 'fuerza' ? ' · día de fuerza' : ' · día mixto'}`
-                  : 'Descanso';
+                  : day.chosen
+                    ? 'Descanso elegido'
+                    : 'Descanso';
           const text = inWindow ? `${baseText} · en ventana de forma` : baseText;
           return (
             <button
@@ -356,19 +384,36 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                   />
                 ) : (
                   <div className="flex flex-col items-start gap-3">
-                    <p className="text-sm text-neutral-500">No registrado</p>
-                    {onLoggedDay && (
-                      <button
-                        onClick={() => setLoggingFor(expanded)}
-                        className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
-                      >
-                        Registrar este día
-                      </button>
+                    {isRestMarked(profile.restDates, dateIso) ? (
+                      <>
+                        <p className="text-sm text-neutral-400">Descanso elegido</p>
+                        <RestButton onClick={() => setRest(dateIso, false)}>Quitar la marca</RestButton>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-neutral-500">No registrado</p>
+                        {onLoggedDay && (
+                          <button
+                            onClick={() => setLoggingFor(expanded)}
+                            className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
+                          >
+                            Registrar este día
+                          </button>
+                        )}
+                        <RestButton onClick={() => setRest(dateIso, true)}>Descansé este día</RestButton>
+                      </>
                     )}
                   </div>
                 )
               ) : isToday ? (
-                <p className="text-sm text-neutral-400">Consulta el detalle completo en «Sesión de hoy».</p>
+                <div className="flex flex-col items-start gap-3">
+                  <p className="text-sm text-neutral-400">{isRestMarked(profile.restDates, dateIso) ? 'Hoy es un descanso elegido.' : 'Consulta el detalle completo en «Sesión de hoy».'}</p>
+                  {isRestMarked(profile.restDates, dateIso) ? (
+                    <RestButton onClick={() => setRest(dateIso, false)}>Quitar la marca</RestButton>
+                  ) : (
+                    <RestButton onClick={() => setRest(dateIso, true)}>Hoy descanso</RestButton>
+                  )}
+                </div>
               ) : expandedPreview?.isRestDay ? (
                 <p className="text-sm text-neutral-400">Descanso</p>
               ) : expandedPreview ? (

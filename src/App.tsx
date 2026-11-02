@@ -30,7 +30,7 @@ function TabLoading() {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabId>('planificacion');
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const { session, loading } = useSession();
   const [syncing, setSyncing] = useState(isSupabaseConfigured);
   // Alta guiada: perfil sin `onboardedAt` y sin ningún macrociclo = atleta nuevo. Se recomprueba tras

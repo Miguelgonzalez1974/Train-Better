@@ -220,7 +220,9 @@ export const localAthleteRepository: AthleteRepository = {
     const trainingDatesLog = [...new Set([...(profile.trainingDatesLog ?? []), entry.date])]
       .sort()
       .slice(-TRAINING_DATES_LOG_LIMIT);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog }));
+    // Si ese día estaba marcado como descanso elegido y al final se entrenó, la marca sobra.
+    const restDates = profile.restDates?.filter((d) => d !== entry.date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, ...(restDates ? { restDates } : {}) }));
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));

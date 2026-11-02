@@ -1,5 +1,6 @@
 import { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from './periodization';
+import { isRestMarked } from './restDays';
 
 /**
  * Racha de dias de entreno PROGRAMADOS cumplidos sin fallar ninguno, contando hacia atras desde
@@ -18,7 +19,14 @@ export function computeAdherenceStreak(profile: AthleteProfile, history: Session
     const dateIso = toLocalIsoDate(cursor);
     const plan = getDayPlan(getWeekdayIndex(cursor), profile.trainingDaysPerWeek);
     if (plan.isTrainingDay) {
-      if (!completedDates.has(dateIso)) break;
+      if (!completedDates.has(dateIso)) {
+        // Un descanso elegido ("Hoy descanso") ni suma ni corta la racha; un día olvidado sí la corta.
+        if (isRestMarked(profile.restDates, dateIso)) {
+          cursor.setDate(cursor.getDate() - 1);
+          continue;
+        }
+        break;
+      }
       streak++;
     }
     cursor.setDate(cursor.getDate() - 1);
@@ -47,5 +55,14 @@ export function computeWeekCount(
   const mondayIso = toLocalIsoDate(startOfWeek(today));
   const todayIso = toLocalIsoDate(today);
   const done = history.filter((h) => h.date >= mondayIso && h.date <= todayIso).length;
-  return { done, planned: profile.trainingDaysPerWeek };
+  // Un día de entreno previsto que descansaste a propósito ("Hoy descanso") sale de lo previsto: no es un fallo.
+  const doneDates = new Set(history.map((h) => h.date));
+  let rested = 0;
+  const cursor = startOfWeek(today);
+  for (let i = 0; i < 7; i++) {
+    const iso = toLocalIsoDate(cursor);
+    if (iso <= todayIso && getDayPlan(i, profile.trainingDaysPerWeek).isTrainingDay && isRestMarked(profile.restDates, iso) && !doneDates.has(iso)) rested++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return { done, planned: Math.max(0, profile.trainingDaysPerWeek - rested) };
 }

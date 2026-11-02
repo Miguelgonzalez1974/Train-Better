@@ -1,5 +1,6 @@
 import type { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from './periodization';
+import { isRestMarked } from './restDays';
 
 /**
  * Constancia del año: de los días de entreno que te tocaban desde que empezaste a usar la app este año (o desde el 1 de
@@ -36,7 +37,8 @@ export function computeYearConsistency(profile: AthleteProfile, history: Session
     const did = trained.has(iso);
     if (did) days++;
     // Hoy solo cuenta como previsto si ya entrenaste: un día sin acabar no es un fallo.
-    if (scheduled && (iso < todayIso || did)) planned++;
+    // Un descanso elegido ("Hoy descanso") no es un fallo: ese día sale de lo previsto.
+    if (scheduled && (iso < todayIso || did) && (did || !isRestMarked(profile.restDates, iso))) planned++;
     cursor.setDate(cursor.getDate() + 1);
   }
 

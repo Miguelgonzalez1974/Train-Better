@@ -362,6 +362,13 @@ describe('borrados: no vuelven tras sincronizar (fusion de tres vias con la ulti
     expect(merged.macrocycles.map((m) => m.id)).toEqual(['verano']);
   });
 
+  it('un descanso elegido se suma de los dos dispositivos y quitar la marca aqui no la revive', () => {
+    expect(mergeProfile({ ...base(), restDates: ['2026-03-01'] }, { ...base(), restDates: ['2026-03-02'] }).restDates).toEqual(['2026-03-01', '2026-03-02']);
+    const synced = { ...base(), restDates: ['2026-03-01', '2026-03-02'] };
+    const local = { ...base(), restDates: ['2026-03-02'] }; // quitaste la marca del 1 aqui; el servidor aun la tiene
+    expect(mergeProfile(synced, local, undefined, undefined, snapshotSyncBase(synced, [])).restDates).toEqual(['2026-03-02']);
+  });
+
   it('sin base (primera sincronizacion) se comporta como la union de siempre', () => {
     const remote = { ...base(), macrocycles: [macro('invierno')] };
     const local = { ...base(), macrocycles: [macro('verano')] };

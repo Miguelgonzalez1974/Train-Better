@@ -1039,6 +1039,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToNutricion }: 
                   setHistory(athleteRepository.getHistory());
                 }}
                 onLoggedDay={handleLoggedPastDay}
+                onRestChange={() => setProfile(athleteRepository.getProfile())}
               />
               {history.length > 0 && (
                 <button

@@ -123,6 +123,7 @@ export function DayRing({
   strain,
   checkIn,
   advice,
+  rest,
   centerLabel,
   isToday,
   onOpenTab,
@@ -134,6 +135,8 @@ export function DayRing({
   checkIn?: ReactNode;
   /** El consejo de hoy (ver `engine/dayAdvice.ts`); sin él, o en un día pasado, la frase habla del esfuerzo. */
   advice?: DayAdvice | null;
+  /** El botón "Hoy descanso" (o su deshacer); sin él no se enseña. */
+  rest?: { marked: boolean; onToggle: () => void };
   /** Lo que va en el centro del anillo: "Hoy", "Ayer" o el día. */
   centerLabel: string;
   isToday: boolean;
@@ -267,6 +270,19 @@ export function DayRing({
         </div>
       ) : (
         <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">{sentence(strain, isToday)}</p>
+      )}
+
+      {/* "Hoy descanso": marca el día como descanso a propósito (no cuenta como día olvidado). Solo hoy y antes de entrenar. */}
+      {rest && isToday && real === null && (
+        <div className="mt-2.5 flex justify-center">
+          <button
+            onClick={rest.onToggle}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-neutral-400 transition-colors duration-200 hover:bg-white/5 hover:text-neutral-200"
+          >
+            <Moon size={13} strokeWidth={2.5} aria-hidden="true" />
+            {rest.marked ? 'Deshacer: voy a entrenar' : 'Hoy descanso'}
+          </button>
+        </div>
       )}
 
       {/* Si la sesión de hoy se pasa del objetivo, la decisión está aquí, no escondida en otra pestaña. */}

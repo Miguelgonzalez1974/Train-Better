@@ -37,6 +37,8 @@ export interface DayAdviceInput {
   /** Lo que se prevé de la sesión frente a tu objetivo de esfuerzo; null si no hay sesión o no se puede estimar. */
   fit: { kind: 'dentro' | 'se-pasa' | 'se-queda-corta'; planned: number; diff: number } | null;
   target: { low: number; high: number };
+  /** Hoy lo marcaste como descanso a propósito ("Hoy descanso"). */
+  restMarked?: boolean;
 }
 
 const PAIN_LABEL: Record<string, string> = {
@@ -63,7 +65,9 @@ const sentence = (...parts: (string | false | null | undefined)[]) => parts.filt
 const withStop = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
 
 export function dayAdvice(input: DayAdviceInput): DayAdvice {
-  const { session, hasCheckIn, prep, level, loadZone, hrvLow, painAreas, fit, target } = input;
+  const { session, hasCheckIn, prep, level, loadZone, hrvLow, painAreas, fit, target, restMarked } = input;
+  // Lo que tú has decidido manda: si marcaste el día como descanso, el consejo es descansar.
+  if (restMarked) return { lead: 'Hoy descansas.', reason: 'Lo marcaste como descanso: descansar bien también suma para mañana.', tone: 'info', icon: 'moon' };
   const fitText = fitClause(fit, target);
   const comp = session?.competition;
   const light = session?.dayLight ?? null;

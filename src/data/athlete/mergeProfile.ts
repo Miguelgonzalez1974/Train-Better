@@ -1,4 +1,5 @@
 import type { AthleteProfile, DailySession, ExtraFoodEntry, SessionHistoryEntry, StrainTarget, WorkSetEntry } from './types';
+import { REST_DATES_LIMIT } from '../../engine/restDays';
 
 /**
  * Fusion de dos estados del atleta (remoto y local) para la sincronizacion. Antes cada `pushRemote`
@@ -29,6 +30,8 @@ export interface SyncBase {
   workLog?: string[];
   setFeedbackLog?: string[];
   history?: string[];
+  /** Fechas marcadas como descanso elegido (`AthleteProfile.restDates`). */
+  restDates?: string[];
   /** Fecha de inicio de la rampa de vuelta que habia (null si no habia). */
   rampStart?: string | null;
 }
@@ -48,6 +51,7 @@ export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistor
     workLog: (profile.workLog ?? []).map(workKey),
     setFeedbackLog: (profile.setFeedbackLog ?? []).map(feedbackKey),
     history: history.map((h) => h.date),
+    restDates: profile.restDates ?? [],
     rampStart: profile.intensityRamp?.startDate ?? null,
   };
 }
@@ -384,6 +388,8 @@ export function mergeProfile(
       PR_LOG_LIMIT,
     ),
     trainingDatesLog: mergeStringSet(remote.trainingDatesLog, local.trainingDatesLog, TRAINING_DATES_LOG_LIMIT),
+    // Descansos elegidos: union, pero quitar la marca ("Deshacer") debe sobrevivir a la sincronizacion como cualquier borrado.
+    restDates: dropDeleted(mergeStringSet(remote.restDates, local.restDates, REST_DATES_LIMIT), (d) => d, base?.restDates, remote.restDates, local.restDates),
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
     // Union por fecha, gana el local en la misma fecha (es una decision de planificacion deliberada,
     // igual criterio que el resto de campos "de config") — recortado igual que sessionCache.

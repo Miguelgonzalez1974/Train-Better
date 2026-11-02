@@ -18,6 +18,14 @@ const base: DayAdviceInput = {
 };
 const advise = (over: Partial<DayAdviceInput>) => dayAdvice({ ...base, ...over });
 
+describe('descanso elegido', () => {
+  it('si marcaste hoy como descanso, el consejo es descansar, aunque el semáforo diga otra cosa', () => {
+    const a = advise({ restMarked: true, session: session({ dayLight: { color: 'verde', reasons: ['Preparación 80 %'] } }) });
+    expect(a).toMatchObject({ lead: 'Hoy descansas.', tone: 'info', icon: 'moon' });
+    expect(a.reason).toContain('Lo marcaste como descanso');
+  });
+});
+
 describe('el icono y el color del consejo', () => {
   const green = { color: 'verde' as const, reasons: ['Preparación 78 %'] };
   it('cada estado lleva su icono y su color', () => {

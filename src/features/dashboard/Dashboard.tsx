@@ -14,6 +14,7 @@ import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
 import { dayAdvice } from '../../engine/dayAdvice';
 import { getActivePainFlags } from '../../engine/painFlags';
+import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -56,7 +57,7 @@ interface DashboardProps {
 export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, onNavigateToNutricion, onOpenMorning }: DashboardProps) {
   const [history] = useState(() => athleteRepository.getHistory());
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
-  const [profile] = useState(() => {
+  const [profile, setProfile] = useState(() => {
     const current = athleteRepository.getProfile();
     const next = ensureStrainTarget(current, history, toLocalIsoDate(new Date()));
     if (next !== current) athleteRepository.saveProfile(next);
@@ -143,8 +144,17 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
   const loadKnown = shown.acwr.acwr !== null && !shown.acwr.coldStart;
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
+  // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
+  const restMarked = isRestMarked(profile.restDates, todayIso);
+  function toggleRest() {
+    const current = athleteRepository.getProfile();
+    const next = restMarked ? withRestUnmarked(current, todayIso) : withRestMarked(current, todayIso);
+    athleteRepository.saveProfile(next);
+    setProfile(next);
+  }
   // El consejo de hoy: lee lo mismo que los anillos y el semáforo del coach, así que nunca los contradice.
   const advice = dayAdvice({
+    restMarked,
     session: todaySession,
     hasCheckIn: Boolean(todayReadiness),
     prep: readiness.total,
@@ -316,6 +326,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               ) : null
             }
             advice={advice}
+            rest={isToday && todayStrain === null && (restMarked || (todaySession !== null && !todaySession.isRestDay)) ? { marked: restMarked, onToggle: toggleRest } : undefined}
             strain={shown.strain}
             readiness={shown.readiness}
             acwr={shown.acwr}

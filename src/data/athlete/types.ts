@@ -311,6 +311,12 @@ export interface AthleteProfile {
    * sin que el contador se quede clavado al llegar al limite del historial detallado.
    */
   trainingDatesLog?: string[];
+  /**
+   * Días (ISO) que el atleta marcó como descanso a propósito ("Hoy descanso"). Sin marca, un día previsto sin registrar se
+   * pinta "no registrado" y cuenta como fallo del plan; con ella es un descanso elegido: se pinta como descanso y no resta.
+   * Si ese día se registra una sesión, la marca se quita sola. Ver `engine/restDays.ts`.
+   */
+  restDates?: string[];
   /** Objetivos activos concurrentes — ver [[Goal]]. Varios pueden convivir (p.ej. competicion + un PR puntual). */
   goals: Goal[];
   /**
