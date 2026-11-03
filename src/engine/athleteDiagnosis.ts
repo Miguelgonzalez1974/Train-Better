@@ -400,7 +400,7 @@ function gymnasticsArea(history: SessionHistoryEntry[]): DiagnosisArea {
 
 function consistencyArea(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date): DiagnosisArea {
   const title = 'Constancia';
-  const y = computeYearConsistency(profile, history, today);
+  const y = computeYearConsistency(profile, history, today, { windowDays: WINDOW_DAYS });
   if (y.pct === null || y.planned < 5 || y.days === 0) {
     return emptyArea('constancia', title, 'Aún pocos días para medir tu constancia.', `Necesito 5 días de entreno previstos; llevas ${y.planned}.`, y.planned);
   }

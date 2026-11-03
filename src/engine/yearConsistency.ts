@@ -19,13 +19,24 @@ export interface YearConsistency {
   since: string;
 }
 
-export function computeYearConsistency(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date): YearConsistency {
+/**
+ * `windowDays`: solo se mira esa ventana reciente (p. ej. 56 días para el diagnóstico del atleta) en lugar de todo el año.
+ * El conteo nunca empieza antes de que el atleta empezara: si hizo el alta, desde ahí; si no, desde su primer día entrenado
+ * registrado (no desde el 1 de enero, que le contaría como fallos los meses en que aún no usaba la app).
+ */
+export function computeYearConsistency(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date, opts: { windowDays?: number } = {}): YearConsistency {
   const todayIso = toLocalIsoDate(today);
   const jan1 = `${today.getFullYear()}-01-01`;
-  const onboarded = profile.onboardedAt ? profile.onboardedAt.slice(0, 10) : jan1;
-  const since = onboarded > jan1 ? onboarded : jan1;
-
   const trained = new Set<string>([...history.map((h) => h.date), ...(profile.trainingDatesLog ?? [])]);
+  const firstTrained = [...trained].sort()[0];
+  const started = profile.onboardedAt ? profile.onboardedAt.slice(0, 10) : (firstTrained ?? todayIso);
+  let since = started > jan1 ? started : jan1;
+  if (opts.windowDays) {
+    const start = new Date(`${todayIso}T12:00:00`);
+    start.setDate(start.getDate() - (opts.windowDays - 1));
+    const windowStart = toLocalIsoDate(start);
+    if (windowStart > since) since = windowStart;
+  }
 
   let planned = 0;
   let days = 0;

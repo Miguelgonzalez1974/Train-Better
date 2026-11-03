@@ -72,6 +72,28 @@ describe('constancia del año', () => {
     expect(withToday.planned).toBe(noToday.planned + 1);
   });
 
+  it('sin alta registrada, se cuenta desde el primer día entrenado y no desde el 1 de enero', () => {
+    const trained = scheduledDates('2026-09-14');
+    const r = computeYearConsistency(profile({ onboardedAt: undefined, trainingDatesLog: trained }), [], TODAY);
+    expect(r.since).toBe('2026-09-14');
+    expect(r.planned).toBe(trained.length);
+    expect(r.pct).toBe(100);
+  });
+
+  it('con una ventana reciente solo se mira esa ventana, sin pasar de cuando empezaste', () => {
+    const all = scheduledDates('2026-01-01');
+    // últimos 14 días (27 sep - 10 oct): todos los previstos menos uno
+    const recent = all.filter((d) => d >= '2026-09-27');
+    const log = [...all.filter((d) => d < '2026-09-27'), ...recent.slice(1)];
+    const r = computeYearConsistency(profile({ trainingDatesLog: log }), [], TODAY, { windowDays: 14 });
+    expect(r.since).toBe('2026-09-27');
+    expect(r.planned).toBe(recent.length);
+    expect(r.days).toBe(recent.length - 1);
+    // la ventana no adelanta el inicio si empezaste después
+    const late = computeYearConsistency(profile({ onboardedAt: '2026-10-05T00:00:00.000Z' }), [], TODAY, { windowDays: 56 });
+    expect(late.since).toBe('2026-10-05');
+  });
+
   it('sin ningún día previsto todavía no hay porcentaje', () => {
     // te diste de alta hoy, que es sábado (no toca)
     const r = computeYearConsistency(profile({ onboardedAt: '2026-10-10T08:00:00.000Z' }), [], TODAY);
