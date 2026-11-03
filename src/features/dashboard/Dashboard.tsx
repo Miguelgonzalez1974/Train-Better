@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Apple, ArrowRight, BarChart3, Flame, Gauge, Sun, Target } from 'lucide-react';
+import { Activity, Apple, ArrowRight, BarChart3, Flame, Radar, Sun, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeWeekCount } from '../../engine/adherence';
@@ -16,12 +16,13 @@ import { dayAdvice } from '../../engine/dayAdvice';
 import { getActivePainFlags } from '../../engine/painFlags';
 import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
 import { describeSkipped } from '../../engine/sessionParts';
+import { activeEmphasisItems, emphasisSubject } from '../../engine/programmingEmphasis';
 import { EmphasisReviewNotice } from './EmphasisReviewNotice';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { buildStructureRow, buildGoalRows } from './progressOverview';
-import { DayRing, ZONE_COLOR, ZONE_TOKEN, ZONE_WORD, type DashTab, type RingTarget } from './DayRing';
+import { DayRing, type DashTab, type RingTarget } from './DayRing';
 import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
@@ -155,7 +156,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const plannedToday = strainView.planned?.strain ?? null;
   const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, history, dayIso, todayIso, days, plannedToday, offsetDays), [profile, history, dayIso, todayIso, plannedToday]);
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
-  const loadKnown = shown.acwr.acwr !== null && !shown.acwr.coldStart;
+  // El icono de Perfil: lo que el coach prioriza ahora (si lo hay) y un punto si hay una revisión de las 4 semanas sin ver.
+  const emphasisNow = activeEmphasisItems(profile);
+  const profileTitle = emphasisNow.length > 0 ? `Perfil · prioriza ${emphasisNow.map((i) => emphasisSubject(i.area, i.row)).join(' y ')}` : 'Perfil';
+  const reviewPending = Boolean(profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar'));
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
   const restMarked = isRestMarked(profile.restDates, todayIso);
@@ -255,17 +259,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           >
             <BarChart3 size={17} strokeWidth={2.25} />
           </button>
-          {/* Carga: el icono toma el color de su zona (óptima, alta…) cuando hay datos, y avisa solo cuando importa. */}
+          {/* Perfil: lo que el coach ve en ti y lo que prioriza. Un punto avisa si hay una revisión de las 4 semanas sin ver. */}
           <button
-            onClick={() => setShowLoad(true)}
-            title={loadKnown ? `Carga · ${ZONE_WORD[shown.acwr.zone]}` : 'Carga'}
-            aria-label="Carga"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
-            style={loadKnown ? { borderColor: `rgb(var(${ZONE_TOKEN[shown.acwr.zone]}) / 0.5)`, color: ZONE_COLOR[shown.acwr.zone] } : undefined}
+            onClick={() => onNavigateToObjetivos('perfil')}
+            title={profileTitle}
+            aria-label={reviewPending ? 'Perfil, hay una revisión nueva' : 'Perfil'}
+            className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
           >
-            <Gauge size={17} strokeWidth={2.25} />
-          </button>
-          <button
+            <Radar size={17} strokeWidth={2.25} />
+            {reviewPending && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-brand-orange ring-2 ring-brand-bg" aria-hidden="true" />}
+          </button>          <button
             onClick={() => setShowConsistency(true)}
             title={yearConsistency.pct !== null ? `Constancia · ${yearConsistency.pct} % (${yearConsistency.days} días este año)` : 'Constancia'}
             aria-label="Constancia"
