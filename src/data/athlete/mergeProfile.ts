@@ -1,4 +1,4 @@
-import type { AthleteProfile, DailySession, ExtraFoodEntry, SessionHistoryEntry, StrainTarget, WorkSetEntry } from './types';
+import type { AthleteProfile, DailySession, DiagnosisAreaKey, DiagnosisCheck, ExtraFoodEntry, SessionHistoryEntry, StrainTarget, WorkSetEntry } from './types';
 import { REST_DATES_LIMIT } from '../../engine/restDays';
 
 /**
@@ -100,6 +100,16 @@ function mergeRegenVariants(remote?: Record<string, number>, local?: Record<stri
 }
 
 const STRAIN_TARGETS_LIMIT = 45;
+
+/** Lo que el atleta dijo de cada área del diagnóstico: por área gana la respuesta más reciente (a igual fecha, la local). */
+function mergeDiagnosisChecks(remote?: AthleteProfile['diagnosisChecks'], local?: AthleteProfile['diagnosisChecks']): AthleteProfile['diagnosisChecks'] {
+  const merged: NonNullable<AthleteProfile['diagnosisChecks']> = { ...(remote ?? {}) };
+  for (const [key, check] of Object.entries(local ?? {}) as [DiagnosisAreaKey, DiagnosisCheck][]) {
+    const other = merged[key];
+    if (!other || check.date >= other.date) merged[key] = check;
+  }
+  return Object.keys(merged).length === 0 ? undefined : merged;
+}
 
 /** Objetivo de esfuerzo por dia: el definitivo (con check-in) gana al provisional; entre iguales, el local. */
 function mergeStrainTargets(remote?: Record<string, StrainTarget>, local?: Record<string, StrainTarget>): Record<string, StrainTarget> | undefined {
@@ -345,6 +355,7 @@ export function mergeProfile(
       local.customComplexes,
     ),
     complexPrefs: local.complexPrefs ?? remote.complexPrefs,
+    diagnosisChecks: mergeDiagnosisChecks(remote.diagnosisChecks, local.diagnosisChecks),
     // Dureza pedida por día: union por fecha, gana el local en la misma fecha (el 0 de «volver a normal» también gana), solo las recientes.
     hardnessLog: remote.hardnessLog || local.hardnessLog ? mergeByKey(remote.hardnessLog, local.hardnessLog, (e) => e.date, (e) => e.date, 120) : undefined,
     hardness: remote.hardness || local.hardness ? pruneByProximityToToday({ ...(remote.hardness ?? {}), ...(local.hardness ?? {}) }, 60) : undefined,

@@ -13,6 +13,7 @@ import {
   Sparkles,
   AlertTriangle,
   PauseCircle,
+  Radar,
   type LucideIcon,
 } from 'lucide-react';
 import { STRENGTH_METHOD_META, STRENGTH_METHODS } from './strengthMethodMeta';
@@ -50,6 +51,7 @@ import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { buildGoalRows, buildStructureRow } from '../dashboard/progressOverview';
 import { JourneyProgress } from '../dashboard/JourneyProgress';
 import { SectionLabel } from '../shell/SectionLabel';
+import { PerfilAtleta } from './PerfilAtleta';
 
 /** A partir de aqui, un objetivo se trata como urgente — mismo umbral usado para destacarlo con el badge pulsante. */
 const URGENT_THRESHOLD_DAYS = 14;
@@ -181,9 +183,10 @@ function newGoalDraft(): Goal {
 const inputClass =
   'rounded-lg border border-brand-border bg-brand-bg px-2.5 py-1.5 text-sm text-white transition-colors focus:border-brand-gold focus:outline-none';
 
-type ObjetivosSection = 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
+type ObjetivosSection = 'perfil' | 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
 
 const SECTION_TABS: { key: ObjetivosSection; label: string; Icon: LucideIcon }[] = [
+  { key: 'perfil', label: 'Perfil', Icon: Radar },
   { key: 'macrociclos', label: 'Macrociclos', Icon: CalendarRange },
   { key: 'programa', label: 'Programa', Icon: Dumbbell },
   { key: 'rampa', label: 'Rampa', Icon: Gauge },
@@ -314,7 +317,7 @@ export function Objetivos() {
         </div>
       )}
 
-      <div role="tablist" className="grid grid-cols-4 gap-1 rounded-xl border border-brand-border bg-brand-surface p-1">
+      <div role="tablist" className="grid grid-cols-5 gap-1 rounded-xl border border-brand-border bg-brand-surface p-1">
         {SECTION_TABS.map((tab) => {
           const isActive = activeSection === tab.key;
           const count = tab.key === 'objetivos' ? profile.goals.length : 0;
@@ -341,6 +344,8 @@ export function Objetivos() {
           );
         })}
       </div>
+
+      {activeSection === 'perfil' && <PerfilAtleta profile={profile} history={history} onSave={(diagnosisChecks) => persist({ ...profile, diagnosisChecks })} />}
 
       {activeSection === 'macrociclos' && (
       <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">

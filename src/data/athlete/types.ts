@@ -318,6 +318,8 @@ export interface AthleteProfile {
    * Si ese día se registra una sesión, la marca se quita sola. Ver `engine/restDays.ts`.
    */
   restDates?: string[];
+  /** Lo que el atleta dijo de cada área del diagnóstico ("Cuadra" / "No cuadra" y por qué). Ver `engine/athleteDiagnosis.ts`. */
+  diagnosisChecks?: Partial<Record<DiagnosisAreaKey, DiagnosisCheck>>;
   /** Objetivos activos concurrentes — ver [[Goal]]. Varios pueden convivir (p.ej. competicion + un PR puntual). */
   goals: Goal[];
   /**
@@ -457,6 +459,22 @@ export interface StrainTarget {
    * cuenta al cerrar el día "partías con X y has hecho Y". No se toca una vez entrenado. Ausente en días anteriores a esta función.
    */
   planned?: number;
+}
+
+/** Las áreas del diagnóstico del atleta (ver `engine/athleteDiagnosis.ts`). */
+export type DiagnosisAreaKey = 'fuerza' | 'halterofilia' | 'motor' | 'gimnasticos' | 'constancia';
+
+/** Por qué el atleta dice que una conclusión no cuadra. */
+export type DiagnosisReason = 'cansado' | 'marcas' | 'mejor' | 'otro';
+
+/** Lo que dijo el atleta de un área: la conclusión cuadra o no, y con cuántos datos estaba el área cuando lo dijo (para volver a preguntar con datos nuevos). */
+export interface DiagnosisCheck {
+  verdict: 'cuadra' | 'no-cuadra';
+  reason?: DiagnosisReason;
+  /** Datos del área en ese momento (`DiagnosisArea.samples`). */
+  samples: number;
+  /** Fecha ISO. */
+  date: string;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */

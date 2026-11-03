@@ -444,8 +444,18 @@ function median(xs: number[]): number {
  * los de cualquier formato. `null` si no hay datos fiables o el ajuste es despreciable. Solo Rx: un
  * WOD escalado se hizo justo para caer en el rango, asi que no informa de cuanto rinde el atleta.
  */
-export function getWodPerformance(history: SessionHistoryEntry[], kind: string): number | null {
-  const samples: { kind: string; perf: number }[] = [];
+export interface WodPerformanceSample {
+  date: string;
+  kind: string;
+  /** >1 = rindio mas de lo estimado, <1 = menos (ya invertido en los WODs por tiempo). */
+  perf: number;
+  /** Sistema energetico del WOD ese dia, si se anoto. */
+  energySystem?: SessionHistoryEntry['energySystem'];
+}
+
+/** Cada WOD en Rx con resultado y banda base guardada, como "cuanto rindio frente a lo estimado". Lo usan la calibracion y el diagnostico del atleta. */
+export function wodPerformanceSamples(history: SessionHistoryEntry[]): WodPerformanceSample[] {
+  const samples: WodPerformanceSample[] = [];
   for (const e of history) {
     const base = e.wodTargetBase;
     if (!e.wodResult || !base || base.mid <= 0 || e.rxOrScaled !== 'rx') continue;
@@ -454,8 +464,13 @@ export function getWodPerformance(history: SessionHistoryEntry[], kind: string):
     const actual = parseWodResultValue(e.wodResult);
     if (actual == null || actual <= 0) continue;
     const ratio = clamp(actual / base.mid, 0.4, 2.5);
-    samples.push({ kind: base.kind, perf: base.unit === 'seconds' ? 1 / ratio : ratio });
+    samples.push({ date: e.date, kind: base.kind, perf: base.unit === 'seconds' ? 1 / ratio : ratio, energySystem: e.energySystem });
   }
+  return samples;
+}
+
+export function getWodPerformance(history: SessionHistoryEntry[], kind: string): number | null {
+  const samples = wodPerformanceSamples(history);
   const sameKind = samples.filter((s) => s.kind === kind).slice(-CALIBRATION_WINDOW_KIND);
   const pool = sameKind.length >= MIN_CALIBRATION_SAMPLES ? sameKind : samples.slice(-CALIBRATION_WINDOW_ALL);
   if (pool.length < MIN_CALIBRATION_SAMPLES) return null;

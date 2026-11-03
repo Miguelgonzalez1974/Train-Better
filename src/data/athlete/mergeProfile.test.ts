@@ -348,6 +348,25 @@ describe('mergeProfile — esfuerzo previsto del día (strainTargets.planned)', 
   });
 });
 
+describe('mergeProfile — lo que dijiste del diagnóstico', () => {
+  const check = (date: string, verdict: 'cuadra' | 'no-cuadra') => ({ verdict, samples: 5, date });
+
+  it('por área gana la respuesta más reciente, y las áreas de cada lado se conservan', () => {
+    const remote = { ...base(), diagnosisChecks: { motor: check('2026-11-01', 'no-cuadra'), fuerza: check('2026-11-02', 'cuadra') } };
+    const local = { ...base(), diagnosisChecks: { motor: check('2026-11-03', 'cuadra') } };
+    const merged = mergeProfile(remote, local).diagnosisChecks;
+    expect(merged?.motor?.verdict).toBe('cuadra');
+    expect(merged?.fuerza?.verdict).toBe('cuadra');
+    // una respuesta antigua del local no pisa a la más reciente del remoto
+    const stale = { ...base(), diagnosisChecks: { motor: check('2026-10-20', 'no-cuadra') } };
+    expect(mergeProfile(local, stale).diagnosisChecks?.motor?.date).toBe('2026-11-03');
+  });
+
+  it('sin respuestas no deja nada', () => {
+    expect(mergeProfile(base(), base()).diagnosisChecks).toBeUndefined();
+  });
+});
+
 describe('mergeHistory', () => {
   const entry = (date: string, extra: Partial<SessionHistoryEntry> = {}): SessionHistoryEntry => ({
     date,
