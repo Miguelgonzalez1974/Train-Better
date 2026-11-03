@@ -1,4 +1,4 @@
-import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, SessionHistoryEntry, StrainTarget } from '../../data/athlete/types';
 import { computeAcwr, getAcwrTrend, type AcwrResult } from '../../engine/loadMetrics';
 import { computeReadinessScore, type ReadinessScore } from '../../engine/readinessScore';
 import { dayStrain, strainStatus } from '../../engine/strain';
@@ -24,6 +24,18 @@ export function buildReadinessSeries(profile: AthleteProfile, history: SessionHi
 }
 
 /**
+ * El previsto de un día para la gráfica: lo anotado antes de entrenar; hoy, sin entrenar, el previsto en vivo; un día sin
+ * sesión (esfuerzo 0) con objetivo fijado vale 0, como lo hecho. null si no se sabe: antes de la primera anotación, el futuro, o un
+ * día entrenado del que no se anotó el previsto (p. ej. se entrenó antes de abrir el Dashboard).
+ */
+export function plannedFor(stored: StrainTarget | undefined, iso: string, todayIso: string, strain: number | null, plannedToday: number | null, firstPlannedIso: string | undefined): number | null {
+  if (iso > todayIso || firstPlannedIso === undefined || iso < firstPlannedIso) return null;
+  if (stored?.planned !== undefined) return stored.planned;
+  if (iso === todayIso && strain === null) return plannedToday;
+  return stored && strain === 0 ? 0 : null;
+}
+
+/**
  * Los `days` días que terminan hoy (o en el día elegido si queda fuera) para la gráfica de tendencia: esfuerzo real (0 en los días sin sesión desde que hay datos,
  * porque un descanso también es un dato; null hoy antes de entrenar y antes de empezar a usar la app), el objetivo de ese día y la
  * preparación con la que se llegó (calculada con lo que se sabía esa mañana).
@@ -33,6 +45,11 @@ export function buildTrendPoints(profile: AthleteProfile, history: SessionHistor
   // hacia atrás si el día elegido en el Dashboard cae antes de su inicio.
   const endIso = isoAddDays(dayIso < isoAddDays(todayIso, -(days - 1)) ? dayIso : todayIso, -offsetDays);
   const firstIso = [...history.map((h) => h.date), ...(profile.readinessLog ?? []).map((r) => r.date)].sort()[0] ?? todayIso;
+  // La línea "Previsto" empieza el primer día en que se anotó un previsto: antes no se sabe, y no se inventa.
+  const firstPlannedIso = Object.entries(profile.strainTargets ?? {})
+    .filter(([, t]) => t.planned !== undefined)
+    .map(([date]) => date)
+    .sort()[0];
   return Array.from({ length: days }, (_, i) => {
     const iso = isoAddDays(endIso, i - (days - 1));
     const entry = history.find((h) => h.date === iso);
@@ -50,7 +67,7 @@ export function buildTrendPoints(profile: AthleteProfile, history: SessionHistor
             painFlags: profile.painFlags,
             today: new Date(`${iso}T12:00:00`),
           }).total;
-    return { iso, strain, target: target ? { low: target.low, high: target.high } : null, readiness, planned: iso === todayIso && strain === null ? plannedToday : null };
+    return { iso, strain, target: target ? { low: target.low, high: target.high } : null, readiness, planned: iso === todayIso && strain === null ? plannedToday : null, plan: plannedFor(profile.strainTargets?.[iso], iso, todayIso, strain, plannedToday, firstPlannedIso) };
   });
 }
 

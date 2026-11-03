@@ -3,7 +3,7 @@
  * periodo anterior de la misma longitud. Todo son reglas fijas sobre los mismos puntos de la gráfica, sin nada inventado: con poca
  * muestra el coach lo dice en vez de afirmar cosas, y el patrón por día de la semana solo sale si se repite al menos tres veces.
  */
-import { dataDays, effortFit, readinessBand, trendSentence, type TrendPoint } from './weekTrend';
+import { dataDays, effortFit, plannedSessions, readinessBand, trendSentence, type TrendPoint } from './weekTrend';
 
 /** Un trozo de texto de una línea: normal, en negrita o una etiqueta de comparación (sube / igual / baja). */
 export type SummarySeg = string | { b: string } | { delta: 'up' | 'eq' | 'down'; t: string };
@@ -148,6 +148,38 @@ function effortRow(c: Closed): SummaryRow | null {
   return { label: 'Esfuerzo', segs: ['Medio ', { b: String(avg) }, ` frente a un objetivo medio de ${tgt}.`] };
 }
 
+/** A partir de qué diferencia entre lo hecho y lo previsto se cuenta como quedarse por debajo o pasarse (en puntos de esfuerzo). */
+const PLAN_GAP = 10;
+
+/** "Previsto": cuántas sesiones cerradas quedaron lejos de lo que el coach esperaba. null con menos de 2 sesiones con previsto. */
+function planRow(points: TrendPoint[], todayIso: string): SummaryRow | null {
+  const s = plannedSessions(points, todayIso);
+  if (s.length < 2) return null;
+  const under = s.filter((x) => x.diff <= -PLAN_GAP).length;
+  const over = s.filter((x) => x.diff >= PLAN_GAP).length;
+  const close = s.length - under - over;
+  const avg = Math.round(mean(s.map((x) => x.diff))!);
+  if (under === 0 && over === 0) return { label: 'Previsto', segs: [{ b: `${s.length} de ${s.length}` }, ' sesiones a menos de 10 puntos de lo previsto.'] };
+  const sessions = s.length;
+  const segs: SummarySeg[] =
+    over === 0
+      ? ['Te quedas por debajo de lo previsto en ', { b: `${under} de ${sessions}` }, ' sesiones']
+      : under === 0
+        ? ['Te pasas de lo previsto en ', { b: `${over} de ${sessions}` }, ' sesiones']
+        : ['Te quedas por debajo en ', { b: String(under) }, ' y te pasas en ', { b: String(over) }, ` de ${sessions} sesiones`];
+  segs.push(`. De media ${avg > 0 ? '+' : avg < 0 ? '−' : ''}${Math.abs(avg)} puntos${close > 0 ? `; ${close} ${close === 1 ? 'quedó' : 'quedaron'} dentro de 10` : ''}.`);
+  return { label: 'Previsto', segs };
+}
+
+/** Una frase para el titular cuando la mayoría de las sesiones se quedan por debajo de lo previsto (y al menos dos); null si no es el caso. */
+function planClause(points: TrendPoint[], todayIso: string): string | null {
+  const s = plannedSessions(points, todayIso);
+  const under = s.filter((x) => x.diff <= -PLAN_GAP);
+  if (under.length < 2 || under.length * 2 < s.length) return null;
+  const last = under.slice(-2).map((x) => `el ${DAY_NAME[dow(x.iso)]} ${x.real} de ${x.plan}`);
+  return `Te quedas por debajo de lo previsto: ${last.join(' y ')}.`;
+}
+
 function restRow(points: TrendPoint[]): SummaryRow | null {
   const rest = points.filter((p) => p.strain === 0).length;
   if (rest === 0) return null;
@@ -182,6 +214,10 @@ export function trendSummary(points: TrendPoint[], prev: TrendPoint[], opts: Sum
   }
   const third = opts.range <= 7 ? nowRow(points, opts) : opts.range <= 14 ? trendRow(points, c) : patternRow(points);
   const rows = [objectiveRow(c), readinessRow(points, prev, opts.range), third].filter((r): r is SummaryRow => r !== null);
-  const more = [effortRow(c), restRow(points)].filter((r): r is SummaryRow => r !== null);
-  return { headline: headlineFor(points, c, opts), rows, more };
+  const more = [planRow(points, opts.todayIso), effortRow(c), restRow(points)].filter((r): r is SummaryRow => r !== null);
+  const headline = headlineFor(points, c, opts);
+  // Con la competición cerca el titular ya habla de llegar fresco: no se le añade nada.
+  const near = opts.range === 7 && opts.competitionDays != null && opts.competitionDays > 0 && opts.competitionDays <= 10;
+  const clause = headline && !near ? planClause(points, opts.todayIso) : null;
+  return { headline: clause ? `${headline} ${clause}` : headline, rows, more };
 }

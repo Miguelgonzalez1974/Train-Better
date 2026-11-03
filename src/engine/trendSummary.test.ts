@@ -58,6 +58,39 @@ describe('trendSummary', () => {
     expect(text(s.more[1].segs)).toBe('3 días sin sesión.');
   });
 
+  describe('el previsto', () => {
+    const withPlan = (plans: (number | null)[]) => week.map((p, i) => ({ ...p, plan: plans[i] }));
+
+    it('sin previsto anotado no hay línea ni frase nueva', () => {
+      const s = trendSummary(week, [], { range: 7, todayIso: today });
+      expect(s.more.some((r) => r.label === 'Previsto')).toBe(false);
+      expect(s.headline).not.toContain('previsto');
+    });
+
+    it('cuenta las sesiones que se quedan por debajo de lo previsto y da la media', () => {
+      // hecho 55, 60, 0, 71, 58, 0, 0 frente a previsto 70, 75, 0, 72, 75, 0, 0
+      const s = trendSummary(withPlan([70, 75, 0, 72, 75, 0, 0]), [], { range: 7, todayIso: today });
+      const row = s.more.find((r) => r.label === 'Previsto')!;
+      expect(text(row.segs)).toBe('Te quedas por debajo de lo previsto en 3 de 4 sesiones. De media −12 puntos; 1 quedó dentro de 10.');
+    });
+
+    it('si se quedan por debajo en la mayoría, el titular lo dice con las dos últimas', () => {
+      const s = trendSummary(withPlan([70, 75, 0, 72, 75, 0, 0]), [], { range: 7, todayIso: today });
+      expect(s.headline).toContain('Te quedas por debajo de lo previsto: el viernes 60 de 75 y el lunes 58 de 75.');
+    });
+
+    it('con lo hecho cerca de lo previsto lo celebra sin avisar', () => {
+      const s = trendSummary(withPlan([55, 62, 0, 70, 60, 0, 0]), [], { range: 7, todayIso: today });
+      expect(text(s.more.find((r) => r.label === 'Previsto')!.segs)).toBe('4 de 4 sesiones a menos de 10 puntos de lo previsto.');
+      expect(s.headline).not.toContain('Te quedas por debajo de lo previsto');
+    });
+
+    it('con la competición cerca el titular no se toca', () => {
+      const s = trendSummary(withPlan([70, 75, 0, 72, 75, 0, 0]), [], { range: 7, todayIso: today, competitionDays: 8 });
+      expect(s.headline).not.toContain('Te quedas por debajo de lo previsto');
+    });
+  });
+
   it('en 14 días avisa si te pasas más hacia el final', () => {
     const pts = Array.from({ length: 14 }, (_, i) => pt(i, i >= 10 ? 72 : 55, 70));
     const s = trendSummary(pts, [], { range: 14, todayIso: iso(13) });

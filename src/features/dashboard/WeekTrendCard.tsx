@@ -18,6 +18,36 @@ const DAY_INITIAL = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 const DAY_LONG = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const dow = (iso: string) => new Date(`${iso}T12:00:00`).getDay();
 
+/** La línea del previsto: blanco apagado, fina y discontinua, para que no se confunda con el azul (lo hecho) ni con el gris (la preparación). */
+const PLAN_STROKE = 'rgb(var(--c-white) / 0.7)';
+
+/**
+ * El hueco entre lo previsto y lo hecho, como trozos de polígono entre días contiguos que tienen las dos cosas: `under` = lo hecho
+ * queda por debajo de lo previsto (gris suave) y si no, por encima (ámbar). Si las dos líneas se cruzan entre dos días, se parte en el cruce.
+ */
+function gapShapes(points: TrendPoint[], x: (i: number) => number, y: (v: number) => number): { d: string; under: boolean }[] {
+  const out: { d: string; under: boolean }[] = [];
+  const quad = (x0: number, p0: number, s0: number, x1: number, p1: number, s1: number, under: boolean) =>
+    out.push({ d: `M${x0.toFixed(1)},${y(p0).toFixed(1)} L${x1.toFixed(1)},${y(p1).toFixed(1)} L${x1.toFixed(1)},${y(s1).toFixed(1)} L${x0.toFixed(1)},${y(s0).toFixed(1)} Z`, under });
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (a.plan == null || b.plan == null || a.strain === null || b.strain === null) continue;
+    const da = a.strain - a.plan;
+    const db = b.strain - b.plan;
+    if (da === 0 && db === 0) continue;
+    if (da * db >= 0) quad(x(i), a.plan, a.strain, x(i + 1), b.plan, b.strain, da + db < 0);
+    else {
+      const t = da / (da - db);
+      const xc = x(i) + (x(i + 1) - x(i)) * t;
+      const vc = a.plan + (b.plan - a.plan) * t;
+      quad(x(i), a.plan, a.strain, xc, vc, vc, da < 0);
+      quad(xc, vc, vc, x(i + 1), b.plan, b.strain, db < 0);
+    }
+  }
+  return out;
+}
+
 const W = 340;
 const H = 190;
 const PAD = { l: 26, r: 40, t: 8, b: 30 };
@@ -47,11 +77,11 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
   const y = (v: number) => PAD.t + (1 - Math.min(100, Math.max(0, v)) / 100) * (H - PAD.t - PAD.b);
   const r = n <= 8 ? 3.6 : n <= 16 ? 3 : 2.2;
 
-  const line = (key: 'strain' | 'readiness') => {
+  const line = (key: 'strain' | 'readiness' | 'plan') => {
     const out: string[] = [];
     let cur: string[] = [];
     points.forEach((p, i) => {
-      const v = p[key];
+      const v = p[key] ?? null;
       if (v === null) {
         if (cur.length > 1) out.push(cur.join(' '));
         cur = [];
@@ -64,6 +94,10 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
   // El día elegido: lo real, o lo previsto si aún no hay esfuerzo (hoy antes de entrenar).
   const shownStrain = selected ? (selected.strain ?? selected.planned ?? null) : null;
   const isPlanned = Boolean(selected && selected.strain === null && selected.planned !== null);
+  // Un día ya entrenado con previsto anotado: junto al esfuerzo sale "previsto ~65" (un día sin sesión prevista no lleva nota).
+  const planNote = selected && selected.strain !== null && selected.plan != null && selected.plan > 0 ? selected.plan : null;
+  const hasPlan = points.some((p) => p.plan != null);
+  const gaps = gapShapes(points, x, y);
   const fit = selected && shownStrain !== null ? effortFit({ strain: shownStrain, target: selected.target }) : 'unknown';
   // Hoy el día no ha terminado: un esfuerzo bajo es lo que llevas, no un veredicto.
   const todayRunning = Boolean(selected && selected.iso === todayIso && !isPlanned && fit === 'below');
@@ -134,6 +168,12 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
                   </p>
                   <p className="mt-1.5 text-[11px] uppercase tracking-[0.1em] text-neutral-500">
                     {isPlanned ? 'Previsto' : 'Esfuerzo'}
+                    {planNote !== null && (
+                      <>
+                        {' · '}
+                        <span className="text-neutral-300">previsto ~{planNote}</span>
+                      </>
+                    )}
                     {todayRunning ? ' · hasta ahora' : FIT_WORD[shownFit] ? ` · ${FIT_WORD[shownFit]}` : ''}
                   </p>
                 </div>
@@ -181,8 +221,15 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
             ))}
 
             {selectedIndex >= 0 && <line x1={x(selectedIndex)} x2={x(selectedIndex)} y1={y(100)} y2={y(0)} stroke="rgb(var(--c-white) / 0.18)" />}
+            {/* El hueco entre lo previsto y lo hecho, por debajo de las líneas: gris si te quedas corto, ámbar si te pasas. */}
+            {gaps.map((g, k) => (
+              <path key={`g${k}`} d={g.d} fill={g.under ? 'rgb(var(--c-white) / 0.085)' : 'rgb(var(--c-state-mid) / 0.14)'} />
+            ))}
             {line('readiness').map((pts, k) => (
               <polyline key={`r${k}`} points={pts} fill="none" stroke="rgb(var(--c-n-500) / 0.55)" strokeWidth={1} strokeLinejoin="round" />
+            ))}
+            {line('plan').map((pts, k) => (
+              <polyline key={`p${k}`} points={pts} fill="none" stroke={PLAN_STROKE} strokeWidth={1.2} strokeDasharray="3 3" strokeLinejoin="round" strokeLinecap="round" />
             ))}
             {line('strain').map((pts, k) => (
               <polyline key={`s${k}`} points={pts} fill="none" stroke={BLUE} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
@@ -195,6 +242,7 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
                 <Fragment key={p.iso}>
                   {p.readiness !== null && <circle cx={x(i)} cy={y(p.readiness)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BAND_COLOR[readinessBand(p.readiness)]} strokeWidth={sw} />}
                   {p.strain !== null && <circle cx={x(i)} cy={y(p.strain)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BLUE} strokeWidth={sw} />}
+                  {on && p.strain !== null && p.plan != null && p.plan > 0 && <circle cx={x(i)} cy={y(p.plan)} r={2.6} fill="rgb(var(--c-white) / 0.95)" stroke="rgb(var(--c-brand-bg))" strokeWidth={1} />}
                   {p.strain === null && p.planned !== null && <circle cx={x(i)} cy={y(p.planned)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BLUE} strokeWidth={sw} strokeDasharray="1.6 1.6" />}
                 </Fragment>
               );
@@ -221,6 +269,18 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
               <span className="inline-block h-2 w-2 rounded-full border-[1.5px]" style={{ borderColor: BLUE }} aria-hidden="true" />
               Esfuerzo
             </span>
+            {hasPlan && (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 border-t-[1.5px] border-dashed" style={{ borderColor: PLAN_STROKE }} aria-hidden="true" />
+                  Previsto
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-3 rounded-[2px]" style={{ background: 'rgb(var(--c-white) / 0.14)' }} aria-hidden="true" />
+                  Diferencia
+                </span>
+              </>
+            )}
             <span className="flex items-center gap-1">
               {[GOOD, MID, LOW].map((c) => (
                 <span key={c} className="inline-block h-2 w-2 rounded-full border-[1.5px]" style={{ borderColor: c }} aria-hidden="true" />

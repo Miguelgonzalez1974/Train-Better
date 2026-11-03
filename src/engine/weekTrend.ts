@@ -14,6 +14,18 @@ export interface TrendPoint {
   readiness: number | null;
   /** Solo hoy, si aún no has entrenado: el esfuerzo que cuesta la sesión prevista. */
   planned: number | null;
+  /**
+   * El esfuerzo previsto de ese día para la línea "Previsto" de la gráfica: el anotado antes de entrenar; 0 en un día sin sesión
+   * prevista (como lo hecho); null si no se sabe (días anteriores a que se anotara, o un día entrenado sin previsto anotado).
+   */
+  plan?: number | null;
+}
+
+/** Una sesión ya cerrada con su previsto: para contar cuánto te quedas o te pasas de lo que el coach esperaba. */
+export function plannedSessions(points: TrendPoint[], todayIso: string): { iso: string; plan: number; real: number; diff: number }[] {
+  return points
+    .filter((p) => p.plan != null && p.plan > 0 && p.strain !== null && !(p.iso === todayIso && p.strain < p.plan))
+    .map((p) => ({ iso: p.iso, plan: p.plan!, real: p.strain!, diff: p.strain! - p.plan! }));
 }
 
 export type ReadinessBand = 'good' | 'mid' | 'low';
