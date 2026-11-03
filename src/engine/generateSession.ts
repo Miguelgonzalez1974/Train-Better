@@ -125,6 +125,7 @@ import {
 import { computeWeakPoints } from './weakPoints';
 import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { buildMicrocyclePlan, type DayIntensity } from './weekPlan';
+import { ACCESSORY_ROLE_FOR_PATTERN, emphasisLevers, sessionEmphasis } from './programmingEmphasis';
 import { rng, seededRng, withSeededRng } from './rng';
 import {
   computeResponseProfile,
@@ -3030,6 +3031,8 @@ function buildAccessoryBlock(
   loadCtx?: Pick<AccessoryLoadContext, 'prs' | 'bodyweightKg' | 'loadFactor'>,
   /** Agujetas de hoy por rol (1 = leves, 2 = fuertes), de la tarjeta de la mañana (ver `soreRoleLevels`). Leves: una serie menos en ese rol. Fuertes: el rol se cambia por otro sin agujetas (y si no hay, una serie menos). */
   soreByRole?: Partial<Record<AccessoryRole, 1 | 2>>,
+  /** Rol que refuerza el diagnostico del atleta hoy (ver programmingEmphasis.ts): se pone como principal de la primera superserie si no esta ya. */
+  emphasisRole?: AccessoryRole,
 ): SessionBlockResult[] {
   // 3 series es el base; la dosis del dia lo mueve entre 2 y 4.
   const accSets = Math.min(4, Math.max(2, Math.round(3 * dose.strengthSets)));
@@ -3051,6 +3054,14 @@ function buildAccessoryBlock(
       roles: [weakRole, plan[0].roles[1]],
       label: `${plan[0].label} · énfasis punto débil`,
       rationale: 'Rol reforzado hoy: este patrón va flojo en tu historial de PRs.',
+    };
+  }
+
+  if (emphasisRole && !plan.some((p) => p.roles.includes(emphasisRole))) {
+    plan[0] = {
+      roles: [emphasisRole, plan[0].roles[1]],
+      label: `${plan[0].label} · énfasis de tu perfil`,
+      rationale: 'Reforzado por tu perfil: es el patrón con más margen en tu perfil de atleta.',
     };
   }
 
@@ -4396,8 +4407,11 @@ function generateDailySessionCore(
   const strengthGoal = pickPriorityGoal(goals, (g) => (g.type === 'elevar-fuerza' || g.type === 'subir-pr') && Boolean(g.movementId));
   const olyGoal = pickPriorityGoal(goals, (g) => (g.type === 'mejorar-potencia' || g.type === 'subir-pr') && Boolean(g.movementId));
   const weeklySplit = usesWeeklySplit(profile);
+  // Lo que el diagnostico del atleta inclina esta semana (ver programmingEmphasis.ts): nada cerca de una competicion.
+  const emphasisNow = comp ? null : emphasisLevers(profile, dateIso);
   const microPlan = buildMicrocyclePlan({
     weeklySplit,
+    emphasis: emphasisNow,
     doubleWodActive: weekHasDouble,
     macroId: macro.id,
     weekNumber: weeksSinceStart(macro.startDate, date) + 1,
@@ -4665,6 +4679,8 @@ function generateDailySessionCore(
   // accesorio suele venir bloqueado por la semana) puede evitar solapar con el tiron/empuje/pierna que
   // el accesorio ya va a cargar. No debe repetir el movimiento que haya salido como A2 de fuerza.
   const accessoryExclude = new Set([...recentIds, ...strengthBlock.map((b) => b.movementId)]);
+  // El patron con margen del diagnostico refuerza el accesorio dos dias a la semana (los dias de entreno impares).
+  const emphasisAccessoryRole = emphasisNow?.pattern && accessoryToday && dayPlan.trainingDayIndex % 2 === 1 ? ACCESSORY_ROLE_FOR_PATTERN[emphasisNow.pattern] : undefined;
   const accessoryWork = accessoryToday
     ? buildAccessoryBlock(
         trainedStrengthPattern,
@@ -4678,6 +4694,7 @@ function generateDailySessionCore(
         weekLock?.accessoryMovements,
         { prs: profile.prs, bodyweightKg: latestBodyweightKg(profile.bodyweightLog), loadFactor: wodLoadFactor },
         soreRoleLevels(readinessCheck?.soreZones),
+        emphasisAccessoryRole,
       )
     : [];
   const wodKindOut: { kind?: WodFormatKind; reasons?: string[]; lockSkipped?: boolean } = { reasons: [] };
@@ -4842,11 +4859,22 @@ function generateDailySessionCore(
     ),
   );
 
+  const profileEmphasis = emphasisNow
+    ? sessionEmphasis(profile, dateIso, {
+        strengthPattern: trainedStrengthPattern,
+        energySystem: wodIsBenchmark || strengthOnlyDay ? null : plannedEnergy,
+        wodDomain: wodIsBenchmark || strengthOnlyDay ? null : plannedDomain,
+        olyFamily: plannedFamily,
+        accessoryReinforced: Boolean(emphasisAccessoryRole) && accessoryWork.length > 0,
+      })
+    : null;
+
   return {
     date: dateIso,
     mesocycleWeek: week,
     isRestDay: false,
     blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
+    ...(profileEmphasis ? { profileEmphasis } : {}),
     ...(light ? { dayLight: light } : {}),
     ...(requestedHardness === 1 || requestedHardness === 2 ? { hardness: requestedHardness, hardnessMode: hardMode } : {}),
     ...(soreCut && !amberToday ? { soreStrengthCut: true } : {}),

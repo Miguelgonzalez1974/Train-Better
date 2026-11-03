@@ -49,6 +49,21 @@ export interface MicrocyclePlan {
 export type DayIntensity = 'alta' | 'media' | 'baja';
 
 /**
+ * Lo que el diagnostico del atleta inclina en la semana (ver `engine/programmingEmphasis.ts`): un empujon dentro de lo que ya hay,
+ * nunca una estructura nueva. Todo opcional; sin nada, la semana sale exactamente como antes.
+ */
+export interface EmphasisLevers {
+  /** Sistema energetico con margen: la semana lleva dos dias de WOD de ese tipo (uno si hay pocos WODs). */
+  engine?: 'base-aerobica' | 'umbral' | 'potencia';
+  /** Patron de fuerza con margen: gana el dia libre del reparto semanal. */
+  pattern?: 'squat' | 'hinge' | 'horizontalPush' | 'verticalPush';
+  /** Familia de oly con margen: empieza la alternancia de la semana. */
+  olyFamily?: 'snatch' | 'clean';
+  /** Gimnasticos con margen: un WOD mas liderado por gimnasticos. */
+  gymnastics?: boolean;
+}
+
+/**
  * Onda de intensidad de la semana por `trainingDayIndex` (el dia 0 se fuerza a 'alta' — es el
  * benchmark). Plantillas fijas por frecuencia, hechas a mano: ningun dia 'alta' pegado a otro, y
  * siempre al menos un dia 'baja' que actue de valle. En Descarga nada sube de 'media'.
@@ -206,6 +221,7 @@ export function planEnergySystems(
   weekNumber: number,
   phase: 1 | 2 | 3 | 4,
   trainingDaysPerWeek: 3 | 4 | 5 | 6,
+  engineBias?: EmphasisLevers['engine'],
 ): EnergySystem[] {
   const rand = mulberry32(hashSeed(`${macroId}:${weekNumber}:energy`));
   const wodSlots = wodDoingSlots(trainingDaysPerWeek);
@@ -214,6 +230,30 @@ export function planEnergySystems(
   wodSlots.forEach((slotIdx, i) => {
     out[slotIdx] = allocated[i];
   });
+  return applyEngineBias(out, engineBias, phase, trainingDaysPerWeek);
+}
+
+/**
+ * Sesgo del diagnostico sobre el reparto de sistemas energeticos: asegura dos dias de WOD del sistema con margen (uno si la semana
+ * tiene menos de cuatro WODs), cambiando el de un sistema repetido y sin dejar dos iguales seguidos si se puede. Nunca en la
+ * descarga, ni el aerobico largo en el pico. El dia 0 (benchmark) no se toca. Determinista.
+ */
+function applyEngineBias(systems: EnergySystem[], bias: EmphasisLevers['engine'], phase: 1 | 2 | 3 | 4, n: 3 | 4 | 5 | 6): EnergySystem[] {
+  if (!bias || phase === 4 || (bias === 'base-aerobica' && phase === 3)) return systems;
+  const slots = wodDoingSlots(n).filter((s) => s !== 0);
+  if (slots.length === 0) return systems;
+  const target = slots.length >= 4 ? 2 : 1;
+  const out = [...systems];
+  while (slots.filter((s) => out[s] === bias).length < target) {
+    const counts = new Map<EnergySystem, number>();
+    for (const s of slots) counts.set(out[s], (counts.get(out[s]) ?? 0) + 1);
+    const candidates = slots.filter((s) => out[s] !== bias);
+    if (candidates.length === 0) break;
+    // Primero el sistema mas repetido (no se pierde ninguno de la fase); a igualdad, el que deja menos iguales juntos y el mas tardio.
+    const touching = (s: number) => (out[s - 1] === bias ? 1 : 0) + (out[s + 1] === bias ? 1 : 0);
+    candidates.sort((a, b) => counts.get(out[b])! - counts.get(out[a])! || touching(a) - touching(b) || b - a);
+    out[candidates[0]] = bias;
+  }
   return out;
 }
 
@@ -233,8 +273,9 @@ const MONO_HEAVY_ENERGY = new Set<EnergySystem>(['base-aerobica', 'recuperacion'
  * favorece el dominio natural del sistema energetico del dia. Determinista y sin PRNG. El slot 0 es el
  * dia de benchmark (no genera WOD) y no cuenta para el reparto.
  */
-export function planWodDomains(n: 3 | 4 | 5 | 6, energySystem: EnergySystem[]): WodDomain[] {
-  const counts: Record<WodDomain, number> = { gymnastics: 0, weighted: 0, monostructural: 0 };
+export function planWodDomains(n: 3 | 4 | 5 | 6, energySystem: EnergySystem[], gymnasticsBias = false): WodDomain[] {
+  // Con los gimnasticos con margen, empiezan un paso por detras en la cuenta: ganan un WOD mas del reparto.
+  const counts: Record<WodDomain, number> = { gymnastics: gymnasticsBias ? -1 : 0, weighted: 0, monostructural: 0 };
   const out: WodDomain[] = Array.from({ length: n }, () => 'gymnastics');
   let prev: WodDomain | null = null;
   for (const slot of wodDoingSlots(n)) {
@@ -281,6 +322,7 @@ function allocatePatterns(
   avoidedPatterns: Set<MovementPattern>,
   goalForcedPattern: StrengthPattern | null,
   rand: () => number,
+  emphasisPattern: StrengthPattern | null = null,
 ): StrengthPattern[] {
   if (slotCount <= 0) return [];
 
@@ -289,6 +331,7 @@ function allocatePatterns(
   const stalled = stalledStrengthPattern(responseProfile);
   if (stalled && isStrengthPattern(stalled) && weight[stalled] > 0) weight[stalled] += 2;
   if (goalForcedPattern && !avoidedPatterns.has(goalForcedPattern)) weight[goalForcedPattern] += 2;
+  if (emphasisPattern && weight[emphasisPattern] > 0) weight[emphasisPattern] += 2;
 
   const avail = STRENGTH_PATTERNS.filter((p) => weight[p] > 0);
   if (avail.length === 0) {
@@ -366,6 +409,7 @@ function allocateSplitPatterns(
   avoidedPatterns: Set<MovementPattern>,
   goalForcedPattern: StrengthPattern | null,
   rand: () => number,
+  emphasisPattern: StrengthPattern | null = null,
 ): StrengthPattern[] {
   const fixed = SPLIT_ORDER[n].slice(0, slotCount);
   if (slotCount <= fixed.length) return fixed;
@@ -375,6 +419,7 @@ function allocateSplitPatterns(
   const stalled = stalledStrengthPattern(responseProfile);
   if (stalled && isStrengthPattern(stalled)) weight[stalled] += 2;
   if (goalForcedPattern) weight[goalForcedPattern] += 2;
+  if (emphasisPattern && !avoidedPatterns.has(emphasisPattern)) weight[emphasisPattern] += 3;
   // Ni el del dia anterior ni el del lunes siguiente (la sentadilla): nunca el mismo patron en dos dias de entreno seguidos
   // (el sabado o el quinto dia de 5 dejan un hueco de descanso antes del lunes).
   const previous = fixed[fixed.length - 1];
@@ -402,6 +447,8 @@ export function buildMicrocyclePlan(input: {
   goalForcedFamily: OlyFamily | null;
   /** Esta semana lleva un dia de doble WOD (sin fuerza ni oly): el hueco se saca de los dias de fuerza. Un dia normal que cae en ese hueco (semana sin doble) reparte fuerza como cualquier otro. */
   doubleWodActive?: boolean;
+  /** Lo que el diagnostico del atleta inclina esta semana (ver EmphasisLevers). */
+  emphasis?: EmphasisLevers | null;
 }): MicrocyclePlan {
   const { macroId, weekNumber, phase, trainingDaysPerWeek: n, responseProfile, avoidedPatterns, goalForcedFamily } = input;
   // El patron del objetivo solo cuenta si es uno de los 4 que el bloque de fuerza cicla — un objetivo
@@ -415,9 +462,10 @@ export function buildMicrocyclePlan(input: {
   // propio oly simetrico (`buildFridayOlyBlock`, ambas familias siempre) independiente del reparto
   // semanal — ver `generateSession.ts`.
   const strengthSlots = strengthDoingSlots(n, input.doubleWodActive ? doubleWodDayIndex(n) : -1);
+  const emphasisPattern: StrengthPattern | null = input.emphasis?.pattern && isStrengthPattern(input.emphasis.pattern) ? input.emphasis.pattern : null;
   const allocated = input.weeklySplit
-    ? allocateSplitPatterns(strengthSlots.length, n, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand)
-    : allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand);
+    ? allocateSplitPatterns(strengthSlots.length, n, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand, emphasisPattern)
+    : allocatePatterns(strengthSlots.length, phase, responseProfile, avoidedPatterns, goalForcedPattern, rand, emphasisPattern);
 
   // Patron por trainingDayIndex: el planificado para los slots de fuerza, y el del ciclo natural
   // como relleno inocuo para el resto (dia de solo metcon / recuperacion — no generan bloque de fuerza).
@@ -432,7 +480,7 @@ export function buildMicrocyclePlan(input: {
   // Familias de oly: se alternan estrictamente a lo largo de los slots de fuerza a partir de un
   // ancla. El ancla la fija un objetivo/estancamiento de oly; si no, alterna por semana para que el
   // mismo dia no lleve siempre la misma.
-  const anchorFam: OlyFamily = goalForcedFamily ?? stalledOlyFamily(responseProfile) ?? (weekNumber % 2 === 0 ? 'snatch' : 'clean');
+  const anchorFam: OlyFamily = goalForcedFamily ?? input.emphasis?.olyFamily ?? stalledOlyFamily(responseProfile) ?? (weekNumber % 2 === 0 ? 'snatch' : 'clean');
   const other = (f: OlyFamily): OlyFamily => (f === 'snatch' ? 'clean' : 'snatch');
   const olyFamily: OlyFamily[] = Array.from({ length: n }, (_, idx) => (idx % 2 === 0 ? 'snatch' : 'clean'));
   strengthSlots.forEach((slotIdx, i) => {
@@ -458,13 +506,13 @@ export function buildMicrocyclePlan(input: {
   // Rotacion de dominios energeticos: la fase fija el sistema dominante y los dias de WOD rotan a su
   // alrededor para no encadenar el mismo estimulo metabolico dos dias seguidos. PRNG propio (ver
   // `planEnergySystems`), independiente del flujo de fuerza/oly.
-  const energySystem = planEnergySystems(macroId, weekNumber, phase, n);
+  const energySystem = planEnergySystems(macroId, weekNumber, phase, n, input.emphasis?.engine);
 
   // Onda de intensidad dura/media/suave de la semana (ver `planDayIntensity`).
   const dayIntensity = planDayIntensity(n, phase);
 
   // Dominio que manda en el WOD de cada dia (ver `planWodDomains`).
-  const wodDomain = planWodDomains(n, energySystem);
+  const wodDomain = planWodDomains(n, energySystem, Boolean(input.emphasis?.gymnastics));
 
   return { weekNumber, phase, strengthPattern, olyFamily, olyCombined, olyComplex, energySystem, wodDomain, dayIntensity };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { NotebookPen, Brain } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult } from '../../data/athlete/types';
@@ -6,6 +6,7 @@ import { SessionBlockCard, type RpeFeedback } from './SessionBlockCard';
 import { BlockPreview } from './BlockPreview';
 import { buildTaskSections, SessionTaskView } from './SessionTaskView';
 import type { MovementProgressData } from './LoadStat';
+import { EmphasisTag } from './ProfileEmphasis';
 
 export const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
 
@@ -101,8 +102,8 @@ export function DaySessionBlocks({
             {openBlocks.size === blocksWithResults.length ? 'Cerrar todo' : 'Abrir todo'}
           </button>
           {blocksWithResults.map(({ block, results, entryIndices }) => (
+            <Fragment key={block}>
             <SessionBlockCard
-              key={block}
               block={block}
               results={results}
               entryIndices={entryIndices}
@@ -125,6 +126,10 @@ export function DaySessionBlocks({
                   }),
               }}
             />
+            {(block === 'strength' || block === 'oly' || block === 'wod' || block === 'accessory') && session.profileEmphasis?.blocks[block] && (
+              <EmphasisTag label={session.profileEmphasis.blocks[block]!.label} why={session.profileEmphasis.blocks[block]!.why} />
+            )}
+            </Fragment>
           ))}
         </div>
       ) : (

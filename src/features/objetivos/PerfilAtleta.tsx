@@ -1,18 +1,20 @@
 import { useMemo, useState } from 'react';
-import { Check, Info } from 'lucide-react';
-import type { AthleteProfile, DiagnosisAreaKey, DiagnosisCheck, DiagnosisReason, SessionHistoryEntry } from '../../data/athlete/types';
+import { Check } from 'lucide-react';
+import type { AthleteProfile, DiagnosisAreaKey, DiagnosisCheck, DiagnosisReason, EmphasisPlan, SessionHistoryEntry } from '../../data/athlete/types';
 import {
   checkState,
   computeAthleteDiagnosis,
   REFERENCE_SCORE,
   REVIEW_STEP,
   type AreaTrend,
+  type AthleteDiagnosis,
   type Confidence,
   type DiagnosisArea,
   type DiagnosisRow,
   type Tone,
 } from '../../engine/athleteDiagnosis';
 import { toLocalIsoDate } from '../../engine/periodization';
+import { addDaysIso, describeLever, EMPHASIS_REVIEW_DAYS, ensureEmphasisPlan, leverFor } from '../../engine/programmingEmphasis';
 import { Modal } from '../shell/Modal';
 import { SectionLabel } from '../shell/SectionLabel';
 
@@ -118,9 +120,123 @@ function Row({ row }: { row: DiagnosisRow }) {
   );
 }
 
+// ---------- La programación según el perfil ----------
+
+function shortDate(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', '');
+}
+
+/**
+ * Lo que el diagnóstico cambia en tus sesiones: un interruptor general y, por separado, cada cosa que aplica ahora (con lo que
+ * hace) para poder quitarla. Lo que el coach vigila pero aún no aplica (pocos datos) y lo que mantiene salen aparte.
+ */
+function EmphasisCard({ profile, diagnosis, history, onChange }: { profile: AthleteProfile; diagnosis: AthleteDiagnosis; history: SessionHistoryEntry[]; onChange: (patch: Partial<AthleteProfile>) => void }) {
+  const plan = profile.emphasisPlan;
+  const enabled = plan?.enabled ?? false;
+  const items = plan?.items ?? [];
+  const removed = new Set(plan?.removed ?? []);
+  const blocked = (i: { area: DiagnosisAreaKey }) => profile.diagnosisChecks?.[i.area]?.verdict === 'no-cuadra';
+  const applying = items.filter((i) => !removed.has(i.key) && !blocked(i));
+  const put = (next: EmphasisPlan) => onChange({ emphasisPlan: next });
+
+  function toggle() {
+    // Al encender se calcula lo que aplica si no estaba hecho; al apagar se conserva todo, solo cambia el interruptor.
+    const turned: EmphasisPlan = { ...(plan ?? { items: [], removed: [] }), enabled: !enabled };
+    onChange({ emphasisPlan: turned.enabled ? (ensureEmphasisPlan({ ...profile, emphasisPlan: turned }, history, new Date()).emphasisPlan ?? turned) : turned });
+  }
+
+  const watching = diagnosis.areas.filter((a) => a.confidence === 'provisional' && (a.tone === 'low' || a.tone === 'mid') && a.weakest && leverFor(a.key, a.weakest.id));
+  const keeping = diagnosis.focus.filter((f) => f.kind === 'mantener');
+
+  return (
+    <div className="rounded-2xl bg-white/[0.03] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[15px] font-semibold text-white">Programar según mi perfil</h3>
+          <p className="mt-1 text-xs leading-relaxed text-neutral-400">
+            El coach inclina tus semanas hacia lo que más margen tiene. Un empujón dentro de lo que ya toca: no cambia tus días, tu objetivo de esfuerzo ni lo que haces si te saltas uno.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Programar según mi perfil"
+          onClick={toggle}
+          className={`relative h-[26px] w-11 shrink-0 rounded-full transition-colors ${enabled ? 'bg-good' : 'bg-white/15'}`}
+        >
+          <span className={`absolute top-[3px] h-5 w-5 rounded-full bg-brand-bg transition-all ${enabled ? 'right-[3px]' : 'left-[3px]'}`} />
+        </button>
+      </div>
+
+      {enabled && (
+        <div className="mt-4 border-t border-white/[0.06] pt-3">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">Ahora mismo aplica</p>
+          {applying.length === 0 && removed.size === 0 && (
+            <p className="py-2 text-xs leading-relaxed text-neutral-500">
+              Aún nada: hace falta que alguna área tenga datos fiables y un punto claramente por detrás. Se vuelve a mirar cada semana mientras tanto.
+            </p>
+          )}
+          <ul className="divide-y divide-white/[0.06]">
+            {items.map((i, n) => {
+              const off = removed.has(i.key);
+              const noCuadra = blocked(i);
+              return (
+                <li key={i.key} className="flex items-start gap-3 py-3">
+                  <span className="mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-extrabold" style={{ color: 'rgb(var(--c-brand-orange))', backgroundColor: 'rgb(var(--c-brand-orange) / 0.16)', opacity: off || noCuadra ? 0.4 : 1 }} aria-hidden="true">
+                    {n + 1}
+                  </span>
+                  <p className={`min-w-0 flex-1 text-[13px] leading-snug ${off || noCuadra ? 'text-neutral-500' : 'text-neutral-200'}`}>
+                    <strong className={`font-semibold ${off || noCuadra ? 'text-neutral-400' : 'text-white'}`}>{i.action}.</strong>
+                    <span className="mt-0.5 block text-xs text-neutral-500">{noCuadra ? 'Dijiste que no cuadra: no se aplica hasta que haya datos nuevos.' : off ? 'Lo quitaste.' : describeLever(i)}</span>
+                  </p>
+                  {!noCuadra && (
+                    <button
+                      onClick={() => put({ ...plan!, removed: off ? plan!.removed.filter((k) => k !== i.key) : [...plan!.removed, i.key] })}
+                      className="shrink-0 self-center rounded-full border border-brand-border px-3 py-1 text-[11px] font-semibold text-neutral-400 transition-colors hover:text-white"
+                    >
+                      {off ? 'Volver a poner' : 'Quitar'}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+            {keeping.map((f) => (
+              <li key={`k-${f.key}`} className="flex items-start gap-3 py-3">
+                <span className="mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full" style={{ color: TONE_COLOR.good, backgroundColor: 'rgb(var(--c-state-good) / 0.14)' }} aria-hidden="true">
+                  <Check size={12} strokeWidth={3} />
+                </span>
+                <p className="text-[13px] leading-snug text-neutral-200">
+                  <strong className="font-semibold text-white">{f.action}.</strong>
+                  <span className="mt-0.5 block text-xs text-neutral-500">Sin cambios: no se añade volumen.</span>
+                </p>
+              </li>
+            ))}
+            {watching.map((a) => (
+              <li key={`w-${a.key}`} className="flex items-start gap-3 py-3">
+                <span className="mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-xs font-bold text-neutral-400" aria-hidden="true">
+                  …
+                </span>
+                <p className="text-[13px] leading-snug text-neutral-200">
+                  <strong className="font-semibold text-white">{a.title}, en observación.</strong>
+                  <span className="mt-0.5 block text-xs text-neutral-500">Aún pocos datos ({a.samples}). No se aplica hasta que sean fiables.</span>
+                </p>
+              </li>
+            ))}
+          </ul>
+          {plan?.computedOn && (
+            <p className="mt-2 text-[11.5px] leading-relaxed text-neutral-500">
+              Se revisa el {shortDate(addDaysIso(plan.computedOn, EMPHASIS_REVIEW_DAYS))}. Lo que marques como «No cuadra» no se aplica hasta tener datos nuevos. Con el interruptor apagado vuelve la programación de antes.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- La pantalla ----------
 
-export function PerfilAtleta({ profile, history, onSave }: { profile: AthleteProfile; history: SessionHistoryEntry[]; onSave: (checks: NonNullable<AthleteProfile['diagnosisChecks']>) => void }) {
+export function PerfilAtleta({ profile, history, onChange }: { profile: AthleteProfile; history: SessionHistoryEntry[]; onChange: (patch: Partial<AthleteProfile>) => void }) {
   const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
   const [asking, setAsking] = useState<DiagnosisArea | null>(null);
   const [reason, setReason] = useState<DiagnosisReason>('cansado');
@@ -132,7 +248,7 @@ export function PerfilAtleta({ profile, history, onSave }: { profile: AthletePro
     const next = { ...checks };
     if (check) next[key] = check;
     else delete next[key];
-    onSave(next);
+    onChange({ diagnosisChecks: next });
   }
 
   function openNo(area: DiagnosisArea) {
@@ -158,12 +274,9 @@ export function PerfilAtleta({ profile, history, onSave }: { profile: AthletePro
         </span>
       </div>
 
-      <p className="flex items-start gap-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs leading-relaxed text-neutral-400">
-        <Info size={14} className="mt-px shrink-0 text-neutral-500" aria-hidden="true" />
-        De momento solo es un diagnóstico: todavía no cambia tus sesiones. Primero quiero que lo leas y me digas si cuadra.
-      </p>
-
       <div className="rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[14px] leading-relaxed text-neutral-100">{diagnosis.headline}</div>
+
+      <EmphasisCard profile={profile} diagnosis={diagnosis} history={history} onChange={onChange} />
 
       {withScore >= 3 && (
         <div className="rounded-2xl bg-white/[0.03] px-3 py-4">

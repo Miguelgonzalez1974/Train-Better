@@ -10,6 +10,7 @@ import { pullRemoteOrSeed } from './data/athlete/remoteSync';
 import { athleteRepository } from './data/athlete/athleteRepository';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard';
 import { getReadinessCheckForDate } from './engine/readiness';
+import { ensureEmphasisPlan } from './engine/programmingEmphasis';
 
 // Cada pestaña carga en su propio trozo de JS, servido solo cuando el atleta la abre — Planificación y
 // Nutrición cargan de paso catálogos enormes (benchmarks/WODs de biblioteca, alimentos) que no hacen
@@ -65,6 +66,12 @@ export default function App() {
     if (!ready) return;
     const p = athleteRepository.getProfile();
     const now = new Date();
+    // La programación según el perfil: se calcula la primera vez y se revisa cada 4 semanas. Si cambia, las pestañas se remontan con ella.
+    const withEmphasis = ensureEmphasisPlan(p, athleteRepository.getHistory(), now);
+    if (withEmphasis !== p) {
+      athleteRepository.saveProfile(withEmphasis);
+      setDataVersion((v) => v + 1);
+    }
     const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (!getReadinessCheckForDate(p.readinessLog, todayIso)) setMorning('auto');
   }, [ready]);

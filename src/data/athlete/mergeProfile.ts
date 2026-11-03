@@ -356,6 +356,7 @@ export function mergeProfile(
     ),
     complexPrefs: local.complexPrefs ?? remote.complexPrefs,
     diagnosisChecks: mergeDiagnosisChecks(remote.diagnosisChecks, local.diagnosisChecks),
+    emphasisPlan: local.emphasisPlan ?? remote.emphasisPlan,
     // Dureza pedida por día: union por fecha, gana el local en la misma fecha (el 0 de «volver a normal» también gana), solo las recientes.
     hardnessLog: remote.hardnessLog || local.hardnessLog ? mergeByKey(remote.hardnessLog, local.hardnessLog, (e) => e.date, (e) => e.date, 120) : undefined,
     hardness: remote.hardness || local.hardness ? pruneByProximityToToday({ ...(remote.hardness ?? {}), ...(local.hardness ?? {}) }, 60) : undefined,

@@ -345,7 +345,7 @@ export function Objetivos() {
         })}
       </div>
 
-      {activeSection === 'perfil' && <PerfilAtleta profile={profile} history={history} onSave={(diagnosisChecks) => persist({ ...profile, diagnosisChecks })} />}
+      {activeSection === 'perfil' && <PerfilAtleta profile={profile} history={history} onChange={(patch) => persist({ ...profile, ...patch })} />}
 
       {activeSection === 'macrociclos' && (
       <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">

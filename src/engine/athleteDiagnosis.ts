@@ -52,6 +52,8 @@ export interface DiagnosisArea {
 
 export interface DiagnosisFocus {
   key: DiagnosisAreaKey;
+  /** La fila del diagnóstico de la que sale (vacía en mantener). */
+  row: string;
   kind: 'prioridad' | 'mantener';
   action: string;
   why: string;
@@ -481,10 +483,10 @@ function buildFocus(areas: DiagnosisArea[], checks: AthleteProfile['diagnosisChe
     .filter((a) => (a.tone === 'low' || a.tone === 'mid') && a.weakest)
     .sort((a, b) => a.score! - b.score!)
     .slice(0, 2);
-  const priority = (a: DiagnosisArea): DiagnosisFocus => ({ key: a.key, kind: 'prioridad', action: ACTION[a.weakest!.id] ?? `Reforzar ${a.title.toLowerCase()}`, why: whyOf(a, a.weakest!) });
+  const priority = (a: DiagnosisArea): DiagnosisFocus => ({ key: a.key, row: a.weakest!.id, kind: 'prioridad', action: ACTION[a.weakest!.id] ?? `Reforzar ${a.title.toLowerCase()}`, why: whyOf(a, a.weakest!) });
   const out: DiagnosisFocus[] = weakOnes.map(priority);
   const best = training.filter((a) => a.tone === 'good' && !weakOnes.includes(a)).sort((a, b) => b.score! - a.score!)[0];
-  if (best && out.length < 3) out.push({ key: best.key, kind: 'mantener', action: MANTENER[best.key], why: best.verdict });
+  if (best && out.length < 3) out.push({ key: best.key, row: '', kind: 'mantener', action: MANTENER[best.key], why: best.verdict });
   return out;
 }
 

@@ -320,6 +320,8 @@ export interface AthleteProfile {
   restDates?: string[];
   /** Lo que el atleta dijo de cada área del diagnóstico ("Cuadra" / "No cuadra" y por qué). Ver `engine/athleteDiagnosis.ts`. */
   diagnosisChecks?: Partial<Record<DiagnosisAreaKey, DiagnosisCheck>>;
+  /** Programación según el perfil (el diagnóstico inclina la semana). Ver `engine/programmingEmphasis.ts`. */
+  emphasisPlan?: EmphasisPlan;
   /** Objetivos activos concurrentes — ver [[Goal]]. Varios pueden convivir (p.ej. competicion + un PR puntual). */
   goals: Goal[];
   /**
@@ -475,6 +477,29 @@ export interface DiagnosisCheck {
   samples: number;
   /** Fecha ISO. */
   date: string;
+}
+
+/** Algo que el coach prioriza en la programación según el diagnóstico del atleta (ver `engine/programmingEmphasis.ts`). */
+export interface EmphasisItem {
+  /** `área:fila` del diagnóstico, p. ej. `motor:base-aerobica`. */
+  key: string;
+  area: DiagnosisAreaKey;
+  /** Fila del diagnóstico de la que sale (`base-aerobica`, `benchPress`...). */
+  row: string;
+  action: string;
+  why: string;
+}
+
+/** La programación según el perfil: interruptor general, lo que aplica ahora (se revisa cada 4 semanas) y lo que el atleta quitó. */
+export interface EmphasisPlan {
+  enabled: boolean;
+  /** Cuándo se calcularon los `items` (ISO): pasados 28 días se recalculan. */
+  computedOn?: string;
+  /** Desde cuándo se aplica (ISO): ninguna sesión anterior cambia. */
+  since?: string;
+  items: EmphasisItem[];
+  /** Claves de `items` que el atleta quitó con "Quitar": no vuelven hasta que las ponga. */
+  removed: string[];
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */
@@ -641,6 +666,15 @@ export interface DailySession {
    * mismos textos que ya se concatenan en `SessionBlockResult.notes`.
    */
   coachReasons?: string[];
+  /**
+   * Lo que el diagnóstico del atleta ha inclinado en esta sesión (ver `engine/programmingEmphasis.ts`): una frase para la cabecera, la
+   * fecha de la próxima revisión y una etiqueta con su porqué en los bloques que lo llevan. Ausente si no hay nada que decir.
+   */
+  profileEmphasis?: {
+    summary: string;
+    reviewOn?: string;
+    blocks: Partial<Record<'strength' | 'oly' | 'wod' | 'accessory', { label: string; why: string }>>;
+  };
   /**
    * Huella del historial (`historyStamp`) con el que se genero esta sesion — la pone `saveCachedSession`
    * la primera vez que se cachea y no se toca despues. Si el historial cambia (se registra una sesion) y

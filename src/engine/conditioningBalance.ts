@@ -12,6 +12,7 @@ import {
   weeksSinceStart,
 } from './periodization';
 import { planEnergySystems } from './weekPlan';
+import { emphasisLevers } from './programmingEmphasis';
 
 /**
  * Lectura de "cómo llevamos el acondicionamiento" para el Dashboard — puramente derivada, no toca el
@@ -126,7 +127,8 @@ export function computeConditioningBalance(
     if (dp.isTrainingDay && !dp.isRecoveryDay && dp.trainingDayIndex > 0 && !isStrengthOnlyDay(n, dp.trainingDayIndex)) {
       const weeksSince = weeksSinceStart(macro.startDate, cursor);
       const phase = resolvePhaseAtWeek(macro, weeksSince).phaseIndex;
-      const sys = planEnergySystems(macro.id, weeksSince + 1, phase, n)[dp.trainingDayIndex];
+      // Con el mismo sesgo del diagnóstico que usó el motor ese día (ver `programmingEmphasis.ts`), para que lo planificado coincida.
+      const sys = planEnergySystems(macro.id, weeksSince + 1, phase, n, emphasisLevers(profile, toLocalIsoDate(cursor))?.engine)[dp.trainingDayIndex];
       planned.set(sys, (planned.get(sys) ?? 0) + 1);
 
       const entry = isPastOrToday ? byDate.get(toLocalIsoDate(cursor)) : undefined;

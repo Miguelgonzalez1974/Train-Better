@@ -81,6 +81,7 @@ import { SessionSummaryCard } from './SessionSummaryCard';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
+import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -1144,6 +1145,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
             onShowReasons={(session.coachReasons?.length ?? 0) > 0 ? () => setShowReasons(true) : null}
           />
         )}
+        {!session.isRestDay && !editMode && session.profileEmphasis && <ProfileEmphasisLine emphasis={session.profileEmphasis} onOpen={onNavigateToObjetivos} />}
         {!session.isRestDay && (
           <div className="flex w-full items-center gap-2 sm:max-w-xl">
             {alreadyCompletedToday && (
