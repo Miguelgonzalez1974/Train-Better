@@ -452,6 +452,11 @@ export interface StrainTarget {
   provisional: boolean;
   /** Fecha ISO en que se fijó. */
   setOn: string;
+  /**
+   * Esfuerzo previsto de la sesión de ese día (0-100) tal como estaba la última vez que se miró antes de entrenar: con él se
+   * cuenta al cerrar el día "partías con X y has hecho Y". No se toca una vez entrenado. Ausente en días anteriores a esta función.
+   */
+  planned?: number;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */

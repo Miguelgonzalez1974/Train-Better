@@ -106,7 +106,10 @@ function mergeStrainTargets(remote?: Record<string, StrainTarget>, local?: Recor
   const merged: Record<string, StrainTarget> = { ...(remote ?? {}) };
   for (const [date, t] of Object.entries(local ?? {})) {
     const other = merged[date];
-    merged[date] = other && !other.provisional && t.provisional ? other : t;
+    const winner = other && !other.provisional && t.provisional ? other : t;
+    // El previsto anotado no se pierde si la versión que gana no lo trae (otro dispositivo lo anotó).
+    const planned = winner.planned ?? (winner === t ? other?.planned : t.planned);
+    merged[date] = planned === undefined ? winner : { ...winner, planned };
   }
   return Object.keys(merged).length === 0 ? undefined : keepLatestKeys(merged, STRAIN_TARGETS_LIMIT);
 }

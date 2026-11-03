@@ -326,6 +326,28 @@ describe('mergeProfile — config: gana el local', () => {
   });
 });
 
+describe('mergeProfile — esfuerzo previsto del día (strainTargets.planned)', () => {
+  const target = (over: Record<string, unknown> = {}) => ({ low: 60, high: 80, readiness: 72, yesterday: null, reasons: [], provisional: false, setOn: '2026-11-02', ...over });
+
+  it('si la versión que gana no trae el previsto, se conserva el de la otra', () => {
+    const remote = { ...base(), strainTargets: { '2026-11-02': target({ planned: 65 }) } };
+    const local = { ...base(), strainTargets: { '2026-11-02': target() } };
+    expect(mergeProfile(remote, local).strainTargets?.['2026-11-02']?.planned).toBe(65);
+    expect(mergeProfile(local, remote).strainTargets?.['2026-11-02']?.planned).toBe(65);
+  });
+
+  it('con previsto en las dos, gana el local (el último visto antes de entrenar)', () => {
+    const remote = { ...base(), strainTargets: { '2026-11-02': target({ planned: 65 }) } };
+    const local = { ...base(), strainTargets: { '2026-11-02': target({ planned: 55 }) } };
+    expect(mergeProfile(remote, local).strainTargets?.['2026-11-02']?.planned).toBe(55);
+  });
+
+  it('un día sin previsto sigue sin él', () => {
+    const remote = { ...base(), strainTargets: { '2026-11-02': target() } };
+    expect(mergeProfile(remote, base()).strainTargets?.['2026-11-02']).not.toHaveProperty('planned');
+  });
+});
+
 describe('mergeHistory', () => {
   const entry = (date: string, extra: Partial<SessionHistoryEntry> = {}): SessionHistoryEntry => ({
     date,

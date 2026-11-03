@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, Apple, ArrowRight, BarChart3, Flame, Gauge, Sun, Target } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
@@ -8,7 +8,7 @@ import { getMonthlyStats } from './stats';
 import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { dayStrain, strainStatus } from '../../engine/strain';
-import { buildStrainTarget, ensureStrainTarget } from '../../engine/strainTarget';
+import { buildStrainTarget, ensureStrainTarget, withPlannedStrain } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
@@ -108,6 +108,17 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     () => (todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias) : null),
     [todaySession, history, strainLearned.bias],
   );
+  // Antes de entrenar se anota el esfuerzo previsto en el objetivo de hoy (lo último que se vio, tras el check-in y los ajustes): al cerrar
+  // el día sirve para contar "partías con X y has hecho Y". Una vez entrenado ya no se toca.
+  const plannedNow = plannedStrain?.strain ?? null;
+  useEffect(() => {
+    if (todayStrain !== null) return;
+    const current = athleteRepository.getProfile();
+    const next = withPlannedStrain(current, todayIso, plannedNow);
+    if (next === current) return;
+    athleteRepository.saveProfile(next);
+    setProfile((prev) => ({ ...prev, strainTargets: next.strainTargets }));
+  }, [todayStrain, todayIso, plannedNow]);
   const strainView: StrainView = {
     target: strainTarget,
     planned: plannedStrain,
@@ -120,6 +131,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const isToday = dayIso === todayIso;
   const pastView = useMemo(() => (isToday ? null : buildPastDayView(profile, history, dayIso, strainLearned)), [isToday, profile, history, dayIso, strainLearned]);
   const shown = pastView ?? { readiness, acwr, trend: acwrTrend, strain: strainView, entry: history.find((h) => h.date === todayIso) };
+  // Con qué se partió el día elegido (previsto anotado y la preparación de esa mañana), para el balance al cerrarlo. Un día pasado ya se
+  // enseña con la preparación de esa mañana, así que solo hoy se compara.
+  const dayStart = { planned: profile.strainTargets?.[dayIso]?.planned ?? null, prep: isToday ? profile.strainTargets?.[dayIso]?.readiness ?? null : null };
   // Nutrición del día elegido: lo apuntado en el diario frente a lo que toca (proteína e hidratos), si hay peso para calcularlo.
   const nutrition = useMemo<NutritionSummary | null>(() => {
     if (!latestBodyweightKg) return null;
@@ -325,6 +339,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             advice={advice}
             rest={isToday && todayStrain === null && (restMarked || (todaySession !== null && !todaySession.isRestDay)) ? { marked: restMarked, onToggle: toggleRest } : undefined}
             strain={shown.strain}
+            start={dayStart}
             readiness={shown.readiness}
             acwr={shown.acwr}
             centerLabel={ringDayLabel(dayIso, todayIso)}

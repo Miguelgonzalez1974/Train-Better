@@ -92,6 +92,16 @@ export function buildStrainTarget(profile: AthleteProfile, history: SessionHisto
 }
 
 /**
+ * Anota en el objetivo de hoy el esfuerzo previsto de la sesión (lo último que se vio antes de entrenar). Devuelve el mismo
+ * perfil si no hay objetivo de ese día, no hay previsto o ya es el mismo. Quien llama no debe usarlo una vez entrenado.
+ */
+export function withPlannedStrain(profile: AthleteProfile, iso: string, planned: number | null): AthleteProfile {
+  const stored = profile.strainTargets?.[iso];
+  if (!stored || planned === null || stored.planned === planned) return profile;
+  return { ...profile, strainTargets: { ...profile.strainTargets, [iso]: { ...stored, planned } } };
+}
+
+/**
  * Devuelve el perfil con el objetivo de hoy fijado, o el mismo perfil si no hay nada que cambiar. Un objetivo
  * definitivo no se vuelve a tocar; uno provisional solo se rehace cuando aparece el check-in de hoy.
  */

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowRight, Check, CircleAlert, Moon, Sun, Trophy, Zap, type LucideIcon } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { DayAdvice } from '../../engine/dayAdvice';
+import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { recoveryColor } from './RecoveryCard';
 import { ACCENT as EFFORT, OVER, type StrainView } from './StrainRing';
@@ -111,6 +112,66 @@ function AdviceGlyph({ icon }: { icon: DayAdvice['icon'] }) {
   return <Icon size={14} strokeWidth={2.75} />;
 }
 
+/** La marca del esfuerzo previsto sobre el anillo del esfuerzo: una raya discontinua que lo cruza (dentro del grupo girado, como los arcos). */
+function PlannedTick({ planned }: { planned: number }) {
+  const a = (Math.min(100, Math.max(0, planned)) / 100) * 2 * Math.PI;
+  const point = (r: number) => ({ x: 50 + r * Math.cos(a), y: 50 + r * Math.sin(a) });
+  const from = point(R_EFF - STROKE / 2 - 0.3);
+  const to = point(R_EFF + STROKE / 2 + 0.3);
+  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="rgb(var(--c-white) / 0.95)" strokeWidth={2} strokeLinecap="round" strokeDasharray="2.2 2.2" />;
+}
+
+/**
+ * El cierre del día: con qué esfuerzo previsto se partía y cuál fue el real, en una barra de 0 a 100 con el objetivo como banda y
+ * la marca de lo previsto; y, si cambió, la preparación de la mañana frente a la de ahora.
+ */
+function BalanceBox({ balance, target, isToday }: { balance: DayBalance; target: { low: number; high: number }; isToday: boolean }) {
+  const over = balance.tone === 'mid';
+  const color = ADVICE_COLOR[balance.tone];
+  const { planned, real, diff, prep } = balance;
+  const sign = diff > 0 ? '+' : '−';
+  return (
+    <div className="mx-auto mt-5 max-w-[26rem] rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[13px] leading-relaxed text-neutral-300">
+      <div className="flex items-start gap-2.5">
+        <span
+          className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+          style={{ color, backgroundColor: `color-mix(in srgb, ${color} 16%, transparent)` }}
+          aria-hidden="true"
+        >
+          {over ? <CircleAlert size={14} strokeWidth={2.75} /> : <Check size={14} strokeWidth={2.75} />}
+        </span>
+        <p>
+          <strong className="font-bold" style={{ color }}>
+            {balance.lead}
+          </strong>{' '}
+          Partías con <strong className={STRONG}>~{planned}</strong> de esfuerzo y {isToday ? 'has hecho' : 'hiciste'} <strong className={STRONG}>{real}</strong>
+          {diff === 0 ? ' (justo lo previsto).' : ` (${sign}${Math.abs(diff)}).`}
+        </p>
+      </div>
+      <div className="relative mx-0.5 mb-1.5 mt-8 h-2 rounded-full bg-white/[0.08]" role="img" aria-label={`Previsto ${planned}, hecho ${real}, objetivo ${target.low} a ${target.high}`}>
+        <div className="absolute -bottom-1 -top-1 rounded-md border-[1.5px]" style={{ left: `${target.low}%`, width: `${target.high - target.low}%`, borderColor: 'rgb(var(--c-white) / 0.8)' }} />
+        <div className="absolute bottom-0 left-0 top-0 rounded-full" style={{ width: `${Math.min(100, real)}%`, backgroundColor: over ? 'rgb(var(--c-state-mid))' : 'rgb(var(--c-state-cool))' }} />
+        <div className="absolute -bottom-[5px] -top-[5px] w-0 border-l-2 border-dashed" style={{ left: `${Math.min(100, planned)}%`, borderColor: 'rgb(var(--c-white) / 0.9)' }}>
+          <span className="absolute -top-[17px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-neutral-300">previsto {planned}</span>
+        </div>
+      </div>
+      <div className="mx-0.5 flex justify-between text-[10px] text-neutral-500">
+        <span>0</span>
+        <span>
+          objetivo {target.low}–{target.high}
+        </span>
+        <span>100</span>
+      </div>
+      {prep && (
+        <p className="mt-3 border-t border-white/[0.08] pt-3 text-[12.5px] text-neutral-400">
+          Preparación <strong className={STRONG}>{prep.morning}</strong> por la mañana → <strong className={STRONG}>{prep.now}</strong> ahora.{' '}
+          {prep.now < prep.morning ? 'La sesión suma carga, por eso baja.' : 'Se recalcula con la sesión de hoy.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /**
  * El estado del día al estilo Whoop: dos anillos completos (esfuerzo por fuera en azul, preparación por dentro con el color
  * de su nivel), el número de cada uno a su lado, y debajo una frase que lo cuenta. El objetivo es un corchete fino por
@@ -121,6 +182,7 @@ export function DayRing({
   readiness,
   acwr,
   strain,
+  start,
   checkIn,
   advice,
   rest,
@@ -132,6 +194,8 @@ export function DayRing({
   readiness: ReadinessScore;
   acwr: AcwrResult;
   strain: StrainView;
+  /** Con qué se partió el día (esfuerzo previsto anotado y preparación de la mañana): al cerrar el día se cuenta "partías con X y has hecho Y". */
+  start?: { planned: number | null; prep: number | null } | null;
   checkIn?: ReactNode;
   /** El consejo de hoy (ver `engine/dayAdvice.ts`); sin él, o en un día pasado, la frase habla del esfuerzo. */
   advice?: DayAdvice | null;
@@ -159,6 +223,7 @@ export function DayRing({
   const within = shown !== null ? Math.min(shown, target.high) : 0;
   const beyond = shown !== null && shown > target.high ? shown - target.high : 0;
   const opacity = real !== null ? 1 : 0.85;
+  const balance = start ? dayBalance({ planned: start.planned, real, target, status: strain.status, isToday, prepMorning: start.prep, prepNow: total }) : null;
 
   const dash = (r: number, from: number, to: number) => {
     const len = filled ? (Math.max(0, to - from) / 100) * circ(r) : 0;
@@ -181,6 +246,7 @@ export function DayRing({
               {total !== null ? total : '—'}
               {total !== null && <span className="text-[0.5em] font-medium">%</span>}
             </span>
+            {balance?.prep && <span className="mt-1.5 text-[11px] leading-tight text-neutral-500">{balance.prep.morning} por la mañana</span>}
           </button>
           {hasLoad ? (
             <button onClick={() => onOpenTab('carga')} className="mt-3 flex flex-col items-end">
@@ -219,6 +285,7 @@ export function DayRing({
               {beyond > 0 && (
                 <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: OVER, opacity }} {...dash(R_EFF, target.high - 0.6, shown ?? target.high)} className={slide} />
               )}
+              {balance && <PlannedTick planned={balance.planned} />}
               {/* Preparación (interior) */}
               <circle cx="50" cy="50" r={R_PREP} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
               {total !== null && (
@@ -240,6 +307,11 @@ export function DayRing({
             <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: beyond > 0 ? OVER : EFFORT }}>
               {shown !== null ? `${real === null ? '~' : ''}${shown}` : '—'}
             </span>
+            {balance && (
+              <span className="mt-1.5 text-[11px] leading-tight text-neutral-500">
+                previsto <strong className="font-semibold text-neutral-300">~{balance.planned}</strong>
+              </span>
+            )}
           </button>
           <button onClick={() => onOpenTab('esfuerzo')} className="mt-3 flex flex-col items-start">
             <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500">Objetivo</span>
@@ -252,7 +324,9 @@ export function DayRing({
 
       {/* El consejo del día (solo hoy y antes de entrenar): una caja neutra con el icono y el verbo en el color del estado, y el motivo.
           Cerrado el día, o en un día pasado, el balance de esfuerzo. */}
-      {advice && isToday && real === null ? (
+      {balance ? (
+        <BalanceBox balance={balance} target={target} isToday={isToday} />
+      ) : advice && isToday && real === null ? (
         <div className="mx-auto mt-5 flex max-w-[26rem] items-start gap-2.5 rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[13px] leading-relaxed">
           <span
             className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
