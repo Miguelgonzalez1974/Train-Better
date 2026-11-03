@@ -125,7 +125,7 @@ function PlannedTick({ planned }: { planned: number }) {
  * El cierre del día: con qué esfuerzo previsto se partía y cuál fue el real, en una barra de 0 a 100 con el objetivo como banda y
  * la marca de lo previsto; y, si cambió, la preparación de la mañana frente a la de ahora.
  */
-function BalanceBox({ balance, target, isToday }: { balance: DayBalance; target: { low: number; high: number }; isToday: boolean }) {
+function BalanceBox({ balance, target, isToday, notDone }: { balance: DayBalance; target: { low: number; high: number }; isToday: boolean; notDone?: string | null }) {
   const over = balance.tone === 'mid';
   const color = ADVICE_COLOR[balance.tone];
   const { planned, real, diff, prep } = balance;
@@ -162,6 +162,7 @@ function BalanceBox({ balance, target, isToday }: { balance: DayBalance; target:
         </span>
         <span>100</span>
       </div>
+      {notDone && <p className="mt-3 border-t border-white/[0.08] pt-3 text-[12.5px] font-semibold text-neutral-300">{notDone}</p>}
       {prep && (
         <p className="mt-3 border-t border-white/[0.08] pt-3 text-[12.5px] text-neutral-400">
           Preparación <strong className={STRONG}>{prep.morning}</strong> por la mañana → <strong className={STRONG}>{prep.now}</strong> ahora.{' '}
@@ -183,6 +184,7 @@ export function DayRing({
   acwr,
   strain,
   start,
+  notDone,
   checkIn,
   advice,
   rest,
@@ -196,6 +198,8 @@ export function DayRing({
   strain: StrainView;
   /** Con qué se partió el día (esfuerzo previsto anotado y preparación de la mañana): al cerrar el día se cuenta "partías con X y has hecho Y". */
   start?: { planned: number | null; prep: number | null } | null;
+  /** Lo que no se hizo de la sesión ya cerrada, en una frase ("Sin el WOD, por la molestia."); null si se hizo todo. */
+  notDone?: string | null;
   checkIn?: ReactNode;
   /** El consejo de hoy (ver `engine/dayAdvice.ts`); sin él, o en un día pasado, la frase habla del esfuerzo. */
   advice?: DayAdvice | null;
@@ -325,7 +329,7 @@ export function DayRing({
       {/* El consejo del día (solo hoy y antes de entrenar): una caja neutra con el icono y el verbo en el color del estado, y el motivo.
           Cerrado el día, o en un día pasado, el balance de esfuerzo. */}
       {balance ? (
-        <BalanceBox balance={balance} target={target} isToday={isToday} />
+        <BalanceBox balance={balance} target={target} isToday={isToday} notDone={notDone} />
       ) : advice && isToday && real === null ? (
         <div className="mx-auto mt-5 flex max-w-[26rem] items-start gap-2.5 rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[13px] leading-relaxed">
           <span
@@ -343,7 +347,10 @@ export function DayRing({
           </p>
         </div>
       ) : (
-        <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">{sentence(strain, isToday)}</p>
+        <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">
+          {sentence(strain, isToday)}
+          {real !== null && notDone ? <> {notDone}</> : null}
+        </p>
       )}
 
       {/* "Hoy descanso": marca el día como descanso a propósito (no cuenta como día olvidado). Solo hoy y antes de entrenar. */}

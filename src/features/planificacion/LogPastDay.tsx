@@ -4,6 +4,7 @@ import type { DailySession, RxOrScaled, SessionHistoryEntry, WodScoreType } from
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { toHistoryEntry } from '../../engine/generateSession';
 import { EMPTY_WOD_FORM, buildWodResult, getWodParts, getWodScoreType, type WodResultForm } from '../../engine/wodScoring';
+import { applySkips, sessionParts, skippedParts, type Skips } from '../../engine/sessionParts';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
@@ -133,10 +134,17 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(estimatedMin);
   const [forms, setForms] = useState<Record<1 | 2, WodResultForm>>({ 1: EMPTY_WOD_FORM, 2: EMPTY_WOD_FORM });
-  const resultOf = (part: 1 | 2) => (scoreTypes[part] ? buildWodResult(scoreTypes[part]!, forms[part]) : undefined);
+  // "Qué has hecho": las partes no hechas no entran en el historial de ese día, igual que al cerrar la sesión de hoy.
+  const [skips, setSkips] = useState<Skips>({});
+  const parts = useMemo(() => sessionParts(session), [session]);
+  const resultOf = (part: 1 | 2) => (scoreTypes[part] && !skips[part === 1 ? 'wod1' : 'wod2'] ? buildWodResult(scoreTypes[part]!, forms[part]) : undefined);
 
   function confirm() {
-    saveEntry(toHistoryEntry(session, rxOrScaled, rpe, durationMin, resultOf(1), undefined, wodParts.includes(2) ? resultOf(2) : undefined));
+    const notDone = skippedParts(skips);
+    saveEntry({
+      ...toHistoryEntry(applySkips(session, skips), rxOrScaled, rpe, durationMin, resultOf(1), undefined, wodParts.includes(2) ? resultOf(2) : undefined),
+      ...(notDone.length > 0 ? { skipped: notDone } : {}),
+    });
     // Las series y los pesos, con la fecha de ese día y el mismo registro que el modo enfocado.
     if (logLifts) for (const entry of workSetsFrom(dateIso, lifts, liftState)) athleteRepository.saveWorkSet(entry);
     // Se marca como "esto pasó de verdad", igual que al cerrar la sesión de hoy: otro dispositivo no la pisa al sincronizar.
@@ -173,6 +181,9 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
         scoreTypes={scoreTypes}
         targets={Object.fromEntries(wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]))}
         forms={forms}
+        parts={parts}
+        skips={skips}
+        onSkipsChange={setSkips}
         onFormChange={(part, patch) => setForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
         rxOrScaled={rxOrScaled}
         onRxOrScaled={setRxOrScaled}

@@ -766,6 +766,21 @@ export interface SessionHistoryEntry {
    * entradas anteriores a esta feature.
    */
   wodTargetBase?: { kind: string; unit: 'seconds' | 'rounds' | 'reps'; mid: number };
+  /**
+   * Partes de la sesión que el atleta marcó como NO hechas al cerrarla (ver `engine/sessionParts.ts`). El resto de campos de la entrada
+   * ya no incluye esos bloques (movimientos, formato y resultado del WOD…). Ausente = se hizo todo, y en las entradas anteriores a esta función.
+   */
+  skipped?: SkippedPart[];
+}
+
+/** Por qué no se hizo una parte de la sesión (opcional al marcarla). */
+export type SkipReason = 'molestia' | 'cansancio' | 'competicion' | 'tiempo' | 'otro';
+
+/** Una parte de la sesión que no se hizo: el bloque y, en un día de doble WOD, cuál de las dos partes del WOD. */
+export interface SkippedPart {
+  block: 'strength' | 'oly' | 'wod' | 'accessory' | 'skill';
+  part?: 1 | 2;
+  reason?: SkipReason;
 }
 
 export const DEFAULT_PROFILE: AthleteProfile = {

@@ -4,6 +4,7 @@ import type { SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types
 import { resolveMovementDisplayName } from '../../data/movements';
 import { getWeekdayIndex } from '../../engine/periodization';
 import { wodResultsOf } from '../../engine/wodScoring';
+import { describeSkipped } from '../../engine/sessionParts';
 import { getMonthlyStats } from '../dashboard/stats';
 import { Modal } from '../shell/Modal';
 import { EmptyState } from '../shell/EmptyState';
@@ -99,6 +100,7 @@ function DiaryRow({ entry, sets, onDelete }: { entry: SessionHistoryEntry; sets:
       {open && (
         <div className="flex flex-col gap-2 border-t border-white/5 px-3 pb-3 pt-2.5 pl-[38px]">
           {names.length > 0 && <p className="text-xs leading-relaxed text-neutral-300">{names.join(' · ')}</p>}
+          {describeSkipped(entry.skipped) && <p className="text-xs font-semibold text-warn">{describeSkipped(entry.skipped)}</p>}
           {setsByMovement.size > 0 && (
             <div className="flex flex-col gap-1">
               {[...setsByMovement.entries()].map(([movementId, ms]) => (

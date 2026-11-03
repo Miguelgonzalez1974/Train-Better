@@ -11,6 +11,7 @@ import { DaySessionBlocks } from './DaySessionBlocks';
 import { ensureWeekLocked } from './weeklyLock';
 import { LogPastDay } from './LogPastDay';
 import { wodResultsOf } from '../../engine/wodScoring';
+import { describeSkipped } from '../../engine/sessionParts';
 import { estimatePlannedStrain, strainFit } from '../../engine/plannedStrain';
 import { buildStrainTarget } from '../../engine/strainTarget';
 import { dayStrain } from '../../engine/strain';
@@ -354,6 +355,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                     ))}
                   </div>
                   <p className="text-neutral-300">{entry.movementIds.map(resolveMovementName).join(' · ')}</p>
+                  {describeSkipped(entry.skipped) && <p className="text-xs font-semibold text-warn">{describeSkipped(entry.skipped)}</p>}
                   {onDeleteHistoryEntry && (
                     <button
                       onClick={() => {

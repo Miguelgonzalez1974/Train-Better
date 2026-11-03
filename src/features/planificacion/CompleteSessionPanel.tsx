@@ -4,6 +4,8 @@ import type { RxOrScaled, WodScoreType } from '../../data/athlete/types';
 import type { WodResultForm } from '../../engine/wodScoring';
 import { WodResultField } from './WodResultField';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
+import { DoneParts } from './DoneParts';
+import type { SessionPart, Skips } from '../../engine/sessionParts';
 
 
 type Part = 1 | 2;
@@ -15,6 +17,10 @@ interface CompleteSessionPanelProps {
   /** Objetivo del coach de cada parte, ya formateado ("12:30", "5 rondas"...). */
   targets: Partial<Record<Part, string>>;
   forms: Record<Part, WodResultForm>;
+  /** Las partes de la sesión por las que se pregunta "qué has hecho" y cuáles se marcaron como no hechas. */
+  parts: SessionPart[];
+  skips: Skips;
+  onSkipsChange: (next: Skips) => void;
   /** Partes cuyo resultado vino prellenado del reloj de entreno — se marca para que se sepa de dónde sale. */
   clockParts?: Part[];
   onFormChange: (part: Part, patch: Partial<WodResultForm>) => void;
@@ -33,15 +39,19 @@ interface CompleteSessionPanelProps {
 }
 
 /**
- * Cierre de sesión en dos pasos. Primero lo que ha pasado (resultado del WOD y test de 1RM — solo si
+ * Cierre de sesión en dos pasos. Primero lo que ha pasado (qué has hecho, resultado del WOD y test de 1RM — solo si
  * hoy había), después cómo lo has sentido (RPE, Rx o escalado y duración, ya estimada). Un día
- * normal de fuerza se queda en un único paso: un toque de RPE y guardar.
+ * normal de fuerza se queda en un único paso: un toque de RPE y guardar. "Qué has hecho" viene como "Todo": solo se
+ * toca si algo no se hizo (y entonces su resultado de WOD no se pide).
  */
 export function CompleteSessionPanel({
   wodParts,
   scoreTypes,
   targets,
   forms,
+  parts,
+  skips,
+  onSkipsChange,
   clockParts = [],
   onFormChange,
   test,
@@ -55,8 +65,9 @@ export function CompleteSessionPanel({
   onConfirm,
   onCancel,
 }: CompleteSessionPanelProps) {
-  const resultParts = wodParts.filter((p) => scoreTypes[p]);
-  const hasResultStep = resultParts.length > 0 || Boolean(test);
+  // El paso del resultado existe si hoy había WOD puntuable o test, aunque luego se marque como no hecho (así el paso no desaparece al tocarlo).
+  const hasResultStep = wodParts.some((p) => scoreTypes[p]) || Boolean(test);
+  const resultParts = wodParts.filter((p) => scoreTypes[p] && !skips[p === 1 ? 'wod1' : 'wod2']);
   const [step, setStep] = useState<0 | 1>(hasResultStep ? 0 : 1);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -107,6 +118,8 @@ export function CompleteSessionPanel({
       {step === 0 && (
         <div key="resultado" className="flex animate-section-in flex-col gap-4 motion-reduce:animate-none">
           <p className="text-lg font-semibold text-white">¿Cómo te fue?</p>
+
+          <DoneParts parts={parts} skips={skips} onChange={onSkipsChange} />
 
           {resultParts.map((part) => (
             <div key={part} className="rounded-xl bg-white/[0.03] p-3">
@@ -161,6 +174,8 @@ export function CompleteSessionPanel({
 
       {step === 1 && (
         <div key="sensaciones" className="flex animate-section-in flex-col gap-5 motion-reduce:animate-none">
+          {/* Sin paso de resultado hoy (p. ej. un día de fuerza sin WOD puntuable), "qué has hecho" va aquí, arriba. */}
+          {!hasResultStep && <DoneParts parts={parts} skips={skips} onChange={onSkipsChange} />}
           <div>
             <p className="mb-3 text-lg font-semibold text-white">¿Cómo lo has sentido?</p>
             <RpePicker value={rpe} onChange={onRpe} />

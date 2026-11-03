@@ -53,6 +53,7 @@ import {
   getWodScoreType,
   type WodResultForm,
 } from '../../engine/wodScoring';
+import { applySkips, sessionParts, skippedParts, type Skips } from '../../engine/sessionParts';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
@@ -191,6 +192,11 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
 
   // Resultado del WOD por parte: la 1 es el unico WOD de un dia normal (o la primera pieza de un dia de doble WOD).
   const [wodForms, setWodForms] = useState<Record<1 | 2, WodResultForm>>({ 1: EMPTY_WOD_FORM, 2: EMPTY_WOD_FORM });
+  // "Qué has hecho" del cierre de sesión: las partes marcadas como no hechas (todo viene hecho). Se limpia al cerrar el panel.
+  const [skips, setSkips] = useState<Skips>({});
+  useEffect(() => {
+    if (!showCompletePanel) setSkips({});
+  }, [showCompletePanel]);
   // Partes del WOD cuyo resultado salió prellenado desde el reloj de entreno (ver workoutClockResult).
   const [clockParts, setClockParts] = useState<(1 | 2)[]>([]);
   const [testedLoadKg, setTestedLoadKg] = useState(0);
@@ -304,6 +310,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     () => ({ 1: session ? getWodScoreType(session, 1) : null, 2: session ? getWodScoreType(session, 2) : null }),
     [session],
   );
+  const doneParts = useMemo(() => (session ? sessionParts(session) : []), [session]);
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
   // Referencia para el cierre de sesión: lo que el coach calculó, a múltiplos de 5 y sin salirse de lo razonable.
@@ -721,6 +728,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
   }
 
   function buildPartResult(part: 1 | 2): WodResult | undefined {
+    if (skips[part === 1 ? 'wod1' : 'wod2']) return undefined; // un WOD no hecho no tiene resultado
     const scoreType = wodScoreTypes[part];
     return scoreType ? buildWodResult(scoreType, wodForms[part]) : undefined;
   }
@@ -737,6 +745,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
     const suggestions: E1rmSuggestion[] = [];
     for (const block of session.blocks) {
       if (block.block !== 'strength' && block.block !== 'oly') continue;
+      if (skips[block.block]) continue; // una parte no hecha no puede subir un PR
       if (!block.loadKg || !block.reps) continue;
       const reps = parseCleanReps(block.reps);
       if (reps === null) continue;
@@ -782,17 +791,20 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
       }
     }
 
-    athleteRepository.appendHistoryEntry(
-      toHistoryEntry(
-        session,
+    // El historial solo recoge lo que se hizo: las partes marcadas como no hechas se quitan (y se anotan en `skipped`).
+    const notDone = skippedParts(skips);
+    athleteRepository.appendHistoryEntry({
+      ...toHistoryEntry(
+        applySkips(session, skips),
         rxOrScaled,
         rpe,
         durationMin,
         buildPartResult(1),
-        testDayBlock && testedLoadKg > 0 ? testedLoadKg : undefined,
+        testDayBlock && testedLoadKg > 0 && !skips[testDayBlock.block as 'strength' | 'oly'] ? testedLoadKg : undefined,
         wodParts.includes(2) ? buildPartResult(2) : undefined,
       ),
-    );
+      ...(notDone.length > 0 ? { skipped: notDone } : {}),
+    });
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
     // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes
     // de enterarse del entreno de hoy podia seguir ganando el empate y pisar la tarjeta del plan
@@ -1252,6 +1264,9 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
             wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]),
           )}
           forms={wodForms}
+          parts={doneParts}
+          skips={skips}
+          onSkipsChange={setSkips}
           clockParts={clockParts}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
           test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}

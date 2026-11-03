@@ -15,6 +15,7 @@ import { getReadinessCheckForDate } from '../../engine/readiness';
 import { dayAdvice } from '../../engine/dayAdvice';
 import { getActivePainFlags } from '../../engine/painFlags';
 import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
+import { describeSkipped } from '../../engine/sessionParts';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -340,6 +341,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             rest={isToday && todayStrain === null && (restMarked || (todaySession !== null && !todaySession.isRestDay)) ? { marked: restMarked, onToggle: toggleRest } : undefined}
             strain={shown.strain}
             start={dayStart}
+            notDone={describeSkipped(shown.entry?.skipped)}
             readiness={shown.readiness}
             acwr={shown.acwr}
             centerLabel={ringDayLabel(dayIso, todayIso)}
