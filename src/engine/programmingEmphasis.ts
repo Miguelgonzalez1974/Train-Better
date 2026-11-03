@@ -1,4 +1,4 @@
-import type { AthleteProfile, DailySession, EmphasisItem, EmphasisPlan, SessionHistoryEntry } from '../data/athlete/types';
+import type { AthleteProfile, DailySession, EmphasisItem, EmphasisPlan, EmphasisReviewEntry, SessionHistoryEntry } from '../data/athlete/types';
 import { computeAthleteDiagnosis } from './athleteDiagnosis';
 import type { EmphasisLevers } from './weekPlan';
 
@@ -57,36 +57,160 @@ export function describeLever(item: EmphasisItem): string {
   return '';
 }
 
-/** Lo que aplica según el diagnóstico de hoy: las prioridades de áreas fiables con palanca, y que el atleta no haya dicho que no cuadran. */
-export function buildEmphasisItems(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date): EmphasisItem[] {
-  const diagnosis = computeAthleteDiagnosis({ profile, history, today });
+/** Cuántas cosas a la vez como mucho: un empujón, no una reescritura. */
+export const MAX_EMPHASIS_ITEMS = 2;
+/** Con esto o más frente a lo esperable (1 = en lo esperable) una cosa se da por lograda y pasa a mantener. */
+export const GRADUATE_AT = 0.93;
+/** Cuánto tiene que subir entre revisiones para contar como mejora (en puntos de ratio). */
+export const IMPROVE_BY = 0.03;
+/** Datos nuevos mínimos desde la última vez para decidir algo; con menos, se espera. */
+export const MIN_NEW_SAMPLES = 3;
+/** Revisiones seguidas sin mejora (8 semanas) tras las que se deja de insistir. */
+export const STALLED_LIMIT = 2;
+/** Si no había datos para decidir, se vuelve a revisar antes. */
+export const WAIT_REVIEW_DAYS = 14;
+/** Lo que se rotó no vuelve en este tiempo. */
+export const ROTATED_PAUSE_DAYS = 56;
+
+type Diagnosis = ReturnType<typeof computeAthleteDiagnosis>;
+
+/** Cómo está una fila del diagnóstico ahora: su ratio frente a lo esperable y con cuántos datos. null si ya no hay fila. */
+function rowNow(diagnosis: Diagnosis, area: EmphasisItem['area'], row: string): { ratio: number; samples: number } | null {
+  const a = diagnosis.areas.find((x) => x.key === area);
+  const r = a?.rows.find((x) => x.id === row);
+  return a && r && r.ratio !== null ? { ratio: r.ratio, samples: r.n ?? a.samples } : null;
+}
+
+/** De qué se habla al avisar de una revisión ("tu motor largo", "tu empuje horizontal"). */
+export function emphasisSubject(area: EmphasisItem['area'], row: string): string {
+  const l = leverFor(area, row);
+  if (l?.engine === 'base-aerobica') return 'tu motor largo';
+  if (l?.engine === 'umbral') return 'tu trabajo a umbral';
+  if (l?.engine === 'potencia') return 'tu potencia';
+  if (l?.pattern === 'horizontalPush') return 'tu empuje horizontal';
+  if (l?.pattern === 'verticalPush') return 'tu empuje vertical';
+  if (l?.pattern === 'hinge') return 'tu bisagra de cadera';
+  if (l?.pattern === 'squat') return 'tu sentadilla';
+  if (l?.olyFamily) return l.olyFamily === 'snatch' ? 'tu arrancada' : 'tu clean y jerk';
+  if (l?.gymnastics) return 'tus gimnásticos';
+  return 'este punto';
+}
+
+/** Un ratio como se enseña: el motor, como "−22 %" frente a lo estimado; el resto, como "78 % de lo esperable". */
+export function formatRatio(area: EmphasisItem['area'], ratio: number): string {
+  if (area === 'motor') {
+    const p = Math.round((ratio - 1) * 100);
+    return `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p)} %`;
+  }
+  return `${Math.round(ratio * 100)} % de lo esperable`;
+}
+
+/** Lo que aplica según el diagnóstico de hoy: las prioridades de áreas fiables con palanca, con el punto de partida de cada una. */
+export function buildEmphasisItems(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date, diagnosis?: Diagnosis): EmphasisItem[] {
+  const d = diagnosis ?? computeAthleteDiagnosis({ profile, history, today });
   const items: EmphasisItem[] = [];
-  for (const f of diagnosis.focus) {
+  for (const f of d.focus) {
     if (f.kind !== 'prioridad' || !leverFor(f.key, f.row)) continue;
-    const area = diagnosis.areas.find((a) => a.key === f.key);
+    const area = d.areas.find((a) => a.key === f.key);
     if (!area || area.confidence !== 'fiable') continue;
-    items.push({ key: `${f.key}:${f.row}`, area: f.key, row: f.row, action: f.action, why: f.why });
+    const start = rowNow(d, f.key, f.row);
+    items.push({ key: `${f.key}:${f.row}`, area: f.key, row: f.row, action: f.action, why: f.why, ...(start ? { baseline: start } : {}), stalled: 0 });
   }
   return items;
 }
 
 /**
- * Devuelve el perfil con lo que aplica al día, o el mismo si no hay nada que cambiar: la primera vez lo crea (encendido), y cada
- * `EMPHASIS_REVIEW_DAYS` días lo recalcula. Con el interruptor apagado no toca nada.
+ * La revisión de las 4 semanas: compara cada cosa que se priorizó con cómo estaba al empezar y decide, con reglas fijas, qué hacer:
+ * graduar (ya está en lo esperable: pasa a mantener), seguir (mejora pero aún por detrás, o aún no hay prueba de que no sirva),
+ * rotar (sin mejora en 8 semanas: se deja de insistir y se pasa a otra cosa) o esperar (menos de `MIN_NEW_SAMPLES` datos nuevos: no se
+ * decide nada). Lo que sigue y lo nuevo suman como mucho `MAX_EMPHASIS_ITEMS`.
+ */
+function reviewPlan(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date, plan: EmphasisPlan): EmphasisPlan {
+  const todayIso = toIso(today);
+  const diagnosis = computeAthleteDiagnosis({ profile, history, today });
+  const entries: EmphasisReviewEntry[] = [];
+  const continuing: EmphasisItem[] = [];
+  const maintained = [...(plan.maintained ?? [])];
+  const rotated = { ...(plan.rotated ?? {}) };
+
+  for (const item of plan.items) {
+    if (plan.removed.includes(item.key)) continue; // lo que quitó el atleta no se revisa
+    const cur = rowNow(diagnosis, item.area, item.row);
+    const base = { key: item.key, area: item.area, label: item.action };
+    if (!item.baseline || !cur) {
+      entries.push({ ...base, before: item.baseline?.ratio ?? null, now: cur?.ratio ?? null, newSamples: 0, decision: 'esperar', reason: 'Aún sin datos para comparar.' });
+      continuing.push({ ...item, ...(cur && !item.baseline ? { baseline: cur } : {}) });
+      continue;
+    }
+    const newSamples = cur.samples - item.baseline.samples;
+    const common = { ...base, before: item.baseline.ratio, now: cur.ratio, newSamples };
+    if (newSamples < MIN_NEW_SAMPLES) {
+      entries.push({ ...common, decision: 'esperar', reason: `Solo ${Math.max(0, newSamples)} ${newSamples === 1 ? 'dato nuevo' : 'datos nuevos'}: hacen falta ${MIN_NEW_SAMPLES} para decidir.` });
+      continuing.push(item);
+    } else if (cur.ratio >= GRADUATE_AT) {
+      entries.push({ ...common, decision: 'graduar', reason: 'Ya está cerca de lo esperable. Pasa a mantener: se vuelve a la programación habitual, sin el refuerzo.' });
+      maintained.unshift({ key: item.key, action: item.action });
+    } else if (cur.ratio - item.baseline.ratio >= IMPROVE_BY) {
+      entries.push({ ...common, decision: 'seguir', reason: 'Mejora, pero aún por detrás de lo esperable. Se mantiene 4 semanas más.' });
+      continuing.push({ ...item, baseline: cur, stalled: 0 });
+    } else if ((item.stalled ?? 0) + 1 >= STALLED_LIMIT) {
+      entries.push({ ...common, decision: 'rotar', reason: 'No mejora tras 8 semanas. Dejo de insistir y paso a otra cosa; se vuelve a mirar más adelante.' });
+      rotated[item.key] = todayIso;
+    } else {
+      entries.push({ ...common, decision: 'seguir', reason: 'Todavía no mejora. Se mantiene 4 semanas más antes de decidir si hace falta otra cosa.' });
+      continuing.push({ ...item, baseline: cur, stalled: (item.stalled ?? 0) + 1 });
+    }
+  }
+
+  const taken = new Set([...continuing.map((i) => i.key), ...maintained.map((m) => m.key)]);
+  const paused = (key: string) => rotated[key] !== undefined && daysBetween(rotated[key], todayIso) < ROTATED_PAUSE_DAYS;
+  const fresh = buildEmphasisItems(profile, history, today, diagnosis).filter((i) => !taken.has(i.key) && !plan.removed.includes(i.key) && !paused(i.key));
+  const items = [...continuing, ...fresh].slice(0, MAX_EMPHASIS_ITEMS);
+  // Si no se pudo decidir nada, se vuelve a mirar pronto y no se avisa en el Resumen.
+  const waitOnly = entries.length > 0 && entries.every((e) => e.decision === 'esperar');
+  return {
+    ...plan,
+    computedOn: todayIso,
+    reviewOn: addDaysIso(todayIso, waitOnly ? WAIT_REVIEW_DAYS : EMPHASIS_REVIEW_DAYS),
+    items,
+    maintained: maintained.slice(0, 3),
+    rotated,
+    ...(entries.length > 0 ? { review: { date: todayIso, entries, seen: waitOnly, noticed: waitOnly } } : {}),
+  };
+}
+
+/** Cuándo toca revisar el plan: la fecha guardada o, sin ella, 28 días tras calcularlo (7 si no había nada que aplicar). */
+export function nextReviewOn(plan: EmphasisPlan): string | null {
+  if (plan.reviewOn) return plan.reviewOn;
+  return plan.computedOn ? addDaysIso(plan.computedOn, plan.items.length === 0 ? EMPTY_REVIEW_DAYS : EMPHASIS_REVIEW_DAYS) : null;
+}
+
+/**
+ * Devuelve el perfil con lo que aplica al día, o el mismo si no hay nada que cambiar: la primera vez lo crea (encendido) y, cuando
+ * toca (cada 28 días), hace la revisión (ver `reviewPlan`). Con el interruptor apagado no toca nada.
  */
 export function ensureEmphasisPlan(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date): AthleteProfile {
   const plan = profile.emphasisPlan;
   if (plan && !plan.enabled) return profile;
   const todayIso = toIso(today);
-  if (plan?.computedOn) {
-    const age = daysBetween(plan.computedOn, todayIso);
-    if (age < (plan.items.length === 0 ? EMPTY_REVIEW_DAYS : EMPHASIS_REVIEW_DAYS)) return profile;
-  }
-  const items = buildEmphasisItems(profile, history, today);
-  const next: EmphasisPlan = { enabled: true, computedOn: todayIso, since: plan?.since ?? todayIso, items, removed: plan?.removed ?? [] };
+  const due = plan ? nextReviewOn(plan) : null;
+  if (plan && due && todayIso < due) return profile;
+  if (plan && plan.items.length > 0) return { ...profile, emphasisPlan: reviewPlan(profile, history, today, plan) };
+  const rotatedNow = plan?.rotated ?? {};
+  const items = buildEmphasisItems(profile, history, today)
+    .filter((i) => !(plan?.removed ?? []).includes(i.key) && !(rotatedNow[i.key] !== undefined && daysBetween(rotatedNow[i.key], todayIso) < ROTATED_PAUSE_DAYS))
+    .slice(0, MAX_EMPHASIS_ITEMS);
+  const next: EmphasisPlan = {
+    ...(plan ?? {}),
+    enabled: true,
+    computedOn: todayIso,
+    reviewOn: addDaysIso(todayIso, items.length === 0 ? EMPTY_REVIEW_DAYS : EMPHASIS_REVIEW_DAYS),
+    since: plan?.since ?? todayIso,
+    items,
+    removed: plan?.removed ?? [],
+  };
   return { ...profile, emphasisPlan: next };
 }
-
 /** Lo que aplica de verdad ahora: sin lo que el atleta quitó ni las áreas que dijo que no cuadran. */
 export function activeEmphasisItems(profile: AthleteProfile): EmphasisItem[] {
   const plan = profile.emphasisPlan;
@@ -173,7 +297,7 @@ export function sessionEmphasis(profile: AthleteProfile, dateIso: string, ctx: E
   const plan = profile.emphasisPlan;
   return {
     summary: `Estas semanas: ${phrases.join(' y ')}.`,
-    reviewOn: plan?.computedOn ? addDaysIso(plan.computedOn, EMPHASIS_REVIEW_DAYS) : undefined,
+    reviewOn: plan ? nextReviewOn(plan) ?? undefined : undefined,
     blocks,
   };
 }

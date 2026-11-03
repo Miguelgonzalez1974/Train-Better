@@ -11,6 +11,7 @@ import { athleteRepository } from './data/athlete/athleteRepository';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard';
 import { getReadinessCheckForDate } from './engine/readiness';
 import { ensureEmphasisPlan } from './engine/programmingEmphasis';
+import type { ObjetivosSection } from './features/objetivos/Objetivos';
 
 // Cada pestaña carga en su propio trozo de JS, servido solo cuando el atleta la abre — Planificación y
 // Nutrición cargan de paso catálogos enormes (benchmarks/WODs de biblioteca, alimentos) que no hacen
@@ -41,6 +42,12 @@ export default function App() {
   // Al guardar algo sube `dataVersion`, que remonta Dashboard y Planificación para que relean el perfil.
   const [morning, setMorning] = useState<'closed' | 'auto' | 'edit'>('closed');
   const [dataVersion, setDataVersion] = useState(0);
+  // Objetivos se abre en una sección concreta cuando se llega desde un aviso (p. ej. la revisión del perfil).
+  const [objetivosSection, setObjetivosSection] = useState<ObjetivosSection | undefined>(undefined);
+  const goTo = (tab: TabId, section?: ObjetivosSection) => {
+    setObjetivosSection(section);
+    setActiveTab(tab);
+  };
 
   const userId = session?.user?.id ?? null;
   useEffect(() => {
@@ -100,26 +107,26 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-brand-bg">
       <SyncIndicator />
-      <Sidebar active={activeTab} onChange={setActiveTab} />
+      <Sidebar active={activeTab} onChange={(t) => goTo(t)} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-6 lg:max-w-5xl">
         <Suspense fallback={<TabLoading />}>
           {activeTab === 'dashboard' && (
             <Dashboard
               key={dataVersion}
               onNavigateToPlanificacion={() => setActiveTab('planificacion')}
-              onNavigateToObjetivos={() => setActiveTab('objetivos')}
+              onNavigateToObjetivos={(section) => goTo('objetivos', section)}
               onNavigateToNutricion={() => setActiveTab('nutricion')}
               onOpenMorning={() => setMorning('edit')}
             />
           )}
           {activeTab === 'planificacion' && (
-            <Planificacion key={dataVersion} onNavigateToObjetivos={() => setActiveTab('objetivos')} />
+            <Planificacion key={dataVersion} onNavigateToObjetivos={() => goTo('objetivos')} onNavigateToPerfil={() => goTo('objetivos', 'perfil')} />
           )}
           {activeTab === 'nutricion' && <Nutricion />}
-          {activeTab === 'objetivos' && <Objetivos />}
+          {activeTab === 'objetivos' && <Objetivos initialSection={objetivosSection} />}
         </Suspense>
       </main>
-      <BottomNav active={activeTab} onChange={setActiveTab} />
+      <BottomNav active={activeTab} onChange={(t) => goTo(t)} />
       {morning !== 'closed' && (
         <Suspense fallback={null}>
           <MorningCard mode={morning} onClose={closeMorning} />

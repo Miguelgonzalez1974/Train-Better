@@ -167,9 +167,11 @@ function loadTodaySession(
 
 interface PlanificacionProps {
   onNavigateToObjetivos: () => void;
+  /** Abre Objetivos → Perfil (desde la línea de lo que el diagnóstico inclina). */
+  onNavigateToPerfil: () => void;
 }
 
-export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
+export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: PlanificacionProps) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history, setHistory] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const goals = profile.goals;
@@ -1145,7 +1147,7 @@ export function Planificacion({ onNavigateToObjetivos }: PlanificacionProps) {
             onShowReasons={(session.coachReasons?.length ?? 0) > 0 ? () => setShowReasons(true) : null}
           />
         )}
-        {!session.isRestDay && !editMode && session.profileEmphasis && <ProfileEmphasisLine emphasis={session.profileEmphasis} onOpen={onNavigateToObjetivos} />}
+        {!session.isRestDay && !editMode && session.profileEmphasis && <ProfileEmphasisLine emphasis={session.profileEmphasis} onOpen={onNavigateToPerfil} />}
         {!session.isRestDay && (
           <div className="flex w-full items-center gap-2 sm:max-w-xl">
             {alreadyCompletedToday && (

@@ -488,18 +488,52 @@ export interface EmphasisItem {
   row: string;
   action: string;
   why: string;
+  /** Cómo estaba la fila del diagnóstico al empezar (o en la última revisión) y con cuántos datos: la revisión compara contra esto. */
+  baseline?: { ratio: number; samples: number };
+  /** Revisiones seguidas sin mejora: con 2 (8 semanas) se rota a otra cosa. */
+  stalled?: number;
+}
+
+/** Qué decide el coach de una cosa al revisarla a las 4 semanas. */
+export type EmphasisDecision = 'graduar' | 'seguir' | 'rotar' | 'esperar';
+
+/** Una cosa revisada: el antes y el después (ratio frente a lo esperable, 1 = en lo esperable) y la decisión con su motivo. */
+export interface EmphasisReviewEntry {
+  key: string;
+  area: DiagnosisAreaKey;
+  label: string;
+  before: number | null;
+  now: number | null;
+  newSamples: number;
+  decision: EmphasisDecision;
+  reason: string;
+}
+
+/** La última revisión de las 4 semanas. `noticed`: el aviso del Resumen ya se abrió (no vuelve a salir); `seen`: el atleta la dio por vista con De acuerdo o Cambiar. */
+export interface EmphasisReview {
+  date: string;
+  entries: EmphasisReviewEntry[];
+  seen: boolean;
+  noticed?: boolean;
 }
 
 /** La programación según el perfil: interruptor general, lo que aplica ahora (se revisa cada 4 semanas) y lo que el atleta quitó. */
 export interface EmphasisPlan {
   enabled: boolean;
-  /** Cuándo se calcularon los `items` (ISO): pasados 28 días se recalculan. */
+  /** Cuándo se calcularon los `items` (ISO). */
   computedOn?: string;
+  /** Cuándo toca la próxima revisión (ISO); sin él, a los 28 días de `computedOn` (7 si no había nada que aplicar). */
+  reviewOn?: string;
   /** Desde cuándo se aplica (ISO): ninguna sesión anterior cambia. */
   since?: string;
   items: EmphasisItem[];
   /** Claves de `items` que el atleta quitó con "Quitar": no vuelven hasta que las ponga. */
   removed: string[];
+  /** Lo que ya llegó a lo esperable en una revisión: pasa a mantener. */
+  maintained?: { key: string; action: string }[];
+  /** Lo que no mejoró en 8 semanas y se dejó de insistir (clave → fecha): no vuelve en 8 semanas. */
+  rotated?: Record<string, string>;
+  review?: EmphasisReview;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */

@@ -24,6 +24,8 @@ export type AreaTrend = 'sube' | 'estable' | 'baja' | 'sin-datos';
 
 export interface DiagnosisRow {
   id: string;
+  /** Cuántos datos hay detrás de esta fila (WODs de ese formato, sesiones...), si se cuentan por fila. */
+  n?: number;
   label: string;
   /** Lo que se enseña a la derecha ("1,7× tu peso", "−12 %", "0,81"). */
   value: string;
@@ -318,7 +320,7 @@ function engineArea(history: SessionHistoryEntry[]): DiagnosisArea {
     const mine = samples.filter((s) => s.energySystem === g.system);
     if (mine.length >= 2) {
       const perf = median(mine.map((s) => s.perf));
-      rows.push({ id: g.id, label: g.label, value: `${pctSigned(perf)} · ${mine.length}`, ratio: perf, tone: toneOf(perf) });
+      rows.push({ id: g.id, label: g.label, n: mine.length, value: `${pctSigned(perf)} · ${mine.length}`, ratio: perf, tone: toneOf(perf) });
     }
   }
   if (rows.length === 0) {
@@ -367,7 +369,7 @@ function gymnasticsArea(history: SessionHistoryEntry[]): DiagnosisArea {
   const rpeGym = mean(sessions.map((e) => e.rpe));
   const rpeRest = rest.length >= 3 ? mean(rest.map((e) => e.rpe)) : null;
   const rows: DiagnosisRow[] = [
-    { id: 'rx', label: 'Hechos en Rx', value: `${Math.round(rx * 100)} % · ${sessions.length}`, ratio, tone: toneOf(ratio) },
+    { id: 'rx', label: 'Hechos en Rx', n: sessions.length, value: `${Math.round(rx * 100)} % · ${sessions.length}`, ratio, tone: toneOf(ratio) },
   ];
   if (rpeRest !== null) rows.push({ id: 'rpe', label: 'Esfuerzo vs el resto', value: `${rpeGym - rpeRest >= 0 ? '+' : '−'}${Math.abs(rpeGym - rpeRest).toFixed(1).replace('.', ',')} RPE`, ratio: null, tone: 'none' });
   const scaled = sessions.length - Math.round(rx * sessions.length);

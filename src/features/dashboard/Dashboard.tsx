@@ -16,6 +16,7 @@ import { dayAdvice } from '../../engine/dayAdvice';
 import { getActivePainFlags } from '../../engine/painFlags';
 import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
 import { describeSkipped } from '../../engine/sessionParts';
+import { EmphasisReviewNotice } from './EmphasisReviewNotice';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -49,7 +50,7 @@ const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeri
 
 interface DashboardProps {
   onNavigateToPlanificacion: () => void;
-  onNavigateToObjetivos: () => void;
+  onNavigateToObjetivos: (section?: 'perfil') => void;
   onNavigateToNutricion: () => void;
   /** Abre la tarjeta de la mañana (hacer o corregir el check-in de hoy). */
   onOpenMorning: () => void;
@@ -164,6 +165,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     athleteRepository.saveProfile(next);
     setProfile(next);
   }
+  // La revisión de las 4 semanas: al abrir el aviso deja de salir y se lleva a Objetivos → Perfil, donde se da por vista.
+  function openEmphasisReview() {
+    const current = athleteRepository.getProfile();
+    if (current.emphasisPlan?.review && !current.emphasisPlan.review.noticed) {
+      const next = { ...current, emphasisPlan: { ...current.emphasisPlan, review: { ...current.emphasisPlan.review, noticed: true } } };
+      athleteRepository.saveProfile(next);
+      setProfile(next);
+    }
+    onNavigateToObjetivos('perfil');
+  }
   // El consejo de hoy: lee lo mismo que los anillos y el semáforo del coach, así que nunca los contradice.
   const advice = dayAdvice({
     restMarked,
@@ -264,7 +275,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           </button>
           {hasStructure && (
             <button
-              onClick={onNavigateToObjetivos}
+              onClick={() => onNavigateToObjetivos()}
               title={
                 structureRow
                   ? `${structureRow.label} · ${structureRow.sublabel}${goalRows.length > 0 ? ` · ${goalsLabel}` : ''}`
@@ -350,6 +361,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             onAdjust={onNavigateToPlanificacion}
           />
           </div>
+
+          {/* La revisión de las 4 semanas de lo que el coach priorizaba: un aviso de una sola vez, solo si decidió algo. */}
+          {isToday && profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && !profile.emphasisPlan.review.noticed && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar') && (
+            <EmphasisReviewNotice review={profile.emphasisPlan.review} onOpen={openEmphasisReview} />
+          )}
 
           {/* Tu día: la sesión (con su esfuerzo en la insignia) y la nutrición, una fila cada una. */}
           <DayRows

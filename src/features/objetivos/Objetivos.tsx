@@ -183,7 +183,7 @@ function newGoalDraft(): Goal {
 const inputClass =
   'rounded-lg border border-brand-border bg-brand-bg px-2.5 py-1.5 text-sm text-white transition-colors focus:border-brand-gold focus:outline-none';
 
-type ObjetivosSection = 'perfil' | 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
+export type ObjetivosSection = 'perfil' | 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
 
 const SECTION_TABS: { key: ObjetivosSection; label: string; Icon: LucideIcon }[] = [
   { key: 'perfil', label: 'Perfil', Icon: Radar },
@@ -193,10 +193,10 @@ const SECTION_TABS: { key: ObjetivosSection; label: string; Icon: LucideIcon }[]
   { key: 'objetivos', label: 'Objetivos', Icon: Target },
 ];
 
-export function Objetivos() {
+export function Objetivos({ initialSection }: { initialSection?: ObjetivosSection } = {}) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
-  const [activeSection, setActiveSection] = useState<ObjetivosSection>('macrociclos');
+  const [activeSection, setActiveSection] = useState<ObjetivosSection>(initialSection ?? 'macrociclos');
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
