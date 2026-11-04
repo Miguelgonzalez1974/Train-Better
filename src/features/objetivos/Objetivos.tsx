@@ -13,8 +13,7 @@ import {
   Sparkles,
   AlertTriangle,
   PauseCircle,
-  Radar,
-  type LucideIcon,
+  ChevronLeft,
 } from 'lucide-react';
 import { STRENGTH_METHOD_META, STRENGTH_METHODS } from './strengthMethodMeta';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -31,7 +30,7 @@ import type {
   SessionHistoryEntry,
   StrengthProgram,
 } from '../../data/athlete/types';
-import { getActiveMacrocycle, getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
+import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, getActiveStrengthProgram, resolveStrengthProgramDay, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
 import {
@@ -48,10 +47,10 @@ import { GOAL_TYPE_META, GOAL_TYPES } from './goalMeta';
 import { MacroPlanModal } from './MacroPlanModal';
 import { SeasonPlannerModal } from './SeasonPlannerModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
-import { buildGoalRows, buildStructureRow } from '../dashboard/progressOverview';
-import { JourneyProgress } from '../dashboard/JourneyProgress';
-import { SectionLabel } from '../shell/SectionLabel';
 import { PerfilAtleta } from './PerfilAtleta';
+import { buildGoalRows } from '../dashboard/progressOverview';
+import { ObjetivosHome, type AddKind, type HomeSuggestion } from './ObjetivosHome';
+import { buildOpenItems, type OpenAction, type OpenItem } from './openItems';
 
 /** A partir de aqui, un objetivo se trata como urgente — mismo umbral usado para destacarlo con el badge pulsante. */
 const URGENT_THRESHOLD_DAYS = 14;
@@ -183,20 +182,24 @@ function newGoalDraft(): Goal {
 const inputClass =
   'rounded-lg border border-brand-border bg-brand-bg px-2.5 py-1.5 text-sm text-white transition-colors focus:border-brand-gold focus:outline-none';
 
+/**
+ * Pantallas de Objetivos. La de inicio (`home`) enseña lo que tienes abierto; las demás son los editores de siempre, a los que se
+ * llega desde las tarjetas o desde Añadir. `perfil` es el perfil del atleta, que se abre desde el Dashboard y ya no es una pestaña.
+ */
 export type ObjetivosSection = 'perfil' | 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
 
-const SECTION_TABS: { key: ObjetivosSection; label: string; Icon: LucideIcon }[] = [
-  { key: 'perfil', label: 'Perfil', Icon: Radar },
-  { key: 'macrociclos', label: 'Macrociclos', Icon: CalendarRange },
-  { key: 'programa', label: 'Programa', Icon: Dumbbell },
-  { key: 'rampa', label: 'Rampa', Icon: Gauge },
-  { key: 'objetivos', label: 'Objetivos', Icon: Target },
-];
+const SECTION_TITLE: Record<ObjetivosSection, string> = {
+  perfil: 'Mi perfil',
+  macrociclos: 'Macrociclos',
+  programa: 'Programa de fuerza',
+  rampa: 'Rampa de vuelta',
+  objetivos: 'Objetivos',
+};
 
 export function Objetivos({ initialSection }: { initialSection?: ObjetivosSection } = {}) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
-  const [activeSection, setActiveSection] = useState<ObjetivosSection>(initialSection ?? 'macrociclos');
+  const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home'>(initialSection ?? 'home');
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
@@ -206,25 +209,35 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
   const [nextMacroDismissed, setNextMacroDismissed] = useState(false);
   const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
-  const structureRow = useMemo(() => buildStructureRow(profile, toLocalIsoDate(new Date())), [profile]);
+  const openGroups = useMemo(() => buildOpenItems(profile, history, todayIso()), [profile, history]);
   const activeProgram = getActiveStrengthProgram(profile.strengthPrograms ?? [], todayIso());
-  const activeMacro = getActiveMacrocycle(profile.macrocycles, todayIso());
 
   function persist(next: AthleteProfile) {
     athleteRepository.saveProfile(next);
     setProfile(next);
   }
 
+  /** Vuelve a lo que tienes abierto, cerrando cualquier formulario a medias. */
+  function goHome() {
+    setMacroDraft(null);
+    setGoalDraft(null);
+    setProgramDraft(null);
+    setRampDraft(null);
+    setPlanMacro(null);
+    setSeasonPlanner(null);
+    setActiveSection('home');
+  }
+
   function saveRamp(e: React.FormEvent) {
     e.preventDefault();
     if (!rampDraft) return;
     persist({ ...profile, intensityRamp: rampDraft });
-    setRampDraft(null);
+    goHome();
   }
 
   function deleteRamp() {
     persist({ ...profile, intensityRamp: undefined });
-    setRampDraft(null);
+    goHome();
   }
 
   function saveStrengthProgram(e: React.FormEvent) {
@@ -234,7 +247,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     const exists = existing.some((p) => p.id === programDraft.id);
     const strengthPrograms = exists ? existing.map((p) => (p.id === programDraft.id ? programDraft : p)) : [...existing, programDraft];
     persist({ ...profile, strengthPrograms });
-    setProgramDraft(null);
+    goHome();
   }
 
   function deleteStrengthProgram(id: string) {
@@ -268,7 +281,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
       ? profile.macrocycles.map((m) => (m.id === finalDraft.id ? finalDraft : m))
       : [...profile.macrocycles, finalDraft];
     persist({ ...profile, macrocycles });
-    setMacroDraft(null);
+    goHome();
   }
 
   function deleteMacro(id: string) {
@@ -286,12 +299,83 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     const exists = profile.goals.some((g) => g.id === goalDraft.id);
     const goals = exists ? profile.goals.map((g) => (g.id === goalDraft.id ? goalDraft : g)) : [...profile.goals, goalDraft];
     persist({ ...profile, goals });
-    setGoalDraft(null);
+    goHome();
   }
 
   function deleteGoal(id: string) {
     persist({ ...profile, goals: profile.goals.filter((g) => g.id !== id) });
   }
+
+  /** Crear algo nuevo desde Añadir: abre el editor que toca, ya con un borrador nuevo. */
+  function addNew(kind: AddKind) {
+    if (kind === 'objetivo') {
+      setGoalDraft(newGoalDraft());
+      setActiveSection('objetivos');
+    } else if (kind === 'macro') {
+      setMacroDraft(newMacroDraft());
+      setActiveSection('macrociclos');
+    } else if (kind === 'programa') {
+      setProgramDraft(newStrengthProgramDraft());
+      setActiveSection('programa');
+    } else if (kind === 'rampa') {
+      setRampDraft(newRampDraft(profile.intensityRamp));
+      setActiveSection('rampa');
+    } else {
+      setActiveSection('macrociclos');
+      setSeasonPlanner({});
+    }
+  }
+
+  /** Lo que se hace con una tarjeta de la pantalla de inicio. Editar abre el formulario de siempre ya con esa cosa. */
+  function runAction(item: OpenItem, action: OpenAction) {
+    if (item.kind === 'objetivo') {
+      const goal = profile.goals.find((g) => g.id === item.refId);
+      if (!goal) return;
+      if (action === 'editar') {
+        setGoalDraft(goal);
+        setActiveSection('objetivos');
+      } else if (window.confirm('¿Terminar este objetivo? Dejará de influir en tus sesiones.')) deleteGoal(goal.id);
+    } else if (item.kind === 'macro') {
+      const macro = profile.macrocycles.find((m) => m.id === item.refId);
+      if (!macro) return;
+      if (action === 'editar') {
+        setMacroDraft(macro);
+        setActiveSection('macrociclos');
+      } else if (action === 'plan') {
+        setPlanMacro(macro);
+        setActiveSection('macrociclos');
+      } else deleteMacro(macro.id);
+    } else if (item.kind === 'programa') {
+      const program = (profile.strengthPrograms ?? []).find((p) => p.id === item.refId);
+      if (!program) return;
+      if (action === 'editar') {
+        setProgramDraft(program);
+        setActiveSection('programa');
+      } else deleteStrengthProgram(program.id);
+    } else if (profile.intensityRamp) {
+      if (action === 'editar') {
+        setRampDraft(profile.intensityRamp);
+        setActiveSection('rampa');
+      } else if (window.confirm('¿Quitar la rampa de vuelta?')) persist({ ...profile, intensityRamp: undefined });
+    }
+  }
+
+  /** El aviso de "tu macrociclo termina pronto": lo mismo que ya hacía la pestaña de macrociclos, pero desde la pantalla de inicio. */
+  function acceptSuggestion() {
+    if (!nextMacroSuggestion) return;
+    setActiveSection('macrociclos');
+    if (nextMacroSuggestion.suggestsSeason) setSeasonPlanner({ targetDate: nextMacroSuggestion.drivingGoal?.targetDate });
+    else setMacroDraft(nextMacroSuggestion.draft);
+    setNextMacroDismissed(true);
+  }
+
+  const homeSuggestion: HomeSuggestion | null =
+    nextMacroSuggestion && !nextMacroDismissed
+      ? {
+          title: `${nextMacroSuggestion.endingStructure.label} termina ${nextMacroSuggestion.daysRemaining === 0 ? 'hoy' : `en ${nextMacroSuggestion.daysRemaining} días`} — ¿planeamos ${nextMacroSuggestion.suggestsSeason ? 'la temporada' : 'el siguiente bloque'}?`,
+          cta: nextMacroSuggestion.suggestsSeason ? 'Planificar temporada' : 'Revisar borrador',
+        }
+      : null;
 
   const today = todayIso();
   const sortedMacros = [...profile.macrocycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
@@ -300,51 +384,27 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Lo que tienes activo ahora, de un vistazo, sin saltar de pestaña en pestaña. Tocarlo lleva a
-          los objetivos. Se esconde mientras hay un formulario abierto para no estorbar. */}
-      {!macroDraft && !goalDraft && !programDraft && !rampDraft && (structureRow || goalRows.length > 0) && (
-        <div className="card p-3">
-          <SectionLabel className="mb-2 px-1">Plan activo</SectionLabel>
-          <JourneyProgress structureRow={structureRow} goalRows={goalRows} onNavigateToObjetivos={() => setActiveSection('objetivos')} />
-          {activeProgram && activeMacro && (
-            <p className="mt-2 flex items-start gap-1.5 border-t border-white/5 px-1 pt-2 text-[11px] leading-snug text-neutral-500">
-              <PauseCircle size={13} strokeWidth={2.25} className="mt-px shrink-0" />
-              <span>
-                «{activeMacro.label}» está en pausa hasta el {formatShortDate(activeProgram.endDate)}, mientras dure tu programa de fuerza.
-              </span>
-            </p>
-          )}
-        </div>
+      {activeSection === 'home' && (
+        <ObjetivosHome
+          groups={openGroups}
+          suggestion={homeSuggestion}
+          onSuggestionAccept={acceptSuggestion}
+          onSuggestionDismiss={() => setNextMacroDismissed(true)}
+          onAction={runAction}
+          onAdd={addNew}
+        />
       )}
 
-      <div role="tablist" className="grid grid-cols-5 gap-1 rounded-xl border border-brand-border bg-brand-surface p-1">
-        {SECTION_TABS.map((tab) => {
-          const isActive = activeSection === tab.key;
-          const count = tab.key === 'objetivos' ? profile.goals.length : 0;
-          return (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveSection(tab.key)}
-              className={`flex flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-semibold transition-all duration-200 ${
-                isActive ? 'bg-brand-bg text-white shadow-sm ring-1 ring-white/15' : 'text-neutral-500 hover:text-neutral-200'
-              }`}
-            >
-              <span className="relative">
-                <tab.Icon size={17} strokeWidth={2.25} className={isActive ? 'text-white' : ''} />
-                {count > 0 && (
-                  <span className="absolute -right-2.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-brand-gold px-0.5 text-[11px] font-bold text-black">
-                    {count}
-                  </span>
-                )}
-              </span>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
+      {activeSection !== 'home' && (
+        <button
+          onClick={goHome}
+          className="flex items-center gap-1.5 self-start rounded-lg py-1 pr-2 text-sm font-semibold text-neutral-300 transition-colors duration-200 hover:text-white"
+        >
+          <ChevronLeft size={17} strokeWidth={2.5} aria-hidden="true" />
+          Objetivos
+          <span className="font-normal text-neutral-500">/ {SECTION_TITLE[activeSection]}</span>
+        </button>
+      )}
       {activeSection === 'perfil' && <PerfilAtleta profile={profile} history={history} onChange={(patch) => persist({ ...profile, ...patch })} />}
 
       {activeSection === 'macrociclos' && (

@@ -19,8 +19,17 @@ export default {
           '0%': { opacity: '0', transform: 'scale(0.96) translateY(-4px)' },
           '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
         },
+        // Rex, la mascota del coach: respira, parpadea, late al pensar y levanta la barra al celebrar.
+        'rex-bob': { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-3px)' } },
+        'rex-blink': { '0%, 92%, 100%': { transform: 'scaleY(1)' }, '95%': { transform: 'scaleY(0.1)' } },
+        'rex-pulse': { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.5)' } },
+        'rex-lift': { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-5px)' } },
       },
       animation: {
+        'rex-bob': 'rex-bob 2.4s ease-in-out infinite',
+        'rex-blink': 'rex-blink 4s infinite',
+        'rex-pulse': 'rex-pulse 0.8s infinite',
+        'rex-lift': 'rex-lift 1s ease-in-out infinite',
         'menu-in': 'menu-in 140ms ease-out',
         'section-in': 'section-in 200ms ease-out',
       },

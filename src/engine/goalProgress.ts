@@ -6,7 +6,7 @@ import { resolveOlyPRKey, resolveStrengthPRKey } from './prResolution';
  * Progreso (0-1) del objetivo entre su fecha de creacion y su fecha objetivo — el suelo que
  * siempre se aplica, aunque el rendimiento real vaya por detras o no haya datos suficientes.
  */
-function getTimeProgress(goal: Goal, today: Date): number {
+export function getTimeProgress(goal: Goal, today: Date): number {
   const created = new Date(goal.createdAt).getTime();
   const target = new Date(goal.targetDate).getTime();
   const now = today.getTime();
@@ -24,7 +24,7 @@ const FULL_PROGRESS_LOAD_GROWTH = 0.08;
  * desde que se creo el objetivo. Devuelve null si el objetivo no tiene un lift con PR rastreable
  * (p.ej. objetivos gimnasticos o de resistencia) o si aun no hay al menos dos tests que comparar.
  */
-function getPerformanceProgress(goal: Goal, history: SessionHistoryEntry[]): number | null {
+export function getPerformanceProgress(goal: Goal, history: SessionHistoryEntry[]): number | null {
   if (!goal.movementId) return null;
   const goalMovement = getMovementById(goal.movementId);
   if (!goalMovement) return null;
