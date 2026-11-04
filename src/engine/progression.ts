@@ -85,6 +85,15 @@ export function mainLiftBlock(blocks: SessionBlockResult[], kind: ProgressionKin
 
 // ---------- Evaluar una sesión ----------
 
+/**
+ * Si el resultado de esta sesión cuenta para la progresión. No cuentan los días de un programa de fuerza (sus cargas salen del
+ * método, no del coach, y el generador no les aplica el factor: anotarlos llenaría el libro de aciertos de decisiones que nunca se
+ * ejecutaron y, al acabar el programa, moverían las cargas del macrociclo con resultados de otro método) ni las sesiones propias.
+ */
+export function countsForProgression(session: { source?: string; strengthProgramLabel?: string; isRestDay?: boolean }): boolean {
+  return !session.isRestDay && session.source !== 'custom' && !session.strengthProgramLabel;
+}
+
 export interface EvaluateInput {
   date: string;
   /** Fuerza u oly: de dónde sale el bloque. */

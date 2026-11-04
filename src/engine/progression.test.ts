@@ -6,6 +6,7 @@ import {
   acceptProposal,
   buildProgressionLedger,
   cleanNeededOn,
+  countsForProgression,
   dismissProposal,
   evaluateLiftSession,
   evaluateStrengthSession,
@@ -493,5 +494,36 @@ describe('el levantamiento principal de cada bloque', () => {
       expect(main!.reps).not.toBe(OLY_PRIMER_REPS);
     }
     expect(olyDays).toBeGreaterThan(5);
+  });
+});
+
+describe('los días de programa de fuerza no cuentan para la progresión', () => {
+  const macro = makeMacro({ id: 'macro-prog-day', startDate: '2026-01-05', endDate: '2026-12-27' });
+  const program = { id: 'p1', startDate: '2026-03-01', endDate: '2026-04-30', method: 'lineal' as const, lifts: [] };
+  const days = consecutiveDates('2026-03-02', 10);
+  const log = ['backSquat', 'frontSquat', 'benchPress', 'deadlift', 'strictPress'].flatMap((key) =>
+    ['limpia', 'limpia'].map((v, i) => ({ ...rec(`2026-02-${String(10 + i).padStart(2, '0')}`, v as ProgressionVerdict), key })),
+  );
+
+  it('countsForProgression: sí en un día normal; no en programa, sesión propia ni descanso', () => {
+    expect(countsForProgression({})).toBe(true);
+    expect(countsForProgression({ strengthProgramLabel: '5/3/1 · Semana 3' })).toBe(false);
+    expect(countsForProgression({ source: 'custom' })).toBe(false);
+    expect(countsForProgression({ isRestDay: true })).toBe(false);
+  });
+
+  it('con un programa activo la sesión lo dice, y el motor ignora el registro de progresión (cargas idénticas)', () => {
+    const base = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [macro], strengthPrograms: [program] });
+    const withLog = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [macro], strengthPrograms: [program], progressionLog: log });
+    const sessions = days.map((d) => generateSessionForDate(base, [], d, base.goals));
+    expect(sessions.filter((s) => !s.isRestDay).every((s) => countsForProgression(s) === false)).toBe(true);
+    expect(days.map((d) => generateSessionForDate(withLog, [], d, withLog.goals))).toEqual(sessions);
+  });
+
+  it('fuera del programa la sesión normal sí cuenta', () => {
+    const p = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [macro] });
+    const trained = days.map((d) => generateSessionForDate(p, [], d, p.goals)).filter((s) => !s.isRestDay);
+    expect(trained.length).toBeGreaterThan(0);
+    expect(trained.every((s) => countsForProgression(s))).toBe(true);
   });
 });

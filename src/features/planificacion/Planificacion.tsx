@@ -61,7 +61,7 @@ import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
-import { evaluateLiftSession, mainLiftBlock, sessionProgressionView, type ProgressionKind } from '../../engine/progression';
+import { countsForProgression, evaluateLiftSession, mainLiftBlock, sessionProgressionView, type ProgressionKind } from '../../engine/progression';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -801,7 +801,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
    * de reps limpias (rampas, olas, complejos, series únicas).
    */
   function recordProgression() {
-    if (!session || session.source === 'custom') return;
+    if (!session || !countsForProgression(session)) return;
     const log = athleteRepository.getWorkLog();
     const feedbackLog = athleteRepository.getSetFeedbackLog();
     const records = (['strength', 'oly'] as const).flatMap((kind: ProgressionKind) => {
