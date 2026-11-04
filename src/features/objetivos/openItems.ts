@@ -66,7 +66,7 @@ function daysUntil(iso: string, todayIso: string): number {
 
 const inDays = (d: number) => (d === 0 ? 'hoy' : d === 1 ? 'mañana' : `en ${d} días`);
 
-function goalFacts(goal: Goal, name: string | undefined, behind: boolean): string[] {
+export function goalFacts(goal: Goal, name: string | undefined, behind: boolean): string[] {
   const n = name ?? 'tu levantamiento';
   switch (goal.type) {
     case 'subir-pr':

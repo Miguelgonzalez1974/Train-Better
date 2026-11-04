@@ -49,6 +49,7 @@ import { SeasonPlannerModal } from './SeasonPlannerModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { PerfilAtleta } from './PerfilAtleta';
 import { buildGoalRows } from '../dashboard/progressOverview';
+import { RexAssistant } from './RexAssistant';
 import { ObjetivosHome, type AddKind, type HomeSuggestion } from './ObjetivosHome';
 import { buildOpenItems, type OpenAction, type OpenItem } from './openItems';
 
@@ -188,7 +189,8 @@ const inputClass =
  */
 export type ObjetivosSection = 'perfil' | 'macrociclos' | 'programa' | 'rampa' | 'objetivos';
 
-const SECTION_TITLE: Record<ObjetivosSection, string> = {
+const SECTION_TITLE: Record<ObjetivosSection | 'asistente', string> = {
+  asistente: 'Hablar con Rex',
   perfil: 'Mi perfil',
   macrociclos: 'Macrociclos',
   programa: 'Programa de fuerza',
@@ -199,7 +201,7 @@ const SECTION_TITLE: Record<ObjetivosSection, string> = {
 export function Objetivos({ initialSection }: { initialSection?: ObjetivosSection } = {}) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
-  const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home'>(initialSection ?? 'home');
+  const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home' | 'asistente'>(initialSection ?? 'home');
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
@@ -392,8 +394,11 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           onSuggestionDismiss={() => setNextMacroDismissed(true)}
           onAction={runAction}
           onAdd={addNew}
+          onTalk={() => setActiveSection('asistente')}
         />
       )}
+
+      {activeSection === 'asistente' && <RexAssistant profile={profile} onCreate={persist} onClose={goHome} />}
 
       {activeSection !== 'home' && (
         <button
