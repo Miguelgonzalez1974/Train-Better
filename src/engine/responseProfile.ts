@@ -179,7 +179,7 @@ export interface ResponseProfile {
   };
 }
 
-const PR_KEY_LABEL: Record<string, string> = {
+export const PR_KEY_LABEL: Record<string, string> = {
   backSquat: 'Back Squat',
   frontSquat: 'Front Squat',
   benchPress: 'Bench Press',

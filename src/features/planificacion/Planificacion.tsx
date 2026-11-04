@@ -58,7 +58,7 @@ import { applySkips, sessionParts, skippedParts, type Skips } from '../../engine
 import { wodCapFor, type WodCap } from '../../engine/wodCap';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
-import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
+import { applyMacroReview, buildWeeklyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
@@ -625,33 +625,15 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setReturnRampDismissed(true);
   }
 
-  /** Marca la semana de revision como ya mostrada (confirmada o descartada) para que no vuelva a salir hasta la semana siguiente del macrociclo. */
-  function markMacroWeekReviewed(reviewKey: string, extra: Partial<AthleteProfile> = {}) {
-    const reviewedMacroWeeks = [...(profile.reviewedMacroWeeks ?? []), reviewKey].slice(-REVIEWED_MACRO_WEEKS_LIMIT);
-    handleSaveProfile({ ...profile, ...extra, reviewedMacroWeeks });
-  }
-
   function handleConfirmMacroReview() {
     if (!macroReviewSuggestion) return;
-    if (macroReviewSuggestion.kind === 'extend-phase') {
-      const macrocycles = profile.macrocycles.map((m) => {
-        if (m.id !== activeMacro?.id || !m.phaseWeeks) return m;
-        const phaseWeeks = [...m.phaseWeeks] as [number, number, number, number];
-        phaseWeeks[macroReviewSuggestion.phaseIndex - 1] += 1;
-        return { ...m, phaseWeeks };
-      });
-      markMacroWeekReviewed(macroReviewSuggestion.reviewKey, { macrocycles });
-    } else {
-      const goals = profile.goals.map((g) => (g.id === macroReviewSuggestion.goalId ? { ...g, emphasis: 'intensivo' as const } : g));
-      markMacroWeekReviewed(macroReviewSuggestion.reviewKey, { goals });
-    }
+    handleSaveProfile(applyMacroReview(profile, macroReviewSuggestion, todayIso));
   }
 
   function handleDismissMacroReview() {
     if (!macroReviewSuggestion) return;
-    markMacroWeekReviewed(macroReviewSuggestion.reviewKey);
+    handleSaveProfile(withMacroWeekReviewed(profile, macroReviewSuggestion.reviewKey));
   }
-
   /**
    * "Regenerar sesión": da OTRO WOD (y el core/skill que dependan del azar) para hoy. La fuerza, el oly y el accesorio
    * los fija el bloqueo semanal y no cambian. Cada pulsación sube la variante del día (`profile.regenVariants`), que

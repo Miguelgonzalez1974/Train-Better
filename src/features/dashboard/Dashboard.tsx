@@ -18,6 +18,10 @@ import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/res
 import { describeSkipped } from '../../engine/sessionParts';
 import { activeEmphasisItems, emphasisSubject } from '../../engine/programmingEmphasis';
 import { EmphasisReviewNotice } from './EmphasisReviewNotice';
+import { WeeklyReviewNotice } from './WeeklyReviewNotice';
+import { RexWeekly } from './RexWeekly';
+import { buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
+import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -74,6 +78,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [formOpen, setFormOpen] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
+  /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
+  const [showWeekly, setShowWeekly] = useState<WeeklyReview | null>(null);
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
   const [dayIso, setDayIso] = useState(() => toLocalIsoDate(new Date()));
   const [tab, setTab] = useState<DashTab>('resumen');
@@ -91,6 +97,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
   const yearConsistency = useMemo(() => computeYearConsistency(profile, history, new Date()), [profile, history]);
   const conditioningBalance = useMemo(() => computeConditioningBalance(profile, history, new Date()), [profile, history]);
+  // La revisión de la semana pasada con Rex (de lunes a miércoles, hasta darla por vista).
+  const weeklyReview = useMemo(() => buildWeeklyReview(profile, history, new Date()), [profile, history]);
 
   // --- Métricas del Análisis: solo lo que ya se calcula en algún sitio de la app, ninguna inventada. ---
   const balancedPairs = imbalanceGroups.filter((g) => g.status !== 'faltan-datos');
@@ -319,6 +327,40 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           }}
         />
       )}
+      {showWeekly && (
+        <Modal open onClose={() => setShowWeekly(null)} title="Revisión semanal">
+          <RexWeekly
+            review={showWeekly}
+            onAccept={() => {
+              if (!showWeekly.suggestion) return;
+              const next = applyMacroReview(athleteRepository.getProfile(), showWeekly.suggestion, todayIso);
+              athleteRepository.saveProfile(next);
+              setProfile(next);
+            }}
+            onDismiss={() => {
+              if (!showWeekly.suggestion) return;
+              const next = withMacroWeekReviewed(athleteRepository.getProfile(), showWeekly.suggestion.reviewKey);
+              athleteRepository.saveProfile(next);
+              setProfile(next);
+            }}
+            onDone={() => {
+              const next = withWeekReviewed(athleteRepository.getProfile(), showWeekly.weekKey);
+              athleteRepository.saveProfile(next);
+              setProfile(next);
+            }}
+            onOpenEmphasis={() => {
+              setShowWeekly(null);
+              openEmphasisReview();
+            }}
+            onGoPlanificacion={() => {
+              setShowWeekly(null);
+              onNavigateToPlanificacion();
+            }}
+            onClose={() => setShowWeekly(null)}
+          />
+        </Modal>
+      )}
+
       {showBodyweight && (
         <Modal open onClose={() => setShowBodyweight(false)} title="Peso corporal">
           <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} embedded />
@@ -364,6 +406,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             onAdjust={onNavigateToPlanificacion}
           />
           </div>
+
+          {/* La semana pasada, lista para repasar con Rex. */}
+          {isToday && weeklyReview && <WeeklyReviewNotice review={weeklyReview} onOpen={() => setShowWeekly(weeklyReview)} />}
 
           {/* La revisión de las 4 semanas de lo que el coach priorizaba: un aviso de una sola vez, solo si decidió algo. */}
           {isToday && profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && !profile.emphasisPlan.review.noticed && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar') && (

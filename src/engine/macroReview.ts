@@ -105,3 +105,32 @@ export function buildWeeklyMacroReview(
 
 /** Cap del log de semanas ya revisadas — mismo orden de magnitud que los demas logs del perfil (bodyweight, readiness). */
 export const REVIEWED_MACRO_WEEKS_LIMIT = 60;
+
+/** El perfil con la semana de revisión dada por vista (confirmada o descartada): no vuelve a salir hasta la siguiente. */
+export function withMacroWeekReviewed(profile: AthleteProfile, reviewKey: string): AthleteProfile {
+  if ((profile.reviewedMacroWeeks ?? []).includes(reviewKey)) return profile;
+  return { ...profile, reviewedMacroWeeks: [...(profile.reviewedMacroWeeks ?? []), reviewKey].slice(-REVIEWED_MACRO_WEEKS_LIMIT) };
+}
+
+/**
+ * Aplica la propuesta de la revisión semanal al plan y marca la semana como revisada: alargar la fase añade una semana a la fase
+ * actual del macrociclo activo; subir el énfasis pone el objetivo en intensivo.
+ */
+export function applyMacroReview(profile: AthleteProfile, suggestion: MacroReviewSuggestion, todayIso: string): AthleteProfile {
+  let next = profile;
+  if (suggestion.kind === 'extend-phase') {
+    const active = profile.macrocycles.find((m) => m.startDate <= todayIso && todayIso <= m.endDate);
+    next = {
+      ...profile,
+      macrocycles: profile.macrocycles.map((m) => {
+        if (m.id !== active?.id || !m.phaseWeeks) return m;
+        const phaseWeeks = [...m.phaseWeeks] as [number, number, number, number];
+        phaseWeeks[suggestion.phaseIndex - 1] += 1;
+        return { ...m, phaseWeeks };
+      }),
+    };
+  } else {
+    next = { ...profile, goals: profile.goals.map((g) => (g.id === suggestion.goalId ? { ...g, emphasis: 'intensivo' as const } : g)) };
+  }
+  return withMacroWeekReviewed(next, suggestion.reviewKey);
+}
