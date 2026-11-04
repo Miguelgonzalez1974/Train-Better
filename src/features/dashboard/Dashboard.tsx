@@ -220,6 +220,18 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && !profile.emphasisPlan.review.noticed && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar'),
   );
   const rexList = buildRexSuggestions({
+    // Mirando un día pasado, Rex habla de ese día y no de hoy.
+    viewDay: isToday
+      ? null
+      : {
+          iso: dayIso,
+          label: dayIso === shiftDay(todayIso, -1, todayIso) ? 'Ayer' : `El ${ringDayLabel(dayIso, todayIso)}`,
+          trained: Boolean(shown.entry),
+          rested: isRestMarked(profile.restDates, dayIso),
+          strain: shown.strain.real,
+          low: shown.strain.target?.low ?? null,
+          high: shown.strain.target?.high ?? null,
+        },
     hour: new Date().getHours(),
     isToday,
     hasCheckIn: Boolean(todayReadiness),
@@ -277,6 +289,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return setFormOpen(true);
       case 'planificacion':
         return onNavigateToPlanificacion();
+      case 'hoy':
+        return setDayIso(todayIso);
     }
   }
 

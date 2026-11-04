@@ -18,7 +18,9 @@ export type RexTarget =
   | 'nutricion'
   | 'peso'
   | 'forma'
-  | 'planificacion';
+  | 'planificacion'
+  /** Volver al día de hoy en el selector de día. */
+  | 'hoy';
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 
@@ -34,9 +36,28 @@ export interface RexSuggestion {
   text: string;
   mood: RexBarMood;
   actions: RexAction[];
+  /** false: sin «Ahora no» (el comentario del día que se mira no se aparta). */
+  dismissible?: boolean;
+}
+
+/** El día que se está mirando cuando no es hoy: Rex lo comenta en vez de hablar de hoy. */
+export interface RexViewDay {
+  iso: string;
+  /** Cómo se nombra en una frase: «Ayer» o «El mié 14». */
+  label: string;
+  trained: boolean;
+  /** Se marcó como «Hoy descanso». */
+  rested: boolean;
+  /** Esfuerzo real de ese día (0-100), null si no entrenó. */
+  strain: number | null;
+  /** El rango de esfuerzo que tocaba ese día. */
+  low: number | null;
+  high: number | null;
 }
 
 export interface RexContext {
+  /** Si se mira un día pasado, Rex solo habla de ese día. */
+  viewDay?: RexViewDay | null;
   /** Hora local (0-23). */
   hour: number;
   /** Solo se sugiere sobre hoy: mirando un día pasado el contexto llega con `isToday` a false y Rex se queda en lo tranquilo. */
@@ -89,8 +110,29 @@ function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
 }
 
+/** Rex comenta el día pasado que se mira: si entrenó, cómo salió el esfuerzo frente al objetivo de ese día; si no, qué hubo. */
+export function daySuggestion(day: RexViewDay): RexSuggestion {
+  const actions: RexAction[] = [
+    { label: 'Volumen por día', target: 'volumen' },
+    { label: 'Volver a hoy', target: 'hoy' },
+  ];
+  const id = `dia-${day.iso}`;
+  if (!day.trained) {
+    const text = day.rested ? `${day.label} fue de descanso. Recuperar también es entrenar.` : `${day.label} no hay ninguna sesión registrada.`;
+    return { id, priority: 100, text, mood: 'idle', actions: [actions[1]], dismissible: false };
+  }
+  const real = day.strain;
+  if (real === null) return { id, priority: 100, text: `${day.label} entrenaste.`, mood: 'happy', actions, dismissible: false };
+  if (day.low === null || day.high === null) return { id, priority: 100, text: `${day.label} entrenaste, con un esfuerzo de ${real}.`, mood: 'happy', actions, dismissible: false };
+  const range = `${day.low}–${day.high}`;
+  if (real > day.high) return { id, priority: 100, text: `${day.label} entrenaste con un esfuerzo de ${real}, por encima de tu objetivo (${range}). Un día así pide cuidar el siguiente.`, mood: 'think', actions, dismissible: false };
+  if (real < day.low) return { id, priority: 100, text: `${day.label} entrenaste con un esfuerzo de ${real}, por debajo de tu objetivo (${range}). Se quedó corto, sin problema.`, mood: 'idle', actions, dismissible: false };
+  return { id, priority: 100, text: `${day.label} entrenaste con un esfuerzo de ${real}, dentro de tu objetivo (${range}). Justo lo que tocaba.`, mood: 'happy', actions, dismissible: false };
+}
+
 /** Todas las sugerencias que tocan ahora, de más a menos importante. Nunca incluye la tranquila (`QUIET_SUGGESTION`). */
 export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
+  if (ctx.viewDay) return [daySuggestion(ctx.viewDay)];
   const out: RexSuggestion[] = [];
 
   if (ctx.isToday && !ctx.hasCheckIn && ctx.hour < 22) {

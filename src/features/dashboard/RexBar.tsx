@@ -112,7 +112,7 @@ export function RexBar({
                 {a.label}
               </button>
             ))}
-            {!quiet && (
+            {!quiet && suggestion.dismissible !== false && (
               <button onClick={onDismiss} className="rounded-full px-2.5 py-1.5 text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-300">
                 Ahora no
               </button>

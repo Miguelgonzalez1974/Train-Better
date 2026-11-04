@@ -12,6 +12,7 @@ import {
   wasTyped,
   withTyped,
   type RexContext,
+  type RexViewDay,
 } from './rexDashboard';
 
 const calm: RexContext = {
@@ -112,6 +113,42 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     const p = list.map((s) => s.priority);
     expect(p).toEqual([...p].sort((a, b) => b - a));
     expect(new Set(list.map((s) => s.id)).size).toBe(list.length);
+  });
+});
+
+describe('Rex en el Dashboard: mirando un día pasado', () => {
+  const day: RexViewDay = { iso: '2026-11-03', label: 'Ayer', trained: true, rested: false, strain: 62, low: 55, high: 75 };
+  const only = (v: Partial<RexViewDay>, c: Partial<RexContext> = {}) => buildRexSuggestions({ ...calm, isToday: false, hasCheckIn: false, weeklyReviewRange: 'x', painLabels: ['Rodilla'], daysSinceWeight: null, ...c, viewDay: { ...day, ...v } });
+
+  it('solo habla de ese día: nada de hoy (revisión, molestia, peso, check-in)', () => {
+    const list = only({});
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe('dia-2026-11-03');
+  });
+
+  it('compara el esfuerzo con el objetivo de ese día', () => {
+    expect(only({})[0].text).toBe('Ayer entrenaste con un esfuerzo de 62, dentro de tu objetivo (55–75). Justo lo que tocaba.');
+    expect(only({ strain: 85 })[0].text).toMatch(/por encima de tu objetivo \(55–75\)/);
+    expect(only({ strain: 40 })[0].text).toMatch(/por debajo de tu objetivo \(55–75\)/);
+    expect(only({ low: null, high: null })[0].text).toBe('Ayer entrenaste, con un esfuerzo de 62.');
+    expect(only({ label: 'El mié 14' })[0].text).toMatch(/^El mié 14 entrenaste/);
+  });
+
+  it('un día sin sesión: descanso elegido o nada registrado, y solo ofrece volver a hoy', () => {
+    const rest = only({ trained: false, rested: true, strain: null })[0];
+    expect(rest.text).toMatch(/^Ayer fue de descanso/);
+    expect(rest.actions.map((a) => a.target)).toEqual(['hoy']);
+    expect(only({ trained: false, strain: null })[0].text).toBe('Ayer no hay ninguna sesión registrada.');
+  });
+
+  it('con sesión ofrece el volumen y volver a hoy, y no se puede apartar', () => {
+    const s = only({})[0];
+    expect(s.actions.map((a) => a.target)).toEqual(['volumen', 'hoy']);
+    expect(s.dismissible).toBe(false);
+  });
+
+  it('sin día pasado todo sigue como antes', () => {
+    expect(buildRexSuggestions({ ...calm, viewDay: null })).toEqual([]);
   });
 });
 
