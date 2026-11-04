@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Apple, ArrowRight, BarChart3, Flame, Radar, Sun, Target } from 'lucide-react';
+import { Apple } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
-import { computeWeekCount } from '../../engine/adherence';
+import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { computeConditioningBalance } from '../../engine/conditioningBalance';
 import { getMonthlyStats } from './stats';
 import { computeReadinessScore } from '../../engine/readinessScore';
@@ -13,19 +13,30 @@ import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
 import { dayAdvice } from '../../engine/dayAdvice';
-import { getActivePainFlags } from '../../engine/painFlags';
+import { getActivePainFlags, PAIN_AREA_LABEL } from '../../engine/painFlags';
 import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
 import { describeSkipped } from '../../engine/sessionParts';
-import { activeEmphasisItems, emphasisSubject } from '../../engine/programmingEmphasis';
-import { EmphasisReviewNotice } from './EmphasisReviewNotice';
-import { WeeklyReviewNotice } from './WeeklyReviewNotice';
+import { RexBar } from './RexBar';
+import {
+  buildRexSuggestions,
+  dismissSuggestion,
+  loadRexMemory,
+  pickRexSuggestion,
+  saveRexMemory,
+  wasTyped,
+  weekRangeText,
+  withTyped,
+  type RexMemory,
+  type RexTarget,
+} from './rexDashboard';
+import { buildOpenItems } from '../objetivos/openItems';
 import { RexWeekly } from './RexWeekly';
 import { buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
-import { buildStructureRow, buildGoalRows } from './progressOverview';
+import { buildGoalRows } from './progressOverview';
 import { DayRing, type DashTab, type RingTarget } from './DayRing';
 import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
@@ -91,7 +102,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const acwrTrend = useMemo(() => getAcwrTrend(history), [history]);
   const todayIso = toLocalIsoDate(new Date());
   const formModel = useMemo(() => buildFormModel(profile, history, todayIso), [profile, history, todayIso]);
-  const structureRow = useMemo(() => buildStructureRow(profile, todayIso), [profile, todayIso]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
@@ -101,8 +111,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const weeklyReview = useMemo(() => buildWeeklyReview(profile, history, new Date()), [profile, history]);
 
   // --- Métricas del Análisis: solo lo que ya se calcula en algún sitio de la app, ninguna inventada. ---
-  const balancedPairs = imbalanceGroups.filter((g) => g.status !== 'faltan-datos');
-  const balancedOk = balancedPairs.filter((g) => g.status === 'equilibrado').length;
   // Fuerza relativa: el total de los tres grandes (sentadilla, banca, peso muerto) en veces tu peso corporal.
   const latestBodyweightKg = [...bodyweightLog].sort((a, b) => a.date.localeCompare(b.date)).pop()?.kg;
   const strengthTotalKg = profile.prs.backSquat + profile.prs.benchPress + profile.prs.deadlift;
@@ -164,9 +172,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const plannedToday = strainView.planned?.strain ?? null;
   const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, history, dayIso, todayIso, days, plannedToday, offsetDays), [profile, history, dayIso, todayIso, plannedToday]);
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
-  // El icono de Perfil: lo que el coach prioriza ahora (si lo hay) y un punto si hay una revisión de las 4 semanas sin ver.
-  const emphasisNow = activeEmphasisItems(profile);
-  const profileTitle = emphasisNow.length > 0 ? `Perfil · prioriza ${emphasisNow.map((i) => emphasisSubject(i.area, i.row)).join(' y ')}` : 'Perfil';
   const reviewPending = Boolean(profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar'));
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
@@ -200,8 +205,77 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     fit: strainView.planned && strainView.fit ? { kind: strainView.fit.fit, planned: strainView.planned.strain, diff: strainView.fit.diff } : null,
     target: strainTarget,
   });
-  // El check-in se hace en la tarjeta de la mañana (que sale al abrir la app): el Resumen solo guarda una pastilla si se dejó para
-  // luego, y lo contestado se ve y se corrige en la pestaña Preparación.
+  // Lo que enseña la ventana de Análisis: cumplimiento de los dominios energéticos.
+  const energyAdherencePct =
+    conditioningBalance && conditioningBalance.totalPlanned > 0
+      ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
+      : null;
+
+  // Rex, arriba del todo: qué toca ahora y atajos a los módulos. Lee lo mismo que el resto del Dashboard.
+  const goalsBehind = useMemo(() => buildOpenItems(profile, history, todayIso).objetivos.filter((i) => i.chip.tone === 'warn').length, [profile, history, todayIso]);
+  const lastWeightDate = bodyweightLog.reduce<string | null>((best, e) => (best === null || e.date > best ? e.date : best), null);
+  const daysSinceWeight = lastWeightDate === null ? null : Math.max(0, Math.round((new Date(`${todayIso}T00:00:00`).getTime() - new Date(`${lastWeightDate}T00:00:00`).getTime()) / 86_400_000));
+  const streak = useMemo(() => computeAdherenceStreak(profile, history, todayIso), [profile, history, todayIso]);
+  const emphasisReviewNew = Boolean(
+    profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && !profile.emphasisPlan.review.noticed && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar'),
+  );
+  const rexList = buildRexSuggestions({
+    hour: new Date().getHours(),
+    isToday,
+    hasCheckIn: Boolean(todayReadiness),
+    trainedToday: history.some((h) => h.date === todayIso),
+    hasSessionToday: todaySession !== null && !todaySession.isRestDay,
+    restMarked,
+    weeklyReviewRange: weeklyReview ? weekRangeText(weeklyReview.from, weeklyReview.to) : null,
+    emphasisReviewPending: emphasisReviewNew,
+    nutritionPercent: isToday ? nutritionPercent : null,
+    streak,
+    goalsBehind,
+    painLabels: getActivePainFlags(profile.painFlags, todayIso).map((f) => PAIN_AREA_LABEL[f.area]),
+    daysSinceWeight,
+  });
+  const [rexMemory, setRexMemory] = useState<RexMemory>(() => loadRexMemory(typeof window !== 'undefined' ? window.localStorage : null));
+  const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso);
+  function updateRexMemory(change: (m: RexMemory) => RexMemory) {
+    setRexMemory((prev) => {
+      const next = change(prev);
+      if (next !== prev) saveRexMemory(typeof window !== 'undefined' ? window.localStorage : null, next);
+      return next;
+    });
+  }
+  const rexBadges: Partial<Record<RexTarget, string>> = {
+    ...(yearConsistency.pct !== null ? { constancia: `${yearConsistency.pct} %` } : {}),
+    ...(goalRows.length > 0 ? { objetivos: String(goalRows.length) } : {}),
+  };
+  const rexDots: RexTarget[] = reviewPending ? ['perfil'] : [];
+  function runRexTarget(target: RexTarget) {
+    switch (target) {
+      case 'checkin':
+        return onOpenMorning();
+      case 'semana':
+        return weeklyReview && setShowWeekly(weeklyReview);
+      case 'revision-enfasis':
+        return openEmphasisReview();
+      case 'constancia':
+        return setShowConsistency(true);
+      case 'volumen':
+        return setShowVolume(true);
+      case 'analisis':
+        return setAnalysisOpen(true);
+      case 'perfil':
+        return onNavigateToObjetivos('perfil');
+      case 'objetivos':
+        return onNavigateToObjetivos();
+      case 'nutricion':
+        return setShowNutrition(true);
+      case 'peso':
+        return setShowBodyweight(true);
+      case 'forma':
+        return setFormOpen(true);
+      case 'planificacion':
+        return onNavigateToPlanificacion();
+    }
+  }
 
   /** Tocar un número del anillo: esfuerzo y preparación abren su pestaña; la carga, su ventana. */
   function openRingTarget(target: RingTarget) {
@@ -209,21 +283,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     else setTab(target);
   }
 
-  const energyAdherencePct =
-    conditioningBalance && conditioningBalance.totalPlanned > 0
-      ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
-      : null;
-
-  // Lo que enseña la fila "Análisis" del Resumen: fuerza relativa, dominios energéticos y desequilibrios.
-  const analysisLabels = [
-    energyAdherencePct !== null ? `${energyAdherencePct}%` : '—',
-    balancedPairs.length > 0 ? `${balancedOk}/${balancedPairs.length}` : '—',
-    strengthRatio !== null ? `${strengthRatio.toFixed(1).replace('.', ',')}×` : '—',
-  ];
-  const hasStructure = Boolean(structureRow) || goalRows.length > 0;
-  const goalsLabel = `${goalRows.length} ${goalRows.length === 1 ? 'objetivo activo' : 'objetivos activos'}`;
-  const StructureIcon = structureRow?.Icon ?? Target;
-  const structureColor = structureRow?.color ?? '#d4af37';
 
   return (
     <div className="flex flex-col gap-4">
@@ -234,15 +293,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </div>
         <div className="flex items-center gap-2 self-end sm:self-auto">
           <ThemeToggle className="h-10 w-10" />
-          {/* Análisis: lo que cambia despacio (energía, equilibrio, fuerza relativa); la ventana trae el detalle. */}
-          <button
-            onClick={() => setAnalysisOpen(true)}
-            title={`Análisis · Energía ${analysisLabels[0]} · Equilibrio ${analysisLabels[1]} · Fuerza ${analysisLabels[2]}`}
-            aria-label="Análisis"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
-          >
-            <Activity size={17} strokeWidth={2.25} />
-          </button>
           {/* Nutrición: el % de lo que llevas del día (proteína e hidratos) sobre el icono, para verlo sin abrir nada. */}
           <button
             onClick={() => setShowNutrition(true)}
@@ -260,54 +310,19 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               </span>
             )}
           </button>
-          <button
-            onClick={() => setShowVolume(true)}
-            title="Volumen por día"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
-          >
-            <BarChart3 size={17} strokeWidth={2.25} />
-          </button>
-          {/* Perfil: lo que el coach ve en ti y lo que prioriza. Un punto avisa si hay una revisión de las 4 semanas sin ver. */}
-          <button
-            onClick={() => onNavigateToObjetivos('perfil')}
-            title={profileTitle}
-            aria-label={reviewPending ? 'Perfil, hay una revisión nueva' : 'Perfil'}
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
-          >
-            <Radar size={17} strokeWidth={2.25} />
-            {reviewPending && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-brand-orange ring-2 ring-brand-bg" aria-hidden="true" />}
-          </button>          <button
-            onClick={() => setShowConsistency(true)}
-            title={yearConsistency.pct !== null ? `Constancia · ${yearConsistency.pct} % (${yearConsistency.days} días este año)` : 'Constancia'}
-            aria-label="Constancia"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
-          >
-            <Flame size={17} strokeWidth={2.25} />
-          </button>
-          {hasStructure && (
-            <button
-              onClick={() => onNavigateToObjetivos()}
-              title={
-                structureRow
-                  ? `${structureRow.label} · ${structureRow.sublabel}${goalRows.length > 0 ? ` · ${goalsLabel}` : ''}`
-                  : goalsLabel
-              }
-              className="relative flex h-10 w-10 items-center justify-center rounded-lg border transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
-              style={{ borderColor: `${structureColor}66`, color: structureColor }}
-            >
-              <StructureIcon size={17} strokeWidth={2.25} />
-              {goalRows.length > 0 && (
-                <span
-                  className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[11px] font-bold"
-                  style={{ background: structureColor, color: '#171310' }}
-                >
-                  {goalRows.length}
-                </span>
-              )}
-            </button>
-          )}
         </div>
       </div>
+      {/* Rex, siempre arriba: te dice lo que toca ahora con atajos, y en «Más» están los módulos que antes eran botones sueltos. */}
+      <RexBar
+        suggestion={rexPick.current}
+        waiting={rexPick.waiting}
+        typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
+        badges={rexBadges}
+        dots={rexDots}
+        onAction={runRexTarget}
+        onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
+        onTyped={() => updateRexMemory((m) => withTyped(m, rexPick.current.id, todayIso))}
+      />
       {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
       {showNutrition && (
         <NutritionModal
@@ -379,20 +394,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           */}
           <div {...swipe} className="touch-pan-y">
           <DayRing
-            checkIn={
-              isToday && !todayReadiness ? (
-                <div className="flex justify-center">
-                  <button
-                    onClick={onOpenMorning}
-                    className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[13px] font-medium text-neutral-200 transition-colors duration-200 hover:bg-white/[0.07]"
-                  >
-                    <Sun size={15} strokeWidth={2.25} className="text-brand-gold" aria-hidden="true" />
-                    Check-in pendiente
-                    <ArrowRight size={14} className="text-neutral-500" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : null
-            }
             advice={advice}
             rest={isToday && todayStrain === null && (restMarked || (todaySession !== null && !todaySession.isRestDay)) ? { marked: restMarked, onToggle: toggleRest } : undefined}
             strain={shown.strain}
@@ -406,14 +407,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             onAdjust={onNavigateToPlanificacion}
           />
           </div>
-
-          {/* La semana pasada, lista para repasar con Rex. */}
-          {isToday && weeklyReview && <WeeklyReviewNotice review={weeklyReview} onOpen={() => setShowWeekly(weeklyReview)} />}
-
-          {/* La revisión de las 4 semanas de lo que el coach priorizaba: un aviso de una sola vez, solo si decidió algo. */}
-          {isToday && profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && !profile.emphasisPlan.review.noticed && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar') && (
-            <EmphasisReviewNotice review={profile.emphasisPlan.review} onOpen={openEmphasisReview} />
-          )}
 
           {/* Tu día: la sesión (con su esfuerzo en la insignia) y la nutrición, una fila cada una. */}
           <DayRows
