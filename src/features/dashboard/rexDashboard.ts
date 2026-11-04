@@ -69,8 +69,8 @@ export function weekRangeText(from: string, to: string): string {
 }
 
 const STREAK_MIN = 4;
-const NUTRITION_HOUR = 15;
-const NUTRITION_LOW = 60;
+export const NUTRITION_HOUR = 15;
+export const NUTRITION_LOW = 60;
 const WEIGHT_STALE_DAYS = 14;
 
 /** Lo que dice Rex cuando no hay nada que sugerir: se queda a disposición con los atajos de siempre. */
@@ -274,6 +274,7 @@ export function saveRexMemory(storage: Pick<Storage, 'setItem'> | null, memory: 
 
 /** Los módulos que se abren desde «Más» (los botones que antes vivían sueltos arriba). */
 export const REX_MODULES: { target: RexTarget; label: string }[] = [
+  { target: 'nutricion', label: 'Nutrición' },
   { target: 'constancia', label: 'Constancia' },
   { target: 'volumen', label: 'Volumen por día' },
   { target: 'analisis', label: 'Análisis' },

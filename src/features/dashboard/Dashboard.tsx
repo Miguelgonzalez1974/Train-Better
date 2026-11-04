@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Apple } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
@@ -19,6 +18,8 @@ import { describeSkipped } from '../../engine/sessionParts';
 import { RexBar } from './RexBar';
 import {
   buildRexSuggestions,
+  NUTRITION_HOUR,
+  NUTRITION_LOW,
   dismissSuggestion,
   loadRexMemory,
   pickRexSuggestion,
@@ -62,7 +63,6 @@ import { AnalysisView } from './AnalysisView';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
 
-const MONTH_LABEL = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(new Date());
 
 interface DashboardProps {
   onNavigateToPlanificacion: () => void;
@@ -246,8 +246,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const rexBadges: Partial<Record<RexTarget, string>> = {
     ...(yearConsistency.pct !== null ? { constancia: `${yearConsistency.pct} %` } : {}),
     ...(goalRows.length > 0 ? { objetivos: String(goalRows.length) } : {}),
+    ...(nutritionPercent !== null ? { nutricion: `${nutritionPercent} %` } : {}),
   };
-  const rexDots: RexTarget[] = reviewPending ? ['perfil'] : [];
+  // Un punto en «Más» (y en el módulo) cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
+  const nutritionLow = isToday && nutritionPercent !== null && nutritionPercent < NUTRITION_LOW && new Date().getHours() >= NUTRITION_HOUR;
+  const rexDots: RexTarget[] = [...(reviewPending ? (['perfil'] as RexTarget[]) : []), ...(nutritionLow ? (['nutricion'] as RexTarget[]) : [])];
   function runRexTarget(target: RexTarget) {
     switch (target) {
       case 'checkin':
@@ -286,32 +289,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-neutral-400 capitalize">{MONTH_LABEL}</p>
-          <p className="text-lg font-semibold text-white">Resumen</p>
-        </div>
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <ThemeToggle className="h-10 w-10" />
-          {/* Nutrición: el % de lo que llevas del día (proteína e hidratos) sobre el icono, para verlo sin abrir nada. */}
-          <button
-            onClick={() => setShowNutrition(true)}
-            title={nutritionPercent !== null ? `Nutrición · ${nutritionPercent} % de lo de ${isToday ? 'hoy' : dayLabel(dayIso, todayIso).toLowerCase()}` : 'Nutrición'}
-            aria-label={nutritionPercent !== null ? `Nutrición, ${nutritionPercent} por ciento` : 'Nutrición'}
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-brand-border text-neutral-300 transition-all duration-200 hover:border-brand-gold hover:text-brand-gold"
-          >
-            <Apple size={17} strokeWidth={2.25} />
-            {nutritionPercent !== null && (
-              <span
-                className="num absolute -right-2 -top-2 rounded-full px-1.5 text-[11px] font-bold leading-[16px]"
-                style={{ background: nutritionPercent >= 90 ? 'rgb(var(--c-state-good))' : 'rgb(var(--c-white) / 0.9)', color: 'rgb(var(--c-brand-bg))' }}
-              >
-                {nutritionPercent}%
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
       {/* Rex, siempre arriba: te dice lo que toca ahora con atajos, y en «Más» están los módulos que antes eran botones sueltos. */}
       <RexBar
         suggestion={rexPick.current}
@@ -319,6 +296,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
         badges={rexBadges}
         dots={rexDots}
+        extra={<ThemeToggle label className="!h-auto !w-full justify-start gap-2 px-3 py-2" />}
         onAction={runRexTarget}
         onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
         onTyped={() => updateRexMemory((m) => withTyped(m, rexPick.current.id, todayIso))}

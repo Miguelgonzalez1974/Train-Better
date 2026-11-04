@@ -23,7 +23,7 @@ function applyTheme(theme: 'dark' | 'light') {
 }
 
 /** Botón sol/luna — alterna tema claro/oscuro y lo recuerda por navegador. Oscuro es el defecto. */
-export function ThemeToggle({ className = '' }: { className?: string }) {
+export function ThemeToggle({ className = '', label = false }: { className?: string; /** Enseña también el texto («Tema claro» / «Tema oscuro»), para usarlo como una opción más de una lista. */ label?: boolean }) {
   const [theme, setTheme] = useState<'dark' | 'light'>(readTheme);
   const toggle = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -37,7 +37,8 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
       aria-label="Cambiar tema"
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold ${className}`}
     >
-      {theme === 'dark' ? <Sun size={16} strokeWidth={2.25} /> : <Moon size={16} strokeWidth={2.25} />}
+      {theme === 'dark' ? <Sun size={label ? 15 : 16} strokeWidth={2.25} /> : <Moon size={label ? 15 : 16} strokeWidth={2.25} />}
+      {label && <span className="min-w-0 truncate text-xs font-semibold text-neutral-200">{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>}
     </button>
   );
 }

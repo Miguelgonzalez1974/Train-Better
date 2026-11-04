@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, ChevronDown, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Activity, Apple, BarChart3, ChevronDown, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { REX_MODULES, type RexSuggestion, type RexTarget } from './rexDashboard';
 
 const MODULE_ICON: Partial<Record<RexTarget, LucideIcon>> = {
+  nutricion: Apple,
   constancia: Flame,
   volumen: BarChart3,
   analisis: Activity,
@@ -26,10 +27,13 @@ export function RexBar({
   typedAlready,
   badges,
   dots,
+  extra,
   onAction,
   onDismiss,
   onTyped,
 }: {
+  /** Una celda más al final de «Más» (el cambio de tema). */
+  extra?: ReactNode;
   suggestion: RexSuggestion;
   /** Cuántas sugerencias más esperan detrás de la que se ve. */
   waiting: number;
@@ -133,6 +137,7 @@ export function RexBar({
               </button>
             );
           })}
+          {extra}
         </div>
       )}
     </section>
