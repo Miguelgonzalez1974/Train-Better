@@ -51,6 +51,13 @@ export function RexBar({
   const animate = !typedAlready && !reduced;
   const [shown, setShown] = useState(animate ? 0 : suggestion.text.length);
   const [more, setMore] = useState(false);
+  // Sin memoizar: si la app queda abierta pasada la medianoche, la fecha se corrige sola en el siguiente repintado.
+  const now = new Date();
+  const today = {
+    weekday: now.toLocaleDateString('es', { weekday: 'short' }).replace('.', ''),
+    dayMonth: now.toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', ''),
+    long: now.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' }),
+  };
   const typing = shown < suggestion.text.length;
 
   // Al cambiar de frase: se escribe letra a letra solo si no se había escrito hoy; si no, sale entera.
@@ -78,7 +85,14 @@ export function RexBar({
   return (
     <section aria-label="Rex" className="rounded-[14px] border border-white/10 bg-white/[0.04] px-3.5 py-3">
       <div className="flex items-start gap-3">
-        <RexMascot size={40} mood={typing ? 'think' : suggestion.mood} />
+        <div className="flex w-12 shrink-0 flex-col items-center gap-1">
+          <RexMascot size={40} mood={typing ? 'think' : suggestion.mood} />
+          {/* La fecha de hoy, siempre: no cambia al mirar otro día con el selector. */}
+          <p className="text-center text-[11px] leading-tight text-neutral-500" aria-label={`Hoy es ${today.long}`}>
+            <span className="block capitalize">{today.weekday}</span>
+            <span className="num block">{today.dayMonth}</span>
+          </p>
+        </div>
         <div className="min-w-0 flex-1">
           <p className="min-h-[2.5rem] text-[13px] leading-relaxed text-neutral-100" aria-live="polite">
             {suggestion.text.slice(0, shown)}
