@@ -4,7 +4,7 @@ import type { AthleteProfile } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { RexMascot, type RexMood } from './RexMascot';
 import { shortDate } from './openItems';
-import { applyPlan, commitItems, getNode, reviewNotes, type CommitKind, type FlowState, type PlanItem, type RexOption } from './rexFlow';
+import { applyPlan, commitItems, getNode, reviewNotes, type CommitKind, type FlowState, type PlanItem, type RexNode, type RexOption } from './rexFlow';
 
 interface Msg {
   id: number;
@@ -19,7 +19,7 @@ const TYPING_MS = 650;
  * temporada entera). Nada se guarda hasta la revisión final; al crear, lo entrega entero a `onCreate`. Las preguntas y lo que crea
  * salen de `rexFlow.ts`, que es lo que se prueba; esto solo las pinta, con la mascota reaccionando a lo que pasa.
  */
-export function RexAssistant({ profile, onCreate, onClose }: { profile: AthleteProfile; onCreate: (next: AthleteProfile) => void; onClose: () => void }) {
+export function RexAssistant({ profile, onCreate, onClose, onDirtyChange }: { profile: AthleteProfile; onCreate: (next: AthleteProfile) => void; onClose: () => void; onDirtyChange?: (dirty: boolean) => void }) {
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const ctx = useMemo(() => ({ profile, todayIso }), [profile, todayIso]);
   const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
@@ -33,6 +33,7 @@ export function RexAssistant({ profile, onCreate, onClose }: { profile: AthleteP
   const [depth, setDepth] = useState(0);
   const [dateValue, setDateValue] = useState('');
   const [dateError, setDateError] = useState('');
+  const [textValue, setTextValue] = useState('');
 
   const stateRef = useRef<FlowState>({});
   const planRef = useRef<PlanItem[]>([]);
@@ -70,6 +71,7 @@ export function RexAssistant({ profile, onCreate, onClose }: { profile: AthleteP
     else setDepth((d) => d + 1);
     setDateValue('');
     setDateError('');
+    setTextValue('');
     say(node.text, () => setNodeId(id));
   }
 
@@ -122,6 +124,19 @@ export function RexAssistant({ profile, onCreate, onClose }: { profile: AthleteP
     else ask(next ?? 'more');
   }
 
+  function submitText(input: NonNullable<RexNode['input']>) {
+    const label = textValue.trim().slice(0, input.max);
+    stateRef.current = { ...stateRef.current, [input.field]: label };
+    push('me', label || `Como lo propones: «${input.suggested}»`);
+    commit(input.commit);
+  }
+
+  /** Salir del asistente sin crear nada: si hay un plan a medias, se pregunta antes de descartarlo. */
+  function leave() {
+    if (planRef.current.length > 0 && phase !== 'done' && !window.confirm('Tienes un plan sin crear. ¿Salir y descartarlo?')) return;
+    onClose();
+  }
+
   function createAll() {
     const items = planRef.current;
     onCreate(applyPlan(profile, items));
@@ -139,6 +154,13 @@ export function RexAssistant({ profile, onCreate, onClose }: { profile: AthleteP
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    onDirtyChange?.(plan.length > 0 && phase !== 'done');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.length, phase]);
+
+  useEffect(() => () => onDirtyChange?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
@@ -217,6 +239,29 @@ export function RexAssistant({ profile, onCreate, onClose }: { profile: AthleteP
           </div>
         )}
 
+        {node?.input && !typing && (
+          <form
+            className="flex animate-section-in items-center gap-2 motion-reduce:animate-none"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (node.input) submitText(node.input);
+            }}
+          >
+            <input
+              type="text"
+              value={textValue}
+              maxLength={node.input.max}
+              onChange={(e) => setTextValue(e.target.value)}
+              placeholder={node.input.suggested}
+              aria-label="Nombre"
+              className="min-w-0 flex-1 rounded-lg border border-brand-border bg-brand-bg px-2.5 py-2 text-sm text-white transition-colors focus:border-brand-gold focus:outline-none"
+            />
+            <button type="submit" className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black transition-all duration-200 hover:bg-brand-orange-dark">
+              Vale
+            </button>
+          </form>
+        )}
+
         {node?.date && !typing && (
           <div className="flex animate-section-in flex-col gap-1.5 motion-reduce:animate-none">
             <div className="flex items-center gap-2">
@@ -285,7 +330,7 @@ export function RexAssistant({ profile, onCreate, onClose }: { profile: AthleteP
               >
                 Seguir añadiendo
               </button>
-              <button onClick={onClose} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5">
+              <button onClick={leave} className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5">
                 Editar a mano
               </button>
             </div>

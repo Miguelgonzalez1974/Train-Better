@@ -29,7 +29,7 @@ let n = 0;
 const mkCtx = (profile: AthleteProfile): RexCtx => ({ profile, todayIso: TODAY, newId: () => `id-${++n}` });
 const emptyProfile = (o: Partial<AthleteProfile> = {}) => fixtureProfile({ macrocycles: [], goals: [], ...o });
 
-type Step = string | { date: string };
+type Step = string | { date: string } | { text: string };
 
 /** Recorre una conversación: cada paso es el texto de un botón, o una fecha. Devuelve lo que se queda en el plan y dónde acaba. */
 function walk(steps: Step[], profile: AthleteProfile = emptyProfile(), from: { plan?: PlanItem[]; s?: FlowState; node?: string } = {}) {
@@ -48,6 +48,11 @@ function walk(steps: Step[], profile: AthleteProfile = emptyProfile(), from: { p
         plan.push(...commitItems(option.commit, s, ctx));
         id = 'more';
       } else id = option.next ?? 'more';
+    } else if ('text' in step) {
+      if (!node.input) throw new Error(`En «${id}» no se pide un texto`);
+      s = { ...s, [node.input.field]: step.text.trim().slice(0, node.input.max) };
+      plan.push(...commitItems(node.input.commit, s, ctx));
+      id = 'more';
     } else {
       if (!node.date) throw new Error(`En «${id}» no se pide una fecha`);
       s = { ...s, [node.date.field]: step.date };
@@ -63,7 +68,7 @@ function walk(steps: Step[], profile: AthleteProfile = emptyProfile(), from: { p
 describe('Rex: que la conversación esté bien cosida', () => {
   const ALL_IDS = [
     'start', 'more', 'o_type', 'o_lift_any', 'o_lift', 'o_oly', 'o_skill', 'o_skill_level', 'o_comp', 'o_comp_days', 'o_comp_end', 'o_when', 'o_date', 'o_push',
-    'm_dur', 'm_phase', 'm_start', 'p_goal', 'p_method', 'p_lifts', 'p_dur', 'p_start', 'p_warn', 'r_gap', 't_when', 't_gap', 'i_suggest', 'i_block', 'i_ok',
+    'm_dur', 'm_phase', 'm_start', 'm_name', 'p_goal', 'p_method', 'p_lifts', 'p_dur', 'p_start', 'p_warn', 'r_gap', 't_when', 't_gap', 'i_suggest', 'i_block', 'i_ok',
   ];
   const rich: FlowState = { type: 'subir-pr', movementId: 'back-squat', detail: 'Sentadilla trasera', cat: 'oly', method: '531', weeks: 8, targetDate: '2027-01-01', why: 'x' };
   const ctx = mkCtx(emptyProfile({ macrocycles: [makeMacro({ id: 'm', label: 'M', startDate: '2026-10-01', endDate: '2026-12-01' })], strengthPrograms: [{ id: 'p', startDate: '2026-10-28', endDate: '2026-12-22', method: '531', lifts: [] }] }));
@@ -72,12 +77,13 @@ describe('Rex: que la conversación esté bien cosida', () => {
     for (const id of ALL_IDS) {
       const node = getNode(id, rich, ctx, []);
       expect(node.text.length, id).toBeGreaterThan(10);
-      expect(Boolean(node.options?.length) !== Boolean(node.date), `«${id}» tiene botones o una fecha, no las dos cosas ni ninguna`).toBe(true);
+      expect([Boolean(node.options?.length), Boolean(node.date), Boolean(node.input)].filter(Boolean), `«${id}» tiene botones, una fecha o un texto: una sola cosa`).toHaveLength(1);
       for (const o of node.options ?? []) {
         expect(Boolean(o.next) || Boolean(o.commit), `«${id}» → «${o.label}» no lleva a ningún sitio`).toBe(true);
         if (o.next && o.next !== 'review') expect(ALL_IDS, `«${id}» → «${o.label}» apunta a «${o.next}»`).toContain(o.next);
       }
       if (node.date) expect(Boolean(node.date.next) || Boolean(node.date.commit), id).toBe(true);
+      if (node.input) expect(node.input.suggested.length, id).toBeGreaterThan(0);
     }
   });
 
@@ -158,7 +164,7 @@ describe('Rex: macrociclo', () => {
   });
 
   it('un macrociclo de 12 semanas desde hoy acaba el día 84 (inclusive) y mide 12 semanas para la app', () => {
-    const m = walk(['Un macrociclo', '12 semanas (3 meses)', 'Con el pico hacia el final', 'Hoy']).plan[0].payload.macro!;
+    const m = walk(['Un macrociclo', '12 semanas (3 meses)', 'Con el pico hacia el final', 'Hoy', { text: '' }]).plan[0].payload.macro!;
     expect(m).toMatchObject({ startDate: TODAY, endDate: addDaysIso(TODAY, 83), phaseWeeks: [5, 4, 2, 1] });
     expect(m.label).toContain('12 semanas');
   });
@@ -166,20 +172,20 @@ describe('Rex: macrociclo', () => {
   it('empezar el lunes que viene', () => {
     expect(nextMondayIso(TODAY)).toBe('2026-11-09');
     expect(nextMondayIso('2026-11-09')).toBe('2026-11-16');
-    expect(walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'El lunes que viene']).plan[0].payload.macro!.startDate).toBe('2026-11-09');
+    expect(walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'El lunes que viene', { text: '' }]).plan[0].payload.macro!.startDate).toBe('2026-11-09');
   });
 
   it('el clásico no fija fases', () => {
-    expect('phaseWeeks' in walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy']).plan[0].payload.macro!).toBe(false);
+    expect('phaseWeeks' in walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy', { text: '' }]).plan[0].payload.macro!).toBe(false);
   });
 
   it('se pueden encadenar: el siguiente arranca el día después del anterior, sin pisarse', () => {
-    const first = walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy']);
+    const first = walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy', { text: '' }]);
     const a = first.plan[0].payload.macro!;
     const node = getNode('m_start', { weeks: 8, phases: 'base' }, first.ctx, first.plan);
     const chain = node.options!.find((o) => o.label.startsWith('Justo después del último'))!;
     expect(chain.set?.startIso).toBe(addDaysIso(a.endDate, 1));
-    const second = walk(['Un macrociclo', '12 semanas (3 meses)', 'Base primero: más acumulación al principio', chain.label], emptyProfile(), { plan: first.plan });
+    const second = walk(['Un macrociclo', '12 semanas (3 meses)', 'Base primero: más acumulación al principio', chain.label, { text: '' }], emptyProfile(), { plan: first.plan });
     const b = second.plan[1].payload.macro!;
     expect(b.startDate > a.endDate).toBe(true);
     expect(b.phaseWeeks).toEqual([7, 3, 1, 1]);
@@ -316,7 +322,7 @@ describe('Rex: varias cosas y crear el plan', () => {
   it('aplicar el plan suma lo nuevo sin tocar lo que ya había ni mutar el perfil', () => {
     const profile = emptyProfile({ intensityRamp: { startDate: '2026-10-01', strengthWeeks: 2, olyWeeks: 2, wodWeeks: 1 } });
     const before = JSON.stringify(profile);
-    const { plan } = walk(['Un objetivo', 'Más resistencia', '8 semanas', 'Moderado: se mezcla con lo demás', 'Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy', 'Una rampa de vuelta', 'Más de 6 semanas'], profile);
+    const { plan } = walk(['Un objetivo', 'Más resistencia', '8 semanas', 'Moderado: se mezcla con lo demás', 'Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy', { text: '' }, 'Una rampa de vuelta', 'Más de 6 semanas'], profile);
     const next = applyPlan(profile, plan);
     expect(JSON.stringify(profile)).toBe(before);
     expect(next.goals).toHaveLength(1);
@@ -384,5 +390,44 @@ describe('Rex: lo que crea es lo que la app espera', () => {
     expect(m.startDate < m.endDate).toBe(true);
     expect(p.startDate < p.endDate).toBe(true);
     expect((new Date(`${m.endDate}T00:00:00`).getTime() - new Date(`${m.startDate}T00:00:00`).getTime()) / 86_400_000 / 7).toBeCloseTo(12, 0);
+  });
+});
+
+describe('Rex: el nombre del macrociclo', () => {
+  const upTo = ['Un macrociclo', '12 semanas (3 meses)', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy'] as const;
+
+  it('lo último que pregunta es el nombre, y propone el automático por si lo dejas vacío', () => {
+    const out = walk([...upTo]);
+    expect(out.id).toBe('m_name');
+    const node = getNode('m_name', out.s, out.ctx, out.plan);
+    expect(node.input).toMatchObject({ field: 'label', suggested: 'Macro 12 semanas · 4 nov', max: 60, commit: 'macro' });
+    expect(node.text).toContain('Macro 12 semanas · 4 nov');
+  });
+
+  it('con un nombre puesto, lo lleva el macrociclo (sin espacios de más)', () => {
+    expect(walk([...upTo, { text: '  Prep competición invierno  ' }]).plan[0].payload.macro!.label).toBe('Prep competición invierno');
+  });
+
+  it('vacío o solo espacios, usa el automático', () => {
+    expect(walk([...upTo, { text: '   ' }]).plan[0].payload.macro!.label).toBe('Macro 12 semanas · 4 nov');
+  });
+
+  it('un nombre larguísimo se recorta', () => {
+    expect(walk([...upTo, { text: 'x'.repeat(200) }]).plan[0].payload.macro!.label).toHaveLength(60);
+  });
+
+  it('el nombre automático sigue la fecha de arranque elegida', () => {
+    const out = walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'El lunes que viene']);
+    expect(getNode('m_name', out.s, out.ctx, out.plan).input!.suggested).toBe('Macro 8 semanas · 9 nov');
+  });
+
+  it('el nombre de un macro no se arrastra al siguiente', () => {
+    const first = walk([...upTo, { text: 'Primero' }]);
+    const second = walk(['Un macrociclo', '8 semanas', 'Clásico: ciclos de 4 semanas en bucle', 'Hoy', { text: '' }], emptyProfile(), { plan: first.plan });
+    expect(second.plan[1].payload.macro!.label).toMatch(/^Macro 8 semanas/);
+  });
+
+  it('una temporada se llama como ella misma, sin preguntar', () => {
+    expect(walk(['Una temporada completa', '12 semanas', 'No, vengo entrenando']).plan[0].payload.macro!.label).toMatch(/^Temporada 12 semanas/);
   });
 });

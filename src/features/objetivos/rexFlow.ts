@@ -32,6 +32,8 @@ export interface FlowState {
   why?: string;
   phases?: PhaseStyle;
   startIso?: string;
+  /** Nombre que el atleta le pone al macrociclo; vacío = el automático. */
+  label?: string;
   cat?: ProgramCat;
   method?: StrengthMethod;
   lifts?: (keyof PersonalRecords)[];
@@ -74,11 +76,20 @@ export interface RexOption {
 export interface RexNode {
   text: string;
   options?: RexOption[];
+  /** En vez de botones, un texto corto (el nombre de algo), con una propuesta por si lo dejas vacío. */
+  input?: { field: 'label'; suggested: string; max: number; commit: CommitKind };
   /** En vez de botones, una fecha. */
   date?: { min?: string; field: 'targetDate' | 'eventEndDate' | 'startIso'; next?: string; commit?: CommitKind };
 }
 
 // ---------- fechas ----------
+
+/** El nombre que lleva un macrociclo si el atleta no le pone otro. */
+export function macroAutoLabel(weeks: number, startIso: string): string {
+  return `Macro ${weeks} semanas · ${shortDate(startIso)}`;
+}
+
+export const LABEL_MAX = 60;
 
 export function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T12:00:00`);
@@ -287,9 +298,13 @@ export function getNode(id: string, s: FlowState, ctx: RexCtx, plan: PlanItem[])
       };
     case 'm_start': {
       const after = lastEndAfterToday(ctx.profile.macrocycles, ctx.todayIso, plan.filter((p) => p.kind === 'Macrociclo'));
-      const o: RexOption[] = [opt('Hoy', { startIso: ctx.todayIso }, undefined, 'macro'), opt('El lunes que viene', { startIso: nextMondayIso(ctx.todayIso) }, undefined, 'macro')];
-      if (after) o.unshift(opt(`Justo después del último (${shortDate(addDaysIso(after, 1))})`, { startIso: addDaysIso(after, 1) }, undefined, 'macro'));
+      const o: RexOption[] = [opt('Hoy', { startIso: ctx.todayIso }, 'm_name'), opt('El lunes que viene', { startIso: nextMondayIso(ctx.todayIso) }, 'm_name')];
+      if (after) o.unshift(opt(`Justo después del último (${shortDate(addDaysIso(after, 1))})`, { startIso: addDaysIso(after, 1) }, 'm_name'));
       return { text: '¿Cuándo arranca?', options: o };
+    }
+    case 'm_name': {
+      const suggested = macroAutoLabel(s.weeks ?? 12, s.startIso ?? ctx.todayIso);
+      return { text: `Último detalle: ¿cómo lo llamamos? Si lo dejas vacío, lo llamo «${suggested}».`, input: { field: 'label', suggested, max: LABEL_MAX, commit: 'macro' } };
     }
 
     // ----- programa de fuerza -----
@@ -404,7 +419,7 @@ function macroItem(args: { weeks: number; startIso: string; phases: PhaseStyle; 
   const phaseWeeks = phaseWeeksFor(weeks, phases);
   const macro: Macrocycle = {
     id: (ctx.newId ?? newIdDefault)(),
-    label: args.label ?? `Macro ${weeks} semanas · ${shortDate(startIso)}`,
+    label: args.label ?? macroAutoLabel(weeks, startIso),
     startDate: startIso,
     endDate,
     ...(phaseWeeks ? { phaseWeeks } : {}),
@@ -461,7 +476,7 @@ function rampItem(r: { s: number; o: number; w: number }, ctx: RexCtx): PlanItem
 /** Lo que crea una respuesta final. Una temporada son varias cosas a la vez. */
 export function commitItems(kind: CommitKind, s: FlowState, ctx: RexCtx): PlanItem[] {
   if (kind === 'obj') return [goalItem(s, ctx)];
-  if (kind === 'macro') return [macroItem({ weeks: s.weeks ?? 12, startIso: s.startIso ?? ctx.todayIso, phases: s.phases ?? 'clasico' }, ctx)];
+  if (kind === 'macro') return [macroItem({ weeks: s.weeks ?? 12, startIso: s.startIso ?? ctx.todayIso, phases: s.phases ?? 'clasico', label: s.label?.trim().slice(0, LABEL_MAX) || undefined }, ctx)];
   if (kind === 'prog') return [programItem(s, ctx)];
   if (kind === 'ramp') return [rampItem(s.ramp ?? { s: 4, o: 4, w: 3 }, ctx)];
   const weeks = s.weeks ?? 12;

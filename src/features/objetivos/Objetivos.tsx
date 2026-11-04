@@ -202,6 +202,8 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
   const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home' | 'asistente'>(initialSection ?? 'home');
+  /** El asistente tiene un plan a medias sin crear: salir pide confirmación. */
+  const [assistantDirty, setAssistantDirty] = useState(false);
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
   const [goalDraft, setGoalDraft] = useState<Goal | null>(null);
   const [programDraft, setProgramDraft] = useState<StrengthProgram | null>(null);
@@ -398,11 +400,14 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
         />
       )}
 
-      {activeSection === 'asistente' && <RexAssistant profile={profile} onCreate={persist} onClose={goHome} />}
+      {activeSection === 'asistente' && <RexAssistant profile={profile} onCreate={persist} onClose={goHome} onDirtyChange={setAssistantDirty} />}
 
       {activeSection !== 'home' && (
         <button
-          onClick={goHome}
+          onClick={() => {
+            if (activeSection === 'asistente' && assistantDirty && !window.confirm('Tienes un plan sin crear. ¿Salir y descartarlo?')) return;
+            goHome();
+          }}
           className="flex items-center gap-1.5 self-start rounded-lg py-1 pr-2 text-sm font-semibold text-neutral-300 transition-colors duration-200 hover:text-white"
         >
           <ChevronLeft size={17} strokeWidth={2.5} aria-hidden="true" />
