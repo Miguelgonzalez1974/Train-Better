@@ -45,7 +45,8 @@ export function parseWorkingReps(reps: string): number | null {
 export function findTopWorkSet(entries: WorkSetEntry[], movementId: string): { kg: number; reps: number } | null {
   let best: WorkSetEntry | null = null;
   for (const entry of entries) {
-    if (entry.movementId !== movementId || !(entry.kg > 0)) continue;
+    // Una serie fallada no cuenta como la más pesada que moviste.
+    if (entry.movementId !== movementId || !(entry.kg > 0) || entry.quality === 'fallada') continue;
     if (!best || entry.kg > best.kg) best = entry;
   }
   return best ? { kg: best.kg, reps: best.reps } : null;

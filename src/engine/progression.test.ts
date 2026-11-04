@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { PrLogEntry, ProgressionRecord, ProgressionVerdict, SetFeedbackEntry, WorkSetEntry } from '../data/athlete/types';
+import type { PrLogEntry, ProgressionRecord, ProgressionVerdict, SetFeedbackEntry, SetQuality, WorkSetEntry } from '../data/athlete/types';
+import { findTopWorkSet } from './setFeedback';
+import { collectE1rmPoints } from './strengthEvolution';
 import {
   acceptProposal,
   buildProgressionLedger,
   cleanNeededOn,
   dismissProposal,
+  evaluateLiftSession,
   evaluateStrengthSession,
   liftProgression,
+  mainLiftBlock,
+  OLY_PRIMER_REPS,
   progressionFactors,
   progressionNote,
   progressionProposal,
@@ -329,5 +334,164 @@ describe('el generador aplica la progresión', () => {
     });
     expect(raised).toBeGreaterThan(0);
     expect(lowered).toBeGreaterThan(0);
+  });
+});
+
+describe('la calidad de cada serie manda sobre el resto', () => {
+  const quality = (marks: (SetQuality | undefined)[]): WorkSetEntry[] => sets(marks.length, 100, 3).map((s, i) => ({ ...s, ...(marks[i] ? { quality: marks[i] } : {}) }));
+  const ev = (marks: (SetQuality | undefined)[], feedback?: SetFeedbackEntry, kind: 'strength' | 'oly' = 'strength') =>
+    evaluateLiftSession({ date: '2026-10-05', kind, block, key: 'backSquat', sets: quality(marks), feedback });
+
+  it('una serie fallada hace la sesión con fallos aunque el RPE sea bajo', () => {
+    const r = ev([undefined, undefined, undefined, undefined, 'fallada'], fb({ actualRpe: 7 }))!;
+    expect(r.verdict).toBe('fallo');
+    expect(r.falladas).toBe(1);
+  });
+
+  it('una serie justa deja la sesión al límite: ni limpia ni con fallos', () => {
+    const r = ev([undefined, 'justa', undefined, undefined, undefined], fb({ actualRpe: 7 }))!;
+    expect(r.verdict).toBe('dura');
+    expect(r.justas).toBe(1);
+    expect(r.falladas).toBeUndefined();
+  });
+
+  it('sin marcas todo cuenta como bien y no deja contadores en el registro', () => {
+    const r = ev([undefined, undefined, undefined, undefined, undefined], fb({ actualRpe: 8 }))!;
+    expect(r.verdict).toBe('limpia');
+    expect(r.justas).toBeUndefined();
+    expect(r.falladas).toBeUndefined();
+  });
+
+  it('el registro dice de dónde viene: fuerza por defecto, oly si se pide', () => {
+    expect(ev([], fb({ actualRpe: 8 }))).toBeNull(); // sin series no hay nada que juzgar
+    expect(ev([undefined, undefined, undefined, undefined, undefined], fb({ actualRpe: 8 }))!.block).toBe('strength');
+    expect(ev([undefined, undefined, undefined, undefined, undefined], fb({ actualRpe: 8 }), 'oly')!.block).toBe('oly');
+  });
+
+  it('las rampas y los complejos no se juzgan', () => {
+    const marks = [undefined, undefined, undefined, undefined, undefined];
+    expect(evaluateLiftSession({ date: '2026-10-05', block: { ...block, setPlan: [{ reps: 5, kg: 80 }, { reps: 3, kg: 90 }] }, key: 'backSquat', sets: quality(marks) })).toBeNull();
+    expect(
+      evaluateLiftSession({ date: '2026-10-05', block: { ...block, complex: { id: 'x', name: 'x', steps: [] } as never }, key: 'backSquat', sets: quality(marks) }),
+    ).toBeNull();
+  });
+
+  it('una serie fallada no cuenta como la más pesada ni para las estimaciones de 1RM', () => {
+    const log: WorkSetEntry[] = [
+      { date: '2026-10-05', movementId: 'back-squat', block: 'strength', setNumber: 1, kg: 100, reps: 3 },
+      { date: '2026-10-05', movementId: 'back-squat', block: 'strength', setNumber: 2, kg: 110, reps: 3, quality: 'fallada' },
+    ];
+    expect(findTopWorkSet(log, 'back-squat')).toEqual({ kg: 100, reps: 3 });
+    const points = collectE1rmPoints('backSquat', 120, [], log);
+    const noFail = collectE1rmPoints('backSquat', 120, [], [log[0]]);
+    expect(points).toEqual(noFail);
+  });
+});
+
+describe('las reglas del oly son más prudentes que las de fuerza', () => {
+  const oly = (verdicts: ProgressionVerdict[], key = 'snatch') =>
+    verdicts.map((v, i) => ({ ...rec(`2026-10-${String(i + 1).padStart(2, '0')}`, v), key, movementId: 'snatch', block: 'oly' as const }));
+
+  it('hacen falta tres sesiones limpias seguidas y sube un 2 %', () => {
+    expect(liftProgression(oly(['limpia', 'limpia']), 'snatch').factor).toBe(1);
+    expect(liftProgression(oly(['limpia', 'limpia', 'limpia']), 'snatch').factor).toBe(1.02);
+    expect(liftProgression(oly(['limpia', 'limpia', 'dura', 'limpia']), 'snatch').factor).toBe(1);
+  });
+
+  it('lo que el atleta acepta para fuerza no cambia el oly', () => {
+    const settings = { cleanNeeded: 3 as const, cleanNeededSince: '2026-09-01' };
+    expect(cleanNeededOn('2026-10-05', settings, 'oly')).toBe(3);
+    expect(cleanNeededOn('2026-10-05', undefined, 'oly')).toBe(3);
+    expect(liftProgression(oly(['limpia', 'limpia', 'limpia']), 'snatch', undefined, settings).factor).toBe(1.02);
+  });
+
+  it('dos sesiones con fallos bajan un 4 % y el tope es más estrecho', () => {
+    expect(liftProgression(oly(['fallo', 'fallo']), 'snatch').factor).toBe(0.96);
+    const many = Array.from({ length: 30 }, (_, i) => ({ ...oly(['limpia'])[0], date: new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10) }));
+    expect(liftProgression(many, 'snatch').factor).toBe(1.04);
+  });
+
+  it('el libro separa las decisiones de oly de las de fuerza y la propuesta no se ve afectada', () => {
+    const records = [...run(['limpia', 'limpia', 'limpia']), ...oly(['limpia', 'limpia', 'limpia', 'dura'])];
+    const ledger = buildProgressionLedger(records);
+    expect(ledger.rows.map((r) => r.rule)).toEqual(['subir', 'subir-oly']);
+    expect(ledger.total).toBe(2);
+    expect(ledger.rows[1].label).toMatch(/oly/);
+    expect(progressionProposal(ledger, undefined, '2026-11-01')).toBeNull();
+  });
+
+  it('la tarjeta del oly pide tres y explica con sus porcentajes', () => {
+    const one = sessionProgressionView(oly(['limpia']), undefined, undefined, '2026-10-01', 'snatch')!;
+    expect(one.kind).toBe('oly');
+    expect(one.needed).toBe(3);
+    expect(progressionReason(one)).toMatch(/1 de 3/);
+    const fail = sessionProgressionView(oly(['fallo']), undefined, undefined, '2026-10-01', 'snatch')!;
+    expect(progressionReason(fail)).toMatch(/4 %/);
+    const up = sessionProgressionView(oly(['limpia', 'limpia', 'limpia']), undefined, undefined, '2026-10-03', 'snatch')!;
+    expect(up.change).toBe('subio');
+    expect(up.deltaPct).toBe(2);
+  });
+});
+
+describe('el generador aplica la progresión también al oly', () => {
+  const macro = makeMacro({ id: 'macro-oly', startDate: '2026-01-05', endDate: '2026-12-27' });
+  const days = consecutiveDates('2026-03-02', 21);
+  const oly = (verdicts: ProgressionVerdict[]): ProgressionRecord[] =>
+    ['snatch', 'clean', 'cleanAndJerk'].flatMap((key) =>
+      verdicts.map((v, i) => ({ ...rec(`2026-02-${String(10 + i).padStart(2, '0')}`, v), key, movementId: key, block: 'oly' as const })),
+    );
+  const olyLoads = (p: ReturnType<typeof makeProfile>) =>
+    days.flatMap((d) => generateSessionForDate(p, [], d, p.goals).blocks.filter((b) => b.block === 'oly' && !b.subgroup && b.loadKg));
+
+  it('con tres sesiones limpias la carga de oly sube y la nota lo dice; sin registro todo igual', () => {
+    const base = olyLoads(makeProfile({ trainingDaysPerWeek: 5, macrocycles: [macro] }));
+    const empty = olyLoads(makeProfile({ trainingDaysPerWeek: 5, macrocycles: [macro], progressionLog: [] }));
+    expect(empty).toEqual(base);
+    const up = olyLoads(makeProfile({ trainingDaysPerWeek: 5, macrocycles: [macro], progressionLog: oly(['limpia', 'limpia', 'limpia']) }));
+    let raised = 0;
+    base.forEach((b, i) => {
+      if (!b?.loadKg || !up[i]?.loadKg || b.movementId !== up[i]!.movementId) return;
+      expect(up[i]!.loadKg!, String(i)).toBeGreaterThanOrEqual(b.loadKg);
+      if (up[i]!.loadKg! > b.loadKg) {
+        raised++;
+        expect(up[i]!.notes).toContain('por tus sesiones limpias');
+      }
+    });
+    expect(raised).toBeGreaterThan(0);
+  });
+});
+
+describe('el levantamiento principal de cada bloque', () => {
+  const b = (movementId: string, reps: string, extra: object = {}) => ({ block: 'oly' as const, movementId, reps, ...extra });
+
+  it('en fuerza es el primero; en oly el que sigue al primer técnico, no el tirón del final', () => {
+    const blocks = [
+      b('burgener-warmup-clean', 'PVC', { subgroup: 'Calentamiento de barra' }),
+      b('muscle-clean', OLY_PRIMER_REPS),
+      b('power-clean', '3'),
+      b('clean-high-pull', '3'),
+    ];
+    expect(mainLiftBlock(blocks, 'oly')?.movementId).toBe('power-clean');
+    expect(mainLiftBlock([{ block: 'strength' as const, movementId: 'back-squat', reps: '3' }, ...blocks], 'strength')?.movementId).toBe('back-squat');
+    expect(mainLiftBlock(blocks, 'strength')).toBeUndefined();
+  });
+
+  it('sin primer técnico el principal es el primero que no es calentamiento', () => {
+    expect(mainLiftBlock([b('x', 'PVC', { subgroup: 's' }), b('snatch', '2')], 'oly')?.movementId).toBe('snatch');
+  });
+
+  it('en las sesiones que genera el motor, el principal de oly nunca es el primer técnico', () => {
+    const macro = makeMacro({ id: 'macro-main', startDate: '2026-01-05', endDate: '2026-12-27' });
+    const p = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [macro] });
+    let olyDays = 0;
+    for (const d of consecutiveDates('2026-03-02', 28)) {
+      const s = generateSessionForDate(p, [], d, p.goals);
+      if (!s.blocks.some((x) => x.block === 'oly')) continue;
+      olyDays++;
+      const main = mainLiftBlock(s.blocks, 'oly');
+      expect(main, String(d)).toBeDefined();
+      expect(main!.reps).not.toBe(OLY_PRIMER_REPS);
+    }
+    expect(olyDays).toBeGreaterThan(5);
   });
 });

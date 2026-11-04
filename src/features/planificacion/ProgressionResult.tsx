@@ -26,8 +26,17 @@ function CleanDots({ done, needed }: { done: number; needed: number }) {
   );
 }
 
+/** Cuántas series salieron bien, justas y falladas (sin marcar = bien). */
+function qualityLine(sets: number, justas = 0, falladas = 0): string {
+  const bien = Math.max(0, sets - justas - falladas);
+  const parts = [`${bien} bien`];
+  if (justas > 0) parts.push(`${justas} ${justas === 1 ? 'justa' : 'justas'}`);
+  if (falladas > 0) parts.push(`${falladas} ${falladas === 1 ? 'fallada' : 'falladas'}`);
+  return parts.join(' · ');
+}
+
 /**
- * Qué decidió el coach con el resultado de fuerza de hoy: cómo salió, si la carga cambia para la próxima vez y por qué regla.
+ * Qué decidió el coach con el resultado de fuerza y de oly de hoy: cómo salió, si la carga cambia para la próxima vez y por qué regla.
  * Vive en la tarjeta que sale al cerrar la sesión.
  */
 export function ProgressionResult({ views }: { views: SessionProgressionView[] }) {
@@ -45,8 +54,10 @@ export function ProgressionResult({ views }: { views: SessionProgressionView[] }
                 <p className="text-sm font-semibold text-white">
                   {name} · {record.prescribedSets}×{record.prescribedReps} a {fmtKg(record.prescribedKg)}
                 </p>
+                <p className="text-[11px] uppercase tracking-wide text-neutral-500">{v.kind === 'oly' ? 'Halterofilia' : 'Fuerza'}</p>
                 <p className="mt-0.5 text-xs text-neutral-400">
-                  {record.topKg !== record.prescribedKg ? `Peso más alto: ${fmtKg(record.topKg)}` : 'Peso como estaba prescrito'}
+                  {qualityLine(record.prescribedSets, record.justas, record.falladas)}
+                  {record.topKg !== record.prescribedKg ? ` · máximo ${fmtKg(record.topKg)}` : ''}
                   {record.rpe !== undefined ? ` · RPE ${String(record.rpe).replace('.', ',')}` : ''}
                 </p>
               </div>

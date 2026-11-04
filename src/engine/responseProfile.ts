@@ -401,7 +401,7 @@ function analyzeWorkLoads(workLog: WorkSetEntry[], prs: PersonalRecords | undefi
   // key -> fecha -> mejor e1RM de esa sesion
   const topByKeyDate = new Map<string, Map<string, number>>();
   for (const e of workLog) {
-    if (!(e.kg > 0) || !(e.reps >= 1) || e.reps > WORKLOG_MAX_REPS) continue;
+    if (!(e.kg > 0) || !(e.reps >= 1) || e.reps > WORKLOG_MAX_REPS || e.quality === 'fallada') continue;
     const key = prKeyForMovement(e.movementId);
     if (!key) continue;
     const pr = prByKey[key];

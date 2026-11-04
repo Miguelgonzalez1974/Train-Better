@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Check, Timer, Minus, Plus, ChartSpline } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession, PainFlag, SessionBlockResult, SetFeel, WorkSetEntry } from '../../data/athlete/types';
+import type { DailySession, PainFlag, SessionBlockResult, SetFeel, SetQuality, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { complexLogId } from '../../data/complexes';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
@@ -38,7 +38,9 @@ interface FocusModeProps {
   todayWorkLog: WorkSetEntry[];
   /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de un levantamiento). */
   progress: MovementProgressData;
-  onLogWorkSet: (movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number) => void;
+  onLogWorkSet: (movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number, quality?: SetQuality) => void;
+  /** Marca cómo salió una serie ya hecha (justa, fallada) o la deja como bien (undefined). */
+  onSetQuality: (movementId: string, setNumber: number, quality: SetQuality | undefined) => void;
   onClearWorkSet: (movementId: string, setNumber: number) => void;
   /** Si hoy se puede subir la carga (no en día ámbar ni con una molestia activa): un "me sobró" solo sube con esto. */
   canRaise: boolean;
@@ -117,6 +119,7 @@ export function FocusMode({
   todayWorkLog,
   progress,
   onLogWorkSet,
+  onSetQuality,
   onClearWorkSet,
   canRaise,
   onFeel,
@@ -166,6 +169,8 @@ export function FocusMode({
   const [feelByMovement, setFeelByMovement] = useState<Record<string, SetFeel>>({});
   const loggedKg = (movementId: string, n: number) =>
     todayWorkLog.find((e) => e.movementId === movementId && e.setNumber === n)?.kg;
+  const qualityOf = (movementId: string, n: number): SetQuality | undefined =>
+    todayWorkLog.find((e) => e.movementId === movementId && e.setNumber === n)?.quality;
   const setIsDone = (movementId: string, n: number) =>
     todayWorkLog.some((e) => e.movementId === movementId && e.setNumber === n);
   const kgFor = (movementId: string, n: number, prescribed: number) =>
@@ -371,7 +376,7 @@ export function FocusMode({
                   const bump = (n: number, delta: number) => {
                     const next = Math.max(0, Math.round((kgFor(mid, n, plannedKg(n)) + delta) * 4) / 4);
                     setPerSetKg((p) => ({ ...p, [`${mid}:${n}`]: next }));
-                    if (setIsDone(mid, n)) onLogWorkSet(mid, blk, n, next, repsOf(n));
+                    if (setIsDone(mid, n)) onLogWorkSet(mid, blk, n, next, repsOf(n), qualityOf(mid, n));
                   };
                   // Tras la primera serie: cómo ha ido ajusta el peso de las que quedan (sugerencia: los +/- siguen mandando).
                   // En una rampa la primera es de aproximación y cada serie lleva su peso: ahí no se reajusta.
@@ -447,11 +452,13 @@ export function FocusMode({
                               </div>
                             )}
                             {reps > 0 && <span className="ml-auto shrink-0 whitespace-nowrap text-lg font-semibold text-neutral-300">{b.complex ? b.reps : `× ${reps}`}</span>}
+                            {on && <SetQualityToggle quality={qualityOf(mid, n)} setNumber={n} onChange={(q) => onSetQuality(mid, n, q)} />}
                           </div>
                           </Fragment>
                         );
                       })}
                     </div>
+                    <p className="text-xs leading-snug text-neutral-500">Tras marcar una serie, toca Justa si salió por los pelos o con la técnica rota, o Fallada si no la completaste. Sin tocar, cuenta como Bien.</p>
                     {showFeel && (
                       <div className="rounded-xl bg-white/[0.04] p-3">
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">¿Cómo ha ido la primera?</p>
@@ -662,6 +669,35 @@ export function FocusMode({
           workLog={progress.workLog}
         />
       )}
+    </div>
+  );
+}
+
+
+const QUALITY_OPTIONS: { value: SetQuality | undefined; label: string; on: string }[] = [
+  { value: undefined, label: 'Bien', on: 'bg-good/20 text-good' },
+  { value: 'justa', label: 'Justa', on: 'bg-warn/20 text-warn' },
+  { value: 'fallada', label: 'Fallada', on: 'bg-bad/20 text-bad' },
+];
+
+/** Cómo salió una serie ya hecha: Bien (por defecto), Justa o Fallada. Alimenta la progresión por resultados. */
+function SetQualityToggle({ quality, setNumber, onChange }: { quality: SetQuality | undefined; setNumber: number; onChange: (q: SetQuality | undefined) => void }) {
+  return (
+    <div className="flex basis-full overflow-hidden rounded-lg border border-white/10" role="radiogroup" aria-label={`Cómo salió la serie ${setNumber}`}>
+      {QUALITY_OPTIONS.map((o) => {
+        const active = o.value === quality;
+        return (
+          <button
+            key={o.label}
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.value)}
+            className={`flex-1 border-l border-white/10 px-3 py-2 text-sm font-semibold transition-colors first:border-l-0 ${active ? o.on : 'text-neutral-500 hover:text-neutral-300'}`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

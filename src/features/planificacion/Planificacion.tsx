@@ -18,6 +18,7 @@ import type {
   SessionHistoryEntry,
   SetFeedbackEntry,
   SetFeel,
+  SetQuality,
   StrainTarget,
   WorkSetEntry,
   VariantPersonalRecords,
@@ -60,7 +61,7 @@ import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
-import { evaluateStrengthSession, sessionProgressionView } from '../../engine/progression';
+import { evaluateLiftSession, mainLiftBlock, sessionProgressionView, type ProgressionKind } from '../../engine/progression';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -346,13 +347,15 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }, [showCompletePanel]);
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
-  /** Lo que decidió el coach con el resultado de fuerza de hoy (tarjeta al cerrar la sesión). */
+  /** Lo que decidió el coach con el resultado de fuerza y de oly de hoy (tarjeta al cerrar la sesión). */
   const progressionViews = useMemo(() => {
     if (!session) return [];
-    const main = session.blocks.find((b) => b.block === 'strength');
-    if (!main) return [];
-    const view = sessionProgressionView(profile.progressionLog, profile.prLog, profile.progressionSettings, session.date, main.movementId);
-    return view ? [view] : [];
+    return (['strength', 'oly'] as const).flatMap((kind) => {
+      const main = mainLiftBlock(session.blocks, kind);
+      if (!main) return [];
+      const view = sessionProgressionView(profile.progressionLog, profile.prLog, profile.progressionSettings, session.date, main.movementId);
+      return view ? [view] : [];
+    });
   }, [session, profile.progressionLog, profile.prLog, profile.progressionSettings]);
   /**
    * Bloques de fuerza/oly de hoy con una serie ya registrada en `workLog` (modo enfocado) — solo esos
@@ -484,9 +487,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
   }
 
-  function handleLogWorkSet(movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number) {
+  function handleLogWorkSet(movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number, quality?: SetQuality) {
     if (!session) return;
-    athleteRepository.saveWorkSet({ date: session.date, movementId, block, setNumber, kg, reps });
+    athleteRepository.saveWorkSet({ date: session.date, movementId, block, setNumber, kg, reps, ...(quality ? { quality } : {}) });
+    setWorkLog(athleteRepository.getWorkLog());
+  }
+
+  /** Cómo salió una serie ya hecha (justa, fallada) o de vuelta a bien: se guarda en la propia serie. */
+  function handleSetQuality(movementId: string, setNumber: number, quality: SetQuality | undefined) {
+    if (!session) return;
+    const entry = athleteRepository.getWorkLog().find((e) => e.date === session.date && e.movementId === movementId && e.setNumber === setNumber);
+    if (!entry) return;
+    const { quality: _previous, ...rest } = entry;
+    athleteRepository.saveWorkSet(quality ? { ...rest, quality } : rest);
     setWorkLog(athleteRepository.getWorkLog());
   }
 
@@ -783,23 +796,33 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }
 
   /**
-   * Anota cómo salió el levantamiento de fuerza principal de hoy (limpia, hecha, dura, fallo) para la progresión por resultados.
-   * No anota nada si esa parte se marcó como no hecha, si no se registraron todas las series o si el formato no es de reps limpias.
+   * Anota cómo salió el levantamiento principal de fuerza y el de oly de hoy (limpia, hecha, dura, fallo) para la progresión por
+   * resultados. No anota nada de una parte que se marcó como no hecha, si no se registraron todas sus series o si el formato no es
+   * de reps limpias (rampas, olas, complejos, series únicas).
    */
-  function recordStrengthProgression() {
-    if (!session || session.source === 'custom' || skips.strength) return;
-    const block = session.blocks.find((b) => b.block === 'strength');
-    const movement = block ? getMovementById(block.movementId) : undefined;
-    if (!block || !movement) return;
-    const record = evaluateStrengthSession({
-      date: session.date,
-      block,
-      key: resolveStrengthPRKey(movement) ?? resolveVariantPRKey(movement),
-      sets: athleteRepository.getWorkLog().filter((e) => e.date === session.date && e.movementId === block.movementId && e.block === 'strength'),
-      feedback: athleteRepository.getSetFeedbackLog().find((e) => e.date === session.date && e.movementId === block.movementId),
+  function recordProgression() {
+    if (!session || session.source === 'custom') return;
+    const log = athleteRepository.getWorkLog();
+    const feedbackLog = athleteRepository.getSetFeedbackLog();
+    const records = (['strength', 'oly'] as const).flatMap((kind: ProgressionKind) => {
+      if (skips[kind]) return [];
+      const block = mainLiftBlock(session.blocks, kind);
+      const movement = block ? getMovementById(block.movementId) : undefined;
+      if (!block || !movement) return [];
+      const rootKey = (kind === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
+      const record = evaluateLiftSession({
+        date: session.date,
+        kind,
+        block,
+        key: rootKey ?? resolveVariantPRKey(movement),
+        sets: log.filter((e) => e.date === session.date && e.movementId === block.movementId && e.block === kind),
+        feedback: feedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId),
+      });
+      return record ? [record] : [];
     });
-    if (record) athleteRepository.appendProgressionRecords([record]);
+    if (records.length > 0) athleteRepository.appendProgressionRecords(records);
   }
+
   function handleConfirmComplete() {
     if (!session) return;
     let nextMessage: string | null = null;
@@ -835,7 +858,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       ),
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
     });
-    recordStrengthProgression();
+    recordProgression();
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
     // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes
     // de enterarse del entreno de hoy podia seguir ganando el empate y pisar la tarjeta del plan
@@ -996,6 +1019,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           todayWorkLog={todayWorkLog}
           progress={movementProgress}
           onLogWorkSet={handleLogWorkSet}
+          onSetQuality={handleSetQuality}
           onClearWorkSet={handleClearWorkSet}
           canRaise={session.dayLight?.color !== 'ambar' && activePainFlags.length === 0}
           onFeel={handleFeelSet}

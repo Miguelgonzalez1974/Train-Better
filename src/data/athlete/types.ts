@@ -545,6 +545,11 @@ export interface ProgressionRecord {
   prescribedReps: number;
   /** RPE de la serie más pesada, si el atleta lo dio. */
   rpe?: number;
+  /** De qué bloque salió; ausente = fuerza (los registros anteriores al oly). */
+  block?: 'strength' | 'oly';
+  /** Series marcadas como justas y como falladas, cuando las hubo. */
+  justas?: number;
+  falladas?: number;
 }
 
 /** Ajustes de la progresión por resultados que el atleta acepta o rechaza. */
@@ -556,6 +561,9 @@ export interface ProgressionSettings {
   /** El atleta dijo "Dejarlo como está" a la propuesta de pedir 3 sesiones limpias (ISO): no vuelve a salir en 28 días. */
   proposalDismissedOn?: string;
 }
+
+/** Cómo salió una serie de fuerza u oly cuando no fue limpia (ver [[WorkSetEntry]]). */
+export type SetQuality = 'justa' | 'fallada';
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */
 export interface WorkSetEntry {
@@ -569,6 +577,8 @@ export interface WorkSetEntry {
   kg: number;
   /** Reps de esa serie — 0 si la prescripción no da un número limpio (rampas "5-3-1", EMOM…). */
   reps: number;
+  /** Cómo salió la serie: ausente = bien; justa = salió pero con la técnica rota o por los pelos; allada = no se completó. */
+  quality?: SetQuality;
 }
 
 export interface SessionBlockResult {

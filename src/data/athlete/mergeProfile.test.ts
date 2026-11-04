@@ -454,6 +454,14 @@ describe('progresion por resultados: sincronizacion', () => {
     expect(mergeProfile(base(), base()).progressionLog).toBeUndefined();
   });
 
+  it('la marca de calidad de una serie (justa, fallada) viaja con la serie y la del local gana', () => {
+    const set = (extra: object) => ({ date: '2026-03-01', movementId: 'back-squat', block: 'strength' as const, setNumber: 1, kg: 100, reps: 3, ...extra });
+    const merged = mergeProfile({ ...base(), workLog: [set({})] }, { ...base(), workLog: [set({ quality: 'fallada' })] }).workLog;
+    expect(merged).toHaveLength(1);
+    expect(merged?.[0].quality).toBe('fallada');
+    // volver a "bien" en el local quita la marca
+    expect(mergeProfile({ ...base(), workLog: [set({ quality: 'fallada' })] }, { ...base(), workLog: [set({})] }).workLog?.[0].quality).toBeUndefined();
+  });
   it('los ajustes aceptados se unen por campo y gana el local', () => {
     const remote = { ...base(), progressionSettings: { cleanNeeded: 3 as const, cleanNeededSince: '2026-03-01' } };
     const local = { ...base(), progressionSettings: { proposalDismissedOn: '2026-03-05' } };

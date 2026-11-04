@@ -68,7 +68,7 @@ function prKeyOfMovement(movementId: string): string | null {
 export function collectE1rmPoints(key: string, currentPr: number, setFeedbackLog: SetFeedbackEntry[] = [], workLog: WorkSetEntry[] = []): E1rmPoint[] {
   const byDate = new Map<string, E1rmPoint>();
   for (const e of workLog) {
-    if (!(e.kg > 0) || !(e.reps >= 1) || e.reps > WORK_MAX_REPS) continue;
+    if (!(e.kg > 0) || !(e.reps >= 1) || e.reps > WORK_MAX_REPS || e.quality === 'fallada') continue;
     if (currentPr > 0 && e.kg < currentPr * WORK_MIN_INTENSITY) continue;
     if (prKeyOfMovement(e.movementId) !== key) continue;
     const kg = Math.round(epley(e.kg, e.reps) * 10) / 10;

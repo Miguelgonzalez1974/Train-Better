@@ -127,7 +127,7 @@ import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { buildMicrocyclePlan, type DayIntensity } from './weekPlan';
 import { ACCESSORY_ROLE_FOR_PATTERN, emphasisLevers, sessionEmphasis } from './programmingEmphasis';
 import { rng, seededRng, withSeededRng } from './rng';
-import { liftProgressionFactor, progressionNote } from './progression';
+import { liftProgressionFactor, OLY_PRIMER_REPS, progressionNote } from './progression';
 import {
   computeResponseProfile,
   engineResponseProfile,
@@ -1490,13 +1490,17 @@ function buildOlyBlock(
   // si no el feedback cualitativo de la 1ª serie (ver buildStrengthBlock).
   const olyLiftKey = resolveOlyPRKey(movement) ?? resolveVariantPRKey(movement);
   const loadCalibFactor = perLiftLoadFactor(responseProfile, olyLiftKey);
-  const setFeelFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, olyLiftKey);
+  const calibFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, olyLiftKey);
+  // Progresión por resultados (engine/progression.ts): empuje acotado por tus últimas sesiones de este levantamiento.
+  const progressionFactor = liftProgressionFactor(responseProfile.progression, olyLiftKey);
+  const setFeelFactor = calibFactor * progressionFactor;
+  const progressionNoteText = progressionNote(progressionFactor);
   const setFeelNote =
     loadCalibFactor !== 1
       ? ` Ajustado a tu 1RM estimado por las series reales que registraste (${loadCalibFactor > 1 ? 'ibas sobrado, subimos' : 'venías justo, bajamos'}).`
-      : setFeelFactor < 1
+      : calibFactor < 1
         ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
-        : setFeelFactor > 1
+        : calibFactor > 1
           ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
           : '';
   const bwFactor = bodyweightLoadFactor(responseProfile);
@@ -1514,11 +1518,12 @@ function buildOlyBlock(
         }`
       : scheme.coachNote) +
     setFeelNote +
+    progressionNoteText +
     receivingTag +
     reintroNote +
     fatigueNote +
     rampNote;
-  const reasons = collectReasons(responseTag, setFeelNote, bwNote, weakPointTag, receivingTag, reintroNote, fatigueNote, rampNote, autoregNote);
+  const reasons = collectReasons(responseTag, setFeelNote, progressionNoteText, bwNote, weakPointTag, receivingTag, reintroNote, fatigueNote, rampNote, autoregNote);
 
   // Semana pico: siempre series rectas (consolidar tecnica al maximo esfuerzo). Resto de semanas: variabilidad de formato.
   // EMOM es un estilo del levantamiento principal, no reemplaza el complejo de 2 movimientos (primer + principal).
@@ -1749,7 +1754,7 @@ function buildOlyBlock(
     movementId: primerMovement.id,
     // En un día de olas o de complejo el primer técnico se queda en 3 series: el volumen del día lo pone lo principal.
     sets: waveDay || complexEntry ? Math.min(3, scheme.sets) : scheme.sets,
-    reps: '2-3',
+    reps: OLY_PRIMER_REPS,
     notes: `Primer técnico antes del levantamiento principal — prioriza posición, no peso.${
       receivingPrimers.length > 0 ? ' Hoy es un drill de recepción: recibe lo más abajo posible.' : OLY_PRIMER_PHASE_NOTE[week]
     }${autoregNote ? ` ${autoregNote}` : ''}`,
@@ -3932,13 +3937,16 @@ function buildFridayOlyBlock(ctx: {
 
     const liftKey = resolveOlyPRKey(main) ?? resolveVariantPRKey(main);
     const loadCalibFactor = perLiftLoadFactor(responseProfile, liftKey);
-    const setFeelFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, liftKey);
+    const calibFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, liftKey);
+    const progressionFactor = liftProgressionFactor(responseProfile.progression, liftKey);
+    const setFeelFactor = calibFactor * progressionFactor;
+    const progressionNoteText = progressionNote(progressionFactor);
     const setFeelNote =
       loadCalibFactor !== 1
         ? ` Ajustado a tu 1RM estimado por las series reales que registraste (${loadCalibFactor > 1 ? 'ibas sobrado, subimos' : 'venías justo, bajamos'}).`
-        : setFeelFactor < 1
+        : calibFactor < 1
           ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
-          : setFeelFactor > 1
+          : calibFactor > 1
             ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
             : '';
     const mainLoadKg = roundToNearestPlate(
@@ -3966,7 +3974,7 @@ function buildFridayOlyBlock(ctx: {
       sets: scheme.sets,
       reps: String(scheme.reps),
       loadKg: mainLoadKg,
-      notes: `${scheme.coachNote}${setFeelNote}${reintroNote}${fatigueNote}${rampNote}`.trim(),
+      notes: `${scheme.coachNote}${setFeelNote}${progressionNoteText}${reintroNote}${fatigueNote}${rampNote}`.trim(),
       ...(scheme.reps >= 2 ? { repStyle: 'touch-and-go' as const } : {}),
     };
 
