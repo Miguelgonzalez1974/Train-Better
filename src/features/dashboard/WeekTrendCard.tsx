@@ -101,6 +101,14 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
   // La línea del previsto necesita al menos dos días seguidos con previsto anotado; mientras no los haya, la leyenda no la promete y
   // se explica que se va dibujando día a día.
   const hasPlanLine = planLines.length > 0;
+  // Un día con previsto sin vecinos con previsto (lo normal los primeros días) no puede formar línea: se dibuja como una raya corta
+  // en su valor, y si ya tiene esfuerzo real, el hueco entre las dos como una franja, para que se vea igual de claro desde el primer día.
+  const lonePlans = points
+    .map((p, i) => ({ p, i }))
+    .filter(({ p, i }) => p.plan != null && p.plan > 0 && points[i - 1]?.plan == null && points[i + 1]?.plan == null)
+    .map(({ p, i }) => ({ i, plan: p.plan!, real: p.strain, under: p.strain !== null && p.strain < p.plan! }));
+  const hasPlanMarks = hasPlanLine || lonePlans.length > 0;
+  const hasGapMarks = gaps.length > 0 || lonePlans.some((l) => l.real !== null && l.real !== l.plan);
   const fit = selected && shownStrain !== null ? effortFit({ strain: shownStrain, target: selected.target }) : 'unknown';
   // Hoy el día no ha terminado: un esfuerzo bajo es lo que llevas, no un veredicto.
   const todayRunning = Boolean(selected && selected.iso === todayIso && !isPlanned && fit === 'below');
@@ -228,8 +236,24 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
             {gaps.map((g, k) => (
               <path key={`g${k}`} d={g.d} fill={g.under ? 'rgb(var(--c-white) / 0.085)' : 'rgb(var(--c-state-mid) / 0.14)'} />
             ))}
+            {lonePlans.map((l) =>
+              l.real !== null && l.real !== l.plan ? (
+                <rect
+                  key={`lg${l.i}`}
+                  x={x(l.i) - Math.min(slot * 0.25, 9)}
+                  y={y(Math.max(l.plan, l.real))}
+                  width={Math.min(slot * 0.5, 18)}
+                  height={Math.max(2, Math.abs(y(l.plan) - y(l.real)))}
+                  rx={2}
+                  fill={l.under ? 'rgb(var(--c-white) / 0.12)' : 'rgb(var(--c-state-mid) / 0.2)'}
+                />
+              ) : null,
+            )}
             {line('readiness').map((pts, k) => (
               <polyline key={`r${k}`} points={pts} fill="none" stroke="rgb(var(--c-n-500) / 0.55)" strokeWidth={1} strokeLinejoin="round" />
+            ))}
+            {lonePlans.map((l) => (
+              <line key={`lp${l.i}`} x1={x(l.i) - Math.min(slot * 0.35, 13)} x2={x(l.i) + Math.min(slot * 0.35, 13)} y1={y(l.plan)} y2={y(l.plan)} stroke={PLAN_STROKE} strokeWidth={1.6} strokeDasharray="3 3" strokeLinecap="round" />
             ))}
             {planLines.map((pts, k) => (
               <polyline key={`p${k}`} points={pts} fill="none" stroke={PLAN_STROKE} strokeWidth={1.2} strokeDasharray="3 3" strokeLinejoin="round" strokeLinecap="round" />
@@ -245,7 +269,6 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
                 <Fragment key={p.iso}>
                   {p.readiness !== null && <circle cx={x(i)} cy={y(p.readiness)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BAND_COLOR[readinessBand(p.readiness)]} strokeWidth={sw} />}
                   {p.strain !== null && <circle cx={x(i)} cy={y(p.strain)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BLUE} strokeWidth={sw} />}
-                  {p.strain !== null && p.plan != null && p.plan > 0 && points[i - 1]?.plan == null && points[i + 1]?.plan == null && !on && <circle cx={x(i)} cy={y(p.plan)} r={2.2} fill="rgb(var(--c-white) / 0.8)" stroke="rgb(var(--c-brand-bg))" strokeWidth={1} />}
                   {on && p.strain !== null && p.plan != null && p.plan > 0 && <circle cx={x(i)} cy={y(p.plan)} r={2.6} fill="rgb(var(--c-white) / 0.95)" stroke="rgb(var(--c-brand-bg))" strokeWidth={1} />}
                   {p.strain === null && p.planned !== null && <circle cx={x(i)} cy={y(p.planned)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BLUE} strokeWidth={sw} strokeDasharray="1.6 1.6" />}
                 </Fragment>
@@ -273,13 +296,13 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
               <span className="inline-block h-2 w-2 rounded-full border-[1.5px]" style={{ borderColor: BLUE }} aria-hidden="true" />
               Esfuerzo
             </span>
-            {hasPlanLine && (
+            {hasPlanMarks && (
               <span className="flex items-center gap-1.5">
                 <span className="inline-block w-4 border-t-[1.5px] border-dashed" style={{ borderColor: PLAN_STROKE }} aria-hidden="true" />
                 Previsto
               </span>
             )}
-            {gaps.length > 0 && (
+            {hasGapMarks && (
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-2 w-3 rounded-[2px]" style={{ background: 'rgb(var(--c-white) / 0.14)' }} aria-hidden="true" />
                 Diferencia
@@ -298,7 +321,7 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
           </div>
           {!hasPlanLine && (
             <p className="mt-2.5 text-[11px] leading-snug text-neutral-500">
-              El previsto se empieza a guardar cada mañana al abrir la app: con dos días seguidos ya se dibuja su línea y lo que te separa de lo hecho.
+              El previsto se guarda cada mañana al abrir la app antes de entrenar. Con un solo día sale como una raya; con dos días seguidos con previsto se dibuja su línea completa.
             </p>
           )}
         </>
