@@ -528,6 +528,8 @@ export function calibrateWodTarget(t: WodTarget, perf: number | null): WodTarget
 export function parseWodResultValue(result: WodResult): number | null {
   const v = result.value.trim();
   if (result.scoreType === 'time') {
+    // No terminado (CAP): el valor no es un tiempo. Cuenta como "al menos el cap": nunca mejor que él.
+    if (result.capped) return result.capSeconds && result.capSeconds > 0 ? result.capSeconds : null;
     const m = v.match(/(\d+):(\d{1,2})/);
     if (m) return Number(m[1]) * 60 + Number(m[2]);
     const only = v.match(/(\d+(?:\.\d+)?)/);
@@ -549,6 +551,7 @@ export function parseWodResultValue(result: WodResult): number | null {
  */
 export function describeWodResultVsTarget(result: WodResult, target: WodTarget): string | null {
   if (target.low === 0 && target.high === 0) return null;
+  if (result.capped) return 'No lo terminaste dentro del time cap — la próxima escala el volumen o la carga para llegar al final.';
   const actual = parseWodResultValue(result);
   if (actual == null) return null;
   const mid = (target.low + target.high) / 2;

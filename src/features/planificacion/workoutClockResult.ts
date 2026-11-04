@@ -13,6 +13,8 @@ export interface ClockStop {
   seconds: number;
   /** Rondas contadas a mano en ese momento. */
   rounds: number;
+  /** El reloj se paró solo en el time cap de un WOD por tiempo: no se terminó. seconds es el cap. */
+  capped?: boolean;
 }
 
 interface Stored {
@@ -71,6 +73,10 @@ export function pickClockStop(runs: ClockStop[], part: 1 | 2, partCount: number)
 
 /** Campos del formulario de resultado que el reloj puede rellenar según cómo se puntúa el WOD, o null si no aplica. */
 export function clockFormFor(stop: ClockStop, scoreType: WodScoreType): Partial<WodResultForm> | null {
+  if (scoreType === 'time' && stop.capped) {
+    // Paró en el cap: no es un tiempo sino un WOD sin terminar, con las rondas contadas.
+    return { capped: true, capSeconds: Math.round(stop.seconds), rounds: stop.rounds };
+  }
   if (scoreType === 'time') {
     const total = Math.round(stop.seconds);
     return total >= 1 ? { minutes: Math.floor(total / 60), seconds: total % 60 } : null;
@@ -80,5 +86,65 @@ export function clockFormFor(stop: ClockStop, scoreType: WodScoreType): Partial<
 }
 
 export function isFormUntouched(form: WodResultForm): boolean {
-  return form.minutes === 0 && form.seconds === 0 && form.rounds === 0 && form.extraReps === 0 && form.reps === 0 && form.load === 0;
+  return form.minutes === 0 && form.seconds === 0 && form.rounds === 0 && form.extraReps === 0 && form.reps === 0 && form.load === 0 && !form.capped;
+}
+
+// ---------- Time cap del reloj ----------
+
+/** Segundos antes del límite en los que el reloj avisa (pitido y vibración). */
+export const CAP_WARN_SECONDS = 60;
+/** Con un límite más corto que esto no se avisa del último minuto: no daría margen para oírlo. */
+export const CAP_WARN_MIN_CAP = 90;
+
+export type CapStep = { kind: 'run' } | { kind: 'warn' } | { kind: 'hit'; seconds: number };
+
+/**
+ * Qué hace el reloj en cada tic con un límite de tiempo: seguir, avisar del último minuto (una sola vez) o llegar al límite
+ * (una sola vez: parar y dejar guardado lo que había). Sin límite, siempre sigue.
+ */
+export function capStep(elapsed: number, cap: { seconds: number } | null, state: { hit: boolean; warned: boolean }): CapStep {
+  if (!cap || state.hit) return { kind: 'run' };
+  if (elapsed >= cap.seconds) return { kind: 'hit', seconds: cap.seconds };
+  if (!state.warned && cap.seconds > CAP_WARN_MIN_CAP && cap.seconds - elapsed <= CAP_WARN_SECONDS) return { kind: 'warn' };
+  return { kind: 'run' };
+}
+
+export interface CapSnapshot {
+  seconds: number;
+  rounds: number;
+  /** El límite era un cap de un WOD por tiempo (no el final de un AMRAP). */
+  capped: boolean;
+}
+
+/**
+ * La parada que se guarda para el resultado del WOD cuando el reloj está parado. Sin límite alcanzado, lo que marca el
+ * cronómetro. Con el límite alcanzado, el límite: si el atleta siguió cronometrando después, también las rondas de ese
+ * momento (lo que pasó tras el cap no cambia el resultado); si no, las rondas actuales, por si corrige un toque de más.
+ */
+export function clockStopToRecord(args: { elapsed: number; rounds: number; snapshot: CapSnapshot | null; continuedPastCap: boolean }): ClockStop {
+  const { elapsed, rounds, snapshot, continuedPastCap } = args;
+  if (!snapshot) return { seconds: Math.round(elapsed), rounds };
+  return { seconds: snapshot.seconds, rounds: continuedPastCap ? snapshot.rounds : rounds, ...(snapshot.capped ? { capped: true } : {}) };
+}
+
+export interface CapView {
+  /** Segundos que quedan hasta el límite (negativo si se pasó). */
+  left: number;
+  /** 0-1 */
+  progress: number;
+  lastMinute: boolean;
+  /** Segundos cronometrados por encima del límite, tras seguir después de llegar. */
+  over: number;
+}
+
+/** Lo que enseña el reloj respecto al límite: lo que queda, el avance, si es el último minuto y cuánto se pasó. */
+export function capView(elapsed: number, cap: { seconds: number } | null, hit: boolean): CapView | null {
+  if (!cap) return null;
+  const left = cap.seconds - elapsed;
+  return {
+    left,
+    progress: Math.min(1, Math.max(0, elapsed / cap.seconds)),
+    lastMinute: !hit && left > 0 && left <= CAP_WARN_SECONDS && cap.seconds > CAP_WARN_MIN_CAP,
+    over: hit ? Math.max(0, elapsed - cap.seconds) : 0,
+  };
 }

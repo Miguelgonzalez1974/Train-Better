@@ -23,6 +23,8 @@ interface CompleteSessionPanelProps {
   onSkipsChange: (next: Skips) => void;
   /** Partes cuyo resultado vino prellenado del reloj de entreno — se marca para que se sepa de dónde sale. */
   clockParts?: Part[];
+  /** Time cap de cada parte del WOD, si se conoce (segundos): se guarda con un resultado no terminado. */
+  capSeconds?: Partial<Record<Part, number>>;
   onFormChange: (part: Part, patch: Partial<WodResultForm>) => void;
   /** Presente solo en un día de test de 1RM. */
   test?: { movementName: string; loadKg: number; onChange: (kg: number) => void };
@@ -53,6 +55,7 @@ export function CompleteSessionPanel({
   skips,
   onSkipsChange,
   clockParts = [],
+  capSeconds,
   onFormChange,
   test,
   rxOrScaled,
@@ -132,7 +135,7 @@ export function CompleteSessionPanel({
                   </span>
                 )}
               </p>
-              <WodResultField scoreType={scoreTypes[part]!} form={forms[part]} onChange={(patch) => onFormChange(part, patch)} />
+              <WodResultField scoreType={scoreTypes[part]!} form={forms[part]} onChange={(patch) => onFormChange(part, patch)} capSeconds={capSeconds?.[part]} />
             </div>
           ))}
 

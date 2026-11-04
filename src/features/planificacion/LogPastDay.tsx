@@ -4,6 +4,7 @@ import type { DailySession, RxOrScaled, SessionHistoryEntry, WodScoreType } from
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { toHistoryEntry } from '../../engine/generateSession';
 import { EMPTY_WOD_FORM, buildWodResult, getWodParts, getWodScoreType, type WodResultForm } from '../../engine/wodScoring';
+import { wodCapFor } from '../../engine/wodCap';
 import { applySkips, sessionParts, skippedParts, type Skips } from '../../engine/sessionParts';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
@@ -129,6 +130,7 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
   const [logLifts, setLogLifts] = useState(true);
   const wodParts = useMemo(() => getWodParts(session), [session]);
   const scoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(() => ({ 1: getWodScoreType(session, 1), 2: getWodScoreType(session, 2) }), [session]);
+  const wodCaps = useMemo(() => ({ 1: wodCapFor(session, 1), 2: wodCapFor(session, 2) }), [session]);
   const estimatedMin = useMemo(() => Math.min(120, Math.max(20, Math.round(estimateSessionMinutes(session) / 5) * 5)), [session]);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   const [rpe, setRpe] = useState(7);
@@ -181,6 +183,7 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
         scoreTypes={scoreTypes}
         targets={Object.fromEntries(wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]))}
         forms={forms}
+        capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
         parts={parts}
         skips={skips}
         onSkipsChange={setSkips}

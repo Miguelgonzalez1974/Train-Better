@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Timer, Pause, Play, RotateCcw, X, Minus, Plus, Maximize2, Minimize2 } from 'lucide-react';
-import { readClockRuns, recordClockStop } from './workoutClockResult';
+import { capStep, capView, clockStopToRecord, readClockRuns, recordClockStop } from './workoutClockResult';
+import type { WodCap } from '../../engine/wodCap';
 
 const PRESETS = [60, 90, 120, 180];
 const PRE_START_SECONDS = 10;
@@ -179,6 +180,8 @@ interface FullscreenClockProps {
   onReset?: () => void;
   extras?: { label: string; onClick: () => void }[];
   rounds?: { value: number; onAdd: () => void; onSub: () => void };
+  /** Barra de avance hasta un límite (time cap): `warn` la pone en naranja (último minuto o límite alcanzado). */
+  progress?: { value: number; warn: boolean };
   onClose: () => void;
 }
 
@@ -206,7 +209,7 @@ const CLOCK_COLORS = {
  * pantalla, apaisado se pone al lado el contador de rondas y los botones van abajo, grandes y con colores sólidos. Es la
  * misma máquina del reloj de siempre; esto solo cambia cómo se ve.
  */
-function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extras, rounds, onClose }: FullscreenClockProps) {
+function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extras, rounds, progress, onClose }: FullscreenClockProps) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col gap-2 bg-black p-4" style={CLOCK_COLORS} role="dialog" aria-label="Reloj a pantalla completa">
       <div aria-hidden="true" className={`pointer-events-none absolute inset-0 transition-colors duration-300 ${tint ? TONE_TINT[tone] : ''}`} />
@@ -219,6 +222,12 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
           <Minimize2 size={22} />
         </button>
       </div>
+
+      {progress && (
+        <div className="relative z-10 h-3 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-label="Avance hasta el límite de tiempo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress.value * 100)}>
+          <div className={`h-full rounded-full transition-[width] duration-200 ${progress.warn ? 'bg-brand-orange' : 'bg-brand-neon'}`} style={{ width: `${Math.round(progress.value * 1000) / 10}%` }} />
+        </div>
+      )}
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col items-stretch gap-3 landscape:flex-row">
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
@@ -266,6 +275,77 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
     </div>
   );
 }
+const CAP_STEP_SECONDS = 60;
+const CAP_MIN_SECONDS = 60;
+const CAP_MAX_SECONDS = 99 * 60;
+const CAP_DEFAULT_SECONDS = 15 * 60;
+
+/**
+ * El límite de tiempo del WOD en el modo Entreno: el del propio WOD (cap de un benchmark o de una programación real, o los minutos
+ * de un AMRAP), o el que se ponga a mano. Se ajusta de minuto en minuto antes de empezar; "Quitar" deja el cronómetro libre.
+ */
+function CapRow({
+  cap,
+  suggested,
+  editable,
+  onChange,
+}: {
+  cap: WodCap | null;
+  suggested: WodCap | null;
+  editable: boolean;
+  onChange: (next: number | null | undefined) => void;
+}) {
+  const word = cap?.kind === 'amrap' ? 'AMRAP' : 'Time cap';
+  if (!cap) {
+    if (!editable) return null;
+    return (
+      <div className="mb-1 flex gap-1.5">
+        <button
+          onClick={() => onChange(CAP_DEFAULT_SECONDS)}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors hover:bg-white/10"
+        >
+          <Plus size={13} strokeWidth={2.5} aria-hidden="true" />
+          Poner un time cap
+        </button>
+        {suggested && (
+          <button
+            onClick={() => onChange(undefined)}
+            className="rounded-lg bg-white/5 px-3 py-2 text-xs font-semibold text-neutral-300 transition-colors hover:bg-white/10"
+          >
+            Cap del WOD · {mmss(suggested.seconds)}
+          </button>
+        )}
+      </div>
+    );
+  }
+  const step = (delta: number) => onChange(Math.min(CAP_MAX_SECONDS, Math.max(CAP_MIN_SECONDS, cap.seconds + delta)));
+  const fromWod = suggested !== null && suggested.seconds === cap.seconds;
+  return (
+    <div className="mb-1 flex items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-1.5">
+      <div className="min-w-0">
+        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{word}</span>
+        {fromWod && <span className="ml-2 text-[11px] text-neutral-500">del WOD</span>}
+      </div>
+      {editable ? (
+        <div className="flex items-center gap-2">
+          <button onClick={() => step(-CAP_STEP_SECONDS)} aria-label="Quitar un minuto al cap" className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10">
+            <Minus size={12} strokeWidth={2.5} />
+          </button>
+          <span className="w-12 text-center text-sm font-bold tabular-nums text-white">{mmss(cap.seconds)}</span>
+          <button onClick={() => step(CAP_STEP_SECONDS)} aria-label="Sumar un minuto al cap" className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-neutral-300 hover:bg-white/10">
+            <Plus size={12} strokeWidth={2.5} />
+          </button>
+          <button onClick={() => onChange(null)} className="ml-1 text-[11px] font-semibold text-neutral-500 underline decoration-dotted hover:text-neutral-200">
+            Quitar
+          </button>
+        </div>
+      ) : (
+        <span className="text-sm font-bold tabular-nums text-white">{mmss(cap.seconds)}</span>
+      )}
+    </div>
+  );
+}
+
 /** Fila de ajuste ±paso para la configuración del Tabata (trabajo/descanso/rondas). */
 function TabataConfigRow({
   label,
@@ -327,7 +407,7 @@ function TabataConfigRow({
  * Vive mientras haya una sesión activa en Planificación; el estado se pierde al salir de la
  * pestaña, aceptable para un reloj que solo importa durante el entreno de hoy.
  */
-export function TrainingTimer() {
+export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | null>> } = {}) {
   const [expanded, setExpanded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [mode, setMode] = useState<TimerMode>('rest');
@@ -408,16 +488,63 @@ export function TrainingTimer() {
   // paras, el tiempo y las rondas quedan guardados para el resultado del WOD al cerrar la sesión (ver workoutClockResult).
   const workoutRunRef = useRef(readClockRuns().length);
 
+  // Time cap (o duración del AMRAP): el del WOD de hoy, o el que el atleta ponga a mano. `undefined` = el del WOD, `null` = sin cap.
+  const [capOverride, setCapOverride] = useState<number | null | undefined>(undefined);
+  const runPart: 1 | 2 = workoutRunRef.current >= 1 && caps?.[2] ? 2 : 1;
+  const suggestedCap = caps?.[runPart] ?? null;
+  const effectiveCap: WodCap | null =
+    capOverride === null ? null : typeof capOverride === 'number' ? { seconds: capOverride, kind: suggestedCap?.kind ?? 'cap' } : suggestedCap;
+  // Los refs llevan el valor vivo al tick (sus dependencias son estables) y al efecto que guarda la parada.
+  const capRef = useRef<WodCap | null>(null);
+  capRef.current = effectiveCap;
+  const roundsRef = useRef(0);
+  const capHitRef = useRef(false);
+  const warnedRef = useRef(false);
+  const capSnapshotRef = useRef<{ seconds: number; rounds: number; capped: boolean } | null>(null);
+  const [capHit, setCapHit] = useState(false);
+  // Tras llegar al cap, el atleta puede seguir cronometrando (para saber cuánto tardaría): eso no cambia lo que se guarda.
+  const [capContinued, setCapContinued] = useState(false);
+
   const workoutTick = useCallback(() => {
     if (workoutStartRef.current == null) return;
-    setWorkoutElapsed((Date.now() - workoutStartRef.current) / 1000);
+    const elapsed = (Date.now() - workoutStartRef.current) / 1000;
+    const cap = capRef.current;
+    const step = capStep(elapsed, cap, { hit: capHitRef.current, warned: warnedRef.current });
+    if (step.kind === 'hit' && cap) {
+      // Llegó al límite: el reloj se para solo y deja guardado lo que había (un CAP, o el final normal de un AMRAP).
+      capHitRef.current = true;
+      capSnapshotRef.current = { seconds: step.seconds, rounds: roundsRef.current, capped: cap.kind === 'cap' };
+      workoutStartRef.current = null;
+      setWorkoutElapsed(step.seconds);
+      setWorkoutRunning(false);
+      setCapHit(true);
+      beep(660, 900);
+      navigator.vibrate?.([300, 120, 300, 120, 300]);
+      return;
+    }
+    if (step.kind === 'warn') {
+      warnedRef.current = true;
+      beep(880, 350);
+      navigator.vibrate?.(180);
+    }
+    setWorkoutElapsed(elapsed);
     workoutRafRef.current = window.setTimeout(workoutTick, 200);
   }, []);
 
   useEffect(() => {
+    roundsRef.current = rounds;
+  }, [rounds]);
+
+  useEffect(() => {
     if (workoutRunning || workoutElapsed < 1) return;
-    recordClockStop(workoutRunRef.current, { seconds: Math.round(workoutElapsed), rounds });
-  }, [workoutRunning, workoutElapsed, rounds]);
+    recordClockStop(workoutRunRef.current, clockStopToRecord({ elapsed: workoutElapsed, rounds, snapshot: capSnapshotRef.current, continuedPastCap: capContinued }));
+  }, [workoutRunning, workoutElapsed, rounds, capContinued]);
+
+  // Al llegar al cap no hace falta seguir con la pantalla encendida.
+  useEffect(() => {
+    if (capHit) wakeLock.release();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capHit]);
 
   useEffect(() => {
     if (workoutRunning) {
@@ -432,6 +559,8 @@ export function TrainingTimer() {
 
   const toggleWorkout = () => {
     const next = !workoutRunning;
+    // Reanudar tras llegar al cap = seguir cronometrando por cuenta del atleta.
+    if (next && capHitRef.current) setCapContinued(true);
     setWorkoutRunning(next);
     if (next && screenLockOn) wakeLock.request();
     else wakeLock.release();
@@ -443,6 +572,13 @@ export function TrainingTimer() {
     setWorkoutElapsed(0);
     setRounds(0);
     workoutStartRef.current = null;
+    capHitRef.current = false;
+    warnedRef.current = false;
+    capSnapshotRef.current = null;
+    setCapHit(false);
+    setCapContinued(false);
+    // El cap de la tanda nueva vuelve a ser el de su WOD (la parte 2 de un doble WOD puede tener otro).
+    setCapOverride(undefined);
     wakeLock.release();
   };
   const setScreenLock = (on: boolean) => {
@@ -696,6 +832,14 @@ export function TrainingTimer() {
     setExpanded(true);
   };
 
+  // Lo que queda hasta el límite del WOD (cap o fin del AMRAP), y si estamos en el último minuto.
+  const view = capView(workoutElapsed, effectiveCap, capHit);
+  const capLeft = view ? view.left : null;
+  const lastMinute = Boolean(view?.lastMinute);
+  const capWord = effectiveCap?.kind === 'amrap' ? 'Fin del AMRAP' : 'CAP';
+  const capProgress = view?.progress ?? 0;
+  const overCap = view?.over ?? 0;
+
   // Con el reloj a pantalla completa la página de detrás no se desplaza.
   useEffect(() => {
     if (!fullscreen) return;
@@ -756,10 +900,25 @@ export function TrainingTimer() {
       return (
         <FullscreenClock
           {...common}
-          label="Entreno"
+          label={capHit ? capWord : lastMinute ? 'Último minuto' : 'Entreno'}
+          sub={
+            effectiveCap
+              ? capHit
+                ? overCap > 0
+                  ? `+${mmss(overCap)} sobre el límite`
+                  : 'Reloj parado'
+                : `Quedan ${mmss(capLeft ?? 0)} · ${effectiveCap.kind === 'amrap' ? 'AMRAP' : 'cap'} ${mmss(effectiveCap.seconds)}`
+              : undefined
+          }
           time={mmss(workoutElapsed)}
-          tone="neon"
-          primary={{ label: workoutRunning ? 'Pausa' : workoutElapsed > 0 ? 'Reanudar' : 'Empezar', running: workoutRunning, onClick: handleWorkoutButton }}
+          tone={capHit || lastMinute ? 'orange' : 'neon'}
+          tint={capHit}
+          progress={effectiveCap ? { value: capProgress, warn: capHit || lastMinute } : undefined}
+          primary={{
+            label: workoutRunning ? 'Pausa' : capHit ? 'Seguir cronometrando' : workoutElapsed > 0 ? 'Reanudar' : 'Empezar',
+            running: workoutRunning,
+            onClick: handleWorkoutButton,
+          }}
           onReset={resetWorkout}
           rounds={{ value: rounds, onAdd: () => setRounds((r) => r + 1), onSub: () => setRounds((r) => Math.max(0, r - 1)) }}
         />
@@ -819,12 +978,26 @@ export function TrainingTimer() {
         </button>
       );
     }
+    if (capHit && !workoutRunning) {
+      return (
+        <button
+          onClick={() => openTo('workout')}
+          aria-label={`${capWord}: reloj parado`}
+          className="fixed bottom-24 right-4 z-40 flex h-24 min-w-24 animate-pulse items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+        >
+          {effectiveCap?.kind === 'amrap' ? 'Fin' : 'CAP'}
+          {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-orange" />}
+        </button>
+      );
+    }
     if (workoutRunning) {
       return (
         <button
           onClick={() => openTo('workout')}
-          aria-label={`Reloj de entreno${rounds > 0 ? `, ronda ${rounds}` : ''}`}
-          className="fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full bg-brand-neon px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+          aria-label={`Reloj de entreno${rounds > 0 ? `, ronda ${rounds}` : ''}${lastMinute ? ', último minuto' : ''}`}
+          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+            lastMinute ? 'bg-brand-orange' : 'bg-brand-neon'
+          }`}
         >
           {mmss(workoutElapsed)}
           {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-neon" />}
@@ -976,7 +1149,34 @@ export function TrainingTimer() {
         </>
       ) : mode === 'workout' ? (
         <>
-          <p className="py-1 text-center text-[5.5rem] font-bold leading-none tabular-nums text-white">{mmss(workoutElapsed)}</p>
+          <CapRow
+            cap={effectiveCap}
+            suggested={suggestedCap}
+            editable={!workoutRunning && !capHit}
+            onChange={setCapOverride}
+          />
+          <p className={`py-1 text-center text-[5.5rem] font-bold leading-none tabular-nums ${capHit || lastMinute ? 'text-brand-orange' : 'text-white'}`}>
+            {mmss(workoutElapsed)}
+          </p>
+          {effectiveCap && (
+            <div className="mb-2">
+              <div className="h-2.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="Avance hasta el límite de tiempo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(capProgress * 100)}>
+                <div
+                  className={`h-full rounded-full transition-[width] duration-200 ${capHit || lastMinute ? 'bg-brand-orange' : 'bg-brand-neon'}`}
+                  style={{ width: `${Math.round(capProgress * 1000) / 10}%` }}
+                />
+              </div>
+              <p className={`mt-1.5 text-center text-sm font-semibold ${capHit || lastMinute ? 'text-brand-orange' : 'text-neutral-400'}`} aria-live="polite">
+                {capHit
+                  ? overCap > 0
+                    ? `${capWord} alcanzado · +${mmss(overCap)} sobre el límite`
+                    : `${capWord} alcanzado · reloj parado`
+                  : lastMinute
+                    ? `Último minuto · quedan ${mmss(capLeft ?? 0)}`
+                    : `Quedan ${mmss(capLeft ?? 0)}`}
+              </p>
+            </div>
+          )}
 
           <ScreenLockToggle screenLockOn={screenLockOn} supported={wakeLock.supported} onChange={setScreenLock} />
           <WakeLockStatusLine supported={wakeLock.supported} screenLockOn={screenLockOn} running={workoutRunning} held={wakeLock.held} />
@@ -1011,14 +1211,18 @@ export function TrainingTimer() {
               className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-neon py-3.5 text-base font-bold text-black transition-colors duration-200 hover:opacity-90"
             >
               {workoutRunning ? <Pause size={19} strokeWidth={2.5} /> : <Play size={19} strokeWidth={2.5} />}
-              {workoutRunning ? 'Pausa' : workoutElapsed > 0 ? 'Reanudar' : 'Empezar'}
+              {workoutRunning ? 'Pausa' : capHit ? 'Seguir cronometrando' : workoutElapsed > 0 ? 'Reanudar' : 'Empezar'}
             </button>
             <button onClick={resetWorkout} className="rounded-xl bg-white/5 px-3.5 py-3.5 text-neutral-300 hover:bg-white/10" aria-label="Reiniciar">
               <RotateCcw size={18} strokeWidth={2.25} />
             </button>
           </div>
           {!workoutRunning && workoutElapsed >= 1 && (
-            <p className="mt-2 text-center text-[11px] text-neutral-500">Este tiempo y las rondas se usarán como resultado al cerrar la sesión.</p>
+            <p className="mt-2 text-center text-[11px] text-neutral-500">
+              {capHit && effectiveCap?.kind === 'cap'
+                ? 'Al cerrar la sesión el WOD saldrá como no terminado (CAP) con tus rondas. Si sigues cronometrando, no cambia lo guardado.'
+                : 'Este tiempo y las rondas se usarán como resultado al cerrar la sesión.'}
+            </p>
           )}
         </>
       ) : mode === 'emom' ? (

@@ -817,8 +817,12 @@ export type WodScoreType = 'time' | 'reps' | 'load' | 'rounds+reps';
 
 export interface WodResult {
   scoreType: WodScoreType;
-  /** Valor formateado para mostrar, ej. "6:42", "8+12", "185 reps", "70 kg" */
+  /** Valor formateado para mostrar, ej. "6:42", "8+12", "185 reps", "70 kg", "CAP · 3+7" */
   value: string;
+  /** Un WOD por tiempo que NO se terminó: se paró en el time cap. `value` lleva lo que se hizo ("CAP · 3+7"), no un tiempo. */
+  capped?: boolean;
+  /** Segundos del time cap en el que se paró (solo con `capped`); sirve como cota de tiempo en las estadísticas. */
+  capSeconds?: number;
 }
 
 export interface SessionHistoryEntry {

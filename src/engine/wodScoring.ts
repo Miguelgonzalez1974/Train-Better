@@ -28,12 +28,21 @@ export interface WodResultForm {
   extraReps: number;
   reps: number;
   load: number;
+  /** Solo en WODs por tiempo: no se terminó, se paró en el time cap. Entonces `rounds` / `extraReps` dicen lo que se hizo. */
+  capped?: boolean;
+  /** Segundos del time cap en el que se paró, si se conocen. */
+  capSeconds?: number;
 }
 
 export const EMPTY_WOD_FORM: WodResultForm = { minutes: 0, seconds: 0, rounds: 0, extraReps: 0, reps: 0, load: 0 };
 
 /** Convierte el formulario en el `WodResult` que se guarda ("9:05", "6+4", "185 reps", "70 kg"). */
 export function buildWodResult(scoreType: WodScoreType, form: WodResultForm): WodResult {
+  // Un WOD por tiempo que no se terminó: se guarda como CAP con lo que se hizo, no como un tiempo.
+  if (scoreType === 'time' && form.capped) {
+    const done = form.rounds > 0 ? (form.extraReps > 0 ? `${form.rounds}+${form.extraReps}` : `${form.rounds}`) : form.extraReps > 0 ? `${form.extraReps} reps` : '';
+    return { scoreType, value: done ? `CAP · ${done}` : 'CAP', capped: true, ...(form.capSeconds && form.capSeconds > 0 ? { capSeconds: Math.round(form.capSeconds) } : {}) };
+  }
   if (scoreType === 'time') return { scoreType, value: `${form.minutes}:${String(form.seconds).padStart(2, '0')}` };
   if (scoreType === 'rounds+reps') return { scoreType, value: form.extraReps > 0 ? `${form.rounds}+${form.extraReps}` : `${form.rounds}` };
   if (scoreType === 'reps') return { scoreType, value: `${form.reps} reps` };

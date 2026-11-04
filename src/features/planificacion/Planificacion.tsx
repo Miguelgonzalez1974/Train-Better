@@ -55,6 +55,7 @@ import {
   type WodResultForm,
 } from '../../engine/wodScoring';
 import { applySkips, sessionParts, skippedParts, type Skips } from '../../engine/sessionParts';
+import { wodCapFor, type WodCap } from '../../engine/wodCap';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine/macroReview';
@@ -313,6 +314,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
   const wodScoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(
     () => ({ 1: session ? getWodScoreType(session, 1) : null, 2: session ? getWodScoreType(session, 2) : null }),
+    [session],
+  );
+  // El límite de tiempo de cada parte del WOD (cap o duración del AMRAP), para el reloj de entreno.
+  const wodCaps = useMemo<Record<1 | 2, WodCap | null>>(
+    () => ({ 1: session ? wodCapFor(session, 1) : null, 2: session ? wodCapFor(session, 2) : null }),
     [session],
   );
   const doneParts = useMemo(() => (session ? sessionParts(session) : []), [session]);
@@ -1010,7 +1016,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       <Modal open={showReasons} onClose={() => setShowReasons(false)} title="Por qué tu sesión es así hoy">
         <CoachReasonsList reasons={session?.coachReasons ?? []} />
       </Modal>
-      {session && !session.isRestDay && <TrainingTimer />}
+      {session && !session.isRestDay && <TrainingTimer caps={wodCaps} />}
       {focusMode && session && !session.isRestDay && (
         <FocusMode
           session={session}
@@ -1325,6 +1331,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           skips={skips}
           onSkipsChange={setSkips}
           clockParts={clockParts}
+          capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
           test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
           rxOrScaled={rxOrScaled}

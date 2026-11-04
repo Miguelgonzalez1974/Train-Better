@@ -1831,6 +1831,19 @@ function findRetestCandidate(
   return { wod, prevDate: info.date, prevResult: info.result };
 }
 
+/** La marca anterior de un retest tal como se cuenta en las notas: un CAP (no terminado) no es un tiempo. */
+function retestPrevText(prev: WodResult): string {
+  return prev.capped ? `sin terminar (${prev.value})` : prev.value;
+}
+
+/** El objetivo del retest. Tras un CAP no hay un tiempo del que "bajar": primero hay que terminarlo dentro del cap. */
+function retestChaseNote(scoreType: WodResult['scoreType'], prev: WodResult): string {
+  if (prev.capped) return 'Objetivo: terminarlo dentro del time cap.';
+  return scoreType === 'time'
+    ? `Objetivo: bajar de ${prev.value} — un 2-4% menos ya es un buen salto.`
+    : `Objetivo: superar ${prev.value} — apunta a +2-4 reps.`;
+}
+
 export interface RetestHeadsUp {
   name: string;
   /** Marca anterior formateada (ej. "4:32", "8+12"). */
@@ -2301,16 +2314,13 @@ function buildWodBlock(
     if (lockedWod) {
       if (retestCandidate && retestCandidate.wod.id === lockedWod.id) {
         const { prevDate, prevResult } = retestCandidate;
-        const chaseNote =
-          lockedWod.scoreType === 'time'
-            ? `Objetivo: bajar de ${prevResult.value} — un 2-4% menos ya es un buen salto.`
-            : `Objetivo: superar ${prevResult.value} — apunta a +2-4 reps.`;
+        const chaseNote = retestChaseNote(lockedWod.scoreType, prevResult);
         return [
           {
             block: 'wod',
             movementId: `benchmark:${lockedWod.id}`,
             format: lockedWod.format,
-            notes: `${lockedWod.name} — ${localizeWodText(lockedWod.format)}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
+            notes: `${lockedWod.name} — ${localizeWodText(lockedWod.format)}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${retestPrevText(prevResult)}. ${chaseNote}${effortNote}`,
           },
         ];
       }
@@ -2326,16 +2336,13 @@ function buildWodBlock(
 
     if (retestCandidate && isRetestDue) {
       const { wod, prevDate, prevResult } = retestCandidate;
-      const chaseNote =
-        wod.scoreType === 'time'
-          ? `Objetivo: bajar de ${prevResult.value} — un 2-4% menos ya es un buen salto.`
-          : `Objetivo: superar ${prevResult.value} — apunta a +2-4 reps.`;
+      const chaseNote = retestChaseNote(wod.scoreType, prevResult);
       return [
         {
           block: 'wod',
           movementId: `benchmark:${wod.id}`,
           format: wod.format,
-          notes: `${wod.name} — ${localizeWodText(wod.format)}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${prevResult.value}. ${chaseNote}${effortNote}`,
+          notes: `${wod.name} — ${localizeWodText(wod.format)}. Retest: tu marca del ${formatIsoDateShort(prevDate)} fue ${retestPrevText(prevResult)}. ${chaseNote}${effortNote}`,
         },
       ];
     }
