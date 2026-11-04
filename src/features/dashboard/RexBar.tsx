@@ -88,7 +88,7 @@ export function RexBar({
         <div className="flex w-12 shrink-0 flex-col items-center gap-1">
           <RexMascot size={40} mood={typing ? 'think' : suggestion.mood} />
           {/* La fecha de hoy, siempre: no cambia al mirar otro día con el selector. */}
-          <p className="text-center text-[11px] leading-tight text-neutral-500" aria-label={`Hoy es ${today.long}`}>
+          <p className="text-center text-[11px] font-bold leading-tight text-neutral-300" aria-label={`Hoy es ${today.long}`}>
             <span className="block capitalize">{today.weekday}</span>
             <span className="num block">{today.dayMonth}</span>
           </p>
