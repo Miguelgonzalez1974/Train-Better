@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CustomFood, CustomMealItem } from '../data/athlete/types';
 import { getFood } from '../data/nutrition/foods';
 import { FOODS } from '../data/nutrition/foods';
-import { builderFoods, builderGroup, macrosOf, totalsOf } from './mealBuilder';
+import { builderFoods, macrosOf, totalsOf } from './mealBuilder';
 import { customFoodToCatalogFood, makeFoodResolver } from './customFoods';
 
 const barrita: CustomFood = { id: 'custom1', name: 'Barrita del gimnasio', proteinPer100: 15, carbsPer100: 55, group: 'Extra' };
@@ -13,14 +13,14 @@ describe('customFoodToCatalogFood', () => {
     const f = customFoodToCatalogFood(barrita);
     expect(f.id).toBe('custom1');
     expect(f.per100).toEqual({ p: 15, c: 55, f: 0 });
-    expect(builderGroup(f)).toBe('Extra');
+    expect(f.group).toBe('Extra');
   });
 
-  it('el mismo grupo elegido siempre resuelve al mismo builderGroup, para las 6 opciones', () => {
+  it('el grupo elegido es el grupo del alimento, para las 6 opciones', () => {
     const groups: CustomFood['group'][] = ['Proteína', 'Hidrato', 'Fruta', 'Verdura', 'Bebida', 'Extra'];
     for (const group of groups) {
       const f = customFoodToCatalogFood({ id: 'x', name: 'x', proteinPer100: 1, carbsPer100: 1, group });
-      expect(builderGroup(f)).toBe(group);
+      expect(f.group).toBe(group);
     }
   });
 });

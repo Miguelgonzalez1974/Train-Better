@@ -1,38 +1,22 @@
-import { getFood, type Food } from '../data/nutrition/foods';
+import { getFood, type Food, type FoodGroup } from '../data/nutrition/foods';
 import type { CustomMealItem } from '../data/athlete/types';
 import type { FoodResolver } from './customFoods';
 
 /**
  * Apuntar lo que comes: el atleta elige alimentos del catálogo (o suyos) y la app suma la proteína y los hidratos
- * de cada cantidad. Los alimentos se agrupan para el selector (`builderGroup`) y las cantidades se mueven de un
+ * de cada cantidad. Los alimentos se agrupan para el selector (`Food.group`) y las cantidades se mueven de un
  * salto razonable para cada alimento (`stepGrams`) sin tope por arriba (`gramsFromTyped`).
  *
  * ORIENTATIVO como el resto del módulo: cuenta proteína e hidratos, no grasa ni calorías.
  */
 
-export type BuilderGroup = 'Proteína' | 'Hidrato' | 'Fruta' | 'Verdura' | 'Bebida' | 'Extra' | 'Plato';
+export type BuilderGroup = FoodGroup;
 export const BUILDER_GROUPS: BuilderGroup[] = ['Proteína', 'Hidrato', 'Fruta', 'Verdura', 'Bebida', 'Extra', 'Plato'];
 
-/** En qué grupo del selector cae un alimento. */
-export function builderGroup(food: Food): BuilderGroup {
-  const has = (r: Food['roles'][number]) => food.roles.includes(r);
-  if (food.dish) return 'Plato';
-  if (has('proteinMain') || has('proteinBreakfast') || has('proteinLight') || has('proteinSnack')) return 'Proteína';
-  if (has('carbMain') || has('carbBreakfast') || has('carbSnack')) return 'Hidrato';
-  if (has('fruit') || has('fruitPre')) return 'Fruta';
-  if (has('veg')) return 'Verdura';
-  if (has('drink')) return 'Bebida';
-  return 'Extra';
-}
-
-/** Alimentos que se pueden elegir al apuntar (los que tienen un hueco asignado en el catálogo), por grupo. */
-export function builderFoods(allFoods: Food[], excluded: Set<string> | string[] = []): Record<BuilderGroup, Food[]> {
-  const ex = excluded instanceof Set ? excluded : new Set(excluded);
+/** Los alimentos del selector agrupados por su grupo. */
+export function builderFoods(allFoods: Food[]): Record<BuilderGroup, Food[]> {
   const out = Object.fromEntries(BUILDER_GROUPS.map((g) => [g, [] as Food[]])) as Record<BuilderGroup, Food[]>;
-  for (const f of allFoods) {
-    if (f.roles.length === 0 || ex.has(f.id)) continue;
-    out[builderGroup(f)].push(f);
-  }
+  for (const f of allFoods) out[f.group].push(f);
   return out;
 }
 

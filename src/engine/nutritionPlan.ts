@@ -40,8 +40,6 @@ export function classifyNutritionDay(session: DailySession | null | undefined): 
 
 /** Proteina (g/kg/dia): ISSN 1.4-2.0 en atletas y hasta ~2.2 en deficit (Morton 2018: 1.6-2.2); punto alto por el objetivo de perder grasa. Igual todos los dias. */
 export const PROTEIN_G_PER_KG = { min: 1.8, max: 2.2 };
-/** Proteina por toma (g/kg): ACSM 0.25-0.3 g/kg (20-25 g) cada 3-5 h; ISSN 0.25 g/kg o 20-40 g. */
-export const PROTEIN_PER_MEAL_G_PER_KG = 0.3;
 
 /**
  * Carbohidrato (g/kg/dia) por tipo de dia. ACSM 2016: 3-5 (ligero), 5-7 (~1 h/dia moderado), 6-10 (1-3 h/dia).
@@ -66,7 +64,6 @@ export interface DayNutrition {
   weightKg: number;
   proteinPerKg: { min: number; max: number };
   proteinG: { min: number; max: number };
-  proteinPerMealG: number;
   carbsPerKg: { min: number; max: number };
   carbsG: { min: number; max: number };
 }
@@ -79,7 +76,6 @@ export function nutritionForDay(dayType: NutritionDayType, weightKg: number): Da
     weightKg,
     proteinPerKg: PROTEIN_G_PER_KG,
     proteinG: { min: round5(PROTEIN_G_PER_KG.min * weightKg), max: round5(PROTEIN_G_PER_KG.max * weightKg) },
-    proteinPerMealG: round5(PROTEIN_PER_MEAL_G_PER_KG * weightKg),
     carbsPerKg: c,
     carbsG: { min: round5(c.min * weightKg), max: round5(c.max * weightKg) },
   };

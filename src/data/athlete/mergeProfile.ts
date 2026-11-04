@@ -83,9 +83,6 @@ const TRAINING_DATES_LOG_LIMIT = 400;
 /** ~8-9 semanas de bloqueos (7 fechas cada una) — mas que de sobra, ver `pruneByProximityToToday`. */
 const WEEKLY_LOCKS_LIMIT = 60;
 
-const NUTRITION_SWAPS_LIMIT = 200;
-const NUTRITION_DONE_DAYS_LIMIT = 30;
-const NUTRITION_CUSTOM_DAYS_LIMIT = 60;
 const NUTRITION_CUSTOM_FOODS_LIMIT = 200;
 const NUTRITION_EXTRA_DAYS_LIMIT = 60;
 const NUTRITION_EXTRAS_PER_DAY_LIMIT = 50;
@@ -151,20 +148,12 @@ function mergeExtraFoods(
 }
 
 /**
- * Preferencias de nutricion: la lista de alimentos excluidos y el horario son config (gana el local si lo
- * tiene); los cambios de alimento y las comidas hechas se unen por clave/fecha, gana el local en la misma.
- * Los alimentos propios se unen por id (gana el local si el mismo id cambió en los dos sitios).
+ * Preferencias de nutricion: los alimentos propios se unen por id (gana el local si el mismo id cambió en los dos
+ * sitios) y los extras del día por id dentro de cada fecha. Los campos de los menús antiguos no se arrastran.
  */
 function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: AthleteProfile['nutritionPrefs'], base?: SyncBase): AthleteProfile['nutritionPrefs'] {
   if (!remote && !local) return undefined;
   return {
-    excludedFoodIds: local?.excludedFoodIds ?? remote?.excludedFoodIds,
-    staples: local?.staples ?? remote?.staples,
-    trainingHours: { ...(remote?.trainingHours ?? {}), ...(local?.trainingHours ?? {}) },
-    swaps: keepLatestKeys({ ...(remote?.swaps ?? {}), ...(local?.swaps ?? {}) }, NUTRITION_SWAPS_LIMIT),
-    doneMeals: keepLatestKeys({ ...(remote?.doneMeals ?? {}), ...(local?.doneMeals ?? {}) }, NUTRITION_DONE_DAYS_LIMIT),
-    // Por fecha: gana el local (el día entero que el atleta acaba de tocar); las demás fechas de ambos dispositivos se conservan.
-    customMeals: keepLatestKeys({ ...(remote?.customMeals ?? {}), ...(local?.customMeals ?? {}) }, NUTRITION_CUSTOM_DAYS_LIMIT),
     customFoods: dropDeleted(
       mergeByKey(remote?.customFoods, local?.customFoods, (f) => f.id, (f) => f.id, NUTRITION_CUSTOM_FOODS_LIMIT),
       (f) => f.id,

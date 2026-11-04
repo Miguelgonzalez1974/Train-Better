@@ -1,5 +1,5 @@
 import type { CustomFood, CustomFoodGroup } from '../data/athlete/types';
-import { getFood, type Food, type FoodRole, type ShoppingCategory } from '../data/nutrition/foods';
+import { getFood, type Food } from '../data/nutrition/foods';
 
 /**
  * Alimentos propios: el atleta solo da proteína e hidratos por 100 g (y el grupo donde quiere verlo). Este módulo
@@ -11,16 +11,7 @@ import { getFood, type Food, type FoodRole, type ShoppingCategory } from '../dat
 
 export type FoodResolver = (id: string) => Food | undefined;
 
-const GROUP_TO_CATEGORY: Record<CustomFoodGroup, ShoppingCategory> = {
-  Proteína: 'proteinas',
-  Hidrato: 'hidratos',
-  Fruta: 'fruta',
-  Verdura: 'verdura',
-  Bebida: 'despensa',
-  Extra: 'despensa',
-};
-
-/** Rango de gramos razonable por defecto, ya que un alimento propio no trae ración típica ni unidad. */
+/** Rango habitual por defecto (marca el salto de los botones +/−), ya que un alimento propio no trae ración típica ni unidad. */
 const GROUP_TO_RANGE: Record<CustomFoodGroup, [number, number]> = {
   Proteína: [50, 300],
   Hidrato: [30, 250],
@@ -30,22 +21,12 @@ const GROUP_TO_RANGE: Record<CustomFoodGroup, [number, number]> = {
   Extra: [10, 100],
 };
 
-const GROUP_TO_ROLE: Record<CustomFoodGroup, FoodRole> = {
-  Proteína: 'proteinMain',
-  Hidrato: 'carbMain',
-  Fruta: 'fruit',
-  Verdura: 'veg',
-  Bebida: 'drink',
-  Extra: 'extra',
-};
-
 /** Convierte un alimento propio en un `Food` del catálogo, para poder usarlo con `mealBuilder`. */
 export function customFoodToCatalogFood(cf: CustomFood): Food {
   return {
     id: cf.id,
     name: cf.name,
-    roles: [GROUP_TO_ROLE[cf.group]],
-    category: GROUP_TO_CATEGORY[cf.group],
+    group: cf.group,
     per100: { p: cf.proteinPer100, c: cf.carbsPer100, f: 0 },
     range: GROUP_TO_RANGE[cf.group],
   };

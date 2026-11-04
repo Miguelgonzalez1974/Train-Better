@@ -238,26 +238,10 @@ export type SoreLevelNum = 1 | 2;
 export type HabitTag = 'alcohol' | 'cafeina' | 'cena-tarde' | 'pantallas' | 'viaje' | 'estres-trabajo' | 'siesta' | 'enfermo';
 
 /**
- * Preferencias del módulo de nutrición. Hoy solo se usan `customFoods` y `extraFoods` (el diario del día). Los demás
- * campos son de los menús del día/semana, que ya no existen: se siguen guardando y sincronizando para no perder datos
- * antiguos, pero ninguna pantalla los lee ni los escribe.
+ * Preferencias del módulo de nutrición: los alimentos propios y lo que se apunta cada día. (Los menús del día y de la
+ * semana ya no existen; sus campos antiguos se descartan al leer el perfil, ver `stripLegacyNutritionPrefs`.)
  */
 export interface NutritionPrefs {
-  /** Ids del catálogo (`data/nutrition/foods.ts`) que el atleta no quiere ver en sus menús. */
-  excludedFoodIds?: string[];
-  /** Cambios de alimento hechos a mano: clave `fecha|comida|hueco` → id del alimento elegido. */
-  swaps?: Record<string, string>;
-  /** Comidas marcadas como hechas, por fecha ISO (índices 0-4 en el orden del día). */
-  doneMeals?: Record<string, number[]>;
-  /** Hora de entreno por día de la semana (lunes = "0"). Sin valor: sábado 10:00, el resto 16:00. */
-  trainingHours?: Record<string, number>;
-  /** Básicos de despensa (ver `STAPLES` en data/nutrition/foods.ts) que el atleta quiere siempre en la lista de la compra. */
-  staples?: string[];
-  /**
-   * Comidas que el atleta montó a mano, por fecha y comida: sustituyen a la sugerencia automática de esa comida
-   * (ver `src/engine/mealBuilder.ts`). Quitar la entrada devuelve la sugerencia automática.
-   */
-  customMeals?: Record<string, Partial<Record<'desayuno' | 'mediaManana' | 'comida' | 'merienda' | 'cena', CustomMealItem[]>>>;
   /** Alimentos que el atleta ha dado de alta él mismo (ver [[CustomFood]]) — solo proteína e hidratos por 100 g. */
   customFoods?: CustomFood[];
   /**

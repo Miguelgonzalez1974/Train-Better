@@ -23,9 +23,6 @@ describe('cantidades por dia', () => {
         expect(d.proteinG).toEqual(first.proteinG);
         expect(d.proteinG.min).toBe(round5(PROTEIN_G_PER_KG.min * kg));
         expect(d.proteinG.max).toBe(round5(PROTEIN_G_PER_KG.max * kg));
-        // Por toma: 0.3 g/kg (ACSM), nunca mas que el total del dia.
-        expect(d.proteinPerMealG).toBe(round5(0.3 * kg));
-        expect(d.proteinPerMealG).toBeLessThan(d.proteinG.min);
       }
     }
     expect(PROTEIN_G_PER_KG).toEqual({ min: 1.8, max: 2.2 });
@@ -50,7 +47,7 @@ describe('cantidades por dia', () => {
     const d = nutritionForDay('normal', 82);
     expect(d.carbsG).toEqual({ min: 330, max: 410 });
     expect(d.proteinG).toEqual({ min: 150, max: 180 });
-    for (const g of [d.carbsG.min, d.carbsG.max, d.proteinG.min, d.proteinG.max, d.proteinPerMealG]) expect(g % 5).toBe(0);
+    for (const g of [d.carbsG.min, d.carbsG.max, d.proteinG.min, d.proteinG.max]) expect(g % 5).toBe(0);
   });
 });
 

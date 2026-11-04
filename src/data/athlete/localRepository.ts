@@ -1,6 +1,7 @@
 import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
 
 import { isExcludedMovement } from '../movements/excluded';
+import { stripLegacyNutritionPrefs } from './legacyNutrition';
 
 const PROFILE_KEY = 'train-better:profile';
 import { historyStamp, painStamp } from './historyStamp';
@@ -127,6 +128,13 @@ function migrateProfile(raw: AthleteProfile & { mesocycleStartDate?: string }): 
   // limpia otra vez al leer.
   if (profile.goals?.some((g) => g.movementId && isExcludedMovement(g.movementId))) {
     profile.goals = profile.goals.filter((g) => !(g.movementId && isExcludedMovement(g.movementId)));
+  }
+
+  // Los menús del día y de la semana ya no existen: sus datos guardados se descartan (el diario y los alimentos
+  // propios se conservan). Se escribe de nuevo en el siguiente guardado.
+  if (profile.nutritionPrefs) {
+    const clean = stripLegacyNutritionPrefs(profile.nutritionPrefs);
+    if (clean !== profile.nutritionPrefs) profile.nutritionPrefs = clean;
   }
 
   return profile;

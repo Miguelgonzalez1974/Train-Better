@@ -1,25 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { FOODS, getFood } from '../data/nutrition/foods';
-import { builderFoods, builderGroup, BUILDER_GROUPS, fixedPortion, gramsFromTyped, macrosOf, stepGrams, totalsOf } from './mealBuilder';
+import { builderFoods, BUILDER_GROUPS, fixedPortion, gramsFromTyped, macrosOf, stepGrams, totalsOf } from './mealBuilder';
 
 const food = (id: string) => getFood(id)!;
 
 describe('grupos del selector', () => {
-  it('todos los alimentos con hueco en el catálogo caen en un grupo del selector', () => {
+  it('todos los alimentos del catálogo caen en un grupo del selector, sin repetirse', () => {
     const groups = builderFoods(FOODS);
     const grouped = BUILDER_GROUPS.flatMap((g) => groups[g]);
-    expect(grouped.length).toBe(FOODS.filter((f) => f.roles.length > 0).length);
+    expect(grouped.length).toBe(FOODS.length);
+    expect(new Set(grouped.map((f) => f.id)).size).toBe(FOODS.length);
   });
 
-  it('los ingredientes sueltos de los platos no se pueden elegir y los excluidos tampoco', () => {
+  it('cada alimento está en el grupo que dice y no quedan ingredientes sueltos de los menús', () => {
     const all = Object.values(builderFoods(FOODS)).flat().map((f) => f.id);
     for (const id of ['cebolla', 'harina', 'mozzarella', 'tomate-triturado']) expect(all).not.toContain(id);
-    const without = Object.values(builderFoods(FOODS, ['skyr'])).flat().map((f) => f.id);
-    expect(without).not.toContain('skyr');
-    expect(builderGroup(food('tortilla-patata'))).toBe('Plato');
-    expect(builderGroup(food('huevos'))).toBe('Proteína');
-    expect(builderGroup(food('avena'))).toBe('Hidrato');
-    expect(builderGroup(food('cafe'))).toBe('Bebida');
+    expect(food('tortilla-patata').group).toBe('Plato');
+    expect(food('huevos').group).toBe('Proteína');
+    expect(food('avena').group).toBe('Hidrato');
+    expect(food('cafe').group).toBe('Bebida');
+    expect(food('aceite').group).toBe('Extra');
+    expect(builderFoods(FOODS)['Fruta'].map((f) => f.id)).toContain('platano');
+  });
+
+  it('el catálogo no arrastra datos de los menús (huecos, categorías de compra, recetas)', () => {
+    for (const f of FOODS) {
+      for (const k of ['roles', 'category', 'tags', 'manualOnly', 'recipe', 'dish', 'spreadable', 'bread']) expect(k in f, `${f.id}.${k}`).toBe(false);
+    }
   });
 });
 

@@ -237,62 +237,28 @@ describe('mergeProfile — config: gana el local', () => {
     expect(merged.weeklyLocks?.['2026-03-02']?.strengthMovementId).toBe('front-squat');
   });
 
-  it('nutritionPrefs: une los cambios de alimento y las comidas hechas; los excluidos y las horas del local mandan', () => {
-    const remote = {
-      ...base(),
-      nutritionPrefs: {
-        excludedFoodIds: ['salmon'],
-        swaps: { '2026-03-02|cena|carb': 'arroz' },
-        doneMeals: { '2026-03-02': [0, 1] },
-        trainingHours: { '0': 17 },
-      },
+  it('nutritionPrefs: los campos de los menús antiguos no se arrastran al fusionar, el diario y los alimentos propios sí', () => {
+    const legacy = {
+      excludedFoodIds: ['salmon'],
+      swaps: { '2026-03-02|cena|carb': 'arroz' },
+      doneMeals: { '2026-03-02': [0, 1] },
+      trainingHours: { '0': 17 },
+      staples: ['aceite'],
+      customMeals: { '2026-10-06': { desayuno: [{ foodId: 'skyr', grams: 200 }] } },
     };
-    const local = {
-      ...base(),
-      nutritionPrefs: {
-        excludedFoodIds: ['salmon', 'skyr'],
-        swaps: { '2026-03-03|comida|carb': 'pasta' },
-        doneMeals: { '2026-03-02': [0] },
-        trainingHours: { '1': 16 },
-      },
-    };
-    const merged = mergeProfile(remote, local).nutritionPrefs;
-    expect(merged?.excludedFoodIds).toEqual(['salmon', 'skyr']);
-    expect(merged?.swaps).toEqual({ '2026-03-02|cena|carb': 'arroz', '2026-03-03|comida|carb': 'pasta' });
-    expect(merged?.doneMeals?.['2026-03-02']).toEqual([0]);
-    expect(merged?.trainingHours).toEqual({ '0': 17, '1': 16 });
-  });
-
-  it('nutritionPrefs: las comidas montadas a mano se unen por fecha (gana el local) y un dia vaciado a proposito no revive', () => {
-    const remote = {
-      ...base(),
-      nutritionPrefs: {
-        customMeals: {
-          '2026-10-06': { desayuno: [{ foodId: 'skyr', grams: 200 }] },
-          '2026-10-07': { cena: [{ foodId: 'pollo', grams: 150 }] },
-        },
-      },
-    };
-    const local = {
-      ...base(),
-      nutritionPrefs: {
-        customMeals: {
-          '2026-10-06': { desayuno: [{ foodId: 'avena', grams: 60 }] },
-          // El atleta volvio al menu automatico de este dia: queda un objeto vacio, que gana al remoto.
-          '2026-10-07': {},
-        },
-      },
-    };
-    const merged = mergeProfile(remote, local).nutritionPrefs?.customMeals;
-    expect(merged?.['2026-10-06']?.desayuno).toEqual([{ foodId: 'avena', grams: 60 }]);
-    expect(merged?.['2026-10-07']).toEqual({});
+    const remote = { ...base(), nutritionPrefs: { ...legacy, extraFoods: { '2026-10-06': [{ id: 'e1', hour: 10, items: [{ foodId: 'platano', grams: 120 }] }] } } };
+    const local = { ...base(), nutritionPrefs: { ...legacy, customFoods: [{ id: 'c1', name: 'Barrita', proteinPer100: 15, carbsPer100: 55, group: 'Extra' as const }] } };
+    const merged = mergeProfile(remote, local).nutritionPrefs as Record<string, unknown>;
+    for (const k of Object.keys(legacy)) expect(k in merged, k).toBe(false);
+    expect(Object.keys(merged).sort()).toEqual(['customFoods', 'extraFoods']);
+    expect((merged.extraFoods as Record<string, unknown[]>)['2026-10-06']).toHaveLength(1);
+    expect(merged.customFoods).toHaveLength(1);
   });
 
   it('nutritionPrefs: un dispositivo sin preferencias hereda las remotas', () => {
-    const remote = { ...base(), nutritionPrefs: { excludedFoodIds: ['skyr'] } };
-    expect(mergeProfile(remote, base()).nutritionPrefs?.excludedFoodIds).toEqual(['skyr']);
+    const remote = { ...base(), nutritionPrefs: { customFoods: [{ id: 'c1', name: 'Barrita', proteinPer100: 15, carbsPer100: 55, group: 'Extra' as const }] } };
+    expect(mergeProfile(remote, base()).nutritionPrefs?.customFoods?.map((f) => f.id)).toEqual(['c1']);
   });
-
   it('nutritionPrefs: los alimentos propios se unen por id, gana el local en el mismo id', () => {
     const remote = { ...base(), nutritionPrefs: { customFoods: [{ id: 'c1', name: 'Barrita', proteinPer100: 15, carbsPer100: 55, group: 'Extra' as const }] } };
     const local = {
