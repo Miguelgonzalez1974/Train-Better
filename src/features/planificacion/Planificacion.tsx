@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy, Library, Flame } from 'lucide-react';
+import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy, Library, Flame, MessageCircle } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -81,6 +81,8 @@ import {
   type CoachNoticesProps,
 } from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
+import { RexSupport } from './RexSupport';
+import type { SupportEffect } from './rexSupportFlow';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
@@ -216,6 +218,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [showAddWodPicker, setShowAddWodPicker] = useState(false);
   const [macroWodPreview, setMacroWodPreview] = useState<SessionBlockResult[] | null>(null);
   const [showPainPicker, setShowPainPicker] = useState(false);
+  const [showRex, setShowRex] = useState(false);
   const [showNotices, setShowNotices] = useState(false);
   const [regenNote, setRegenNote] = useState<string | null>(null);
   const [showReasons, setShowReasons] = useState(false);
@@ -980,6 +983,17 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowPainPicker(false);
   }
 
+  /** Lo que decide Rex ante un imprevisto: un aviso de molestia (se recalcula la sesión), días de descanso, o cambiar la sesión de hoy. */
+  function handleRexApply(effect: SupportEffect) {
+    if (effect.regenerate) handleSaveProfile(effect.profile);
+    else if (effect.profile !== profile) {
+      // Solo marcas de descanso: no se toca la sesión de hoy (podría estar a medias o ya hecha).
+      athleteRepository.saveProfile(effect.profile);
+      setProfile(effect.profile);
+    }
+    if (effect.swap) handlePickType(effect.swap);
+  }
+
   function handleRemovePainFlag(id: string) {
     // No se borra: se marca como retirado hoy. Deja de evitar sus patrones al instante, pero la
     // carga de esos patrones vuelve en rampa las siguientes semanas (getPainReintroPatterns). Los
@@ -1223,6 +1237,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 Empezar sesión
               </button>
             )}
+            <button
+              onClick={() => setShowRex(true)}
+              title="¿Algo ha pasado? Cuéntaselo a Rex"
+              aria-label="¿Algo ha pasado? Cuéntaselo a Rex"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5 hover:text-white"
+            >
+              <MessageCircle size={18} strokeWidth={2.25} />
+            </button>
             <ActionMenu
               active={editMode}
               alert={activePainFlags.length > 0}
@@ -1561,6 +1583,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             <span className="text-sm font-semibold text-white">Recuperación</span>
           </button>
         </div>
+      </Modal>
+
+      <Modal open={showRex} onClose={() => setShowRex(false)} title="¿Algo ha pasado?">
+        <RexSupport profile={profile} todayIso={todayIso} todayDone={alreadyCompletedToday} onApply={handleRexApply} onClose={() => setShowRex(false)} />
       </Modal>
 
       <Modal open={showPainPicker} onClose={() => setShowPainPicker(false)} title="¿Algo te molesta hoy?">
