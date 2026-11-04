@@ -5,12 +5,16 @@ import { complexLogId } from '../../data/complexes';
 import { fmtKg, fmtNumber } from '../../lib/format';
 import { buildWodRecapLines } from '../../engine/wodScoring';
 import { NutritionTip } from './NutritionTip';
+import { ProgressionResult } from './ProgressionResult';
+import type { SessionProgressionView } from '../../engine/progression';
 import type { E1rmSuggestion } from './Planificacion';
 
 interface SessionSummaryCardProps {
   session: DailySession;
   entry: SessionHistoryEntry;
   workLog: WorkSetEntry[];
+  /** Lo que el coach decidió con el resultado de fuerza de hoy. */
+  progression: SessionProgressionView[];
   streak: number;
   weekCount: { done: number; planned: number };
   prUpdateMessage: string | null;
@@ -108,6 +112,7 @@ export function SessionSummaryCard({
   session,
   entry,
   workLog,
+  progression,
   streak,
   weekCount,
   prUpdateMessage,
@@ -148,6 +153,8 @@ export function SessionSummaryCard({
           ))}
         </div>
       )}
+
+      <ProgressionResult views={progression} />
 
       {hasAchievements && (
         <div className="flex flex-col gap-2 border-t border-white/5 pt-3">

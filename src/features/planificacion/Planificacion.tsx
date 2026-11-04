@@ -60,6 +60,7 @@ import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT } from '../../engine
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
+import { evaluateStrengthSession, sessionProgressionView } from '../../engine/progression';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
@@ -345,6 +346,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }, [showCompletePanel]);
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
+  /** Lo que decidió el coach con el resultado de fuerza de hoy (tarjeta al cerrar la sesión). */
+  const progressionViews = useMemo(() => {
+    if (!session) return [];
+    const main = session.blocks.find((b) => b.block === 'strength');
+    if (!main) return [];
+    const view = sessionProgressionView(profile.progressionLog, profile.prLog, profile.progressionSettings, session.date, main.movementId);
+    return view ? [view] : [];
+  }, [session, profile.progressionLog, profile.prLog, profile.progressionSettings]);
   /**
    * Bloques de fuerza/oly de hoy con una serie ya registrada en `workLog` (modo enfocado) — solo esos
    * admiten el check-in de RPE: el peso y las reps salen de ahí, no se vuelven a pedir. Sin serie
@@ -773,6 +782,24 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     return suggestions;
   }
 
+  /**
+   * Anota cómo salió el levantamiento de fuerza principal de hoy (limpia, hecha, dura, fallo) para la progresión por resultados.
+   * No anota nada si esa parte se marcó como no hecha, si no se registraron todas las series o si el formato no es de reps limpias.
+   */
+  function recordStrengthProgression() {
+    if (!session || session.source === 'custom' || skips.strength) return;
+    const block = session.blocks.find((b) => b.block === 'strength');
+    const movement = block ? getMovementById(block.movementId) : undefined;
+    if (!block || !movement) return;
+    const record = evaluateStrengthSession({
+      date: session.date,
+      block,
+      key: resolveStrengthPRKey(movement) ?? resolveVariantPRKey(movement),
+      sets: athleteRepository.getWorkLog().filter((e) => e.date === session.date && e.movementId === block.movementId && e.block === 'strength'),
+      feedback: athleteRepository.getSetFeedbackLog().find((e) => e.date === session.date && e.movementId === block.movementId),
+    });
+    if (record) athleteRepository.appendProgressionRecords([record]);
+  }
   function handleConfirmComplete() {
     if (!session) return;
     let nextMessage: string | null = null;
@@ -808,6 +835,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       ),
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
     });
+    recordStrengthProgression();
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
     // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes
     // de enterarse del entreno de hoy podia seguir ganando el empate y pisar la tarjeta del plan
@@ -1209,6 +1237,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           session={session}
           entry={todayHistoryEntry}
           workLog={todayWorkLog}
+          progression={progressionViews}
           streak={adherenceStreak}
           weekCount={weekCount}
           prUpdateMessage={prUpdateMessage}

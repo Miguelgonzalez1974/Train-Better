@@ -425,3 +425,39 @@ describe('borrados: no vuelven tras sincronizar (fusion de tres vias con la ulti
     expect(mergeProfile(newRemote, deleted, undefined, undefined, syncBase).intensityRamp?.startDate).toBe('2026-04-01');
   });
 });
+
+describe('progresion por resultados: sincronizacion', () => {
+  const r = (date: string, movementId = 'back-squat') => ({
+    date,
+    movementId,
+    key: 'backSquat',
+    verdict: 'limpia' as const,
+    prescribedKg: 100,
+    topKg: 100,
+    prescribedSets: 5,
+    prescribedReps: 3,
+  });
+
+  it('los resultados de los dos dispositivos se unen por fecha y movimiento', () => {
+    const merged = mergeProfile({ ...base(), progressionLog: [r('2026-03-01')] }, { ...base(), progressionLog: [r('2026-03-02')] }).progressionLog;
+    expect(merged?.map((e) => e.date)).toEqual(['2026-03-01', '2026-03-02']);
+  });
+
+  it('deshacer una sesion aqui no revive su resultado aunque el servidor aun lo tenga', () => {
+    const synced = { ...base(), progressionLog: [r('2026-03-01'), r('2026-03-02')] };
+    const local = { ...base(), progressionLog: [r('2026-03-02')] };
+    expect(mergeProfile(synced, local, undefined, undefined, snapshotSyncBase(synced, [])).progressionLog?.map((e) => e.date)).toEqual(['2026-03-02']);
+  });
+
+  it('un dispositivo sin registro hereda el remoto, y sin registro en ninguno no queda nada', () => {
+    expect(mergeProfile({ ...base(), progressionLog: [r('2026-03-01')] }, base()).progressionLog).toHaveLength(1);
+    expect(mergeProfile(base(), base()).progressionLog).toBeUndefined();
+  });
+
+  it('los ajustes aceptados se unen por campo y gana el local', () => {
+    const remote = { ...base(), progressionSettings: { cleanNeeded: 3 as const, cleanNeededSince: '2026-03-01' } };
+    const local = { ...base(), progressionSettings: { proposalDismissedOn: '2026-03-05' } };
+    expect(mergeProfile(remote, local).progressionSettings).toEqual({ cleanNeeded: 3, cleanNeededSince: '2026-03-01', proposalDismissedOn: '2026-03-05' });
+    expect(mergeProfile(base(), base()).progressionSettings).toBeUndefined();
+  });
+});

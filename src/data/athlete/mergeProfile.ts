@@ -29,6 +29,8 @@ export interface SyncBase {
   extraFoods?: string[];
   workLog?: string[];
   setFeedbackLog?: string[];
+  /** Resultados de progresion de fuerza (echa|movimiento). */
+  progressionLog?: string[];
   history?: string[];
   /** Fechas marcadas como descanso elegido (`AthleteProfile.restDates`). */
   restDates?: string[];
@@ -50,6 +52,7 @@ export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistor
     extraFoods: Object.entries(profile.nutritionPrefs?.extraFoods ?? {}).flatMap(([iso, list]) => list.map((e) => `${iso}|${e.id}`)),
     workLog: (profile.workLog ?? []).map(workKey),
     setFeedbackLog: (profile.setFeedbackLog ?? []).map(feedbackKey),
+    progressionLog: (profile.progressionLog ?? []).map(feedbackKey),
     history: history.map((h) => h.date),
     restDates: profile.restDates ?? [],
     rampStart: profile.intensityRamp?.startDate ?? null,
@@ -78,6 +81,8 @@ const BODYWEIGHT_LOG_LIMIT = 120;
 const READINESS_LOG_LIMIT = 120;
 const PR_LOG_LIMIT = 150;
 const SET_FEEDBACK_LOG_LIMIT = 120;
+/** Igual que en localRepository.ts. */
+const PROGRESSION_LOG_LIMIT = 150;
 const WORK_LOG_LIMIT = 300;
 const TRAINING_DATES_LOG_LIMIT = 400;
 /** ~8-9 semanas de bloqueos (7 fechas cada una) — mas que de sobra, ver `pruneByProximityToToday`. */
@@ -346,6 +351,13 @@ export function mergeProfile(
     complexPrefs: local.complexPrefs ?? remote.complexPrefs,
     diagnosisChecks: mergeDiagnosisChecks(remote.diagnosisChecks, local.diagnosisChecks),
     emphasisPlan: local.emphasisPlan ?? remote.emphasisPlan,
+    // Resultados de fuerza por sesion: union por fecha y movimiento (gana el local); deshacer una sesion borra los suyos y no vuelven.
+    progressionLog:
+      remote.progressionLog || local.progressionLog
+        ? dropDeleted(mergeByKey(remote.progressionLog, local.progressionLog, feedbackKey, (e) => e.date, PROGRESSION_LOG_LIMIT), feedbackKey, base?.progressionLog, remote.progressionLog, local.progressionLog)
+        : undefined,
+    // Ajustes aceptados de la progresion: por campo, gana el local.
+    progressionSettings: remote.progressionSettings || local.progressionSettings ? { ...(remote.progressionSettings ?? {}), ...(local.progressionSettings ?? {}) } : undefined,
     // Dureza pedida por día: union por fecha, gana el local en la misma fecha (el 0 de «volver a normal» también gana), solo las recientes.
     hardnessLog: remote.hardnessLog || local.hardnessLog ? mergeByKey(remote.hardnessLog, local.hardnessLog, (e) => e.date, (e) => e.date, 120) : undefined,
     hardness: remote.hardness || local.hardness ? pruneByProximityToToday({ ...(remote.hardness ?? {}), ...(local.hardness ?? {}) }, 60) : undefined,

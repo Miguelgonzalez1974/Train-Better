@@ -1,4 +1,4 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ProgressionRecord, ProgressionSettings, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
 
 import { isExcludedMovement } from '../movements/excluded';
 import { stripLegacyNutritionPrefs } from './legacyNutrition';
@@ -24,6 +24,8 @@ const READINESS_LOG_LIMIT = 120;
 const PR_LOG_LIMIT = 150;
 /** Mismo orden de magnitud que los demas logs del perfil: ~4-5 meses de series principales valoradas a 4-5 dias/semana. */
 const SET_FEEDBACK_LOG_LIMIT = 120;
+/** Resultados de fuerza por sesion y levantamiento: ~2 por sesion, mas de 2 meses a 5 dias/semana. */
+const PROGRESSION_LOG_LIMIT = 150;
 /** ~6 levantamientos x 5 series x ~10 sesiones recientes — series a series completo del modo enfocado. */
 const WORK_LOG_LIMIT = 300;
 /** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
@@ -63,6 +65,10 @@ export interface AthleteRepository {
   appendSetFeedbackEntry(entry: SetFeedbackEntry): void;
   /** Deshace el feedback de una serie (el atleta pulsa "cambiar" y no vuelve a elegir). */
   deleteSetFeedbackEntry(date: string, movementId: string): void;
+  /** Anota (o sustituye, por dia+movimiento) como salio cada levantamiento de fuerza al cerrar la sesion — ver engine/progression.ts. */
+  appendProgressionRecords(entries: ProgressionRecord[]): void;
+  /** Guarda los ajustes de la progresion por resultados que el atleta acepta o rechaza. */
+  saveProgressionSettings(settings: ProgressionSettings): void;
   getWorkLog(): WorkSetEntry[];
   /** Registra (o sustituye, por date+movementId+setNumber) una serie de trabajo marcada en el modo enfocado. */
   saveWorkSet(entry: WorkSetEntry): void;
@@ -242,7 +248,9 @@ export const localAthleteRepository: AthleteRepository = {
     const profile = localAthleteRepository.getProfile();
     const trainingDatesLog = (profile.trainingDatesLog ?? []).filter((d) => d !== date);
     const workLog = (profile.workLog ?? []).filter((e) => e.date !== date);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog }));
+    // Si se deshace la sesion, su resultado de progresion tampoco cuenta.
+    const progressionLog = (profile.progressionLog ?? []).filter((e) => e.date !== date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog, progressionLog }));
   },
   updateHistoryTestLoad(date, testLoadKg) {
     const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
@@ -317,6 +325,18 @@ export const localAthleteRepository: AthleteRepository = {
     const setFeedbackLog = (profile.setFeedbackLog ?? []).filter((e) => !(e.date === date && e.movementId === movementId));
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, setFeedbackLog }));
   },
+  appendProgressionRecords(entries) {
+    if (entries.length === 0) return;
+    const profile = localAthleteRepository.getProfile();
+    const replaced = new Set(entries.map((e) => `${e.date}|${e.movementId}`));
+    const kept = (profile.progressionLog ?? []).filter((e) => !replaced.has(`${e.date}|${e.movementId}`));
+    const progressionLog = [...kept, ...entries].sort((a, b) => a.date.localeCompare(b.date)).slice(-PROGRESSION_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, progressionLog }));
+  },
+  saveProgressionSettings(settings) {
+    const profile = localAthleteRepository.getProfile();
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, progressionSettings: settings }));
+  },
   getWorkLog() {
     return localAthleteRepository.getProfile().workLog ?? [];
   },
@@ -362,6 +382,7 @@ export const localAthleteRepository: AthleteRepository = {
         trainingDatesLog: [],
         prLog: [],
         setFeedbackLog: [],
+        progressionLog: [],
         workLog: [],
         sessionCache: {},
       }),

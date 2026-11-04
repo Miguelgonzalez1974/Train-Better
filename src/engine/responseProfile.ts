@@ -1,7 +1,8 @@
-import type { BodyweightEntry, PersonalRecords, PrLogEntry, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from '../data/athlete/types';
+import type { BodyweightEntry, PersonalRecords, PrLogEntry, ProgressionRecord, ProgressionSettings, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from '../data/athlete/types';
 import type { MovementPattern } from '../data/movements/types';
 import { getMovementById } from '../data/movements';
 import { computeAcwr, daysBetween } from './loadMetrics';
+import { progressionFactors } from './progression';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPRKey } from './prResolution';
 import { SET_FEEL_SCORE } from './setFeedback';
 
@@ -148,6 +149,11 @@ export interface ResponseProfile {
    * `setFeel`, sigue viva aunque `confident` sea false (gate propio por lift).
    */
   perLiftLoad: LiftLoadCalibration[];
+  /**
+   * Empuje por resultados (engine/progression.ts): clave de PR -> factor acumulado (sube con sesiones limpias, baja con
+   * fallos). Solo trae los levantamientos que se apartan de 1. Vive aunque confident sea false, como perLiftLoad.
+   */
+  progression?: Record<string, number>;
   recovery: {
     tier: RecoveryTier | null;
     avgDays: number | null;
@@ -478,6 +484,7 @@ export function computeResponseProfile(
   bodyweightLog: BodyweightEntry[] = [],
   workLog: WorkSetEntry[] = [],
   prs?: PersonalRecords,
+  progression?: { log?: ProgressionRecord[]; settings?: ProgressionSettings },
 ): ResponseProfile {
   const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
   const dataWeeks = sorted.length > 0 ? Math.max(0, daysBetween(sorted[0].date, today) / 7) : 0;
@@ -504,6 +511,7 @@ export function computeResponseProfile(
     perLift: analyzePerLift(prLog ?? []),
     setFeel: analyzeSetFeel(setFeedbackLog),
     perLiftLoad,
+    progression: progressionFactors(progression?.log, prLog, progression?.settings),
     recovery: analyzeRecovery(sorted),
     rx: analyzeRx(sorted),
     bodyweight: analyzeBodyweight(bodyweightLog, today),
@@ -518,6 +526,7 @@ export const NEUTRAL_RESPONSE_PROFILE: ResponseProfile = {
   perLift: [],
   setFeel: [],
   perLiftLoad: [],
+  progression: {},
   recovery: { tier: null, avgDays: null, cycles: 0 },
   rx: { trend: null, recentRate: null },
   bodyweight: { trend: null, pctPerWeek: null, points: 0 },
@@ -531,7 +540,7 @@ export const NEUTRAL_RESPONSE_PROFILE: ResponseProfile = {
  */
 export function engineResponseProfile(profile: ResponseProfile): ResponseProfile {
   if (profile.confident) return profile;
-  return { ...NEUTRAL_RESPONSE_PROFILE, setFeel: profile.setFeel, perLiftLoad: profile.perLiftLoad };
+  return { ...NEUTRAL_RESPONSE_PROFILE, setFeel: profile.setFeel, perLiftLoad: profile.perLiftLoad, progression: profile.progression };
 }
 
 /**

@@ -127,6 +127,7 @@ import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { buildMicrocyclePlan, type DayIntensity } from './weekPlan';
 import { ACCESSORY_ROLE_FOR_PATTERN, emphasisLevers, sessionEmphasis } from './programmingEmphasis';
 import { rng, seededRng, withSeededRng } from './rng';
+import { liftProgressionFactor, progressionNote } from './progression';
 import {
   computeResponseProfile,
   engineResponseProfile,
@@ -1040,15 +1041,19 @@ function buildStrengthBlock(
   // atleta ha registrado series reales ("hice X kg x Y @ RPE Z"), se usa el factor por e1RM medido
   // (mas preciso); si no, el cualitativo del feedback de la 1ª serie. Ambos acotados; 1 = sin efecto.
   const loadCalibFactor = perLiftLoadFactor(responseProfile, todayLiftKey);
-  const setFeelFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, todayLiftKey);
+  const calibFactor = loadCalibFactor !== 1 ? loadCalibFactor : setFeelLoadFactor(responseProfile, todayLiftKey);
+  // Progresión por resultados (engine/progression.ts): empuje acotado por encima de la calibración, por tus últimas sesiones de este levantamiento.
+  const progressionFactor = liftProgressionFactor(responseProfile.progression, todayLiftKey);
+  const setFeelFactor = calibFactor * progressionFactor;
   const setFeelNote =
     loadCalibFactor !== 1
       ? ` Ajustado a tu 1RM estimado por las series reales que registraste en este levantamiento (${loadCalibFactor > 1 ? 'ibas sobrado, subimos' : 'venías justo, bajamos'}).`
-      : setFeelFactor < 1
+      : calibFactor < 1
         ? ' Tus valoraciones de la primera serie en este levantamiento venían pesadas — ajustamos la carga un pelín a la baja.'
-        : setFeelFactor > 1
+        : calibFactor > 1
           ? ' Tus valoraciones de la primera serie en este levantamiento venían sobradas — subimos la carga un pelín.'
           : '';
+  const progressionNoteText = progressionNote(progressionFactor);
   // Perfil de respuesta: si el atleta viene perdiendo peso corporal, menos margen de recuperacion — carga algo mas baja.
   const bwFactor = bodyweightLoadFactor(responseProfile);
   const bwNote =
@@ -1118,8 +1123,8 @@ function buildStrengthBlock(
   // tempo, y las causas cortas de que el peso se desvíe: sensación previa, rampa, reintro, fatiga).
   // El "por qué hoy" de la sesión entera (ACWR/RPE/readiness, punto débil, desbalance, peso
   // corporal, perfil de respuesta) va SOLO a `coachReasons` — ver el resumen "Avisos del coach".
-  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${setFeelNote}${painTag}${reintroNote}${fatigueNote}${rampNote}${tempoNote}`;
-  const reasons = collectReasons(responseTag, setFeelNote, bwNote, weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
+  const notes = `${scheme.coachNote}${styleNote ? ` ${styleNote}` : ''}${goalTag}${setFeelNote}${progressionNoteText}${painTag}${reintroNote}${fatigueNote}${rampNote}${tempoNote}`;
+  const reasons = collectReasons(responseTag, setFeelNote, progressionNoteText, bwNote, weakPointTag, imbalanceTag, painTag, reintroNote, fatigueNote, rampNote, autoregNote, tempoNote);
 
   if (style === 'emom' && emomPartner && emomPartnerMovement && (week === 1 || week === 2)) {
     const reps = STRENGTH_EMOM_REPS[week];
@@ -1132,7 +1137,7 @@ function buildStrengthBlock(
     const emomNotes =
       `${scheme.coachNote} Cada 2 min durante 10 min (${STRENGTH_EMOM_ROUNDS} rondas): ${reps} reps de ${movement.name} + ${emomPartner.reps} de ${emomPartnerMovement.name}; ` +
       `descansa lo que sobre del intervalo. La carga sube cada ronda: ${loads.map((l, i) => `R${i + 1} ${l} kg`).join(' · ')}. ` +
-      `Si una ronda te obliga a ir al fallo, repite el peso de la anterior en vez de subir.${goalTag}${setFeelNote}${painTag}${reintroNote}${fatigueNote}${rampNote}`;
+      `Si una ronda te obliga a ir al fallo, repite el peso de la anterior en vez de subir.${goalTag}${setFeelNote}${progressionNoteText}${painTag}${reintroNote}${fatigueNote}${rampNote}`;
     return {
       blocks: [
         { block: 'strength', movementId: movement.id, format, sets: STRENGTH_EMOM_ROUNDS, reps: String(reps), loadKg: loads[loads.length - 1], notes: emomNotes },
@@ -4341,7 +4346,10 @@ function generateDailySessionCore(
   // datos suficientes (`engineResponseProfile` devuelve el neutro si no). Individualiza: cuanto se
   // fia del RPE, sesgo de reporte, ritmo de progreso por lift, y velocidad de recuperacion.
   const responseProfile = engineResponseProfile(
-    computeResponseProfile(history, profile.prLog, date, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, profile.prs),
+    computeResponseProfile(history, profile.prLog, date, profile.setFeedbackLog, profile.bodyweightLog, profile.workLog, profile.prs, {
+      log: profile.progressionLog,
+      settings: profile.progressionSettings,
+    }),
   );
   const resolved = resolveTrainingWeek(
     calendarWeek,

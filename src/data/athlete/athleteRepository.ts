@@ -37,6 +37,14 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.deleteSetFeedbackEntry(date, movementId);
     void pushRemote();
   },
+  appendProgressionRecords(entries) {
+    localAthleteRepository.appendProgressionRecords(entries);
+    void pushRemote();
+  },
+  saveProgressionSettings(settings) {
+    localAthleteRepository.saveProgressionSettings(settings);
+    void pushRemote();
+  },
   saveWorkSet(entry) {
     localAthleteRepository.saveWorkSet(entry);
     void pushRemote();

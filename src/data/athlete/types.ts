@@ -306,6 +306,10 @@ export interface AthleteProfile {
   diagnosisChecks?: Partial<Record<DiagnosisAreaKey, DiagnosisCheck>>;
   /** Programación según el perfil (el diagnóstico inclina la semana). Ver `engine/programmingEmphasis.ts`. */
   emphasisPlan?: EmphasisPlan;
+  /** Cómo salió cada levantamiento de fuerza principal al cerrar la sesión; de aquí sale la progresión por resultados. Ver `engine/progression.ts`. */
+  progressionLog?: ProgressionRecord[];
+  /** Ajustes de la progresión por resultados que el atleta ha aceptado (ver `engine/progression.ts`). */
+  progressionSettings?: ProgressionSettings;
   /** Objetivos activos concurrentes — ver [[Goal]]. Varios pueden convivir (p.ej. competicion + un PR puntual). */
   goals: Goal[];
   /**
@@ -518,6 +522,39 @@ export interface EmphasisPlan {
   /** Lo que no mejoró en 8 semanas y se dejó de insistir (clave → fecha): no vuelve en 8 semanas. */
   rotated?: Record<string, string>;
   review?: EmphasisReview;
+}
+
+/**
+ * Cómo salió un levantamiento de fuerza al cerrar la sesión: `limpia` (todas las series con las reps pedidas y esfuerzo
+ * razonable), `hecha` (series completas pero sin dato de esfuerzo), `dura` (completas pero al límite) o `fallo`
+ * (alguna serie se quedó corta de reps o se bajó el peso).
+ */
+export type ProgressionVerdict = 'limpia' | 'hecha' | 'dura' | 'fallo';
+
+/** El resultado de un levantamiento de fuerza en una sesión. Clave: date+movementId. */
+export interface ProgressionRecord {
+  date: string;
+  movementId: string;
+  /** Clave de PR del levantamiento (`keyof PersonalRecords` o `keyof VariantPersonalRecords`). */
+  key: string;
+  verdict: ProgressionVerdict;
+  prescribedKg: number;
+  /** Peso más alto que se movió. */
+  topKg: number;
+  prescribedSets: number;
+  prescribedReps: number;
+  /** RPE de la serie más pesada, si el atleta lo dio. */
+  rpe?: number;
+}
+
+/** Ajustes de la progresión por resultados que el atleta acepta o rechaza. */
+export interface ProgressionSettings {
+  /** Sesiones limpias seguidas que hacen falta para subir (2 por defecto). */
+  cleanNeeded?: 2 | 3;
+  /** Desde cuándo vale `cleanNeeded` (ISO): las decisiones anteriores se leen con 2. */
+  cleanNeededSince?: string;
+  /** El atleta dijo "Dejarlo como está" a la propuesta de pedir 3 sesiones limpias (ISO): no vuelve a salir en 28 días. */
+  proposalDismissedOn?: string;
 }
 
 /** Una serie de trabajo registrada de un levantamiento de fuerza u oly. Clave: date+movementId+setNumber. */
