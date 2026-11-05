@@ -61,6 +61,7 @@ import { BodyweightCard } from './BodyweightCard';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { AnalysisView } from './AnalysisView';
+import { addSubirPrGoal } from './rexAnalysis';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
 
@@ -518,6 +519,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             bodyweightKg={latestBodyweightKg}
             stats={stats}
             todayIso={todayIso}
+            onCreateGoal={(movementId) => {
+              const next = addSubirPrGoal(athleteRepository.getProfile(), movementId, todayIso);
+              athleteRepository.saveProfile(next);
+              setProfile(next);
+            }}
+            onOpenObjetivos={() => {
+              setAnalysisOpen(false);
+              onNavigateToObjetivos();
+            }}
           />
         </Modal>
       )}    </div>

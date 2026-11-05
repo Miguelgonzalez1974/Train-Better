@@ -1,6 +1,10 @@
 import { CoachAccuracyCard } from './CoachAccuracyCard';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { ChevronDown, Dumbbell, Fingerprint, Scale } from 'lucide-react';
+import { RexMascot } from '../objetivos/RexMascot';
+import { analysisRexLine, openGoalMovements, PROPOSAL_WEEKS } from './rexAnalysis';
+import { getImbalanceBias } from '../../engine/imbalances';
+import { buildProgressionLedger } from '../../engine/progression';
 import type { AthleteProfile, PersonalRecords, SessionHistoryEntry } from '../../data/athlete/types';
 import { analysisHeadline } from '../../engine/analysisHeadline';
 import { competitionTile, rpeTrend, topRiser } from '../../engine/analysisStats';
@@ -43,8 +47,6 @@ function paceMeta(lift: LiftResponse | undefined): { text: string; className: st
   const rate = Math.round(lift.ratePerMonthPct * 10) / 10;
   return { text: `${signed(rate)} %/mes`, className: lift.tier === 'rapido' ? 'text-good' : 'text-neutral-300' };
 }
-
-const HEADLINE_DOT = { good: 'bg-good', warn: 'bg-warn', neutral: 'bg-neutral-500' } as const;
 
 /** Nombre corto de cada levantamiento para caber en una casilla de la fila de arriba. */
 const SHORT_LIFT: Record<string, string> = {
@@ -116,6 +118,8 @@ export function AnalysisView({
   bodyweightKg,
   stats,
   todayIso,
+  onCreateGoal,
+  onOpenObjetivos,
 }: {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
@@ -125,12 +129,25 @@ export function AnalysisView({
   bodyweightKg?: number;
   stats: MonthlyStats;
   todayIso: string;
+  /** Rex crea un objetivo «Subir PR» a partir de lo que ha visto aquí. */
+  onCreateGoal?: (movementId: string) => void;
+  /** Ir a Objetivos para cambiarlo hablando con Rex. */
+  onOpenObjetivos?: () => void;
 }) {
-  const [tab, setTab] = useState<AnalysisTab>('fuerza');
+  const [tab, setTabRaw] = useState<AnalysisTab>('fuerza');
+  // Cambiar de pestaña cierra la propuesta a medias (cada pestaña tiene la suya).
+  const setTab = (next: AnalysisTab) => {
+    setTabRaw(next);
+    setProposalState('idle');
+    setCreatedLabel(null);
+  };
   const [liftKey, setLiftKey] = useState<keyof PersonalRecords>('backSquat');
   const [range, setRange] = useState<EvolutionRange>('6m');
   const [energyOpen, setEnergyOpen] = useState(true);
   const [imbalancesOpen, setImbalancesOpen] = useState(true);
+  // La propuesta de objetivo de Rex: cerrada, pidiendo confirmación, o ya creada (con el nombre del levantamiento).
+  const [proposalState, setProposalState] = useState<'idle' | 'confirm'>('idle');
+  const [createdLabel, setCreatedLabel] = useState<string | null>(null);
 
   const { prs } = profile;
   const prLog = profile.prLog ?? [];
@@ -152,6 +169,25 @@ export function AnalysisView({
     () => analysisHeadline({ loadRows, perLift: response.perLift, desbalances, equilibrados }),
     [loadRows, response.perLift, desbalances, equilibrados],
   );
+  // Rex: la conclusión de la pestaña que miras y, si hay un levantamiento claro que mejorar, un objetivo ya montado.
+  const weakLiftIds = useMemo(() => getImbalanceBias(profile.prs, profile.variantPrs, history).strengthLiftIds, [profile.prs, profile.variantPrs, history]);
+  const ledger = useMemo(
+    () => buildProgressionLedger(profile.progressionLog, profile.prLog, profile.progressionSettings, profile.emphasisPlan),
+    [profile.progressionLog, profile.prLog, profile.progressionSettings, profile.emphasisPlan],
+  );
+  const rex = analysisRexLine({
+    tab,
+    headline,
+    strengthRatio,
+    perLift: response.perLift,
+    imbalances: imbalanceGroups,
+    weakLiftIds,
+    confident: response.confident,
+    weeks: Math.floor(response.dataWeeks),
+    minWeeks: RESPONSE_MIN_WEEKS,
+    ledger: { resolved: ledger.resolved, hits: ledger.hits, rows: ledger.rows },
+    openGoalMovementIds: openGoalMovements(profile, todayIso),
+  });
 
   // Cuántos levantamientos han subido su PR desde el primer test registrado.
   const rising = useMemo(
@@ -241,11 +277,66 @@ export function AnalysisView({
         {rpeNote && <p className="mt-2 px-0.5 text-[11px] leading-relaxed text-neutral-500">{rpeNote}</p>}
       </div>
 
-      {/* Titular: lo importante en una o dos frases. */}
-      <section className="rounded-2xl bg-white/[0.03] p-4" aria-label="Resumen del análisis">
-        <div className="flex items-start gap-2.5">
-          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${HEADLINE_DOT[headline.tone]}`} aria-hidden="true" />
-          <p className="text-[13px] leading-relaxed text-neutral-200">{headline.sentences.join(' ')}</p>
+      {/* Rex: la conclusión de la pestaña que miras. Los números están debajo, en las pestañas. */}
+      <section className="rounded-2xl bg-white/[0.03] p-4" aria-label="Lo que dice Rex">
+        <div className="flex items-start gap-3">
+          <RexMascot size={36} mood={createdLabel ? 'happy' : rex.tone === 'good' ? 'happy' : rex.tone === 'warn' ? 'think' : 'idle'} />
+          <div className="min-w-0 flex-1" aria-live="polite">
+            <p className="text-[13px] leading-relaxed text-neutral-200">
+              <strong className={`font-bold ${rex.tone === 'good' ? 'text-good' : rex.tone === 'warn' ? 'text-warn' : 'text-white'}`}>{rex.lead}</strong> {rex.text}
+            </p>
+
+            {createdLabel ? (
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <p className="text-[13px] text-good">Creado: Subir PR · {createdLabel}.</p>
+                {onOpenObjetivos && (
+                  <button onClick={onOpenObjetivos} className="rounded-full border border-brand-border px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors hover:border-brand-gold hover:text-white">
+                    Ver objetivos
+                  </button>
+                )}
+              </div>
+            ) : (
+              rex.proposal &&
+              onCreateGoal &&
+              (proposalState === 'idle' ? (
+                <button
+                  onClick={() => setProposalState('confirm')}
+                  className="mt-2.5 rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark"
+                >
+                  Crear un objetivo con esto
+                </button>
+              ) : (
+                <div className="mt-2.5 rounded-xl border border-brand-orange/40 bg-brand-orange/[0.08] p-3">
+                  <p className="text-[13px] font-semibold text-white">Subir PR · {rex.proposal.label}</p>
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    En {PROPOSAL_WEEKS} semanas · énfasis moderado · lo propongo porque {rex.proposal.why}.
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        const proposal = rex.proposal;
+                        if (!proposal) return;
+                        onCreateGoal(proposal.movementId);
+                        setCreatedLabel(proposal.label);
+                        setProposalState('idle');
+                      }}
+                      className="rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark"
+                    >
+                      Crearlo
+                    </button>
+                    {onOpenObjetivos && (
+                      <button onClick={onOpenObjetivos} className="rounded-full border border-brand-border px-3.5 py-1.5 text-xs font-semibold text-neutral-200 transition-colors hover:border-brand-gold hover:text-white">
+                        Cambiar algo con Rex
+                      </button>
+                    )}
+                    <button onClick={() => setProposalState('idle')} className="rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-300">
+                      No
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </section>
 
