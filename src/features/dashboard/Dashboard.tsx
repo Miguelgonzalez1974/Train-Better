@@ -488,7 +488,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </Modal>
       )}
       {showMobility && (
-        <Modal open onClose={() => setShowMobility(false)} title="Movilidad">
+        <Modal open onClose={() => setShowMobility(false)} title="Recovery">
           <Movilidad
             profile={profile}
             todayIso={todayIso}

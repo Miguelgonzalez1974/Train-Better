@@ -85,10 +85,10 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     // Si la sesión se pasa del objetivo, el atajo principal es ajustarla.
     expect(buildRexSuggestions({ ...calm, advice: { ...advice, overTarget: true }, canRest: true })[0].actions[0].label).toBe('Ajustar sesión');
     // Sin sesión prevista no ofrece verla; con el descanso marcado ofrece deshacerlo.
-    expect(buildRexSuggestions({ ...calm, advice, hasSessionToday: false, canRest: false })[0].actions).toEqual([{ label: 'Hacer movilidad', target: 'movilidad' }]);
+    expect(buildRexSuggestions({ ...calm, advice, hasSessionToday: false, canRest: false })[0].actions).toEqual([{ label: 'Hacer recovery', target: 'movilidad' }]);
     expect(buildRexSuggestions({ ...calm, advice, restMarked: true, canRest: true })[0].actions).toEqual([
       { label: 'Deshacer: voy a entrenar', target: 'descanso' },
-      { label: 'Hacer movilidad', target: 'movilidad' },
+      { label: 'Hacer recovery', target: 'movilidad' },
     ]);
   });
 

@@ -180,12 +180,12 @@ const ADVICE_MOOD: Record<RexAdvice['tone'], RexBarMood> = { good: 'happy', mid:
 export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restMarked' | 'canRest' | 'hasSessionToday'>): RexSuggestion {
   const actions: RexAction[] = [];
   if (ctx.restMarked) {
-    actions.push({ label: 'Deshacer: voy a entrenar', target: 'descanso' }, { label: 'Hacer movilidad', target: 'movilidad' });
+    actions.push({ label: 'Deshacer: voy a entrenar', target: 'descanso' }, { label: 'Hacer recovery', target: 'movilidad' });
   } else {
     if (ctx.hasSessionToday) actions.push({ label: advice.overTarget ? 'Ajustar sesión' : 'Ver la sesión', target: 'planificacion' });
     if (ctx.canRest) actions.push({ label: 'Hoy descanso', target: 'descanso' });
     // Un día sin sesión es un buen día para moverse sin cargar.
-    if (!ctx.hasSessionToday) actions.push({ label: 'Hacer movilidad', target: 'movilidad' });
+    if (!ctx.hasSessionToday) actions.push({ label: 'Hacer recovery', target: 'movilidad' });
   }
   return {
     id: 'consejo',
@@ -399,7 +399,7 @@ export function saveRexMemory(storage: Pick<Storage, 'setItem'> | null, memory: 
 export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'nutricion', label: 'Nutrición' },
   { target: 'constancia', label: 'Constancia' },
-  { target: 'movilidad', label: 'Movilidad' },
+  { target: 'movilidad', label: 'Recovery' },
   { target: 'volumen', label: 'Volumen por día' },
   { target: 'analisis', label: 'Análisis' },
   { target: 'forma', label: 'Tu forma' },

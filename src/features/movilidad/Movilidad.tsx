@@ -123,7 +123,7 @@ export function Movilidad({
         : `Esta es tu rutina: unos ${Math.max(1, Math.round(routineSeconds(routine) / 60))} min, ${routine.length} ejercicios${purpose === 'recuperar' ? ' estáticos, porque es para después de entrenar' : purpose === 'calentar' ? ' dinámicos, para no restarte fuerza' : ''}.`;
   } else if (step === 'done' && result) {
     const focus = (profile.mobilityFocus ?? zones).filter((z) => zones.includes(z))[0];
-    rexText = `Hecho: ${result.minutes} min. Esta semana llevas ${result.weekly} min de movilidad.${focus && (saveFocus || profile.mobilityFocus?.includes(focus)) ? ` Mañana te pregunto cómo notas ${MOBILITY_ZONE_LABEL[focus].toLowerCase()}.` : ''}`;
+    rexText = `Hecho: ${result.minutes} min. Esta semana llevas ${result.weekly} min de recovery.${focus && (saveFocus || profile.mobilityFocus?.includes(focus)) ? ` Mañana te pregunto cómo notas ${MOBILITY_ZONE_LABEL[focus].toLowerCase()}.` : ''}`;
   }
 
   if (step === 'guide') {
