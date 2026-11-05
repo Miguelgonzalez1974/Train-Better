@@ -371,6 +371,11 @@ export function mergeProfile(
       (r, l) => (l.clearedDate ? l : r.clearedDate ? r : l),
     ),
     reviewedMacroWeeks: mergeStringSet(remote.reviewedMacroWeeks, local.reviewedMacroWeeks, 999),
+    // Movilidad: las rutinas y las valoraciones son logs (union por clave, no se borran); las zonas prioritarias son config (gana el local).
+    mobilityLog: remote.mobilityLog || local.mobilityLog ? mergeByKey(remote.mobilityLog, local.mobilityLog, (e) => e.id, (e) => e.date, 200) : undefined,
+    mobilityRatings:
+      remote.mobilityRatings || local.mobilityRatings ? mergeByKey(remote.mobilityRatings, local.mobilityRatings, (r) => `${r.date}|${r.zone}`, (r) => r.date, 200) : undefined,
+    mobilityFocus: local.mobilityFocus ?? remote.mobilityFocus,
 
     // --- logs: union por clave ---
     workLog: dropDeleted(

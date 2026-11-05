@@ -1,5 +1,6 @@
 import type { Block, MovementPattern } from '../movements/types';
 import type { OlyComplex } from '../complexes';
+import type { MobilityZone } from '../mobility';
 
 export interface PersonalRecords {
   backSquat: number;
@@ -335,6 +336,12 @@ export interface AthleteProfile {
   variantPrs?: VariantPersonalRecords;
   /** Check-ins diarios de energia (ver [[ReadinessCheck]]) — el motor los lee por fecha para ajustar la carga de hoy. */
   readinessLog?: ReadinessCheck[];
+  /** Rutinas de movilidad y estiramientos hechas con Rex (ver `engine/mobility.ts`). Cuentan como hábito, no como entreno. */
+  mobilityLog?: MobilityLogEntry[];
+  /** Zonas que el atleta quiere potenciar: Rex las tiene en cuenta en las rutinas siguientes. */
+  mobilityFocus?: MobilityZone[];
+  /** Cómo nota el atleta cada zona prioritaria (1 = muy limitada, 5 = fenomenal), para ver si la movilidad le sirve. */
+  mobilityRatings?: MobilityRating[];
   /**
    * Claves `macroId:semana` de revisiones semanales del macrociclo ya mostradas (confirmadas o
    * descartadas) — ver `src/engine/macroReview.ts`. Evita repetir el mismo aviso cada dia dentro de
@@ -953,4 +960,27 @@ export interface Goal {
    * comportamiento anterior (empieza siempre por el escalon mas facil).
    */
   skillLevel?: number;
+}
+
+/** Para qué es una rutina de movilidad: estirar tras entrenar, una sesión de movilidad o calentar antes. */
+export type MobilityPurpose = 'recuperar' | 'movilidad' | 'calentar';
+
+/** Una rutina de movilidad hecha (o a medias, si pasó de la mitad). */
+export interface MobilityLogEntry {
+  id: string;
+  /** Fecha ISO del día en que se hizo. */
+  date: string;
+  purpose: MobilityPurpose;
+  zones: MobilityZone[];
+  /** Minutos que duró de verdad (redondeados). */
+  minutes: number;
+  /** Ejercicios hechos. */
+  exercises: number;
+}
+
+/** Cómo nota el atleta una zona, de 1 a 5. */
+export interface MobilityRating {
+  date: string;
+  zone: MobilityZone;
+  value: 1 | 2 | 3 | 4 | 5;
 }

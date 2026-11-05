@@ -65,9 +65,9 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     expect(s.lead).toBe('Sesión hecha.');
     expect(s.text).toBe('Sesión hecha. Esfuerzo 52 con ~65 previstos, por debajo de tu objetivo (55–75): había margen.');
     expect(s.dismissible).toBe(false);
-    expect(s.actions.map((a) => a.target)).toEqual(['detalle-dia', 'volumen', 'forma']);
+    expect(s.actions.map((a) => a.target)).toEqual(['detalle-dia', 'movilidad', 'volumen']);
     const noDetail = buildRexSuggestions({ ...calm, trainedToday: true, closing: { ...closing, hasDetail: false, planned: null, status: 'pasado', real: 80, notDone: 'Sin el WOD, por la molestia.' } })[0];
-    expect(noDetail.actions.map((a) => a.target)).toEqual(['volumen', 'forma']);
+    expect(noDetail.actions.map((a) => a.target)).toEqual(['movilidad', 'volumen']);
     expect(noDetail.text).toBe('Sesión hecha. Esfuerzo 80: 5 por encima de tu objetivo (55–75). Mañana, con cuidado. Sin el WOD, por la molestia.');
     expect(noDetail.tone).toBe('mid');
     expect(buildRexSuggestions({ ...calm, trainedToday: true })[0].text).toBe('Sesión hecha. Buen trabajo.');
@@ -85,8 +85,11 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     // Si la sesión se pasa del objetivo, el atajo principal es ajustarla.
     expect(buildRexSuggestions({ ...calm, advice: { ...advice, overTarget: true }, canRest: true })[0].actions[0].label).toBe('Ajustar sesión');
     // Sin sesión prevista no ofrece verla; con el descanso marcado ofrece deshacerlo.
-    expect(buildRexSuggestions({ ...calm, advice, hasSessionToday: false, canRest: false })[0].actions).toEqual([]);
-    expect(buildRexSuggestions({ ...calm, advice, restMarked: true, canRest: true })[0].actions).toEqual([{ label: 'Deshacer: voy a entrenar', target: 'descanso' }]);
+    expect(buildRexSuggestions({ ...calm, advice, hasSessionToday: false, canRest: false })[0].actions).toEqual([{ label: 'Hacer movilidad', target: 'movilidad' }]);
+    expect(buildRexSuggestions({ ...calm, advice, restMarked: true, canRest: true })[0].actions).toEqual([
+      { label: 'Deshacer: voy a entrenar', target: 'descanso' },
+      { label: 'Hacer movilidad', target: 'movilidad' },
+    ]);
   });
 
   it('el check-in va antes que el consejo, y el consejo antes que lo demás', () => {

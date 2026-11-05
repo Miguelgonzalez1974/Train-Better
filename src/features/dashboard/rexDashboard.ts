@@ -30,6 +30,8 @@ export type RexTarget =
   | 'plan-dureza'
   | 'plan-molestia'
   | 'plan-avisos'
+  /** La rutina de movilidad y estiramientos con Rex. */
+  | 'movilidad'
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 
@@ -178,10 +180,12 @@ const ADVICE_MOOD: Record<RexAdvice['tone'], RexBarMood> = { good: 'happy', mid:
 export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restMarked' | 'canRest' | 'hasSessionToday'>): RexSuggestion {
   const actions: RexAction[] = [];
   if (ctx.restMarked) {
-    actions.push({ label: 'Deshacer: voy a entrenar', target: 'descanso' });
+    actions.push({ label: 'Deshacer: voy a entrenar', target: 'descanso' }, { label: 'Hacer movilidad', target: 'movilidad' });
   } else {
     if (ctx.hasSessionToday) actions.push({ label: advice.overTarget ? 'Ajustar sesión' : 'Ver la sesión', target: 'planificacion' });
     if (ctx.canRest) actions.push({ label: 'Hoy descanso', target: 'descanso' });
+    // Un día sin sesión es un buen día para moverse sin cargar.
+    if (!ctx.hasSessionToday) actions.push({ label: 'Hacer movilidad', target: 'movilidad' });
   }
   return {
     id: 'consejo',
@@ -199,7 +203,7 @@ export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restM
 export function closingSuggestion(c: RexClosing | null): RexSuggestion {
   const actions: RexAction[] = [];
   if (c?.hasDetail) actions.push({ label: 'Ver detalle', target: 'detalle-dia' });
-  actions.push({ label: 'Volumen por día', target: 'volumen' }, { label: 'Tu forma', target: 'forma' });
+  actions.push({ label: 'Estirar', target: 'movilidad' }, { label: 'Volumen por día', target: 'volumen' });
   const base = { id: 'cierre', priority: 95, lead: 'Sesión hecha.', actions, dismissible: false };
   if (!c) return { ...base, text: 'Sesión hecha. Buen trabajo.', mood: 'happy', tone: 'good' };
   const range = `${c.low}–${c.high}`;
@@ -395,6 +399,7 @@ export function saveRexMemory(storage: Pick<Storage, 'setItem'> | null, memory: 
 export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'nutricion', label: 'Nutrición' },
   { target: 'constancia', label: 'Constancia' },
+  { target: 'movilidad', label: 'Movilidad' },
   { target: 'volumen', label: 'Volumen por día' },
   { target: 'analisis', label: 'Análisis' },
   { target: 'forma', label: 'Tu forma' },

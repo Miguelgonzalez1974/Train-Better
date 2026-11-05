@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
+import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, PersonStanding, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { REX_MODULES, type RexSuggestion, type RexTarget } from './rexDashboard';
 
 const MODULE_ICON: Partial<Record<RexTarget, LucideIcon>> = {
   nutricion: Apple,
+  movilidad: PersonStanding,
   constancia: Flame,
   volumen: BarChart3,
   analisis: Activity,

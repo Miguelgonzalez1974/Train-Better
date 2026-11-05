@@ -62,6 +62,8 @@ import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { AnalysisView } from './AnalysisView';
 import { addSubirPrGoal } from './rexAnalysis';
+import { Movilidad } from '../movilidad/Movilidad';
+import { weeklyMobilityMinutes } from '../../engine/mobility';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
 
@@ -92,6 +94,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showConsistency, setShowConsistency] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
   const [showDayDetail, setShowDayDetail] = useState(false);
+  const [showMobility, setShowMobility] = useState(false);
   /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
   const [showWeekly, setShowWeekly] = useState<WeeklyReview | null>(null);
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
@@ -285,6 +288,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     ...(yearConsistency.pct !== null ? { constancia: `${yearConsistency.pct} %` } : {}),
     ...(goalRows.length > 0 ? { objetivos: String(goalRows.length) } : {}),
     ...(nutritionPercent !== null ? { nutricion: `${nutritionPercent} %` } : {}),
+    ...(weeklyMobilityMinutes(profile, todayIso) > 0 ? { movilidad: `${weeklyMobilityMinutes(profile, todayIso)} min` } : {}),
   };
   // Un punto en «Más» (y en el módulo) cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
   const nutritionLow = isToday && nutritionPercent !== null && nutritionPercent < NUTRITION_LOW && new Date().getHours() >= NUTRITION_HOUR;
@@ -321,6 +325,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return toggleRest();
       case 'detalle-dia':
         return setShowDayDetail(true);
+      case 'movilidad':
+        return setShowMobility(true);
     }
   }
 
@@ -478,6 +484,21 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               setFormOpen(false);
               setTab('sueno');
             }}
+          />
+        </Modal>
+      )}
+      {showMobility && (
+        <Modal open onClose={() => setShowMobility(false)} title="Movilidad">
+          <Movilidad
+            profile={profile}
+            todayIso={todayIso}
+            session={todaySession}
+            trainedToday={todayStrain !== null}
+            onProfileChange={(next) => {
+              athleteRepository.saveProfile(next);
+              setProfile(next);
+            }}
+            onClose={() => setShowMobility(false)}
           />
         </Modal>
       )}
