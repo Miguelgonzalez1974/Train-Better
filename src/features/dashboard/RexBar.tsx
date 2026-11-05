@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, PersonStanding, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
+import { Activity, Apple, BarChart3, CalendarCheck, ChevronDown, ChevronRight, PersonStanding, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { REX_MODULES, type RexSuggestion, type RexTarget } from './rexDashboard';
 
 const MODULE_ICON: Partial<Record<RexTarget, LucideIcon>> = {
   nutricion: Apple,
   movilidad: PersonStanding,
+  semana: CalendarCheck,
   constancia: Flame,
   volumen: BarChart3,
   analisis: Activity,
@@ -40,6 +41,7 @@ export function RexBar({
   extra,
   showDate = true,
   modules = true,
+  hide = [],
   onAction,
   onDismiss,
   onNext,
@@ -53,6 +55,8 @@ export function RexBar({
   showDate?: boolean;
   /** Enseñar el botón «Más» con los módulos del Dashboard. */
   modules?: boolean;
+  /** Módulos de «Más» que hoy no se pueden abrir (por ejemplo «Tu semana» sin ninguna semana que repasar). */
+  hide?: RexTarget[];
   suggestion: RexSuggestion;
   /** Cuántas sugerencias más esperan detrás de la que se ve. */
   waiting: number;
@@ -163,7 +167,7 @@ export function RexBar({
 
       {modules && more && (
         <div className="mt-3 grid animate-section-in grid-cols-2 gap-2 motion-reduce:animate-none sm:grid-cols-3">
-          {REX_MODULES.map((m) => {
+          {REX_MODULES.filter((m) => !hide.includes(m.target)).map((m) => {
             const Icon = MODULE_ICON[m.target] ?? Target;
             return (
               <button

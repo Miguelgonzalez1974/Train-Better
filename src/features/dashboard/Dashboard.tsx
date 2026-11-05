@@ -115,6 +115,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const conditioningBalance = useMemo(() => computeConditioningBalance(profile, history, new Date()), [profile, history]);
   // La revisión de la semana pasada con Rex (de lunes a miércoles, hasta darla por vista).
   const weeklyReview = useMemo(() => buildWeeklyReview(profile, history, new Date()), [profile, history]);
+  // «Tu semana» en «Más»: la última semana completa, a cualquier hora, la hayas repasado ya o no.
+  const anytimeReview = useMemo(() => buildWeeklyReview(profile, history, new Date(), { anytime: true }), [profile, history]);
 
   // --- Métricas del Análisis: solo lo que ya se calcula en algún sitio de la app, ninguna inventada. ---
   // Fuerza relativa: el total de los tres grandes (sentadilla, banca, peso muerto) en veces tu peso corporal.
@@ -284,21 +286,29 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       return next;
     });
   }
+  /** La semana que «Tu semana» abre: la pendiente (lunes a miércoles) o, si no, la última completa. */
+  const reviewable = weeklyReview ?? anytimeReview;
   const rexBadges: Partial<Record<RexTarget, string>> = {
     ...(yearConsistency.pct !== null ? { constancia: `${yearConsistency.pct} %` } : {}),
     ...(goalRows.length > 0 ? { objetivos: String(goalRows.length) } : {}),
     ...(nutritionPercent !== null ? { nutricion: `${nutritionPercent} %` } : {}),
+    ...(reviewable ? { semana: `${reviewable.sessions.done} de ${reviewable.sessions.planned}` } : {}),
     ...(weeklyMobilityMinutes(profile, todayIso) > 0 ? { movilidad: `${weeklyMobilityMinutes(profile, todayIso)} min` } : {}),
   };
   // Un punto en «Más» (y en el módulo) cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
   const nutritionLow = isToday && nutritionPercent !== null && nutritionPercent < NUTRITION_LOW && new Date().getHours() >= NUTRITION_HOUR;
-  const rexDots: RexTarget[] = [...(reviewPending ? (['perfil'] as RexTarget[]) : []), ...(nutritionLow ? (['nutricion'] as RexTarget[]) : [])];
+  const rexDots: RexTarget[] = [
+    ...(reviewPending ? (['perfil'] as RexTarget[]) : []),
+    ...(nutritionLow ? (['nutricion'] as RexTarget[]) : []),
+    ...(weeklyReview ? (['semana'] as RexTarget[]) : []),
+  ];
   function runRexTarget(target: RexTarget) {
     switch (target) {
       case 'checkin':
         return onOpenMorning();
       case 'semana':
-        return weeklyReview && setShowWeekly(weeklyReview);
+        // Si hay una revisión pendiente (lunes a miércoles) se abre esa; si no, la última semana completa.
+        return reviewable && setShowWeekly(reviewable);
       case 'revision-enfasis':
         return openEmphasisReview();
       case 'constancia':
@@ -346,6 +356,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
         badges={rexBadges}
         dots={rexDots}
+        hide={reviewable ? [] : ['semana']}
         extra={<ThemeToggle label className="!h-auto !w-full justify-start gap-2 px-3 py-2" />}
         onAction={runRexTarget}
         onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}

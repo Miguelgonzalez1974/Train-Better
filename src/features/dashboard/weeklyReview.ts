@@ -87,11 +87,17 @@ export function previousWeek(today: Date): { monday: Date; from: string; to: str
   return { monday, from: toLocalIsoDate(monday), to: toLocalIsoDate(shiftDays(monday, 6)) };
 }
 
-export function buildWeeklyReview(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date = new Date()): WeeklyReview | null {
-  if (getWeekdayIndex(today) > REVIEW_LAST_WEEKDAY) return null;
+export function buildWeeklyReview(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  today: Date = new Date(),
+  /** `anytime`: repasar la última semana completa cuando quieras (desde «Más»), aunque ya no sea lunes a miércoles o ya la hayas dado por vista. */
+  opts: { anytime?: boolean } = {},
+): WeeklyReview | null {
+  if (!opts.anytime && getWeekdayIndex(today) > REVIEW_LAST_WEEKDAY) return null;
   const { monday, from, to } = previousWeek(today);
   const weekKey = `semana:${from}`;
-  if ((profile.reviewedMacroWeeks ?? []).includes(weekKey)) return null;
+  if (!opts.anytime && (profile.reviewedMacroWeeks ?? []).includes(weekKey)) return null;
   // Sin nada anterior a esa semana no hay qué repasar (alta reciente).
   if (!history.some((h) => h.date <= to)) return null;
 

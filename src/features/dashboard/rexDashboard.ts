@@ -400,6 +400,7 @@ export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'nutricion', label: 'Nutrición' },
   { target: 'constancia', label: 'Constancia' },
   { target: 'movilidad', label: 'Recovery' },
+  { target: 'semana', label: 'Tu semana' },
   { target: 'volumen', label: 'Volumen por día' },
   { target: 'analisis', label: 'Análisis' },
   { target: 'forma', label: 'Tu forma' },

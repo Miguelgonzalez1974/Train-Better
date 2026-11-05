@@ -39,6 +39,19 @@ describe('revisión semanal: cuándo sale', () => {
     expect(done.reviewedMacroWeeks).toEqual(['semana:2026-11-02']);
   });
 
+  it('«anytime» (Tu semana, en Más) repasa la última semana completa fuera de lunes a miércoles y aunque ya esté vista', () => {
+    const history = [...OLDER, ...week(FULL)];
+    const thursday = new Date('2026-11-12T09:00:00');
+    expect(buildWeeklyReview(makeProfile(), history, thursday)).toBeNull();
+    const review = buildWeeklyReview(makeProfile(), history, thursday, { anytime: true })!;
+    expect(review).toMatchObject({ weekKey: 'semana:2026-11-02', from: '2026-11-02', to: '2026-11-08', sessions: { done: 5, planned: 5 } });
+    const seen = withWeekReviewed(makeProfile(), review.weekKey);
+    expect(buildWeeklyReview(seen, history, MONDAY)).toBeNull();
+    expect(buildWeeklyReview(seen, history, MONDAY, { anytime: true })).not.toBeNull();
+    // Sin nada anterior a esa semana sigue sin haber qué repasar.
+    expect(buildWeeklyReview(makeProfile(), [], thursday, { anytime: true })).toBeNull();
+  });
+
   it('un atleta sin nada anterior a esa semana no tiene qué repasar', () => {
     expect(buildWeeklyReview(makeProfile(), [], MONDAY)).toBeNull();
     expect(buildWeeklyReview(makeProfile(), week(['2026-11-09']), MONDAY)).toBeNull();
