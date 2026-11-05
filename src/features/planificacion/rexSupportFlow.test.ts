@@ -31,6 +31,21 @@ describe('Rex para imprevistos: la conversación', () => {
     expect(getSupportNode('start', mkCtx(base(), true)).options.map((o) => o.label)).toEqual(['Me duele algo', 'Voy a faltar unos días']);
   });
 
+  it('con la sesión a mano, primero lo que se cambia (otro WOD, el tipo, más dura) y luego los imprevistos', () => {
+    const ctx: SupportCtx = { ...mkCtx(base()), canSwapWod: true, canChangeType: true, canHarder: true };
+    const opts = getSupportNode('start', ctx).options;
+    expect(opts.map((o) => o.label)).toEqual(['Otro WOD', 'Cambiar el tipo de sesión', 'Más dura', 'Me duele algo', 'Hoy no estoy para el plan', 'Voy a faltar unos días']);
+    expect(opts.filter((o) => o.act).map((o) => o.act)).toEqual(['otro-wod', 'tipo', 'dureza']);
+    // Cada una aparece solo si se puede.
+    expect(getSupportNode('start', { ...ctx, canSwapWod: false }).options.map((o) => o.label)).not.toContain('Otro WOD');
+    expect(getSupportNode('start', { ...ctx, canHarder: false }).options.map((o) => o.label)).not.toContain('Más dura');
+  });
+
+  it('con la sesión de hoy ya hecha no se ofrece cambiarla', () => {
+    const labels = getSupportNode('start', { ...mkCtx(base(), true), canSwapWod: true, canChangeType: true, canHarder: true }).options.map((o) => o.label);
+    expect(labels).toEqual(['Más dura', 'Me duele algo', 'Voy a faltar unos días']);
+  });
+
   it('cada botón lleva a una pregunta que existe o al resumen', () => {
     const ctx = mkCtx(base());
     const ids = ['start', 'p_zone', 'p_dur', 't_what', 'a_why', 'a_days'];

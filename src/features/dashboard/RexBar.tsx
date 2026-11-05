@@ -37,6 +37,8 @@ export function RexBar({
   badges,
   dots,
   extra,
+  showDate = true,
+  modules = true,
   onAction,
   onDismiss,
   onNext,
@@ -46,6 +48,10 @@ export function RexBar({
   onNext: () => void;
   /** Una celda más al final de «Más» (el cambio de tema). */
   extra?: ReactNode;
+  /** Enseñar la fecha de hoy bajo el muñeco (en el Dashboard sí; donde el título ya dice el día, no). */
+  showDate?: boolean;
+  /** Enseñar el botón «Más» con los módulos del Dashboard. */
+  modules?: boolean;
   suggestion: RexSuggestion;
   /** Cuántas sugerencias más esperan detrás de la que se ve. */
   waiting: number;
@@ -101,10 +107,10 @@ export function RexBar({
         <div className="flex w-12 shrink-0 flex-col items-center gap-1">
           <RexMascot size={40} mood={typing ? 'think' : suggestion.mood} />
           {/* La fecha de hoy, siempre: no cambia al mirar otro día con el selector. */}
-          <p className="text-center text-[11px] font-bold leading-tight text-neutral-300" aria-label={`Hoy es ${today.long}`}>
+          {showDate && <p className="text-center text-[11px] font-bold leading-tight text-neutral-300" aria-label={`Hoy es ${today.long}`}>
             <span className="block capitalize">{today.weekday}</span>
             <span className="num block">{today.dayMonth}</span>
-          </p>
+          </p>}
         </div>
         <div className="min-w-0 flex-1">
           <p className="min-h-[2.5rem] text-[13px] leading-relaxed text-neutral-100" aria-live="polite">
@@ -135,7 +141,7 @@ export function RexBar({
                 Ahora no
               </button>
             )}
-            <button
+            {modules && <button
               onClick={() => setMore((v) => !v)}
               aria-expanded={more}
               className="relative ml-auto flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-white"
@@ -143,7 +149,7 @@ export function RexBar({
               Más
               <ChevronDown size={13} aria-hidden="true" className={`transition-transform duration-200 ${more ? 'rotate-180' : ''}`} />
               {!more && dots.length > 0 && <span className="absolute right-0 top-0.5 h-2 w-2 rounded-full bg-brand-orange" aria-label="Hay algo sin ver" />}
-            </button>
+            </button>}
           </div>
           {waiting > 0 && !more && (
             <button onClick={onNext} className="mt-1.5 flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 transition-colors hover:text-neutral-300">
@@ -154,7 +160,7 @@ export function RexBar({
         </div>
       </div>
 
-      {more && (
+      {modules && more && (
         <div className="mt-3 grid animate-section-in grid-cols-2 gap-2 motion-reduce:animate-none sm:grid-cols-3">
           {REX_MODULES.map((m) => {
             const Icon = MODULE_ICON[m.target] ?? Target;

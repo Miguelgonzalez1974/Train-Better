@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RexMascot, type RexMood } from '../objetivos/RexMascot';
-import { applySupport, getSupportNode, summarize, type SupportEffect, type SupportOption, type SupportState } from './rexSupportFlow';
+import { applySupport, getSupportNode, summarize, type SupportAction, type SupportEffect, type SupportOption, type SupportState } from './rexSupportFlow';
 import type { AthleteProfile } from '../../data/athlete/types';
 
 interface Msg {
@@ -16,8 +16,32 @@ const TYPING_MS = 600;
  * solo lo aplica si el atleta dice que sí. Lo que hace cada respuesta vive en `rexSupport.ts`; esto solo lo pinta y entrega el
  * resultado a `onApply`, que lo guarda como ya lo hace el resto de la pantalla.
  */
-export function RexSupport({ profile, todayIso, todayDone, onApply, onClose }: { profile: AthleteProfile; todayIso: string; todayDone: boolean; onApply: (effect: SupportEffect) => void; onClose: () => void }) {
-  const ctx = useMemo(() => ({ profile, todayIso, todayDone }), [profile, todayIso, todayDone]);
+export function RexSupport({
+  profile,
+  todayIso,
+  todayDone,
+  canSwapWod = false,
+  canChangeType = false,
+  canHarder = false,
+  onApply,
+  onAct,
+  onClose,
+}: {
+  profile: AthleteProfile;
+  todayIso: string;
+  todayDone: boolean;
+  /** Se puede cambiar el WOD de hoy por otro. */
+  canSwapWod?: boolean;
+  /** Se puede cambiar el tipo de la sesión de hoy. */
+  canChangeType?: boolean;
+  /** Se puede subir la dureza de hoy. */
+  canHarder?: boolean;
+  onApply: (effect: SupportEffect) => void;
+  /** Un cambio directo de la sesión (otro WOD, cambiar el tipo, más dura): la pantalla lo hace y esta conversación se cierra. */
+  onAct?: (action: SupportAction) => void;
+  onClose: () => void;
+}) {
+  const ctx = useMemo(() => ({ profile, todayIso, todayDone, canSwapWod, canChangeType, canHarder }), [profile, todayIso, todayDone, canSwapWod, canChangeType, canHarder]);
   const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
 
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -67,6 +91,11 @@ export function RexSupport({ profile, todayIso, todayDone, onApply, onClose }: {
   }
 
   function pick(option: SupportOption) {
+    if (option.act && onAct) {
+      onAct(option.act);
+      onClose();
+      return;
+    }
     setBoth({ ...stateRef.current, ...option.set });
     push('me', option.label);
     if (option.next === 'summary') say('Esto haría:', () => setPhase('confirm'));

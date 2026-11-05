@@ -29,14 +29,25 @@ export interface SupportCtx {
   todayIso: string;
   /** La sesión de hoy ya está hecha: no se puede cambiar por otra y los días fuera empiezan mañana. */
   todayDone: boolean;
+  /** La sesión de hoy lleva un WOD que se puede cambiar por otro. */
+  canSwapWod?: boolean;
+  /** Se puede cambiar el tipo de la sesión de hoy (hay una sesión y aún no está hecha). */
+  canChangeType?: boolean;
+  /** La dureza de hoy se puede subir. */
+  canHarder?: boolean;
   newId?: () => string;
 }
+
+/** Cambios directos de la sesión de hoy que Rex no resume: abren lo que la pantalla ya tiene (otro WOD, el selector de tipo, la hoja de dureza). */
+export type SupportAction = 'otro-wod' | 'tipo' | 'dureza';
 
 export interface SupportOption {
   label: string;
   set?: Partial<SupportState>;
-  /** Siguiente pregunta; `summary` = enseñar qué haría. */
+  /** Siguiente pregunta; `summary` = enseñar qué haría; `act` = hacerlo ya (ver `act`). */
   next: string;
+  /** Si lleva acción, al elegirla Rex la entrega a la pantalla y cierra la conversación. */
+  act?: SupportAction;
 }
 
 export interface SupportNode {
@@ -100,10 +111,18 @@ export function getSupportNode(id: string, ctx: SupportCtx): SupportNode {
         options: AWAY_DAYS.map((days) => ({ label: awayLabel(days), set: { days }, next: 'summary' })),
       };
     default: {
-      const options: SupportOption[] = [{ label: 'Me duele algo', next: 'p_zone' }];
+      // Primero lo que se cambia de la sesión de hoy (si se puede), luego los imprevistos.
+      const options: SupportOption[] = [];
+      if (!ctx.todayDone && ctx.canSwapWod) options.push({ label: 'Otro WOD', next: 'act', act: 'otro-wod' });
+      if (!ctx.todayDone && ctx.canChangeType) options.push({ label: 'Cambiar el tipo de sesión', next: 'act', act: 'tipo' });
+      if (ctx.canHarder) options.push({ label: 'Más dura', next: 'act', act: 'dureza' });
+      options.push({ label: 'Me duele algo', next: 'p_zone' });
       if (!ctx.todayDone) options.push({ label: 'Hoy no estoy para el plan', next: 't_what' });
       options.push({ label: 'Voy a faltar unos días', next: 'a_why' });
-      return { text: 'Cuéntame qué ha pasado y lo ajusto. Primero te enseño qué haría, y solo lo aplico si me dices que sí.', options };
+      const text = options.some((o) => o.act)
+        ? '¿Qué quieres cambiar, o qué ha pasado? Lo de los imprevistos te lo enseño antes de aplicarlo.'
+        : 'Cuéntame qué ha pasado y lo ajusto. Primero te enseño qué haría, y solo lo aplico si me dices que sí.';
+      return { text, options };
     }
   }
 }

@@ -13,7 +13,7 @@ const FIT_COLOR: Record<PlanFit, string> = {
   'se-queda-corta': 'rgb(var(--c-state-cool))',
 };
 const GOLD = 'rgb(var(--c-brand-gold))';
-const PHASE_WORD: Record<NonNullable<DailySession['competition']>['phase'], string> = {
+export const PHASE_WORD: Record<NonNullable<DailySession['competition']>['phase'], string> = {
   construccion: 'construcción',
   'pico-1': 'pico',
   pico: 'pico',

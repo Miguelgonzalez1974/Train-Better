@@ -10,31 +10,41 @@ interface CoachHeaderProps {
   onSaveProfile: (profile: AthleteProfile) => void;
   /** Botones extra a la derecha, junto al del perfil (el de los avisos del coach). */
   trailing?: ReactNode;
+  /** `icon`: solo el botón del perfil (sin la fila «Coach IA»), para ponerlo donde haga falta. */
+  variant?: 'row' | 'icon';
 }
 
-export function CoachHeader({ profile, onSaveProfile, trailing }: CoachHeaderProps) {
+export function CoachHeader({ profile, onSaveProfile, trailing, variant = 'row' }: CoachHeaderProps) {
   const [open, setOpen] = useState(false);
+
+  const gear = (
+    <button
+      onClick={() => setOpen(true)}
+      title="Tu perfil"
+      aria-label="Tu perfil"
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-all duration-200 hover:rotate-45 hover:border-brand-gold hover:text-brand-gold"
+    >
+      <Settings size={16} />
+    </button>
+  );
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Brain size={18} strokeWidth={2} className="text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.65)]" />
-          <p className="text-sm font-semibold tracking-tight text-neutral-300">Coach IA</p>
-        </div>
+      {variant === 'icon' ? (
+        gear
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Brain size={18} strokeWidth={2} className="text-brand-neon drop-shadow-[0_0_6px_rgba(57,255,20,0.65)]" />
+            <p className="text-sm font-semibold tracking-tight text-neutral-300">Coach IA</p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          {trailing}
-          <button
-            onClick={() => setOpen(true)}
-            title="Tu perfil"
-            aria-label="Tu perfil"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-all duration-200 hover:rotate-45 hover:border-brand-gold hover:text-brand-gold"
-          >
-            <Settings size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            {trailing}
+            {gear}
+          </div>
         </div>
-      </div>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Tu perfil">
         <PerfilRapido

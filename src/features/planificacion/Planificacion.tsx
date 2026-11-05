@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Bandage, Play, CheckCircle2, Undo2, Info, Trophy, Library, Flame, MessageCircle } from 'lucide-react';
+import { Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Play, CheckCircle2, Undo2, Info, Trophy, Library, MessageCircle } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
 import { HardnessSheet, hardnessContextOf, type HardnessApplyInfo } from './HardnessControl';
-import { DayStatusRow } from './DayStatusRow';
+import { DayStatusRow, PHASE_WORD } from './DayStatusRow';
 import { hardnessAvailable, hardnessSituation, hardnessUnavailableReason, type HardnessLevel } from '../../engine/hardness';
 import { learnHardness, suggestHardness } from '../../engine/hardnessLearning';
 import type {
@@ -75,14 +75,17 @@ import { learnStrain } from '../../engine/strainLearning';
 import { ActionMenu } from '../shell/ActionMenu';
 import {
   CoachNoticesBody,
-  CoachNoticesButton,
   CoachReasonsList,
   summarizeNotices,
   type CoachNoticesProps,
 } from './CoachNotices';
 import { SessionSummaryCard } from './SessionSummaryCard';
 import { RexSupport } from './RexSupport';
-import type { SupportEffect } from './rexSupportFlow';
+import type { SupportAction, SupportEffect } from './rexSupportFlow';
+import { RexBar } from '../dashboard/RexBar';
+import { dismissSuggestion, loadRexMemory, pickRexSuggestion, saveRexMemory, wasTyped, withTyped, type RexMemory, type RexTarget } from '../dashboard/rexDashboard';
+import { buildPlanRexSuggestions } from './rexPlan';
+import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
@@ -220,6 +223,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [showPainPicker, setShowPainPicker] = useState(false);
   const [showRex, setShowRex] = useState(false);
   const [showNotices, setShowNotices] = useState(false);
+  // Rex en Planificación: el detalle del estado del día se abre con «Por qué»; lo apartado se recuerda en este dispositivo.
+  const [showPlanDetail, setShowPlanDetail] = useState(false);
+  const [rexMemory, setRexMemory] = useState<RexMemory>(() => loadRexMemory(typeof window !== 'undefined' ? window.localStorage : null));
+  const [rexCursor, setRexCursor] = useState(0);
   const [regenNote, setRegenNote] = useState<string | null>(null);
   const [showReasons, setShowReasons] = useState(false);
   const [painAreaDraft, setPainAreaDraft] = useState<PainArea>('hombro');
@@ -1004,6 +1011,44 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   };
   const noticeSummary = summarizeNotices(noticeProps);
 
+  // Rex: la frase del estado del día y el aviso de que el coach tiene algo que contar. La molestia ya va dentro de la frase.
+  const noticesWithoutPain = Math.max(0, noticeSummary.count - activePainFlags.length);
+  const planComp = session?.competition;
+  const rexList = buildPlanRexSuggestions({
+    hasTrainingSession: Boolean(session && !session.isRestDay && !editMode && !alreadyCompletedToday),
+    light: session?.dayLight ? { color: session.dayLight.color, name: LIGHT_LABEL[session.dayLight.color].name } : null,
+    planned: plannedStrain ? plannedStrain.strain : null,
+    fit: planFitResult ? { kind: planFitResult.fit, diff: planFitResult.diff } : null,
+    target: strainTarget ? { low: strainTarget.low, high: strainTarget.high } : null,
+    hardness: session?.hardness ?? 0,
+    canHarder,
+    competition: planComp && !planComp.eventDay && planComp.daysToEvent > 0 ? { daysToEvent: planComp.daysToEvent, phase: PHASE_WORD[planComp.phase] } : null,
+    painLabels: activePainFlags.map((f) => PAIN_AREA_LABEL[f.area]),
+    emphasis: session?.profileEmphasis?.summary ?? null,
+    notices: { count: noticesWithoutPain, actionable: noticeSummary.actionable },
+  });
+  const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso, rexCursor);
+  const showRexBar = rexList.length > 0 && rexPick.current.id !== 'quiet';
+  function updateRexMemory(change: (m: RexMemory) => RexMemory) {
+    setRexMemory((prev) => {
+      const next = change(prev);
+      if (next !== prev) saveRexMemory(typeof window !== 'undefined' ? window.localStorage : null, next);
+      return next;
+    });
+  }
+  function runPlanTarget(target: RexTarget) {
+    if (target === 'plan-detalle') setShowPlanDetail((v) => !v);
+    else if (target === 'plan-dureza') setShowHardness(true);
+    else if (target === 'plan-molestia') setShowPainPicker(true);
+    else if (target === 'plan-avisos') setShowNotices(true);
+  }
+  /** Los cambios directos de la sesión que Rex ofrece en «¿Cambiar algo?»: otro WOD, el selector de tipo o la hoja de dureza. */
+  function handleRexAct(action: SupportAction) {
+    if (action === 'otro-wod') handleRegenerate();
+    else if (action === 'tipo') setShowTypePicker(true);
+    else setShowHardness(true);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <Modal open={showNotices} onClose={() => setShowNotices(false)} title="Avisos del coach">
@@ -1038,11 +1083,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           }}
         />
       )}
-      <CoachHeader
-        profile={profile}
-        onSaveProfile={handleSaveProfile}
-        trailing={<CoachNoticesButton count={noticeSummary.count} actionable={noticeSummary.actionable} onClick={() => setShowNotices(true)} />}
-      />
+      {/* Sin sesión, el perfil sigue a mano en una fila propia; con sesión vive en la fila del título. */}
+      {!session && (
+        <div className="flex justify-end">
+          <CoachHeader variant="icon" profile={profile} onSaveProfile={handleSaveProfile} />
+        </div>
+      )}
 
       {showComplexes && (
         <ComplexLibrary profile={profile} workLog={workLog} week={complexWeek} onSave={handleSaveComplexes} onClose={() => setShowComplexes(false)} />
@@ -1150,6 +1196,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 <Info size={15} strokeWidth={2.25} />
               </button>
             )}
+            <div className="ml-auto">
+              <CoachHeader variant="icon" profile={profile} onSaveProfile={handleSaveProfile} />
+            </div>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-400">
             {session.competition && (
@@ -1181,8 +1230,24 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             )}
           </div>
         </div>
-        {/* El estado del día en una fila de casillas tocables (esfuerzo, semáforo, dureza, competición, molestias). */}
-        {!session.isRestDay && !editMode && (
+        {/* Rex cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y avisa de lo que
+            el coach tiene para ti. Las casillas con todo el detalle quedan detrás de «Por qué». */}
+        {showRexBar && (
+          <RexBar
+            suggestion={rexPick.current}
+            waiting={rexPick.waiting}
+            typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
+            badges={{}}
+            dots={[]}
+            showDate={false}
+            modules={false}
+            onAction={runPlanTarget}
+            onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
+            onNext={() => setRexCursor((c) => c + 1)}
+            onTyped={() => updateRexMemory((m) => withTyped(m, rexPick.current.id, todayIso))}
+          />
+        )}
+        {showPlanDetail && !session.isRestDay && !editMode && !alreadyCompletedToday && (
           <DayStatusRow
             session={session}
             planned={plannedStrain}
@@ -1201,7 +1266,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             onShowReasons={(session.coachReasons?.length ?? 0) > 0 ? () => setShowReasons(true) : null}
           />
         )}
-        {!session.isRestDay && !editMode && session.profileEmphasis && <ProfileEmphasisLine emphasis={session.profileEmphasis} onOpen={onNavigateToPerfil} />}
+        {showPlanDetail && !session.isRestDay && !editMode && !alreadyCompletedToday && session.profileEmphasis && (
+          <ProfileEmphasisLine emphasis={session.profileEmphasis} onOpen={onNavigateToPerfil} />
+        )}
         {!session.isRestDay && (
           <div className="flex w-full items-center gap-2 sm:max-w-xl">
             {alreadyCompletedToday && (
@@ -1221,11 +1288,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             )}
             <button
               onClick={() => setShowRex(true)}
-              title="¿Algo ha pasado? Cuéntaselo a Rex"
-              aria-label="¿Algo ha pasado? Cuéntaselo a Rex"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-border text-neutral-300 transition-colors duration-200 hover:bg-white/5 hover:text-white"
+              title="Cambiar la sesión o contarle a Rex qué ha pasado"
+              aria-label="¿Cambiar algo? Habla con Rex"
+              className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-brand-border px-3 text-sm font-semibold text-neutral-200 transition-colors duration-200 hover:bg-white/5 hover:text-white"
             >
-              <MessageCircle size={18} strokeWidth={2.25} />
+              <MessageCircle size={16} strokeWidth={2.25} aria-hidden="true" />
+              ¿Cambiar algo?
             </button>
             <ActionMenu
               active={editMode}
@@ -1233,16 +1301,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
               busy={spinning}
               items={[
                 { label: editMode ? 'Terminar edición' : 'Editar sesión', Icon: editMode ? Check : Pencil, onSelect: () => setEditMode((prev) => !prev) },
-                ...(alreadyCompletedToday || !hasWodBlock ? [] : [{ label: 'Otro WOD', Icon: RefreshCw, onSelect: handleRegenerate }]),
-                { label: 'Cambiar tipo de sesión', Icon: Brain, onSelect: () => setShowTypePicker(true) },
-                ...(canHarder ? [{ label: session.hardness ? 'Cambiar la dureza' : 'Subir la dureza', Icon: Flame, onSelect: () => setShowHardness(true) }] : []),
+                // Otro WOD, cambiar el tipo, la dureza y las molestias se piden ahora a Rex («¿Cambiar algo?») o desde su frase.
                 { label: 'Librería de complejos', Icon: Library, onSelect: () => setShowComplexes(true) },
-                {
-                  label: activePainFlags.length > 0 ? 'Molestias activas' : '¿Algo te molesta hoy?',
-                  Icon: Bandage,
-                  onSelect: () => setShowPainPicker(true),
-                  tone: activePainFlags.length > 0 ? 'danger' : 'default',
-                },
+                ...(noticeSummary.count > 0 ? [{ label: `Avisos del coach (${noticeSummary.count})`, Icon: Brain, onSelect: () => setShowNotices(true) }] : []),
                 alreadyCompletedToday
                   ? { label: 'Deshacer el registro de hoy', Icon: Undo2, onSelect: handleUndoComplete, tone: 'danger' }
                   : { label: 'Borrar sesión de hoy', Icon: Trash2, onSelect: handleDeleteTodaySession, tone: 'danger' },
@@ -1568,7 +1629,17 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       </Modal>
 
       <Modal open={showRex} onClose={() => setShowRex(false)} title="¿Algo ha pasado?">
-        <RexSupport profile={profile} todayIso={todayIso} todayDone={alreadyCompletedToday} onApply={handleRexApply} onClose={() => setShowRex(false)} />
+        <RexSupport
+          profile={profile}
+          todayIso={todayIso}
+          todayDone={alreadyCompletedToday}
+          canSwapWod={hasWodBlock && !alreadyCompletedToday}
+          canChangeType={!alreadyCompletedToday}
+          canHarder={canHarder}
+          onApply={handleRexApply}
+          onAct={handleRexAct}
+          onClose={() => setShowRex(false)}
+        />
       </Modal>
 
       <Modal open={showPainPicker} onClose={() => setShowPainPicker(false)} title="¿Algo te molesta hoy?">

@@ -24,7 +24,12 @@ export type RexTarget =
   /** Marcar hoy como descanso, o deshacerlo. */
   | 'descanso'
   /** El balance del día cerrado (previsto frente a hecho). */
-  | 'detalle-dia';
+  | 'detalle-dia'
+  /** Planificación: el detalle del estado del día, la hoja de dureza, el aviso de molestia y los avisos del coach. */
+  | 'plan-detalle'
+  | 'plan-dureza'
+  | 'plan-molestia'
+  | 'plan-avisos'
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 
