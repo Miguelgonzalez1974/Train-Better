@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Activity, Apple, BarChart3, ChevronDown, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
+import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, Flame, Gauge, Radar, Scale, Target, type LucideIcon } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { REX_MODULES, type RexSuggestion, type RexTarget } from './rexDashboard';
 
@@ -16,6 +16,15 @@ const MODULE_ICON: Partial<Record<RexTarget, LucideIcon>> = {
 
 const TYPE_MS = 18;
 
+/** El color del verbo del consejo: los mismos colores de estado que los anillos. */
+const LEAD_COLOR: Record<NonNullable<RexSuggestion['tone']>, string> = {
+  good: 'rgb(var(--c-state-good))',
+  mid: 'rgb(var(--c-state-mid))',
+  bad: 'rgb(var(--c-state-low))',
+  info: 'rgb(var(--c-state-cool))',
+  gold: 'rgb(var(--c-brand-gold))',
+};
+
 /**
  * Rex arriba del Dashboard: una frase con atajos a lo que toca ahora (check-in, revisión, nutrición…) y un «Más» con los módulos
  * que antes eran botones sueltos. La frase solo se escribe con animación la primera vez que sale cada día. Todo lo que decide
@@ -30,8 +39,11 @@ export function RexBar({
   extra,
   onAction,
   onDismiss,
+  onNext,
   onTyped,
 }: {
+  /** Pasa a la siguiente cosa que Rex tiene que contar, sin apartar la actual. */
+  onNext: () => void;
   /** Una celda más al final de «Más» (el cambio de tema). */
   extra?: ReactNode;
   suggestion: RexSuggestion;
@@ -78,9 +90,10 @@ export function RexBar({
     }, TYPE_MS);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestion.id, animate]);
+  }, [suggestion.id, suggestion.text, animate]);
 
   const quiet = suggestion.id === 'quiet';
+  const leadLen = suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.lead.length : 0;
 
   return (
     <section aria-label="Rex" className="rounded-[14px] border border-white/10 bg-white/[0.04] px-3.5 py-3">
@@ -95,7 +108,12 @@ export function RexBar({
         </div>
         <div className="min-w-0 flex-1">
           <p className="min-h-[2.5rem] text-[13px] leading-relaxed text-neutral-100" aria-live="polite">
-            {suggestion.text.slice(0, shown)}
+            {leadLen > 0 && (
+              <strong className="font-bold" style={{ color: LEAD_COLOR[suggestion.tone ?? 'info'] }}>
+                {suggestion.text.slice(0, Math.min(shown, leadLen))}
+              </strong>
+            )}
+            {suggestion.text.slice(leadLen, Math.max(shown, leadLen))}
             {typing && <span className="ml-0.5 inline-block h-3 w-px translate-y-0.5 animate-pulse bg-neutral-400 motion-reduce:animate-none" aria-hidden="true" />}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -127,7 +145,12 @@ export function RexBar({
               {!more && dots.length > 0 && <span className="absolute right-0 top-0.5 h-2 w-2 rounded-full bg-brand-orange" aria-label="Hay algo sin ver" />}
             </button>
           </div>
-          {waiting > 0 && !more && <p className="mt-1.5 text-[11px] text-neutral-500">{waiting === 1 ? 'Tengo otra cosa que contarte.' : `Tengo ${waiting} cosas más que contarte.`}</p>}
+          {waiting > 0 && !more && (
+            <button onClick={onNext} className="mt-1.5 flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 transition-colors hover:text-neutral-300">
+              {waiting === 1 ? 'Tengo otra cosa que contarte' : `Tengo ${waiting} cosas más que contarte`}
+              <ChevronRight size={12} aria-hidden="true" />
+            </button>
+          )}
         </div>
       </div>
 

@@ -38,7 +38,8 @@ import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { buildGoalRows } from './progressOverview';
-import { DayRing, type DashTab, type RingTarget } from './DayRing';
+import { BalanceBox, DayRing, type DashTab, type RingTarget } from './DayRing';
+import { dayBalance } from '../../engine/dayBalance';
 import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
@@ -89,6 +90,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [formOpen, setFormOpen] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
+  const [showDayDetail, setShowDayDetail] = useState(false);
   /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
   const [showWeekly, setShowWeekly] = useState<WeeklyReview | null>(null);
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
@@ -219,6 +221,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const emphasisReviewNew = Boolean(
     profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && !profile.emphasisPlan.review.noticed && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar'),
   );
+  // Se puede marcar hoy como descanso mientras haya sesión que descansar (o ya esté marcado) y no se haya entrenado.
+  const canRest = isToday && todayStrain === null && (restMarked || (todaySession !== null && !todaySession.isRestDay));
+  // El balance del día cerrado (previsto frente a hecho): Rex lo resume en una frase y el detalle se abre aparte.
+  const dayBalanceNow = isToday
+    ? dayBalance({ planned: dayStart.planned, real: shown.strain.real, target: shown.strain.target, status: shown.strain.status, isToday, prepMorning: dayStart.prep, prepNow: shown.readiness.total })
+    : null;
   const rexList = buildRexSuggestions({
     // Mirando un día pasado, Rex habla de ese día y no de hoy.
     viewDay: isToday
@@ -235,9 +243,23 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     hour: new Date().getHours(),
     isToday,
     hasCheckIn: Boolean(todayReadiness),
-    trainedToday: history.some((h) => h.date === todayIso),
+    trainedToday: todayStrain !== null,
     hasSessionToday: todaySession !== null && !todaySession.isRestDay,
     restMarked,
+    canRest,
+    advice: isToday && todayStrain === null ? { lead: advice.lead, reason: advice.reason, tone: advice.tone, overTarget: strainView.fit?.fit === 'se-pasa' } : null,
+    closing:
+      isToday && todayStrain !== null
+        ? {
+            real: todayStrain,
+            low: strainTarget.low,
+            high: strainTarget.high,
+            planned: dayStart.planned,
+            status: strainState,
+            notDone: describeSkipped(shown.entry?.skipped),
+            hasDetail: dayBalanceNow !== null,
+          }
+        : null,
     weeklyReviewRange: weeklyReview ? weekRangeText(weeklyReview.from, weeklyReview.to) : null,
     emphasisReviewPending: emphasisReviewNew,
     nutritionPercent: isToday ? nutritionPercent : null,
@@ -247,7 +269,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     daysSinceWeight,
   });
   const [rexMemory, setRexMemory] = useState<RexMemory>(() => loadRexMemory(typeof window !== 'undefined' ? window.localStorage : null));
-  const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso);
+  // Pasar a «la otra cosa» que Rex tiene que contar sin apartar la actual; se reinicia al cambiar de día.
+  const [rexCursor, setRexCursor] = useState(0);
+  useEffect(() => setRexCursor(0), [dayIso]);
+  const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso, rexCursor);
   function updateRexMemory(change: (m: RexMemory) => RexMemory) {
     setRexMemory((prev) => {
       const next = change(prev);
@@ -291,6 +316,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return onNavigateToPlanificacion();
       case 'hoy':
         return setDayIso(todayIso);
+      case 'descanso':
+        return toggleRest();
+      case 'detalle-dia':
+        return setShowDayDetail(true);
     }
   }
 
@@ -313,6 +342,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         extra={<ThemeToggle label className="!h-auto !w-full justify-start gap-2 px-3 py-2" />}
         onAction={runRexTarget}
         onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
+        onNext={() => setRexCursor((c) => c + 1)}
         onTyped={() => updateRexMemory((m) => withTyped(m, rexPick.current.id, todayIso))}
       />
       {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
@@ -386,8 +416,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           */}
           <div {...swipe} className="touch-pan-y">
           <DayRing
-            advice={advice}
-            rest={isToday && todayStrain === null && (restMarked || (todaySession !== null && !todaySession.isRestDay)) ? { marked: restMarked, onToggle: toggleRest } : undefined}
             strain={shown.strain}
             start={dayStart}
             notDone={describeSkipped(shown.entry?.skipped)}
@@ -396,7 +424,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             centerLabel={ringDayLabel(dayIso, todayIso)}
             isToday={isToday}
             onOpenTab={openRingTarget}
-            onAdjust={onNavigateToPlanificacion}
           />
           </div>
 
@@ -451,6 +478,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               setTab('sueno');
             }}
           />
+        </Modal>
+      )}
+      {showDayDetail && dayBalanceNow && (
+        <Modal open onClose={() => setShowDayDetail(false)} title="Cómo ha ido el día">
+          <BalanceBox balance={dayBalanceNow} target={shown.strain.target} isToday notDone={describeSkipped(shown.entry?.skipped)} />
         </Modal>
       )}
       {showLoad && (

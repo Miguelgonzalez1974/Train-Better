@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowRight, Check, CircleAlert, Moon, Sun, Trophy, Zap, type LucideIcon } from 'lucide-react';
+import { Check, CircleAlert } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
@@ -97,21 +97,6 @@ const ADVICE_COLOR: Record<DayAdvice['tone'], string> = {
   gold: 'rgb(var(--c-brand-gold))',
 };
 
-const ADVICE_ICON: Record<DayAdvice['icon'], LucideIcon> = {
-  check: Check,
-  bolt: Zap,
-  down: ArrowDown,
-  alert: CircleAlert,
-  sun: Sun,
-  moon: Moon,
-  trophy: Trophy,
-};
-
-function AdviceGlyph({ icon }: { icon: DayAdvice['icon'] }) {
-  const Icon = ADVICE_ICON[icon];
-  return <Icon size={14} strokeWidth={2.75} />;
-}
-
 /** La marca del esfuerzo previsto sobre el anillo del esfuerzo: una raya discontinua que lo cruza (dentro del grupo girado, como los arcos). */
 function PlannedTick({ planned }: { planned: number }) {
   const a = (Math.min(100, Math.max(0, planned)) / 100) * 2 * Math.PI;
@@ -125,7 +110,7 @@ function PlannedTick({ planned }: { planned: number }) {
  * El cierre del día: con qué esfuerzo previsto se partía y cuál fue el real, en una barra de 0 a 100 con el objetivo como banda y
  * la marca de lo previsto; y, si cambió, la preparación de la mañana frente a la de ahora.
  */
-function BalanceBox({ balance, target, isToday, notDone }: { balance: DayBalance; target: { low: number; high: number }; isToday: boolean; notDone?: string | null }) {
+export function BalanceBox({ balance, target, isToday, notDone }: { balance: DayBalance; target: { low: number; high: number }; isToday: boolean; notDone?: string | null }) {
   const over = balance.tone === 'mid';
   const color = ADVICE_COLOR[balance.tone];
   const { planned, real, diff, prep } = balance;
@@ -185,13 +170,9 @@ export function DayRing({
   strain,
   start,
   notDone,
-  checkIn,
-  advice,
-  rest,
   centerLabel,
   isToday,
   onOpenTab,
-  onAdjust,
 }: {
   readiness: ReadinessScore;
   acwr: AcwrResult;
@@ -200,17 +181,10 @@ export function DayRing({
   start?: { planned: number | null; prep: number | null } | null;
   /** Lo que no se hizo de la sesión ya cerrada, en una frase ("Sin el WOD, por la molestia."); null si se hizo todo. */
   notDone?: string | null;
-  checkIn?: ReactNode;
-  /** El consejo de hoy (ver `engine/dayAdvice.ts`); sin él, o en un día pasado, la frase habla del esfuerzo. */
-  advice?: DayAdvice | null;
-  /** El botón "Hoy descanso" (o su deshacer); sin él no se enseña. */
-  rest?: { marked: boolean; onToggle: () => void };
   /** Lo que va en el centro del anillo: "Hoy", "Ayer" o el día. */
   centerLabel: string;
   isToday: boolean;
   onOpenTab: (target: RingTarget) => void;
-  /** "Ajustar sesión": lleva a Planificación (otro WOD o una sesión ligera). */
-  onAdjust?: () => void;
 }) {
   const [filled, setFilled] = useState(false);
   useEffect(() => {
@@ -237,8 +211,6 @@ export function DayRing({
 
   return (
     <section>
-      {checkIn && <div className="mb-4">{checkIn}</div>}
-
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
         {/* Preparación */}
         <div className="flex flex-col items-end text-right">
@@ -326,58 +298,16 @@ export function DayRing({
         </div>
       </div>
 
-      {/* El consejo del día (solo hoy y antes de entrenar): una caja neutra con el icono y el verbo en el color del estado, y el motivo.
-          Cerrado el día, o en un día pasado, el balance de esfuerzo. */}
-      {balance ? (
-        <BalanceBox balance={balance} target={target} isToday={isToday} notDone={notDone} />
-      ) : advice && isToday && real === null ? (
-        <div className="mx-auto mt-5 flex max-w-[26rem] items-start gap-2.5 rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[13px] leading-relaxed">
-          <span
-            className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-            style={{ color: ADVICE_COLOR[advice.tone], backgroundColor: `color-mix(in srgb, ${ADVICE_COLOR[advice.tone]} 16%, transparent)` }}
-            aria-hidden="true"
-          >
-            <AdviceGlyph icon={advice.icon} />
-          </span>
-          <p className="text-neutral-300">
-            <strong className="font-bold" style={{ color: ADVICE_COLOR[advice.tone] }}>
-              {advice.lead}
-            </strong>
-            {advice.reason && <> {advice.reason}</>}
+      {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}
+      {!isToday &&
+        (balance ? (
+          <BalanceBox balance={balance} target={target} isToday={isToday} notDone={notDone} />
+        ) : (
+          <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">
+            {sentence(strain, isToday)}
+            {real !== null && notDone ? <> {notDone}</> : null}
           </p>
-        </div>
-      ) : (
-        <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">
-          {sentence(strain, isToday)}
-          {real !== null && notDone ? <> {notDone}</> : null}
-        </p>
-      )}
-
-      {/* "Hoy descanso": marca el día como descanso a propósito (no cuenta como día olvidado). Solo hoy y antes de entrenar. */}
-      {rest && isToday && real === null && (
-        <div className="mt-2.5 flex justify-center">
-          <button
-            onClick={rest.onToggle}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-neutral-400 transition-colors duration-200 hover:bg-white/5 hover:text-neutral-200"
-          >
-            <Moon size={13} strokeWidth={2.5} aria-hidden="true" />
-            {rest.marked ? 'Deshacer: voy a entrenar' : 'Hoy descanso'}
-          </button>
-        </div>
-      )}
-
-      {/* Si la sesión de hoy se pasa del objetivo, la decisión está aquí, no escondida en otra pestaña. */}
-      {onAdjust && isToday && real === null && strain.fit?.fit === 'se-pasa' && (
-        <div className="mt-3 flex justify-center">
-          <button
-            onClick={onAdjust}
-            className="flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-colors duration-200 hover:bg-white/5"
-            style={{ borderColor: 'rgb(var(--c-state-mid) / 0.6)', color: OVER }}
-          >
-            Ajustar sesión <ArrowRight size={13} aria-hidden="true" />
-          </button>
-        </div>
-      )}
+        ))}
     </section>
   );
 }

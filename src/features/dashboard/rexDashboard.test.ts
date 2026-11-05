@@ -58,12 +58,48 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     expect(list[0].text).toContain('2 nov al 8 nov');
   });
 
-  it('tras la sesión ofrece volumen y forma', () => {
-    const s = buildRexSuggestions({ ...calm, trainedToday: true })[0];
-    expect(s.id).toBe('sesion-hecha');
-    expect(s.mood).toBe('happy');
-    expect(s.actions.map((a) => a.target)).toEqual(['volumen', 'forma']);
+  it('tras la sesión: «Sesión hecha» con el esfuerzo frente al objetivo, y el detalle solo si hay balance', () => {
+    const closing = { real: 52, low: 55, high: 75, planned: 65, status: 'por-debajo' as const, notDone: null, hasDetail: true };
+    const s = buildRexSuggestions({ ...calm, trainedToday: true, closing })[0];
+    expect(s.id).toBe('cierre');
+    expect(s.lead).toBe('Sesión hecha.');
+    expect(s.text).toBe('Sesión hecha. Esfuerzo 52 con ~65 previstos, por debajo de tu objetivo (55–75): había margen.');
+    expect(s.dismissible).toBe(false);
+    expect(s.actions.map((a) => a.target)).toEqual(['detalle-dia', 'volumen', 'forma']);
+    const noDetail = buildRexSuggestions({ ...calm, trainedToday: true, closing: { ...closing, hasDetail: false, planned: null, status: 'pasado', real: 80, notDone: 'Sin el WOD, por la molestia.' } })[0];
+    expect(noDetail.actions.map((a) => a.target)).toEqual(['volumen', 'forma']);
+    expect(noDetail.text).toBe('Sesión hecha. Esfuerzo 80: 5 por encima de tu objetivo (55–75). Mañana, con cuidado. Sin el WOD, por la molestia.');
+    expect(noDetail.tone).toBe('mid');
+    expect(buildRexSuggestions({ ...calm, trainedToday: true })[0].text).toBe('Sesión hecha. Buen trabajo.');
   });
+
+  it('el consejo del día es la frase principal: verbo en color, motivo y atajos de la sesión y el descanso', () => {
+    const advice = { lead: 'Buen día para apretar.', reason: 'Preparación 82 % y carga óptima.', tone: 'good' as const, overTarget: false };
+    const list = buildRexSuggestions({ ...calm, advice, canRest: true });
+    expect(list[0]).toMatchObject({ id: 'consejo', lead: 'Buen día para apretar.', tone: 'good', dismissible: false });
+    expect(list[0].text).toBe('Buen día para apretar. Preparación 82 % y carga óptima.');
+    expect(list[0].actions).toEqual([
+      { label: 'Ver la sesión', target: 'planificacion' },
+      { label: 'Hoy descanso', target: 'descanso' },
+    ]);
+    // Si la sesión se pasa del objetivo, el atajo principal es ajustarla.
+    expect(buildRexSuggestions({ ...calm, advice: { ...advice, overTarget: true }, canRest: true })[0].actions[0].label).toBe('Ajustar sesión');
+    // Sin sesión prevista no ofrece verla; con el descanso marcado ofrece deshacerlo.
+    expect(buildRexSuggestions({ ...calm, advice, hasSessionToday: false, canRest: false })[0].actions).toEqual([]);
+    expect(buildRexSuggestions({ ...calm, advice, restMarked: true, canRest: true })[0].actions).toEqual([{ label: 'Deshacer: voy a entrenar', target: 'descanso' }]);
+  });
+
+  it('el check-in va antes que el consejo, y el consejo antes que lo demás', () => {
+    const advice = { lead: 'Entrena como está previsto.', reason: '', tone: 'info' as const, overTarget: false };
+    expect(ids({ advice, hasCheckIn: false, weeklyReviewRange: 'x', goalsBehind: 1 })).toEqual(['checkin', 'consejo', 'semana', 'objetivos-atrasados']);
+    expect(buildRexSuggestions({ ...calm, advice })[0].text).toBe('Entrena como está previsto.');
+  });
+
+  it('mirando otro día no hay consejo ni cierre de hoy', () => {
+    const advice = { lead: 'x', reason: 'y', tone: 'good' as const, overTarget: false };
+    expect(ids({ advice, isToday: false })).not.toContain('consejo');
+  });
+
 
   it('la nutrición solo se menciona por la tarde y si va baja', () => {
     expect(ids({ nutritionPercent: 30, hour: 11 })).not.toContain('nutricion');
@@ -89,11 +125,6 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     expect(never.id).toBe('peso');
     expect(never.text).toMatch(/Aún no tengo tu peso/);
     expect(ids({ daysSinceWeight: 13 })).not.toContain('peso');
-  });
-
-  it('un descanso elegido lo celebra con calma', () => {
-    expect(ids({ restMarked: true })).toEqual(['descanso']);
-    expect(ids({ restMarked: true, trainedToday: true })).not.toContain('descanso');
   });
 
   it('siempre ordenadas de más a menos importante', () => {
@@ -167,6 +198,12 @@ describe('Rex en el Dashboard: dejar para luego y recordar', () => {
     mem = dismissSuggestion(mem, 'semana', '2026-11-05');
     expect(pickRexSuggestion(list, mem, '2026-11-05').current).toBe(QUIET_SUGGESTION);
     expect(dismissSuggestion(mem, 'quiet', '2026-11-05')).toBe(mem);
+  });
+
+  it('«Tengo otra cosa…» pasa a la siguiente sin apartar nada y da la vuelta', () => {
+    expect(pickRexSuggestion(list, EMPTY_REX_MEMORY, '2026-11-05', 1).current.id).toBe('semana');
+    expect(pickRexSuggestion(list, EMPTY_REX_MEMORY, '2026-11-05', 2).current.id).toBe('checkin');
+    expect(pickRexSuggestion([], EMPTY_REX_MEMORY, '2026-11-05', 3).current).toBe(QUIET_SUGGESTION);
   });
 
   it('cuenta cuántas esperan detrás', () => {

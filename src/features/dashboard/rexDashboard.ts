@@ -20,7 +20,11 @@ export type RexTarget =
   | 'forma'
   | 'planificacion'
   /** Volver al día de hoy en el selector de día. */
-  | 'hoy';
+  | 'hoy'
+  /** Marcar hoy como descanso, o deshacerlo. */
+  | 'descanso'
+  /** El balance del día cerrado (previsto frente a hecho). */
+  | 'detalle-dia';
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 
@@ -33,11 +37,38 @@ export interface RexSuggestion {
   id: string;
   /** Mayor = antes. */
   priority: number;
+  /** La frase entera. Si lleva `lead`, empieza por él. */
   text: string;
+  /** El arranque de la frase (el verbo del consejo), que se pinta en el color de su tono. */
+  lead?: string;
+  tone?: 'good' | 'mid' | 'bad' | 'info' | 'gold';
   mood: RexBarMood;
   actions: RexAction[];
-  /** false: sin «Ahora no» (el comentario del día que se mira no se aparta). */
+  /** false: sin «Ahora no» (el consejo y el comentario del día no se apartan). */
   dismissible?: boolean;
+}
+
+/** El consejo del día tal como lo calcula `dayAdvice`, más si la sesión se pasa del objetivo. */
+export interface RexAdvice {
+  lead: string;
+  reason: string;
+  tone: 'good' | 'mid' | 'bad' | 'info' | 'gold';
+  /** La sesión prevista se pasa del objetivo de esfuerzo: el atajo principal es ajustarla. */
+  overTarget: boolean;
+}
+
+/** El día de hoy ya entrenado: cómo salió el esfuerzo frente al objetivo. */
+export interface RexClosing {
+  real: number;
+  low: number;
+  high: number;
+  /** Esfuerzo previsto anotado antes de entrenar; null si no se anotó. */
+  planned: number | null;
+  status: 'por-debajo' | 'dentro' | 'pasado' | 'sin-entrenar';
+  /** Lo que no se hizo de la sesión ("Sin el WOD, por la molestia."). */
+  notDone: string | null;
+  /** Hay balance (previsto frente a hecho) para abrir. */
+  hasDetail: boolean;
 }
 
 /** El día que se está mirando cuando no es hoy: Rex lo comenta en vez de hablar de hoy. */
@@ -67,6 +98,12 @@ export interface RexContext {
   /** Hoy hay sesión prevista (no es descanso ni está marcado como descanso). */
   hasSessionToday: boolean;
   restMarked: boolean;
+  /** Se puede marcar hoy como descanso (o deshacerlo): hay sesión que descansar y aún no se entrenó. */
+  canRest?: boolean;
+  /** El consejo de hoy (solo antes de entrenar). Rex lo dice como frase principal. */
+  advice?: RexAdvice | null;
+  /** Hoy ya entrenado: Rex cuenta cómo salió. */
+  closing?: RexClosing | null;
   /** Texto de las fechas de la semana a repasar ("2 nov al 8 nov"), o null si no hay revisión pendiente. */
   weeklyReviewRange: string | null;
   /** Revisión de 4 semanas de lo que prioriza el coach, sin ver ni avisar. */
@@ -130,6 +167,56 @@ export function daySuggestion(day: RexViewDay): RexSuggestion {
   return { id, priority: 100, text: `${day.label} entrenaste con un esfuerzo de ${real}, dentro de tu objetivo (${range}). Justo lo que tocaba.`, mood: 'happy', actions, dismissible: false };
 }
 
+const ADVICE_MOOD: Record<RexAdvice['tone'], RexBarMood> = { good: 'happy', mid: 'think', bad: 'think', info: 'idle', gold: 'lift' };
+
+/** El consejo del día como frase de Rex: el verbo en color y el motivo, con los atajos de la sesión y del descanso. */
+export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restMarked' | 'canRest' | 'hasSessionToday'>): RexSuggestion {
+  const actions: RexAction[] = [];
+  if (ctx.restMarked) {
+    actions.push({ label: 'Deshacer: voy a entrenar', target: 'descanso' });
+  } else {
+    if (ctx.hasSessionToday) actions.push({ label: advice.overTarget ? 'Ajustar sesión' : 'Ver la sesión', target: 'planificacion' });
+    if (ctx.canRest) actions.push({ label: 'Hoy descanso', target: 'descanso' });
+  }
+  return {
+    id: 'consejo',
+    priority: 95,
+    lead: advice.lead,
+    tone: advice.tone,
+    text: advice.reason ? `${advice.lead} ${advice.reason}` : advice.lead,
+    mood: ADVICE_MOOD[advice.tone],
+    actions,
+    dismissible: false,
+  };
+}
+
+/** Hoy ya entrenado: «Sesión hecha.» y el esfuerzo frente al objetivo, con el detalle (previsto frente a hecho) a un toque. */
+export function closingSuggestion(c: RexClosing | null): RexSuggestion {
+  const actions: RexAction[] = [];
+  if (c?.hasDetail) actions.push({ label: 'Ver detalle', target: 'detalle-dia' });
+  actions.push({ label: 'Volumen por día', target: 'volumen' }, { label: 'Tu forma', target: 'forma' });
+  const base = { id: 'cierre', priority: 95, lead: 'Sesión hecha.', actions, dismissible: false };
+  if (!c) return { ...base, text: 'Sesión hecha. Buen trabajo.', mood: 'happy', tone: 'good' };
+  const range = `${c.low}–${c.high}`;
+  const planned = c.planned !== null ? ` con ~${c.planned} previstos` : '';
+  let body: string;
+  let tone: RexSuggestion['tone'] = 'good';
+  let mood: RexBarMood = 'happy';
+  if (c.status === 'pasado') {
+    body = `Esfuerzo ${c.real}${planned}: ${c.real - c.high} por encima de tu objetivo (${range}). Mañana, con cuidado.`;
+    tone = 'mid';
+    mood = 'think';
+  } else if (c.status === 'por-debajo') {
+    body = `Esfuerzo ${c.real}${planned}, por debajo de tu objetivo (${range}): había margen.`;
+    tone = 'info';
+    mood = 'idle';
+  } else {
+    body = `Esfuerzo ${c.real}${planned}, dentro de tu objetivo (${range}).`;
+  }
+  const notDone = c.notDone ? ` ${c.notDone}` : '';
+  return { ...base, text: `Sesión hecha. ${body}${notDone}`, mood, tone };
+}
+
 /** Todas las sugerencias que tocan ahora, de más a menos importante. Nunca incluye la tranquila (`QUIET_SUGGESTION`). */
 export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
   if (ctx.viewDay) return [daySuggestion(ctx.viewDay)];
@@ -165,17 +252,11 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
     });
   }
 
+  // La frase principal de hoy: tras entrenar, cómo salió; antes, el consejo del día. Va justo detrás del check-in y no se aparta.
   if (ctx.isToday && ctx.trainedToday) {
-    out.push({
-      id: 'sesion-hecha',
-      priority: 70,
-      text: 'Sesión hecha, buen trabajo. ¿Quieres ver cómo ha quedado el volumen o cómo estás de forma?',
-      mood: 'happy',
-      actions: [
-        { label: 'Volumen por día', target: 'volumen' },
-        { label: 'Tu forma', target: 'forma' },
-      ],
-    });
+    out.push(closingSuggestion(ctx.closing ?? null));
+  } else if (ctx.isToday && ctx.advice) {
+    out.push(adviceSuggestion(ctx.advice, ctx));
   }
 
   if (ctx.isToday && ctx.nutritionPercent !== null && ctx.hour >= NUTRITION_HOUR && ctx.nutritionPercent < NUTRITION_LOW) {
@@ -206,16 +287,6 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
       text: `${ctx.goalsBehind} ${plural(ctx.goalsBehind, 'objetivo va', 'objetivos van')} por detrás o ${plural(ctx.goalsBehind, 'le falta', 'les faltan')} un test. ¿Lo miramos?`,
       mood: 'think',
       actions: [{ label: 'Ver objetivos', target: 'objetivos' }],
-    });
-  }
-
-  if (ctx.isToday && ctx.restMarked && !ctx.trainedToday) {
-    out.push({
-      id: 'descanso',
-      priority: 45,
-      text: 'Hoy toca descanso. Aprovecha para recuperar: duerme bien y come con ganas.',
-      mood: 'idle',
-      actions: [{ label: 'Ver mi forma', target: 'forma' }],
     });
   }
 
@@ -258,10 +329,11 @@ export const EMPTY_REX_MEMORY: RexMemory = { dismissed: {}, typed: [] };
 const TYPED_LIMIT = 30;
 
 /** Elige la sugerencia a enseñar: la primera no dejada para luego hoy; si no queda ninguna, la tranquila. */
-export function pickRexSuggestion(list: RexSuggestion[], memory: RexMemory, todayIso: string): { current: RexSuggestion; waiting: number } {
+export function pickRexSuggestion(list: RexSuggestion[], memory: RexMemory, todayIso: string, cursor = 0): { current: RexSuggestion; waiting: number } {
   const open = list.filter((s) => memory.dismissed[s.id] !== todayIso);
   if (open.length === 0) return { current: QUIET_SUGGESTION, waiting: 0 };
-  return { current: open[0], waiting: open.length - 1 };
+  // `cursor` pasa a la siguiente sin apartar nada («Tengo otra cosa…»); da la vuelta al llegar al final.
+  return { current: open[((cursor % open.length) + open.length) % open.length], waiting: open.length - 1 };
 }
 
 /** Deja una sugerencia para luego (hoy). No muta la memoria. */
