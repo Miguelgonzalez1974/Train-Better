@@ -11,9 +11,9 @@ const CUSTOM_FOOD_GROUPS: CustomFoodGroup[] = ['Proteína', 'Hidrato', 'Fruta', 
  * Mis alimentos: los que no están en el catálogo, dados de alta con su proteína e hidratos por 100 g. Salen al buscar en
  * "Añadir alimento" del diario. El catálogo predefinido se busca desde ahí, no hace falta verlo entero.
  */
-export function MisAlimentosPanel({ shared }: { shared: NutritionShared }) {
+export function MisAlimentosPanel({ shared, initialName = '' }: { shared: NutritionShared; /** Nombre ya escrito (cuando Rex no conoce un alimento y se da de alta desde ahí). */ initialName?: string }) {
   const { prefs, updatePrefs } = shared;
-  const [newFood, setNewFood] = useState<{ name: string; p: string; c: string; group: CustomFoodGroup | null }>({ name: '', p: '', c: '', group: null });
+  const [newFood, setNewFood] = useState<{ name: string; p: string; c: string; group: CustomFoodGroup | null }>({ name: initialName, p: '', c: '', group: null });
   const customFoods = prefs.customFoods ?? [];
 
   function saveCustomFood() {

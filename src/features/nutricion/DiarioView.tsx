@@ -11,6 +11,7 @@ import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
 import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MacroRing } from './MacroRing';
 import { MisAlimentosPanel } from './MisAlimentosPanel';
+import { RexMeal } from './RexMeal';
 import { QuantityStepper } from './QuantityStepper';
 import { addDays, dayLabel, dayTarget, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
@@ -38,6 +39,8 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
   const [changingType, setChangingType] = useState(false);
   const [adding, setAdding] = useState(false);
   const [myFoods, setMyFoods] = useState(false);
+  /** Nombre con el que se abre «Mis alimentos» cuando Rex no conoce lo que has dicho. */
+  const [myFoodsName, setMyFoodsName] = useState('');
   useEffect(() => {
     setTypeOverride(null);
     setChangingType(false);
@@ -147,6 +150,17 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
         )}
       </section>
 
+      {/* Rex: escribes lo que has comido y lo apunta (tras enseñártelo). */}
+      <RexMeal
+        shared={shared}
+        iso={iso}
+        missing={missing}
+        onCreateFood={(name) => {
+          setMyFoodsName(name);
+          setMyFoods(true);
+        }}
+      />
+
       <button
         onClick={() => setAdding(true)}
         className="flex items-center justify-center gap-2 rounded-xl bg-brand-orange px-4 py-3 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
@@ -212,12 +226,15 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
 
       {myFoods && (
         <Modal open onClose={() => setMyFoods(false)} title="Mis alimentos">
-          <MisAlimentosPanel shared={shared} />
+          <MisAlimentosPanel shared={shared} initialName={myFoodsName} />
         </Modal>
       )}
 
       <button
-        onClick={() => setMyFoods(true)}
+        onClick={() => {
+          setMyFoodsName('');
+          setMyFoods(true);
+        }}
         className="flex items-center justify-between rounded-xl border border-brand-border px-3.5 py-3 text-left text-sm font-semibold text-neutral-200 transition-colors hover:border-brand-gold hover:text-white"
       >
         <span>
