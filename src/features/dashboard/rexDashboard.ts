@@ -405,5 +405,5 @@ export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'forma', label: 'Tu forma' },
   { target: 'perfil', label: 'Mi perfil' },
   { target: 'objetivos', label: 'Objetivos' },
-  { target: 'peso', label: 'Peso corporal' },
+  // El peso corporal ya no está aquí: se apunta desde Nutrición (que es donde se usa) y con el aviso de Rex cuando lleva días sin apuntarse.
 ];

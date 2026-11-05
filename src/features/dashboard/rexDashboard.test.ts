@@ -247,6 +247,8 @@ describe('Rex en el Dashboard: los módulos de «Más»', () => {
   it('cubre los botones que salen de la cabecera, sin repetir', () => {
     const targets = REX_MODULES.map((m) => m.target);
     expect(new Set(targets).size).toBe(targets.length);
-    for (const t of ['nutricion', 'constancia', 'volumen', 'analisis', 'perfil', 'objetivos', 'peso']) expect(targets).toContain(t);
+    for (const t of ['nutricion', 'constancia', 'volumen', 'analisis', 'perfil', 'objetivos', 'movilidad']) expect(targets).toContain(t);
+    // El peso se apunta desde Nutrición y con el aviso de Rex, no desde «Más».
+    expect(targets).not.toContain('peso');
   });
 });
