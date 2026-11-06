@@ -18,8 +18,8 @@ const DAY_INITIAL = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 const DAY_LONG = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const dow = (iso: string) => new Date(`${iso}T12:00:00`).getDay();
 
-/** La línea del previsto: blanco apagado, fina y discontinua, para que no se confunda con el azul (lo hecho) ni con el gris (la preparación). */
-const PLAN_STROKE = 'rgb(var(--c-white) / 0.7)';
+/** La línea del previsto: en su color (fucsia, como en los anillos), fina y discontinua, para que no se confunda con el azul (lo hecho) ni con el gris (la preparación). */
+const PLAN_STROKE = 'rgb(var(--c-plan))';
 
 /**
  * El hueco entre lo previsto y lo hecho, como trozos de polígono entre días contiguos que tienen las dos cosas: `under` = lo hecho
@@ -174,7 +174,7 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
             {selected && (
               <div className="flex gap-6">
                 <div className="text-right">
-                  <p className="num text-[28px] font-medium leading-none" style={{ color: BLUE }}>
+                  <p className="num text-[28px] font-medium leading-none" style={{ color: isPlanned ? PLAN_STROKE : BLUE }}>
                     {shownStrain !== null ? `${isPlanned ? '~' : ''}${shownStrain}` : '—'}
                   </p>
                   <p className="mt-1.5 text-[11px] uppercase tracking-[0.1em] text-neutral-500">
@@ -182,7 +182,7 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
                     {planNote !== null && (
                       <>
                         {' · '}
-                        <span className="text-neutral-300">previsto ~{planNote}</span>
+                        <span className="font-semibold normal-case" style={{ color: PLAN_STROKE }}>previsto ~{planNote}</span>
                       </>
                     )}
                     {todayRunning ? ' · hasta ahora' : FIT_WORD[shownFit] ? ` · ${FIT_WORD[shownFit]}` : ''}
@@ -270,7 +270,7 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
                   {p.readiness !== null && <circle cx={x(i)} cy={y(p.readiness)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BAND_COLOR[readinessBand(p.readiness)]} strokeWidth={sw} />}
                   {p.strain !== null && <circle cx={x(i)} cy={y(p.strain)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BLUE} strokeWidth={sw} />}
                   {on && p.strain !== null && p.plan != null && p.plan > 0 && <circle cx={x(i)} cy={y(p.plan)} r={2.6} fill="rgb(var(--c-white) / 0.95)" stroke="rgb(var(--c-brand-bg))" strokeWidth={1} />}
-                  {p.strain === null && p.planned !== null && <circle cx={x(i)} cy={y(p.planned)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={BLUE} strokeWidth={sw} strokeDasharray="1.6 1.6" />}
+                  {p.strain === null && p.planned !== null && <circle cx={x(i)} cy={y(p.planned)} r={rr} fill="rgb(var(--c-brand-bg))" stroke={PLAN_STROKE} strokeWidth={sw} strokeDasharray="1.6 1.6" />}
                 </Fragment>
               );
             })}

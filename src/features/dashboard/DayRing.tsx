@@ -5,7 +5,7 @@ import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { recoveryColor } from './RecoveryCard';
-import { ACCENT as EFFORT, OVER, type StrainView } from './StrainRing';
+import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 
 export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
 /** Lo que se abre al tocar un número del anillo: una pestaña, o la carga (que vive en el icono de arriba). */
@@ -103,7 +103,7 @@ function PlannedTick({ planned }: { planned: number }) {
   const point = (r: number) => ({ x: 50 + r * Math.cos(a), y: 50 + r * Math.sin(a) });
   const from = point(R_EFF - STROKE / 2 - 0.3);
   const to = point(R_EFF + STROKE / 2 + 0.3);
-  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="rgb(var(--c-white) / 0.95)" strokeWidth={2} strokeLinecap="round" strokeDasharray="2.2 2.2" />;
+  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={PLAN} strokeWidth={2.4} strokeLinecap="round" strokeDasharray="2.2 2.2" />;
 }
 
 /**
@@ -129,15 +129,15 @@ export function BalanceBox({ balance, target, isToday, notDone }: { balance: Day
           <strong className="font-bold" style={{ color }}>
             {balance.lead}
           </strong>{' '}
-          Partías con <strong className={STRONG}>~{planned}</strong> de esfuerzo y {isToday ? 'has hecho' : 'hiciste'} <strong className={STRONG}>{real}</strong>
+          Partías con <strong className="font-semibold" style={{ color: PLAN }}>~{planned}</strong> de esfuerzo y {isToday ? 'has hecho' : 'hiciste'} <strong className={STRONG}>{real}</strong>
           {diff === 0 ? ' (justo lo previsto).' : ` (${sign}${Math.abs(diff)}).`}
         </p>
       </div>
       <div className="relative mx-0.5 mb-1.5 mt-8 h-2 rounded-full bg-white/[0.08]" role="img" aria-label={`Previsto ${planned}, hecho ${real}, objetivo ${target.low} a ${target.high}`}>
         <div className="absolute -bottom-1 -top-1 rounded-md border-[1.5px]" style={{ left: `${target.low}%`, width: `${target.high - target.low}%`, borderColor: 'rgb(var(--c-white) / 0.8)' }} />
         <div className="absolute bottom-0 left-0 top-0 rounded-full" style={{ width: `${Math.min(100, real)}%`, backgroundColor: over ? 'rgb(var(--c-state-mid))' : 'rgb(var(--c-state-cool))' }} />
-        <div className="absolute -bottom-[5px] -top-[5px] w-0 border-l-2 border-dashed" style={{ left: `${Math.min(100, planned)}%`, borderColor: 'rgb(var(--c-white) / 0.9)' }}>
-          <span className="absolute -top-[17px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-neutral-300">previsto {planned}</span>
+        <div className="absolute -bottom-[5px] -top-[5px] w-0 border-l-2 border-dashed" style={{ left: `${Math.min(100, planned)}%`, borderColor: PLAN }}>
+          <span className="absolute -top-[17px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold" style={{ color: PLAN }}>previsto {planned}</span>
         </div>
       </div>
       <div className="mx-0.5 flex justify-between text-[10px] text-neutral-500">
@@ -256,7 +256,8 @@ export function DayRing({
               {/* Esfuerzo (exterior) */}
               <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
               {shown !== null && shown > 0 && (
-                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: EFFORT, opacity }} {...dash(R_EFF, 0, within)} className={slide} />
+                // Antes de entrenar el arco es el previsto (lila y algo tenue); una vez entrenado, el esfuerzo hecho (azul).
+                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: real === null ? PLAN : EFFORT, opacity: real === null ? 0.7 : opacity }} {...dash(R_EFF, 0, within)} className={slide} />
               )}
               {beyond > 0 && (
                 <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: OVER, opacity }} {...dash(R_EFF, target.high - 0.6, shown ?? target.high)} className={slide} />
@@ -280,12 +281,18 @@ export function DayRing({
             <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: EFFORT }}>
               Esfuerzo
             </span>
-            <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: beyond > 0 ? OVER : EFFORT }}>
+            <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: beyond > 0 ? OVER : real === null ? PLAN : EFFORT }}>
               {shown !== null ? `${real === null ? '~' : ''}${shown}` : '—'}
             </span>
+            {/* Antes de entrenar el número es el previsto; ya entrenado, el número es lo hecho y el previsto va debajo, en su color. */}
+            {real === null && shown !== null && (
+              <span className="mt-1.5 text-xs font-semibold leading-tight" style={{ color: PLAN }}>
+                previsto
+              </span>
+            )}
             {balance && (
-              <span className="mt-1.5 text-[11px] leading-tight text-neutral-500">
-                previsto <strong className="font-semibold text-neutral-300">~{balance.planned}</strong>
+              <span className="mt-1.5 text-xs font-semibold leading-tight" style={{ color: PLAN }}>
+                previsto ~{balance.planned}
               </span>
             )}
           </button>

@@ -8,7 +8,7 @@ import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { DayShapeChips } from '../shell/blockMeta';
 import { competitionHeadline } from '../shell/competitionMeta';
 import { SectionLabel } from '../shell/SectionLabel';
-import { ACCENT as EFFORT, OVER, type StrainView } from './StrainRing';
+import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 
 /** "Back Squat · WOD 12 min AMRAP" — el titular de la sesión de hoy en una línea, no el detalle entero (para eso está Planificación). */
 function buildPreviewLine(session: DailySession): string {
@@ -52,7 +52,7 @@ function Badge({ tone, children }: { tone: BadgeTone; children: ReactNode }) {
       : tone === 'over'
         ? { backgroundColor: OVER, color: 'rgb(var(--c-brand-bg))' }
         : tone === 'planned'
-          ? { border: `1.5px dashed ${EFFORT}`, color: EFFORT, backgroundColor: 'rgb(var(--c-state-cool) / 0.1)' }
+          ? { border: `1.5px dashed ${PLAN}`, color: PLAN, backgroundColor: 'rgb(var(--c-plan) / 0.1)' }
           : tone === 'plannedOver'
             ? { border: `1.5px dashed ${OVER}`, color: OVER, backgroundColor: 'rgb(var(--c-state-mid) / 0.1)' }
             : tone === 'gold'
