@@ -39,7 +39,7 @@ import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { buildGoalRows } from './progressOverview';
 import { BalanceBox, DayRing, type DashTab } from './DayRing';
-import { explainDone, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainAction } from '../../engine/explainNumbers';
+import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainAction } from '../../engine/explainNumbers';
 import { dayBalance } from '../../engine/dayBalance';
 import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
@@ -352,6 +352,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       status: shown.strain.status,
       rpe: shown.entry?.rpe,
       minutes: shown.entry?.durationMin,
+    }),
+    esfuerzo: explainEffort({
+      real: shown.strain.real,
+      planned: dayStart.planned ?? shown.strain.planned?.strain ?? null,
+      target: shown.strain.target,
+      status: shown.strain.status,
     }),
     previsto: explainPlanned(shown.strain.planned, shown.strain.target, shown.strain.fit),
     objetivo: explainObjective(shown.strain.target),

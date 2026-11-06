@@ -6,7 +6,8 @@ import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 import type { ExplainAction, ExplainId, Explanation } from '../../engine/explainNumbers';
-import { RexExplainBubble } from './RexExplainBubble';
+import { RexExplainBubble, RexHint } from './RexExplainBubble';
+import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
 
 export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
 /** Lo que se abre al tocar un número del anillo: una pestaña, o la carga (que vive en el icono de arriba). */
@@ -129,7 +130,7 @@ const CHAR_WIDTH = 7.2 * 0.56;
  * El rango del objetivo escrito sobre su corchete, siguiendo la curva del aro. En la mitad de arriba se lee por fuera del aro; en la de
  * abajo, por dentro de la curva (si no, saldría del revés). Va fuera del grupo girado: los ángulos se miden desde las 12 en sentido horario.
  */
-function ObjectiveLabel({ id, low, high }: { id: string; low: number; high: number }) {
+function ObjectiveLabel({ id, low, high, onTap }: { id: string; low: number; high: number; onTap: () => void }) {
   const lower = Math.cos(((low + high) / 2 / 100) * 2 * Math.PI) < 0;
   const r = lower ? 56.5 : 51.6;
   const at = (pct: number) => {
@@ -149,6 +150,26 @@ function ObjectiveLabel({ id, low, high }: { id: string; low: number; high: numb
       <defs>
         <path id={id} d={d} />
       </defs>
+      {/* Zona táctil del texto del objetivo: Rex lo explica */}
+      <path
+        d={d}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={12}
+        strokeLinecap="round"
+        pointerEvents="stroke"
+        role="button"
+        tabIndex={0}
+        aria-label="Rex explica el objetivo"
+        onClick={onTap}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTap();
+          }
+        }}
+        className="cursor-pointer outline-none"
+      />
       <text fontSize={7.2} fontWeight={500} fill="rgb(var(--c-white) / 0.85)" className="num">
         <textPath href={`#${id}`} startOffset="50%" textAnchor="middle">
           {text}
@@ -251,9 +272,41 @@ export function DayRing({
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
   }, [centerLabel]);
-  const ask = (id: ExplainId) => setAsked((cur) => (cur === id ? null : id));
+  // La pista de Rex («Toca un aro o un número…») sale hasta el primer toque y no vuelve.
+  const [hintSeen, setHintSeen] = useState(() => ringHintSeen(typeof window !== 'undefined' ? window.localStorage : null));
+  const ask = (id: ExplainId) => {
+    setAsked((cur) => (cur === id ? null : id));
+    if (!hintSeen) {
+      setHintSeen(true);
+      markRingHintSeen(typeof window !== 'undefined' ? window.localStorage : null);
+    }
+  };
   const askedExplanation = asked ? explanations[asked] : undefined;
-  const askedAnchor: 'left' | 'center' | 'right' = asked === 'preparacion' || asked === 'carga' ? 'left' : asked === 'realizado' || asked === 'previsto' ? 'right' : 'center';
+  const askedAnchor: 'left' | 'center' | 'right' = asked === 'preparacion' || asked === 'carga' ? 'left' : asked === 'objetivo' ? 'center' : 'right';
+  /** Un aro tocable: la zona táctil es un círculo transparente más ancho que el aro, y se maneja también con el teclado. */
+  const ringHit = (r: number, id: ExplainId, label: string) => (
+    <circle
+      cx="50"
+      cy="50"
+      r={r}
+      fill="none"
+      stroke="transparent"
+      strokeWidth={13}
+      pointerEvents="stroke"
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      aria-expanded={asked === id}
+      onClick={() => ask(id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          ask(id);
+        }
+      }}
+      className="cursor-pointer outline-none focus-visible:stroke-white/20"
+    />
+  );
   const asking = (id: ExplainId) => (asked === id ? 'rounded-lg bg-white/10' : '');
 
   const { total } = readiness;
@@ -283,7 +336,7 @@ export function DayRing({
         {/* Preparación */}
         <div className="flex flex-col items-end text-right">
           <button onClick={() => ask('preparacion')} aria-expanded={asked === 'preparacion'} className={`flex flex-col items-end -mx-1 px-1 py-0.5 ${asking('preparacion')}`}>
-            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: prepTint }}>
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: prepTint }}>
               Preparación
             </span>
             <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: prepTint }}>
@@ -294,7 +347,7 @@ export function DayRing({
           </button>
           {hasLoad ? (
             <button onClick={() => ask('carga')} aria-expanded={asked === 'carga'} className={`mt-3 flex flex-col items-end -mx-1 px-1 py-0.5 ${asking('carga')}`}>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500">Carga</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500 underline decoration-dotted decoration-1 underline-offset-[3px]">Carga</span>
               <span className="flex items-center gap-1 text-sm font-semibold text-neutral-200">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ZONE_COLOR[acwr.zone] }} />
                 {ZONE_WORD[acwr.zone]}
@@ -307,7 +360,7 @@ export function DayRing({
 
         {/* Los dos anillos */}
         <div className="relative aspect-square w-[min(44vw,9.5rem)]">
-          <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" role="img" aria-label={`Preparación ${total ?? 'sin datos'}, esfuerzo ${real ?? 'sin entrenar'}${plannedLine !== null ? `, previsto ${plannedLine}` : ''}, objetivo ${target.low} a ${target.high}`}>
+          <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" role="group" aria-label={`Preparación ${total ?? 'sin datos'}, esfuerzo ${real ?? 'sin entrenar'}${plannedLine !== null ? `, previsto ${plannedLine}` : ''}, objetivo ${target.low} a ${target.high}`}>
             <g transform="rotate(-90 50 50)">
               {/* Objetivo: corchete fino por fuera, de tu mínimo a tu máximo */}
               <circle
@@ -350,19 +403,20 @@ export function DayRing({
               )}
             </g>
             {/* Objetivo: el rango escrito sobre su corchete, girando con él */}
-            <ObjectiveLabel id={labelId} low={target.low} high={target.high} />
+            <ObjectiveLabel id={labelId} low={target.low} high={target.high} onTap={() => ask('objetivo')} />
+            {/* Zonas táctiles de los aros: el de dentro explica la preparación y el de fuera, el esfuerzo entero (realizado, previsto y objetivo) */}
+            {ringHit(R_PREP, 'preparacion', 'Rex explica la preparación')}
+            {ringHit(R_EFF, 'esfuerzo', 'Rex explica el esfuerzo')}
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500">{centerLabel}</span>
           </div>
-          {/* Tocar el aro: Rex explica el objetivo */}
-          <button onClick={() => ask('objetivo')} aria-label="Rex explica el objetivo" aria-expanded={asked === 'objetivo'} className="absolute inset-0 rounded-full" />
         </div>
 
         {/* Esfuerzo: lo realizado y lo previsto, siempre a la vista, cada uno con el color que tiene en el aro. El objetivo va escrito sobre el arco. */}
         <div className="flex flex-col items-start text-left">
           <button onClick={() => ask('realizado')} aria-expanded={asked === 'realizado'} className={`flex flex-col items-start text-left -mx-1 px-1 py-0.5 ${asking('realizado')}`}>
-            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: doneColor }}>
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: doneColor }}>
               Realizado
             </span>
             <span className="num text-[2rem] font-semibold leading-none tracking-tight" style={{ color: doneColor }}>
@@ -370,7 +424,7 @@ export function DayRing({
             </span>
           </button>
           <button onClick={() => ask('previsto')} aria-expanded={asked === 'previsto'} className={`mt-2.5 flex flex-col items-start text-left -mx-1 px-1 py-0.5 ${asking('previsto')}`}>
-            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: PLAN }}>
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: PLAN }}>
               Previsto
             </span>
             <span className="num text-xl font-semibold leading-none tracking-tight" style={{ color: PLAN }}>
@@ -381,6 +435,7 @@ export function DayRing({
       </div>
 
       {/* Pregúntale a Rex: el globo con la explicación del número tocado */}
+      {!askedExplanation && !hintSeen && <RexHint />}
       {askedExplanation && <RexExplainBubble explanation={askedExplanation} anchor={askedAnchor} onAction={onExplainAction} onClose={() => setAsked(null)} />}
 
       {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}

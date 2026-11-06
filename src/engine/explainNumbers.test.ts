@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StrainTarget } from '../data/athlete/types';
-import { explainDone, explainLoad, explainObjective, explainPlanned, explainReadiness } from './explainNumbers';
+import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness } from './explainNumbers';
 import type { AcwrResult } from './loadMetrics';
 import type { ReadinessScore } from './readinessScore';
 
@@ -122,5 +122,33 @@ describe('explicar lo previsto, lo realizado y el objetivo', () => {
     expect(e.text).toContain('preparación de 58');
     expect(explainObjective(target({ provisional: true })).text).toContain('Aún sin tu check-in');
     expect(explainObjective(target({ readiness: null })).text).toBe('Es la zona de esfuerzo que te conviene hoy, según cómo estás.');
+  });
+});
+
+describe('explicar el aro del esfuerzo entero', () => {
+  const base = { target: { low: 55, high: 75 } };
+
+  it('antes de entrenar junta lo hecho (vacío), lo previsto y el objetivo, y dice si la sesión encaja', () => {
+    const e = explainEffort({ ...base, real: null, planned: 65, status: 'sin-entrenar' });
+    expect(e).toMatchObject({ id: 'esfuerzo', lead: 'Tu esfuerzo de hoy.', tone: 'effort', foot: 'La sesión cae dentro de tu objetivo: encaja.' });
+    expect(e.text).toBe('Aún no has entrenado: lo previsto es ~65 y tu objetivo 55–75.');
+    expect(e.rows).toEqual([
+      { kind: 'plain', label: 'Realizado', value: '—' },
+      { kind: 'plain', label: 'Previsto (la sesión de hoy)', value: '~65' },
+      { kind: 'plain', label: 'Objetivo (lo que te conviene)', value: '55–75' },
+    ]);
+    expect(e.actions.map((a) => a.action)).toEqual(['ver-esfuerzo', 'planificacion']);
+    expect(explainEffort({ ...base, real: null, planned: 90, status: 'sin-entrenar' }).foot).toContain('se pasa 15');
+    expect(explainEffort({ ...base, real: null, planned: 30, status: 'sin-entrenar' }).foot).toContain('deja margen');
+    expect(explainEffort({ ...base, real: null, planned: null, status: 'sin-entrenar' }).text).toBe('Aún no has entrenado y tu objetivo es 55–75.');
+  });
+
+  it('ya entrenado cuenta lo hecho frente a lo previsto y cómo quedó frente al objetivo', () => {
+    const e = explainEffort({ ...base, real: 52, planned: 65, status: 'por-debajo' });
+    expect(e.text).toBe('Has hecho 52 frente a ~65 previstos, con un objetivo de 55–75.');
+    expect(e.foot).toBe('Has quedado por debajo del objetivo.');
+    expect(e.rows[0]).toEqual({ kind: 'plain', label: 'Realizado', value: '52' });
+    expect(explainEffort({ ...base, real: 80, planned: 65, status: 'pasado' })).toMatchObject({ tone: 'bad', foot: 'Te has pasado del objetivo.' });
+    expect(explainEffort({ ...base, real: 70, planned: null, status: 'dentro' }).text).toBe('Has hecho 70, con un objetivo de 55–75.');
   });
 });

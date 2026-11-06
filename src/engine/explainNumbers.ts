@@ -1,6 +1,6 @@
 import type { StrainTarget } from '../data/athlete/types';
 import type { AcwrResult } from './loadMetrics';
-import type { PlanFit, PlannedStrain } from './plannedStrain';
+import { strainFit, type PlanFit, type PlannedStrain } from './plannedStrain';
 import type { ReadinessScore } from './readinessScore';
 import type { StrainStatus } from './strain';
 
@@ -10,7 +10,7 @@ import type { StrainStatus } from './strain';
  * `RexExplainBubble`, y los botones de cada explicación llevan a una pantalla con un `ExplainAction`.
  */
 
-export type ExplainId = 'preparacion' | 'carga' | 'realizado' | 'previsto' | 'objetivo';
+export type ExplainId = 'preparacion' | 'carga' | 'esfuerzo' | 'realizado' | 'previsto' | 'objetivo';
 
 /** Color del verbo de la explicación (los colores de estado de la app, el del esfuerzo, el del previsto o el neutro). */
 export type ExplainTone = 'good' | 'mid' | 'bad' | 'info' | 'plan' | 'effort' | 'neutral';
@@ -206,6 +206,42 @@ export function explainPlanned(planned: PlannedStrain | null, target: Pick<Strai
     rows,
     foot,
     actions,
+  };
+}
+
+/**
+ * El aro del esfuerzo entero: lo realizado, lo previsto y el objetivo juntos, que son lo mismo mirado de tres formas. Es lo que sale al
+ * tocar el aro de fuera; cada número, y el texto del objetivo, siguen teniendo su explicación suelta.
+ */
+export function explainEffort(i: DoneInput): Explanation {
+  const range = `${i.target.low}–${i.target.high}`;
+  const rows: ExplainRow[] = [
+    { kind: 'plain', label: 'Realizado', value: i.real === null ? '—' : String(i.real) },
+    { kind: 'plain', label: 'Previsto (la sesión de hoy)', value: i.planned === null ? '—' : `~${i.planned}` },
+    { kind: 'plain', label: 'Objetivo (lo que te conviene)', value: range },
+  ];
+  if (i.real === null) {
+    const fit = i.planned === null ? null : strainFit(i.planned, i.target);
+    const foot = i.planned === null ? 'Hoy no hay una sesión de la que calcular el previsto.' : fit?.fit === 'se-pasa' ? `La sesión se pasa ${fit.diff} de tu objetivo: puedes ajustarla.` : fit?.fit === 'se-queda-corta' ? 'La sesión te deja margen sobre tu objetivo.' : 'La sesión cae dentro de tu objetivo: encaja.';
+    return {
+      id: 'esfuerzo',
+      lead: 'Tu esfuerzo de hoy.',
+      tone: 'effort',
+      text: i.planned === null ? `Aún no has entrenado y tu objetivo es ${range}.` : `Aún no has entrenado: lo previsto es ~${i.planned} y tu objetivo ${range}.`,
+      rows,
+      foot,
+      actions: [{ label: 'Ver la tendencia', action: 'ver-esfuerzo' }, { label: 'Ir a la sesión', action: 'planificacion' }],
+    };
+  }
+  const word = i.status === 'pasado' ? 'Te has pasado del objetivo.' : i.status === 'por-debajo' ? 'Has quedado por debajo del objetivo.' : 'Has quedado dentro del objetivo.';
+  return {
+    id: 'esfuerzo',
+    lead: 'Tu esfuerzo de hoy.',
+    tone: i.status === 'pasado' ? 'bad' : 'effort',
+    text: `Has hecho ${i.real}${i.planned !== null ? ` frente a ~${i.planned} previstos` : ''}, con un objetivo de ${range}.`,
+    rows,
+    foot: word,
+    actions: [{ label: 'Ver la tendencia', action: 'ver-esfuerzo' }],
   };
 }
 

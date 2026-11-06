@@ -139,3 +139,18 @@ export function RexExplainBubble({
     </section>
   );
 }
+
+/** La pista de Rex bajo los anillos, hasta que se toca algo por primera vez: ocupa el mismo sitio que luego tendrá la explicación. */
+export function RexHint() {
+  return (
+    <section role="note" className="relative mt-4 animate-section-in motion-reduce:animate-none">
+      <span className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-white/20 bg-brand-surface" aria-hidden="true" />
+      <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-brand-surface px-3.5 py-3">
+        <RexMascot size={32} />
+        <p className="text-[13px] leading-relaxed text-neutral-200">
+          <strong className="font-bold text-good">Toca un aro o un número</strong> para ver de dónde sale.
+        </p>
+      </div>
+    </section>
+  );
+}
