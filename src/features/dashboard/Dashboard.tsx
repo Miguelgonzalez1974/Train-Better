@@ -41,7 +41,9 @@ import { buildGoalRows } from './progressOverview';
 import { BalanceBox, DayRing, type DashTab } from './DayRing';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainAction } from '../../engine/explainNumbers';
 import { dayBalance } from '../../engine/dayBalance';
-import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
+import { macroChip } from './dayHeader';
+import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
+import { DashTabs, DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
@@ -101,6 +103,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
   const [dayIso, setDayIso] = useState(() => toLocalIsoDate(new Date()));
   const [tab, setTab] = useState<DashTab>('resumen');
+  // Rex avisa de que los aros se tocan (globo de la esquina + latido de los aros) hasta el primer toque; no vuelve.
+  const [ringHintPending, setRingHintPending] = useState(() => !ringHintSeen(typeof window !== 'undefined' ? window.localStorage : null));
+  const markRingHint = () => {
+    setRingHintPending(false);
+    markRingHintSeen(typeof window !== 'undefined' ? window.localStorage : null);
+  };
   // Deslizar el dedo sobre el anillo cambia de día (también están las flechas de arriba).
   const swipe = useDaySwipe((delta) => setDayIso((cur) => shiftDay(cur, delta, toLocalIsoDate(new Date()))));
 
@@ -376,6 +384,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {/* Rex en la esquina: un globo con lo más importante al abrir y, al tocarlo, su panel con atajos y los módulos de «Más». */}
       <RexCorner
         speak={isToday}
+        hint={ringHintPending && tab === 'resumen' ? { lead: 'Toca un aro o un número', text: ' para ver de dónde sale.' } : null}
         suggestion={rexPick.current}
         waiting={rexPick.waiting}
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
@@ -448,6 +457,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       )}
 
       {/* Selector de día y pestañas, al estilo Whoop: el día elegido manda sobre todo lo de debajo. */}
+      <DayHeader dayIso={dayIso} macro={macroChip(profile.macrocycles, todayIso, todaySession?.competition?.daysToEvent ?? null)} onOpenMacro={() => onNavigateToObjetivos()} />
       <DaySelector dayIso={dayIso} todayIso={todayIso} onChange={setDayIso} />
       <DashTabs tab={tab} onChange={setTab} />
 
@@ -468,6 +478,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             isToday={isToday}
             explanations={explanations}
             onExplainAction={runExplainAction}
+            hintPending={ringHintPending}
+            onHintSeen={markRingHint}
           />
           </div>
 

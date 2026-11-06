@@ -1,6 +1,27 @@
 import { useRef, type TouchEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { DashTab } from './DayRing';
+import { headerDate, type MacroChip } from './dayHeader';
+
+/** Encima del selector: la fecha del día que se mira y, a la derecha, el programa activo (nombre, semana y días para competir). Tocarlo lleva a Objetivos. */
+export function DayHeader({ dayIso, macro, onOpenMacro }: { dayIso: string; macro: MacroChip | null; onOpenMacro: () => void }) {
+  return (
+    <div className="mt-3 flex items-center justify-between gap-3 md:mt-0">
+      <h1 className="shrink-0 text-[15px] font-semibold tracking-tight text-white">{headerDate(dayIso)}</h1>
+      {macro && (
+        <button
+          onClick={onOpenMacro}
+          aria-label={`Programa activo: ${macro.label}, ${macro.week}${macro.countdown ? `, faltan ${macro.countdown} para competir` : ''}. Abrir Objetivos`}
+          className="flex min-w-0 items-center gap-1.5 rounded-full border border-white/10 px-3 py-1 text-[11px] font-medium text-neutral-300 transition-colors hover:border-white/25 hover:text-white"
+        >
+          <span className="min-w-0 truncate">{macro.label}</span>
+          <span className="num shrink-0 text-neutral-500">· {macro.week}</span>
+          {macro.countdown && <span className="num shrink-0 font-semibold text-brand-gold">· {macro.countdown}</span>}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const TABS: { id: DashTab; label: string }[] = [
   { id: 'resumen', label: 'Resumen' },

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentProps } from 'react';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { X } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
@@ -28,26 +28,39 @@ export function cornerNeedsAttention(suggestion: RexSuggestion, dots: RexTarget[
  */
 export function RexCorner({
   speak,
+  hint,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'showDate' | 'modules' | 'defaultMore'> & {
   /** El globo de la esquina puede hablar solo (hoy sí; mirando un día pasado, no). */
   speak: boolean;
+  /** Una pista que va antes que cualquier otra cosa (p. ej. «Toca un aro…»); null cuando ya no hace falta. */
+  hint?: { lead: string; text: string } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [bubble, setBubble] = useState(false);
   const { suggestion, dots } = bar;
   const quiet = suggestion.id === 'quiet';
+  // Si el globo ya dijo la pista, la sugerencia que había entonces no vuelve a salir en esta visita (sería ruido tras tocar un aro).
+  const hintedOver = useRef<string | null>(null);
+  const hinting = Boolean(hint);
+  if (hinting) hintedOver.current = suggestion.id;
+  const suppressed = !hinting && hintedOver.current === suggestion.id;
 
-  // El globo sale cuando Rex tiene algo nuevo que decir y se recoge solo; no sale con el panel abierto ni con la frase tranquila.
+  // El globo sale cuando Rex tiene algo que decir y se recoge solo; no sale con el panel abierto ni con la frase tranquila.
   useEffect(() => {
-    if (!speak || quiet || open) {
+    const talks = hinting || (speak && !quiet && !suppressed);
+    if (!talks || open) {
       setBubble(false);
       return;
     }
     setBubble(true);
     const timer = window.setTimeout(() => setBubble(false), BUBBLE_MS);
     return () => window.clearTimeout(timer);
-  }, [speak, quiet, open, suggestion.id]);
+  }, [hinting, speak, quiet, suppressed, open, suggestion.id]);
+
+  const said = hint ?? { lead: suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.lead : '', text: '' };
+  const leadLen = said.lead.length;
+  const bubbleText = hint ? hint.text : suggestion.text.slice(leadLen);
 
   // Escape cierra el panel.
   useEffect(() => {
@@ -59,7 +72,6 @@ export function RexCorner({
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const leadLen = suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.lead.length : 0;
   const attention = cornerNeedsAttention(suggestion, dots);
 
   return (
@@ -74,11 +86,11 @@ export function RexCorner({
             >
               <p className="line-clamp-4 text-[13px] leading-snug text-neutral-100">
                 {leadLen > 0 && (
-                  <strong className="font-bold" style={{ color: LEAD_COLOR[suggestion.tone ?? 'info'] }}>
-                    {suggestion.text.slice(0, leadLen)}
+                  <strong className="font-bold" style={{ color: hint ? LEAD_COLOR.good : LEAD_COLOR[suggestion.tone ?? 'info'] }}>
+                    {said.lead}
                   </strong>
                 )}
-                {suggestion.text.slice(leadLen)}
+                {bubbleText}
               </p>
             </button>
           )}

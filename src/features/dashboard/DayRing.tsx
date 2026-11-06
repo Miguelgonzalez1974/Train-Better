@@ -6,8 +6,7 @@ import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 import type { ExplainAction, ExplainId, Explanation } from '../../engine/explainNumbers';
-import { RexExplainBubble, RexHint } from './RexExplainBubble';
-import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
+import { RexExplainBubble } from './RexExplainBubble';
 
 export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
 /** Lo que se abre al tocar un número del anillo: una pestaña, o la carga (que vive en el icono de arriba). */
@@ -247,7 +246,13 @@ export function DayRing({
   isToday,
   explanations,
   onExplainAction,
+  hintPending,
+  onHintSeen,
 }: {
+  /** Rex aún no ha avisado de que los aros se tocan (lo dice el globo de la esquina): los aros laten un par de veces. */
+  hintPending: boolean;
+  /** Se tocó algo por primera vez: la pista ya no hace falta. */
+  onHintSeen: () => void;
   readiness: ReadinessScore;
   acwr: AcwrResult;
   strain: StrainView;
@@ -272,14 +277,9 @@ export function DayRing({
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
   }, [centerLabel]);
-  // La pista de Rex («Toca un aro o un número…») sale hasta el primer toque y no vuelve.
-  const [hintSeen, setHintSeen] = useState(() => ringHintSeen(typeof window !== 'undefined' ? window.localStorage : null));
   const ask = (id: ExplainId) => {
     setAsked((cur) => (cur === id ? null : id));
-    if (!hintSeen) {
-      setHintSeen(true);
-      markRingHintSeen(typeof window !== 'undefined' ? window.localStorage : null);
-    }
+    if (hintPending) onHintSeen();
   };
   const askedExplanation = asked ? explanations[asked] : undefined;
   const askedAnchor: 'left' | 'center' | 'right' = asked === 'preparacion' || asked === 'carga' ? 'left' : asked === 'objetivo' ? 'center' : 'right';
@@ -359,7 +359,7 @@ export function DayRing({
         </div>
 
         {/* Los dos anillos */}
-        <div className="relative aspect-square w-[min(44vw,9.5rem)]">
+        <div className={`relative aspect-square w-[min(44vw,9.5rem)] ${hintPending ? 'animate-ring-hint motion-reduce:animate-none' : ''}`}>
           <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" role="group" aria-label={`Preparación ${total ?? 'sin datos'}, esfuerzo ${real ?? 'sin entrenar'}${plannedLine !== null ? `, previsto ${plannedLine}` : ''}, objetivo ${target.low} a ${target.high}`}>
             <g transform="rotate(-90 50 50)">
               {/* Objetivo: corchete fino por fuera, de tu mínimo a tu máximo */}
@@ -435,7 +435,6 @@ export function DayRing({
       </div>
 
       {/* Pregúntale a Rex: el globo con la explicación del número tocado */}
-      {!askedExplanation && !hintSeen && <RexHint />}
       {askedExplanation && <RexExplainBubble explanation={askedExplanation} anchor={askedAnchor} onAction={onExplainAction} onClose={() => setAsked(null)} />}
 
       {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}

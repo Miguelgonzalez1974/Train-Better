@@ -13,7 +13,7 @@ const TONE_COLOR: Record<ExplainTone, string> = {
   neutral: 'rgb(var(--c-white))',
 };
 
-/** Color de una nota de 0 a 100 con los mismos tramos que el aro de preparación. */
+/** Color de una nota de 0 a 100 con los mismos tramos que el aro de preparaciÃ³n. */
 function scoreColor(value: number): string {
   return value >= 65 ? 'rgb(var(--c-ring-good))' : value <= 40 ? 'rgb(var(--c-ring-low))' : 'rgb(var(--c-ring-mid))';
 }
@@ -34,7 +34,7 @@ function Row({ row }: { row: ExplainRow }) {
         <div className="flex items-baseline justify-between gap-3 text-xs">
           <span className="min-w-0 text-neutral-300">
             {row.label}
-            {row.weight && <span className="ml-1 text-neutral-500">· {row.weight}</span>}
+            {row.weight && <span className="ml-1 text-neutral-500">Â· {row.weight}</span>}
           </span>
           <span className="num shrink-0 font-semibold" style={{ color }}>
             {row.value}
@@ -55,7 +55,7 @@ function Row({ row }: { row: ExplainRow }) {
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="min-w-0 text-neutral-300">{row.label}</span>
         <span className="num shrink-0 font-semibold" style={{ color }}>
-          {positive ? '+' : '−'}
+          {positive ? '+' : 'âˆ’'}
           {Math.abs(row.value)}
         </span>
       </div>
@@ -68,8 +68,8 @@ function Row({ row }: { row: ExplainRow }) {
 }
 
 /**
- * El globo de Rex que explica un número del anillo: sale bajo los números, con una cola que señala de qué lado está lo que has tocado
- * (izquierda: preparación y carga; derecha: realizado y previsto; centro: el objetivo). El texto y el desglose vienen de
+ * El globo de Rex que explica un nÃºmero del anillo: sale bajo los nÃºmeros, con una cola que seÃ±ala de quÃ© lado estÃ¡ lo que has tocado
+ * (izquierda: preparaciÃ³n y carga; derecha: realizado y previsto; centro: el objetivo). El texto y el desglose vienen de
  * `engine/explainNumbers.ts`; los botones los traduce quien lo usa (`onAction`).
  */
 export function RexExplainBubble({
@@ -91,7 +91,7 @@ export function RexExplainBubble({
 
   const left = anchor === 'left' ? '16%' : anchor === 'right' ? '84%' : '50%';
   return (
-    <section ref={ref} role="region" aria-label="Rex explica este número" className="relative mt-4 animate-section-in motion-reduce:animate-none">
+    <section ref={ref} role="region" aria-label="Rex explica este nÃºmero" className="relative mt-4 animate-section-in motion-reduce:animate-none">
       <span
         className="absolute -top-1.5 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-white/20 bg-brand-surface"
         style={{ left }}
@@ -107,7 +107,7 @@ export function RexExplainBubble({
               </strong>{' '}
               {explanation.text}
             </p>
-            <button onClick={onClose} aria-label="Cerrar la explicación" className="-mr-1 -mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-white/10 hover:text-white">
+            <button onClick={onClose} aria-label="Cerrar la explicaciÃ³n" className="-mr-1 -mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-white/10 hover:text-white">
               <X size={14} />
             </button>
           </div>
@@ -135,21 +135,6 @@ export function RexExplainBubble({
             ))}
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-/** La pista de Rex bajo los anillos, hasta que se toca algo por primera vez: ocupa el mismo sitio que luego tendrá la explicación. */
-export function RexHint() {
-  return (
-    <section role="note" className="relative mt-4 animate-section-in motion-reduce:animate-none">
-      <span className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-white/20 bg-brand-surface" aria-hidden="true" />
-      <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-brand-surface px-3.5 py-3">
-        <RexMascot size={32} />
-        <p className="text-[13px] leading-relaxed text-neutral-200">
-          <strong className="font-bold text-good">Toca un aro o un número</strong> para ver de dónde sale.
-        </p>
       </div>
     </section>
   );
