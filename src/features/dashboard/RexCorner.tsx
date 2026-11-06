@@ -3,6 +3,7 @@ import { Send, X } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
 import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
+import { labReturn } from '../../lib/labReturn';
 import type { RexSuggestion, RexTarget } from './rexDashboard';
 
 /** Cuánto se queda el globo de la esquina antes de recogerse solo (la pista de los aros no se recoge: se queda hasta que se toca un aro). */
@@ -87,6 +88,55 @@ export function RexCorner({
   const [bubble, setBubble] = useState(false);
   const blocked = useBlockingOverlay();
   const typingInField = useTyping();
+  // Volver al lab: lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse; si te vas a otra pestaña, la app ofrece «Volver al lab».
+  // Solo en el Dashboard (`modules`): en Planificación el panel no vuelve solo.
+  const returns = modules;
+  const [waiting, setWaiting] = useState(false);
+  const fromLab = useRef(false);
+  const sawOverlay = useRef(false);
+  useEffect(() => {
+    if (!waiting) return;
+    if (blocked) sawOverlay.current = true;
+    else if (sawOverlay.current) {
+      fromLab.current = false;
+      setWaiting(false);
+      setOpen(true);
+    }
+  }, [waiting, blocked]);
+  useEffect(() => {
+    if (!waiting) return;
+    // Si en un momento no se ha abierto ninguna ventana, no había nada a lo que volver (una pestaña interna, un cambio de día…).
+    const timer = window.setTimeout(() => {
+      if (!sawOverlay.current) {
+        fromLab.current = false;
+        setWaiting(false);
+      }
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [waiting]);
+  // Al montar: si se pidió volver al lab desde otra pestaña, se abre. Al desmontar con algo abierto desde el lab, se avisa para ofrecer la vuelta.
+  useEffect(() => {
+    if (!returns) return;
+    const reopen = labReturn.takeReopen();
+    labReturn.clear(); // estoy en el Dashboard: ya no hay nada a lo que volver desde otra pestaña
+    if (reopen) setOpen(true);
+    return () => {
+      if (fromLab.current) labReturn.markPending();
+    };
+  }, [returns]);
+  /** Lanza algo desde el panel: el panel se cierra y, si abre una ventana, vuelve al cerrarla. */
+  const leave = () => {
+    setOpen(false);
+    if (returns) {
+      fromLab.current = true;
+      sawOverlay.current = false;
+      setWaiting(true);
+    }
+  };
+  const launch = (run: () => void) => {
+    leave();
+    run();
+  };
   const { suggestion, dots } = bar;
   const quiet = suggestion.id === 'quiet';
   // Si el globo ya dijo la pista, la sugerencia que había entonces no vuelve a salir en esta visita (sería ruido tras tocar un aro).
@@ -140,7 +190,8 @@ export function RexCorner({
     if (!value || !ask) return;
     const result = ask(value);
     if (result === 'close') {
-      setOpen(false);
+      // Ya hizo lo pedido (abrió un módulo o llevó a otra pestaña): el panel se va y vuelve al cerrarse lo abierto.
+      leave();
       return;
     }
     setAnswer(result);
@@ -268,10 +319,7 @@ export function RexCorner({
                           {answer.actions.map((a, i) => (
                             <button
                               key={a.label}
-                              onClick={() => {
-                                setOpen(false);
-                                bar.onAction(a.target);
-                              }}
+                              onClick={() => launch(() => bar.onAction(a.target))}
                               className={
                                 i === 0
                                   ? 'rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark'
@@ -296,10 +344,7 @@ export function RexCorner({
               defaultMore={modules}
               // El globo ya la había dicho (o el panel se abre a pedido): sale entera, sin volver a escribirse.
               typedAlready
-              onAction={(target) => {
-                setOpen(false);
-                bar.onAction(target);
-              }}
+              onAction={(target) => launch(() => bar.onAction(target))}
             />
           </section>
         </div>

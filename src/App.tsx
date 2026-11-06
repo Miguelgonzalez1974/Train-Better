@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Sidebar } from './features/shell/Sidebar';
 import { BottomNav } from './features/shell/BottomNav';
 import { SyncIndicator } from './features/shell/SyncIndicator';
+import { BackToLab } from './features/shell/BackToLab';
+import { labReturn } from './lib/labReturn';
 import type { TabId } from './features/shell/navItems';
 import { Login } from './features/auth/Login';
 import { useSession } from './features/auth/useSession';
@@ -126,6 +128,14 @@ export default function App() {
           {activeTab === 'objetivos' && <Objetivos initialSection={objetivosSection} />}
         </Suspense>
       </main>
+      {activeTab !== 'dashboard' && (
+        <BackToLab
+          onBack={() => {
+            labReturn.requestReopen();
+            goTo('dashboard');
+          }}
+        />
+      )}
       <BottomNav active={activeTab} onChange={(t) => goTo(t)} />
       {morning !== 'closed' && (
         <Suspense fallback={null}>
