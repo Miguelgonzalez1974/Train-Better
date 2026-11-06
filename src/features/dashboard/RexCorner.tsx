@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { X } from 'lucide-react';
+import { Send, X } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
+import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
 import type { RexSuggestion, RexTarget } from './rexDashboard';
 
 /** Cuánto se queda el globo de la esquina antes de recogerse solo (la pista de los aros no se recoge: se queda hasta que se toca un aro). */
@@ -64,6 +65,7 @@ export function RexCorner({
   modules = true,
   showDate = true,
   raised = false,
+  ask,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
   /** El globo de la esquina puede hablar solo (hoy sí; mirando un día pasado, no). */
@@ -75,8 +77,13 @@ export function RexCorner({
   showDate?: boolean;
   /** Más arriba de lo normal, para no tapar el reloj de entreno flotante (Planificación). */
   raised?: boolean;
+  /** La caja «Pregúntale a Rex…»: recibe lo escrito y devuelve la respuesta, o 'close' si ya hizo lo pedido (abrir un módulo, ir a Nutrición). */
+  ask?: (text: string) => AskAnswer | 'close';
 }) {
   const [open, setOpen] = useState(false);
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState<AskAnswer | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [bubble, setBubble] = useState(false);
   const blocked = useBlockingOverlay();
   const typingInField = useTyping();
@@ -124,7 +131,20 @@ export function RexCorner({
   const attention = cornerNeedsAttention(suggestion, dots);
   const openPanel = () => {
     if (!hinting) spoken.add(key);
+    setAnswer(null);
+    setQuestion('');
     setOpen(true);
+  };
+  const send = (text: string) => {
+    const value = text.trim();
+    if (!value || !ask) return;
+    const result = ask(value);
+    if (result === 'close') {
+      setOpen(false);
+      return;
+    }
+    setAnswer(result);
+    setQuestion('');
   };
 
   return (
@@ -181,12 +201,94 @@ export function RexCorner({
             aria-label="Rex"
             className="absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] w-full max-w-xl animate-section-in overflow-y-auto rounded-t-3xl border border-b-0 border-white/15 bg-brand-bg px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl motion-reduce:animate-none md:bottom-6 md:right-6 md:left-auto md:mx-0 md:rounded-3xl md:border-b"
           >
-            <div className="mb-2 flex items-center justify-between">
-              <span className="mx-auto h-1 w-10 rounded-full bg-white/20 md:hidden" aria-hidden="true" />
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">El lab de Rex</span>
               <button onClick={() => setOpen(false)} aria-label="Cerrar a Rex" className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white">
                 <X size={16} />
               </button>
             </div>
+            {/* Pregúntale a Rex: escribes como lo dirías y Rex lo lee con reglas (peso, comida, qué toca, cómo estás, módulos). */}
+            {ask && (
+              <div className="mb-3">
+                <form
+                  className="mb-2 flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    send(question);
+                  }}
+                >
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    placeholder="Pregúntale a Rex…"
+                    aria-label="Pregúntale a Rex"
+                    autoComplete="off"
+                    enterKeyHint="send"
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-brand-border bg-brand-surface px-3.5 text-sm text-white placeholder:text-neutral-600 focus:border-brand-gold focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={question.trim() === ''}
+                    aria-label="Enviar a Rex"
+                    className="flex h-11 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-orange text-black transition-colors hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Send size={17} strokeWidth={2.25} />
+                  </button>
+                </form>
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {ASK_EXAMPLES.map((example) => (
+                    <button
+                      key={example}
+                      onClick={() => {
+                        if (example.endsWith('…')) {
+                          setQuestion(example.slice(0, -1) + ' ');
+                          inputRef.current?.focus();
+                        } else send(example);
+                      }}
+                      className="rounded-full border border-brand-border px-3 py-1 text-[11px] font-medium text-neutral-400 transition-colors hover:border-white/30 hover:text-white"
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+                {answer && (
+                  <div className="mb-2 flex items-start gap-3 rounded-2xl border border-white/15 bg-brand-surface px-3.5 py-3" aria-live="polite">
+                    <RexMascot size={32} mood="think" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] leading-relaxed text-neutral-100">
+                        <strong className="font-bold" style={{ color: LEAD_COLOR[answer.tone] }}>
+                          {answer.lead}
+                        </strong>{' '}
+                        {answer.text}
+                      </p>
+                      {answer.actions.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {answer.actions.map((a, i) => (
+                            <button
+                              key={a.label}
+                              onClick={() => {
+                                setOpen(false);
+                                bar.onAction(a.target);
+                              }}
+                              className={
+                                i === 0
+                                  ? 'rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark'
+                                  : 'rounded-full border border-brand-border px-3.5 py-1.5 text-xs font-semibold text-neutral-200 transition-colors hover:border-white/30 hover:bg-white/5'
+                              }
+                            >
+                              {a.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <RexBar
               {...bar}
               showDate={showDate}

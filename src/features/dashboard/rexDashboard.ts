@@ -18,6 +18,8 @@ export type RexTarget =
   | 'nutricion'
   | 'peso'
   | 'forma'
+  /** La pestaña Preparación del Dashboard. */
+  | 'preparacion'
   | 'planificacion'
   /** Volver al día de hoy en el selector de día. */
   | 'hoy'

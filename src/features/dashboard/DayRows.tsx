@@ -11,7 +11,7 @@ import { SectionLabel } from '../shell/SectionLabel';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 
 /** "Back Squat · WOD 12 min AMRAP" — el titular de la sesión de hoy en una línea, no el detalle entero (para eso está Planificación). */
-function buildPreviewLine(session: DailySession): string {
+export function buildPreviewLine(session: DailySession): string {
   if (session.source === 'custom') return session.customTitle || 'Sesión propia';
   // Día de doble WOD: sin fuerza ni oly, el titular son las dos piezas.
   if (session.doubleWod) {

@@ -4,6 +4,7 @@ import { FOODS } from '../../data/nutrition/foods';
 import type { ExtraFoodEntry } from '../../data/athlete/types';
 import { customFoodToCatalogFood } from '../../engine/customFoods';
 import { chooseFood, dropIssue, dropItem, mealTotals, parseMeal, setIssueGrams, setItemGrams, type MealIssue, type MealParse } from '../../engine/mealText';
+import { takeMealDraft } from '../../lib/mealDraft';
 import { RexMascot, type RexMood } from '../objetivos/RexMascot';
 import { QuantityStepper } from './QuantityStepper';
 import { withExtra } from './nutritionData';
@@ -45,6 +46,16 @@ export function RexMeal({
     if (sent) setParse(parseMeal(sent, foods, customIds));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customFoods]);
+
+  // Si vienes del lab de Rex con «he comido…» ya escrito, se lee aquí y se te enseña antes de apuntar nada.
+  useEffect(() => {
+    const draft = takeMealDraft(typeof window !== 'undefined' ? window.sessionStorage : null);
+    if (!draft) return;
+    setText(draft);
+    setSent(draft);
+    setParse(parseMeal(draft, foods, customIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function submit() {
     const value = text.trim();
