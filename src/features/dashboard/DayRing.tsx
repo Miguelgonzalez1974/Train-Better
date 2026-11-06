@@ -27,7 +27,7 @@ export const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
 };
 export const ZONE_WORD: Record<AcwrResult['zone'], string> = { baja: 'Baja', optima: 'Óptima', moderada: 'Alta', alta: 'Muy alta' };
 
-// Dos anillos completos que arrancan a las 12: el exterior es el esfuerzo (azul) y el interior la preparación (con el color
+// Dos anillos completos que arrancan a las 12: el exterior es el esfuerzo (amarillo, con lo previsto como línea azul) y el interior la preparación (con el color
 // de su nivel). El objetivo es un corchete fino por fuera del anillo del esfuerzo, entre tu mínimo y tu máximo.
 const R_EFF = 40;
 const R_PREP = 27;
@@ -116,6 +116,9 @@ function PlannedEnd({ planned }: { planned: number }) {
   );
 }
 
+/** Ancho aproximado de un carácter del texto del arco, en unidades del aro (para saber si «Obj.» cabe). */
+const CHAR_WIDTH = 7.2 * 0.56;
+
 /**
  * El rango del objetivo escrito sobre su corchete, siguiendo la curva del aro. En la mitad de arriba se lee por fuera del aro; en la de
  * abajo, por dentro de la curva (si no, saldría del revés). Va fuera del grupo girado: los ángulos se miden desde las 12 en sentido horario.
@@ -131,6 +134,10 @@ function ObjectiveLabel({ id, low, high }: { id: string; low: number; high: numb
   const end = at(lower ? low : high);
   const large = high - low > 50 ? 1 : 0;
   const d = `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} ${lower ? 0 : 1} ${end.x} ${end.y}`;
+  // «Obj. 10–30» si cabe en el arco (con un poco de holgura); con un rango muy estrecho, solo los números.
+  const numbers = `${low}–${high}`;
+  const arcLength = r * ((high - low) / 100) * 2 * Math.PI;
+  const text = arcLength >= (numbers.length + 5) * CHAR_WIDTH * 1.15 ? `Obj. ${numbers}` : numbers;
   return (
     <>
       <defs>
@@ -138,7 +145,7 @@ function ObjectiveLabel({ id, low, high }: { id: string; low: number; high: numb
       </defs>
       <text fontSize={7.2} fontWeight={500} fill="rgb(var(--c-white) / 0.85)" className="num">
         <textPath href={`#${id}`} startOffset="50%" textAnchor="middle">
-          {low}–{high}
+          {text}
         </textPath>
       </text>
     </>
@@ -198,9 +205,9 @@ export function BalanceBox({ balance, target, isToday, notDone }: { balance: Day
 }
 
 /**
- * El estado del día al estilo Whoop: dos anillos completos (esfuerzo por fuera en azul, preparación por dentro con el color
+ * El estado del día al estilo Whoop: dos anillos completos (esfuerzo por fuera en amarillo, preparación por dentro con el color
  * de su nivel), el número de cada uno a su lado, y debajo una frase que lo cuenta. El objetivo es un corchete fino por
- * fuera del anillo del esfuerzo: si el azul pasa de su final, te pasas (y ese tramo se pinta coral). Tocar un número abre su
+ * fuera del anillo del esfuerzo: si el amarillo pasa de su final, te pasas (y ese tramo se pinta rojo). Tocar un número abre su
  * pestaña con el detalle.
  */
 export function DayRing({
@@ -336,8 +343,7 @@ export function DayRing({
         {/* Esfuerzo: lo realizado y lo previsto, siempre a la vista, cada uno con el color que tiene en el aro. El objetivo va escrito sobre el arco. */}
         <div className="flex flex-col items-start text-left">
           <button onClick={() => onOpenTab('esfuerzo')} className="flex flex-col items-start text-left">
-            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500">Esfuerzo</span>
-            <span className="mt-2 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: doneColor }}>
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: doneColor }}>
               Realizado
             </span>
             <span className="num text-[2rem] font-semibold leading-none tracking-tight" style={{ color: doneColor }}>
