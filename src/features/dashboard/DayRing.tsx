@@ -12,7 +12,7 @@ export type RingTarget = 'esfuerzo' | 'preparacion' | 'carga';
 
 const NEUTRAL = '#525252';
 
-/** El color del aro de preparación: los mismos tramos que ecoveryColor, con tonos propios del aro (en el tema claro, más cercanos a los del oscuro). */
+/** El color del aro de preparación: los mismos tramos que recoveryColor, con tonos propios del aro (en el tema claro, más cercanos a los del oscuro). */
 function ringPrepColor(score: number): string {
   return score >= 65 ? 'rgb(var(--c-ring-good))' : score <= 40 ? 'rgb(var(--c-ring-low))' : 'rgb(var(--c-ring-mid))';
 }
