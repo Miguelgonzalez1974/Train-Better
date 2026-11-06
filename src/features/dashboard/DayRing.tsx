@@ -4,7 +4,6 @@ import type { AcwrResult } from '../../engine/loadMetrics';
 import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
-import { recoveryColor } from './RecoveryCard';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 
 export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
@@ -12,6 +11,11 @@ export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
 export type RingTarget = 'esfuerzo' | 'preparacion' | 'carga';
 
 const NEUTRAL = '#525252';
+
+/** El color del aro de preparación: los mismos tramos que ecoveryColor, con tonos propios del aro (en el tema claro, más cercanos a los del oscuro). */
+function ringPrepColor(score: number): string {
+  return score >= 65 ? 'rgb(var(--c-ring-good))' : score <= 40 ? 'rgb(var(--c-ring-low))' : 'rgb(var(--c-ring-mid))';
+}
 /** Variable de color de cada zona de carga (para componer `rgb(var(...) / alfa)` donde haga falta). */
 export const ZONE_TOKEN: Record<AcwrResult['zone'], string> = {
   baja: '--c-state-cool',
@@ -240,7 +244,7 @@ export function DayRing({
   }, [centerLabel]);
 
   const { total } = readiness;
-  const prepTint = total !== null ? recoveryColor(total) : NEUTRAL;
+  const prepTint = total !== null ? ringPrepColor(total) : NEUTRAL;
   const hasLoad = acwr.acwr !== null && !acwr.coldStart;
   const { target, planned, real } = strain;
   const labelId = `obj${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
