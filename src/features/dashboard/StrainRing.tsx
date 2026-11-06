@@ -19,9 +19,9 @@ export interface StrainView {
   learning: StrainLearning;
 }
 
-/** El esfuerzo es azul (su color en todo el Dashboard) y pasa a coral cuando rebasa el máximo del objetivo. */
-export const ACCENT = 'rgb(var(--c-state-cool))';
-export const OVER = 'rgb(var(--c-state-mid))';
+/** El esfuerzo hecho es amarillo (su color en todo el Dashboard) y pasa a rojo cuando rebasa el máximo del objetivo. */
+export const ACCENT = 'rgb(var(--c-effort))';
+export const OVER = 'rgb(var(--c-state-low))';
 /** El esfuerzo previsto (la sesión que tocaba), con su propio color para no confundirlo con lo hecho (azul) ni con el objetivo (blanco). */
 export const PLAN = 'rgb(var(--c-plan))';
 const NEUTRAL = 'rgb(var(--c-white) / 0.5)';

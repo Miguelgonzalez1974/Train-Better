@@ -5,7 +5,7 @@ import { trendSummary, type SummaryRow, type SummarySeg } from '../../engine/tre
 import { SectionLabel } from '../shell/SectionLabel';
 import { fmtDay, xTickIndexes } from './ChartKit';
 
-const BLUE = 'rgb(var(--c-state-cool))';
+const BLUE = 'rgb(var(--c-effort))';
 const GOOD = 'rgb(var(--c-state-good))';
 const MID = 'rgb(var(--c-state-mid))';
 const LOW = 'rgb(var(--c-state-low))';
@@ -18,7 +18,7 @@ const DAY_INITIAL = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 const DAY_LONG = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const dow = (iso: string) => new Date(`${iso}T12:00:00`).getDay();
 
-/** La línea del previsto: en su color (fucsia, como en los anillos), fina y discontinua, para que no se confunda con el azul (lo hecho) ni con el gris (la preparación). */
+/** La línea del previsto: en su color (azul, como en los anillos), fina y discontinua, para que no se confunda con el azul (lo hecho) ni con el gris (la preparación). */
 const PLAN_STROKE = 'rgb(var(--c-plan))';
 
 /**
@@ -204,7 +204,7 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
             {/* Tu objetivo de cada día, detrás de todo, como una franja suave. */}
             {points.map((p, i) =>
               p.target ? (
-                <rect key={`t${p.iso}`} x={x(i) - Math.min(slot * 0.38, 14)} y={y(p.target.high)} width={Math.min(slot * 0.76, 28)} height={Math.max(3, y(p.target.low) - y(p.target.high))} rx={3} fill="rgb(var(--c-state-cool) / 0.13)" />
+                <rect key={`t${p.iso}`} x={x(i) - Math.min(slot * 0.38, 14)} y={y(p.target.high)} width={Math.min(slot * 0.76, 28)} height={Math.max(3, y(p.target.low) - y(p.target.high))} rx={3} fill="rgb(var(--c-effort) / 0.13)" />
               ) : null,
             )}
             {[0, 25, 50, 75, 100].map((g) => (
@@ -315,7 +315,7 @@ export function WeekTrendCard({ build, selectedIso, todayIso, competitionDays, o
               <span className="ml-0.5">Preparación</span>
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-3 rounded-[2px]" style={{ background: 'rgb(var(--c-state-cool) / 0.22)' }} aria-hidden="true" />
+              <span className="inline-block h-2 w-3 rounded-[2px]" style={{ background: 'rgb(var(--c-effort) / 0.22)' }} aria-hidden="true" />
               Tu objetivo
             </span>
           </div>

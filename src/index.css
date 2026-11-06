@@ -33,8 +33,10 @@
   --c-state-cool: 56 189 248;
   /* Sueño: un violeta suave, para que no se confunda con el azul del esfuerzo. */
   --c-sleep: 167 139 250;
-  /* Esfuerzo previsto: un fucsia suave, distinto del azul del esfuerzo hecho, del blanco del objetivo y del violeta del sueño. */
-  --c-plan: 232 121 249;
+  /* Esfuerzo previsto: azul (el esfuerzo hecho es amarillo, el objetivo blanco y el sueño violeta). */
+  --c-plan: 56 189 248;
+  /* Esfuerzo hecho: amarillo (lo previsto es azul y lo que se pasa del objetivo, rojo). */
+  --c-effort: 250 204 21;
 }
 
 /* Tema claro (opt-in): "white" pasa a ser texto oscuro, el ramo neutral se invierte, y las
@@ -68,7 +70,8 @@
   --c-state-low: 200 30 30;
   --c-state-cool: 3 105 161;
   --c-sleep: 109 40 217;
-  --c-plan: 162 28 175;
+  --c-plan: 3 105 161;
+  --c-effort: 161 98 7;
 }
 
 /* La página nunca se ensancha en horizontal: un elemento que se sale hacía el documento (y las capas fixed, como el modo

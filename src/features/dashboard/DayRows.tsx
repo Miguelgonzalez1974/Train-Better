@@ -54,7 +54,7 @@ function Badge({ tone, children }: { tone: BadgeTone; children: ReactNode }) {
         : tone === 'planned'
           ? { border: `1.5px dashed ${PLAN}`, color: PLAN, backgroundColor: 'rgb(var(--c-plan) / 0.1)' }
           : tone === 'plannedOver'
-            ? { border: `1.5px dashed ${OVER}`, color: OVER, backgroundColor: 'rgb(var(--c-state-mid) / 0.1)' }
+            ? { border: `1.5px dashed ${OVER}`, color: OVER, backgroundColor: 'rgb(var(--c-state-low) / 0.1)' }
             : tone === 'gold'
             ? { backgroundColor: 'rgb(var(--c-brand-gold) / 0.18)', color: 'rgb(var(--c-brand-gold))' }
             : { backgroundColor: 'rgb(var(--c-white) / 0.08)', color: 'rgb(var(--c-white) / 0.8)' };
