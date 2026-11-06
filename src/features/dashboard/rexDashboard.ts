@@ -33,6 +33,9 @@ export type RexTarget =
   /** Planificación: abrir el resumen de la sesión completada, y el chat «¿Cambiar algo?». */
   | 'plan-resumen'
   | 'plan-cambiar'
+  /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
+  | 'plan-empezar'
+  | 'plan-terminar'
   /** La rutina de movilidad y estiramientos con Rex. */
   | 'movilidad'
 

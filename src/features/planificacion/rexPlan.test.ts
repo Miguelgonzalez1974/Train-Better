@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlanRexSuggestions, planCompletedSuggestion, planNoticesSuggestion, planStateSuggestion, type PlanRexContext } from './rexPlan';
+import { buildPlanRexSuggestions, planCompletedSuggestion, planEditingSuggestion, planNoticesSuggestion, planRestSuggestion, planStateSuggestion, type PlanRexContext } from './rexPlan';
 
 const base: PlanRexContext = {
   hasTrainingSession: true,
@@ -47,15 +47,31 @@ describe('Rex en Planificación: la frase del estado del día', () => {
     expect(planStateSuggestion(mk({ emphasis: 'x'.repeat(120) }))!.text).not.toContain('xxxx');
   });
 
-  it('tres atajos: el porqué, la dureza y la molestia, con la etiqueta que toca', () => {
-    expect(planStateSuggestion(mk())!.actions).toEqual([
+  it('Rex lo controla todo: empezar es el botón principal, y detrás van el porqué y «¿Cambiar algo?»', () => {
+    expect(planStateSuggestion(mk({ canStart: true }))!.actions).toEqual([
+      { label: 'Empezar sesión', target: 'plan-empezar' },
       { label: 'Por qué', target: 'plan-detalle' },
-      { label: 'Más dura', target: 'plan-dureza' },
-      { label: 'Me duele algo', target: 'plan-molestia' },
+      { label: '¿Cambiar algo?', target: 'plan-cambiar' },
     ]);
-    const adjusted = planStateSuggestion(mk({ hardness: 2, painLabels: ['Codo / muñeca'] }))!.actions.map((a) => a.label);
-    expect(adjusted).toEqual(['Por qué', 'Cambiar la dureza', 'Molestias']);
-    expect(planStateSuggestion(mk({ canHarder: false }))!.actions.map((a) => a.target)).toEqual(['plan-detalle', 'plan-molestia']);
+    // Sin poder empezar (sesión propia, por ejemplo) no se ofrece.
+    expect(planStateSuggestion(mk({ canStart: false }))!.actions.map((a) => a.target)).toEqual(['plan-detalle', 'plan-cambiar']);
+    // Más dura y Me duele algo ya no son botones sueltos: viven en «¿Cambiar algo?».
+    expect(planStateSuggestion(mk({ canStart: true, hardness: 2, painLabels: ['Rodilla'] }))!.actions.map((a) => a.target)).not.toContain('plan-dureza');
+  });
+
+  it('mientras se edita, Rex solo ofrece terminar la edición y manda sobre lo demás', () => {
+    const s = planEditingSuggestion(true)!;
+    expect(s).toMatchObject({ id: 'plan-editando', actions: [{ label: 'Terminar edición', target: 'plan-terminar' }], dismissible: false });
+    expect(planEditingSuggestion(false)).toBeNull();
+    const list = buildPlanRexSuggestions(mk({ editing: true, hasTrainingSession: false, notices: { count: 1, actionable: false } }));
+    expect(list.map((x) => x.id)).toEqual(['plan-editando', 'plan-avisos']);
+  });
+
+  it('un día de descanso también tiene su globo, para poder contarle algo a Rex', () => {
+    const s = planRestSuggestion(true)!;
+    expect(s).toMatchObject({ id: 'plan-descanso', actions: [{ label: '¿Cambiar algo?', target: 'plan-cambiar' }] });
+    expect(planRestSuggestion(false)).toBeNull();
+    expect(buildPlanRexSuggestions(mk({ restDay: true, hasTrainingSession: false })).map((x) => x.id)).toEqual(['plan-descanso']);
   });
 
   it('sin sesión de entreno (descanso, hecha o editando) no hay frase', () => {

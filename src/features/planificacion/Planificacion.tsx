@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, Trash2, Play, CheckCircle2, Undo2, Info, Trophy, Library, MessageCircle } from 'lucide-react';
+import { NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -72,7 +72,7 @@ import { competitionCountdown, competitionHeadline } from '../shell/competitionM
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
-import { ActionMenu } from '../shell/ActionMenu';
+
 import {
   CoachNoticesBody,
   CoachReasonsList,
@@ -198,7 +198,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(60);
-  const [spinning, setSpinning] = useState(false);
+  const [, setSpinning] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
   // Resultado del WOD por parte: la 1 es el unico WOD de un dia normal (o la primera pieza de un dia de doble WOD).
@@ -1035,6 +1035,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         }
       : null;
   const rexList = buildPlanRexSuggestions({
+    canStart: Boolean(session && !alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && !session.isRestDay),
+    editing: editMode && Boolean(session && !session.isRestDay),
+    restDay: Boolean(session?.isRestDay && !session.competition?.eventDay),
     completed: completedInfo,
     hasTrainingSession: Boolean(session && !session.isRestDay && !editMode && !alreadyCompletedToday),
     light: session?.dayLight ? { color: session.dayLight.color, name: LIGHT_LABEL[session.dayLight.color].name } : null,
@@ -1064,11 +1067,18 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     else if (target === 'plan-avisos') setShowNotices(true);
     else if (target === 'plan-resumen') setShowSummary(true);
     else if (target === 'plan-cambiar') setShowRex(true);
+    else if (target === 'plan-empezar') setFocusMode(true);
+    else if (target === 'plan-terminar') setEditMode(false);
   }
   /** Los cambios directos de la sesión que Rex ofrece en «¿Cambiar algo?»: otro WOD, el selector de tipo o la hoja de dureza. */
   function handleRexAct(action: SupportAction) {
     if (action === 'otro-wod') handleRegenerate();
     else if (action === 'tipo') setShowTypePicker(true);
+    else if (action === 'editar') setEditMode(true);
+    else if (action === 'complejos') setShowComplexes(true);
+    else if (action === 'avisos') setShowNotices(true);
+    else if (action === 'deshacer') handleUndoComplete();
+    else if (action === 'borrar') handleDeleteTodaySession();
     else setShowHardness(true);
   }
 
@@ -1291,48 +1301,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         )}
         {showPlanDetail && !session.isRestDay && !editMode && !alreadyCompletedToday && session.profileEmphasis && (
           <ProfileEmphasisLine emphasis={session.profileEmphasis} onOpen={onNavigateToPerfil} />
-        )}
-        {!session.isRestDay && (
-          <div className="flex w-full items-center gap-2 sm:max-w-xl">
-            {alreadyCompletedToday && (
-              <div className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-good/10 px-3 py-2.5 text-sm font-semibold text-good ring-1 ring-good/30 sm:flex-none">
-                <CheckCircle2 size={15} strokeWidth={2.5} />
-                Sesión completada
-              </div>
-            )}
-            {!alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && (
-              <button
-                onClick={() => setFocusMode(true)}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-orange px-4 py-3 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark sm:flex-none"
-              >
-                <Play size={14} strokeWidth={2.5} />
-                Empezar sesión
-              </button>
-            )}
-            <button
-              onClick={() => setShowRex(true)}
-              title="Cambiar la sesión o contarle a Rex qué ha pasado"
-              aria-label="¿Cambiar algo? Habla con Rex"
-              className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-brand-border px-3 text-sm font-semibold text-neutral-200 transition-colors duration-200 hover:bg-white/5 hover:text-white"
-            >
-              <MessageCircle size={16} strokeWidth={2.25} aria-hidden="true" />
-              ¿Cambiar algo?
-            </button>
-            <ActionMenu
-              active={editMode}
-              alert={activePainFlags.length > 0}
-              busy={spinning}
-              items={[
-                { label: editMode ? 'Terminar edición' : 'Editar sesión', Icon: editMode ? Check : Pencil, onSelect: () => setEditMode((prev) => !prev) },
-                // Otro WOD, cambiar el tipo, la dureza y las molestias se piden ahora a Rex («¿Cambiar algo?») o desde su frase.
-                { label: 'Librería de complejos', Icon: Library, onSelect: () => setShowComplexes(true) },
-                ...(noticeSummary.count > 0 ? [{ label: `Avisos del coach (${noticeSummary.count})`, Icon: Brain, onSelect: () => setShowNotices(true) }] : []),
-                alreadyCompletedToday
-                  ? { label: 'Deshacer el registro de hoy', Icon: Undo2, onSelect: handleUndoComplete, tone: 'danger' }
-                  : { label: 'Borrar sesión de hoy', Icon: Trash2, onSelect: handleDeleteTodaySession, tone: 'danger' },
-              ]}
-            />
-          </div>
         )}
       </div>
       {regenNote && <p className="text-xs text-neutral-500">{regenNote}</p>}
@@ -1663,6 +1631,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           canSwapWod={hasWodBlock && !alreadyCompletedToday}
           canChangeType={!alreadyCompletedToday}
           canHarder={canHarder}
+          canEdit={Boolean(session && !session.isRestDay)}
+          moreOptions
+          noticeCount={noticeSummary.count}
+          canDelete={Boolean(session && !alreadyCompletedToday)}
           onApply={handleRexApply}
           onAct={handleRexAct}
           onClose={() => setShowRex(false)}

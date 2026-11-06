@@ -23,6 +23,10 @@ export function RexSupport({
   canSwapWod = false,
   canChangeType = false,
   canHarder = false,
+  canEdit = false,
+  moreOptions = false,
+  noticeCount = 0,
+  canDelete = false,
   onApply,
   onAct,
   onClose,
@@ -36,12 +40,20 @@ export function RexSupport({
   canChangeType?: boolean;
   /** Se puede subir la dureza de hoy. */
   canHarder?: boolean;
+  /** Se puede editar la sesión de hoy. */
+  canEdit?: boolean;
+  /** Mostrar «Más opciones» (librería de complejos, avisos, deshacer o borrar). */
+  moreOptions?: boolean;
+  /** Avisos del coach pendientes. */
+  noticeCount?: number;
+  /** Se puede borrar la sesión de hoy. */
+  canDelete?: boolean;
   onApply: (effect: SupportEffect) => void;
   /** Un cambio directo de la sesión (otro WOD, cambiar el tipo, más dura): la pantalla lo hace y esta conversación se cierra. */
   onAct?: (action: SupportAction) => void;
   onClose: () => void;
 }) {
-  const ctx = useMemo(() => ({ profile, todayIso, todayDone, canSwapWod, canChangeType, canHarder }), [profile, todayIso, todayDone, canSwapWod, canChangeType, canHarder]);
+  const ctx = useMemo(() => ({ profile, todayIso, todayDone, canSwapWod, canChangeType, canHarder, canEdit, moreOptions, noticeCount, canDelete }), [profile, todayIso, todayDone, canSwapWod, canChangeType, canHarder, canEdit, moreOptions, noticeCount, canDelete]);
   const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
 
   const [msgs, setMsgs] = useState<Msg[]>([]);

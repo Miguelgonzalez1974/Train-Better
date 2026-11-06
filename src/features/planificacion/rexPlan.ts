@@ -20,6 +20,12 @@ export interface PlanCompleted {
 }
 
 export interface PlanRexContext {
+  /** Se puede empezar la sesión (hay bloques que hacer, no es una sesión propia y aún no está hecha). */
+  canStart?: boolean;
+  /** Se está editando la sesión de hoy: Rex solo ofrece terminar la edición. */
+  editing?: boolean;
+  /** Hoy es un día de descanso: Rex ofrece, al menos, contarle algo. */
+  restDay?: boolean;
   /** La sesión de hoy ya está completada: Rex lo cuenta en vez del estado del día. */
   completed?: PlanCompleted | null;
   /** Hay sesión de entreno hoy (no es descanso, no está hecha y no se está editando). */
@@ -74,9 +80,10 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
 
   const lead = ctx.light ? `${ctx.light.name}.` : 'Sesión de hoy.';
   const tone = ctx.light ? LIGHT_TONE[ctx.light.color] : 'info';
-  const actions: RexAction[] = [{ label: 'Por qué', target: 'plan-detalle' }];
-  if (ctx.canHarder) actions.push({ label: ctx.hardness > 0 ? 'Cambiar la dureza' : 'Más dura', target: 'plan-dureza' });
-  actions.push({ label: ctx.painLabels.length > 0 ? 'Molestias' : 'Me duele algo', target: 'plan-molestia' });
+  // Rex lo controla todo: empezar es el botón principal; el resto de cambios (más dura, me duele algo, otro WOD…) están en «¿Cambiar algo?».
+  const actions: RexAction[] = [];
+  if (ctx.canStart) actions.push({ label: 'Empezar sesión', target: 'plan-empezar' });
+  actions.push({ label: 'Por qué', target: 'plan-detalle' }, { label: '¿Cambiar algo?', target: 'plan-cambiar' });
   return {
     id: 'plan-estado',
     priority: 95,
@@ -111,6 +118,38 @@ export function planCompletedSuggestion(c: PlanCompleted | null | undefined): Re
   };
 }
 
+/** Mientras se edita la sesión: una frase y la salida, que antes estaba en el menú de los tres puntos. */
+export function planEditingSuggestion(editing: boolean | undefined): RexSuggestion | null {
+  if (!editing) return null;
+  const lead = 'Editando la sesión.';
+  return {
+    id: 'plan-editando',
+    priority: 100,
+    lead,
+    tone: 'info',
+    text: `${lead} Toca un ejercicio para cambiarlo y usa los botones de cada bloque para añadir o quitar.`,
+    mood: 'think',
+    actions: [{ label: 'Terminar edición', target: 'plan-terminar' }],
+    dismissible: false,
+  };
+}
+
+/** Un día de descanso: Rex sigue ahí para lo que haga falta (me duele algo, voy a faltar unos días…). */
+export function planRestSuggestion(restDay: boolean | undefined): RexSuggestion | null {
+  if (!restDay) return null;
+  const lead = 'Día de descanso.';
+  return {
+    id: 'plan-descanso',
+    priority: 92,
+    lead,
+    tone: 'info',
+    text: `${lead} Aprovecha para recuperar. Si algo ha pasado, cuéntamelo.`,
+    mood: 'idle',
+    actions: [{ label: '¿Cambiar algo?', target: 'plan-cambiar' }],
+    dismissible: false,
+  };
+}
+
 /** Rex avisa de que el coach tiene algo para ti (una propuesta que decidir o una nota); la molestia ya se dice en la frase del estado. */
 export function planNoticesSuggestion(notices: PlanRexContext['notices']): RexSuggestion | null {
   if (notices.count <= 0) return null;
@@ -132,5 +171,5 @@ export function planNoticesSuggestion(notices: PlanRexContext['notices']): RexSu
 
 /** Todo lo que Rex tiene que decir en Planificación, de más a menos importante. Vacío = la barra no se enseña. */
 export function buildPlanRexSuggestions(ctx: PlanRexContext): RexSuggestion[] {
-  return [planCompletedSuggestion(ctx.completed), planStateSuggestion(ctx), planNoticesSuggestion(ctx.notices)].filter((s): s is RexSuggestion => s !== null).sort((a, b) => b.priority - a.priority);
+  return [planEditingSuggestion(ctx.editing), planCompletedSuggestion(ctx.completed), planStateSuggestion(ctx), planRestSuggestion(ctx.restDay), planNoticesSuggestion(ctx.notices)].filter((s): s is RexSuggestion => s !== null).sort((a, b) => b.priority - a.priority);
 }

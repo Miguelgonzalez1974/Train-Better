@@ -35,11 +35,19 @@ export interface SupportCtx {
   canChangeType?: boolean;
   /** La dureza de hoy se puede subir. */
   canHarder?: boolean;
+  /** Se puede editar la sesión de hoy (hay una sesión de entreno). */
+  canEdit?: boolean;
+  /** Hay más opciones de gestión (librería de complejos, avisos del coach, deshacer o borrar). */
+  moreOptions?: boolean;
+  /** Avisos del coach pendientes (cuántos). */
+  noticeCount?: number;
+  /** Se puede borrar la sesión de hoy (hay una sesión y aún no está hecha). */
+  canDelete?: boolean;
   newId?: () => string;
 }
 
 /** Cambios directos de la sesión de hoy que Rex no resume: abren lo que la pantalla ya tiene (otro WOD, el selector de tipo, la hoja de dureza). */
-export type SupportAction = 'otro-wod' | 'tipo' | 'dureza';
+export type SupportAction = 'otro-wod' | 'tipo' | 'dureza' | 'editar' | 'complejos' | 'avisos' | 'deshacer' | 'borrar';
 
 export interface SupportOption {
   label: string;
@@ -110,15 +118,25 @@ export function getSupportNode(id: string, ctx: SupportCtx): SupportNode {
         text: ctx.todayDone ? 'Hoy ya has entrenado. ¿Cuántos días vas a faltar, desde mañana?' : '¿Cuántos días vas a faltar, contando hoy?',
         options: AWAY_DAYS.map((days) => ({ label: awayLabel(days), set: { days }, next: 'summary' })),
       };
+    case 'm_more': {
+      const options: SupportOption[] = [{ label: 'Librería de complejos', next: 'act', act: 'complejos' }];
+      if ((ctx.noticeCount ?? 0) > 0) options.push({ label: `Avisos del coach (${ctx.noticeCount})`, next: 'act', act: 'avisos' });
+      if (ctx.todayDone) options.push({ label: 'Deshacer el registro de hoy', next: 'act', act: 'deshacer' });
+      else if (ctx.canDelete) options.push({ label: 'Borrar la sesión de hoy', next: 'act', act: 'borrar' });
+      options.push({ label: 'Volver', next: 'start' });
+      return { text: 'Lo de siempre: tu librería, los avisos del coach y, si hace falta, deshacer o borrar. Antes de borrar nada te pido confirmación.', options };
+    }
     default: {
       // Primero lo que se cambia de la sesión de hoy (si se puede), luego los imprevistos.
       const options: SupportOption[] = [];
       if (!ctx.todayDone && ctx.canSwapWod) options.push({ label: 'Otro WOD', next: 'act', act: 'otro-wod' });
       if (!ctx.todayDone && ctx.canChangeType) options.push({ label: 'Cambiar el tipo de sesión', next: 'act', act: 'tipo' });
       if (ctx.canHarder) options.push({ label: 'Más dura', next: 'act', act: 'dureza' });
+      if (ctx.canEdit) options.push({ label: 'Editar sesión', next: 'act', act: 'editar' });
       options.push({ label: 'Me duele algo', next: 'p_zone' });
       if (!ctx.todayDone) options.push({ label: 'Hoy no estoy para el plan', next: 't_what' });
       options.push({ label: 'Voy a faltar unos días', next: 'a_why' });
+      if (ctx.moreOptions) options.push({ label: 'Más opciones', next: 'm_more' });
       const text = options.some((o) => o.act)
         ? '¿Qué quieres cambiar, o qué ha pasado? Lo de los imprevistos te lo enseño antes de aplicarlo.'
         : 'Cuéntame qué ha pasado y lo ajusto. Primero te enseño qué haría, y solo lo aplico si me dices que sí.';

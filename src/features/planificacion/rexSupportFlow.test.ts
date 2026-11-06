@@ -41,6 +41,22 @@ describe('Rex para imprevistos: la conversación', () => {
     expect(getSupportNode('start', { ...ctx, canHarder: false }).options.map((o) => o.label)).not.toContain('Más dura');
   });
 
+  it('Rex lo gestiona todo: editar la sesión en la lista y, en «Más opciones», la librería, los avisos y deshacer o borrar', () => {
+    const ctx: SupportCtx = { ...mkCtx(base()), canEdit: true, moreOptions: true, noticeCount: 2, canDelete: true };
+    const start = getSupportNode('start', ctx).options;
+    expect(start.map((o) => o.label)).toEqual(['Editar sesión', 'Me duele algo', 'Hoy no estoy para el plan', 'Voy a faltar unos días', 'Más opciones']);
+    expect(start.find((o) => o.label === 'Editar sesión')?.act).toBe('editar');
+    const more = getSupportNode('m_more', ctx).options;
+    expect(more.map((o) => o.label)).toEqual(['Librería de complejos', 'Avisos del coach (2)', 'Borrar la sesión de hoy', 'Volver']);
+    expect(more.filter((o) => o.act).map((o) => o.act)).toEqual(['complejos', 'avisos', 'borrar']);
+    expect(more[more.length - 1].next).toBe('start');
+  });
+
+  it('con la sesión hecha, en vez de borrar se ofrece deshacer el registro; sin avisos no sale la fila de avisos', () => {
+    const more = getSupportNode('m_more', { ...mkCtx(base(), true), noticeCount: 0, canDelete: false }).options;
+    expect(more.map((o) => o.label)).toEqual(['Librería de complejos', 'Deshacer el registro de hoy', 'Volver']);
+    expect(more.find((o) => o.label === 'Deshacer el registro de hoy')?.act).toBe('deshacer');
+  });
   it('con la sesión de hoy ya hecha no se ofrece cambiarla', () => {
     const labels = getSupportNode('start', { ...mkCtx(base(), true), canSwapWod: true, canChangeType: true, canHarder: true }).options.map((o) => o.label);
     expect(labels).toEqual(['Más dura', 'Me duele algo', 'Voy a faltar unos días']);
@@ -48,9 +64,9 @@ describe('Rex para imprevistos: la conversación', () => {
 
   it('cada botón lleva a una pregunta que existe o al resumen', () => {
     const ctx = mkCtx(base());
-    const ids = ['start', 'p_zone', 'p_dur', 't_what', 'a_why', 'a_days'];
+    const ids = ['start', 'p_zone', 'p_dur', 't_what', 'a_why', 'a_days', 'm_more'];
     for (const id of ids) {
-      for (const o of getSupportNode(id, ctx).options) expect(o.next === 'summary' || ids.includes(o.next), `${id} → ${o.label}`).toBe(true);
+      for (const o of getSupportNode(id, ctx).options) expect(o.next === 'summary' || (o.next === 'act' && Boolean(o.act)) || ids.includes(o.next), `${id} → ${o.label}`).toBe(true);
     }
   });
 
