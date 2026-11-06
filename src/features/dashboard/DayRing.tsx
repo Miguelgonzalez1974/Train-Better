@@ -213,6 +213,8 @@ export function DayRing({
   const beyond = real !== null && real > target.high ? real - target.high : 0;
   const balance = start ? dayBalance({ planned: start.planned, real, target, status: strain.status, isToday, prepMorning: start.prep, prepNow: total }) : null;
   const plannedLine = real !== null ? (balance ? balance.planned : null) : planned?.strain ?? null;
+  /** Hasta dónde llega lo hecho sobre el aro (0 antes de entrenar): la línea del previsto solo se ve a partir de ahí. */
+  const doneTo = real ?? 0;
 
   const dash = (r: number, from: number, to: number) => {
     const len = filled ? (Math.max(0, to - from) / 100) * circ(r) : 0;
@@ -273,11 +275,16 @@ export function DayRing({
               {beyond > 0 && (
                 <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: OVER }} {...dash(R_EFF, target.high - 0.6, real ?? target.high)} className={slide} />
               )}
-              {/* Lo previsto: una línea fina fucsia por el centro del aro, del 0 a su valor, con una marca al final. Se compara con el azul de un vistazo. */}
+              {/* Lo previsto: una línea fina fucsia que solo se ve donde el azul aún no llega (lo que falta); donde el azul la cubre, el aro es
+                  macizo. La marca del final se queda siempre, también cuando lo hecho la pasa. */}
               {plannedLine !== null && plannedLine > 0 && (
                 <>
-                  <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_HALO} strokeLinecap="round" style={{ stroke: RING_BG }} {...dash(R_EFF, 0, plannedLine)} className={slide} />
-                  <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_LINE} strokeLinecap="round" style={{ stroke: PLAN }} {...dash(R_EFF, 0, plannedLine)} className={slide} />
+                  {plannedLine > doneTo && (
+                    <>
+                      <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_HALO} strokeLinecap={doneTo > 0 ? 'butt' : 'round'} style={{ stroke: RING_BG }} {...dash(R_EFF, doneTo, plannedLine)} className={slide} />
+                      <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_LINE} strokeLinecap={doneTo > 0 ? 'butt' : 'round'} style={{ stroke: PLAN }} {...dash(R_EFF, doneTo, plannedLine)} className={slide} />
+                    </>
+                  )}
                   <PlannedEnd planned={plannedLine} />
                 </>
               )}
