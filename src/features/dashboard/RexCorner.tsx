@@ -70,6 +70,8 @@ export function RexCorner({
   sticky = null,
   nudge = false,
   onOpenLab,
+  onCloseLab,
+  canRestoreBubble = false,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
   /** El globo de la esquina puede hablar solo (hoy sí; mirando un día pasado, no). */
@@ -89,6 +91,10 @@ export function RexCorner({
   nudge?: boolean;
   /** Se abrió el lab (con el botón, el globo o desde otra pestaña). */
   onOpenLab?: () => void;
+  /** Se cerró el lab (no por irse a abrir otra cosa): el globo fijo cerrado vuelve. */
+  onCloseLab?: () => void;
+  /** El globo fijo está cerrado: el lab ofrece «Mostrar el globo». */
+  canRestoreBubble?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
@@ -177,11 +183,17 @@ export function RexCorner({
   const bubbleText = hint ? hint.text : suggestion.text.slice(leadLen);
   const bubbleAction = hint ? null : (suggestion.actions[0] ?? null);
 
+  /** El atleta cierra el lab (X, fuera o Escape): se avisa para que el globo fijo vuelva. Irse a abrir un módulo no cuenta (`leave`). */
+  const dismiss = () => {
+    setOpen(false);
+    onCloseLab?.();
+  };
+
   // Escape cierra el panel.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') dismiss();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -280,7 +292,7 @@ export function RexCorner({
 
       {open && (
         <div className="fixed inset-0 z-[55]">
-          <button aria-label="Cerrar a Rex" onClick={() => setOpen(false)} className="absolute inset-0 cursor-default bg-black/60 backdrop-blur-[2px]" />
+          <button aria-label="Cerrar a Rex" onClick={dismiss} className="absolute inset-0 cursor-default bg-black/60 backdrop-blur-[2px]" />
           <section
             role="dialog"
             aria-label="Rex"
@@ -288,7 +300,12 @@ export function RexCorner({
           >
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">El lab de Rex</span>
-              <button onClick={() => setOpen(false)} aria-label="Cerrar a Rex" className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white">
+              {canRestoreBubble && (
+                <button onClick={dismiss} className="rounded-full border border-brand-border px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition-colors hover:border-white/30 hover:text-white">
+                  Mostrar el globo
+                </button>
+              )}
+              <button onClick={dismiss} aria-label="Cerrar a Rex" className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white">
                 <X size={16} />
               </button>
             </div>

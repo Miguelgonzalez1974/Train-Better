@@ -447,6 +447,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         speak={isToday && !closingBubble}
         nudge={closingBubble && tab === 'resumen' && stickyShut && !labSeen}
         onOpenLab={markLabSeen}
+        onCloseLab={() => setStickyShut(false)}
+        canRestoreBubble={closingBubble && tab === 'resumen' && stickyShut}
         ask={askRex}
         sticky={stickyOn ? { tip: 'Toca los aros o un número para ver de dónde salen, o a mí para entrar en mi lab.', onClose: closeSticky } : null}
         hint={ringHintPending && tab === 'resumen' && !closingBubble ? { lead: 'Toca un aro o un número', text: ' para ver de dónde sale, o tócame a mí y entra en mi lab.' } : null}
