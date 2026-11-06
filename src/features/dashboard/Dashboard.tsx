@@ -292,9 +292,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [rexCursor, setRexCursor] = useState(0);
   useEffect(() => setRexCursor(0), [dayIso]);
   const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso, rexCursor);
-  // Con la sesión hecha, el globo de Rex («Sesión hecha» + la pista de los aros y del lab) se queda fijo hasta que lo cierras; no vuelve ese día.
-  const [stickyShut, setStickyShut] = useState(() => stickyClosed(typeof window !== 'undefined' ? window.localStorage : null, todayIso, 'cierre'));
-  // La versión mínima: cerrado el globo, el punto del botón de Rex late hasta que abres el lab (se recuerda por día).
+  // Con la sesión hecha, el globo de Rex («Sesión hecha» + la pista de los aros y del lab) está fijo en el Resumen. Se puede cerrar con la X,
+  // pero solo hasta que sales del Resumen (otra pestaña o pantalla): al volver, se activa otra vez.
+  const [stickyShut, setStickyShut] = useState(false);
+  useEffect(() => setStickyShut(false), [tab, dayIso]);
+  // La versión mínima: con el globo cerrado, el punto del botón de Rex late hasta que abres el lab (se recuerda por día).
   const [labSeen, setLabSeen] = useState(() => stickyClosed(typeof window !== 'undefined' ? window.localStorage : null, todayIso, 'cierre', 'tb-lab-seen'));
   function markLabSeen() {
     if (labSeen) return;
@@ -302,9 +304,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     setLabSeen(true);
   }
   const closingBubble = isToday && rexPick.current.id === 'cierre';
-  const stickyOn = closingBubble && !stickyShut;
+  const stickyOn = closingBubble && tab === 'resumen' && !stickyShut;
   function closeSticky() {
-    markStickyClosed(typeof window !== 'undefined' ? window.localStorage : null, todayIso, 'cierre');
     setStickyShut(true);
   }
   function updateRexMemory(change: (m: RexMemory) => RexMemory) {
@@ -444,7 +445,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {/* Rex en la esquina: un globo con lo más importante al abrir y, al tocarlo, su panel con atajos y los módulos de «Más». */}
       <RexCorner
         speak={isToday && !closingBubble}
-        nudge={closingBubble && stickyShut && !labSeen}
+        nudge={closingBubble && tab === 'resumen' && stickyShut && !labSeen}
         onOpenLab={markLabSeen}
         ask={askRex}
         sticky={stickyOn ? { tip: 'Toca los aros o un número para ver de dónde salen, o a mí para entrar en mi lab.', onClose: closeSticky } : null}
