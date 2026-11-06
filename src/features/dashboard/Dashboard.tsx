@@ -15,7 +15,7 @@ import { dayAdvice } from '../../engine/dayAdvice';
 import { getActivePainFlags, PAIN_AREA_LABEL } from '../../engine/painFlags';
 import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
 import { describeSkipped } from '../../engine/sessionParts';
-import { RexBar } from './RexBar';
+import { RexCorner } from './RexCorner';
 import {
   buildRexSuggestions,
   NUTRITION_HOUR,
@@ -373,8 +373,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Rex, siempre arriba: te dice lo que toca ahora con atajos, y en «Más» están los módulos que antes eran botones sueltos. */}
-      <RexBar
+      {/* Rex en la esquina: un globo con lo más importante al abrir y, al tocarlo, su panel con atajos y los módulos de «Más». */}
+      <RexCorner
+        speak={isToday}
         suggestion={rexPick.current}
         waiting={rexPick.waiting}
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}

@@ -41,6 +41,7 @@ export function RexBar({
   extra,
   showDate = true,
   modules = true,
+  defaultMore = false,
   hide = [],
   onAction,
   onDismiss,
@@ -55,6 +56,8 @@ export function RexBar({
   showDate?: boolean;
   /** Enseñar el botón «Más» con los módulos del Dashboard. */
   modules?: boolean;
+  /** «Más» sale abierto (en el panel de la esquina). */
+  defaultMore?: boolean;
   /** Módulos de «Más» que hoy no se pueden abrir (por ejemplo «Tu semana» sin ninguna semana que repasar). */
   hide?: RexTarget[];
   suggestion: RexSuggestion;
@@ -73,7 +76,7 @@ export function RexBar({
   const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
   const animate = !typedAlready && !reduced;
   const [shown, setShown] = useState(animate ? 0 : suggestion.text.length);
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(defaultMore);
   // Sin memoizar: si la app queda abierta pasada la medianoche, la fecha se corrige sola en el siguiente repintado.
   const now = new Date();
   const today = {

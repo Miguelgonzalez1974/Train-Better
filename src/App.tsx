@@ -108,7 +108,7 @@ export default function App() {
     <div className="flex min-h-screen bg-brand-bg">
       <SyncIndicator />
       <Sidebar active={activeTab} onChange={(t) => goTo(t)} />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-6 lg:max-w-5xl">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-36 md:pb-24 lg:max-w-5xl">
         <Suspense fallback={<TabLoading />}>
           {activeTab === 'dashboard' && (
             <Dashboard
