@@ -6,7 +6,22 @@ import type { RexAction, RexSuggestion } from '../dashboard/rexDashboard';
  * del perfil y una campana; ahora es una voz con tres atajos y el detalle completo detrás de «Por qué». Puro: lo pinta `RexBar`.
  */
 
+/** Lo que Rex cuenta de la sesión ya completada, en una frase: lo que decidió el coach con los resultados, un PR nuevo o, si no, cómo va la semana. */
+export interface PlanCompleted {
+  /** Cambios de carga de hoy ya redactados («Press banca sube a 85 kg el próximo día»). */
+  changes: string[];
+  /** Mensaje de PR nuevo de hoy, si lo hay. */
+  prMessage: string | null;
+  /** Sugerencias de 1RM por confirmar (están en el resumen). */
+  e1rmPending: number;
+  streak: number;
+  weekDone: number;
+  weekPlanned: number;
+}
+
 export interface PlanRexContext {
+  /** La sesión de hoy ya está completada: Rex lo cuenta en vez del estado del día. */
+  completed?: PlanCompleted | null;
   /** Hay sesión de entreno hoy (no es descanso, no está hecha y no se está editando). */
   hasTrainingSession: boolean;
   /** Semáforo del día (verde/ámbar/rojo) y su nombre corto ("Día verde"); null si aún no hay check-in. */
@@ -74,6 +89,28 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
   };
 }
 
+/** La sesión ya hecha: una frase con lo que importa y el resumen completo a un toque (ya no ocupa la pantalla al entrar). */
+export function planCompletedSuggestion(c: PlanCompleted | null | undefined): RexSuggestion | null {
+  if (!c) return null;
+  const lead = 'Sesión completada.';
+  const week = c.weekPlanned > 0 ? `Esta semana llevas ${c.weekDone} de ${c.weekPlanned}.` : '';
+  const body = c.changes.length > 0 ? stop(c.changes.slice(0, 2).join(' ')) : c.prMessage ? stop(c.prMessage) : c.streak > 1 ? `Buen trabajo: ${c.streak} días seguidos sin fallar. ${week}`.trim() : `Buen trabajo. ${week}`.trim();
+  const pending = c.e1rmPending > 0 ? ` Tengo ${c.e1rmPending === 1 ? 'una sugerencia' : `${c.e1rmPending} sugerencias`} de 1RM por confirmar.` : '';
+  return {
+    id: 'plan-completada',
+    priority: 95,
+    lead,
+    tone: 'good',
+    text: `${lead} ${body}${pending}`.trim(),
+    mood: 'happy',
+    actions: [
+      { label: 'Ver resumen', target: 'plan-resumen' },
+      { label: '¿Cambiar algo?', target: 'plan-cambiar' },
+    ],
+    dismissible: false,
+  };
+}
+
 /** Rex avisa de que el coach tiene algo para ti (una propuesta que decidir o una nota); la molestia ya se dice en la frase del estado. */
 export function planNoticesSuggestion(notices: PlanRexContext['notices']): RexSuggestion | null {
   if (notices.count <= 0) return null;
@@ -95,5 +132,5 @@ export function planNoticesSuggestion(notices: PlanRexContext['notices']): RexSu
 
 /** Todo lo que Rex tiene que decir en Planificación, de más a menos importante. Vacío = la barra no se enseña. */
 export function buildPlanRexSuggestions(ctx: PlanRexContext): RexSuggestion[] {
-  return [planStateSuggestion(ctx), planNoticesSuggestion(ctx.notices)].filter((s): s is RexSuggestion => s !== null).sort((a, b) => b.priority - a.priority);
+  return [planCompletedSuggestion(ctx.completed), planStateSuggestion(ctx), planNoticesSuggestion(ctx.notices)].filter((s): s is RexSuggestion => s !== null).sort((a, b) => b.priority - a.priority);
 }

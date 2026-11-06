@@ -225,6 +225,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [showNotices, setShowNotices] = useState(false);
   // Rex en Planificación: el detalle del estado del día se abre con «Por qué»; lo apartado se recuerda en este dispositivo.
   const [showPlanDetail, setShowPlanDetail] = useState(false);
+  /** El resumen de la sesión completada se abre desde el globo de Rex, no ocupa la pantalla al entrar. */
+  const [showSummary, setShowSummary] = useState(false);
   const [rexMemory, setRexMemory] = useState<RexMemory>(() => loadRexMemory(typeof window !== 'undefined' ? window.localStorage : null));
   const [rexCursor, setRexCursor] = useState(0);
   const [regenNote, setRegenNote] = useState<string | null>(null);
@@ -1014,7 +1016,26 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // Rex: la frase del estado del día y el aviso de que el coach tiene algo que contar. La molestia ya va dentro de la frase.
   const noticesWithoutPain = Math.max(0, noticeSummary.count - activePainFlags.length);
   const planComp = session?.competition;
+  // Con la sesión hecha, Rex cuenta lo que importa en una frase (cambios de carga, un PR, la racha) y el resumen entero se abre aparte.
+  const kgText = (n: number) => `${String(Math.round(n * 10) / 10).replace('.', ',')} kg`;
+  const completedInfo =
+    alreadyCompletedToday && session
+      ? {
+          changes: progressionViews.flatMap((v) => {
+            const name = getMovementById(v.record.movementId)?.name ?? v.record.movementId;
+            if (v.change === 'subio' && v.nextKg) return [`${name} sube a ${kgText(v.nextKg)} el próximo día.`];
+            if (v.change === 'bajo' && v.nextKg) return [`${name} baja a ${kgText(v.nextKg)} el próximo día: te están costando las series.`];
+            return [];
+          }),
+          prMessage: prUpdateMessage,
+          e1rmPending: e1rmSuggestions.length,
+          streak: adherenceStreak,
+          weekDone: weekCount.done,
+          weekPlanned: weekCount.planned,
+        }
+      : null;
   const rexList = buildPlanRexSuggestions({
+    completed: completedInfo,
     hasTrainingSession: Boolean(session && !session.isRestDay && !editMode && !alreadyCompletedToday),
     light: session?.dayLight ? { color: session.dayLight.color, name: LIGHT_LABEL[session.dayLight.color].name } : null,
     planned: plannedStrain ? plannedStrain.strain : null,
@@ -1041,6 +1062,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     else if (target === 'plan-dureza') setShowHardness(true);
     else if (target === 'plan-molestia') setShowPainPicker(true);
     else if (target === 'plan-avisos') setShowNotices(true);
+    else if (target === 'plan-resumen') setShowSummary(true);
+    else if (target === 'plan-cambiar') setShowRex(true);
   }
   /** Los cambios directos de la sesión que Rex ofrece en «¿Cambiar algo?»: otro WOD, el selector de tipo o la hoja de dureza. */
   function handleRexAct(action: SupportAction) {
@@ -1327,19 +1350,22 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         />
       )}
 
+      {/* El resumen de la sesión completada vive detrás del globo de Rex («Ver resumen»): ya no ocupa la pantalla al entrar. */}
       {alreadyCompletedToday && todayHistoryEntry && (
-        <SessionSummaryCard
-          session={session}
-          entry={todayHistoryEntry}
-          workLog={todayWorkLog}
-          progression={progressionViews}
-          streak={adherenceStreak}
-          weekCount={weekCount}
-          prUpdateMessage={prUpdateMessage}
-          e1rmSuggestions={e1rmSuggestions}
-          onConfirmE1rm={handleConfirmE1rmSuggestion}
-          onDismissE1rm={handleDismissE1rmSuggestion}
-        />
+        <Modal open={showSummary} onClose={() => setShowSummary(false)} title="Resumen de la sesión">
+          <SessionSummaryCard
+            session={session}
+            entry={todayHistoryEntry}
+            workLog={todayWorkLog}
+            progression={progressionViews}
+            streak={adherenceStreak}
+            weekCount={weekCount}
+            prUpdateMessage={prUpdateMessage}
+            e1rmSuggestions={e1rmSuggestions}
+            onConfirmE1rm={handleConfirmE1rmSuggestion}
+            onDismissE1rm={handleDismissE1rmSuggestion}
+          />
+        </Modal>
       )}
 
 
@@ -1370,6 +1396,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       ) : (
         <DaySessionBlocks
           session={session}
+          autoOpenMain={!alreadyCompletedToday}
           editable={editMode}
           onUpdateEntry={handleUpdateEntry}
           onAddEntry={handleAddEntry}

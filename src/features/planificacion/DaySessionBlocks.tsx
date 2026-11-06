@@ -22,6 +22,8 @@ interface DaySessionBlocksProps {
    * `session.blocks` — `SessionBlockCard` la pinta debajo del levantamiento al que pertenece. */
   setFeedbackByIndex?: Map<number, RpeFeedback>;
   onRateSet?: (index: number, rpe: number) => void;
+  /** Al cambiar de día, abrir el bloque principal (fuerza, oly o WOD) y dejar el resto plegado. Una sesión ya hecha entra toda plegada. */
+  autoOpenMain?: boolean;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
@@ -34,15 +36,18 @@ export function DaySessionBlocks({
   progress,
   setFeedbackByIndex,
   onRateSet,
+  autoOpenMain = false,
 }: DaySessionBlocksProps) {
   // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
   // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
   const [tab, setTab] = useState<'session' | 'task'>('session');
   // Todo plegado por defecto: un bloque abierto a la vez (al abrir otro se cierra el anterior), o todos con "Abrir todo".
   const [openBlocks, setOpenBlocks] = useState<Set<Block>>(new Set());
+  const mainBlock = ((['strength', 'oly', 'wod'] as Block[]).find((b) => session.blocks.some((x) => x.block === b)));
   useEffect(() => {
     setTab('session');
-    setOpenBlocks(new Set());
+    setOpenBlocks(new Set(autoOpenMain && mainBlock ? [mainBlock] : []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.date]);
 
   if (session.source === 'custom') {

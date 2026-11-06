@@ -30,6 +30,9 @@ export type RexTarget =
   | 'plan-dureza'
   | 'plan-molestia'
   | 'plan-avisos'
+  /** Planificación: abrir el resumen de la sesión completada, y el chat «¿Cambiar algo?». */
+  | 'plan-resumen'
+  | 'plan-cambiar'
   /** La rutina de movilidad y estiramientos con Rex. */
   | 'movilidad'
 

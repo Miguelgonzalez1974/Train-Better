@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlanRexSuggestions, planNoticesSuggestion, planStateSuggestion, type PlanRexContext } from './rexPlan';
+import { buildPlanRexSuggestions, planCompletedSuggestion, planNoticesSuggestion, planStateSuggestion, type PlanRexContext } from './rexPlan';
 
 const base: PlanRexContext = {
   hasTrainingSession: true,
@@ -60,6 +60,39 @@ describe('Rex en Planificación: la frase del estado del día', () => {
 
   it('sin sesión de entreno (descanso, hecha o editando) no hay frase', () => {
     expect(planStateSuggestion(mk({ hasTrainingSession: false }))).toBeNull();
+  });
+});
+
+describe('Rex en Planificación: la sesión completada', () => {
+  const done = { changes: [], prMessage: null, e1rmPending: 0, streak: 1, weekDone: 3, weekPlanned: 5 };
+
+  it('cuenta lo que decidió el coach, con el resumen a un toque', () => {
+    const s = planCompletedSuggestion({ ...done, changes: ['Press banca sube a 85 kg el próximo día.'] })!;
+    expect(s).toMatchObject({ id: 'plan-completada', lead: 'Sesión completada.', tone: 'good', dismissible: false });
+    expect(s.text).toBe('Sesión completada. Press banca sube a 85 kg el próximo día.');
+    expect(s.actions).toEqual([
+      { label: 'Ver resumen', target: 'plan-resumen' },
+      { label: '¿Cambiar algo?', target: 'plan-cambiar' },
+    ]);
+  });
+
+  it('sin cambios de carga: un PR nuevo, la racha o cómo va la semana', () => {
+    expect(planCompletedSuggestion({ ...done, prMessage: 'Nuevo PR en sentadilla: 160 kg.' })!.text).toBe('Sesión completada. Nuevo PR en sentadilla: 160 kg.');
+    expect(planCompletedSuggestion({ ...done, streak: 6 })!.text).toBe('Sesión completada. Buen trabajo: 6 días seguidos sin fallar. Esta semana llevas 3 de 5.');
+    expect(planCompletedSuggestion(done)!.text).toBe('Sesión completada. Buen trabajo. Esta semana llevas 3 de 5.');
+    expect(planCompletedSuggestion({ ...done, weekPlanned: 0 })!.text).toBe('Sesión completada. Buen trabajo.');
+  });
+
+  it('dos cambios de carga como máximo, y avisa de las sugerencias de 1RM que están en el resumen', () => {
+    const s = planCompletedSuggestion({ ...done, changes: ['A sube.', 'B baja.', 'C sube.'], e1rmPending: 2 })!;
+    expect(s.text).toBe('Sesión completada. A sube. B baja. Tengo 2 sugerencias de 1RM por confirmar.');
+    expect(planCompletedSuggestion({ ...done, e1rmPending: 1 })!.text).toContain('una sugerencia de 1RM');
+  });
+
+  it('la sesión completada va antes que los avisos y sustituye a la frase del estado', () => {
+    const list = buildPlanRexSuggestions(mk({ completed: done, hasTrainingSession: false, notices: { count: 1, actionable: false } }));
+    expect(list.map((s) => s.id)).toEqual(['plan-completada', 'plan-avisos']);
+    expect(planCompletedSuggestion(null)).toBeNull();
   });
 });
 
