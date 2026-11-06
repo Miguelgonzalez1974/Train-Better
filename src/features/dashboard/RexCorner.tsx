@@ -68,6 +68,8 @@ export function RexCorner({
   raised = false,
   ask,
   sticky = null,
+  nudge = false,
+  onOpenLab,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
   /** El globo de la esquina puede hablar solo (hoy sí; mirando un día pasado, no). */
@@ -83,6 +85,10 @@ export function RexCorner({
   ask?: (text: string) => AskAnswer | 'close';
   /** Un globo fijo que no se recoge solo: se queda hasta que lo cierras con la X (`onClose`) y lleva debajo una pista (`tip`). null = no hay. */
   sticky?: { tip: string; onClose: () => void } | null;
+  /** La versión mínima de la pista, cuando cierras el globo fijo: el punto del botón late hasta que abres el lab. */
+  nudge?: boolean;
+  /** Se abrió el lab (con el botón, el globo o desde otra pestaña). */
+  onOpenLab?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
@@ -187,6 +193,7 @@ export function RexCorner({
     setAnswer(null);
     setQuestion('');
     setOpen(true);
+    onOpenLab?.();
   };
   const send = (text: string) => {
     const value = text.trim();
@@ -261,7 +268,12 @@ export function RexCorner({
             className="pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-brand-surface shadow-xl shadow-black/40 transition-transform duration-200 active:scale-95"
           >
             <RexMascot size={42} mood={bubble ? suggestion.mood : 'idle'} />
-            {attention && <span className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full bg-brand-orange ring-2 ring-brand-bg" aria-label="Hay algo sin ver" />}
+            {(attention || nudge) && (
+              <>
+                {nudge && <span className="absolute right-0.5 top-0.5 h-3 w-3 animate-ping rounded-full bg-brand-orange/70 motion-reduce:animate-none" aria-hidden="true" />}
+                <span className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full bg-brand-orange ring-2 ring-brand-bg" aria-label="Hay algo sin ver" />
+              </>
+            )}
           </button>
         </div>
       )}

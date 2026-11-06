@@ -16,6 +16,15 @@ describe('el globo fijo de Rex', () => {
     expect(stickyClosed(s, '2026-11-06', 'otro')).toBe(false);
   });
 
+  it('cada marca (slot) va por separado: cerrar el globo no marca el lab como visto', () => {
+    const s = fake();
+    markStickyClosed(s, '2026-11-06', 'cierre');
+    expect(stickyClosed(s, '2026-11-06', 'cierre', 'tb-lab-seen')).toBe(false);
+    markStickyClosed(s, '2026-11-06', 'cierre', 'tb-lab-seen');
+    expect(stickyClosed(s, '2026-11-06', 'cierre', 'tb-lab-seen')).toBe(true);
+    expect(stickyClosed(s, '2026-11-06', 'cierre')).toBe(true);
+  });
+
   it('sin almacenamiento o si falla, simplemente se ve', () => {
     expect(stickyClosed(null, '2026-11-06', 'cierre')).toBe(false);
     expect(stickyClosed({ getItem: () => { throw new Error('bloqueado'); } }, '2026-11-06', 'cierre')).toBe(false);
