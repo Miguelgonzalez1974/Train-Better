@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { Check, CircleAlert } from 'lucide-react';
+import { Check, CircleAlert, MousePointerClick } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
@@ -435,6 +435,12 @@ export function DayRing({
       </div>
 
       {/* Pregúntale a Rex: el globo con la explicación del número tocado */}
+      {hintPending && !askedExplanation && (
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-good">
+          <MousePointerClick size={14} aria-hidden="true" />
+          Toca un aro o un número para ver de dónde sale
+        </p>
+      )}
       {askedExplanation && <RexExplainBubble explanation={askedExplanation} anchor={askedAnchor} onAction={onExplainAction} onClose={() => setAsked(null)} />}
 
       {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}

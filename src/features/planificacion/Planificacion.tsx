@@ -82,7 +82,7 @@ import {
 import { SessionSummaryCard } from './SessionSummaryCard';
 import { RexSupport } from './RexSupport';
 import type { SupportAction, SupportEffect } from './rexSupportFlow';
-import { RexBar } from '../dashboard/RexBar';
+import { RexCorner } from '../dashboard/RexCorner';
 import { dismissSuggestion, loadRexMemory, pickRexSuggestion, saveRexMemory, wasTyped, withTyped, type RexMemory, type RexTarget } from '../dashboard/rexDashboard';
 import { buildPlanRexSuggestions } from './rexPlan';
 import { LIGHT_LABEL } from '../../engine/dayLight';
@@ -1263,10 +1263,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             )}
           </div>
         </div>
-        {/* Rex cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y avisa de lo que
-            el coach tiene para ti. Las casillas con todo el detalle quedan detrás de «Por qué». */}
-        {showRexBar && (
-          <RexBar
+        {/* Rex, en la esquina, cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y
+            avisa de lo que el coach tiene para ti; sus botones (Empezar sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
+            Las casillas con todo el detalle quedan detrás de «Por qué». */}
+        {showRexBar && !focusMode && (
+          <RexCorner
+            speak
+            raised
             suggestion={rexPick.current}
             waiting={rexPick.waiting}
             typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}

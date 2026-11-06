@@ -24,15 +24,15 @@ export default {
         'rex-blink': { '0%, 92%, 100%': { transform: 'scaleY(1)' }, '95%': { transform: 'scaleY(0.1)' } },
         'rex-pulse': { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.5)' } },
         'rex-lift': { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-5px)' } },
-        // Los aros «laten» un par de veces cuando Rex dice que se pueden tocar.
-        'ring-hint': { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.07)' } },
+        // Los aros «laten» cada pocos segundos mientras Rex no ha conseguido que se toquen.
+        'ring-hint': { '0%, 55%, 100%': { transform: 'scale(1)' }, '75%': { transform: 'scale(1.07)' } },
       },
       animation: {
         'rex-bob': 'rex-bob 2.4s ease-in-out infinite',
         'rex-blink': 'rex-blink 4s infinite',
         'rex-pulse': 'rex-pulse 0.8s infinite',
         'rex-lift': 'rex-lift 1s ease-in-out infinite',
-        'ring-hint': 'ring-hint 1.2s ease-in-out 0.8s 3',
+        'ring-hint': 'ring-hint 2.6s ease-in-out infinite',
         'menu-in': 'menu-in 140ms ease-out',
         'section-in': 'section-in 200ms ease-out',
       },
