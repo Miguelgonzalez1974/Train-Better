@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { Send, X } from 'lucide-react';
+import { MousePointerClick, Send, X } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
 import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
@@ -67,6 +67,7 @@ export function RexCorner({
   showDate = true,
   raised = false,
   ask,
+  sticky = null,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
   /** El globo de la esquina puede hablar solo (hoy sí; mirando un día pasado, no). */
@@ -80,6 +81,8 @@ export function RexCorner({
   raised?: boolean;
   /** La caja «Pregúntale a Rex…»: recibe lo escrito y devuelve la respuesta, o 'close' si ya hizo lo pedido (abrir un módulo, ir a Nutrición). */
   ask?: (text: string) => AskAnswer | 'close';
+  /** Un globo fijo que no se recoge solo: se queda hasta que lo cierras con la X (`onClose`) y lleva debajo una pista (`tip`). null = no hay. */
+  sticky?: { tip: string; onClose: () => void } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
@@ -149,19 +152,19 @@ export function RexCorner({
   // El globo sale cuando Rex tiene algo que decir y se recoge solo; no sale con el panel abierto, con una ventana encima, con la frase
   // tranquila ni si ya lo dijo en esta visita. La pista de los aros no se recoge sola.
   useEffect(() => {
-    const talks = hinting || (speak && !quiet && !suppressed && !spoken.has(key));
+    const talks = Boolean(sticky) || hinting || (speak && !quiet && !suppressed && !spoken.has(key));
     if (!talks || open || blocked) {
       setBubble(false);
       return;
     }
     setBubble(true);
-    if (hinting) return;
+    if (hinting || sticky) return;
     const timer = window.setTimeout(() => {
       spoken.add(key);
       setBubble(false);
     }, BUBBLE_MS);
     return () => window.clearTimeout(timer);
-  }, [hinting, speak, quiet, suppressed, open, blocked, key]);
+  }, [hinting, sticky !== null, speak, quiet, suppressed, open, blocked, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const said = hint ?? { lead: suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.lead : '', text: '' };
   const leadLen = said.lead.length;
@@ -207,9 +210,22 @@ export function RexCorner({
           }`}
         >
           {bubble && (
-            <div className="pointer-events-auto relative max-w-[min(18rem,calc(100vw-5.5rem))] animate-section-in rounded-2xl rounded-br-md border border-white/20 bg-brand-surface px-3.5 py-2.5 text-left shadow-xl shadow-black/40 motion-reduce:animate-none">
+            <div
+              className={`pointer-events-auto relative animate-section-in rounded-2xl rounded-br-md border border-white/20 bg-brand-surface py-2.5 pl-3.5 text-left shadow-xl shadow-black/40 motion-reduce:animate-none ${
+                sticky ? 'max-w-[min(20rem,calc(100vw-1.5rem))] pr-9' : 'max-w-[min(18rem,calc(100vw-5.5rem))] pr-3.5'
+              }`}
+            >
+              {sticky && (
+                <button
+                  onClick={sticky.onClose}
+                  aria-label="Cerrar el globo de Rex"
+                  className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              )}
               <button onClick={openPanel} aria-label="Rex tiene algo que decirte: abrir" className="block w-full text-left">
-                <p className="line-clamp-4 text-[13px] leading-snug text-neutral-100">
+                <p className={`${sticky ? '' : 'line-clamp-4'} text-[13px] leading-snug text-neutral-100`}>
                   {leadLen > 0 && (
                     <strong className="font-bold" style={{ color: hint ? LEAD_COLOR.good : LEAD_COLOR[suggestion.tone ?? 'info'] }}>
                       {said.lead}
@@ -217,6 +233,12 @@ export function RexCorner({
                   )}
                   {bubbleText}
                 </p>
+                {sticky && (
+                  <p className="mt-1.5 flex items-start gap-1.5 border-t border-white/10 pt-1.5 text-[11.5px] leading-snug text-neutral-400">
+                    <MousePointerClick size={13} aria-hidden="true" className="mt-px shrink-0 text-good" />
+                    <span>{sticky.tip}</span>
+                  </p>
+                )}
               </button>
               {bubbleAction && (
                 <button

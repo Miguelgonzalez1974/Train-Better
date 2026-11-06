@@ -45,6 +45,7 @@ import { macroChip } from './dayHeader';
 import { dayAnswer, helpAnswer, parseAsk, weightAnswer, type AskAnswer } from './rexAsk';
 import { describeDayForAsk } from './rexAskDay';
 import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
+import { markStickyClosed, stickyClosed } from '../../lib/stickyBubble';
 import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
 import { DashTabs, DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
@@ -291,6 +292,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [rexCursor, setRexCursor] = useState(0);
   useEffect(() => setRexCursor(0), [dayIso]);
   const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso, rexCursor);
+  // Con la sesión hecha, el globo de Rex («Sesión hecha» + la pista de los aros y del lab) se queda fijo hasta que lo cierras; no vuelve ese día.
+  const [stickyShut, setStickyShut] = useState(() => stickyClosed(typeof window !== 'undefined' ? window.localStorage : null, todayIso, 'cierre'));
+  const closingBubble = isToday && rexPick.current.id === 'cierre';
+  const stickyOn = closingBubble && !stickyShut;
+  function closeSticky() {
+    markStickyClosed(typeof window !== 'undefined' ? window.localStorage : null, todayIso, 'cierre');
+    setStickyShut(true);
+  }
   function updateRexMemory(change: (m: RexMemory) => RexMemory) {
     setRexMemory((prev) => {
       const next = change(prev);
@@ -424,12 +433,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
 
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={`flex flex-col gap-4 ${stickyOn ? 'pb-28' : ''}`}>
       {/* Rex en la esquina: un globo con lo más importante al abrir y, al tocarlo, su panel con atajos y los módulos de «Más». */}
       <RexCorner
-        speak={isToday}
+        speak={isToday && !closingBubble}
         ask={askRex}
-        hint={ringHintPending && tab === 'resumen' ? { lead: 'Toca un aro o un número', text: ' para ver de dónde sale, o tócame a mí y entra en mi lab.' } : null}
+        sticky={stickyOn ? { tip: 'Toca los aros o un número para ver de dónde salen, o a mí para entrar en mi lab.', onClose: closeSticky } : null}
+        hint={ringHintPending && tab === 'resumen' && !closingBubble ? { lead: 'Toca un aro o un número', text: ' para ver de dónde sale, o tócame a mí y entra en mi lab.' } : null}
         suggestion={rexPick.current}
         waiting={rexPick.waiting}
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
