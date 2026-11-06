@@ -97,13 +97,23 @@ const ADVICE_COLOR: Record<DayAdvice['tone'], string> = {
   gold: 'rgb(var(--c-brand-gold))',
 };
 
-/** La marca del esfuerzo previsto sobre el anillo del esfuerzo: una raya discontinua que lo cruza (dentro del grupo girado, como los arcos). */
-function PlannedTick({ planned }: { planned: number }) {
+/** Grosor de la línea del previsto y de su borde oscuro (para que se lea sobre el azul de lo hecho). */
+const PLAN_LINE = 1.8;
+const PLAN_HALO = 3.6;
+const RING_BG = 'rgb(var(--c-brand-bg))';
+
+/** El final de la línea del previsto: una marca que cruza el aro, con borde oscuro (dentro del grupo girado, como los arcos). */
+function PlannedEnd({ planned }: { planned: number }) {
   const a = (Math.min(100, Math.max(0, planned)) / 100) * 2 * Math.PI;
   const point = (r: number) => ({ x: 50 + r * Math.cos(a), y: 50 + r * Math.sin(a) });
-  const from = point(R_EFF - STROKE / 2 - 0.3);
-  const to = point(R_EFF + STROKE / 2 + 0.3);
-  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={PLAN} strokeWidth={2.4} strokeLinecap="round" strokeDasharray="2.2 2.2" />;
+  const from = point(R_EFF - STROKE / 2 - 0.7);
+  const to = point(R_EFF + STROKE / 2 + 0.7);
+  return (
+    <>
+      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={RING_BG} strokeWidth={PLAN_HALO} strokeLinecap="round" />
+      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={PLAN} strokeWidth={PLAN_LINE + 0.2} strokeLinecap="round" />
+    </>
+  );
 }
 
 /**
@@ -198,10 +208,11 @@ export function DayRing({
   const hasLoad = acwr.acwr !== null && !acwr.coldStart;
   const { target, planned, real } = strain;
   const shown = real !== null ? real : planned?.strain ?? null;
-  const within = shown !== null ? Math.min(shown, target.high) : 0;
-  const beyond = shown !== null && shown > target.high ? shown - target.high : 0;
-  const opacity = real !== null ? 1 : 0.85;
+  // Lo hecho (aro azul, y ámbar lo que pasa del objetivo) y lo previsto (línea fina fucsia por el centro del aro, del 0 a su valor).
+  const within = real !== null ? Math.min(real, target.high) : 0;
+  const beyond = real !== null && real > target.high ? real - target.high : 0;
   const balance = start ? dayBalance({ planned: start.planned, real, target, status: strain.status, isToday, prepMorning: start.prep, prepNow: total }) : null;
+  const plannedLine = real !== null ? (balance ? balance.planned : null) : planned?.strain ?? null;
 
   const dash = (r: number, from: number, to: number) => {
     const len = filled ? (Math.max(0, to - from) / 100) * circ(r) : 0;
@@ -239,7 +250,7 @@ export function DayRing({
 
         {/* Los dos anillos */}
         <div className="relative aspect-square w-[min(44vw,9.5rem)]">
-          <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" role="img" aria-label={`Preparación ${total ?? 'sin datos'}, esfuerzo ${shown ?? 'sin datos'}, objetivo ${target.low} a ${target.high}`}>
+          <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" role="img" aria-label={`Preparación ${total ?? 'sin datos'}, esfuerzo ${real ?? 'sin entrenar'}${plannedLine !== null ? `, previsto ${plannedLine}` : ''}, objetivo ${target.low} a ${target.high}`}>
             <g transform="rotate(-90 50 50)">
               {/* Objetivo: corchete fino por fuera, de tu mínimo a tu máximo */}
               <circle
@@ -255,14 +266,21 @@ export function DayRing({
               />
               {/* Esfuerzo (exterior) */}
               <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
-              {shown !== null && shown > 0 && (
-                // Antes de entrenar el arco es el previsto (lila y algo tenue); una vez entrenado, el esfuerzo hecho (azul).
-                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: real === null ? PLAN : EFFORT, opacity: real === null ? 0.7 : opacity }} {...dash(R_EFF, 0, within)} className={slide} />
+              {/* Lo hecho: el aro azul (y en ámbar lo que pasa del máximo del objetivo). Antes de entrenar, vacío. */}
+              {real !== null && real > 0 && (
+                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: EFFORT }} {...dash(R_EFF, 0, within)} className={slide} />
               )}
               {beyond > 0 && (
-                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: OVER, opacity }} {...dash(R_EFF, target.high - 0.6, shown ?? target.high)} className={slide} />
+                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: OVER }} {...dash(R_EFF, target.high - 0.6, real ?? target.high)} className={slide} />
               )}
-              {balance && <PlannedTick planned={balance.planned} />}
+              {/* Lo previsto: una línea fina fucsia por el centro del aro, del 0 a su valor, con una marca al final. Se compara con el azul de un vistazo. */}
+              {plannedLine !== null && plannedLine > 0 && (
+                <>
+                  <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_HALO} strokeLinecap="round" style={{ stroke: RING_BG }} {...dash(R_EFF, 0, plannedLine)} className={slide} />
+                  <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_LINE} strokeLinecap="round" style={{ stroke: PLAN }} {...dash(R_EFF, 0, plannedLine)} className={slide} />
+                  <PlannedEnd planned={plannedLine} />
+                </>
+              )}
               {/* Preparación (interior) */}
               <circle cx="50" cy="50" r={R_PREP} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
               {total !== null && (
