@@ -5,6 +5,8 @@ import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
+import type { ExplainAction, ExplainId, Explanation } from '../../engine/explainNumbers';
+import { RexExplainBubble } from './RexExplainBubble';
 
 export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
 /** Lo que se abre al tocar un número del anillo: una pestaña, o la carga (que vive en el icono de arriba). */
@@ -222,7 +224,8 @@ export function DayRing({
   notDone,
   centerLabel,
   isToday,
-  onOpenTab,
+  explanations,
+  onExplainAction,
 }: {
   readiness: ReadinessScore;
   acwr: AcwrResult;
@@ -234,14 +237,24 @@ export function DayRing({
   /** Lo que va en el centro del anillo: "Hoy", "Ayer" o el día. */
   centerLabel: string;
   isToday: boolean;
-  onOpenTab: (target: RingTarget) => void;
+  /** Lo que Rex cuenta de cada número al tocarlo («Pregúntale a Rex»). */
+  explanations: Partial<Record<ExplainId, Explanation>>;
+  /** Lo que hace cada botón de la explicación (abrir una pestaña, la carga o Planificación). */
+  onExplainAction: (action: ExplainAction) => void;
 }) {
   const [filled, setFilled] = useState(false);
+  // El número por el que se ha preguntado a Rex (su globo sale bajo los anillos); se cierra al cambiar de día.
+  const [asked, setAsked] = useState<ExplainId | null>(null);
   useEffect(() => {
     setFilled(false);
+    setAsked(null);
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
   }, [centerLabel]);
+  const ask = (id: ExplainId) => setAsked((cur) => (cur === id ? null : id));
+  const askedExplanation = asked ? explanations[asked] : undefined;
+  const askedAnchor: 'left' | 'center' | 'right' = asked === 'preparacion' || asked === 'carga' ? 'left' : asked === 'realizado' || asked === 'previsto' ? 'right' : 'center';
+  const asking = (id: ExplainId) => (asked === id ? 'rounded-lg bg-white/10' : '');
 
   const { total } = readiness;
   const prepTint = total !== null ? ringPrepColor(total) : NEUTRAL;
@@ -269,7 +282,7 @@ export function DayRing({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-5 gap-y-2.5">
         {/* Preparación */}
         <div className="flex flex-col items-end text-right">
-          <button onClick={() => onOpenTab('preparacion')} className="flex flex-col items-end">
+          <button onClick={() => ask('preparacion')} aria-expanded={asked === 'preparacion'} className={`flex flex-col items-end -mx-1 px-1 py-0.5 ${asking('preparacion')}`}>
             <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: prepTint }}>
               Preparación
             </span>
@@ -280,7 +293,7 @@ export function DayRing({
             {balance?.prep && <span className="mt-1.5 text-[11px] leading-tight text-neutral-500">{balance.prep.morning} por la mañana</span>}
           </button>
           {hasLoad ? (
-            <button onClick={() => onOpenTab('carga')} className="mt-3 flex flex-col items-end">
+            <button onClick={() => ask('carga')} aria-expanded={asked === 'carga'} className={`mt-3 flex flex-col items-end -mx-1 px-1 py-0.5 ${asking('carga')}`}>
               <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500">Carga</span>
               <span className="flex items-center gap-1 text-sm font-semibold text-neutral-200">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ZONE_COLOR[acwr.zone] }} />
@@ -342,18 +355,22 @@ export function DayRing({
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500">{centerLabel}</span>
           </div>
+          {/* Tocar el aro: Rex explica el objetivo */}
+          <button onClick={() => ask('objetivo')} aria-label="Rex explica el objetivo" aria-expanded={asked === 'objetivo'} className="absolute inset-0 rounded-full" />
         </div>
 
         {/* Esfuerzo: lo realizado y lo previsto, siempre a la vista, cada uno con el color que tiene en el aro. El objetivo va escrito sobre el arco. */}
         <div className="flex flex-col items-start text-left">
-          <button onClick={() => onOpenTab('esfuerzo')} className="flex flex-col items-start text-left">
+          <button onClick={() => ask('realizado')} aria-expanded={asked === 'realizado'} className={`flex flex-col items-start text-left -mx-1 px-1 py-0.5 ${asking('realizado')}`}>
             <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: doneColor }}>
               Realizado
             </span>
             <span className="num text-[2rem] font-semibold leading-none tracking-tight" style={{ color: doneColor }}>
               {real !== null ? real : '—'}
             </span>
-            <span className="mt-2.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: PLAN }}>
+          </button>
+          <button onClick={() => ask('previsto')} aria-expanded={asked === 'previsto'} className={`mt-2.5 flex flex-col items-start text-left -mx-1 px-1 py-0.5 ${asking('previsto')}`}>
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em]" style={{ color: PLAN }}>
               Previsto
             </span>
             <span className="num text-xl font-semibold leading-none tracking-tight" style={{ color: PLAN }}>
@@ -362,6 +379,9 @@ export function DayRing({
           </button>
         </div>
       </div>
+
+      {/* Pregúntale a Rex: el globo con la explicación del número tocado */}
+      {askedExplanation && <RexExplainBubble explanation={askedExplanation} anchor={askedAnchor} onAction={onExplainAction} onClose={() => setAsked(null)} />}
 
       {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}
       {!isToday &&

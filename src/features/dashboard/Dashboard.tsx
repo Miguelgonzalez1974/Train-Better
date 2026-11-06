@@ -38,7 +38,8 @@ import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { buildGoalRows } from './progressOverview';
-import { BalanceBox, DayRing, type DashTab, type RingTarget } from './DayRing';
+import { BalanceBox, DayRing, type DashTab } from './DayRing';
+import { explainDone, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainAction } from '../../engine/explainNumbers';
 import { dayBalance } from '../../engine/dayBalance';
 import { DashTabs, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
@@ -340,10 +341,27 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     }
   }
 
-  /** Tocar un número del anillo: esfuerzo y preparación abren su pestaña; la carga, su ventana. */
-  function openRingTarget(target: RingTarget) {
-    if (target === 'carga') setShowLoad(true);
-    else setTab(target);
+  /** «Pregúntale a Rex»: lo que cuenta de cada número del anillo (con el desglose real), y a dónde lleva cada botón de su globo. */
+  const explanations = {
+    preparacion: explainReadiness(shown.readiness),
+    carga: explainLoad(shown.acwr, shown.readiness.loadPenalty),
+    realizado: explainDone({
+      real: shown.strain.real,
+      planned: dayStart.planned ?? shown.strain.planned?.strain ?? null,
+      target: shown.strain.target,
+      status: shown.strain.status,
+      rpe: shown.entry?.rpe,
+      minutes: shown.entry?.durationMin,
+    }),
+    previsto: explainPlanned(shown.strain.planned, shown.strain.target, shown.strain.fit),
+    objetivo: explainObjective(shown.strain.target),
+  };
+  function runExplainAction(action: ExplainAction) {
+    if (action === 'ver-preparacion') setTab('preparacion');
+    else if (action === 'ver-esfuerzo') setTab('esfuerzo');
+    else if (action === 'ver-carga') setShowLoad(true);
+    else if (action === 'recovery') setShowMobility(true);
+    else onNavigateToPlanificacion();
   }
 
 
@@ -430,7 +448,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         <>
           {/*
             El estado del día: el check-in (el primer gesto de la mañana: al contestar se fija el objetivo de esfuerzo y se
-            rehace la sesión) y los dos anillos, esfuerzo y preparación. Tocar un número abre su pestaña.
+            rehace la sesión) y los dos anillos, esfuerzo y preparación. Tocar un número le pregunta a Rex de dónde sale.
           */}
           <div {...swipe} className="touch-pan-y">
           <DayRing
@@ -441,7 +459,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             acwr={shown.acwr}
             centerLabel={ringDayLabel(dayIso, todayIso)}
             isToday={isToday}
-            onOpenTab={openRingTarget}
+            explanations={explanations}
+            onExplainAction={runExplainAction}
           />
           </div>
 
