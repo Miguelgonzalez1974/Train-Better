@@ -435,12 +435,13 @@ export function DayRing({
       </div>
 
       {/* Pregúntale a Rex: el globo con la explicación del número tocado */}
-      {hintPending && !askedExplanation && (
-        <p className="mt-3 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-good">
-          <MousePointerClick size={14} aria-hidden="true" />
-          Toca un aro o un número para ver de dónde sale
-        </p>
-      )}
+      {/* Siempre a la vista (también con la sesión hecha): verde y en negrita hasta el primer toque, y más discreta después. */}
+      <p
+        className={`mt-3 flex items-center justify-center gap-1.5 text-center text-[12px] leading-snug ${hintPending ? 'font-semibold text-good' : 'font-medium text-neutral-300'}`}
+      >
+        <MousePointerClick size={15} aria-hidden="true" className="shrink-0 text-good" />
+        <span>Toca los aros o un número para ver de dónde salen · o a Rex para entrar en su lab</span>
+      </p>
       {askedExplanation && <RexExplainBubble explanation={askedExplanation} anchor={askedAnchor} onAction={onExplainAction} onClose={() => setAsked(null)} />}
 
       {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}
