@@ -412,7 +412,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           onAction={(target) => {
             if (target === 'objetivos-hablar') setActiveSection('asistente');
           }}
-          examples={['Quiero subir mi sentadilla', '¿Cómo voy?', 'Crea un macro', 'Mi perfil']}
+          examples={[]}
           ask={(text) =>
             routeAsk(text, 'objetivos', {
               todayIso: todayIso(),
