@@ -1170,7 +1170,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       ],
     },
   ];
-  const rexExamples = ['Me duele la rodilla', 'Hoy no estoy para el plan', 'Voy a faltar 3 días', ...(hasWodBlock && !alreadyCompletedToday ? ['Otro WOD'] : []), ...(companionLive ? ['Aplaza el programa'] : [])];
 
   // Si RexLab de otra pantalla dejó dicho qué abrir (la molestia, «hoy no», faltar, otro WOD), se abre al llegar.
   useEffect(() => {
@@ -1443,7 +1442,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             modules={false}
             ask={askRex}
             lab={rexLab}
-            examples={rexExamples}
+            examples={[]}
             onAction={runPlanTarget}
             onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
             onNext={() => setRexCursor((c) => c + 1)}
