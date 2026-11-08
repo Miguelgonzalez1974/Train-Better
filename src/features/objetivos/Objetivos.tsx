@@ -392,7 +392,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
 
   return (
     <div className="flex flex-col gap-5">
-      {activeSection === 'home' && <SeasonSetupCard profile={profile} onApply={persist} />}
+      {activeSection === 'home' && <SeasonSetupCard profile={profile} history={history} onApply={persist} />}
       {activeSection === 'home' && (
         <ObjetivosHome
           groups={openGroups}

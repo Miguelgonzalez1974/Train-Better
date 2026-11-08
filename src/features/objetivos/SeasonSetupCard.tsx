@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { CalendarRange } from 'lucide-react';
-import type { AthleteProfile } from '../../data/athlete/types';
+import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
-import { applySeasonSetup, backupBeforeSeason, buildSeasonSetup, describeRemovals, restoreSeasonBackup, type SeasonBackup } from '../../engine/seasonSetup';
+import { applySeasonSetup, backupBeforeSeason, buildSeasonSetup, describeRemovals, restoreSeasonBackup, swapToTexas, type SeasonBackup } from '../../engine/seasonSetup';
 import { isCompanionProgram } from '../../engine/strengthCompanion';
+import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
+import { CompanionWeeks } from '../planificacion/CompanionWeeks';
 import { formatIsoDateShort } from '../../lib/dateFormat';
 import { Modal } from '../shell/Modal';
 
@@ -24,10 +26,11 @@ function readJson<T>(key: string): T | null {
  * programa de fuerza que convive con él. Enseña lo que se va a quitar y lo que se va a crear, guarda copia de lo anterior y se puede
  * deshacer. La lógica está en `engine/seasonSetup.ts`; aquí solo se enseña y se aplica.
  */
-export function SeasonSetupCard({ profile, onApply }: { profile: AthleteProfile; onApply: (next: AthleteProfile) => void }) {
+export function SeasonSetupCard({ profile, history, onApply }: { profile: AthleteProfile; history: SessionHistoryEntry[]; onApply: (next: AthleteProfile) => void }) {
   const todayIso = toLocalIsoDate(new Date());
   const setup = useMemo(() => buildSeasonSetup(todayIso), [todayIso]);
   const [open, setOpen] = useState(false);
+  const [weeksOpen, setWeeksOpen] = useState(false);
   const [hidden, setHidden] = useState(() => readJson<boolean>(HIDDEN_KEY) === true);
   const [backup, setBackup] = useState<SeasonBackup | null>(() => readJson<SeasonBackup>(BACKUP_KEY));
   const applied = (profile.strengthPrograms ?? []).some(isCompanionProgram) && backup !== null;
@@ -70,17 +73,40 @@ export function SeasonSetupCard({ profile, onApply }: { profile: AthleteProfile;
 
   const removals = describeRemovals(profile);
 
+  const companion = (profile.strengthPrograms ?? []).find(isCompanionProgram);
+
   if (applied) {
     return (
-      <section className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs text-neutral-400" aria-label="Temporada aplicada">
-        <span className="flex items-center gap-2">
-          <CalendarRange size={15} aria-hidden="true" className="shrink-0 text-good" />
-          Temporada hasta junio aplicada.
-        </span>
-        <button onClick={undo} className="shrink-0 rounded-full border border-brand-border px-3 py-1 font-semibold text-neutral-200 hover:bg-white/5">
-          Deshacer
-        </button>
-      </section>
+      <>
+        <section className="flex flex-col gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs text-neutral-400" aria-label="Temporada aplicada">
+          <span className="flex items-center gap-2">
+            <CalendarRange size={15} aria-hidden="true" className="shrink-0 text-good" />
+            Temporada hasta junio aplicada
+            {companion ? <span className="text-neutral-500">· programa: {STRENGTH_METHOD_LABEL[companion.method]}</span> : null}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {companion && (
+              <button onClick={() => setWeeksOpen(true)} className="rounded-full border border-brand-border px-3 py-1 font-semibold text-neutral-200 hover:bg-white/5">
+                Ver semana a semana
+              </button>
+            )}
+            {companion && companion.method !== 'texas' && (
+              <button
+                onClick={() => {
+                  if (window.confirm('¿Cambiar tu programa de fuerza por el Texas Method de 8 semanas, desde mañana? El macro no cambia.')) onApply(swapToTexas(profile, todayIso));
+                }}
+                className="rounded-full border border-brand-border px-3 py-1 font-semibold text-neutral-200 hover:bg-white/5"
+              >
+                Probar Texas Method
+              </button>
+            )}
+            <button onClick={undo} className="rounded-full border border-brand-border px-3 py-1 font-semibold text-neutral-200 hover:bg-white/5">
+              Deshacer temporada
+            </button>
+          </div>
+        </section>
+        {companion && <CompanionWeeks open={weeksOpen} onClose={() => setWeeksOpen(false)} profile={profile} history={history} program={companion} todayIso={todayIso} />}
+      </>
     );
   }
 
@@ -105,6 +131,7 @@ export function SeasonSetupCard({ profile, onApply }: { profile: AthleteProfile;
         </div>
       </section>
 
+      <CompanionWeeks open={weeksOpen} onClose={() => setWeeksOpen(false)} profile={profile} history={history} program={setup.program} todayIso={todayIso} />
       <Modal open={open} onClose={() => setOpen(false)} title="Nueva temporada">
         <div className="flex flex-col gap-4 text-sm text-neutral-300">
           <div>
@@ -146,11 +173,14 @@ export function SeasonSetupCard({ profile, onApply }: { profile: AthleteProfile;
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">Programa de fuerza · convive con el macro</p>
             <div className="rounded-lg bg-white/[0.04] px-3 py-2">
-              <p className="font-semibold text-white">Bloque de Temporada · 24 sesiones</p>
+              <p className="font-semibold text-white">Texas Method · 8 semanas · 24 sesiones</p>
               <p className="text-xs text-neutral-500">
-                Lunes, miércoles y viernes desde el {formatIsoDateShort(setup.program.startDate)}: test de apertura, cinco semanas de olas, descarga y retest. Press banca, sentadilla y press militar.
-                Cada día te lo ofrece debajo de la sesión del macro.
+                Desde mañana ({formatIsoDateShort(setup.program.startDate)}), lunes de volumen, miércoles de recuperación y viernes de intensidad. Un levantamiento por semana: sentadilla,
+                press banca y press militar. Cada día te lo ofrece debajo de la sesión del macro, y tú decides si lo haces.
               </p>
+              <button onClick={() => setWeeksOpen(true)} className="mt-2 rounded-full border border-brand-border px-3 py-1 text-xs font-semibold text-neutral-200 hover:bg-white/5">
+                Ver semana a semana
+              </button>
             </div>
           </div>
 

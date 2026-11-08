@@ -154,6 +154,8 @@ export interface StrengthProgram {
 export interface ProgramCompanion {
   /** Días de la semana en que toca (0 = lunes … 6 = domingo), p. ej. [0, 2, 4]. */
   weekdays: number[];
+  /** Cuántas semanas dura el programa (sesiones = semanas × días). Ausente = hasta su fecha de fin (el Bloque de Temporada siempre son 8). */
+  weeks?: number;
   /** Siguiente sesión (0 = la primera). Avanza al hacerla o saltarla, nunca por fecha. */
   cursor: number;
   /** Fecha ISO del último día en que se hizo o se saltó una sesión; de ahí sale cuándo toca la siguiente. */

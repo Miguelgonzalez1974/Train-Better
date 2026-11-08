@@ -15,9 +15,9 @@ import {
   undoDeclineCompanion,
   type CompanionProgram,
 } from '../../engine/strengthCompanion';
-import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { getMovementById } from '../../data/movements';
 import { formatIsoDateShort } from '../../lib/dateFormat';
+import { CompanionWeeks } from './CompanionWeeks';
 
 /** El programa de fuerza que convive con el macro y le toca ofrecerse hoy (o ya está en curso), si hay alguno. */
 export function pickCompanionProgram(profile: AthleteProfile, todayIso: string): CompanionProgram | null {
@@ -66,10 +66,10 @@ export function CompanionCard({
   const [minutes, setMinutes] = useState<number | null>(null);
   const [mark, setMark] = useState<string>('');
   const [showNotes, setShowNotes] = useState(false);
+  const [weeksOpen, setWeeksOpen] = useState(false);
 
   if (!program || !status) return null;
   const id = program.id;
-  const label = STRENGTH_METHOD_LABEL[program.method];
 
   if (status.kind === 'pausado') {
     return (
@@ -150,7 +150,7 @@ export function CompanionCard({
       <div>
         <p className="text-[15px] font-semibold leading-snug text-white">{plan.title}</p>
         <p className="text-xs text-neutral-500">
-          {label} · semana {plan.week} · sesión <span className="num">{plan.index + 1}</span>
+          {plan.role} · semana {plan.week}{plan.weeks ? ` de ${plan.weeks}` : ''} · sesión <span className="num">{plan.index + 1}</span>
           {total}
         </p>
       </div>
@@ -179,9 +179,15 @@ export function CompanionCard({
         </div>
       </dl>
 
-      <button onClick={() => setShowNotes((v) => !v)} aria-expanded={showNotes} className="flex items-center gap-1 self-start text-xs font-medium text-neutral-500 hover:text-neutral-300">
-        Cómo hacerla <ChevronDown size={13} aria-hidden="true" className={showNotes ? 'rotate-180' : ''} />
-      </button>
+      <div className="flex items-center gap-4">
+        <button onClick={() => setShowNotes((v) => !v)} aria-expanded={showNotes} className="flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-300">
+          Cómo hacerla <ChevronDown size={13} aria-hidden="true" className={showNotes ? 'rotate-180' : ''} />
+        </button>
+        <button onClick={() => setWeeksOpen(true)} className="text-xs font-medium text-neutral-500 hover:text-neutral-300">
+          Ver semana a semana
+        </button>
+      </div>
+      <CompanionWeeks open={weeksOpen} onClose={() => setWeeksOpen(false)} profile={profile} history={history} program={program} todayIso={todayIso} />
       {showNotes && <p className="text-xs leading-relaxed text-neutral-400">{plan.notes}</p>}
 
       {!accepted ? (

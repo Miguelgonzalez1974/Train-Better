@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { makeProfile } from './__fixtures';
-import { applySeasonSetup, backupBeforeSeason, blockLengths, blockPhaseWeeks, buildSeasonSetup, nextMondayIso, restoreSeasonBackup, seasonEndIso } from './seasonSetup';
+import { applySeasonSetup, backupBeforeSeason, blockLengths, blockPhaseWeeks, buildSeasonSetup, nextMondayIso, restoreSeasonBackup, seasonEndIso, swapToTexas, TEXAS_WEEKS } from './seasonSetup';
 import { getActiveMacrocycle, totalMacrocycleWeeks } from './periodization';
 import { generateSessionForDate } from './generateSession';
-import { companionStatus, isCompanionProgram } from './strengthCompanion';
+import { companionStatus, companionTotalSessions, isCompanionProgram } from './strengthCompanion';
 
 let n = 0;
 const ids = () => `id${++n}`;
@@ -56,10 +56,11 @@ describe('el plan completo', () => {
     expect(setup.macrocycles.map((m) => m.phaseWeeks)).toEqual([[5, 3, 1, 1], [4, 4, 2, 1], [3, 3, 5, 1]]);
   });
 
-  it('el programa es el Bloque de Temporada que convive con el macro, lunes, miércoles y viernes, desde el 16 nov', () => {
-    expect(setup.program).toMatchObject({ method: 'temporada', startDate: '2026-11-16', lifts: ['benchPress', 'backSquat', 'strictPress'] });
+  it('el programa es un Texas Method de 8 semanas que convive con el macro, lunes, miércoles y viernes, desde mañana', () => {
+    expect(setup.program).toMatchObject({ method: 'texas', startDate: '2026-11-09', lifts: ['backSquat', 'benchPress', 'strictPress'] });
     expect(isCompanionProgram(setup.program)).toBe(true);
-    expect(setup.program.companion).toMatchObject({ weekdays: [0, 2, 4], cursor: 0, deferrals: 0 });
+    expect(setup.program.companion).toMatchObject({ weekdays: [0, 2, 4], weeks: 8, cursor: 0, deferrals: 0 });
+    expect(companionTotalSessions(setup.program)).toBe(24);
     expect(setup.ramp).toEqual({ startDate: '2026-11-09', strengthWeeks: 1, olyWeeks: 2, wodWeeks: 2 });
   });
 
@@ -94,8 +95,21 @@ describe('el plan completo', () => {
     expect(session.strengthProgramLabel).toBeUndefined();
     const program = profile.strengthPrograms![0];
     if (!isCompanionProgram(program)) throw new Error('debería convivir');
-    expect(companionStatus(program, '2026-11-15').kind).toBe('no-empieza');
-    expect(companionStatus(program, '2026-11-16').kind).toBe('oferta');
-    expect(companionStatus(program, '2026-11-17').kind).toBe('oferta'); // aún no hecha: sigue pendiente
+    expect(companionStatus(program, '2026-11-08').kind).toBe('no-empieza');
+    expect(companionStatus(program, '2026-11-09').kind).toBe('oferta');
+    expect(companionStatus(program, '2026-11-10').kind).toBe('oferta'); // aún no hecha: sigue pendiente
+  });
+});
+
+describe('cambiar el programa que convive por el Texas Method', () => {
+  it('quita el programa que convivía, deja los demás y no toca el macro', () => {
+    const setup = buildSeasonSetup('2026-11-08', ids)!;
+    const normal = { id: 'n', startDate: '2026-12-01', endDate: '2027-01-01', method: '531' as const, lifts: [] };
+    const profile = makeProfile({ macrocycles: setup.macrocycles, strengthPrograms: [normal, { ...setup.program, method: 'temporada' }] });
+    const next = swapToTexas(profile, '2026-11-08', ids);
+    expect(next.macrocycles).toBe(profile.macrocycles);
+    expect(next.strengthPrograms?.map((p) => p.method)).toEqual(['531', 'texas']);
+    expect(next.strengthPrograms?.[1]).toMatchObject({ startDate: '2026-11-09' });
+    expect(TEXAS_WEEKS).toBe(8);
   });
 });

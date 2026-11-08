@@ -1,6 +1,6 @@
-import type { AthleteProfile, IntensityRamp, Macrocycle, StrengthProgram } from '../data/athlete/types';
+import type { AthleteProfile, IntensityRamp, Macrocycle } from '../data/athlete/types';
 import { addDaysIso, isoDiffDays, weeksBetweenIso } from './periodization';
-import { COMPANION_DEFAULT_WEEKDAYS, newCompanion, weekdayOf } from './strengthCompanion';
+import { COMPANION_DEFAULT_WEEKDAYS, newCompanion, weekdayOf, type CompanionProgram } from './strengthCompanion';
 import { STRENGTH_METHOD_LABEL } from './strengthPrograms';
 
 /**
@@ -14,7 +14,7 @@ export interface SeasonSetup {
   endDate: string;
   totalWeeks: number;
   macrocycles: Macrocycle[];
-  program: StrengthProgram;
+  program: CompanionProgram;
   ramp: IntensityRamp;
 }
 
@@ -80,6 +80,32 @@ const SHAPES: { shape: Shape; label: string }[] = [
   { shape: 'pico', label: 'Pico y tests' },
 ];
 
+/** Semanas que dura el Texas Method de prueba. */
+export const TEXAS_WEEKS = 8;
+
+/**
+ * El Texas Method que convive con el macro: arranca mañana, dura 8 semanas y se ofrece lunes (volumen), miércoles (recuperación) y viernes
+ * (intensidad). Un levantamiento por semana, rotando sentadilla, press banca y press militar (el deadlift ya lo trabaja el macro).
+ */
+export function buildTexasProgram(todayIso: string, newId: () => string = () => crypto.randomUUID()): CompanionProgram {
+  const startDate = addDaysIso(todayIso, 1);
+  return {
+    id: newId(),
+    startDate,
+    // Margen para aplazamientos: el programa acaba al hacer su última sesión, no en esta fecha.
+    endDate: addDaysIso(startDate, (TEXAS_WEEKS + 6) * 7),
+    method: 'texas',
+    lifts: ['backSquat', 'benchPress', 'strictPress'],
+    companion: newCompanion(COMPANION_DEFAULT_WEEKDAYS, TEXAS_WEEKS),
+  };
+}
+
+/** Cambia el programa que convive con el macro por el Texas Method de prueba, sin tocar el macro. */
+export function swapToTexas(profile: AthleteProfile, todayIso: string, newId: () => string = () => crypto.randomUUID()): AthleteProfile {
+  const kept = (profile.strengthPrograms ?? []).filter((p) => !p.companion);
+  return { ...profile, strengthPrograms: [...kept, buildTexasProgram(todayIso, newId)] };
+}
+
 /** El plan completo desde el primer lunes tras `todayIso` hasta junio. `newId` = generador de ids (en tests, uno fijo). */
 export function buildSeasonSetup(todayIso: string, newId: () => string = () => crypto.randomUUID()): SeasonSetup | null {
   const startDate = nextMondayIso(todayIso);
@@ -97,17 +123,7 @@ export function buildSeasonSetup(todayIso: string, newId: () => string = () => c
     return macro;
   });
 
-  const programStart = addDaysIso(startDate, 7);
-  const program: StrengthProgram = {
-    id: newId(),
-    startDate: programStart,
-    // Margen para aplazamientos: el programa acaba al hacer su última sesión, no en esta fecha.
-    endDate: addDaysIso(programStart, 14 * 7),
-    method: 'temporada',
-    // Un levantamiento por sesión semanal: lunes pecho, miércoles pierna, viernes hombro (el macro ya trabaja otra cosa esos días).
-    lifts: ['benchPress', 'backSquat', 'strictPress'],
-    companion: newCompanion(COMPANION_DEFAULT_WEEKDAYS),
-  };
+  const program = buildTexasProgram(todayIso, newId);
 
   return { startDate, endDate, totalWeeks, macrocycles, program, ramp: { startDate, strengthWeeks: 1, olyWeeks: 2, wodWeeks: 2 } };
 }

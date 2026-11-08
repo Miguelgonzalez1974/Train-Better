@@ -140,7 +140,7 @@ import {
   type ResponseProfile,
 } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
-import { companionPosition, companionTotalSessions, isCompanionTestSession, supportsCompanion } from './strengthCompanion';
+import { companionPosition, companionTotalSessions, companionWeeks, isCompanionTestSession, supportsCompanion } from './strengthCompanion';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import {
   MAYHEM_BASE_TOTAL_WEEKS,
@@ -5189,6 +5189,10 @@ export interface CompanionSessionPlan {
   perWeek: number;
   /** Total de sesiones del programa; null si no tiene tope. */
   total: number | null;
+  /** Semanas que dura el programa; null si no tiene tope. */
+  weeks: number | null;
+  /** Qué papel hace la sesión dentro del ciclo del método («Texas Method · día de volumen»). */
+  role: string;
   /** «Press banca · 4×4 al 80 %» — qué es en una línea. */
   title: string;
   /** Cómo lo llama el programa («Test 1RM», «Ola 5x5…»). */
@@ -5215,6 +5219,8 @@ export function generateCompanionSession(
   history: SessionHistoryEntry[],
   program: StrengthProgram & { companion: NonNullable<StrengthProgram['companion']> },
   todayIso: string,
+  /** `neutral`: sin autorregulación (la del día de hoy), para enseñar el plan tal cual y no lo que saldría hoy. */
+  opts: { neutral?: boolean } = {},
 ): CompanionSessionPlan | null {
   if (!supportsCompanion(program.method)) return null;
   const today = new Date(`${todayIso}T00:00:00`);
@@ -5226,8 +5232,8 @@ export function generateCompanionSession(
   const rpeAutoreg = getRpeAutoregFactor(history, today);
   const readiness = getReadinessFactor(getReadinessCheckForDate(profile.readinessLog, todayIso));
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', today);
-  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor;
-  const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
+  const autoregFactor = opts.neutral ? 1 : combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor;
+  const autoregNote = opts.neutral ? '' : [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
 
   const dayPlan: DayPlan = { isTrainingDay: true, trainingDayIndex: pos.dayInWeek, strengthPattern: 'squat', olyFamily: 'snatch', isRecoveryDay: false };
   const day = resolveStrengthProgramDay(
@@ -5257,6 +5263,8 @@ export function generateCompanionSession(
     week: pos.week + 1,
     perWeek,
     total,
+    weeks: companionWeeks(program),
+    role: day.format,
     title: `${movement.name} · ${isTest ? 'test' : scheme}`,
     format: day.format,
     movementId: day.movementId,

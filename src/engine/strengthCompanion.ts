@@ -31,14 +31,20 @@ export function weekdayOf(iso: string): number {
 }
 
 /** El estado inicial de un programa que convive con el macro. */
-export function newCompanion(weekdays: number[] = COMPANION_DEFAULT_WEEKDAYS): ProgramCompanion {
+export function newCompanion(weekdays: number[] = COMPANION_DEFAULT_WEEKDAYS, weeks?: number): ProgramCompanion {
   const days = [...new Set(weekdays)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b);
-  return { weekdays: days.length > 0 ? days : COMPANION_DEFAULT_WEEKDAYS, cursor: 0, deferrals: 0 };
+  return { weekdays: days.length > 0 ? days : COMPANION_DEFAULT_WEEKDAYS, cursor: 0, deferrals: 0, ...(weeks ? { weeks } : {}) };
+}
+
+/** Cuántas semanas dura el programa; null = sin tope (sigue hasta su fecha de fin). */
+export function companionWeeks(program: CompanionProgram): number | null {
+  return program.method === 'temporada' ? TEMPORADA_TOTAL_WEEKS : (program.companion.weeks ?? null);
 }
 
 /** Cuántas sesiones tiene el programa entero; null = sin tope (sigue hasta su fecha de fin). */
 export function companionTotalSessions(program: CompanionProgram): number | null {
-  return program.method === 'temporada' ? TEMPORADA_TOTAL_WEEKS * program.companion.weekdays.length : null;
+  const weeks = companionWeeks(program);
+  return weeks === null ? null : weeks * program.companion.weekdays.length;
 }
 
 /** Dónde cae la sesión número `index`: semana (0 = la primera), puesto dentro de la semana y la fecha «sintética» que usa el motor. */
