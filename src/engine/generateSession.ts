@@ -141,6 +141,7 @@ import {
 } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
 import { companionPosition, companionTotalSessions, companionWeeks, isCompanionTestSession, supportsCompanion } from './strengthCompanion';
+import { texasSessionAt } from './texasClassic';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import {
   MAYHEM_BASE_TOTAL_WEEKS,
@@ -5207,6 +5208,20 @@ export interface CompanionSessionPlan {
   isTest: boolean;
   /** Los bloques para enseñar (el levantamiento, o la secuencia de un complex). */
   blocks: SessionBlockResult[];
+  /** Cada levantamiento de la sesión con su esquema y carga (uno en casi todos los métodos; dos en el Texas Method clásico). */
+  lifts: CompanionLift[];
+  /** Texas Method clásico: es el día de intensidad (marca de 5 repeticiones a batir). */
+  intensity: boolean;
+}
+
+export interface CompanionLift {
+  movementId: string;
+  prKey: keyof PersonalRecords;
+  sets: number;
+  reps: string;
+  loadKg: number;
+  /** Es la marca a batir (Texas, viernes): se anota si salieron las 5 repeticiones. */
+  attempt: boolean;
 }
 
 /**
@@ -5219,8 +5234,11 @@ export function generateCompanionSession(
   history: SessionHistoryEntry[],
   program: StrengthProgram & { companion: NonNullable<StrengthProgram['companion']> },
   todayIso: string,
-  /** `neutral`: sin autorregulación (la del día de hoy), para enseñar el plan tal cual y no lo que saldría hoy. */
-  opts: { neutral?: boolean } = {},
+  /**
+   * `neutral`: sin autorregulación (la del día de hoy), para enseñar el plan tal cual y no lo que saldría hoy.
+   * `projectFrom`: por dónde va el programa de verdad; el Texas proyecta las marcas de los viernes entre ahí y la sesión pedida.
+   */
+  opts: { neutral?: boolean; projectFrom?: number } = {},
 ): CompanionSessionPlan | null {
   if (!supportsCompanion(program.method)) return null;
   const today = new Date(`${todayIso}T00:00:00`);
@@ -5234,6 +5252,38 @@ export function generateCompanionSession(
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', today);
   const autoregFactor = opts.neutral ? 1 : combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor;
   const autoregNote = opts.neutral ? '' : [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
+
+  const rampNote = strengthRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
+
+  // Texas Method clásico: dos levantamientos por sesión y progresión por marcas (ver `texasClassic.ts`), no una tabla fija por día.
+  if (program.method === 'texas') {
+    const texas = texasSessionAt(index, program.companion, profile.prs, { from: opts.projectFrom ?? index, autoreg: autoregFactor });
+    const notes = `${texas.note}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`;
+    const names = texas.lifts.map((l) => getMovementById(l.movementId)?.name ?? l.movementId);
+    if (texas.lifts.some((l) => !getMovementById(l.movementId))) return null;
+    const lifts: CompanionLift[] = texas.lifts.map((l) => ({ movementId: l.movementId, prKey: l.liftKey, sets: l.sets, reps: String(l.reps), loadKg: l.loadKg, attempt: l.attempt }));
+    const main = lifts[0];
+    return {
+      index,
+      week: texas.week + 1,
+      perWeek,
+      total: companionTotalSessions(program),
+      weeks: companionWeeks(program),
+      role: texas.roleLabel,
+      title: `${names.join(' + ')} · ${texas.role === 'volumen' ? 'volumen' : texas.role === 'recuperacion' ? 'recuperación' : 'marca de 5'}`,
+      format: texas.roleLabel,
+      movementId: main.movementId,
+      prKey: main.prKey,
+      sets: main.sets,
+      reps: main.reps,
+      loadKg: main.loadKg,
+      notes,
+      isTest: false,
+      blocks: texas.lifts.map((l) => ({ block: 'strength', movementId: l.movementId, sets: l.sets, reps: String(l.reps), loadKg: l.loadKg, format: texas.roleLabel, notes })),
+      lifts,
+      intensity: texas.role === 'intensidad',
+    };
+  }
 
   const dayPlan: DayPlan = { isTrainingDay: true, trainingDayIndex: pos.dayInWeek, strengthPattern: 'squat', olyFamily: 'snatch', isRecoveryDay: false };
   const day = resolveStrengthProgramDay(
@@ -5250,7 +5300,7 @@ export function generateCompanionSession(
   const movement = getMovementById(day.movementId);
   if (!movement) return null;
 
-  const notes = `${day.notes}${strengthRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : ''}${autoregNote ? ` ${autoregNote}` : ''}`;
+  const notes = `${day.notes}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`;
   const blocks: SessionBlockResult[] = day.complexMovementIds
     ? day.complexMovementIds.map((id) => ({ block: 'wod', movementId: id, sets: day.sets, reps: day.reps, loadKg: day.loadKg, format: day.format, notes }))
     : [{ block: day.scoreAsWod ? 'wod' : 'strength', movementId: day.movementId, sets: day.sets, reps: day.reps, loadKg: day.loadKg, format: day.format, notes }];
@@ -5275,6 +5325,8 @@ export function generateCompanionSession(
     notes,
     isTest,
     blocks,
+    lifts: [{ movementId: day.movementId, prKey: day.prKey, sets: day.sets, reps: day.reps, loadKg: day.loadKg, attempt: false }],
+    intensity: false,
   };
 }
 

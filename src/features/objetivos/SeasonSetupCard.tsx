@@ -175,8 +175,9 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
             <div className="rounded-lg bg-white/[0.04] px-3 py-2">
               <p className="font-semibold text-white">Texas Method · 8 semanas · 24 sesiones</p>
               <p className="text-xs text-neutral-500">
-                Desde mañana ({formatIsoDateShort(setup.program.startDate)}), lunes de volumen, miércoles de recuperación y viernes de intensidad. Un levantamiento por semana: sentadilla,
-                press banca y press militar. Cada día te lo ofrece debajo de la sesión del macro, y tú decides si lo haces.
+                Texas Method clásico desde mañana ({formatIsoDateShort(setup.program.startDate)}): lunes de volumen (sentadilla 5×5 al 90 % de tu 5RM más banca o press militar), miércoles de
+                recuperación y viernes de marca (un 5RM nuevo en sentadilla y en el press de la semana). Banca y press militar se alternan, y la carga sube cuando logras la marca del viernes. Cada
+                día te lo ofrece debajo de la sesión del macro, y tú decides si lo haces: Rex te avisa si el semáforo está ámbar o rojo, pero no lo bloquea.
               </p>
               <button onClick={() => setWeeksOpen(true)} className="mt-2 rounded-full border border-brand-border px-3 py-1 text-xs font-semibold text-neutral-200 hover:bg-white/5">
                 Ver semana a semana

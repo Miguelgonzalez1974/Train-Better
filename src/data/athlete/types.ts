@@ -156,6 +156,11 @@ export interface ProgramCompanion {
   weekdays: number[];
   /** Cuántas semanas dura el programa (sesiones = semanas × días). Ausente = hasta su fecha de fin (el Bloque de Temporada siempre son 8). */
   weeks?: number;
+  /**
+   * Solo el Texas Method clásico: tu 5RM de trabajo por levantamiento (la última marca de 5 repeticiones que sacaste). De él salen el día de
+   * volumen (90 %), el de recuperación y la marca a batir el viernes. Ausente = se estima de tu PR (~86 %) y sube con cada viernes logrado.
+   */
+  fiveRm?: Partial<Record<keyof PersonalRecords, number>>;
   /** Siguiente sesión (0 = la primera). Avanza al hacerla o saltarla, nunca por fecha. */
   cursor: number;
   /** Fecha ISO del último día en que se hizo o se saltó una sesión; de ahí sale cuándo toca la siguiente. */

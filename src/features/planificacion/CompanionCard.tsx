@@ -45,7 +45,10 @@ export function CompanionCard({
   history,
   todayIso,
   commit,
+  light = null,
 }: {
+  /** El semáforo del día: con ámbar o rojo la tarjeta avisa, pero no bloquea nada (lo decide el usuario). */
+  light?: { color: 'verde' | 'ambar' | 'rojo'; name: string; reason?: string } | null;
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
   todayIso: string;
@@ -59,12 +62,14 @@ export function CompanionCard({
     () => (program && wantsPlan ? generateCompanionSession(profile, history, program, todayIso) : null),
     // La sesión depende del puntero y de los PR; no de cualquier cambio del perfil.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [program?.id, program?.companion.cursor, profile.prs, wantsPlan, todayIso, history.length, profile.readinessLog],
+    [program?.id, program?.companion.cursor, program?.companion.fiveRm, profile.prs, wantsPlan, todayIso, history.length, profile.readinessLog],
   );
   const [more, setMore] = useState(false);
   const [rpe, setRpe] = useState(7);
   const [minutes, setMinutes] = useState<number | null>(null);
   const [mark, setMark] = useState<string>('');
+  /** Texas, viernes: el peso con el que salieron las 5 repeticiones de cada marca (vacío = no salió). */
+  const [marks, setMarks] = useState<Record<string, string>>({});
   const [showNotes, setShowNotes] = useState(false);
   const [weeksOpen, setWeeksOpen] = useState(false);
 
@@ -123,18 +128,27 @@ export function CompanionCard({
     const kg = Number(mark.replace(',', '.'));
     const tested = isOneRm && Number.isFinite(kg) && kg > 0 ? kg : undefined;
     commit((p) => {
+      const achieved: Partial<Record<'backSquat' | 'benchPress' | 'strictPress', number>> = {};
+      if (plan.intensity) {
+        for (const l of plan.lifts.filter((x) => x.attempt)) {
+          const kgDone = Number((marks[l.prKey] ?? String(l.loadKg)).replace(',', '.'));
+          if (Number.isFinite(kgDone) && kgDone > 0) achieved[l.prKey as 'backSquat' | 'benchPress' | 'strictPress'] = kgDone;
+        }
+      }
       let next = completeCompanion(p, id, todayIso, {
         label: plan.title,
         movementId: plan.movementId,
         loadKg: tested ?? plan.loadKg,
         rpe,
         durationMin: minutes ?? mins,
+        achieved: plan.intensity ? achieved : undefined,
       });
       // Un test de 1RM mejor que tu PR lo actualiza: de él salen las cargas de todo lo que viene.
       if (tested !== undefined && tested > next.prs[plan.prKey]) next = { ...next, prs: { ...next.prs, [plan.prKey]: tested } };
       return next;
     });
     setMark('');
+    setMarks({});
     setMinutes(null);
   }
 
@@ -156,7 +170,21 @@ export function CompanionCard({
       </div>
 
       <dl className="divide-y divide-white/[0.06] rounded-lg bg-white/[0.03] px-3 text-sm">
-        {plan.blocks.map((b, i) => {
+        {plan.lifts.length > 1 &&
+          plan.lifts.map((l) => (
+            <div key={l.prKey} className="flex items-baseline justify-between gap-3 py-2">
+              <dt className="min-w-0 text-neutral-200">
+                {getMovementById(l.movementId)?.name ?? l.movementId}
+                <span className="text-neutral-500">
+                  {' '}
+                  · {l.sets}×{l.reps}
+                  {l.attempt ? ' · marca a batir' : ''}
+                </span>
+              </dt>
+              <dd className="num shrink-0 font-semibold text-white">{KG(l.loadKg)}</dd>
+            </div>
+          ))}
+        {plan.lifts.length <= 1 && plan.blocks.map((b, i) => {
           const m = getMovementById(b.movementId);
           return (
             <div key={`${b.movementId}-${i}`} className="flex items-baseline justify-between gap-3 py-2">
@@ -189,6 +217,13 @@ export function CompanionCard({
       </div>
       <CompanionWeeks open={weeksOpen} onClose={() => setWeeksOpen(false)} profile={profile} history={history} program={program} todayIso={todayIso} />
       {showNotes && <p className="text-xs leading-relaxed text-neutral-400">{plan.notes}</p>}
+
+      {!accepted && light && light.color !== 'verde' && (
+        <p className={`rounded-lg px-3 py-2 text-xs leading-snug ${light.color === 'rojo' ? 'bg-bad/10 text-bad' : 'bg-warn/10 text-warn'}`}>
+          Hoy es {light.name.toLowerCase()}
+          {light.reason ? ` (${light.reason.charAt(0).toLowerCase()}${light.reason.slice(1)})` : ''}. Puedes hacerla igual: lo decides tú.
+        </p>
+      )}
 
       {!accepted ? (
         <>
@@ -230,6 +265,25 @@ export function CompanionCard({
       ) : (
         <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-3">
           <p className="text-sm text-neutral-200">Hazla cuando te venga bien hoy. Al terminar, apunta cómo fue.</p>
+          {plan.intensity &&
+            plan.lifts
+              .filter((l) => l.attempt)
+              .map((l) => (
+                <label key={l.prKey} className="flex items-center justify-between gap-3 text-sm text-neutral-300">
+                  <span>
+                    {getMovementById(l.movementId)?.name ?? l.movementId}: peso de las 5 reps
+                    <span className="block text-xs text-neutral-500">Vacío si no salieron</span>
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={marks[l.prKey] ?? String(l.loadKg)}
+                    onChange={(e) => setMarks((prev) => ({ ...prev, [l.prKey]: e.target.value }))}
+                    aria-label={`Peso con el que salieron las 5 repeticiones de ${getMovementById(l.movementId)?.name ?? l.movementId}`}
+                    className="num h-9 w-24 rounded-lg border border-brand-border bg-brand-bg px-2 text-right text-white focus:border-brand-gold focus:outline-none"
+                  />
+                </label>
+              ))}
           {isOneRm && (
             <label className="flex items-center justify-between gap-3 text-sm text-neutral-300">
               Marca de hoy (kg)

@@ -150,6 +150,21 @@ describe('Rex en Planificación: el programa de fuerza que convive con el macro'
     expect(accepted.actions[0].label).toBe('Ver el programa');
   });
 
+  it('con semáforo ámbar o rojo Rex avisa pero no bloquea: lo decide el usuario', () => {
+    const amber = planProgramSuggestion(program, { color: 'ambar', name: 'Día ámbar' })!;
+    expect(amber.text).toContain('Ojo: hoy es día ámbar. Tú decides.');
+    expect(amber.tone).toBe('mid');
+    expect(amber.actions).toHaveLength(1);
+    expect(planProgramSuggestion(program, { color: 'rojo', name: 'Día rojo' })!.tone).toBe('bad');
+    const green = planProgramSuggestion(program, { color: 'verde', name: 'Día verde' })!;
+    expect(green.text).not.toContain('Ojo');
+    // ya aceptada, no se vuelve a avisar
+    expect(planProgramSuggestion({ ...program, accepted: true }, { color: 'rojo', name: 'Día rojo' })!.text).not.toContain('Ojo');
+    // el aviso viaja con el contexto de Planificación
+    const list = buildPlanRexSuggestions({ ...base, light: { color: 'ambar', name: 'Día ámbar' }, program });
+    expect(list.find((s) => s.id === 'plan-programa')!.text).toContain('Tú decides');
+  });
+
   it('sin programa no hay nada, y la frase del día lo menciona sin cambiar de protagonista', () => {
     expect(planProgramSuggestion(null)).toBeNull();
     const withProgram = buildPlanRexSuggestions({ ...base, program });

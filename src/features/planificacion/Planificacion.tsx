@@ -1482,7 +1482,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       )}
 
       {/* El programa de fuerza que convive con el macro: «¿quieres hacerla hoy?» bajo la sesión del día. */}
-      {!editMode && <CompanionCard profile={profile} history={history} todayIso={todayIso} commit={commitCompanion} />}
+      {!editMode && <CompanionCard
+          profile={profile}
+          history={history}
+          todayIso={todayIso}
+          commit={commitCompanion}
+          light={session?.dayLight ? { color: session.dayLight.color, name: LIGHT_LABEL[session.dayLight.color].name, reason: session.dayLight.reasons?.[0] } : null}
+        />}
       </>
       )}
         </div>

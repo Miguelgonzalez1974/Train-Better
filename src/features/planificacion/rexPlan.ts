@@ -196,15 +196,17 @@ export function programSentence(p: PlanProgram): string {
 }
 
 /** El programa de fuerza que convive con el macro: Rex lo anuncia y lleva a su tarjeta (bajo la sesión). */
-export function planProgramSuggestion(p: PlanProgram | null | undefined): RexSuggestion | null {
+export function planProgramSuggestion(p: PlanProgram | null | undefined, light?: PlanRexContext['light']): RexSuggestion | null {
   if (!p) return null;
   const lead = p.isTest ? 'Test.' : p.accepted ? 'Programa en tu día.' : 'Programa de fuerza.';
+  // El semáforo avisa pero no decide: con ámbar o rojo Rex lo dice y deja la elección al usuario (se puede estar fuerte y haber dormido poco).
+  const warn = !p.accepted && light && light.color !== 'verde' ? ` Ojo: hoy es ${light.name.toLowerCase()}. Tú decides.` : '';
   return {
     id: 'plan-programa',
     priority: 94,
     lead,
-    tone: p.isTest ? 'info' : 'gold',
-    text: `${lead} ${programSentence(p)}${p.accepted ? '' : ' ¿La hacemos hoy?'}`,
+    tone: !p.accepted && light?.color === 'rojo' ? 'bad' : !p.accepted && light?.color === 'ambar' ? 'mid' : p.isTest ? 'info' : 'gold',
+    text: `${lead} ${programSentence(p)}${p.accepted ? '' : ' ¿La hacemos hoy?'}${warn}`,
     mood: 'lift',
     actions: [{ label: p.accepted ? 'Ver el programa' : 'Verla', target: 'plan-programa' }],
     dismissible: !p.isTest,
@@ -217,7 +219,7 @@ export function buildPlanRexSuggestions(ctx: PlanRexContext): RexSuggestion[] {
     planEditingSuggestion(ctx.editing),
     planCompletedSuggestion(ctx.completed),
     planStateSuggestion(ctx),
-    planProgramSuggestion(ctx.program),
+    planProgramSuggestion(ctx.program, ctx.light),
     planRestSuggestion(ctx.restDay),
     planNoticesSuggestion(ctx.notices),
   ]

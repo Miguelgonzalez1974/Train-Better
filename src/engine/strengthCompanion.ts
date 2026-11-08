@@ -1,6 +1,7 @@
 import type { AthleteProfile, CompanionLogEntry, ProgramCompanion, StrengthProgram } from '../data/athlete/types';
 import { addDaysIso } from './periodization';
 import { TEMPORADA_TOTAL_WEEKS } from './strengthPrograms';
+import { recordFiveRm, type TexasLiftKey } from './texasClassic';
 
 /**
  * Programa de fuerza que CONVIVE con el macro. El macro sigue mandando cada día y la sesión del programa se ofrece debajo
@@ -148,16 +149,26 @@ export interface CompanionResult {
   loadKg?: number;
   rpe?: number;
   durationMin?: number;
+  /** Texas Method clásico: los levantamientos del viernes cuyas 5 repeticiones salieron, con el peso. Sube su 5RM de trabajo. */
+  achieved?: Partial<Record<TexasLiftKey, number>>;
 }
 
 function resolve(profile: AthleteProfile, programId: string, todayIso: string, outcome: CompanionLogEntry['outcome'], result: CompanionResult): AthleteProfile {
   const program = (profile.strengthPrograms ?? []).find((p) => p.id === programId);
   if (!program || !isCompanionProgram(program)) return profile;
   const index = program.companion.cursor;
-  const entry: CompanionLogEntry = { id: `${programId}|${index}`, programId, index, date: todayIso, outcome, ...result };
+  const { achieved, ...logged } = result;
+  const entry: CompanionLogEntry = { id: `${programId}|${index}`, programId, index, date: todayIso, outcome, ...logged };
   const next = updateProgram(profile, programId, (p) => ({
     ...p,
-    companion: { ...p.companion, cursor: p.companion.cursor + 1, lastResolvedOn: todayIso, declinedOn: undefined, acceptedOn: undefined, deferrals: 0 },
+    companion: {
+      ...(achieved && p.method === 'texas' ? recordFiveRm(p.companion, achieved) : p.companion),
+      cursor: p.companion.cursor + 1,
+      lastResolvedOn: todayIso,
+      declinedOn: undefined,
+      acceptedOn: undefined,
+      deferrals: 0,
+    },
   }));
   return { ...next, companionLog: [...(next.companionLog ?? []).filter((e) => e.id !== entry.id), entry] };
 }

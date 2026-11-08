@@ -6,10 +6,22 @@ import { companionTotalSessions, type CompanionProgram } from './strengthCompani
 /**
  * «Cómo queda cada semana»: todas las sesiones de un programa que convive con el macro, semana a semana, con su levantamiento, esquema
  * y carga. Se calcula sin autorregulación de hoy (el plan tal cual, con tus PR de ahora), para poder ver el programa entero antes de
- * empezarlo y compararlo con cómo avanza. Cada sesión sale del mismo cálculo que la que se ofrece cada día.
+ * empezarlo y compararlo con cómo avanza. En el Texas Method se da por logrado cada viernes que falta, para enseñar la progresión.
+ * Cada sesión sale del mismo cálculo que la que se ofrece cada día.
  */
 
 export type ScheduleState = 'hecha' | 'saltada' | 'siguiente' | 'pendiente';
+
+export interface ScheduleLine {
+  movementName: string;
+  /** «5×5», «1×5» o «test». */
+  scheme: string;
+  loadKg: number;
+  /** Carga como % del PR (1RM) del levantamiento; null en el Texas (donde la referencia es el 5RM) y en los tests. */
+  percent: number | null;
+  /** Marca a batir (Texas, viernes). */
+  attempt: boolean;
+}
 
 export interface ScheduleSession {
   index: number;
@@ -17,12 +29,7 @@ export interface ScheduleSession {
   weekday: number;
   /** «Texas Method · día de volumen». */
   role: string;
-  movementName: string;
-  /** «5×5» o «test». */
-  scheme: string;
-  loadKg: number;
-  /** Carga como % del PR del levantamiento (null si no se puede calcular). */
-  percent: number | null;
+  lines: ScheduleLine[];
   isTest: boolean;
   state: ScheduleState;
 }
@@ -45,20 +52,28 @@ export function companionSchedule(
   const log = new Map((profile.companionLog ?? []).filter((e) => e.programId === program.id).map((e) => [e.index, e.outcome]));
   const weeks: ScheduleWeek[] = [];
   for (let i = 0; i < total; i++) {
-    const plan = generateCompanionSession(profile, history, { ...program, companion: { ...program.companion, cursor: i } }, todayIso, { neutral: true });
+    const plan = generateCompanionSession(profile, history, { ...program, companion: { ...program.companion, cursor: i } }, todayIso, {
+      neutral: true,
+      projectFrom: program.companion.cursor,
+    });
     if (!plan) continue;
     const week = Math.floor(i / perWeek) + 1;
     if (!weeks.some((w) => w.week === week)) weeks.push({ week, sessions: [] });
-    const pr = profile.prs[plan.prKey];
     const done = log.get(i);
     weeks[weeks.length - 1].sessions.push({
       index: i,
       weekday: program.companion.weekdays[i % perWeek],
       role: plan.role,
-      movementName: getMovementById(plan.movementId)?.name ?? plan.movementId,
-      scheme: plan.isTest ? 'test' : `${plan.sets}×${plan.reps}`,
-      loadKg: plan.loadKg,
-      percent: pr > 0 ? Math.round((plan.loadKg / pr) * 100) : null,
+      lines: plan.lifts.map((l) => {
+        const pr = profile.prs[l.prKey];
+        return {
+          movementName: getMovementById(l.movementId)?.name ?? l.movementId,
+          scheme: plan.isTest ? 'test' : `${l.sets}×${l.reps}`,
+          loadKg: l.loadKg,
+          percent: program.method === 'texas' || plan.isTest || pr <= 0 ? null : Math.round((l.loadKg / pr) * 100),
+          attempt: l.attempt,
+        };
+      }),
       isTest: plan.isTest,
       state: done ?? (i < program.companion.cursor ? 'saltada' : i === program.companion.cursor ? 'siguiente' : 'pendiente'),
     });

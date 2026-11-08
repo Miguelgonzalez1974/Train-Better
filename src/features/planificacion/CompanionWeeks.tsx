@@ -56,13 +56,21 @@ export function CompanionWeeks({
                 <li key={s.index} className={`flex items-baseline gap-2 py-1.5 text-sm ${s.state === 'siguiente' ? 'text-white' : 'text-neutral-300'}`}>
                   <span className="w-9 shrink-0 text-xs font-semibold text-neutral-500">{DAY[s.weekday]}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block">{s.movementName}</span>
-                    <span className="num block text-xs text-neutral-500">
-                      {shortRole(s.role)} · {s.scheme}
-                      {s.percent !== null && !s.isTest ? ` · ${s.percent} %` : ''}
-                    </span>
+                    <span className="num block text-xs text-neutral-500">{shortRole(s.role)}</span>
+                    {s.lines.map((l) => (
+                      <span key={l.movementName} className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0">
+                          {l.movementName}{' '}
+                          <span className="num text-xs text-neutral-500">
+                            {l.scheme}
+                            {l.percent !== null ? ` · ${l.percent} %` : ''}
+                            {l.attempt ? ' · marca' : ''}
+                          </span>
+                        </span>
+                        <span className="num shrink-0 font-semibold">{kg(l.loadKg)}</span>
+                      </span>
+                    ))}
                   </span>
-                  <span className="num shrink-0 text-right font-semibold">{kg(s.loadKg)}</span>
                   <span className={`w-4 shrink-0 ${DOT[s.state]}`} aria-label={s.state}>
                     {s.state === 'hecha' ? <Check size={14} aria-hidden="true" /> : s.state === 'siguiente' ? '●' : s.state === 'saltada' ? '–' : ''}
                   </span>

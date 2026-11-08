@@ -33,7 +33,7 @@ export function resolveProgramLifts(program: StrengthProgram): (keyof PersonalRe
   return program.lifts.length > 0 ? program.lifts : DEFAULT_STRENGTH_PROGRAM_LIFTS;
 }
 
-const PROGRAM_LIFT_MOVEMENT_ID: Record<keyof PersonalRecords, string> = {
+export const PROGRAM_LIFT_MOVEMENT_ID: Record<keyof PersonalRecords, string> = {
   backSquat: 'back-squat',
   frontSquat: 'front-squat',
   benchPress: 'bench-press',
