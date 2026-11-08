@@ -418,3 +418,15 @@ export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'objetivos', label: 'Objetivos' },
   // El peso corporal ya no está aquí: se apunta desde Nutrición (que es donde se usa) y con el aviso de Rex cuando lleva días sin apuntarse.
 ];
+
+/**
+ * La línea de cifras del globo fijo de Rex: el objetivo de esfuerzo del día y, según el momento, lo realizado o lo previsto
+ * («Objetivo 45–65 · Previsto ~54», «Objetivo 45–65 · Realizado 50»). null si no hay nada que contar.
+ */
+export function dockStats(input: { low: number | null; high: number | null; real: number | null; planned: number | null; skipTarget?: boolean }): string | null {
+  const parts: string[] = [];
+  if (!input.skipTarget && input.low !== null && input.high !== null) parts.push(`Objetivo ${input.low}–${input.high}`);
+  if (input.real !== null) parts.push(`Realizado ${Math.round(input.real)}`);
+  else if (input.planned !== null && input.planned > 0) parts.push(`Previsto ~${Math.round(input.planned)}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}

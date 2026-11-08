@@ -83,7 +83,7 @@ import { SessionSummaryCard } from './SessionSummaryCard';
 import { RexSupport } from './RexSupport';
 import type { SupportAction, SupportEffect } from './rexSupportFlow';
 import { RexCorner } from '../dashboard/RexCorner';
-import { dismissSuggestion, loadRexMemory, pickRexSuggestion, saveRexMemory, wasTyped, withTyped, type RexMemory, type RexTarget } from '../dashboard/rexDashboard';
+import { dismissSuggestion, dockStats, loadRexMemory, pickRexSuggestion, saveRexMemory, wasTyped, withTyped, type RexMemory, type RexTarget } from '../dashboard/rexDashboard';
 import { buildPlanRexSuggestions } from './rexPlan';
 import { CompanionCard, pickCompanionProgram } from './CompanionCard';
 import { generateCompanionSession } from '../../engine/generateSession';
@@ -1110,7 +1110,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-44">
       <Modal open={showNotices} onClose={() => setShowNotices(false)} title="Avisos del coach">
         <CoachNoticesBody {...noticeProps} />
       </Modal>
@@ -1299,7 +1299,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {showRexBar && !focusMode && (
           <RexCorner
             speak
-            raised
+            raised={Boolean(session && !session.isRestDay)}
+            dock={{ stats: dockStats({ low: strainTarget?.low ?? null, high: strainTarget?.high ?? null, real: null, planned: plannedStrain?.strain ?? null }) }}
             suggestion={rexPick.current}
             waiting={rexPick.waiting}
             typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}

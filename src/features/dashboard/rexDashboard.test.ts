@@ -6,6 +6,7 @@ import {
   REX_MODULES,
   buildRexSuggestions,
   dismissSuggestion,
+  dockStats,
   loadRexMemory,
   pickRexSuggestion,
   saveRexMemory,
@@ -250,5 +251,23 @@ describe('Rex en el Dashboard: los módulos de «Más»', () => {
     for (const t of ['nutricion', 'constancia', 'volumen', 'analisis', 'perfil', 'objetivos', 'movilidad', 'semana']) expect(targets).toContain(t);
     // El peso se apunta desde Nutrición y con el aviso de Rex, no desde «Más».
     expect(targets).not.toContain('peso');
+  });
+});
+
+describe('la línea de cifras del globo fijo de Rex', () => {
+  it('objetivo y previsto antes de entrenar; objetivo y realizado después', () => {
+    expect(dockStats({ low: 45, high: 65, real: null, planned: 53.6 })).toBe('Objetivo 45–65 · Previsto ~54');
+    expect(dockStats({ low: 45, high: 65, real: 50, planned: 54 })).toBe('Objetivo 45–65 · Realizado 50');
+  });
+
+  it('si la frase ya dice el rango del objetivo, no lo repite', () => {
+    expect(dockStats({ low: 45, high: 65, real: null, planned: 54, skipTarget: true })).toBe('Previsto ~54');
+    expect(dockStats({ low: 45, high: 65, real: null, planned: null, skipTarget: true })).toBeNull();
+  });
+
+  it('sin previsto, sin objetivo o sin nada, dice solo lo que hay (o null)', () => {
+    expect(dockStats({ low: 30, high: 45, real: null, planned: null })).toBe('Objetivo 30–45');
+    expect(dockStats({ low: null, high: null, real: 40, planned: null })).toBe('Realizado 40');
+    expect(dockStats({ low: null, high: null, real: null, planned: 0 })).toBeNull();
   });
 });

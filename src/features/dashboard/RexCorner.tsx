@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { MousePointerClick, Send, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, FlaskConical, MousePointerClick, Send, X } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
 import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
@@ -16,6 +16,25 @@ const LEAD_COLOR: Record<NonNullable<RexSuggestion['tone']>, string> = {
   info: 'rgb(var(--c-state-cool))',
   gold: 'rgb(var(--c-brand-gold))',
 };
+
+const FOLDED_KEY = 'tb-rex-dock-folded';
+
+/** ¿Tiene el atleta plegado el globo fijo de Rex? Se recuerda en este dispositivo, para todas las pantallas. */
+function readFolded(): boolean {
+  try {
+    return typeof window !== 'undefined' && window.localStorage.getItem(FOLDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeFolded(folded: boolean): void {
+  try {
+    window.localStorage.setItem(FOLDED_KEY, folded ? '1' : '0');
+  } catch {
+    /* sin almacenamiento: se vuelve a desplegar al abrir */
+  }
+}
 
 /** Lo que Rex ya ha dicho en un globo durante esta visita a la app: cambiar de pestaña no lo repite. */
 const spoken = new Set<string>();
@@ -67,11 +86,7 @@ export function RexCorner({
   showDate = true,
   raised = false,
   ask,
-  sticky = null,
-  nudge = false,
-  onOpenLab,
-  onCloseLab,
-  canRestoreBubble = false,
+  dock = null,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
   /** El globo de la esquina puede hablar solo (hoy sí; mirando un día pasado, no). */
@@ -85,22 +100,25 @@ export function RexCorner({
   raised?: boolean;
   /** La caja «Pregúntale a Rex…»: recibe lo escrito y devuelve la respuesta, o 'close' si ya hizo lo pedido (abrir un módulo, ir a Nutrición). */
   ask?: (text: string) => AskAnswer | 'close';
-  /** Un globo fijo que no se recoge solo: se queda hasta que lo cierras con la X (`onClose`) y lleva debajo una pista (`tip`). null = no hay. */
-  sticky?: { tip: string; onClose: () => void } | null;
-  /** La versión mínima de la pista, cuando cierras el globo fijo: el punto del botón late hasta que abres el lab. */
-  nudge?: boolean;
-  /** Se abrió el lab (con el botón, el globo o desde otra pestaña). */
-  onOpenLab?: () => void;
-  /** Se cerró el lab (no por irse a abrir otra cosa): el globo fijo cerrado vuelve. */
-  onCloseLab?: () => void;
-  /** El globo fijo está cerrado: el lab ofrece «Mostrar el globo». */
-  canRestoreBubble?: boolean;
+  /**
+   * El globo fijo de la pantalla: Rex dice siempre aquí su frase del momento (estado del día y qué hacer), con una línea de cifras (`stats`),
+   * una pista opcional (`tip`), el botón de su primera acción y el botón «RexLab». Se pliega con la flechita a una sola línea, pero no se
+   * quita. null = sin globo fijo (solo el globo que sale un rato).
+   */
+  dock?: { stats?: string | null; tip?: string | null } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [bubble, setBubble] = useState(false);
+  const [folded, setFolded] = useState(() => readFolded());
+  const toggleFold = () => {
+    setFolded((v) => {
+      writeFolded(!v);
+      return !v;
+    });
+  };
   const blocked = useBlockingOverlay();
   const typingInField = useTyping();
   // Volver al lab: lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse; si te vas a otra pestaña, la app ofrece «Volver al lab».
@@ -164,30 +182,27 @@ export function RexCorner({
   // El globo sale cuando Rex tiene algo que decir y se recoge solo; no sale con el panel abierto, con una ventana encima, con la frase
   // tranquila ni si ya lo dijo en esta visita. La pista de los aros no se recoge sola.
   useEffect(() => {
-    const talks = Boolean(sticky) || hinting || (speak && !quiet && !suppressed && !spoken.has(key));
+    const talks = Boolean(dock) || hinting || (speak && !quiet && !suppressed && !spoken.has(key));
     if (!talks || open || blocked) {
       setBubble(false);
       return;
     }
     setBubble(true);
-    if (hinting || sticky) return;
+    if (hinting || dock) return;
     const timer = window.setTimeout(() => {
       spoken.add(key);
       setBubble(false);
     }, BUBBLE_MS);
     return () => window.clearTimeout(timer);
-  }, [hinting, sticky !== null, speak, quiet, suppressed, open, blocked, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hinting, dock !== null, speak, quiet, suppressed, open, blocked, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const said = hint ?? { lead: suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.lead : '', text: '' };
   const leadLen = said.lead.length;
   const bubbleText = hint ? hint.text : suggestion.text.slice(leadLen);
   const bubbleAction = hint ? null : (suggestion.actions[0] ?? null);
 
-  /** El atleta cierra el lab (X, fuera o Escape): se avisa para que el globo fijo vuelva. Irse a abrir un módulo no cuenta (`leave`). */
-  const dismiss = () => {
-    setOpen(false);
-    onCloseLab?.();
-  };
+  /** El atleta cierra RexLab (X, fuera o Escape). Irse a abrir un módulo es `leave`, que vuelve al cerrarlo. */
+  const dismiss = () => setOpen(false);
 
   // Escape cierra el panel.
   useEffect(() => {
@@ -205,7 +220,6 @@ export function RexCorner({
     setAnswer(null);
     setQuestion('');
     setOpen(true);
-    onOpenLab?.();
   };
   const send = (text: string) => {
     const value = text.trim();
@@ -224,27 +238,79 @@ export function RexCorner({
     <>
       {!open && !typingInField && (
         <div
-          className={`pointer-events-none fixed right-3 z-30 flex flex-col items-end gap-2 md:right-6 ${
-            raised ? 'bottom-[calc(12.5rem+env(safe-area-inset-bottom))] md:bottom-[8.5rem]' : 'bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-6'
-          }`}
+          className={`pointer-events-none fixed z-30 flex items-end gap-2 md:right-6 ${
+            dock ? 'left-3 right-3 flex-row justify-end md:left-auto md:w-[26rem]' : 'right-3 flex-col'
+          } ${raised ? 'bottom-[calc(12.5rem+env(safe-area-inset-bottom))] md:bottom-[8.5rem]' : 'bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-6'}`}
         >
-          {bubble && (
+          {bubble && dock && (
             <div
-              className={`pointer-events-auto relative animate-section-in rounded-2xl rounded-br-md border border-white/20 bg-brand-surface py-2.5 pl-3.5 text-left shadow-xl shadow-black/40 motion-reduce:animate-none ${
-                sticky ? 'max-w-[min(20rem,calc(100vw-1.5rem))] pr-9' : 'max-w-[min(18rem,calc(100vw-5.5rem))] pr-3.5'
-              }`}
+              role="region"
+              aria-label="Rex dice"
+              className="pointer-events-auto relative min-w-0 flex-1 animate-section-in rounded-2xl rounded-br-md border border-white/20 bg-brand-surface py-2.5 pl-3.5 pr-10 text-left shadow-xl shadow-black/40 motion-reduce:animate-none"
             >
-              {sticky && (
-                <button
-                  onClick={sticky.onClose}
-                  aria-label="Cerrar el globo de Rex"
-                  className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  <X size={14} />
+              <button
+                onClick={toggleFold}
+                aria-label={folded ? 'Desplegar a Rex' : 'Plegar a Rex'}
+                aria-expanded={!folded}
+                className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                {folded ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+              </button>
+              {folded ? (
+                <button onClick={toggleFold} aria-label="Desplegar a Rex" className="block w-full text-left">
+                  <p className="truncate text-[13px] leading-snug text-neutral-100">
+                    {suggestion.lead && suggestion.text.startsWith(suggestion.lead) && (
+                      <strong className="font-bold" style={{ color: LEAD_COLOR[suggestion.tone ?? 'info'] }}>
+                        {suggestion.lead}
+                      </strong>
+                    )}
+                    {suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.text.slice(suggestion.lead.length) : suggestion.text}
+                  </p>
                 </button>
+              ) : (
+                <>
+                  <p className="text-[13px] leading-snug text-neutral-100">
+                    {suggestion.lead && suggestion.text.startsWith(suggestion.lead) && (
+                      <strong className="font-bold" style={{ color: LEAD_COLOR[suggestion.tone ?? 'info'] }}>
+                        {suggestion.lead}
+                      </strong>
+                    )}
+                    {suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.text.slice(suggestion.lead.length) : suggestion.text}
+                  </p>
+                  {dock.stats && <p className="num mt-1 text-xs font-medium text-neutral-400">{dock.stats}</p>}
+                  {dock.tip && (
+                    <p className="mt-1.5 flex items-start gap-1.5 border-t border-white/10 pt-1.5 text-[11.5px] leading-snug text-neutral-400">
+                      <MousePointerClick size={13} aria-hidden="true" className="mt-px shrink-0 text-good" />
+                      <span>{dock.tip}</span>
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {bubbleAction && (
+                      <button
+                        onClick={() => bar.onAction(bubbleAction.target)}
+                        className="rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark"
+                      >
+                        {bubbleAction.label}
+                      </button>
+                    )}
+                    <button
+                      onClick={openPanel}
+                      className="flex items-center gap-1.5 rounded-full border border-brand-border px-3 py-1.5 text-xs font-semibold text-neutral-100 transition-colors hover:border-white/30 hover:bg-white/5"
+                    >
+                      <FlaskConical size={14} aria-hidden="true" />
+                      RexLab
+                    </button>
+                  </div>
+                </>
               )}
+            </div>
+          )}
+          {bubble && !dock && (
+            <div
+              className="pointer-events-auto relative max-w-[min(18rem,calc(100vw-7rem))] animate-section-in rounded-2xl rounded-br-md border border-white/20 bg-brand-surface py-2.5 pl-3.5 pr-3.5 text-left shadow-xl shadow-black/40 motion-reduce:animate-none"
+            >
               <button onClick={openPanel} aria-label="Rex tiene algo que decirte: abrir" className="block w-full text-left">
-                <p className={`${sticky ? '' : 'line-clamp-4'} text-[13px] leading-snug text-neutral-100`}>
+                <p className="line-clamp-4 text-[13px] leading-snug text-neutral-100">
                   {leadLen > 0 && (
                     <strong className="font-bold" style={{ color: hint ? LEAD_COLOR.good : LEAD_COLOR[suggestion.tone ?? 'info'] }}>
                       {said.lead}
@@ -252,12 +318,6 @@ export function RexCorner({
                   )}
                   {bubbleText}
                 </p>
-                {sticky && (
-                  <p className="mt-1.5 flex items-start gap-1.5 border-t border-white/10 pt-1.5 text-[11.5px] leading-snug text-neutral-400">
-                    <MousePointerClick size={13} aria-hidden="true" className="mt-px shrink-0 text-good" />
-                    <span>{sticky.tip}</span>
-                  </p>
-                )}
               </button>
               {bubbleAction && (
                 <button
@@ -275,17 +335,12 @@ export function RexCorner({
           )}
           <button
             onClick={openPanel}
-            aria-label="Hablar con Rex"
+            aria-label="Hablar con Rex (RexLab)"
             aria-haspopup="dialog"
-            className="pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-brand-surface shadow-xl shadow-black/40 transition-transform duration-200 active:scale-95"
+            className="pointer-events-auto relative flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full border border-white/20 bg-brand-surface shadow-xl shadow-black/40 transition-transform duration-200 active:scale-95"
           >
-            <RexMascot size={42} mood={bubble ? suggestion.mood : 'idle'} />
-            {(attention || nudge) && (
-              <>
-                {nudge && <span className="absolute right-0.5 top-0.5 h-3 w-3 animate-ping rounded-full bg-brand-orange/70 motion-reduce:animate-none" aria-hidden="true" />}
-                <span className="absolute right-0.5 top-0.5 h-3 w-3 rounded-full bg-brand-orange ring-2 ring-brand-bg" aria-label="Hay algo sin ver" />
-              </>
-            )}
+            <RexMascot size={56} mood={bubble ? suggestion.mood : 'idle'} />
+            {attention && <span className="absolute right-1 top-1 h-3.5 w-3.5 rounded-full bg-brand-orange ring-2 ring-brand-bg" aria-label="Hay algo sin ver" />}
           </button>
         </div>
       )}
@@ -299,12 +354,10 @@ export function RexCorner({
             className="absolute inset-x-0 bottom-0 mx-auto max-h-[88vh] w-full max-w-xl animate-section-in overflow-y-auto rounded-t-3xl border border-b-0 border-white/15 bg-brand-bg px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl motion-reduce:animate-none md:bottom-6 md:right-6 md:left-auto md:mx-0 md:rounded-3xl md:border-b"
           >
             <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">El lab de Rex</span>
-              {canRestoreBubble && (
-                <button onClick={dismiss} className="rounded-full border border-brand-border px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition-colors hover:border-white/30 hover:text-white">
-                  Mostrar el globo
-                </button>
-              )}
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.06em] text-neutral-400">
+                <FlaskConical size={14} aria-hidden="true" />
+                RexLab
+              </span>
               <button onClick={dismiss} aria-label="Cerrar a Rex" className="ml-auto flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/10 hover:text-white">
                 <X size={16} />
               </button>
