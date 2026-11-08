@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlanRexSuggestions, planCompletedSuggestion, planEditingSuggestion, planNoticesSuggestion, planRestSuggestion, planStateSuggestion, type PlanRexContext } from './rexPlan';
+import { buildPlanRexSuggestions, planCompletedSuggestion, planEditingSuggestion, planNoticesSuggestion, planProgramSuggestion, planRestSuggestion, planStateSuggestion, programSentence, type PlanRexContext } from './rexPlan';
 
 const base: PlanRexContext = {
   hasTrainingSession: true,
@@ -126,5 +126,35 @@ describe('Rex en Planificación: los avisos del coach', () => {
     expect(buildPlanRexSuggestions(mk({ notices: { count: 1, actionable: false } })).map((s) => s.id)).toEqual(['plan-estado', 'plan-avisos']);
     expect(buildPlanRexSuggestions(mk({ hasTrainingSession: false }))).toEqual([]);
     expect(buildPlanRexSuggestions(mk({ hasTrainingSession: false, notices: { count: 1, actionable: false } })).map((s) => s.id)).toEqual(['plan-avisos']);
+  });
+});
+
+describe('Rex en Planificación: el programa de fuerza que convive con el macro', () => {
+  const program = { title: 'Press banca · 4×4', number: 7, total: 24, accepted: false, late: false, isTest: false };
+  const base: PlanRexContext = { hasTrainingSession: true, light: null, planned: 54, fit: null, target: null, hardness: 0, canHarder: false, competition: null, painLabels: [], emphasis: null, notices: { count: 0, actionable: false } };
+
+  it('lo anuncia con el número de sesión y lleva a su tarjeta', () => {
+    const s = planProgramSuggestion(program)!;
+    expect(s).toMatchObject({ id: 'plan-programa', actions: [{ label: 'Verla', target: 'plan-programa' }] });
+    expect(s.text).toContain('sesión 7 de 24');
+    expect(s.text).toContain('Press banca · 4×4');
+    expect(s.text.endsWith('¿La hacemos hoy?')).toBe(true);
+  });
+
+  it('un test no se aparta; una sesión pendiente lo dice; aceptada ya no pregunta', () => {
+    expect(planProgramSuggestion({ ...program, isTest: true })).toMatchObject({ dismissible: false });
+    expect(planProgramSuggestion({ ...program, isTest: true })!.text).toContain('test');
+    expect(programSentence({ ...program, late: true })).toContain('quedó pendiente');
+    const accepted = planProgramSuggestion({ ...program, accepted: true })!;
+    expect(accepted.text).not.toContain('¿La hacemos hoy?');
+    expect(accepted.actions[0].label).toBe('Ver el programa');
+  });
+
+  it('sin programa no hay nada, y la frase del día lo menciona sin cambiar de protagonista', () => {
+    expect(planProgramSuggestion(null)).toBeNull();
+    const withProgram = buildPlanRexSuggestions({ ...base, program });
+    expect(withProgram.map((s) => s.id)).toEqual(['plan-estado', 'plan-programa']);
+    expect(withProgram[0].text).toContain('programa de fuerza (sesión 7)');
+    expect(buildPlanRexSuggestions(base).map((s) => s.id)).toEqual(['plan-estado']);
   });
 });

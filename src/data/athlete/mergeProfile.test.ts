@@ -469,3 +469,27 @@ describe('progresion por resultados: sincronizacion', () => {
     expect(mergeProfile(base(), base()).progressionSettings).toBeUndefined();
   });
 });
+
+describe('mergeProfile — programas de fuerza que conviven con el macro', () => {
+  const program = (cursor: number) => ({
+    id: 'p1',
+    startDate: '2026-11-16',
+    endDate: '2027-02-22',
+    method: 'temporada' as const,
+    lifts: ['benchPress' as const],
+    companion: { weekdays: [0, 2, 4], cursor, deferrals: 0 },
+  });
+
+  it('el progreso del programa no retrocede: vale el puntero más adelantado, venga de donde venga', () => {
+    const remote = { ...base(), strengthPrograms: [program(5)] };
+    const local = { ...base(), strengthPrograms: [program(2)] };
+    expect(mergeProfile(remote, local).strengthPrograms?.[0].companion?.cursor).toBe(5);
+    expect(mergeProfile(local, remote).strengthPrograms?.[0].companion?.cursor).toBe(5);
+  });
+
+  it('las sesiones hechas se unen por id en los dos sentidos', () => {
+    const entry = (index: number) => ({ id: `p1|${index}`, programId: 'p1', index, date: `2026-11-${16 + index}`, outcome: 'hecha' as const });
+    const merged = mergeProfile({ ...base(), companionLog: [entry(0), entry(1)] }, { ...base(), companionLog: [entry(1), entry(2)] });
+    expect(merged.companionLog?.map((e) => e.id).sort()).toEqual(['p1|0', 'p1|1', 'p1|2']);
+  });
+});

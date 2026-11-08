@@ -143,6 +143,46 @@ export interface StrengthProgram {
    * clasicos (sentadilla trasera, press banca, peso muerto, press militar).
    */
   lifts: (keyof PersonalRecords)[];
+  /**
+   * Presente = el programa CONVIVE con el macro en vez de sustituirlo: el macro sigue mandando cada día y la sesión del programa se
+   * ofrece debajo («¿quieres hacerla hoy?»). El programa avanza por sesiones hechas (no por fecha). Ver `engine/strengthCompanion.ts`.
+   */
+  companion?: ProgramCompanion;
+}
+
+/** Estado de un programa de fuerza que convive con el macro: qué sesión toca y cómo va. */
+export interface ProgramCompanion {
+  /** Días de la semana en que toca (0 = lunes … 6 = domingo), p. ej. [0, 2, 4]. */
+  weekdays: number[];
+  /** Siguiente sesión (0 = la primera). Avanza al hacerla o saltarla, nunca por fecha. */
+  cursor: number;
+  /** Fecha ISO del último día en que se hizo o se saltó una sesión; de ahí sale cuándo toca la siguiente. */
+  lastResolvedOn?: string;
+  /** Fecha en que se aplazó («hoy no»): hoy no se vuelve a ofrecer, mañana sí. */
+  declinedOn?: string;
+  /** Fecha en que se aceptó («hacerla hoy»): la sesión sale como parte del día. */
+  acceptedOn?: string;
+  /** Aplazamientos seguidos (se reinicia al hacerla o saltarla). */
+  deferrals: number;
+  /** Pausado hasta esta fecha (inclusive). */
+  pausedUntil?: string;
+}
+
+/** Una sesión de un programa que convive con el macro, hecha o saltada. */
+export interface CompanionLogEntry {
+  /** `programId|índice` — una entrada por sesión. */
+  id: string;
+  programId: string;
+  /** Posición de la sesión en el programa (0 = la primera). */
+  index: number;
+  date: string;
+  outcome: 'hecha' | 'saltada';
+  /** Qué se hizo, tal como se enseña («Press banca · 4×4 al 80 %»). */
+  label?: string;
+  movementId?: string;
+  loadKg?: number;
+  rpe?: number;
+  durationMin?: number;
 }
 
 /**
@@ -338,6 +378,8 @@ export interface AthleteProfile {
   readinessLog?: ReadinessCheck[];
   /** Rutinas de movilidad y estiramientos hechas con Rex (ver `engine/mobility.ts`). Cuentan como hábito, no como entreno. */
   mobilityLog?: MobilityLogEntry[];
+  /** Sesiones hechas o saltadas de los programas de fuerza que conviven con el macro (ver `engine/strengthCompanion.ts`). */
+  companionLog?: CompanionLogEntry[];
   /** Zonas que el atleta quiere potenciar: Rex las tiene en cuenta en las rutinas siguientes. */
   mobilityFocus?: MobilityZone[];
   /** Cómo nota el atleta cada zona prioritaria (1 = muy limitada, 5 = fenomenal), para ver si la movilidad le sirve. */

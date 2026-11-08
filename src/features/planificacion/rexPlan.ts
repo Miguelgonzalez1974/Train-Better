@@ -47,6 +47,22 @@ export interface PlanRexContext {
   emphasis: string | null;
   /** Avisos del coach que no son una molestia, y si alguno pide una decisión. */
   notices: { count: number; actionable: boolean };
+  /** La sesión del programa de fuerza que convive con el macro, si hoy toca ofrecerla o ya se aceptó. */
+  program?: PlanProgram | null;
+}
+
+/** Lo que Rex dice del programa de fuerza que convive con el macro. */
+export interface PlanProgram {
+  /** «Press banca · 4×4» */
+  title: string;
+  /** Número de sesión (1 = la primera) y total (null si no tiene tope). */
+  number: number;
+  total: number | null;
+  /** Ya dijiste «hacerla hoy». */
+  accepted: boolean;
+  /** Ya tocaba antes y quedó pendiente. */
+  late: boolean;
+  isTest: boolean;
 }
 
 const LIGHT_TONE = { verde: 'good', ambar: 'mid', rojo: 'bad' } as const;
@@ -77,6 +93,7 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
   if (ctx.competition) parts.push(`A ${ctx.competition.daysToEvent} ${ctx.competition.daysToEvent === 1 ? 'día' : 'días'} de competir (${ctx.competition.phase}).`);
   if (ctx.painLabels.length > 0) parts.push(`Cuidando ${ctx.painLabels.map((l) => l.toLowerCase()).join(' y ')}.`);
   if (ctx.emphasis && ctx.emphasis.length <= EMPHASIS_MAX) parts.push(stop(ctx.emphasis));
+  if (ctx.program) parts.push(ctx.program.accepted ? 'Tu programa de fuerza va en tu día.' : `Debajo tienes tu programa de fuerza (sesión ${ctx.program.number}).`);
 
   const lead = ctx.light ? `${ctx.light.name}.` : 'Sesión de hoy.';
   const tone = ctx.light ? LIGHT_TONE[ctx.light.color] : 'info';
@@ -169,7 +186,41 @@ export function planNoticesSuggestion(notices: PlanRexContext['notices']): RexSu
   };
 }
 
+/** La frase corta del programa, para decirla sola o pegada a la del día. */
+export function programSentence(p: PlanProgram): string {
+  const n = p.total ? `${p.number} de ${p.total}` : `${p.number}`;
+  if (p.accepted) return `Tu programa de fuerza está en tu día: ${p.title}.`;
+  if (p.isTest) return `Hoy toca test de tu programa de fuerza (sesión ${n}): ${p.title}. Es la única que no se salta.`;
+  if (p.late) return `Te quedó pendiente la sesión ${n} de tu programa de fuerza: ${p.title}.`;
+  return `Hoy toca la sesión ${n} de tu programa de fuerza: ${p.title}.`;
+}
+
+/** El programa de fuerza que convive con el macro: Rex lo anuncia y lleva a su tarjeta (bajo la sesión). */
+export function planProgramSuggestion(p: PlanProgram | null | undefined): RexSuggestion | null {
+  if (!p) return null;
+  const lead = p.isTest ? 'Test.' : p.accepted ? 'Programa en tu día.' : 'Programa de fuerza.';
+  return {
+    id: 'plan-programa',
+    priority: 94,
+    lead,
+    tone: p.isTest ? 'info' : 'gold',
+    text: `${lead} ${programSentence(p)}${p.accepted ? '' : ' ¿La hacemos hoy?'}`,
+    mood: 'lift',
+    actions: [{ label: p.accepted ? 'Ver el programa' : 'Verla', target: 'plan-programa' }],
+    dismissible: !p.isTest,
+  };
+}
+
 /** Todo lo que Rex tiene que decir en Planificación, de más a menos importante. Vacío = la barra no se enseña. */
 export function buildPlanRexSuggestions(ctx: PlanRexContext): RexSuggestion[] {
-  return [planEditingSuggestion(ctx.editing), planCompletedSuggestion(ctx.completed), planStateSuggestion(ctx), planRestSuggestion(ctx.restDay), planNoticesSuggestion(ctx.notices)].filter((s): s is RexSuggestion => s !== null).sort((a, b) => b.priority - a.priority);
+  return [
+    planEditingSuggestion(ctx.editing),
+    planCompletedSuggestion(ctx.completed),
+    planStateSuggestion(ctx),
+    planProgramSuggestion(ctx.program),
+    planRestSuggestion(ctx.restDay),
+    planNoticesSuggestion(ctx.notices),
+  ]
+    .filter((s): s is RexSuggestion => s !== null)
+    .sort((a, b) => b.priority - a.priority);
 }

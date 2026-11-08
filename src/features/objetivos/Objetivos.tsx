@@ -32,6 +32,10 @@ import type {
 } from '../../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, getActiveStrengthProgram, resolveStrengthProgramDay, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
+import { newCompanion, supportsCompanion } from '../../engine/strengthCompanion';
+import { SeasonSetupCard } from './SeasonSetupCard';
+
+const WEEKDAY_CHIPS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
 import {
   MAYHEM_BASE_TOTAL_WEEKS,
@@ -388,6 +392,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
 
   return (
     <div className="flex flex-col gap-5">
+      {activeSection === 'home' && <SeasonSetupCard profile={profile} onApply={persist} />}
       {activeSection === 'home' && (
         <ObjetivosHome
           groups={openGroups}
@@ -1065,8 +1070,65 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
               </div>
             )}
 
+            {supportsCompanion(programDraft.method) && (
+              <div className="rounded-xl border border-white/10 p-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(programDraft.companion)}
+                    onChange={(e) => setProgramDraft((prev) => (prev ? { ...prev, companion: e.target.checked ? newCompanion() : undefined } : prev))}
+                    className="mt-1 h-4 w-4 accent-brand-orange"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-neutral-200">Que conviva con mi macro</span>
+                    <span className="block text-xs leading-relaxed text-neutral-500">
+                      El macro sigue mandando cada día y debajo se te ofrece la sesión del programa: «¿quieres hacerla hoy?». Si dices que no, pasa al día siguiente.
+                      El programa avanza por sesiones hechas, no por fecha.
+                    </span>
+                  </span>
+                </label>
+                {programDraft.companion && (
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-xs font-medium text-neutral-400">Días en que toca</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {WEEKDAY_CHIPS.map((label, day) => {
+                        const on = programDraft.companion?.weekdays.includes(day) ?? false;
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() =>
+                              setProgramDraft((prev) => {
+                                if (!prev?.companion) return prev;
+                                const days = on ? prev.companion.weekdays.filter((d) => d !== day) : [...prev.companion.weekdays, day];
+                                return days.length === 0 ? prev : { ...prev, companion: { ...prev.companion, weekdays: days.sort((a, b) => a - b) } };
+                              })
+                            }
+                            className={`h-9 w-11 rounded-full border text-xs font-semibold transition-colors duration-200 ${
+                              on ? 'border-brand-gold bg-brand-gold/10 text-brand-gold' : 'border-brand-border text-neutral-400 hover:border-brand-gold/50'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {programDraft.lifts.length > programDraft.companion.weekdays.length && (
+                      <p className="mt-2 text-xs text-warn">
+                        Con {programDraft.companion.weekdays.length} {programDraft.companion.weekdays.length === 1 ? 'sesión' : 'sesiones'} por semana, los levantamientos rotan en ese orden: los últimos de la lista casi no
+                        entrarían. Deja uno por sesión semanal.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className="text-xs text-neutral-600">
-              {programDraft.method === 'haltero' ||
+              {programDraft.companion
+                ? 'Convive con tu macro: tu día sigue siendo el del macro y esta sesión se ofrece aparte, en Planificación y con Rex. Una sesión de test no se salta; el resto se puede aplazar o saltar.'
+                : programDraft.method === 'haltero' ||
               programDraft.method === 'mayhem-base' ||
               programDraft.method === 'mayhem-tecnica' ||
               programDraft.method === 'mayhem-pico'

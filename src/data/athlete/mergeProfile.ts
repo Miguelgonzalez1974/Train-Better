@@ -74,6 +74,19 @@ function dropDeleted<T>(merged: T[], keyOf: (x: T) => string, baseKeys: string[]
   });
 }
 
+/**
+ * El progreso de un programa que convive con el macro (qué sesión toca) no se pisa: si el mismo programa está en los dos sitios, vale
+ * el estado del que va más adelantado (mayor puntero); a igualdad, gana el local. Lo demás del programa sigue la regla de config.
+ */
+function mergeCompanionProgress<T extends { id: string; companion?: { cursor: number } }>(merged: T[], remote: T[] | undefined, local: T[] | undefined): T[] {
+  return merged.map((p) => {
+    const r = remote?.find((x) => x.id === p.id)?.companion;
+    const l = local?.find((x) => x.id === p.id)?.companion;
+    if (!r || !l) return p;
+    return { ...p, companion: r.cursor > l.cursor ? r : l };
+  });
+}
+
 // Topes — mismos valores que en `localRepository.ts` (una union fusionada puede superarlos).
 const HISTORY_LIMIT = 30;
 const SESSION_CACHE_LIMIT = 21;
@@ -332,13 +345,20 @@ export function mergeProfile(
     // --- estructuras con id: union, gana el local en misma id; lo borrado desde la ultima sincronizacion no vuelve ---
     macrocycles: dropDeleted(mergeByKey(remote.macrocycles, local.macrocycles, (m) => m.id, (m) => m.startDate, 999), (m) => m.id, base?.macrocycles, remote.macrocycles, local.macrocycles),
     goals: dropDeleted(mergeByKey(remote.goals, local.goals, (g) => g.id, (g) => g.createdAt ?? '', 999), (g) => g.id, base?.goals, remote.goals, local.goals),
-    strengthPrograms: dropDeleted(
-      mergeByKey(remote.strengthPrograms, local.strengthPrograms, (p) => p.id, (p) => p.startDate, 999),
-      (p) => p.id,
-      base?.strengthPrograms,
+    strengthPrograms: mergeCompanionProgress(
+      dropDeleted(
+        mergeByKey(remote.strengthPrograms, local.strengthPrograms, (p) => p.id, (p) => p.startDate, 999),
+        (p) => p.id,
+        base?.strengthPrograms,
+        remote.strengthPrograms,
+        local.strengthPrograms,
+      ),
       remote.strengthPrograms,
       local.strengthPrograms,
     ),
+    // Sesiones hechas o saltadas de los programas que conviven con el macro: un log, union por id (programa|sesión).
+    companionLog:
+      remote.companionLog || local.companionLog ? mergeByKey(remote.companionLog, local.companionLog, (e) => e.id, (e) => e.date, 500) : undefined,
     // Los complejos propios se unen por id (gana el local si el mismo id cambió en los dos sitios); lo borrado no vuelve. Favoritos y
     // ocultos son preferencias: gana el local si las ha tocado en este dispositivo.
     customComplexes: dropDeleted(

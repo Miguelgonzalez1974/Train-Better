@@ -38,6 +38,8 @@ export type RexTarget =
   /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
   | 'plan-empezar'
   | 'plan-terminar'
+  /** Planificación: ir a la tarjeta del programa de fuerza que convive con el macro. */
+  | 'plan-programa'
   /** La rutina de movilidad y estiramientos con Rex. */
   | 'movilidad'
 

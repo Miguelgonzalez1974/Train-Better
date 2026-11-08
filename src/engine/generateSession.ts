@@ -140,6 +140,7 @@ import {
   type ResponseProfile,
 } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
+import { companionPosition, companionTotalSessions, isCompanionTestSession, supportsCompanion } from './strengthCompanion';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
 import {
   MAYHEM_BASE_TOTAL_WEEKS,
@@ -5179,6 +5180,96 @@ export function generateStrengthProgramSession(
   };
 }
 
+/** La sesión que toca de un programa de fuerza que convive con el macro, lista para enseñar bajo la sesión del día. */
+export interface CompanionSessionPlan {
+  /** Posición de la sesión en el programa (0 = la primera). */
+  index: number;
+  /** Semana del programa (1 = la primera) y cuántas sesiones por semana. */
+  week: number;
+  perWeek: number;
+  /** Total de sesiones del programa; null si no tiene tope. */
+  total: number | null;
+  /** «Press banca · 4×4 al 80 %» — qué es en una línea. */
+  title: string;
+  /** Cómo lo llama el programa («Test 1RM», «Ola 5x5…»). */
+  format: string;
+  movementId: string;
+  /** El PR que mueve esta sesión si es un test de 1RM (para actualizarlo con la marca). */
+  prKey: keyof PersonalRecords;
+  sets: number;
+  reps: string;
+  loadKg: number;
+  notes: string;
+  isTest: boolean;
+  /** Los bloques para enseñar (el levantamiento, o la secuencia de un complex). */
+  blocks: SessionBlockResult[];
+}
+
+/**
+ * La sesión número `cursor` de un programa de fuerza que CONVIVE con el macro. Es el mismo cálculo que `generateStrengthProgramSession`
+ * (mismas tablas, misma autorregulación), pero la semana y el puesto del día salen del puntero del programa y no del calendario: así una
+ * sesión aplazada no se pierde. null si el método no encaja como complemento (halterofilia, Mayhem) o el catálogo no tiene el movimiento.
+ */
+export function generateCompanionSession(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  program: StrengthProgram & { companion: NonNullable<StrengthProgram['companion']> },
+  todayIso: string,
+): CompanionSessionPlan | null {
+  if (!supportsCompanion(program.method)) return null;
+  const today = new Date(`${todayIso}T00:00:00`);
+  const index = program.companion.cursor;
+  const pos = companionPosition(program, index);
+  const perWeek = program.companion.weekdays.length;
+
+  const acwrResult = computeAcwr(history, today);
+  const rpeAutoreg = getRpeAutoregFactor(history, today);
+  const readiness = getReadinessFactor(getReadinessCheckForDate(profile.readinessLog, todayIso));
+  const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', today);
+  const autoregFactor = combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor;
+  const autoregNote = [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
+
+  const dayPlan: DayPlan = { isTrainingDay: true, trainingDayIndex: pos.dayInWeek, strengthPattern: 'squat', olyFamily: 'snatch', isRecoveryDay: false };
+  const day = resolveStrengthProgramDay(
+    program,
+    dayPlan,
+    profile.prs,
+    autoregFactor,
+    new Date(`${pos.syntheticDate}T00:00:00`),
+    perWeek,
+    getAvoidedPatterns(profile.painFlags, todayIso),
+    profile.variantPrs,
+  );
+  if (!day) return null;
+  const movement = getMovementById(day.movementId);
+  if (!movement) return null;
+
+  const notes = `${day.notes}${strengthRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : ''}${autoregNote ? ` ${autoregNote}` : ''}`;
+  const blocks: SessionBlockResult[] = day.complexMovementIds
+    ? day.complexMovementIds.map((id) => ({ block: 'wod', movementId: id, sets: day.sets, reps: day.reps, loadKg: day.loadKg, format: day.format, notes }))
+    : [{ block: day.scoreAsWod ? 'wod' : 'strength', movementId: day.movementId, sets: day.sets, reps: day.reps, loadKg: day.loadKg, format: day.format, notes }];
+
+  const total = companionTotalSessions(program);
+  const isTest = isCompanionTestSession(program, index);
+  const scheme = day.reps && day.sets > 0 ? `${day.sets}×${day.reps}` : day.format;
+  return {
+    index,
+    week: pos.week + 1,
+    perWeek,
+    total,
+    title: `${movement.name} · ${isTest ? 'test' : scheme}`,
+    format: day.format,
+    movementId: day.movementId,
+    prKey: day.prKey,
+    sets: day.sets,
+    reps: day.reps,
+    loadKg: day.loadKg,
+    notes,
+    isTest,
+    blocks,
+  };
+}
+
 /**
  * Bloque(s) wod opcional para añadir sobre un dia de programa de fuerza ya generado — no sustituye
  * la sesion, se anade encima (ver `Planificacion.tsx`). El caso "trae el WOD real de tu
@@ -5210,7 +5301,8 @@ export function generateSessionForDate(
   goals: Goal[],
 ): DailySession {
   const dateIso = toLocalIsoDate(date);
-  const activeProgram = getActiveStrengthProgram(profile.strengthPrograms ?? [], dateIso);
+  // Un programa que convive con el macro no sustituye la sesión: el macro manda y el programa se ofrece aparte (`strengthCompanion.ts`).
+  const activeProgram = getActiveStrengthProgram((profile.strengthPrograms ?? []).filter((p) => !p.companion), dateIso);
   const activeMacro = getActiveMacrocycle(profile.macrocycles, dateIso);
   // Generación DETERMINISTA: el RNG del motor se siembra con la estructura activa + la fecha, así
   // que el mismo perfil sincronizado produce EXACTAMENTE la misma sesión en cualquier dispositivo y
@@ -5436,7 +5528,7 @@ export function previewMacroSession(
  * sin mostrarse hasta que el atleta lo eligiera manualmente — ahora cualquiera de los dos cuenta.
  */
 export function hasActiveTrainingStructure(profile: AthleteProfile, dateIso: string): boolean {
-  return Boolean(getActiveStrengthProgram(profile.strengthPrograms ?? [], dateIso) || getActiveMacrocycle(profile.macrocycles, dateIso));
+  return Boolean(getActiveStrengthProgram((profile.strengthPrograms ?? []).filter((p) => !p.companion), dateIso) || getActiveMacrocycle(profile.macrocycles, dateIso));
 }
 
 /**

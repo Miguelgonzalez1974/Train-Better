@@ -85,6 +85,9 @@ import type { SupportAction, SupportEffect } from './rexSupportFlow';
 import { RexCorner } from '../dashboard/RexCorner';
 import { dismissSuggestion, loadRexMemory, pickRexSuggestion, saveRexMemory, wasTyped, withTyped, type RexMemory, type RexTarget } from '../dashboard/rexDashboard';
 import { buildPlanRexSuggestions } from './rexPlan';
+import { CompanionCard, pickCompanionProgram } from './CompanionCard';
+import { generateCompanionSession } from '../../engine/generateSession';
+import { companionStatus } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
@@ -1034,6 +1037,28 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           weekPlanned: weekCount.planned,
         }
       : null;
+  // El programa de fuerza que convive con el macro: si hoy toca ofrecerlo (o ya lo aceptaste), Rex lo anuncia y la tarjeta cuelga bajo la sesión.
+  const companionProgram = pickCompanionProgram(profile, todayIso);
+  const companionStat = companionProgram ? companionStatus(companionProgram, todayIso) : null;
+  const companionPlan =
+    companionProgram && (companionStat?.kind === 'oferta' || companionStat?.kind === 'aceptada') ? generateCompanionSession(profile, history, companionProgram, todayIso) : null;
+  const companionForRex =
+    companionPlan && companionStat
+      ? {
+          title: companionPlan.title,
+          number: companionPlan.index + 1,
+          total: companionPlan.total,
+          accepted: companionStat.kind === 'aceptada',
+          late: companionStat.kind === 'oferta' && companionStat.late,
+          isTest: companionPlan.isTest,
+        }
+      : null;
+  /** Aplica un cambio al perfil guardado y refresca la pantalla (la tarjeta del programa de fuerza lo usa). */
+  function commitCompanion(change: (p: AthleteProfile) => AthleteProfile) {
+    const next = change(athleteRepository.getProfile());
+    athleteRepository.saveProfile(next);
+    setProfile(next);
+  }
   const rexList = buildPlanRexSuggestions({
     canStart: Boolean(session && !alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && !session.isRestDay),
     editing: editMode && Boolean(session && !session.isRestDay),
@@ -1050,6 +1075,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     painLabels: activePainFlags.map((f) => PAIN_AREA_LABEL[f.area]),
     emphasis: session?.profileEmphasis?.summary ?? null,
     notices: { count: noticesWithoutPain, actionable: noticeSummary.actionable },
+    program: companionForRex,
   });
   const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso, rexCursor);
   const showRexBar = rexList.length > 0 && rexPick.current.id !== 'quiet';
@@ -1069,6 +1095,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     else if (target === 'plan-cambiar') setShowRex(true);
     else if (target === 'plan-empezar') setFocusMode(true);
     else if (target === 'plan-terminar') setEditMode(false);
+    else if (target === 'plan-programa') document.getElementById('companion-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   /** Los cambios directos de la sesión que Rex ofrece en «¿Cambiar algo?»: otro WOD, el selector de tipo o la hoja de dureza. */
   function handleRexAct(action: SupportAction) {
@@ -1453,6 +1480,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           </button>
         )
       )}
+
+      {/* El programa de fuerza que convive con el macro: «¿quieres hacerla hoy?» bajo la sesión del día. */}
+      {!editMode && <CompanionCard profile={profile} history={history} todayIso={todayIso} commit={commitCompanion} />}
       </>
       )}
         </div>
