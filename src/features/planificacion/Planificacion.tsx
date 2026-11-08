@@ -1237,6 +1237,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         </div>
       )}
 
+      {/* Sin macro activo hoy (p. ej. empieza mañana) el programa de fuerza también se ve: aún no ha empezado o se ofrece solo. */}
+      {!session && <CompanionCard profile={profile} history={history} todayIso={todayIso} commit={commitCompanion} light={null} />}
+
       {session && (
       <>
       <div className="flex flex-col gap-3">

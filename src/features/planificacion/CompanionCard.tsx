@@ -15,15 +15,16 @@ import {
   undoDeclineCompanion,
   type CompanionProgram,
 } from '../../engine/strengthCompanion';
+import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { getMovementById } from '../../data/movements';
 import { formatIsoDateShort } from '../../lib/dateFormat';
 import { CompanionWeeks } from './CompanionWeeks';
 
-/** El programa de fuerza que convive con el macro y le toca ofrecerse hoy (o ya está en curso), si hay alguno. */
+/** El programa de fuerza que convive con el macro y le toca ofrecerse hoy, ya está en curso o empieza pronto (para poder verlo antes de que arranque), si hay alguno. */
 export function pickCompanionProgram(profile: AthleteProfile, todayIso: string): CompanionProgram | null {
   return (profile.strengthPrograms ?? []).filter(isCompanionProgram).find((p) => {
     const kind = companionStatus(p, todayIso).kind;
-    return kind !== 'terminado' && kind !== 'no-empieza';
+    return kind !== 'terminado';
   }) ?? null;
 }
 
@@ -76,6 +77,24 @@ export function CompanionCard({
   if (!program || !status) return null;
   const id = program.id;
 
+  if (status.kind === 'no-empieza') {
+    return (
+      <section id="companion-card" className="flex flex-col gap-2 rounded-xl border border-white/10 px-3.5 py-3 text-xs text-neutral-400" aria-label="Programa de fuerza: aún no ha empezado">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
+          <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza
+        </p>
+        <p className="text-sm text-neutral-200">
+          {program.method === 'texas' ? 'Texas Method' : STRENGTH_METHOD_LABEL[program.method]}
+          {program.companion.weeks ? ` · ${program.companion.weeks} semanas` : ''} · empieza el <span className="num">{formatIsoDateShort(status.startDate)}</span>.
+        </p>
+        <p>Cuando llegue, te lo ofreceré cada día que toque debajo de la sesión del macro, y tú decides si lo haces.</p>
+        <button onClick={() => setWeeksOpen(true)} className="self-start rounded-full border border-brand-border px-3 py-1 font-semibold text-neutral-200 hover:bg-white/5">
+          Ver semana a semana
+        </button>
+        <CompanionWeeks open={weeksOpen} onClose={() => setWeeksOpen(false)} profile={profile} history={history} program={program} todayIso={todayIso} />
+      </section>
+    );
+  }
   if (status.kind === 'pausado') {
     return (
       <section id="companion-card" className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs text-neutral-400" aria-label="Programa de fuerza en pausa">
