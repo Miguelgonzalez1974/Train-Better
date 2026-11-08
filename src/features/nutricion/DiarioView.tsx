@@ -122,7 +122,7 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
             onWeightLogged: () => rexBus.emit('nutri-weight', 'refresh'),
           })
         }
-        examples={['He comido…']}
+        examples={[]}
         lab={[
           {
             title: 'Apuntar y ajustar',

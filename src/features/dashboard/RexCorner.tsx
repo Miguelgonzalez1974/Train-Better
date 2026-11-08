@@ -417,7 +417,7 @@ export function RexCorner({
                     <Send size={17} strokeWidth={2.25} />
                   </button>
                 </form>
-                <div className="mb-2 flex flex-wrap gap-1.5">
+                <div className={`mb-2 flex flex-wrap gap-1.5 ${(examples ?? ASK_EXAMPLES).length === 0 ? 'hidden' : ''}`}>
                   {(examples ?? ASK_EXAMPLES).map((example) => (
                     <button
                       key={example}
