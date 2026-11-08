@@ -606,7 +606,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             week={weekCount}
             monthDays={stats.diasEntrenados}
             year={yearConsistency}
-            calendar={<TrainingHeatmap history={history} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
+            calendar={<TrainingHeatmap history={history} trainingDates={profile.trainingDatesLog ?? []} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
           />
         </Modal>
       )}

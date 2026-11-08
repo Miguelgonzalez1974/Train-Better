@@ -43,11 +43,13 @@ const KIND_TITLE: Record<CellKind, string> = {
 
 interface TrainingHeatmapProps {
   history: SessionHistoryEntry[];
+  /** Todos los días entrenados que se recuerdan (	rainingDatesLog): el historial solo guarda las últimas 30 sesiones, así que los días más antiguos salen de aquí. */
+  trainingDates?: string[];
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
   macrocycles: Macrocycle[];
 }
 
-export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: TrainingHeatmapProps) {
+export function TrainingHeatmap({ history, trainingDates = [], trainingDaysPerWeek, macrocycles }: TrainingHeatmapProps) {
   const [pinnedIso, setPinnedIso] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +72,7 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: T
   startMonday.setDate(startMonday.getDate() - (WEEKS - 1) * 7);
 
   const historyByDate = new Map(history.map((h) => [h.date, h]));
+  const trainedByLog = new Set(trainingDates);
 
   const columns: DayCell[][] = Array.from({ length: WEEKS }, (_, w) =>
     Array.from({ length: 7 }, (_, d) => {
@@ -84,6 +87,8 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: T
         const kind: CellKind = entry.rpe <= RECOVERY_RPE_THRESHOLD ? 'recovery' : 'trained';
         return { iso, rpe: entry.rpe, kind };
       }
+      // Un día entrenado que ya no está en el historial (solo guarda 30 sesiones) pero sí en el registro de días: cuenta como entrenado, sin RPE.
+      if (trainedByLog.has(iso)) return { iso, rpe: null, kind: 'trained' as CellKind };
 
       if (!getActiveMacrocycle(macrocycles, iso)) return { iso, rpe: null, kind: 'offSeason' as CellKind };
 
@@ -146,7 +151,7 @@ export function TrainingHeatmap({ history, trainingDaysPerWeek, macrocycles }: T
                   setPinnedIso(isPinned ? null : cell.iso);
                 }}
                 className={`aspect-square w-full cursor-pointer rounded-sm transition-transform duration-150 hover:scale-125 ${
-                  cell.kind === 'trained' ? trainedBucketClass(cell.rpe!) : CELL_CLASS[cell.kind]
+                  cell.kind === 'trained' ? (cell.rpe !== null ? trainedBucketClass(cell.rpe) : 'bg-brand-orange/70') : CELL_CLASS[cell.kind]
                 }`}
               />
               <div
