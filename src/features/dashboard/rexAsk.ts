@@ -13,6 +13,18 @@ export type AskIntent =
   /** ¿Qué toca ese día? `offset` en días desde hoy (0 = hoy). */
   | { kind: 'dia'; offset: number; label: string }
   | { kind: 'estado' }
+  /** Nutrición: lo que falta del día, y una idea de qué comer para cerrarlo. */
+  | { kind: 'falta' }
+  | { kind: 'cena' }
+  /** Imprevistos de Planificación: me duele algo (con la zona si la dices), hoy no estoy para el plan, voy a faltar unos días, otro WOD. */
+  | { kind: 'dolor'; zone: 'hombro' | 'cadera-lumbar' | 'rodilla' | 'codo-muneca' | null }
+  | { kind: 'no-plan' }
+  | { kind: 'faltar'; days: number | null }
+  | { kind: 'otro-wod' }
+  /** El programa de fuerza que convive con el macro: aplazarlo, saltarlo, pausarlo o hacerlo hoy. */
+  | { kind: 'programa'; action: 'aplazar' | 'saltar' | 'pausar' | 'hacer'; days: number | null }
+  /** Crear algo con Rex (objetivo, macro, programa, temporada): abre el asistente. */
+  | { kind: 'crear'; what: 'objetivo' | 'macro' | 'programa' | 'temporada' }
   | { kind: 'modulo'; target: RexTarget }
   | { kind: 'ayuda' };
 
@@ -71,6 +83,32 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
   const weight = findWeight(norm);
   if (weight !== null && /\b(kg|kgs|kilos?|peso|pese|pesado|pesa|pesar|bascula)\b/.test(norm)) return { kind: 'peso', kg: weight };
 
+  // El programa de fuerza: hay que nombrarlo y decir qué hacer con él.
+  if (/\b(programa|texas)\b/.test(norm)) {
+    const days = Number(norm.match(/(\d+) dias?/)?.[1] ?? (/\buna semana\b/.test(norm) ? 7 : NaN));
+    const d = Number.isFinite(days) ? days : null;
+    if (/\b(pausa|pausar|pausalo|para el programa|detener)\b/.test(norm)) return { kind: 'programa', action: 'pausar', days: d };
+    if (/\b(salta|saltar|saltate|sin hacer)\b/.test(norm)) return { kind: 'programa', action: 'saltar', days: null };
+    if (/\b(aplaza|aplazar|aplazalo|hoy no|mas tarde|manana)\b/.test(norm)) return { kind: 'programa', action: 'aplazar', days: null };
+    if (/\b(hazla|hacerla|hacerlo|hago|hacemos|empezar|empieza)\b/.test(norm)) return { kind: 'programa', action: 'hacer', days: null };
+  }
+
+  // Imprevistos (antes que «qué toca», que también lee «entreno»).
+  if (/\b(me duele|dolor|molestia|lesion|lesionado|lesionada|tirón|tiron)\b/.test(norm)) {
+    const zone = /\brodilla\b/.test(norm) ? 'rodilla' : /\b(hombro)\b/.test(norm) ? 'hombro' : /\b(lumbar|espalda|cadera)\b/.test(norm) ? 'cadera-lumbar' : /\b(codo|muneca)\b/.test(norm) ? 'codo-muneca' : null;
+    return { kind: 'dolor', zone };
+  }
+  if (/\b(voy a faltar|no voy a (poder )?entrenar|me voy de (viaje|vacaciones)|estare fuera|de viaje)\b/.test(norm)) {
+    const n = Number(norm.match(/(\d+) dias?/)?.[1] ?? (/\buna semana\b/.test(norm) ? 7 : NaN));
+    return { kind: 'faltar', days: Number.isFinite(n) ? n : null };
+  }
+  if (/\b(otro|cambia|cambiar|cambiame)\b.*\bwod\b/.test(norm)) return { kind: 'otro-wod' };
+  if (/\b(no estoy para|no me encuentro|hoy no (entreno|quiero|puedo|hago)|estoy (cansad[oa]|fundid[oa]|roto|rota|mal)|no tengo ganas)\b/.test(norm)) return { kind: 'no-plan' };
+
+  // Nutrición.
+  if (/\b(que|cuanto|cuantos|cuanta|cuantas)\b.*\bfaltan?\b|\bme falta(n)?\b/.test(norm)) return { kind: 'falta' };
+  if (/\bque (ceno|cenar|como|comer|desayuno|desayunar|almuerzo|almorzar|meriendo|merendar|tomo|tomar)\b|\bidea(s)? de (cena|comida|almuerzo|desayuno|merienda)\b/.test(norm)) return { kind: 'cena' };
+
   if (/\b(que|cual)\b.*\b(toca|hay|entreno|entrenamiento|sesion|wod|plan|programado)\b|\b(toca|entreno)\b/.test(norm) || /^(y )?(hoy|manana|pasado manana)$/.test(norm)) {
     if (/\bpasado manana\b/.test(norm)) return { kind: 'dia', offset: 2, label: 'pasado mañana' };
     if (/\bmanana\b/.test(norm)) return { kind: 'dia', offset: 1, label: 'mañana' };
@@ -83,6 +121,13 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
   }
 
   if (/\b(como|que tal)\b.*\b(estoy|voy|ando|llevo|vengo)\b|\b(mi estado|mi preparacion|estoy listo|estoy para)\b/.test(norm)) return { kind: 'estado' };
+
+  // Crear con Rex: «crea un macro», «quiero subir mi sentadilla», «nueva temporada».
+  if (/\b(crea|crear|nuevo|nueva|monta|montame|prepara|preparame|quiero un|quiero una)\b.*\b(macro|macrociclo|objetivo|programa|temporada)\b/.test(norm)) {
+    const what = /\btemporada\b/.test(norm) ? 'temporada' : /\bprograma\b/.test(norm) ? 'programa' : /\b(macro|macrociclo)\b/.test(norm) ? 'macro' : 'objetivo';
+    return { kind: 'crear', what };
+  }
+  if (/\bquiero (subir|mejorar|llegar|conseguir|aprender)\b/.test(norm)) return { kind: 'crear', what: 'objetivo' };
 
   const hit = MODULE_WORDS.find((m) => m.words.test(norm));
   if (hit) return { kind: 'modulo', target: hit.target };
@@ -145,3 +190,27 @@ export function helpAnswer(): AskAnswer {
 
 /** Frases de ejemplo que se ofrecen como atajos bajo la caja. */
 export const ASK_EXAMPLES = ['¿Qué toca mañana?', '¿Cómo estoy?', 'Apunta mi peso', 'He comido…'] as const;
+
+/** Lo que falta del día en comida, con un botón a «He comido…». */
+export function missingAnswer(missing: { protein: number; carbs: number }): AskAnswer {
+  if (missing.protein <= 0 && missing.carbs <= 0) return { lead: 'Día cubierto.', tone: 'good', text: 'Ya llevas lo que te toca de proteína e hidratos.', actions: [] };
+  const parts = [missing.protein > 0 ? `${Math.round(missing.protein)} g de proteína` : null, missing.carbs > 0 ? `${Math.round(missing.carbs)} g de hidratos` : null].filter(Boolean);
+  return { lead: 'Te falta:', tone: 'info', text: `${parts.join(' y ')}.`, actions: [{ label: '¿Qué ceno?', target: 'nutri-cena', ask: '¿Qué ceno?' }] };
+}
+
+/** «¿Qué ceno?»: las ideas ya redactadas (hasta tres), o que no falta casi nada. */
+export function dinnerAnswer(ideas: string[]): AskAnswer {
+  if (ideas.length === 0) return { lead: 'No te falta casi nada.', tone: 'good', text: 'Con un poco de fruta o lo que te apetezca, cubierto.', actions: [] };
+  return {
+    lead: 'Para cerrar el día:',
+    tone: 'info',
+    text: ideas.map((idea, i) => `${i + 1}) ${idea}.`).join(' '),
+    actions: [{ label: 'He comido…', target: 'nutri-comido' }],
+  };
+}
+
+/** Una petición que esta pantalla no hace: dice dónde se hace y ofrece ir. */
+export function elsewhereAnswer(what: string, target: 'ir-dashboard' | 'ir-planificacion' | 'ir-nutricion' | 'ir-objetivos'): AskAnswer {
+  const label = target === 'ir-dashboard' ? 'Ir al Dashboard' : target === 'ir-planificacion' ? 'Ir a Planificación' : target === 'ir-nutricion' ? 'Ir a Nutrición' : 'Ir a Objetivos';
+  return { lead: 'Eso se hace en otra pantalla.', tone: 'info', text: `${what}`, actions: [{ label, target }] };
+}

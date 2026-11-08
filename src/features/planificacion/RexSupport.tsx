@@ -27,6 +27,7 @@ export function RexSupport({
   moreOptions = false,
   noticeCount = 0,
   canDelete = false,
+  startNode,
   onApply,
   onAct,
   onClose,
@@ -48,6 +49,8 @@ export function RexSupport({
   noticeCount?: number;
   /** Se puede borrar la sesión de hoy. */
   canDelete?: boolean;
+  /** Por dónde empieza la conversación (la molestia, «hoy no», faltar unos días) cuando RexLab ya sabe qué ha pasado; por defecto, el principio. */
+  startNode?: string;
   onApply: (effect: SupportEffect) => void;
   /** Un cambio directo de la sesión (otro WOD, cambiar el tipo, más dura): la pantalla lo hace y esta conversación se cierra. */
   onAct?: (action: SupportAction) => void;
@@ -130,7 +133,7 @@ export function RexSupport({
   }
 
   useEffect(() => {
-    ask('start');
+    ask(startNode ?? 'start');
     return () => {
       tokenRef.current += 1;
     };

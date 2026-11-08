@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarRange } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -7,6 +7,7 @@ import { isCompanionProgram } from '../../engine/strengthCompanion';
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { CompanionWeeks } from '../planificacion/CompanionWeeks';
 import { formatIsoDateShort } from '../../lib/dateFormat';
+import { rexBus } from '../../lib/rexBus';
 import { Modal } from '../shell/Modal';
 
 const BACKUP_KEY = 'tb-season-backup';
@@ -34,6 +35,15 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
   const [hidden, setHidden] = useState(() => readJson<boolean>(HIDDEN_KEY) === true);
   const [backup, setBackup] = useState<SeasonBackup | null>(() => readJson<SeasonBackup>(BACKUP_KEY));
   const applied = (profile.strengthPrograms ?? []).some(isCompanionProgram) && backup !== null;
+  // RexLab de Objetivos abre la revisión de la temporada o el programa semana a semana.
+  useEffect(() => {
+    const offSeason = rexBus.on('season-open', () => setOpen(true));
+    const offWeeks = rexBus.on('companion-weeks', () => setWeeksOpen(true));
+    return () => {
+      offSeason();
+      offWeeks();
+    };
+  }, []);
 
   if (!setup) return null;
   if (hidden && !applied) return null;

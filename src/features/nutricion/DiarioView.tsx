@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, PieChart, Plus, Salad, Scale, Star, ToggleRight, X } from 'lucide-react';
 import { makeFoodResolver } from '../../engine/customFoods';
 import { totalsOf } from '../../engine/mealBuilder';
 import { fixedPortion } from '../../engine/mealBuilder';
@@ -13,6 +13,8 @@ import { MacroRing } from './MacroRing';
 import { MisAlimentosPanel } from './MisAlimentosPanel';
 import { RexMeal } from './RexMeal';
 import { ScreenRex } from '../dashboard/ScreenRex';
+import { routeAsk } from '../dashboard/rexAskRouter';
+import { rexBus } from '../../lib/rexBus';
 import { QuantityStepper } from './QuantityStepper';
 import { addDays, dayLabel, dayTarget, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
@@ -113,6 +115,38 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
           input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           input?.focus();
         }}
+        ask={(text) =>
+          routeAsk(text, 'nutricion', {
+            todayIso,
+            missing: () => missing,
+            onWeightLogged: () => rexBus.emit('nutri-weight', 'refresh'),
+          })
+        }
+        examples={['¿Qué me falta?', '¿Qué ceno?', 'He comido…', 'Apunta mi peso']}
+        lab={[
+          {
+            title: 'Apuntar',
+            items: [
+              { label: 'Añadir alimento', icon: Plus, onClick: () => setAdding(true) },
+              { label: 'Mis alimentos', icon: Star, onClick: () => setMyFoods(true) },
+              { label: 'Registrar mi peso', hint: `${weightKg} kg`, icon: Scale, onClick: () => rexBus.emit('nutri-weight') },
+            ],
+          },
+          {
+            title: 'Para llegar a tu objetivo',
+            items: [
+              { label: '¿Qué ceno?', hint: '2–3 ideas con tus alimentos', icon: Salad, ask: '¿Qué ceno?' },
+              { label: '¿Qué me falta?', hint: 'gramos que quedan', icon: PieChart, ask: '¿Qué me falta?' },
+            ],
+          },
+          {
+            title: 'El día',
+            items: [
+              { label: 'Ver ayer', icon: CalendarDays, onClick: () => onChangeIso(addDays(iso, -1)) },
+              { label: 'Cambiar el tipo de día', hint: 'ligero · normal · fuerte', icon: ToggleRight, onClick: () => setChangingType(true) },
+            ],
+          },
+        ]}
       />
       {/* Fecha */}
       <div className="flex items-center justify-between gap-2">

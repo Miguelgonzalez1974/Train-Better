@@ -44,13 +44,21 @@ export type RexTarget =
   | 'movilidad'
   /** Nutrición: ir a la caja «He comido…». Objetivos: hablar con Rex (el asistente). */
   | 'nutri-comido'
+  | 'nutri-cena'
   | 'objetivos-hablar'
+  /** Ir a una pestaña de la app (desde RexLab de cualquier pantalla). */
+  | 'ir-dashboard'
+  | 'ir-planificacion'
+  | 'ir-nutricion'
+  | 'ir-objetivos'
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 
 export interface RexAction {
   label: string;
   target: RexTarget;
+  /** Si lleva, en la respuesta de RexLab el botón no se va a ningún sitio: hace esa pregunta ahí mismo. */
+  ask?: string;
 }
 
 export interface RexSuggestion {

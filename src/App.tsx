@@ -4,6 +4,7 @@ import { BottomNav } from './features/shell/BottomNav';
 import { SyncIndicator } from './features/shell/SyncIndicator';
 import { BackToLab } from './features/shell/BackToLab';
 import { labReturn } from './lib/labReturn';
+import { appNav } from './lib/appNav';
 import type { TabId } from './features/shell/navItems';
 import { Login } from './features/auth/Login';
 import { useSession } from './features/auth/useSession';
@@ -50,6 +51,9 @@ export default function App() {
     setObjetivosSection(section);
     setActiveTab(tab);
   };
+
+  // RexLab cambia de pestaña desde cualquier pantalla (p. ej. «he comido…» desde el Dashboard lleva a Nutrición).
+  useEffect(() => appNav.register((tab) => goTo(tab)), []);
 
   const userId = session?.user?.id ?? null;
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Dumbbell } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { generateCompanionSession, type CompanionSessionPlan } from '../../engine/generateSession';
@@ -18,6 +18,7 @@ import {
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { getMovementById } from '../../data/movements';
 import { formatIsoDateShort } from '../../lib/dateFormat';
+import { rexBus } from '../../lib/rexBus';
 import { CompanionWeeks } from './CompanionWeeks';
 
 /** El programa de fuerza que convive con el macro y le toca ofrecerse hoy, ya está en curso o empieza pronto (para poder verlo antes de que arranque), si hay alguno. */
@@ -73,6 +74,8 @@ export function CompanionCard({
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [showNotes, setShowNotes] = useState(false);
   const [weeksOpen, setWeeksOpen] = useState(false);
+  // RexLab abre la vista semana a semana.
+  useEffect(() => rexBus.on('companion-weeks', () => setWeeksOpen(true)), []);
 
   if (!program || !status) return null;
   const id = program.id;

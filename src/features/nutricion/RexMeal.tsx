@@ -5,6 +5,7 @@ import type { ExtraFoodEntry } from '../../data/athlete/types';
 import { customFoodToCatalogFood } from '../../engine/customFoods';
 import { chooseFood, dropIssue, dropItem, mealTotals, parseMeal, setIssueGrams, setItemGrams, type MealIssue, type MealParse } from '../../engine/mealText';
 import { takeMealDraft } from '../../lib/mealDraft';
+import { rexBus } from '../../lib/rexBus';
 import { RexMascot, type RexMood } from '../objetivos/RexMascot';
 import { QuantityStepper } from './QuantityStepper';
 import { withExtra } from './nutritionData';
@@ -56,6 +57,20 @@ export function RexMeal({
     setParse(parseMeal(draft, foods, customIds));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // RexLab escribe aquí una frase de comida (he comido…): se lee y se enseña antes de apuntar nada, igual que si la hubieras escrito tú.
+  useEffect(() => {
+    return rexBus.on('meal-text', (phrase) => {
+      if (!phrase || phrase.trim() === '') return;
+      setText(phrase);
+      setSent(phrase);
+      setParse(parseMeal(phrase, foods, customIds));
+      setDone(null);
+      setGramsDraft({});
+      document.querySelector('input[aria-label="Qué has comido"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foods, customIds]);
 
   function submit() {
     const value = text.trim();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayAnswer, helpAnswer, normalizeAsk, parseAsk, weightAnswer } from './rexAsk';
+import { dayAnswer, dinnerAnswer, elsewhereAnswer, helpAnswer, missingAnswer, normalizeAsk, parseAsk, weightAnswer } from './rexAsk';
 
 const FRIDAY = 5;
 
@@ -79,5 +79,54 @@ describe('las respuestas de Rex', () => {
 
   it('la ayuda enseña ejemplos', () => {
     expect(helpAnswer().text).toContain('¿qué toca mañana?');
+  });
+});
+
+describe('RexLab de cada pantalla: lo nuevo que lee la caja', () => {
+  it('lo que falta y qué ceno', () => {
+    expect(parseAsk('¿Qué me falta?', FRIDAY)).toEqual({ kind: 'falta' });
+    expect(parseAsk('cuánta proteína me falta', FRIDAY)).toEqual({ kind: 'falta' });
+    expect(parseAsk('¿Qué ceno?', FRIDAY)).toEqual({ kind: 'cena' });
+    expect(parseAsk('dame una idea de cena', FRIDAY)).toEqual({ kind: 'cena' });
+  });
+
+  it('imprevistos: me duele algo (con su zona), hoy no estoy para el plan, voy a faltar, otro WOD', () => {
+    expect(parseAsk('me duele la rodilla', FRIDAY)).toEqual({ kind: 'dolor', zone: 'rodilla' });
+    expect(parseAsk('tengo molestia en la espalda', FRIDAY)).toEqual({ kind: 'dolor', zone: 'cadera-lumbar' });
+    expect(parseAsk('me duele algo', FRIDAY)).toEqual({ kind: 'dolor', zone: null });
+    expect(parseAsk('hoy no estoy para el plan', FRIDAY)).toEqual({ kind: 'no-plan' });
+    expect(parseAsk('hoy no entreno', FRIDAY)).toEqual({ kind: 'no-plan' });
+    expect(parseAsk('voy a faltar 3 días', FRIDAY)).toEqual({ kind: 'faltar', days: 3 });
+    expect(parseAsk('me voy de viaje una semana', FRIDAY)).toEqual({ kind: 'faltar', days: 7 });
+    expect(parseAsk('cámbiame el wod', FRIDAY)).toEqual({ kind: 'otro-wod' });
+    expect(parseAsk('otro WOD', FRIDAY)).toEqual({ kind: 'otro-wod' });
+  });
+
+  it('el programa de fuerza: aplazar, saltar, pausar o hacerlo hoy, y solo si lo nombras', () => {
+    expect(parseAsk('aplaza el programa', FRIDAY)).toEqual({ kind: 'programa', action: 'aplazar', days: null });
+    expect(parseAsk('salta esta sesión del programa', FRIDAY)).toEqual({ kind: 'programa', action: 'saltar', days: null });
+    expect(parseAsk('pausa el programa una semana', FRIDAY)).toEqual({ kind: 'programa', action: 'pausar', days: 7 });
+    expect(parseAsk('pausa el programa 10 días', FRIDAY)).toEqual({ kind: 'programa', action: 'pausar', days: 10 });
+    expect(parseAsk('hazla hoy, la del texas', FRIDAY)).toEqual({ kind: 'programa', action: 'hacer', days: null });
+    // sin decir «programa» no se aplaza nada
+    expect(parseAsk('aplaza', FRIDAY).kind).not.toBe('programa');
+  });
+
+  it('crear con Rex y lo que ya entendía sigue igual', () => {
+    expect(parseAsk('crea un macro', FRIDAY)).toEqual({ kind: 'crear', what: 'macro' });
+    expect(parseAsk('quiero un programa nuevo', FRIDAY)).toEqual({ kind: 'crear', what: 'programa' });
+    expect(parseAsk('nueva temporada', FRIDAY)).toEqual({ kind: 'crear', what: 'temporada' });
+    expect(parseAsk('quiero subir mi sentadilla', FRIDAY)).toEqual({ kind: 'crear', what: 'objetivo' });
+    expect(parseAsk('mis objetivos', FRIDAY)).toEqual({ kind: 'modulo', target: 'objetivos' });
+    expect(parseAsk('¿qué toca mañana?', FRIDAY)).toEqual({ kind: 'dia', offset: 1, label: 'mañana' });
+    expect(parseAsk('¿cómo estoy?', FRIDAY)).toEqual({ kind: 'estado' });
+  });
+
+  it('las respuestas de lo que falta y de qué ceno', () => {
+    expect(missingAnswer({ protein: 48.4, carbs: 90 })).toMatchObject({ lead: 'Te falta:', text: '48 g de proteína y 90 g de hidratos.', actions: [{ ask: '¿Qué ceno?' }] });
+    expect(missingAnswer({ protein: 0, carbs: 0 }).lead).toBe('Día cubierto.');
+    expect(dinnerAnswer(['150 g de pollo y 110 g de arroz', '2 huevos']).text).toBe('1) 150 g de pollo y 110 g de arroz. 2) 2 huevos.');
+    expect(dinnerAnswer([]).lead).toBe('No te falta casi nada.');
+    expect(elsewhereAnswer('Eso está en el Dashboard.', 'ir-dashboard').actions).toEqual([{ label: 'Ir al Dashboard', target: 'ir-dashboard' }]);
   });
 });

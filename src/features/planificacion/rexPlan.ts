@@ -97,10 +97,10 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
 
   const lead = ctx.light ? `${ctx.light.name}.` : 'Sesión de hoy.';
   const tone = ctx.light ? LIGHT_TONE[ctx.light.color] : 'info';
-  // Rex lo controla todo: empezar es el botón principal; el resto de cambios (más dura, me duele algo, otro WOD…) están en «¿Cambiar algo?».
+  // Empezar es el botón principal; los cambios (más dura, me duele algo, otro WOD…) viven en RexLab.
   const actions: RexAction[] = [];
   if (ctx.canStart) actions.push({ label: 'Empezar sesión', target: 'plan-empezar' });
-  actions.push({ label: 'Por qué', target: 'plan-detalle' }, { label: '¿Cambiar algo?', target: 'plan-cambiar' });
+  actions.push({ label: 'Por qué', target: 'plan-detalle' });
   return {
     id: 'plan-estado',
     priority: 95,
@@ -127,10 +127,7 @@ export function planCompletedSuggestion(c: PlanCompleted | null | undefined): Re
     tone: 'good',
     text: `${lead} ${body}${pending}`.trim(),
     mood: 'happy',
-    actions: [
-      { label: 'Ver resumen', target: 'plan-resumen' },
-      { label: '¿Cambiar algo?', target: 'plan-cambiar' },
-    ],
+    actions: [{ label: 'Ver resumen', target: 'plan-resumen' }],
     dismissible: false,
   };
 }
@@ -162,7 +159,7 @@ export function planRestSuggestion(restDay: boolean | undefined): RexSuggestion 
     tone: 'info',
     text: `${lead} Aprovecha para recuperar. Si algo ha pasado, cuéntamelo.`,
     mood: 'idle',
-    actions: [{ label: '¿Cambiar algo?', target: 'plan-cambiar' }],
+    actions: [],
     dismissible: false,
   };
 }

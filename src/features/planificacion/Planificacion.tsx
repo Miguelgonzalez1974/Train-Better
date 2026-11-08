@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy } from 'lucide-react';
+import { NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -87,8 +87,14 @@ import { dismissSuggestion, dockStats, loadRexMemory, pickRexSuggestion, saveRex
 import { buildPlanRexSuggestions } from './rexPlan';
 import { CompanionCard, pickCompanionProgram } from './CompanionCard';
 import { ScreenRex } from '../dashboard/ScreenRex';
+import { routeAsk } from '../dashboard/rexAskRouter';
+import { dayAnswer, type AskAnswer } from '../dashboard/rexAsk';
+import { describeDayForAsk } from '../dashboard/rexAskDay';
+import { handoff } from '../../lib/handoff';
+import { rexBus } from '../../lib/rexBus';
+import type { LabSection } from '../dashboard/RexCorner';
 import { generateCompanionSession } from '../../engine/generateSession';
-import { companionStatus } from '../../engine/strengthCompanion';
+import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer } from './TrainingTimer';
@@ -226,6 +232,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [macroWodPreview, setMacroWodPreview] = useState<SessionBlockResult[] | null>(null);
   const [showPainPicker, setShowPainPicker] = useState(false);
   const [showRex, setShowRex] = useState(false);
+  /** Por dónde empieza la conversación de Rex cuando RexLab ya sabe qué ha pasado (la molestia, «hoy no», faltar). */
+  const [supportStart, setSupportStart] = useState<string | undefined>(undefined);
   const [showNotices, setShowNotices] = useState(false);
   // Rex en Planificación: el detalle del estado del día se abre con «Por qué»; lo apartado se recuerda en este dispositivo.
   const [showPlanDetail, setShowPlanDetail] = useState(false);
@@ -1060,6 +1068,122 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     athleteRepository.saveProfile(next);
     setProfile(next);
   }
+  function openSupport(node?: string) {
+    setSupportStart(node);
+    setShowRex(true);
+  }
+  const companionLive = companionProgram && (companionStat?.kind === 'oferta' || companionStat?.kind === 'aceptada' || companionStat?.kind === 'aplazada');
+  /** Lo que se hace con el programa de fuerza desde RexLab: hacerla hoy, aplazarla, saltarla o pausar el programa. */
+  function programAsk(action: 'aplazar' | 'saltar' | 'pausar' | 'hacer', days: number | null): AskAnswer {
+    if (!companionProgram || !companionLive) return { lead: 'Sin sesión del programa.', tone: 'info', text: 'Hoy no toca ninguna sesión de tu programa de fuerza.', actions: [] };
+    const id = companionProgram.id;
+    if (action === 'hacer') {
+      commitCompanion((p) => acceptCompanion(p, id, todayIso));
+      return { lead: 'Hecho.', tone: 'good', text: 'La sesión del programa va en tu día. Al terminarla, apúntala en su tarjeta.', actions: [{ label: 'Verla', target: 'plan-programa' }] };
+    }
+    if (action === 'aplazar') {
+      commitCompanion((p) => declineCompanion(p, id, todayIso));
+      return { lead: 'Aplazada.', tone: 'info', text: 'La sesión no se pierde: mañana te la vuelvo a ofrecer.', actions: [] };
+    }
+    if (action === 'saltar') {
+      if (companionPlan && isCompanionTestSession(companionProgram, companionPlan.index)) return { lead: 'Esa no se salta.', tone: 'mid', text: 'Es una sesión de test: solo se puede aplazar.', actions: [] };
+      commitCompanion((p) => skipCompanion(p, id, todayIso, companionPlan?.title));
+      return { lead: 'Saltada.', tone: 'info', text: 'El programa avanza a la siguiente sin hacerla.', actions: [] };
+    }
+    commitCompanion((p) => pauseCompanion(p, id, todayIso, days ?? 7));
+    return { lead: 'Programa en pausa.', tone: 'info', text: `No te ofreceré nada del programa durante ${days ?? 7} días.`, actions: [] };
+  }
+  /** La caja de RexLab de Planificación: lo que se hace aquí lo hace esta pantalla; lo demás lo reparte el común (`rexAskRouter.ts`). */
+  function askRex(text: string): AskAnswer | 'close' {
+    return routeAsk(text, 'planificacion', {
+      todayIso,
+      local: {
+        dolor: () => {
+          openSupport('p_zone');
+          return 'close';
+        },
+        'no-plan': () => {
+          openSupport('t_what');
+          return 'close';
+        },
+        faltar: () => {
+          openSupport('a_why');
+          return 'close';
+        },
+        'otro-wod': () => {
+          if (!hasWodBlock || alreadyCompletedToday) return { lead: 'Hoy no hay WOD que cambiar.', tone: 'info', text: 'No hay un WOD en la sesión de hoy o ya está hecha.', actions: [] };
+          handleRexAct('otro-wod');
+          return 'close';
+        },
+        programa: (intent) => programAsk(intent.action, intent.days),
+        dia: (intent) =>
+          dayAnswer(
+            intent.label,
+            describeDayForAsk({ offset: intent.offset, todayIso, profile, history, todaySession: session && !alreadyCompletedToday ? session : null, todayStrain: null, bias: strainBias }),
+          ),
+      },
+    });
+  }
+  /** Las opciones de RexLab de Planificación: lo que antes estaba en «¿Cambiar algo?», agrupado, y el programa de fuerza. */
+  const canChangeToday = Boolean(session && !session.isRestDay && !alreadyCompletedToday);
+  const rexLab: LabSection[] = [
+    ...(canChangeToday
+      ? [
+          {
+            title: 'Cambiar la sesión de hoy',
+            items: [
+              ...(hasWodBlock ? [{ label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
+              ...(canHarder ? [{ label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
+              { label: 'Cambiar el tipo', hint: 'recovery, WOD libre', icon: SlidersHorizontal, onClick: () => handleRexAct('tipo') },
+              { label: 'Editar sesión', icon: Pencil, onClick: () => handleRexAct('editar') },
+            ],
+          },
+        ]
+      : []),
+    {
+      title: 'Si algo ha pasado',
+      items: [
+        { label: 'Me duele algo', icon: HeartPulse, onClick: () => openSupport('p_zone') },
+        ...(!alreadyCompletedToday ? [{ label: 'Hoy no estoy para el plan', icon: Frown, onClick: () => openSupport('t_what') }] : []),
+        { label: 'Voy a faltar unos días', icon: Plane, onClick: () => openSupport('a_why') },
+      ],
+    },
+    ...(companionProgram && companionLive
+      ? [
+          {
+            title: 'Programa de fuerza',
+            items: [
+              ...(companionStat?.kind !== 'aceptada' ? [{ label: 'Hacerla hoy', hint: companionPlan ? `sesión ${companionPlan.index + 1}` : undefined, icon: Dumbbell, onClick: () => programAsk('hacer', null) }] : []),
+              ...(companionStat?.kind !== 'aplazada' ? [{ label: 'Hoy no', hint: 'pasa a mañana', icon: FastForward, onClick: () => programAsk('aplazar', null) }] : []),
+              { label: 'Ver semana a semana', icon: CalendarDays, onClick: () => rexBus.emit('companion-weeks') },
+              { label: 'Pausar 7 días', icon: PauseCircle, onClick: () => programAsk('pausar', 7) },
+            ],
+          },
+        ]
+      : []),
+    {
+      title: 'Más',
+      items: [
+        { label: 'Librería de complejos', icon: Library, onClick: () => handleRexAct('complejos') },
+        ...(noticeSummary.count > 0 ? [{ label: 'Avisos del coach', hint: String(noticeSummary.count), icon: Bell, onClick: () => handleRexAct('avisos') }] : []),
+        ...(alreadyCompletedToday ? [{ label: 'Deshacer el registro', icon: Undo2, onClick: () => handleRexAct('deshacer') }] : []),
+      ],
+    },
+  ];
+  const rexExamples = ['Me duele la rodilla', 'Hoy no estoy para el plan', 'Voy a faltar 3 días', ...(hasWodBlock && !alreadyCompletedToday ? ['Otro WOD'] : []), ...(companionLive ? ['Aplaza el programa'] : [])];
+
+  // Si RexLab de otra pantalla dejó dicho qué abrir (la molestia, «hoy no», faltar, otro WOD), se abre al llegar.
+  useEffect(() => {
+    const node = handoff.take('support-start');
+    const act = handoff.take('plan-act');
+    if (node) openSupport(node);
+    else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
+      const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
+      return () => window.clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const rexList = buildPlanRexSuggestions({
     canStart: Boolean(session && !alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && !session.isRestDay),
     editing: editMode && Boolean(session && !session.isRestDay),
@@ -1317,6 +1441,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             dots={[]}
             showDate={false}
             modules={false}
+            ask={askRex}
+            lab={rexLab}
+            examples={rexExamples}
             onAction={runPlanTarget}
             onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
             onNext={() => setRexCursor((c) => c + 1)}
@@ -1687,9 +1814,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           moreOptions
           noticeCount={noticeSummary.count}
           canDelete={Boolean(session && !alreadyCompletedToday)}
+          startNode={supportStart}
           onApply={handleRexApply}
           onAct={handleRexAct}
-          onClose={() => setShowRex(false)}
+          onClose={() => {
+            setShowRex(false);
+            setSupportStart(undefined);
+          }}
         />
       </Modal>
 

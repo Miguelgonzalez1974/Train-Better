@@ -43,9 +43,9 @@ import { BalanceBox, DayRing, type DashTab } from './DayRing';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainAction } from '../../engine/explainNumbers';
 import { dayBalance } from '../../engine/dayBalance';
 import { macroChip } from './dayHeader';
-import { dayAnswer, helpAnswer, parseAsk, weightAnswer, type AskAnswer } from './rexAsk';
+import { dayAnswer, type AskAnswer } from './rexAsk';
+import { routeAsk } from './rexAskRouter';
 import { describeDayForAsk } from './rexAskDay';
-import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
 import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
 import { DashTabs, DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
@@ -394,45 +394,27 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     else onNavigateToPlanificacion();
   }
 
-  /** «Pregúntale a Rex»: lee lo escrito (`rexAsk.ts`) y hace lo pedido o contesta; 'close' si ya abrió algo. */
+  /** «Pregúntale a Rex»: el reparto común de `rexAskRouter.ts`, con lo que el Dashboard hace por su cuenta (qué toca, cómo estás, abrir un módulo). */
   function askRex(text: string): AskAnswer | 'close' {
-    const intent = parseAsk(text, new Date().getDay());
-    switch (intent.kind) {
-      case 'peso': {
-        const last = [...bodyweightLog].sort((a, b) => a.date.localeCompare(b.date)).pop();
-        const daysAgo = last ? Math.max(0, Math.round((new Date(`${todayIso}T00:00:00`).getTime() - new Date(`${last.date}T00:00:00`).getTime()) / 86_400_000)) : 0;
-        athleteRepository.appendBodyweightEntry({ date: todayIso, kg: intent.kg });
-        setBodyweightLog(athleteRepository.getBodyweightLog());
-        return weightAnswer(intent.kg, last ? { kg: last.kg, daysAgo } : null);
-      }
-      case 'comida':
-        // Nutrición lo recoge, lo lee con Rex y te lo enseña antes de apuntar nada.
-        try {
-          window.sessionStorage.setItem(MEAL_DRAFT_KEY, intent.text);
-        } catch {
-          /* sin almacenamiento: se abre Nutrición y se escribe allí */
-        }
-        onNavigateToNutricion();
-        return 'close';
-      case 'dia':
-        return dayAnswer(
-          intent.label,
-          describeDayForAsk({ offset: intent.offset, todayIso, profile, history, todaySession, todayStrain, bias: strainLearned.bias }),
-        );
-      case 'estado': {
-        const prep = explanations.preparacion;
-        const effort = explanations.esfuerzo;
-        const tone = prep.tone === 'good' || prep.tone === 'mid' || prep.tone === 'bad' || prep.tone === 'info' ? prep.tone : 'info';
-        return { lead: prep.lead, tone, text: `${shown.readiness.total !== null ? `Preparación ${shown.readiness.total} sobre 100. ` : ''}${effort.text}`, actions: [{ label: 'Ver la preparación', target: 'preparacion' }] };
-      }
-      case 'modulo':
-        runRexTarget(intent.target);
-        return 'close';
-      case 'ayuda':
-        return helpAnswer();
-    }
+    return routeAsk(text, 'dashboard', {
+      todayIso,
+      onWeightLogged: () => setBodyweightLog(athleteRepository.getBodyweightLog()),
+      missing: () => (nutrition ? { protein: Math.max(0, nutrition.protein.target - nutrition.protein.done), carbs: Math.max(0, nutrition.carbs.target - nutrition.carbs.done) } : null),
+      local: {
+        dia: (intent) => dayAnswer(intent.label, describeDayForAsk({ offset: intent.offset, todayIso, profile, history, todaySession, todayStrain, bias: strainLearned.bias })),
+        estado: () => {
+          const prep = explanations.preparacion;
+          const effort = explanations.esfuerzo;
+          const tone = prep.tone === 'good' || prep.tone === 'mid' || prep.tone === 'bad' || prep.tone === 'info' ? prep.tone : 'info';
+          return { lead: prep.lead, tone, text: `${shown.readiness.total !== null ? `Preparación ${shown.readiness.total} sobre 100. ` : ''}${effort.text}`, actions: [{ label: 'Ver la preparación', target: 'preparacion' }] };
+        },
+        modulo: (intent) => {
+          runRexTarget(intent.target);
+          return 'close';
+        },
+      },
+    });
   }
-
 
   return (
     <div className="flex flex-col gap-4 pb-44">

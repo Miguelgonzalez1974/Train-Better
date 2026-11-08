@@ -1,4 +1,5 @@
-import { RexCorner } from './RexCorner';
+import { RexCorner, type LabSection } from './RexCorner';
+import type { AskAnswer } from './rexAsk';
 import type { RexAction, RexSuggestion, RexTarget } from './rexDashboard';
 
 /**
@@ -15,6 +16,9 @@ export function ScreenRex({
   stats = null,
   actions = [],
   onAction,
+  ask,
+  lab,
+  examples,
 }: {
   id: string;
   lead: string;
@@ -25,11 +29,18 @@ export function ScreenRex({
   stats?: string | null;
   actions?: RexAction[];
   onAction?: (target: RexTarget) => void;
+  /** La caja de RexLab de esta pantalla, sus atajos y sus opciones. */
+  ask?: (text: string) => AskAnswer | 'close';
+  lab?: LabSection[];
+  examples?: readonly string[];
 }) {
   const suggestion: RexSuggestion = { id, priority: 50, lead, text: `${lead} ${text}`, tone, mood, actions, dismissible: false };
   return (
     <RexCorner
       speak={false}
+      ask={ask}
+      lab={lab}
+      examples={examples}
       modules={false}
       showDate={false}
       dock={{ stats }}

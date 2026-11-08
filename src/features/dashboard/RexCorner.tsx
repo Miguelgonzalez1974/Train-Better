@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { ChevronDown, ChevronUp, FlaskConical, MousePointerClick, Send, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, FlaskConical, MousePointerClick, Send, X, type LucideIcon } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
 import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
 import { labReturn } from '../../lib/labReturn';
+import { appNav } from '../../lib/appNav';
+import type { TabId } from '../shell/navItems';
 import type { RexSuggestion, RexTarget } from './rexDashboard';
 
 /** Cuánto se queda el globo de la esquina antes de recogerse solo (la pista de los aros no se recoge: se queda hasta que se toca un aro). */
@@ -35,6 +37,23 @@ function writeFolded(folded: boolean): void {
     /* sin almacenamiento: se vuelve a desplegar al abrir */
   }
 }
+
+/** Una opción de RexLab de la pantalla: abre algo (onClick) o hace una pregunta ahí mismo (sk). */
+export interface LabItem {
+  label: string;
+  hint?: string;
+  icon: LucideIcon;
+  onClick?: () => void;
+  ask?: string;
+}
+
+/** Un grupo de opciones de RexLab con su título. */
+export interface LabSection {
+  title: string;
+  items: LabItem[];
+}
+
+const NAV_TARGET: Partial<Record<RexTarget, TabId>> = { 'ir-dashboard': 'dashboard', 'ir-planificacion': 'planificacion', 'ir-nutricion': 'nutricion', 'ir-objetivos': 'objetivos' };
 
 /** Lo que Rex ya ha dicho en un globo durante esta visita a la app: cambiar de pestaña no lo repite. */
 const spoken = new Set<string>();
@@ -86,6 +105,8 @@ export function RexCorner({
   showDate = true,
   raised = false,
   ask,
+  lab,
+  examples,
   dock = null,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
@@ -100,6 +121,10 @@ export function RexCorner({
   raised?: boolean;
   /** La caja «Pregúntale a Rex…»: recibe lo escrito y devuelve la respuesta, o 'close' si ya hizo lo pedido (abrir un módulo, ir a Nutrición). */
   ask?: (text: string) => AskAnswer | 'close';
+  /** Las opciones propias de esta pantalla, bajo la frase de Rex (Planificación, Nutrición, Objetivos…). */
+  lab?: LabSection[];
+  /** Los atajos de la caja de esta pantalla (por defecto, los del Dashboard). */
+  examples?: readonly string[];
   /**
    * El globo fijo de la pantalla: Rex dice siempre aquí su frase del momento (estado del día y qué hacer), con una línea de cifras (`stats`),
    * una pista opcional (`tip`), el botón de su primera acción y el botón «RexLab». Se pliega con la flechita a una sola línea, pero no se
@@ -393,7 +418,7 @@ export function RexCorner({
                   </button>
                 </form>
                 <div className="mb-2 flex flex-wrap gap-1.5">
-                  {ASK_EXAMPLES.map((example) => (
+                  {(examples ?? ASK_EXAMPLES).map((example) => (
                     <button
                       key={example}
                       onClick={() => {
@@ -423,7 +448,14 @@ export function RexCorner({
                           {answer.actions.map((a, i) => (
                             <button
                               key={a.label}
-                              onClick={() => launch(() => bar.onAction(a.target))}
+                              onClick={() => {
+                                const tab = NAV_TARGET[a.target];
+                                if (a.ask) send(a.ask);
+                                else if (tab) {
+                                  setOpen(false);
+                                  appNav.goTo(tab);
+                                } else launch(() => bar.onAction(a.target));
+                              }}
                               className={
                                 i === 0
                                   ? 'rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark'
@@ -450,6 +482,33 @@ export function RexCorner({
               typedAlready
               onAction={(target) => launch(() => bar.onAction(target))}
             />
+
+            {lab?.map((section) => (
+              <div key={section.title} className="mt-4">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">{section.title}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.label}
+                        onClick={() => {
+                          if (item.ask) send(item.ask);
+                          else if (item.onClick) launch(item.onClick);
+                        }}
+                        className="flex items-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-left text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
+                      >
+                        <Icon size={15} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block leading-snug">{item.label}</span>
+                          {item.hint && <span className="block text-[11px] font-normal text-neutral-500">{item.hint}</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </section>
         </div>
       )}

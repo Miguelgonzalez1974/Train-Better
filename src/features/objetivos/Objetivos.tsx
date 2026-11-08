@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   PauseCircle,
   ChevronLeft,
+  CalendarDays,
+  Radar,
 } from 'lucide-react';
 import { STRENGTH_METHOD_META, STRENGTH_METHODS } from './strengthMethodMeta';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -35,6 +37,10 @@ import { DEFAULT_STRENGTH_PROGRAM_LIFTS, getActiveStrengthProgram, resolveStreng
 import { newCompanion, supportsCompanion } from '../../engine/strengthCompanion';
 import { SeasonSetupCard } from './SeasonSetupCard';
 import { ScreenRex } from '../dashboard/ScreenRex';
+import { routeAsk } from '../dashboard/rexAskRouter';
+import { elsewhereAnswer } from '../dashboard/rexAsk';
+import { handoff } from '../../lib/handoff';
+import { rexBus } from '../../lib/rexBus';
 
 const WEEKDAY_CHIPS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
@@ -206,7 +212,7 @@ const SECTION_TITLE: Record<ObjetivosSection | 'asistente', string> = {
 export function Objetivos({ initialSection }: { initialSection?: ObjetivosSection } = {}) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
-  const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home' | 'asistente'>(initialSection ?? 'home');
+  const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home' | 'asistente'>(() => (handoff.take('objetivos-asistente') ? 'asistente' : (initialSection ?? 'home')));
   /** El asistente tiene un plan a medias sin crear: salir pide confirmación. */
   const [assistantDirty, setAssistantDirty] = useState(false);
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
@@ -406,6 +412,50 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           onAction={(target) => {
             if (target === 'objetivos-hablar') setActiveSection('asistente');
           }}
+          examples={['Quiero subir mi sentadilla', '¿Cómo voy?', 'Crea un macro', 'Mi perfil']}
+          ask={(text) =>
+            routeAsk(text, 'objetivos', {
+              todayIso: todayIso(),
+              local: {
+                crear: () => {
+                  setActiveSection('asistente');
+                  return 'close';
+                },
+                estado: () => ({
+                  lead: 'Objetivos.',
+                  tone: 'info',
+                  text: openGroups.total === 0 ? 'No tienes nada abierto.' : `Tienes ${openGroups.total} ${openGroups.total === 1 ? 'abierto' : 'abiertos'}: míralos aquí abajo con su avance.`,
+                  actions: [{ label: 'Hablar con Rex', target: 'objetivos-hablar' }],
+                }),
+                modulo: (intent) => {
+                  if (intent.target === 'perfil') setActiveSection('perfil');
+                  else if (intent.target === 'objetivos') setActiveSection('home');
+                  else return elsewhereAnswer('Ese módulo está en el Dashboard.', 'ir-dashboard');
+                  return 'close';
+                },
+              },
+            })
+          }
+          lab={[
+            {
+              title: 'Crear con Rex',
+              items: [
+                { label: 'Objetivo nuevo', icon: Target, onClick: () => setActiveSection('asistente') },
+                { label: 'Macro', icon: CalendarRange, onClick: () => setActiveSection('asistente') },
+                { label: 'Programa de fuerza', hint: 'Texas, 5/3/1…', icon: Dumbbell, onClick: () => setActiveSection('asistente') },
+                { label: 'Nueva temporada', hint: 'nov → jun', icon: CalendarDays, onClick: () => rexBus.emit('season-open') },
+              ],
+            },
+            {
+              title: 'Lo que tienes abierto',
+              items: [
+                { label: 'Programa semana a semana', icon: CalendarDays, onClick: () => rexBus.emit('companion-weeks') },
+                { label: 'Mis macros', icon: CalendarRange, onClick: () => setActiveSection('macrociclos') },
+                { label: 'Mis programas', icon: Dumbbell, onClick: () => setActiveSection('programa') },
+                { label: 'Mi perfil', hint: 'qué priorizaría', icon: Radar, onClick: () => setActiveSection('perfil') },
+              ],
+            },
+          ]}
         />
       )}
       {activeSection === 'home' && <SeasonSetupCard profile={profile} history={history} onApply={persist} />}

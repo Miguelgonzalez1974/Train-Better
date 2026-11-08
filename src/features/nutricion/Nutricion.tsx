@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scale } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { NutritionPrefs } from '../../data/athlete/types';
@@ -7,6 +7,7 @@ import { BodyweightCard } from '../dashboard/BodyweightCard';
 import { Modal } from '../shell/Modal';
 import { DiarioView } from './DiarioView';
 import { ScreenRex } from '../dashboard/ScreenRex';
+import { rexBus } from '../../lib/rexBus';
 import { computeWeekDays, mondayOf, type WeekDay } from './nutritionData';
 import type { NutritionShared } from './shared';
 
@@ -19,6 +20,8 @@ export function Nutricion() {
   const [history] = useState(() => athleteRepository.getHistory());
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   const [showWeight, setShowWeight] = useState(false);
+  // RexLab: abrir el peso, o refrescarlo tras apuntarlo desde la caja.
+  useEffect(() => rexBus.on('nutri-weight', (p) => (p === 'refresh' ? setBodyweightLog(athleteRepository.getBodyweightLog()) : setShowWeight(true))), []);
   const todayIso = toLocalIsoDate(new Date());
   const [selectedIso, setSelectedIso] = useState(todayIso);
 

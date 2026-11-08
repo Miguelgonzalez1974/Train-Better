@@ -47,15 +47,14 @@ describe('Rex en Planificación: la frase del estado del día', () => {
     expect(planStateSuggestion(mk({ emphasis: 'x'.repeat(120) }))!.text).not.toContain('xxxx');
   });
 
-  it('Rex lo controla todo: empezar es el botón principal, y detrás van el porqué y «¿Cambiar algo?»', () => {
+  it('empezar es el botón principal, y detrás va el porqué; los cambios viven en RexLab', () => {
     expect(planStateSuggestion(mk({ canStart: true }))!.actions).toEqual([
       { label: 'Empezar sesión', target: 'plan-empezar' },
       { label: 'Por qué', target: 'plan-detalle' },
-      { label: '¿Cambiar algo?', target: 'plan-cambiar' },
     ]);
     // Sin poder empezar (sesión propia, por ejemplo) no se ofrece.
-    expect(planStateSuggestion(mk({ canStart: false }))!.actions.map((a) => a.target)).toEqual(['plan-detalle', 'plan-cambiar']);
-    // Más dura y Me duele algo ya no son botones sueltos: viven en «¿Cambiar algo?».
+    expect(planStateSuggestion(mk({ canStart: false }))!.actions.map((a) => a.target)).toEqual(['plan-detalle']);
+    // Más dura y Me duele algo no son botones sueltos: viven en RexLab.
     expect(planStateSuggestion(mk({ canStart: true, hardness: 2, painLabels: ['Rodilla'] }))!.actions.map((a) => a.target)).not.toContain('plan-dureza');
   });
 
@@ -69,7 +68,7 @@ describe('Rex en Planificación: la frase del estado del día', () => {
 
   it('un día de descanso también tiene su globo, para poder contarle algo a Rex', () => {
     const s = planRestSuggestion(true)!;
-    expect(s).toMatchObject({ id: 'plan-descanso', actions: [{ label: '¿Cambiar algo?', target: 'plan-cambiar' }] });
+    expect(s).toMatchObject({ id: 'plan-descanso', actions: [] });
     expect(planRestSuggestion(false)).toBeNull();
     expect(buildPlanRexSuggestions(mk({ restDay: true, hasTrainingSession: false })).map((x) => x.id)).toEqual(['plan-descanso']);
   });
@@ -86,10 +85,7 @@ describe('Rex en Planificación: la sesión completada', () => {
     const s = planCompletedSuggestion({ ...done, changes: ['Press banca sube a 85 kg el próximo día.'] })!;
     expect(s).toMatchObject({ id: 'plan-completada', lead: 'Sesión completada.', tone: 'good', dismissible: false });
     expect(s.text).toBe('Sesión completada. Press banca sube a 85 kg el próximo día.');
-    expect(s.actions).toEqual([
-      { label: 'Ver resumen', target: 'plan-resumen' },
-      { label: '¿Cambiar algo?', target: 'plan-cambiar' },
-    ]);
+    expect(s.actions).toEqual([{ label: 'Ver resumen', target: 'plan-resumen' }]);
   });
 
   it('sin cambios de carga: un PR nuevo, la racha o cómo va la semana', () => {
