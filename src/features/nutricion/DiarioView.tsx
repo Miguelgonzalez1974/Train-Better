@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, PieChart, Plus, Salad, Scale, Star, ToggleRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Scale, Star, ToggleRight, X } from 'lucide-react';
 import { makeFoodResolver } from '../../engine/customFoods';
 import { totalsOf } from '../../engine/mealBuilder';
 import { fixedPortion } from '../../engine/mealBuilder';
@@ -122,7 +122,7 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
             onWeightLogged: () => rexBus.emit('nutri-weight', 'refresh'),
           })
         }
-        examples={['¿Qué me falta?', '¿Qué ceno?', 'He comido…', 'Apunta mi peso']}
+        examples={['He comido…', 'Apunta mi peso']}
         lab={[
           {
             title: 'Apuntar',
@@ -133,16 +133,8 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
             ],
           },
           {
-            title: 'Para llegar a tu objetivo',
-            items: [
-              { label: '¿Qué ceno?', hint: '2–3 ideas con tus alimentos', icon: Salad, ask: '¿Qué ceno?' },
-              { label: '¿Qué me falta?', hint: 'gramos que quedan', icon: PieChart, ask: '¿Qué me falta?' },
-            ],
-          },
-          {
             title: 'El día',
             items: [
-              { label: 'Ver ayer', icon: CalendarDays, onClick: () => onChangeIso(addDays(iso, -1)) },
               { label: 'Cambiar el tipo de día', hint: 'ligero · normal · fuerte', icon: ToggleRight, onClick: () => setChangingType(true) },
             ],
           },

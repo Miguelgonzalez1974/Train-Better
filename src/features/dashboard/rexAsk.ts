@@ -13,9 +13,8 @@ export type AskIntent =
   /** ¿Qué toca ese día? `offset` en días desde hoy (0 = hoy). */
   | { kind: 'dia'; offset: number; label: string }
   | { kind: 'estado' }
-  /** Nutrición: lo que falta del día, y una idea de qué comer para cerrarlo. */
+  /** Nutrición: lo que falta del día. */
   | { kind: 'falta' }
-  | { kind: 'cena' }
   /** Imprevistos de Planificación: me duele algo (con la zona si la dices), hoy no estoy para el plan, voy a faltar unos días, otro WOD. */
   | { kind: 'dolor'; zone: 'hombro' | 'cadera-lumbar' | 'rodilla' | 'codo-muneca' | null }
   | { kind: 'no-plan' }
@@ -107,7 +106,6 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
 
   // Nutrición.
   if (/\b(que|cuanto|cuantos|cuanta|cuantas)\b.*\bfaltan?\b|\bme falta(n)?\b/.test(norm)) return { kind: 'falta' };
-  if (/\bque (ceno|cenar|como|comer|desayuno|desayunar|almuerzo|almorzar|meriendo|merendar|tomo|tomar)\b|\bidea(s)? de (cena|comida|almuerzo|desayuno|merienda)\b/.test(norm)) return { kind: 'cena' };
 
   if (/\b(que|cual)\b.*\b(toca|hay|entreno|entrenamiento|sesion|wod|plan|programado)\b|\b(toca|entreno)\b/.test(norm) || /^(y )?(hoy|manana|pasado manana)$/.test(norm)) {
     if (/\bpasado manana\b/.test(norm)) return { kind: 'dia', offset: 2, label: 'pasado mañana' };
@@ -195,18 +193,7 @@ export const ASK_EXAMPLES = ['¿Qué toca mañana?', '¿Cómo estoy?', 'Apunta m
 export function missingAnswer(missing: { protein: number; carbs: number }): AskAnswer {
   if (missing.protein <= 0 && missing.carbs <= 0) return { lead: 'Día cubierto.', tone: 'good', text: 'Ya llevas lo que te toca de proteína e hidratos.', actions: [] };
   const parts = [missing.protein > 0 ? `${Math.round(missing.protein)} g de proteína` : null, missing.carbs > 0 ? `${Math.round(missing.carbs)} g de hidratos` : null].filter(Boolean);
-  return { lead: 'Te falta:', tone: 'info', text: `${parts.join(' y ')}.`, actions: [{ label: '¿Qué ceno?', target: 'nutri-cena', ask: '¿Qué ceno?' }] };
-}
-
-/** «¿Qué ceno?»: las ideas ya redactadas (hasta tres), o que no falta casi nada. */
-export function dinnerAnswer(ideas: string[]): AskAnswer {
-  if (ideas.length === 0) return { lead: 'No te falta casi nada.', tone: 'good', text: 'Con un poco de fruta o lo que te apetezca, cubierto.', actions: [] };
-  return {
-    lead: 'Para cerrar el día:',
-    tone: 'info',
-    text: ideas.map((idea, i) => `${i + 1}) ${idea}.`).join(' '),
-    actions: [{ label: 'He comido…', target: 'nutri-comido' }],
-  };
+  return { lead: 'Te falta:', tone: 'info', text: `${parts.join(' y ')}.`, actions: [] };
 }
 
 /** Una petición que esta pantalla no hace: dice dónde se hace y ofrece ir. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayAnswer, dinnerAnswer, elsewhereAnswer, helpAnswer, missingAnswer, normalizeAsk, parseAsk, weightAnswer } from './rexAsk';
+import { dayAnswer, elsewhereAnswer, helpAnswer, missingAnswer, normalizeAsk, parseAsk, weightAnswer } from './rexAsk';
 
 const FRIDAY = 5;
 
@@ -83,11 +83,10 @@ describe('las respuestas de Rex', () => {
 });
 
 describe('RexLab de cada pantalla: lo nuevo que lee la caja', () => {
-  it('lo que falta y qué ceno', () => {
+  it('lo que falta se entiende escrito; qué ceno ya no (no daba buena información)', () => {
     expect(parseAsk('¿Qué me falta?', FRIDAY)).toEqual({ kind: 'falta' });
     expect(parseAsk('cuánta proteína me falta', FRIDAY)).toEqual({ kind: 'falta' });
-    expect(parseAsk('¿Qué ceno?', FRIDAY)).toEqual({ kind: 'cena' });
-    expect(parseAsk('dame una idea de cena', FRIDAY)).toEqual({ kind: 'cena' });
+    expect(parseAsk('¿Qué ceno?', FRIDAY)).toEqual({ kind: 'ayuda' });
   });
 
   it('imprevistos: me duele algo (con su zona), hoy no estoy para el plan, voy a faltar, otro WOD', () => {
@@ -122,11 +121,9 @@ describe('RexLab de cada pantalla: lo nuevo que lee la caja', () => {
     expect(parseAsk('¿cómo estoy?', FRIDAY)).toEqual({ kind: 'estado' });
   });
 
-  it('las respuestas de lo que falta y de qué ceno', () => {
-    expect(missingAnswer({ protein: 48.4, carbs: 90 })).toMatchObject({ lead: 'Te falta:', text: '48 g de proteína y 90 g de hidratos.', actions: [{ ask: '¿Qué ceno?' }] });
+  it('la respuesta de lo que falta', () => {
+    expect(missingAnswer({ protein: 48.4, carbs: 90 })).toMatchObject({ lead: 'Te falta:', text: '48 g de proteína y 90 g de hidratos.', actions: [] });
     expect(missingAnswer({ protein: 0, carbs: 0 }).lead).toBe('Día cubierto.');
-    expect(dinnerAnswer(['150 g de pollo y 110 g de arroz', '2 huevos']).text).toBe('1) 150 g de pollo y 110 g de arroz. 2) 2 huevos.');
-    expect(dinnerAnswer([]).lead).toBe('No te falta casi nada.');
     expect(elsewhereAnswer('Eso está en el Dashboard.', 'ir-dashboard').actions).toEqual([{ label: 'Ir al Dashboard', target: 'ir-dashboard' }]);
   });
 });

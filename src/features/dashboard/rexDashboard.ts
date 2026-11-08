@@ -44,7 +44,6 @@ export type RexTarget =
   | 'movilidad'
   /** Nutrición: ir a la caja «He comido…». Objetivos: hablar con Rex (el asistente). */
   | 'nutri-comido'
-  | 'nutri-cena'
   | 'objetivos-hablar'
   /** Ir a una pestaña de la app (desde RexLab de cualquier pantalla). */
   | 'ir-dashboard'

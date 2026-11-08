@@ -1,14 +1,9 @@
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import type { AthleteProfile } from '../../data/athlete/types';
-import { FOODS, type Food } from '../../data/nutrition/foods';
-import { customFoodToCatalogFood } from '../../engine/customFoods';
-import { describeIdea, mealIdeas } from '../../engine/mealIdeas';
-import { addDaysIso } from '../../engine/periodization';
 import { appNav } from '../../lib/appNav';
 import { handoff } from '../../lib/handoff';
 import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
 import { rexBus } from '../../lib/rexBus';
-import { dinnerAnswer, elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
+import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
 
 export type RexScreen = 'dashboard' | 'planificacion' | 'nutricion' | 'objetivos';
 
@@ -20,18 +15,6 @@ export interface RouterApi {
   missing?: () => { protein: number; carbs: number } | null;
   /** Se acaba de apuntar un peso: la pantalla refresca el suyo. */
   onWeightLogged?: () => void;
-}
-
-/** Los alimentos con los propios del atleta, y los que más ha apuntado estas dos semanas (van primero en «¿qué ceno?»). */
-export function foodsAndRecents(profile: AthleteProfile, todayIso: string): { foods: Food[]; recent: string[] } {
-  const custom = (profile.nutritionPrefs?.customFoods ?? []).map(customFoodToCatalogFood);
-  const since = addDaysIso(todayIso, -14);
-  const count = new Map<string, number>();
-  for (const [date, list] of Object.entries(profile.nutritionPrefs?.extraFoods ?? {})) {
-    if (date < since) continue;
-    for (const e of list) for (const it of e.items) count.set(it.foodId, (count.get(it.foodId) ?? 0) + 1);
-  }
-  return { foods: [...FOODS, ...custom], recent: [...count.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id) };
 }
 
 /** Apunta el peso de hoy y dice cómo cambia frente al último. */
@@ -56,12 +39,6 @@ export function sendMealToNutrition(text: string, onNutrition: boolean): void {
   appNav.goTo('nutricion');
 }
 
-/** «¿Qué ceno?»: ideas con tus alimentos para cerrar lo que falta. */
-export function dinnerFor(profile: AthleteProfile, todayIso: string, missing: { protein: number; carbs: number }): AskAnswer {
-  const { foods, recent } = foodsAndRecents(profile, todayIso);
-  return dinnerAnswer(mealIdeas(missing, foods, recent).map(describeIdea));
-}
-
 const SUPPORT_NODE: Partial<Record<AskIntent['kind'], string>> = { dolor: 'p_zone', 'no-plan': 't_what', faltar: 'a_why' };
 
 /**
@@ -83,11 +60,10 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
     case 'comida':
       sendMealToNutrition(intent.text, screen === 'nutricion');
       return 'close';
-    case 'falta':
-    case 'cena': {
+    case 'falta': {
       const missing = api.missing?.() ?? null;
       if (!missing) return elsewhereAnswer('Para calcular lo que te falta necesito tu peso y tu diario: míralo en Nutrición.', 'ir-nutricion');
-      return intent.kind === 'falta' ? missingAnswer(missing) : dinnerFor(athleteRepository.getProfile(), api.todayIso, missing);
+      return missingAnswer(missing);
     }
     case 'dolor':
     case 'no-plan':
