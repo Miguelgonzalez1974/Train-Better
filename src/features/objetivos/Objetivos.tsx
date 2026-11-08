@@ -34,6 +34,7 @@ import { getDayPlan, getWeekdayIndex, toLocalIsoDate, totalMacrocycleWeeks, week
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, getActiveStrengthProgram, resolveStrengthProgramDay, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { newCompanion, supportsCompanion } from '../../engine/strengthCompanion';
 import { SeasonSetupCard } from './SeasonSetupCard';
+import { ScreenRex } from '../dashboard/ScreenRex';
 
 const WEEKDAY_CHIPS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from '../../engine/halteroProgram';
@@ -391,7 +392,22 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
   const goalMeta = goalDraft ? GOAL_TYPE_META[goalDraft.type] : null;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 pb-44">
+      {activeSection === 'home' && (
+        <ScreenRex
+          id="objetivos-inicio"
+          lead="Objetivos."
+          text={
+            openGroups.total === 0
+              ? 'No tienes nada abierto. Cuéntame qué quieres conseguir y te ayudo a montarlo.'
+              : `Tienes ${openGroups.total} ${openGroups.total === 1 ? 'abierto' : 'abiertos'}. ¿Hablamos de alguno o creamos algo nuevo?`
+          }
+          actions={[{ label: 'Hablar con Rex', target: 'objetivos-hablar' }]}
+          onAction={(target) => {
+            if (target === 'objetivos-hablar') setActiveSection('asistente');
+          }}
+        />
+      )}
       {activeSection === 'home' && <SeasonSetupCard profile={profile} history={history} onApply={persist} />}
       {activeSection === 'home' && (
         <ObjetivosHome

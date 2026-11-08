@@ -12,6 +12,7 @@ import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MacroRing } from './MacroRing';
 import { MisAlimentosPanel } from './MisAlimentosPanel';
 import { RexMeal } from './RexMeal';
+import { ScreenRex } from '../dashboard/ScreenRex';
 import { QuantityStepper } from './QuantityStepper';
 import { addDays, dayLabel, dayTarget, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
@@ -92,7 +93,27 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-44">
+      {/* Rex, en su esquina de siempre: dice cómo vas de comida hoy y lleva a la caja «He comido…». */}
+      <ScreenRex
+        id="nutricion-dia"
+        lead={covered ? 'Día cubierto.' : 'Nutrición.'}
+        tone={covered ? 'good' : 'info'}
+        mood={covered ? 'happy' : 'idle'}
+        text={
+          covered
+            ? 'Ya llevas lo que te toca de proteína e hidratos.'
+            : `Te faltan ${missing.protein} g de proteína y ${missing.carbs} g de hidratos. Cuéntame lo que comas y lo apunto.`
+        }
+        stats={`Proteína ${Math.round(done.protein)} de ${objective.protein} g · Hidratos ${Math.round(done.carbs)} de ${objective.carbs} g`}
+        actions={[{ label: 'He comido…', target: 'nutri-comido' }]}
+        onAction={(target) => {
+          if (target !== 'nutri-comido') return;
+          const input = document.querySelector<HTMLInputElement>('input[aria-label="Qué has comido"]');
+          input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          input?.focus();
+        }}
+      />
       {/* Fecha */}
       <div className="flex items-center justify-between gap-2">
         <button onClick={() => onChangeIso(addDays(iso, -1))} aria-label="Día anterior" className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/5 hover:text-white">

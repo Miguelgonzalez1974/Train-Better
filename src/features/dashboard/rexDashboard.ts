@@ -42,6 +42,9 @@ export type RexTarget =
   | 'plan-programa'
   /** La rutina de movilidad y estiramientos con Rex. */
   | 'movilidad'
+  /** Nutrición: ir a la caja «He comido…». Objetivos: hablar con Rex (el asistente). */
+  | 'nutri-comido'
+  | 'objetivos-hablar'
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 

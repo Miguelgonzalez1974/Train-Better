@@ -6,6 +6,7 @@ import { toLocalIsoDate } from '../../engine/periodization';
 import { BodyweightCard } from '../dashboard/BodyweightCard';
 import { Modal } from '../shell/Modal';
 import { DiarioView } from './DiarioView';
+import { ScreenRex } from '../dashboard/ScreenRex';
 import { computeWeekDays, mondayOf, type WeekDay } from './nutritionData';
 import type { NutritionShared } from './shared';
 
@@ -68,7 +69,8 @@ export function Nutricion() {
       </header>
 
       {!shared ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 pb-44">
+          <ScreenRex id="nutricion-sin-peso" lead="Nutrición." text="Para calcular lo que te toca cada día primero necesito tu peso. Apúntalo aquí y lo preparo." tone="mid" />
           <div className="card p-4 text-sm text-neutral-300">
             <p className="mb-3">Los objetivos de cada día se calculan por kilo de peso corporal, así que primero necesito tu peso.</p>
             <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} embedded />

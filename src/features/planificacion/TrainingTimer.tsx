@@ -959,7 +959,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
         <button
           onClick={() => openTo(preStartFor)}
           aria-label="Cuenta atrás de inicio"
-          className="fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+          className="fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
         >
           {preStartRemaining}
         </button>
@@ -970,7 +970,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
         <button
           onClick={() => openTo('rest')}
           aria-label="Cronómetro de descanso"
-          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             done ? 'animate-pulse bg-brand-orange text-black' : 'bg-brand-gold text-black'
           }`}
         >
@@ -983,7 +983,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
         <button
           onClick={() => openTo('workout')}
           aria-label={`${capWord}: reloj parado`}
-          className="fixed bottom-24 right-4 z-40 flex h-24 min-w-24 animate-pulse items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
+          className="fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 animate-pulse items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
         >
           {effectiveCap?.kind === 'amrap' ? 'Fin' : 'CAP'}
           {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-orange" />}
@@ -995,7 +995,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
         <button
           onClick={() => openTo('workout')}
           aria-label={`Reloj de entreno${rounds > 0 ? `, ronda ${rounds}` : ''}${lastMinute ? ', último minuto' : ''}`}
-          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             lastMinute ? 'bg-brand-orange' : 'bg-brand-neon'
           }`}
         >
@@ -1009,7 +1009,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
         <button
           onClick={() => openTo('emom')}
           aria-label="Reloj EMOM"
-          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             emomDone ? 'animate-pulse bg-brand-orange' : 'bg-brand-gold'
           }`}
         >
@@ -1025,7 +1025,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
         <button
           onClick={() => openTo('tabata')}
           aria-label="Reloj Tabata"
-          className={`fixed bottom-24 right-4 z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
+          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
             tabataDone ? 'animate-pulse bg-brand-orange' : tabataPhase === 'work' ? 'bg-brand-orange' : 'bg-brand-gold'
           }`}
         >
@@ -1043,7 +1043,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
       <button
         onClick={() => setExpanded(true)}
         aria-label="Reloj de entreno"
-        className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-surface/95 text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
+        className="fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-surface/95 text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
       >
         <Timer size={22} strokeWidth={2.25} />
         {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-border" />}
@@ -1052,7 +1052,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
   }
 
   return (
-    <div className="fixed bottom-24 right-4 z-40 w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6">
+    <div className="fixed bottom-24 left-4 md:left-[17rem] z-40 w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex flex-1 gap-0.5 rounded-lg bg-white/5 p-0.5">
           <button

@@ -130,6 +130,7 @@ export default function App() {
       </main>
       {activeTab !== 'dashboard' && (
         <BackToLab
+          raised={activeTab === 'planificacion'}
           onBack={() => {
             labReturn.requestReopen();
             goTo('dashboard');

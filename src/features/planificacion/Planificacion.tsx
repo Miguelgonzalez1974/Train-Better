@@ -86,6 +86,7 @@ import { RexCorner } from '../dashboard/RexCorner';
 import { dismissSuggestion, dockStats, loadRexMemory, pickRexSuggestion, saveRexMemory, wasTyped, withTyped, type RexMemory, type RexTarget } from '../dashboard/rexDashboard';
 import { buildPlanRexSuggestions } from './rexPlan';
 import { CompanionCard, pickCompanionProgram } from './CompanionCard';
+import { ScreenRex } from '../dashboard/ScreenRex';
 import { generateCompanionSession } from '../../engine/generateSession';
 import { companionStatus } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
@@ -1237,6 +1238,15 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         </div>
       )}
 
+      {/* Sin sesión, Rex sigue en su esquina de siempre con una frase sobre por qué. */}
+      {!session && (
+        <ScreenRex
+          id="plan-sin-sesion"
+          lead="Sin sesión hoy."
+          text={nextMacroStart ? `Tu macro empieza el ${nextMacroStart}. Hasta entonces decides tú qué haces cada día.` : 'Decides tú qué haces cada día.'}
+        />
+      )}
+
       {/* Sin macro activo hoy (p. ej. empieza mañana) el programa de fuerza también se ve: aún no ha empezado o se ofrece solo. */}
       {!session && <CompanionCard profile={profile} history={history} todayIso={todayIso} commit={commitCompanion} light={null} />}
 
@@ -1299,7 +1309,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {showRexBar && !focusMode && (
           <RexCorner
             speak
-            raised={Boolean(session && !session.isRestDay)}
             dock={{ stats: dockStats({ low: strainTarget?.low ?? null, high: strainTarget?.high ?? null, real: null, planned: plannedStrain?.strain ?? null }) }}
             suggestion={rexPick.current}
             waiting={rexPick.waiting}
