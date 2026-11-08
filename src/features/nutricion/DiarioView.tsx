@@ -122,19 +122,14 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
             onWeightLogged: () => rexBus.emit('nutri-weight', 'refresh'),
           })
         }
-        examples={['He comido…', 'Apunta mi peso']}
+        examples={['He comido…']}
         lab={[
           {
-            title: 'Apuntar',
+            title: 'Apuntar y ajustar',
             items: [
               { label: 'Añadir alimento', icon: Plus, onClick: () => setAdding(true) },
               { label: 'Mis alimentos', icon: Star, onClick: () => setMyFoods(true) },
               { label: 'Registrar mi peso', hint: `${weightKg} kg`, icon: Scale, onClick: () => rexBus.emit('nutri-weight') },
-            ],
-          },
-          {
-            title: 'El día',
-            items: [
               { label: 'Cambiar el tipo de día', hint: 'ligero · normal · fuerte', icon: ToggleRight, onClick: () => setChangingType(true) },
             ],
           },
