@@ -1163,15 +1163,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         ]
       : []),
     {
-      title: 'Marcas',
-      items: [
-        { label: 'Mis marcas', icon: Trophy, ask: 'mis marcas' },
-        { label: 'Apuntar una marca', hint: 'o escríbela arriba', icon: Dumbbell, ask: 'apuntar marca' },
-      ],
-    },
-    {
       title: 'Más',
       items: [
+        { label: 'Mis marcas', icon: Trophy, ask: 'mis marcas' },
         { label: 'Librería de complejos', icon: Library, onClick: () => handleRexAct('complejos') },
         ...(noticeSummary.count > 0 ? [{ label: 'Avisos del coach', hint: String(noticeSummary.count), icon: Bell, onClick: () => handleRexAct('avisos') }] : []),
         ...(alreadyCompletedToday ? [{ label: 'Deshacer el registro', icon: Undo2, onClick: () => handleRexAct('deshacer') }] : []),

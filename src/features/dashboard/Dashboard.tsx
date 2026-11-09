@@ -68,7 +68,6 @@ import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
-import { Dumbbell, Trophy } from 'lucide-react';
 import { AnalysisView, type AnalysisTab } from './AnalysisView';
 import { MarksScreen } from './MarksScreen';
 import type { AthleteProfile } from '../../data/athlete/types';
@@ -454,15 +453,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       <RexCorner
         speak={false}
         ask={askRex}
-        lab={[
-          {
-            title: 'Marcas',
-            items: [
-              { label: 'Mis marcas', icon: Trophy, ask: 'mis marcas' },
-              { label: 'Apuntar una marca', hint: 'o escríbela arriba', icon: Dumbbell, ask: 'apuntar marca' },
-            ],
-          },
-        ]}
         dock={{ stats: rexDockStats, tip: ringHintPending && tab === 'resumen' ? 'Toca un aro o un número para ver de dónde sale.' : null }}
         suggestion={rexPick.current}
         waiting={rexPick.waiting}

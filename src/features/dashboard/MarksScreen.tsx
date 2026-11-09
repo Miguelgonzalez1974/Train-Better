@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { ChevronDown, Pencil, Scale } from 'lucide-react';
+import { ChevronDown, Pencil, Plus, Scale } from 'lucide-react';
 import type { AthleteProfile, PersonalRecords } from '../../data/athlete/types';
 import { analysisHeadline } from '../../engine/analysisHeadline';
 import type { ImbalanceGroup } from '../../engine/imbalances';
@@ -13,7 +13,7 @@ import { EvolutionChart, fmtKg } from './EvolutionChart';
 import { MarksEditor } from './MarksEditor';
 import { PR_ROWS } from './PersonalRecordsCard';
 import { analysisRexLine, openGoalMovements, PROPOSAL_WEEKS } from './rexAnalysis';
-import { currentMark, MARK_LIFTS, type MarkKey } from './rexMarks';
+import { applyMark, currentMark, MARK_LIFTS, markLiftByKey, markProposalAnswer, markSavedAnswer, type MarkKey } from './rexMarks';
 
 const RANGES: EvolutionRange[] = ['8s', '6m', 'todo'];
 const OLYMPIC_KEYS: (keyof PersonalRecords)[] = ['snatch', 'cleanAndJerk'];
@@ -75,6 +75,14 @@ export function MarksScreen({
   const [editing, setEditing] = useState(false);
   const [proposal, setProposal] = useState<'idle' | 'confirm'>('idle');
   const [createdLabel, setCreatedLabel] = useState<string | null>(null);
+  // «Apuntar una marca»: levantamiento y kilos, lo que Rex ha entendido (`pending`) y la nota de lo ya apuntado.
+  const [adding, setAdding] = useState(false);
+  const [addKey, setAddKey] = useState<MarkKey>('backSquat');
+  const [kgText, setKgText] = useState('');
+  const [pending, setPending] = useState<{ key: MarkKey; kg: number } | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const pendingLift = pending ? markLiftByKey(pending.key) : null;
+  const proposal2 = pending && pendingLift ? markProposalAnswer(profile, pendingLift, pending.kg, 'marcas') : null;
 
   const { prs } = profile;
   const prLog = profile.prLog ?? [];
@@ -320,11 +328,111 @@ export function MarksScreen({
           </p>
         )}
 
+        {saved && <p className="px-1 text-[13px] text-good">{saved}</p>}
+
+        {adding && (
+          <form
+            className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const kg = Number(kgText.replace(',', '.'));
+              if (Number.isFinite(kg) && kg >= 20 && kg <= 500) setPending({ key: addKey, kg });
+            }}
+          >
+            <p className="text-sm font-semibold text-white">Apuntar una marca</p>
+            <div className="flex gap-2">
+              <select
+                value={addKey}
+                onChange={(e) => {
+                  setAddKey(e.target.value as MarkKey);
+                  setPending(null);
+                }}
+                aria-label="Levantamiento"
+                className="min-w-0 flex-1 rounded-lg border border-brand-border bg-brand-bg px-2.5 py-2 text-sm text-white focus:border-brand-gold focus:outline-none"
+              >
+                {MARK_LIFTS.map((l) => (
+                  <option key={l.key} value={l.key}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                inputMode="decimal"
+                step={0.5}
+                min={20}
+                max={500}
+                placeholder="kg"
+                aria-label="Kilos"
+                value={kgText}
+                onChange={(e) => {
+                  setKgText(e.target.value);
+                  setPending(null);
+                }}
+                className="w-24 rounded-lg border border-brand-border bg-brand-bg px-2.5 py-2 text-sm text-white focus:border-brand-gold focus:outline-none"
+              />
+            </div>
+            {pending && proposal2 ? (
+              <div className="flex flex-col gap-2" aria-live="polite">
+                <p className="text-[13px] leading-relaxed text-neutral-200">
+                  <strong className="font-bold text-white">{proposal2.lead}</strong> {proposal2.text}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {proposal2.actions[0]?.ask?.startsWith('confirmo') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lift = markLiftByKey(pending.key);
+                        if (!lift) return;
+                        const before = currentMark(profile, lift.key);
+                        const next = applyMark(profile, lift, pending.kg);
+                        onSaveProfile({ prs: next.prs, variantPrs: next.variantPrs });
+                        setSaved(markSavedAnswer(before, lift, pending.kg, 'marcas').text);
+                        setPending(null);
+                        setKgText('');
+                        setAdding(false);
+                      }}
+                      className="rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark"
+                    >
+                      {proposal2.actions[0].label}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setPending(null)} className="rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-300">
+                    Cambiar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button type="submit" disabled={kgText.trim() === ''} className="rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark disabled:cursor-not-allowed disabled:opacity-40">
+                  Revisar
+                </button>
+                <button type="button" onClick={() => setAdding(false)} className="rounded-full px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-300">
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </form>
+        )}
+
         <div className="flex flex-col items-start gap-2">
-          <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 rounded-full border border-brand-border px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:border-brand-gold hover:text-white">
-            <Pencil size={14} aria-hidden="true" /> Editar mis marcas
-          </button>
-          <p className="px-1 text-[11px] text-neutral-500">Si solo has mejorado una, díselo a Rex: «mi back squat es 140».</p>
+          <div className="flex flex-wrap gap-2">
+            {!adding && (
+              <button
+                onClick={() => {
+                  setAdding(true);
+                  setSaved(null);
+                }}
+                className="flex items-center gap-1.5 rounded-full bg-brand-orange px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-orange-dark"
+              >
+                <Plus size={14} aria-hidden="true" /> Apuntar una marca
+              </button>
+            )}
+            <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 rounded-full border border-brand-border px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:border-brand-gold hover:text-white">
+              <Pencil size={14} aria-hidden="true" /> Editar mis marcas
+            </button>
+          </div>
+          <p className="px-1 text-[11px] text-neutral-500">También puedes decírselo a Rex: «mi back squat es 140».</p>
         </div>
       </div>
 
