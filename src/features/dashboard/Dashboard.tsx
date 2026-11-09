@@ -705,7 +705,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             imbalanceGroups={imbalanceGroups}
             strengthRatio={strengthRatio}
             energyAdherencePct={energyAdherencePct}
-            bodyweightKg={latestBodyweightKg}
             stats={stats}
             todayIso={todayIso}
             initialTab={analysisStart}

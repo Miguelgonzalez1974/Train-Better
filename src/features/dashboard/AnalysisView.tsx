@@ -93,7 +93,6 @@ export function AnalysisView({
   imbalanceGroups,
   strengthRatio,
   energyAdherencePct,
-  bodyweightKg,
   stats,
   todayIso,
   onCreateGoal,
@@ -107,7 +106,6 @@ export function AnalysisView({
   imbalanceGroups: ImbalanceGroup[];
   strengthRatio: number | null;
   energyAdherencePct: number | null;
-  bodyweightKg?: number;
   stats: MonthlyStats;
   todayIso: string;
   /** Rex crea un objetivo «Subir PR» a partir de lo que ha visto aquí. */
