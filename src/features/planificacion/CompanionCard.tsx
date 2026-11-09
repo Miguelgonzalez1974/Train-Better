@@ -164,6 +164,14 @@ export function CompanionCard({
         rpe,
         durationMin: minutes ?? mins,
         achieved: plan.intensity ? achieved : undefined,
+        // Lo que se hizo, levantamiento a levantamiento: el Dashboard lo enseña después («Lo que hiciste»).
+        lifts: plan.lifts.map((l) => ({
+          movementId: l.movementId,
+          sets: l.sets,
+          reps: l.reps,
+          loadKg: l.loadKg,
+          ...(l.attempt ? { attempt: true, ...(achieved[l.prKey as 'backSquat' | 'benchPress' | 'strictPress'] ? { achieved: achieved[l.prKey as 'backSquat' | 'benchPress' | 'strictPress'] } : {}) } : {}),
+        })),
       });
       // Un test de 1RM mejor que tu PR lo actualiza: de él salen las cargas de todo lo que viene.
       if (tested !== undefined && tested > next.prs[plan.prKey]) next = { ...next, prs: { ...next.prs, [plan.prKey]: tested } };

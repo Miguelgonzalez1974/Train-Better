@@ -49,6 +49,7 @@ import { describeDayForAsk } from './rexAskDay';
 import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
 import { DashTabs, DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
+import { DaySummaryModal } from './DaySummaryModal';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
 import { buildFormModel, formRowNote } from './formModel';
@@ -102,6 +103,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showLoad, setShowLoad] = useState(false);
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [showMobility, setShowMobility] = useState(false);
+  /** «Lo que hiciste»: la sesión del macro y la del programa de fuerza del día elegido. */
+  const [showDone, setShowDone] = useState(false);
   /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
   const [showWeekly, setShowWeekly] = useState<WeeklyReview | null>(null);
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
@@ -169,6 +172,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   };
   // El día elegido en el selector: hoy usa lo de hoy (con la sesión prevista); un día pasado se reconstruye con lo que se sabía esa mañana.
   const isToday = dayIso === todayIso;
+  // Las sesiones del programa de fuerza que convive con el macro, hechas o saltadas el día elegido.
+  const dayCompanion = (profile.companionLog ?? []).filter((e) => e.date === dayIso);
   const pastView = useMemo(() => (isToday ? null : buildPastDayView(profile, history, dayIso, strainLearned)), [isToday, profile, history, dayIso, strainLearned]);
   const shown = pastView ?? { readiness, acwr, trend: acwrTrend, strain: strainView, entry: history.find((h) => h.date === todayIso) };
   // Con qué se partió el día elegido (previsto anotado y la preparación de esa mañana), para el balance al cerrarlo. Un día pasado ya se
@@ -530,6 +535,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             form={isToday && formModel.plan.sessions > 0 ? formModel.plan : null}
             formNote={formRowNote(formModel)}
             onOpenForm={() => setFormOpen(true)}
+            companionDone={dayCompanion}
+            onOpenDone={() => setShowDone(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
           />
         </>
@@ -593,6 +600,21 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         <Modal open onClose={() => setShowDayDetail(false)} title="Cómo ha ido el día">
           <BalanceBox balance={dayBalanceNow} target={shown.strain.target} isToday notDone={describeSkipped(shown.entry?.skipped)} />
         </Modal>
+      )}
+      {showDone && (
+        <DaySummaryModal
+          open
+          onClose={() => setShowDone(false)}
+          dayLabel={dayLabel(dayIso, todayIso)}
+          entry={shown.entry}
+          session={isToday ? athleteRepository.getCachedSession(dayIso) : (profile.sessionCache?.[dayIso] ?? null)}
+          workLog={athleteRepository.getWorkLog()}
+          companion={dayCompanion}
+          onOpenPlan={isToday ? () => {
+            setShowDone(false);
+            onNavigateToPlanificacion();
+          } : undefined}
+        />
       )}
       {showLoad && (
         <Modal open onClose={() => setShowLoad(false)} title="Carga">

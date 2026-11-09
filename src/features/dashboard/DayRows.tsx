@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
-import { CalendarPlus, Check, ChevronRight, Moon, TrendingUp, Trophy } from 'lucide-react';
+import { CalendarPlus, Check, ChevronRight, Dumbbell, Moon, TrendingUp, Trophy } from 'lucide-react';
 import { formToday, type FormSeries } from '../../engine/formCurve';
 import { EnergyBadge, FORM_TONE } from './FormCurve';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
-import type { DailySession, SessionHistoryEntry } from '../../data/athlete/types';
+import type { CompanionLogEntry, DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { DayShapeChips } from '../shell/blockMeta';
 import { competitionHeadline } from '../shell/competitionMeta';
@@ -101,6 +101,8 @@ export function DayRows({
   strain,
   form,
   formNote,
+  companionDone = [],
+  onOpenDone,
   onNavigateToPlanificacion,
   onOpenForm,
 }: {
@@ -114,11 +116,16 @@ export function DayRows({
   form: FormSeries | null;
   /** Lo que dice la fila sobre tus ventanas ("Próxima ventana en 5 días · jue 12 nov"); sin él, la frase de hoy. */
   formNote?: string | null;
+  /** Sesiones del programa de fuerza hechas ese día (para decir que hubo programa y poder abrirlo). */
+  companionDone?: CompanionLogEntry[];
+  /** Abre «Lo que hiciste»: la sesión del macro y la del programa de ese día. */
+  onOpenDone: () => void;
   onNavigateToPlanificacion: () => void;
   /** Abre la ventana con la curva de forma. */
   onOpenForm: () => void;
 }) {
   const real = strain.real;
+  const programDone = companionDone.some((c) => c.outcome === 'hecha');
   const over = real !== null && real > strain.target.high;
 
   let sessionRow: ReactNode;
@@ -127,9 +134,20 @@ export function DayRows({
       <Row
         badge={<Badge tone={over ? 'over' : 'effort'}>{real ?? '—'}</Badge>}
         title="Sesión completada"
-        sub={`RPE ${entry.rpe} · ${entry.durationMin} min`}
-        right={isToday ? <Check size={17} strokeWidth={2.5} className="mr-1 shrink-0" style={{ color: 'rgb(var(--c-state-good))' }} aria-hidden="true" /> : undefined}
-        onClick={isToday ? onNavigateToPlanificacion : undefined}
+        sub={`RPE ${entry.rpe} · ${entry.durationMin} min${programDone ? ' · + programa de fuerza' : ''}`}
+        right={isToday ? <Check size={17} strokeWidth={2.5} className="mr-1 shrink-0" style={{ color: 'rgb(var(--c-state-good))' }} aria-hidden="true" /> : chevron}
+        onClick={onOpenDone}
+      />
+    );
+  } else if (programDone && (!isToday || !session)) {
+    // Solo se hizo la sesión del programa de fuerza (sin sesión del macro que enseñar): también se puede abrir.
+    sessionRow = (
+      <Row
+        badge={<Badge tone="effort"><Dumbbell size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
+        title="Programa de fuerza hecho"
+        sub={companionDone.find((c) => c.outcome === 'hecha')?.label ?? 'Sesión del programa'}
+        right={chevron}
+        onClick={onOpenDone}
       />
     );
   } else if (!isToday) {

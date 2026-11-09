@@ -41,7 +41,7 @@ function workSummary(workLog: WorkSetEntry[], movementId: string, prescribedSets
  * `subgroup` — la anterior al calentamiento de barra, ver `buildOlyBlock`) y el WOD (nombre del
  * benchmark, o los movimientos reales del historial si es generado).
  */
-function buildRecapLines(
+export function buildRecapLines(
   session: DailySession,
   entry: SessionHistoryEntry,
   workLog: WorkSetEntry[],

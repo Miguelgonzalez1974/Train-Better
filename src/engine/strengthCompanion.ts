@@ -151,6 +151,8 @@ export interface CompanionResult {
   durationMin?: number;
   /** Texas Method clásico: los levantamientos del viernes cuyas 5 repeticiones salieron, con el peso. Sube su 5RM de trabajo. */
   achieved?: Partial<Record<TexasLiftKey, number>>;
+  /** Lo que se hizo, levantamiento a levantamiento, para poder enseñarlo después. */
+  lifts?: CompanionLogEntry['lifts'];
 }
 
 function resolve(profile: AthleteProfile, programId: string, todayIso: string, outcome: CompanionLogEntry['outcome'], result: CompanionResult): AthleteProfile {

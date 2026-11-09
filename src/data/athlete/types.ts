@@ -190,6 +190,20 @@ export interface CompanionLogEntry {
   loadKg?: number;
   rpe?: number;
   durationMin?: number;
+  /** Cada levantamiento de la sesión (el Texas lleva dos), con lo que se hizo. */
+  lifts?: CompanionLogLift[];
+}
+
+/** Un levantamiento de una sesión de programa ya hecha. */
+export interface CompanionLogLift {
+  movementId: string;
+  sets: number;
+  reps: string;
+  loadKg: number;
+  /** Era la marca de 5 repeticiones a batir (Texas, viernes). */
+  attempt?: boolean;
+  /** Con qué peso salieron las 5 repeticiones; ausente en una marca que no salió. */
+  achieved?: number;
 }
 
 /**
