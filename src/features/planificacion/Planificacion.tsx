@@ -96,6 +96,7 @@ import { handoff } from '../../lib/handoff';
 import { rexBus } from '../../lib/rexBus';
 import type { LabSection } from '../dashboard/RexCorner';
 import { generateCompanionSession } from '../../engine/generateSession';
+import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companionLoad';
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
@@ -303,7 +304,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [strainTarget, setStrainTarget] = useState<StrainTarget | null>(() => profile.strainTargets?.[todayIso] ?? null);
   useEffect(() => {
     const fresh = athleteRepository.getProfile();
-    const next = ensureStrainTarget(fresh, athleteRepository.getHistory(), todayIso);
+    const next = ensureStrainTarget(fresh, withCompanionLoad(athleteRepository.getHistory(), fresh.companionLog), todayIso);
     if (next !== fresh) {
       athleteRepository.saveProfile(next);
       setProfile((prev) => ({ ...prev, strainTargets: next.strainTargets }));
@@ -313,9 +314,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const strainBias = useMemo(() => learnStrain(profile, history, todayIso).bias, [profile, history, todayIso]);
   // Lo que el coach ha aprendido de cómo aguantas la dureza que subes (ver engine/hardnessLearning.ts): corrige la previsión de un día subido.
   const hardnessLearn = useMemo(() => learnHardness(profile, history, todayIso), [profile, history, todayIso]);
+  // La carga del programa de fuerza que convive con el macro cuenta en el esfuerzo (ver `engine/companionLoad.ts`): la tira de la semana lo enseña con ella
+  // y la previsión de hoy suma la sesión del programa si ya has aceptado hacerla. Lo que aprende el coach sigue con el historial del macro solo.
+  const loadHistory = useMemo(() => withCompanionLoad(history, profile.companionLog), [history, profile.companionLog]);
+  const companionExtra = useMemo(() => acceptedCompanionLoad(profile, todayIso, (p) => generateCompanionSession(profile, history, p, todayIso, { neutral: true })), [profile, history, todayIso]);
   const plannedStrain = useMemo(
-    () => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history, strainBias + (session.hardness ? hardnessLearn.bias : 0)) : null),
-    [session, history, alreadyCompletedToday, strainBias, hardnessLearn.bias],
+    () => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history, strainBias + (session.hardness ? hardnessLearn.bias : 0), companionExtra) : null),
+    [session, history, alreadyCompletedToday, strainBias, hardnessLearn.bias, companionExtra],
   );
   const planFitResult = plannedStrain && strainTarget ? planFit(plannedStrain, strainTarget) : null;
   // Se puede subir la dureza de hoy (ver `engine/hardness.ts`): una sesión normal de entreno todavía sin registrar.
@@ -1340,7 +1345,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             <div className="flex flex-col gap-1.5">
               <WeekStrip
                 profile={profile}
-                history={history}
+                history={loadHistory}
                 goals={goals}
                 onDeleteHistoryEntry={(date) => {
                   athleteRepository.deleteHistoryEntry(date);

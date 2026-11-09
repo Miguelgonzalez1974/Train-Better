@@ -897,6 +897,11 @@ export interface WodResult {
 
 export interface SessionHistoryEntry {
   date: string;
+  /**
+   * Minutos del programa de fuerza que convive con el macro que ya están sumados a `durationMin` y a `rpe` de esta entrada (ver `engine/companionLoad.ts`).
+   * Solo existe en el historial derivado que se usa para calcular carga y esfuerzo; nunca se guarda. Su presencia evita sumar dos veces lo mismo.
+   */
+  companionLoadMin?: number;
   mesocycleWeek: number;
   movementIds: string[];
   rxOrScaled: RxOrScaled;

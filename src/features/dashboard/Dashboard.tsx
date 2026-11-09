@@ -7,6 +7,8 @@ import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { dayStrain, strainStatus } from '../../engine/strain';
 import { buildStrainTarget, ensureStrainTarget, withPlannedStrain } from '../../engine/strainTarget';
+import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companionLoad';
+import { generateCompanionSession } from '../../engine/generateSession';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
 import { getReadinessCheckForDate } from '../../engine/readiness';
@@ -94,7 +96,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
   const [profile, setProfile] = useState(() => {
     const current = athleteRepository.getProfile();
-    const next = ensureStrainTarget(current, history, toLocalIsoDate(new Date()));
+    const next = ensureStrainTarget(current, withCompanionLoad(history, current.companionLog), toLocalIsoDate(new Date()));
     if (next !== current) athleteRepository.saveProfile(next);
     return next;
   });
@@ -133,10 +135,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const swipe = useDaySwipe((delta) => setDayIso((cur) => shiftDay(cur, delta, toLocalIsoDate(new Date()))));
 
   const stats = useMemo(() => getMonthlyStats(history, profile.trainingDatesLog ?? []), [history, profile.trainingDatesLog]);
-  const acwr = useMemo(() => computeAcwr(history), [history]);
-  const acwrTrend = useMemo(() => getAcwrTrend(history), [history]);
+  // La carga y el esfuerzo cuentan también el programa de fuerza que convive con el macro (Texas): ver `engine/companionLoad.ts`. Lo que aprende el coach de tus aciertos sigue con el historial del macro solo.
+  const loadHistory = useMemo(() => withCompanionLoad(history, profile.companionLog), [history, profile.companionLog]);
+  const acwr = useMemo(() => computeAcwr(loadHistory), [loadHistory]);
+  const acwrTrend = useMemo(() => getAcwrTrend(loadHistory), [loadHistory]);
   const todayIso = toLocalIsoDate(new Date());
-  const formModel = useMemo(() => buildFormModel(profile, history, todayIso), [profile, history, todayIso]);
+  const formModel = useMemo(() => buildFormModel(profile, loadHistory, todayIso), [profile, loadHistory, todayIso]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
@@ -152,16 +156,18 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const strengthTotalKg = profile.prs.backSquat + profile.prs.benchPress + profile.prs.deadlift;
   const strengthRatio = latestBodyweightKg ? strengthTotalKg / latestBodyweightKg : null;
   // Nota de preparación: el check-in más tu carga y cómo te salen las sesiones (ver `computeReadinessScore`).
-  const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
+  const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history: loadHistory, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
   const readinessLearning = computeReadinessLearning(profile.readinessLog, history);
-  const todayStrain = dayStrain(history.find((h) => h.date === todayIso));
-  const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, history, todayIso);
+  const todayStrain = dayStrain(loadHistory.find((h) => h.date === todayIso));
+  const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, loadHistory, todayIso);
   const strainState = strainStatus(todayStrain, strainTarget);
   const todaySession = useMemo(() => resolveTodaySession(profile, history, todayIso), [profile, history, todayIso]);
   const strainLearned = useMemo(() => learnStrain(profile, history, todayIso), [profile, history, todayIso]);
+  // La sesión del programa que has aceptado hacer hoy se suma al esfuerzo previsto (el anillo y el aviso de «se pasa» cuentan con ella).
+  const companionExtra = useMemo(() => acceptedCompanionLoad(profile, todayIso, (p) => generateCompanionSession(profile, history, p, todayIso, { neutral: true })), [profile, history, todayIso]);
   const plannedStrain = useMemo(
-    () => (todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias) : null),
-    [todaySession, history, strainLearned.bias],
+    () => (todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias, companionExtra) : null),
+    [todaySession, history, strainLearned.bias, companionExtra],
   );
   // Antes de entrenar se anota el esfuerzo previsto en el objetivo de hoy (lo último que se vio, tras el check-in y los ajustes): al cerrar
   // el día sirve para contar "partías con X y has hecho Y". Una vez entrenado ya no se toca.
@@ -186,8 +192,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const isToday = dayIso === todayIso;
   // Las sesiones del programa de fuerza que convive con el macro, hechas o saltadas el día elegido.
   const dayCompanion = (profile.companionLog ?? []).filter((e) => e.date === dayIso);
-  const pastView = useMemo(() => (isToday ? null : buildPastDayView(profile, history, dayIso, strainLearned)), [isToday, profile, history, dayIso, strainLearned]);
-  const shown = pastView ?? { readiness, acwr, trend: acwrTrend, strain: strainView, entry: history.find((h) => h.date === todayIso) };
+  const pastView = useMemo(() => (isToday ? null : buildPastDayView(profile, loadHistory, dayIso, strainLearned)), [isToday, profile, loadHistory, dayIso, strainLearned]);
+  const shown = pastView ?? { readiness, acwr, trend: acwrTrend, strain: strainView, entry: loadHistory.find((h) => h.date === todayIso) };
   // Con qué se partió el día elegido (previsto anotado y la preparación de esa mañana), para el balance al cerrarlo. Un día pasado ya se
   // enseña con la preparación de esa mañana, así que solo hoy se compara.
   const dayStart = { planned: profile.strainTargets?.[dayIso]?.planned ?? null, prep: isToday ? profile.strainTargets?.[dayIso]?.readiness ?? null : null };
@@ -208,8 +214,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Datos de las gráficas de las pestañas (solo se calculan al abrirlas).
   // Los datos de la tendencia (pestaña Esfuerzo): se calculan al dibujarla, para el rango que se pida. Hoy lleva el esfuerzo previsto.
   const plannedToday = strainView.planned?.strain ?? null;
-  const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, history, dayIso, todayIso, days, plannedToday, offsetDays), [profile, history, dayIso, todayIso, plannedToday]);
-  const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
+  const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, loadHistory, dayIso, todayIso, days, plannedToday, offsetDays), [profile, loadHistory, dayIso, todayIso, plannedToday]);
+  const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, loadHistory, dayIso, 14) : []), [tab, profile, loadHistory, dayIso]);
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
   const restMarked = isRestMarked(profile.restDates, todayIso);
@@ -624,7 +630,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           open
           onClose={() => setShowDone(false)}
           dayLabel={dayLabel(dayIso, todayIso)}
-          entry={shown.entry}
+          // La sesión del macro tal como se registró, sin la carga del programa sumada (esa sale debajo, en su propio bloque).
+          entry={history.find((h) => h.date === dayIso)}
           session={isToday ? athleteRepository.getCachedSession(dayIso) : (profile.sessionCache?.[dayIso] ?? null)}
           workLog={athleteRepository.getWorkLog()}
           companion={dayCompanion}

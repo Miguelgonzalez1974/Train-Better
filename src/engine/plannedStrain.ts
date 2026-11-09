@@ -2,6 +2,7 @@ import type { DailySession, SessionHistoryEntry, StrainTarget } from '../data/at
 import { estimateSessionMinutes } from '../lib/sessionDuration';
 import { strainFromSrpe } from './strain';
 import { HARDNESS_RPE_BUMP } from './hardness';
+import { combinedPlannedStrain } from './companionLoad';
 
 /**
  * Esfuerzo PREVISTO de la sesión de hoy, para compararlo con el objetivo del día antes de empezar: duración estimada de
@@ -56,14 +57,23 @@ function expectedRpe(session: DailySession, history: SessionHistoryEntry[]): num
  * null si hoy no hay sesión que estimar (descanso, sesión propia o sin bloques). `bias` son los puntos que se suman a la
  * estimación porque tus sesiones suelen salir por encima o por debajo de lo previsto (ver `learnStrain`); 0 sin corrección.
  */
-export function estimatePlannedStrain(session: DailySession, history: SessionHistoryEntry[], bias = 0): PlannedStrain | null {
+export function estimatePlannedStrain(
+  session: DailySession,
+  history: SessionHistoryEntry[],
+  bias = 0,
+  /** La sesión del programa de fuerza que convive con el macro, si hoy la has aceptado hacer: se suma al día (ver `acceptedCompanionLoad`). */
+  extra: { minutes: number; rpe: number } | null = null,
+): PlannedStrain | null {
   if (session.isRestDay || session.source === 'custom' || session.blocks.length === 0) return null;
-  const minutes = estimateSessionMinutes(session);
-  if (minutes <= 0) return null;
+  const macroMinutes = estimateSessionMinutes(session);
+  if (macroMinutes <= 0) return null;
   // Una sesión a la que el atleta subió la dureza se espera más dura: +0,15 de RPE por nivel si es más volumen (los minutos ya
   // suben), +0,35 si es más intensidad (mismo volumen, más carga).
-  const rpe = expectedRpe(session, history) + (session.hardness ? HARDNESS_RPE_BUMP[session.hardnessMode ?? 'volume'] * session.hardness : 0);
-  const raw = strainFromSrpe(rpe * minutes);
+  const macroRpe = expectedRpe(session, history) + (session.hardness ? HARDNESS_RPE_BUMP[session.hardnessMode ?? 'volume'] * session.hardness : 0);
+  const total = extra ? combinedPlannedStrain({ rpe: macroRpe, minutes: macroMinutes }, extra) : null;
+  const rpe = total ? total.rpe : macroRpe;
+  const minutes = total ? total.minutes : macroMinutes;
+  const raw = total ? total.strain : strainFromSrpe(macroRpe * macroMinutes);
   return { strain: Math.max(0, Math.min(100, raw + bias)), rpe, minutes, bias };
 }
 

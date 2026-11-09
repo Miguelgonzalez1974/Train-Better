@@ -95,10 +95,12 @@ export function texasSessionAt(
   index: number,
   companion: Pick<ProgramCompanion, 'fiveRm'>,
   prs: PersonalRecords,
-  opts: { from?: number; autoreg?: number } = {},
+  opts: { from?: number; autoreg?: number; setScale?: number } = {},
 ): TexasSession {
   const from = opts.from ?? index;
   const autoreg = opts.autoreg ?? 1;
+  // Descarga o taper: menos series de volumen y recuperación (mínimo 2); la marca del viernes no se toca.
+  const scaleSets = (sets: number) => Math.max(2, Math.round(sets * (opts.setScale ?? 1)));
   const week = Math.floor(index / TEXAS_CYCLE);
   const role = texasRole(index);
   const weekA = isWeekA(week);
@@ -110,9 +112,9 @@ export function texasSessionAt(
 
   let lifts: TexasLift[];
   if (role === 'volumen') {
-    lifts = [lift('backSquat', 5, 5, mondaySquat), lift(monSecondary, 5, 5, 0.9 * five(monSecondary) * autoreg)];
+    lifts = [lift('backSquat', scaleSets(5), 5, mondaySquat), lift(monSecondary, scaleSets(5), 5, 0.9 * five(monSecondary) * autoreg)];
   } else if (role === 'recuperacion') {
-    lifts = [lift('backSquat', 2, 5, 0.8 * mondaySquat), lift(wedSecondary, 3, 5, 0.9 * five(wedSecondary) * autoreg)];
+    lifts = [lift('backSquat', scaleSets(2), 5, 0.8 * mondaySquat), lift(wedSecondary, scaleSets(3), 5, 0.9 * five(wedSecondary) * autoreg)];
   } else {
     lifts = fridayLifts(index).map((k) => lift(k, 1, 5, five(k) + TEXAS_INCREMENT_KG, true));
   }

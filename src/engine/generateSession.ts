@@ -140,6 +140,8 @@ import {
   type ResponseProfile,
 } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
+import { withCompanionLoad } from './companionLoad';
+import { companionPhaseAdjust } from './companionPhase';
 import { companionPosition, companionTotalSessions, companionWeeks, isCompanionTestSession, supportsCompanion } from './strengthCompanion';
 import { texasSessionAt } from './texasClassic';
 import { HALTERO_TOTAL_WEEKS, resolveHalteroDay } from './halteroProgram';
@@ -5241,6 +5243,8 @@ export function generateCompanionSession(
   opts: { neutral?: boolean; projectFrom?: number } = {},
 ): CompanionSessionPlan | null {
   if (!supportsCompanion(program.method)) return null;
+  // Sus propias sesiones anteriores también son carga: el programa se autorregula con lo que ya hizo (ver `companionLoad.ts`).
+  history = withCompanionLoad(history, profile.companionLog, { orphans: true });
   const today = new Date(`${todayIso}T00:00:00`);
   const index = program.companion.cursor;
   const pos = companionPosition(program, index);
@@ -5250,14 +5254,16 @@ export function generateCompanionSession(
   const rpeAutoreg = getRpeAutoregFactor(history, today);
   const readiness = getReadinessFactor(getReadinessCheckForDate(profile.readinessLog, todayIso));
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', today);
-  const autoregFactor = opts.neutral ? 1 : combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor;
-  const autoregNote = opts.neutral ? '' : [getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
+  // Sigue el momento del macro: descarga, taper y días de competición bajan el programa (aviso y recorte, nunca bloqueo). Ver `companionPhase.ts`.
+  const phase = opts.neutral ? { setScale: 1, loadScale: 1, note: '' } : companionPhaseAdjust(profile, history, today);
+  const autoregFactor = opts.neutral ? 1 : combineAutoregFactors(getAutoregFactor(acwrResult.zone), rpeAutoreg.factor, readiness.factor) * strengthRampFactor * phase.loadScale;
+  const autoregNote = opts.neutral ? '' : [phase.note, getAutoregNote(acwrResult.zone, acwrResult.coldStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ');
 
   const rampNote = strengthRampFactor < 1 ? ' Rampa de vuelta activa — carga reducida a propósito mientras coges ritmo de nuevo.' : '';
 
   // Texas Method clásico: dos levantamientos por sesión y progresión por marcas (ver `texasClassic.ts`), no una tabla fija por día.
   if (program.method === 'texas') {
-    const texas = texasSessionAt(index, program.companion, profile.prs, { from: opts.projectFrom ?? index, autoreg: autoregFactor });
+    const texas = texasSessionAt(index, program.companion, profile.prs, { from: opts.projectFrom ?? index, autoreg: autoregFactor, setScale: phase.setScale });
     const notes = `${texas.note}${rampNote}${autoregNote ? ` ${autoregNote}` : ''}`;
     const names = texas.lifts.map((l) => getMovementById(l.movementId)?.name ?? l.movementId);
     if (texas.lifts.some((l) => !getMovementById(l.movementId))) return null;
@@ -5361,6 +5367,8 @@ export function generateSessionForDate(
   goals: Goal[],
 ): DailySession {
   const dateIso = toLocalIsoDate(date);
+  // La carga del programa de fuerza que convive con el macro cuenta: el semáforo, la carga acumulada y la autorregulación la ven (ver `companionLoad.ts`).
+  history = withCompanionLoad(history, profile.companionLog, { orphans: true });
   // Un programa que convive con el macro no sustituye la sesión: el macro manda y el programa se ofrece aparte (`strengthCompanion.ts`).
   const activeProgram = getActiveStrengthProgram((profile.strengthPrograms ?? []).filter((p) => !p.companion), dateIso);
   const activeMacro = getActiveMacrocycle(profile.macrocycles, dateIso);
