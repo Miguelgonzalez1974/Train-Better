@@ -1283,6 +1283,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           history={history}
           workLog={workLog}
           trainingDatesLog={profile.trainingDatesLog ?? []}
+          companionLog={profile.companionLog ?? []}
           onDeleteEntry={(date) => {
             athleteRepository.deleteHistoryEntry(date);
             setHistory(athleteRepository.getHistory());
@@ -1310,7 +1311,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 onLoggedDay={handleLoggedPastDay}
                 onRestChange={() => setProfile(athleteRepository.getProfile())}
               />
-              {history.length > 0 && (
+              {(history.length > 0 || (profile.companionLog ?? []).length > 0) && (
                 <button
                   onClick={() => setShowDiary(true)}
                   className="self-end text-xs font-semibold text-neutral-500 transition-colors duration-200 hover:text-brand-gold"
