@@ -343,6 +343,7 @@ export function PerfilAtleta({
   onChange,
   mode = 'analisis',
   onOpenOther,
+  extra,
 }: {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
@@ -350,6 +351,8 @@ export function PerfilAtleta({
   mode?: 'analisis' | 'programacion';
   /** Lleva al otro sitio: de la programación a la rueda (Dashboard) y de la rueda a la programación (Objetivos). */
   onOpenOther?: () => void;
+  /** Detalle plegable que va tras «Qué priorizaría» (en el Dashboard: la energía y las parejas de levantamientos). */
+  extra?: React.ReactNode;
 }) {
   const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
   const [asking, setAsking] = useState<DiagnosisArea | null>(null);
@@ -514,6 +517,8 @@ export function PerfilAtleta({
           </ul>
         )}
       </div>
+
+      {extra}
 
       {onOpenOther && (
         <button onClick={onOpenOther} className="self-start rounded-full border border-brand-border px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-white/5">

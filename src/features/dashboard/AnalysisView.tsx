@@ -22,7 +22,7 @@ import { PerfilAtleta } from '../objetivos/PerfilAtleta';
 import { computeAthleteDiagnosis } from '../../engine/athleteDiagnosis';
 import type { MonthlyStats } from './stats';
 
-export type AnalysisTab = 'equilibrio' | 'coach' | 'perfil';
+export type AnalysisTab = 'coach' | 'perfil';
 
 const comma = (n: number | string) => String(n).replace('.', ',');
 
@@ -92,12 +92,11 @@ export function AnalysisView({
   history,
   imbalanceGroups,
   strengthRatio,
-  energyAdherencePct,
   stats,
   todayIso,
   onCreateGoal,
   onOpenObjetivos,
-  initialTab = 'equilibrio',
+  initialTab = 'perfil',
   onSaveProfile,
   onOpenProgramming,
 }: {
@@ -105,7 +104,6 @@ export function AnalysisView({
   history: SessionHistoryEntry[];
   imbalanceGroups: ImbalanceGroup[];
   strengthRatio: number | null;
-  energyAdherencePct: number | null;
   stats: MonthlyStats;
   todayIso: string;
   /** Rex crea un objetivo «Subir PR» a partir de lo que ha visto aquí. */
@@ -126,8 +124,9 @@ export function AnalysisView({
     setProposalState('idle');
     setCreatedLabel(null);
   };
-  const [energyOpen, setEnergyOpen] = useState(true);
-  const [imbalancesOpen, setImbalancesOpen] = useState(true);
+  // Los dos detalles del Perfil van plegados; las parejas se abren solas si alguna está desviada.
+  const [energyOpen, setEnergyOpen] = useState(false);
+  const [imbalancesOpen, setImbalancesOpen] = useState(imbalanceGroups.some((g) => g.status === 'desbalance'));
   // La propuesta de objetivo de Rex: cerrada, pidiendo confirmación, o ya creada (con el nombre del levantamiento).
   const [proposalState, setProposalState] = useState<'idle' | 'confirm'>('idle');
   const [createdLabel, setCreatedLabel] = useState<string | null>(null);
@@ -160,8 +159,9 @@ export function AnalysisView({
   );
   const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
   const priorities = diagnosis.focus.filter((f) => f.kind === 'prioridad').length;
+  // El Perfil usa la frase del diagnóstico, pero conserva la propuesta de objetivo que salía del equilibrio (el lado flojo de una pareja desviada).
   const rexBase = analysisRexLine({
-    tab: tab === 'perfil' ? 'coach' : tab,
+    tab: tab === 'coach' ? 'coach' : 'equilibrio',
     headline,
     strengthRatio,
     perLift: response.perLift,
@@ -173,7 +173,7 @@ export function AnalysisView({
     ledger: { resolved: ledger.resolved, hits: ledger.hits, rows: ledger.rows },
     openGoalMovementIds: openGoalMovements(profile, todayIso),
   });
-  const rex = tab === 'perfil' ? { lead: 'Tu perfil.', tone: 'neutral' as const, text: diagnosis.headline, proposal: null } : rexBase;
+  const rex = tab === 'perfil' ? { lead: 'Tu perfil.', tone: 'neutral' as const, text: diagnosis.headline, proposal: rexBase.proposal } : rexBase;
 
   const weeks = Math.floor(response.dataWeeks);
 
@@ -221,13 +221,6 @@ export function AnalysisView({
     stats.rpeMedioSemana !== null && stats.rpeMedio !== null
       ? `RPE: esfuerzo medio de tus sesiones esta semana (${comma(stats.rpeMedioSemana.toFixed(1))}) frente a la media del mes (${comma(stats.rpeMedio.toFixed(1))}). WODs Rx: los que hiciste como estaban prescritos, sin escalar.`
       : null;
-
-  const balanceHint =
-    desbalances > 0
-      ? { text: `⚠ ${desbalances} ${desbalances === 1 ? 'desbalance' : 'desbalances'}`, cls: 'text-warn' }
-      : equilibrados > 0
-        ? { text: '● bien', cls: 'text-good' }
-        : { text: 'sin datos', cls: 'text-neutral-500' };
 
   return (
     <div className="flex flex-col gap-4">
@@ -304,14 +297,14 @@ export function AnalysisView({
         </div>
       </section>
 
-      <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Análisis">
+      <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Análisis">
         <TabButton
-          active={tab === 'equilibrio'}
-          onClick={() => setTab('equilibrio')}
-          label="Equilibrio"
-          value={energyAdherencePct !== null ? `${energyAdherencePct}%` : '—'}
-          hint={balanceHint.text}
-          hintClass={balanceHint.cls}
+          active={tab === 'perfil'}
+          onClick={() => setTab('perfil')}
+          label="Perfil"
+          value={diagnosis.focus.length > 0 ? String(priorities) : '—'}
+          hint={priorities > 0 ? (priorities === 1 ? 'prioridad' : 'prioridades') : desbalances > 0 ? `⚠ ${desbalances} ${desbalances === 1 ? 'desbalance' : 'desbalances'}` : 'sin datos'}
+          hintClass={priorities > 0 ? 'text-brand-orange' : desbalances > 0 ? 'text-warn' : 'text-neutral-500'}
         />
         <TabButton
           active={tab === 'coach'}
@@ -321,23 +314,23 @@ export function AnalysisView({
           hint={response.confident ? 'aprende de ti' : 'aprendiendo'}
           hintClass={response.confident ? 'text-brand-neon' : 'text-neutral-500'}
         />
-        <TabButton
-          active={tab === 'perfil'}
-          onClick={() => setTab('perfil')}
-          label="Perfil"
-          value={diagnosis.focus.length > 0 ? String(priorities) : '—'}
-          hint={priorities > 0 ? (priorities === 1 ? 'prioridad' : 'prioridades') : 'sin datos'}
-          hintClass={priorities > 0 ? 'text-brand-orange' : 'text-neutral-500'}
-        />
       </div>
 
-      {tab === 'perfil' && onSaveProfile && <PerfilAtleta profile={profile} history={history} onChange={onSaveProfile} mode="analisis" onOpenOther={onOpenProgramming} />}
-
-      {tab === 'equilibrio' && (
-        <div className="animate-section-in flex flex-col divide-y divide-white/10 motion-reduce:animate-none">
-          <EnergyDomainsCard profile={profile} history={history} collapsed={!energyOpen} onToggleCollapsed={() => setEnergyOpen((v) => !v)} />
-          <ImbalancesCard groups={imbalanceGroups} collapsed={!imbalancesOpen} onToggleCollapsed={() => setImbalancesOpen((v) => !v)} />
-        </div>
+      {tab === 'perfil' && onSaveProfile && (
+        <PerfilAtleta
+          profile={profile}
+          history={history}
+          onChange={onSaveProfile}
+          mode="analisis"
+          onOpenOther={onOpenProgramming}
+          // El detalle que antes era la pestaña Equilibrio: dónde entrenas (energía) y las parejas de levantamientos, plegables.
+          extra={
+            <div className="flex flex-col divide-y divide-white/10">
+              <EnergyDomainsCard profile={profile} history={history} collapsed={!energyOpen} onToggleCollapsed={() => setEnergyOpen((v) => !v)} />
+              <ImbalancesCard groups={imbalanceGroups} collapsed={!imbalancesOpen} onToggleCollapsed={() => setImbalancesOpen((v) => !v)} />
+            </div>
+          }
+        />
       )}
 
       {tab === 'coach' && (

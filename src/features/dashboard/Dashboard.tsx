@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
-import { computeConditioningBalance } from '../../engine/conditioningBalance';
 import { getMonthlyStats } from './stats';
 import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
@@ -105,7 +104,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Lo que otra pantalla deja dicho al llegar: «Mi perfil» abre el Análisis en su pestaña Perfil; «Mis marcas» abre esa pantalla (con un levantamiento desplegado si viene).
   const [handed] = useState<string | null>(() => handoff.peek('analisis-tab'));
   const handedMarks = handed === 'marcas' || handed?.startsWith('marcas:') ? { key: (handed.split(':')[1] as MarkKey | undefined) ?? null } : null;
-  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>(handed === 'perfil' ? 'perfil' : 'equilibrio');
+  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>('perfil');
   const [analysisOpen, setAnalysisOpen] = useState(handed === 'perfil');
   const [marks, setMarks] = useState<{ key: MarkKey | null } | null>(handedMarks);
   useEffect(() => {
@@ -141,7 +140,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
   const yearConsistency = useMemo(() => computeYearConsistency(profile, history, new Date()), [profile, history]);
-  const conditioningBalance = useMemo(() => computeConditioningBalance(profile, history, new Date()), [profile, history]);
   // La revisión de la semana pasada con Rex (de lunes a miércoles, hasta darla por vista).
   const weeklyReview = useMemo(() => buildWeeklyReview(profile, history, new Date()), [profile, history]);
   // «Tu semana» en «Más»: la última semana completa, a cualquier hora, la hayas repasado ya o no.
@@ -244,11 +242,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     fit: strainView.planned && strainView.fit ? { kind: strainView.fit.fit, planned: strainView.planned.strain, diff: strainView.fit.diff } : null,
     target: strainTarget,
   });
-  // Lo que enseña la ventana de Análisis: cumplimiento de los dominios energéticos.
-  const energyAdherencePct =
-    conditioningBalance && conditioningBalance.totalPlanned > 0
-      ? Math.round((conditioningBalance.totalDone / conditioningBalance.totalPlanned) * 100)
-      : null;
 
   // Rex, arriba del todo: qué toca ahora y atajos a los módulos. Lee lo mismo que el resto del Dashboard.
   const goalsBehind = useMemo(() => buildOpenItems(profile, history, todayIso).objetivos.filter((i) => i.chip.tone === 'warn').length, [profile, history, todayIso]);
@@ -339,7 +332,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Un punto en «Más» (y en el módulo) cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
   const nutritionLow = isToday && nutritionPercent !== null && nutritionPercent < NUTRITION_LOW && new Date().getHours() >= NUTRITION_HOUR;
   const rexDots: RexTarget[] = [
-    ...(reviewPending ? (['perfil'] as RexTarget[]) : []),
+    // La revisión del perfil de las 4 semanas se decide en Objetivos: el punto va en ese módulo.
+    ...(reviewPending ? (['objetivos'] as RexTarget[]) : []),
     ...(nutritionLow ? (['nutricion'] as RexTarget[]) : []),
     ...(weeklyReview ? (['semana'] as RexTarget[]) : []),
   ];
@@ -356,16 +350,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return setShowConsistency(true);
       case 'volumen':
         return setShowVolume(true);
+      // El Análisis abre en el Perfil (la rueda y las áreas); «Mi perfil» ya no es un botón aparte, pero «perfil» en la caja lleva al mismo sitio.
       case 'analisis':
-        setAnalysisStart('equilibrio');
-        return setAnalysisOpen(true);
-      case 'marcas':
-        return setMarks({ key: null });
       case 'perfil':
         setAnalysisStart('perfil');
         return setAnalysisOpen(true);
+      case 'marcas':
+        return setMarks({ key: null });
       case 'objetivos':
-        return onNavigateToObjetivos();
+        // Con una revisión del perfil pendiente, el módulo lleva a ella.
+        return reviewPending ? openEmphasisReview() : onNavigateToObjetivos();
       case 'nutricion':
         return setShowNutrition(true);
       case 'peso':
@@ -694,7 +688,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             history={history}
             imbalanceGroups={imbalanceGroups}
             strengthRatio={strengthRatio}
-            energyAdherencePct={energyAdherencePct}
             stats={stats}
             todayIso={todayIso}
             initialTab={analysisStart}

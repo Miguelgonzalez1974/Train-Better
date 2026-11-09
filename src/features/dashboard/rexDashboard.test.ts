@@ -66,9 +66,9 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     expect(s.lead).toBe('Sesión hecha.');
     expect(s.text).toBe('Sesión hecha. Esfuerzo 52 con ~65 previstos, por debajo de tu objetivo (55–75): había margen.');
     expect(s.dismissible).toBe(false);
-    expect(s.actions.map((a) => a.target)).toEqual(['detalle-dia', 'movilidad']);
+    expect(s.actions.map((a) => a.target)).toEqual(['detalle-dia']);
     const noDetail = buildRexSuggestions({ ...calm, trainedToday: true, closing: { ...closing, hasDetail: false, planned: null, status: 'pasado', real: 80, notDone: 'Sin el WOD, por la molestia.' } })[0];
-    expect(noDetail.actions.map((a) => a.target)).toEqual(['movilidad']);
+    expect(noDetail.actions.map((a) => a.target)).toEqual([]);
     expect(noDetail.text).toBe('Sesión hecha. Esfuerzo 80: 5 por encima de tu objetivo (55–75). Mañana, con cuidado. Sin el WOD, por la molestia.');
     expect(noDetail.tone).toBe('mid');
     expect(buildRexSuggestions({ ...calm, trainedToday: true })[0].text).toBe('Sesión hecha. Buen trabajo.');
@@ -248,7 +248,7 @@ describe('Rex en el Dashboard: los módulos de «Más»', () => {
   it('cubre los botones que salen de la cabecera, sin repetir', () => {
     const targets = REX_MODULES.map((m) => m.target);
     expect(new Set(targets).size).toBe(targets.length);
-    for (const t of ['nutricion', 'constancia', 'volumen', 'analisis', 'marcas', 'perfil', 'objetivos', 'movilidad', 'semana']) expect(targets).toContain(t);
+    for (const t of ['nutricion', 'constancia', 'volumen', 'analisis', 'marcas', 'objetivos', 'movilidad', 'semana']) expect(targets).toContain(t);
     // El peso se apunta desde Nutrición y con el aviso de Rex, no desde «Más».
     expect(targets).not.toContain('peso');
   });

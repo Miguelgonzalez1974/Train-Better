@@ -220,8 +220,8 @@ export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restM
 /** Hoy ya entrenado: «Sesión hecha.» y el esfuerzo frente al objetivo, con el detalle (previsto frente a hecho) a un toque. */
 export function closingSuggestion(c: RexClosing | null): RexSuggestion {
   const actions: RexAction[] = [];
+  // Estirar es el botón «Recovery» de «Más»: aquí solo el detalle del día.
   if (c?.hasDetail) actions.push({ label: 'Ver detalle', target: 'detalle-dia' });
-  actions.push({ label: 'Estirar', target: 'movilidad' });
   const base = { id: 'cierre', priority: 95, lead: 'Sesión hecha.', actions, dismissible: false };
   if (!c) return { ...base, text: 'Sesión hecha. Buen trabajo.', mood: 'happy', tone: 'good' };
   const range = `${c.low}–${c.high}`;
@@ -423,7 +423,6 @@ export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'analisis', label: 'Análisis' },
   { target: 'marcas', label: 'Mis marcas' },
   { target: 'forma', label: 'Tu forma' },
-  { target: 'perfil', label: 'Mi perfil' },
   { target: 'objetivos', label: 'Objetivos' },
   // El peso corporal ya no está aquí: se apunta desde Nutrición (que es donde se usa) y con el aviso de Rex cuando lleva días sin apuntarse.
 ];
