@@ -62,7 +62,7 @@ import { PerfilAtleta } from './PerfilAtleta';
 import { buildGoalRows } from '../dashboard/progressOverview';
 import { RexAssistant } from './RexAssistant';
 import { ObjetivosHome, type AddKind, type HomeSuggestion } from './ObjetivosHome';
-import { buildOpenItems, type OpenAction, type OpenItem } from './openItems';
+import { buildOpenItems, objetivosRexLine, type OpenAction, type OpenItem } from './openItems';
 
 /** A partir de aqui, un objetivo se trata como urgente — mismo umbral usado para destacarlo con el badge pulsante. */
 const URGENT_THRESHOLD_DAYS = 14;
@@ -403,11 +403,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
         <ScreenRex
           id="objetivos-inicio"
           lead="Objetivos."
-          text={
-            openGroups.total === 0
-              ? 'No tienes nada abierto. Cuéntame qué quieres conseguir y te ayudo a montarlo.'
-              : `Tienes ${openGroups.total} ${openGroups.total === 1 ? 'abierto' : 'abiertos'}. ¿Hablamos de alguno o creamos algo nuevo?`
-          }
+          text={objetivosRexLine(openGroups, profile, todayIso())}
           actions={[{ label: 'Hablar con Rex', target: 'objetivos-hablar' }]}
           onAction={(target) => {
             if (target === 'objetivos-hablar') setActiveSection('asistente');
@@ -467,7 +463,6 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           onSuggestionDismiss={() => setNextMacroDismissed(true)}
           onAction={runAction}
           onAdd={addNew}
-          onTalk={() => setActiveSection('asistente')}
         />
       )}
 

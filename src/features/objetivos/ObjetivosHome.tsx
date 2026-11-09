@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { CalendarRange, ChevronDown, Dumbbell, Gauge, MessageCircle, Pause, Pencil, Plus, Map, Sparkles, Target, Trash2, type LucideIcon } from 'lucide-react';
-import { RexMascot } from './RexMascot';
+import { CalendarRange, ChevronDown, Dumbbell, Gauge, Pause, Pencil, Plus, Map, Sparkles, Target, Trash2, type LucideIcon } from 'lucide-react';
 import type { ChipTone, OpenAction, OpenGroups, OpenItem } from './openItems';
 
 export type AddKind = 'objetivo' | 'macro' | 'programa' | 'rampa' | 'temporada';
@@ -121,7 +120,6 @@ export function ObjetivosHome({
   onSuggestionDismiss,
   onAction,
   onAdd,
-  onTalk,
 }: {
   groups: OpenGroups;
   suggestion: HomeSuggestion | null;
@@ -129,27 +127,17 @@ export function ObjetivosHome({
   onSuggestionDismiss: () => void;
   onAction: (item: OpenItem, action: OpenAction) => void;
   onAdd: (kind: AddKind) => void;
-  onTalk: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const nothingOpen = groups.total === 0;
 
   return (
     <div className="flex animate-section-in flex-col gap-4 motion-reduce:animate-none">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-3">
-        <RexMascot size={42} />
+      <header className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold text-white">Objetivos</h1>
           <p className="text-xs text-neutral-400">{nothingOpen ? 'Nada abierto' : `${groups.total} ${groups.total === 1 ? 'abierto' : 'abiertos'}`}</p>
         </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
-        <button
-          onClick={onTalk}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-orange px-3 py-1.5 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark sm:flex-none"
-        >
-          <MessageCircle size={15} strokeWidth={2.5} aria-hidden="true" />
-          Hablar con Rex
-        </button>
         <div className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}
@@ -187,7 +175,6 @@ export function ObjetivosHome({
             </>
           )}
         </div>
-        </div>
       </header>
 
       {suggestion && (
@@ -209,16 +196,8 @@ export function ObjetivosHome({
 
       {nothingOpen ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-white/[0.03] px-4 py-8 text-center">
-          <RexMascot size={92} />
           <p className="text-base font-semibold text-white">Todavía no tienes nada abierto</p>
-          <p className="max-w-xs text-sm text-neutral-400">Cuéntame qué quieres conseguir y te hago unas preguntas para montarlo. O elige tú qué crear.</p>
-          <button
-            onClick={onTalk}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
-          >
-            <MessageCircle size={15} strokeWidth={2.5} aria-hidden="true" />
-            Hablar con Rex
-          </button>
+          <p className="max-w-xs text-sm text-neutral-400">Elige qué crear, o cuéntaselo a Rex abajo a la derecha.</p>
           <div className="grid w-full max-w-sm grid-cols-1 gap-2 sm:grid-cols-2">
             {ADD_OPTIONS.map(({ key, label, Icon }) => (
               <button

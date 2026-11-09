@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Goal, StrengthProgram } from '../../data/athlete/types';
 import { makeMacro, makeProfile as fixtureProfile } from '../../engine/__fixtures';
-import { buildOpenItems } from './openItems';
+import { buildOpenItems, objetivosRexLine } from './openItems';
 
 const TODAY = '2026-11-04';
 
@@ -160,5 +160,27 @@ describe('lo que tengo abierto', () => {
     );
     expect(g.total).toBe(3);
     expect(g.terminados).toHaveLength(1);
+  });
+});
+
+describe('la frase del Rex fijo', () => {
+  const line = (profile: ReturnType<typeof makeProfile>) => objetivosRexLine(buildOpenItems(profile, [], TODAY), profile, TODAY);
+
+  it('un objetivo atrasado manda sobre lo demás', () => {
+    expect(line(makeProfile({ goals: [goal({ createdAt: '2026-08-01', targetDate: '2026-12-01' })] }))).toBe('A tu objetivo de Back Squat le falta un test para saber cómo vas.');
+  });
+
+  it('sin atrasos, la sesión por la que va el programa que convive con el macro', () => {
+    const texas = program({ method: 'texas', startDate: '2026-11-02', endDate: '2027-01-03', companion: { weekdays: [0, 2, 4], weeks: 8, cursor: 6, deferrals: 0 } });
+    expect(line(makeProfile({ strengthPrograms: [texas] }))).toMatch(/va por la sesión 7 de 24\.$/);
+  });
+
+  it('un macro que empieza esta semana', () => {
+    expect(line(makeProfile({ macrocycles: [makeMacro({ id: 'm', label: 'M', startDate: '2026-11-05', endDate: '2027-02-01' })] }))).toBe('Mañana empieza tu macro.');
+  });
+
+  it('sin nada que destacar, cuenta lo que tienes abierto', () => {
+    expect(line(makeProfile({}))).toMatch(/No tienes nada abierto/);
+    expect(line(makeProfile({ goals: [goal({})] }))).toMatch(/^Tienes 1 abierto/);
   });
 });

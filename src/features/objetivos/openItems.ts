@@ -6,6 +6,7 @@ import { describeRampStatus } from '../../engine/intensityRamp';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { currentWeekInRange, getActiveMacrocycle, resolveMacrocyclePhase, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
 import { getActiveStrengthProgram } from '../../engine/strengthPrograms';
+import { companionStatus, companionTotalSessions, isCompanionProgram } from '../../engine/strengthCompanion';
 import { GOAL_TYPE_COLOR, GOAL_TYPE_META } from './goalMeta';
 import { STRENGTH_METHOD_COLOR, STRENGTH_METHOD_META } from './strengthMethodMeta';
 
@@ -302,4 +303,37 @@ export function buildOpenItems(profile: AthleteProfile, history: SessionHistoryE
     total: objetivos.length + fondo.length + viene.length,
     pauseNote: hasPaused && program ? `Hasta el ${shortDate(program.endDate)} manda el programa de fuerza: el macrociclo y tus objetivos esperan.` : null,
   };
+}
+
+/**
+ * La frase del Rex fijo de Objetivos: algo que NO se ve ya en las tarjetas, por este orden: un objetivo que va por detrás, la sesión por la
+ * que va el programa que convive con el macro y un macrociclo que empieza esta semana. Sin nada que destacar, cuenta lo que tienes abierto.
+ */
+export function objetivosRexLine(groups: OpenGroups, profile: AthleteProfile, todayIso: string): string {
+  const behind = groups.objetivos.find((o) => o.chip.tone === 'warn');
+  if (behind) {
+    const name = behind.title.split(' · ')[1] ?? behind.title;
+    return behind.chip.text === 'Falta un test' ? `A tu objetivo de ${name} le falta un test para saber cómo vas.` : `Tu objetivo de ${name} va por detrás.`;
+  }
+
+  for (const p of profile.strengthPrograms ?? []) {
+    if (!isCompanionProgram(p)) continue;
+    const status = companionStatus(p, todayIso);
+    if (status.kind === 'no-empieza' || status.kind === 'terminado') continue;
+    const total = companionTotalSessions(p);
+    const label = STRENGTH_METHOD_META[p.method].label;
+    return `Tu programa ${label} va por la sesión ${p.companion.cursor + 1}${total !== null ? ` de ${total}` : ''}.`;
+  }
+
+  const soon = profile.macrocycles
+    .filter((m) => m.startDate > todayIso)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+  if (soon) {
+    const days = daysUntil(soon.startDate, todayIso);
+    if (days <= 7) return days === 1 ? 'Mañana empieza tu macro.' : `Tu macro empieza en ${days} días.`;
+  }
+
+  return groups.total === 0
+    ? 'No tienes nada abierto. Cuéntame qué quieres conseguir y te ayudo a montarlo.'
+    : `Tienes ${groups.total} ${groups.total === 1 ? 'abierto' : 'abiertos'}. ¿Hablamos de alguno o creamos algo nuevo?`;
 }
