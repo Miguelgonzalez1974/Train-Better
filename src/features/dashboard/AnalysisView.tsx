@@ -359,7 +359,7 @@ export function AnalysisView({
           <CoachAccuracyCard profile={profile} todayIso={todayIso} />
           <p className="flex items-center gap-2 px-1 text-[11px] leading-snug text-neutral-500">
             <Dumbbell size={13} className="shrink-0" aria-hidden="true" />
-            Los ajustes de carga por levantamiento están en Mis marcas (Rex → Marcas).
+            Los ajustes de carga por levantamiento están en Mis marcas (RexLab → Más).
           </p>
         </div>
       )}

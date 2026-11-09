@@ -421,7 +421,7 @@ export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'semana', label: 'Tu semana' },
   { target: 'volumen', label: 'Volumen por día' },
   { target: 'analisis', label: 'Análisis' },
-  { target: 'marcas', label: 'Marcas' },
+  { target: 'marcas', label: 'Mis marcas' },
   { target: 'forma', label: 'Tu forma' },
   { target: 'perfil', label: 'Mi perfil' },
   { target: 'objetivos', label: 'Objetivos' },
