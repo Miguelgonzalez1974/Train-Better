@@ -377,7 +377,7 @@ export function PerfilAtleta({
     return (
       <section className="flex animate-section-in flex-col gap-4 motion-reduce:animate-none">
         <div>
-          <p className="text-sm text-neutral-400">Tu perfil de atleta</p>
+          <p className="text-sm text-neutral-400">Programación</p>
           <p className="text-lg font-semibold text-white">Cómo programa el coach</p>
           <p className="mt-0.5 text-xs text-neutral-500">{diagnosis.headline}</p>
         </div>

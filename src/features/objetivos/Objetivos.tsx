@@ -15,7 +15,6 @@ import {
   PauseCircle,
   ChevronLeft,
   CalendarDays,
-  Radar,
 } from 'lucide-react';
 import { STRENGTH_METHOD_META, STRENGTH_METHODS } from './strengthMethodMeta';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
@@ -470,7 +469,6 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
                 { label: 'Programa semana a semana', icon: CalendarDays, onClick: () => rexBus.emit('companion-weeks') },
                 { label: 'Mis macros', icon: CalendarRange, onClick: () => setActiveSection('macrociclos') },
                 { label: 'Mis programas', icon: Dumbbell, onClick: () => setActiveSection('programa') },
-                { label: 'Mi perfil', hint: 'la rueda, en el Dashboard', icon: Radar, onClick: openProfileWheel },
                 { label: 'Cómo programa el coach', hint: 'perfil, días, WODs', icon: Gauge, onClick: () => setActiveSection('perfil') },
               ],
             },
