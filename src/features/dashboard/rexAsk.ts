@@ -6,6 +6,9 @@
  */
 import type { RexAction, RexTarget } from './rexDashboard';
 import { findLoadReps, findMarkKg, findMarkLift, type MarkLift } from './rexMarks';
+import type { DataQuestion, WhyAbout } from './rexData';
+import type { AdaptRequest } from '../../lib/sessionAdapt';
+import type { PartKey } from '../../engine/sessionParts';
 
 export type AskIntent =
   | { kind: 'peso'; kg: number }
@@ -30,6 +33,15 @@ export type AskIntent =
   | { kind: 'marca-ver'; lift: MarkLift | null; /** true: abrir la pantalla «Mis marcas» (todas, o desplegada en ese levantamiento); false: contestar en una línea. */ open: boolean }
   | { kind: 'marca-apuntar'; lift: MarkLift | null; kg: number | null; confirmed: boolean }
   | { kind: 'marca-estimar'; lift: MarkLift; loadKg: number; reps: number }
+  /** Cambiar la sesión de hoy hablando («tengo 30 minutos», «sin accesorio», «solo fuerza»); `confirmed` = ya dijo que sí al resumen. */
+  | { kind: 'adaptar'; request: AdaptRequest; confirmed: boolean }
+  | { kind: 'adaptar-deshacer' }
+  /** «Acortar la sesión», «tengo poco tiempo» sin decir cuánto: Rex pregunta cuánto con botones. */
+  | { kind: 'adaptar-ayuda' }
+  /** Preguntas sobre tus datos: último levantamiento, última marca, racha, sesiones, duración de hoy, peso actual. */
+  | { kind: 'dato'; question: DataQuestion }
+  /** «¿Por qué este peso / este WOD / hoy así?». */
+  | { kind: 'por-que'; about: WhyAbout }
   | { kind: 'ayuda' };
 
 export interface AskAnswer {
@@ -77,6 +89,90 @@ const MODULE_WORDS: { target: RexTarget; words: RegExp }[] = [
   { target: 'planificacion', words: /\b(planificacion|plan de hoy|la sesion|mi sesion|entrenar ya|empezar)\b/ },
 ];
 
+/** Cómo se llama cada parte de la sesión al hablar. «wod» son las dos piezas de un día de doble WOD. */
+const PART_WORDS: [RegExp, PartKey[]][] = [
+  [/\b(accesorios?|core|abdominales)\b/, ['accessory']],
+  [/\b(tecnica|skill|skills|gimnasticos?)\b/, ['skill']],
+  [/\b(oly|olimpico|olimpicos|halterofilia|halterofilico)\b/, ['oly']],
+  [/\b(wod|wods|metcon|metcones|acondicionamiento)\b/, ['wod1', 'wod2']],
+  [/\bfuerza\b/, ['strength']],
+];
+
+/** Las partes de la sesión que se nombran en la frase, sin repetir y en el orden en que aparecen las palabras. */
+export function findSessionParts(norm: string): PartKey[] {
+  const out: PartKey[] = [];
+  for (const [re, keys] of PART_WORDS) if (re.test(norm)) for (const k of keys) if (!out.includes(k)) out.push(k);
+  return out;
+}
+
+/** Los minutos que se dicen: «30 minutos», «45 min», «media hora», «una hora», «1h30», «hora y media». null si no hay. */
+export function findMinutes(norm: string): number | null {
+  if (/\bmedia hora\b/.test(norm)) return 30;
+  if (/\bhora y media\b/.test(norm)) return 90;
+  const h = norm.match(/\b(\d)\s*(?:horas?\b|h(?=\d|\s|$))\s*(?:y\s*)?(\d{1,2})?(?!\d)/);
+  if (h) return Number(h[1]) * 60 + Number(h[2] ?? 0);
+  if (/\b(una|1) hora\b/.test(norm)) return 60;
+  if (/\bdos horas\b/.test(norm)) return 120;
+  const m = norm.match(/\b(\d{1,3})\s*(?:min|mins|minutos)\b/);
+  if (m) {
+    const n = Number(m[1]);
+    return n >= 10 && n <= 180 ? n : null;
+  }
+  return null;
+}
+
+/** «Cambiar la sesión» por frase: minutos, quitar una parte o quedarse solo con una. null si no va de eso. */
+function parseAdaptAsk(norm: string): AskIntent | null {
+  // El botón «Sí, aplicar» de Rex: «confirmo cambio minutos 30», «confirmo cambio sin accesorio», «confirmo cambio solo fuerza wod».
+  const conf = norm.match(/^confirmo cambio (minutos|sin|solo) (.+)$/);
+  if (conf) {
+    if (conf[1] === 'minutos') {
+      const n = Number(conf[2]);
+      return Number.isFinite(n) ? { kind: 'adaptar', request: { how: 'minutos', minutes: n }, confirmed: true } : { kind: 'ayuda' };
+    }
+    const parts = findSessionParts(conf[2]);
+    return parts.length > 0 ? { kind: 'adaptar', request: { how: conf[1] as 'sin' | 'solo', parts }, confirmed: true } : { kind: 'ayuda' };
+  }
+  if (/\b(deshaz|deshacer|deshazlo|vuelve a la sesion|como estaba|la de antes)\b/.test(norm) && /\b(cambio|sesion|antes|estaba)\b/.test(norm)) return { kind: 'adaptar-deshacer' };
+
+  const parts = findSessionParts(norm);
+  const minutes = findMinutes(norm);
+  if (minutes === null && parts.length === 0 && /\b(acortar|acorta|acortala|recortar|recorta|mas corta|poco tiempo|sin tiempo|tengo prisa|voy justo|voy justa)\b/.test(norm)) return { kind: 'adaptar-ayuda' };
+  // «Cuánto dura la sesión» es una pregunta, no un cambio.
+  if (/\bcuanto (dura|tarda|me lleva|va a durar)\b/.test(norm)) return null;
+  if (minutes !== null && /\b(tengo|solo|apenas|dispongo|queda|quedan|dura|durar|duracion|acorta|acortar|corta|cortar|menos de|maximo|como mucho|sesion de|entreno de|adapta|adaptala|ajusta|ajustala|que quepa|que dure)\b/.test(norm) && !(/\botro\b/.test(norm) && /\bwod\b/.test(norm))) {
+    return { kind: 'adaptar', request: { how: 'minutos', minutes }, confirmed: false };
+  }
+  if (parts.length > 0) {
+    // «Solo fuerza», «solo el wod y el accesorio» (sin que sea «solo tengo 30 minutos», que ya se ha leído).
+    if (/\bsolo\b/.test(norm) && !/\bsolo tengo\b/.test(norm)) return { kind: 'adaptar', request: { how: 'solo', parts }, confirmed: false };
+    if (/\b(sin|quita|quitame|quitar|elimina|eliminar|salta|saltate|saltar|omite|omitir|no quiero|no hagas|no me pongas|no pongas|prefiero no|hoy no hago|hoy sin|quitale)\b/.test(norm)) return { kind: 'adaptar', request: { how: 'sin', parts }, confirmed: false };
+  }
+  return null;
+}
+
+/** «¿Por qué…?»: del peso, del WOD o de la sesión de hoy. null si no empieza por «por qué» o no se sabe de qué. */
+function parseWhyAsk(norm: string): AskIntent | null {
+  if (!/^(y |pero )?por ?que\b/.test(norm)) return null;
+  if (/\b(peso|kilos|kg|carga|pesa|tanto)\b/.test(norm)) return { kind: 'por-que', about: 'peso' };
+  if (/\b(wod|metcon)\b/.test(norm)) return { kind: 'por-que', about: 'wod' };
+  if (/\b(hoy|sesion|entreno|entrenamiento|toca|asi|descanso|recovery|me pone|me manda|esta)\b/.test(norm)) return { kind: 'por-que', about: 'sesion' };
+  return null;
+}
+
+/** Preguntas sobre tus datos. null si la frase no es una. */
+function parseDataAsk(norm: string): AskIntent | null {
+  const lift = findMarkLift(norm);
+  if (lift && /\b(ultimo|ultima|cuando)\b/.test(norm)) {
+    return { kind: 'dato', question: { what: /\b(test|probe|marca|pr|record|max|maximo)\b/.test(norm) ? 'ultimo-test' : 'ultimo-levantamiento', lift } };
+  }
+  if (/\b(racha|seguidos|consecutivos|sin fallar)\b/.test(norm)) return { kind: 'dato', question: { what: 'racha' } };
+  if (/\bcuantas? (sesiones|entrenos|entrenamientos|dias)\b/.test(norm) && /\b(llevo|he hecho|hecho|entrenado|esta semana|este mes|van|hay)\b/.test(norm)) return { kind: 'dato', question: { what: 'sesiones' } };
+  if (/\bcuanto (dura|tarda|me lleva|va a durar|durara)\b/.test(norm) || /\bduracion de (hoy|la sesion)\b/.test(norm)) return { kind: 'dato', question: { what: 'duracion' } };
+  if (/\b(cuanto peso|cual es mi peso|mi peso actual|que peso tengo|cuanto pesaba)\b/.test(norm) && findWeight(norm) === null) return { kind: 'dato', question: { what: 'peso-actual' } };
+  return null;
+}
+
 /** Las frases de marcas. null si la frase no va de marcas. */
 function parseMarkAsk(norm: string): AskIntent | null {
   const lift = findMarkLift(norm);
@@ -98,13 +194,85 @@ function parseMarkAsk(norm: string): AskIntent | null {
   }
 
   if (/\b(apunta|apuntar|anota|anotar|registra|registrar|actualiza|actualizar|nueva|nuevo)\b.*\b(marca|pr|record|1rm)\b/.test(norm)) return { kind: 'marca-apuntar', lift: null, kg: null, confirmed: false };
-  if (/\b(mis|todas mis|tus) (marcas|records|prs|maximos|1rm)\b|\bmi (marca|pr|record)\b/.test(norm)) return { kind: 'marca-ver', lift: null, open: true };
+  if (/\b(mis|todas mis|tus) (marcas?|records?|prs?|maximos|1rm)\b|\bmi (marca|pr|record)\b/.test(norm)) return { kind: 'marca-ver', lift: null, open: true };
   return null;
+}
+
+// ---------- Faltas de escritura ----------
+
+/** Las palabras que Rex entiende y que merece la pena corregir si se escriben con una falta («sentadila», «manna», «entrnar»). Ya sin acentos. */
+const VOCAB = [
+  'sentadilla', 'sentadillas', 'entreno', 'entrenamiento', 'entrenar', 'manana', 'proteina', 'hidratos', 'accesorio', 'accesorios', 'tecnica', 'halterofilia',
+  'marcas', 'marca', 'records', 'racha', 'sesion', 'sesiones', 'minutos', 'cuanto', 'cuantas', 'cuantos', 'ultimo', 'ultima', 'cuando', 'apunta', 'quita',
+  'duele', 'hombro', 'rodilla', 'lumbar', 'espalda', 'muneca', 'recovery', 'movilidad', 'estiramientos', 'constancia', 'objetivos', 'macrociclo',
+  'perfil', 'analisis', 'semana', 'snatch', 'deadlift', 'clean', 'banca', 'squat', 'arrancada', 'cargada', 'envion', 'fuerza', 'acortar', 'deshaz', 'muestrame',
+  'ensename', 'cuentame', 'dime', 'levanto', 'programa', 'temporada',
+];
+// No se incluyen palabras de uso común que otra palabra normal podría «corregir» sin querer: tengo/estoy (estas), falta (fatal), comido (comida), etc.
+const VOCAB_SET = new Set(VOCAB);
+
+/** Distancia de edición (sustituir, borrar, añadir, o intercambiar dos letras seguidas, cada cosa cuenta 1). */
+function editDistance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 0; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+
+/**
+ * Corrige las palabras que casi coinciden con una de `VOCAB` (una falta en palabras cortas, dos en largas), solo si hay una única candidata.
+ * No toca números, palabras de menos de 5 letras ni las que son una palabra conocida más larga o más corta («semanal» no pasa a «semana»).
+ */
+export function fixTypos(norm: string): string {
+  return norm
+    .split(' ')
+    .map((tok) => {
+      if (tok.length < 5 || VOCAB_SET.has(tok) || /\d/.test(tok)) return tok;
+      const max = tok.length >= 9 ? 2 : 1;
+      // Una palabra que solo es otra con letras de más o de menos al final («semanal», «proteinas») es otra palabra, no una falta; una letra final repetida («rachaa») sí.
+      const isExtension = (v: string) => (tok.startsWith(v) && tok !== v + v[v.length - 1]) || v.startsWith(tok);
+      const near = VOCAB.filter((v) => Math.abs(v.length - tok.length) <= max && !isExtension(v) && editDistance(tok, v) <= max);
+      const best = near.length > 0 ? Math.min(...near.map((v) => editDistance(tok, v))) : null;
+      const winners = best === null ? [] : near.filter((v) => editDistance(tok, v) === best);
+      if (winners.length === 1) return winners[0];
+      // «marca» y «marcas» a la vez: da igual cuál (se leen igual); con dos palabras distintas, mejor no tocar.
+      const shortest = [...winners].sort((a, b) => a.length - b.length)[0];
+      return winners.length > 1 && winners.every((w) => w.startsWith(shortest)) ? shortest : tok;
+    })
+    .join(' ');
+}
+
+// ---------- Varias cosas en una frase ----------
+
+/** Las respuestas que se pueden dar seguidas sin pedir nada: leer algo o apuntar el peso. Con algo que pide confirmar o abre otra pantalla no se junta. */
+const COMBINABLE = new Set<AskIntent['kind']>(['peso', 'dia', 'estado', 'falta', 'dato', 'por-que']);
+
+/**
+ * «Apunta 82,4 kg y dime qué toca mañana»: si la frase trae varias peticiones y todas se pueden contestar seguidas, las devuelve por separado. null si es una
+ * sola, si alguna no se entiende, si alguna pide confirmar o abrir otra pantalla, o si es una comida («arroz y pollo» no son dos cosas).
+ */
+export function splitAsk(text: string, todayWeekday: number): string[] | null {
+  const norm = normalizeAsk(text);
+  if (parseAsk(text, todayWeekday).kind === 'comida') return null;
+  const parts = norm
+    .split(/,\s+(?=[a-z])|\.\s+(?=[a-z])|\s+(?:y luego|y despues|y ademas|y tambien|luego|despues|ademas|tambien|y|e)\s+(?=(?:dime|apunta|anota|ensename|cuentame|muestrame|cual|cuanto|cuantas|cuantos|que|como|por ?que)\b)/)
+    .map((p) => p.trim())
+    .filter((p) => p !== '');
+  if (parts.length < 2) return null;
+  const kinds = parts.map((p) => parseAsk(p, todayWeekday));
+  const ok = kinds.every((k) => COMBINABLE.has(k.kind) || (k.kind === 'marca-ver' && !k.open));
+  return ok ? parts : null;
 }
 
 /** Lee lo que se ha escrito. La primera regla que encaja gana: peso, comida, día, estado, módulo; si no, ayuda. */
 export function parseAsk(text: string, todayWeekday: number): AskIntent {
-  const norm = normalizeAsk(text);
+  const norm = fixTypos(normalizeAsk(text));
   if (norm === '') return { kind: 'ayuda' };
 
   if (MEAL_START.test(norm)) return { kind: 'comida', text: text.trim() };
@@ -112,6 +280,10 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
   // Marcas: antes que el peso («mi back squat es 140 kg» no es tu peso corporal) y que los módulos («records» abre el Análisis).
   const mark = parseMarkAsk(norm);
   if (mark) return mark;
+
+  // «¿Por qué 85 kg?» no es tu peso corporal: se lee antes que el peso.
+  const why = parseWhyAsk(norm);
+  if (why) return why;
 
   const weight = findWeight(norm);
   if (weight !== null && /\b(kg|kgs|kilos?|peso|pese|pesado|pesa|pesar|bascula)\b/.test(norm)) return { kind: 'peso', kg: weight };
@@ -131,6 +303,11 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
     const zone = /\brodilla\b/.test(norm) ? 'rodilla' : /\b(hombro)\b/.test(norm) ? 'hombro' : /\b(lumbar|espalda|cadera)\b/.test(norm) ? 'cadera-lumbar' : /\b(codo|muneca)\b/.test(norm) ? 'codo-muneca' : null;
     return { kind: 'dolor', zone };
   }
+  // Cambiar la sesión de hoy: minutos, sin una parte, solo una parte (antes de «hoy no entreno», que también lee «no hago»).
+  const adapt = parseAdaptAsk(norm);
+  if (adapt) return adapt;
+  const data = parseDataAsk(norm);
+  if (data) return data;
   if (/\b(voy a faltar|no voy a (poder )?entrenar|me voy de (viaje|vacaciones)|estare fuera|de viaje)\b/.test(norm)) {
     const n = Number(norm.match(/(\d+) dias?/)?.[1] ?? (/\buna semana\b/.test(norm) ? 7 : NaN));
     return { kind: 'faltar', days: Number.isFinite(n) ? n : null };
@@ -215,7 +392,7 @@ export function helpAnswer(): AskAnswer {
   return {
     lead: 'No te he entendido.',
     tone: 'mid',
-    text: 'Prueba con «¿qué toca mañana?», «apunta 82,4 kg», «mi back squat es 140», «he comido dos huevos y arroz», «¿cómo estoy?» o el nombre de un módulo (nutrición, recovery, objetivos…).',
+    text: 'Prueba con «¿qué toca mañana?», «tengo 30 minutos», «mi back squat es 140», «¿por qué este peso?», «apunta 82,4 kg», «he comido dos huevos y arroz», «¿cómo estoy?» o el nombre de un módulo (nutrición, recovery, objetivos…).',
     actions: [],
   };
 }

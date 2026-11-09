@@ -5,8 +5,9 @@ import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { rexBus } from '../../lib/rexBus';
 import type { RexTarget } from './rexDashboard';
+import { dataAnswer, whyAnswer } from './rexData';
 import { applyMark, currentMark, markAskKgAnswer, type MarkKey, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
-import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
+import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, splitAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
 
 export type RexScreen = 'dashboard' | 'planificacion' | 'nutricion' | 'objetivos';
 
@@ -46,6 +47,22 @@ export function sendMealToNutrition(text: string, onNutrition: boolean): void {
   appNav.goTo('nutricion');
 }
 
+/** Junta varias respuestas en una: la primera da el arranque y el tono, el resto va detrás (con su arranque), y los botones se suman sin repetir. */
+export function mergeAnswers(answers: AskAnswer[]): AskAnswer {
+  const [first, ...rest] = answers;
+  const text = [first.text, ...rest.map((a) => `${a.lead} ${a.text}`)].join(' · ');
+  const seen = new Set<string>();
+  const actions = answers
+    .flatMap((a) => a.actions)
+    .filter((a) => {
+      if (seen.has(a.label)) return false;
+      seen.add(a.label);
+      return true;
+    })
+    .slice(0, 4);
+  return { lead: first.lead, tone: first.tone, text, actions };
+}
+
 const SUPPORT_NODE: Partial<Record<AskIntent['kind'], string>> = { dolor: 'p_zone', 'no-plan': 't_what', faltar: 'a_why' };
 
 /**
@@ -54,6 +71,13 @@ const SUPPORT_NODE: Partial<Record<AskIntent['kind'], string>> = { dolor: 'p_zon
  * preparado (la conversación de la molestia en Planificación, el asistente en Objetivos). 'close' = ya se ha hecho algo y RexLab se va.
  */
 export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAnswer | 'close' {
+  // «Apunta 82,4 kg y dime qué toca mañana»: varias peticiones que se contestan seguidas, en una sola respuesta.
+  const clauses = splitAsk(text, new Date().getDay());
+  if (clauses) {
+    const results = clauses.map((c) => routeAsk(c, screen, api));
+    if (results.includes('close')) return 'close';
+    return mergeAnswers(results as AskAnswer[]);
+  }
   const intent = parseAsk(text, new Date().getDay());
   // Los botones de las respuestas de marcas llevan al Análisis: en el Dashboard lo abre; desde otra pantalla va al Dashboard y lo abre allí.
   const analysis: RexTarget = screen === 'dashboard' ? 'marcas' : 'ir-marcas';
@@ -109,6 +133,23 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
       else handoff.put('support-start', SUPPORT_NODE[intent.kind] ?? 'start');
       appNav.goTo('planificacion');
       return 'close';
+    case 'dato':
+    case 'por-que': {
+      const todayIso = api.todayIso;
+      const ctx = {
+        profile: athleteRepository.getProfile(),
+        history: athleteRepository.getHistory(),
+        session: athleteRepository.getCachedSession(todayIso),
+        todayIso,
+        marksTarget: analysis,
+        planTarget: (screen === 'dashboard' ? 'planificacion' : 'ir-planificacion') as RexTarget,
+      };
+      return intent.kind === 'dato' ? dataAnswer(intent.question, ctx) : whyAnswer(intent.about, ctx);
+    }
+    case 'adaptar':
+    case 'adaptar-ayuda':
+    case 'adaptar-deshacer':
+      return elsewhereAnswer('La sesión de hoy se cambia desde Planificación: allí te enseño qué quitaría y lo aplico si me dices que sí.', 'ir-planificacion');
     case 'programa':
       return elsewhereAnswer('El programa de fuerza se ve y se decide debajo de tu sesión, en Planificación.', 'ir-planificacion');
     case 'crear':

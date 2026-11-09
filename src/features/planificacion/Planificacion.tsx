@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Timer, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -88,6 +88,8 @@ import { CompanionCard, pickCompanionProgram } from './CompanionCard';
 import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
 import { dayAnswer, type AskAnswer } from '../dashboard/rexAsk';
+import { adaptDoneAnswer, adaptHowMuchAnswer, adaptProposalAnswer, adaptRefusalAnswer } from '../dashboard/rexAdapt';
+import { planAdaptation, type AdaptRequest } from '../../lib/sessionAdapt';
 import { describeDayForAsk } from '../dashboard/rexAskDay';
 import { handoff } from '../../lib/handoff';
 import { rexBus } from '../../lib/rexBus';
@@ -1092,6 +1094,31 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     commitCompanion((p) => pauseCompanion(p, id, todayIso, days ?? 7));
     return { lead: 'Programa en pausa.', tone: 'info', text: `No te ofreceré nada del programa durante ${days ?? 7} días.`, actions: [] };
   }
+  /**
+   * Cambiar la sesión de hoy hablando («tengo 30 minutos», «sin accesorio», «solo fuerza»): primero se enseña qué se quitaría y solo se aplica con el
+   * «Sí». La sesión de antes se guarda en memoria para poder deshacer mientras no recargues.
+   */
+  const adaptUndoRef = useRef<DailySession | null>(null);
+  function adaptAsk(request: AdaptRequest, confirmed: boolean): AskAnswer {
+    if (!session) return adaptRefusalAnswer('sin-sesion');
+    if (alreadyCompletedToday) return adaptRefusalAnswer('hecha');
+    const plan = planAdaptation(session, request);
+    if (typeof plan === 'string') return adaptRefusalAnswer(plan);
+    if (plan.removed.length === 0) return adaptProposalAnswer(request, plan);
+    if (!confirmed) return adaptProposalAnswer(request, plan);
+    adaptUndoRef.current = session;
+    athleteRepository.saveCachedSession(plan.session);
+    setSession(plan.session);
+    return adaptDoneAnswer(plan);
+  }
+  function adaptUndo(): AskAnswer {
+    const before = adaptUndoRef.current;
+    if (!before) return adaptRefusalAnswer('nada-que-deshacer');
+    athleteRepository.saveCachedSession(before);
+    setSession(before);
+    adaptUndoRef.current = null;
+    return { lead: 'Deshecho.', tone: 'good', text: 'La sesión de hoy vuelve a como estaba.', actions: [] };
+  }
   /** La caja de RexLab de Planificación: lo que se hace aquí lo hace esta pantalla; lo demás lo reparte el común (`rexAskRouter.ts`). */
   function askRex(text: string): AskAnswer | 'close' {
     return routeAsk(text, 'planificacion', {
@@ -1117,6 +1144,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           return 'close';
         },
         programa: (intent) => programAsk(intent.action, intent.days),
+        adaptar: (intent) => adaptAsk(intent.request, intent.confirmed),
+        'adaptar-ayuda': () => (!session || alreadyCompletedToday ? adaptRefusalAnswer(session ? 'hecha' : 'sin-sesion') : adaptHowMuchAnswer()),
+        'adaptar-deshacer': () => adaptUndo(),
         dia: (intent) =>
           dayAnswer(
             intent.label,
@@ -1135,6 +1165,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             items: [
               ...(hasWodBlock ? [{ label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(canHarder ? [{ label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
+              { label: 'Acortar la sesión', hint: 'tengo poco tiempo', icon: Timer, ask: 'acortar la sesion' },
               { label: 'Cambiar el tipo', hint: 'recovery, WOD libre', icon: SlidersHorizontal, onClick: () => handleRexAct('tipo') },
               { label: 'Editar sesión', icon: Pencil, onClick: () => handleRexAct('editar') },
             ],

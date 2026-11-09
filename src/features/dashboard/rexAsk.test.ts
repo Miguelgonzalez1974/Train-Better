@@ -47,7 +47,9 @@ describe('leer lo que se le pregunta a Rex', () => {
     expect(parseAsk('abre nutrición', FRIDAY)).toEqual({ kind: 'modulo', target: 'nutricion' });
     expect(parseAsk('quiero estirar', FRIDAY)).toEqual({ kind: 'modulo', target: 'movilidad' });
     expect(parseAsk('mis objetivos', FRIDAY)).toEqual({ kind: 'modulo', target: 'objetivos' });
-    expect(parseAsk('mi racha', FRIDAY)).toEqual({ kind: 'modulo', target: 'constancia' });
+    // «Mi racha» ya no solo abre Constancia: contesta con tu racha (y un botón a Constancia).
+    expect(parseAsk('mi racha', FRIDAY)).toEqual({ kind: 'dato', question: { what: 'racha' } });
+    expect(parseAsk('mi constancia', FRIDAY)).toEqual({ kind: 'modulo', target: 'constancia' });
     expect(parseAsk('check-in', FRIDAY)).toEqual({ kind: 'modulo', target: 'checkin' });
   });
 
