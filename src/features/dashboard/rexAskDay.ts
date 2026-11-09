@@ -28,7 +28,9 @@ export function describeDayForAsk(input: {
   if (offset === 0 && history.some((h) => h.date === todayIso)) return { kind: 'hecho', strain: input.todayStrain };
   if (isRestMarked(profile.restDates, iso)) return { kind: 'descanso', chosen: true };
   if (!hasActiveTrainingStructure(profile, iso)) return { kind: 'sin-plan' };
-  const session = offset === 0 ? input.todaySession : generateSessionForDate(profile, history, new Date(`${iso}T00:00:00`), profile.goals);
+  // Una sesión que moviste o editaste a mano manda sobre lo que el motor generaría (es lo que verás en Planificación ese día).
+  const edited = profile.sessionCache?.[iso]?.editedByAthlete ? profile.sessionCache[iso] : null;
+  const session = offset === 0 ? input.todaySession : (edited ?? generateSessionForDate(profile, history, new Date(`${iso}T00:00:00`), profile.goals));
   if (!session) return { kind: 'sin-plan' };
   if (session.isRestDay) return { kind: 'descanso', chosen: false };
   if (session.competition?.eventDay) return { kind: 'competicion' };

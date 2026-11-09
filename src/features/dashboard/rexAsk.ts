@@ -38,6 +38,8 @@ export type AskIntent =
   | { kind: 'adaptar-deshacer' }
   /** «Acortar la sesión», «tengo poco tiempo» sin decir cuánto: Rex pregunta cuánto con botones. */
   | { kind: 'adaptar-ayuda' }
+  /** Mover o intercambiar sesiones de la semana: días como desplazamiento desde hoy (0 = hoy); `to` null = que Rex elija el hueco. */
+  | { kind: 'mover'; from: number; to: number | null; confirmed: boolean }
   /** Preguntas sobre tus datos: último levantamiento, última marca, racha, sesiones, duración de hoy, peso actual. */
   | { kind: 'dato'; question: DataQuestion }
   /** «¿Por qué este peso / este WOD / hoy así?». */
@@ -148,6 +150,47 @@ function parseAdaptAsk(norm: string): AskIntent | null {
     if (/\bsolo\b/.test(norm) && !/\bsolo tengo\b/.test(norm)) return { kind: 'adaptar', request: { how: 'solo', parts }, confirmed: false };
     if (/\b(sin|quita|quitame|quitar|elimina|eliminar|salta|saltate|saltar|omite|omitir|no quiero|no hagas|no me pongas|no pongas|prefiero no|hoy no hago|hoy sin|quitale)\b/.test(norm)) return { kind: 'adaptar', request: { how: 'sin', parts }, confirmed: false };
   }
+  return null;
+}
+
+const DAY_WORDS = /\b(pasado manana|manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/g;
+const JS_WEEKDAY = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+const MOVE_VERB = /\b(pasa|pasala|pasalo|pasame|pasarla|mueve|muevela|muevelo|mover|moverla|traslada|trasladala|aplaza|aplazala|aplazar|pospon|posponla|posponer|retrasa|retrasala|adelanta|adelantala)\b/;
+const SWAP_VERB = /\b(intercambia|intercambiame|intercambiar|cambia|cambiame|cambiar)\b/;
+const CANT = /\b(no puedo|no podre|no voy a poder|no me va bien|no me viene bien|no entreno|no voy a entrenar|me es imposible)\b/;
+
+/** «Pasa la sesión de hoy al jueves», «mañana no puedo entrenar», «intercambia el miércoles y el jueves». null si no va de mover sesiones. */
+function parseMoveAsk(norm: string, todayWeekday: number): AskIntent | null {
+  const conf = norm.match(/^confirmo (?:mover|intercambiar) (-?\d+) (\d+)$/);
+  if (conf) return { kind: 'mover', from: Number(conf[1]), to: Number(conf[2]), confirmed: true };
+  if (/\bwod\b/.test(norm)) return null;
+
+  const found = [...norm.matchAll(DAY_WORDS)].map((m) => ({ word: m[1], start: m.index ?? 0 }));
+  if (found.length === 0 || found.length > 2) return null;
+  const offsetOf = (word: string, asTarget: boolean): number => {
+    if (word === 'hoy') return 0;
+    if (word === 'manana') return 1;
+    if (word === 'pasado manana') return 2;
+    const diff = (JS_WEEKDAY.indexOf(word) - todayWeekday + 7) % 7;
+    return diff === 0 ? (asTarget ? 7 : 0) : diff;
+  };
+  // Un día precedido por «a / al / para / hasta» es el destino; el resto, el origen.
+  const roleOf = (start: number) => (/\b(a|al|para|hasta|hacia)\s+(el\s+|la\s+)?$/.test(norm.slice(Math.max(0, start - 16), start)) ? 'to' : 'from');
+  const days = found.map((f) => ({ ...f, role: roleOf(f.start) as 'to' | 'from' }));
+
+  // Intercambiar: dos días y un verbo de cambiar.
+  if (days.length === 2 && SWAP_VERB.test(norm) && days.every((d) => d.role === 'from' || d.word !== 'hoy')) {
+    return { kind: 'mover', from: offsetOf(days[0].word, false), to: offsetOf(days[1].word, true), confirmed: false };
+  }
+  if (MOVE_VERB.test(norm)) {
+    const origin = days.find((d) => d.role === 'from');
+    const target = days.find((d) => d.role === 'to');
+    if (origin && target) return { kind: 'mover', from: offsetOf(origin.word, false), to: offsetOf(target.word, true), confirmed: false };
+    if (target) return { kind: 'mover', from: 0, to: offsetOf(target.word, true), confirmed: false };
+    if (origin) return { kind: 'mover', from: offsetOf(origin.word, false), to: null, confirmed: false };
+  }
+  // «Mañana no puedo entrenar»: el día elegido (nunca hoy, que ya tiene su camino con «hoy no estoy para el plan»).
+  if (CANT.test(norm) && days.length === 1 && days[0].word !== 'hoy') return { kind: 'mover', from: offsetOf(days[0].word, false), to: null, confirmed: false };
   return null;
 }
 
@@ -306,6 +349,8 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
   // Cambiar la sesión de hoy: minutos, sin una parte, solo una parte (antes de «hoy no entreno», que también lee «no hago»).
   const adapt = parseAdaptAsk(norm);
   if (adapt) return adapt;
+  const move = parseMoveAsk(norm, todayWeekday);
+  if (move) return move;
   const data = parseDataAsk(norm);
   if (data) return data;
   if (/\b(voy a faltar|no voy a (poder )?entrenar|me voy de (viaje|vacaciones)|estare fuera|de viaje)\b/.test(norm)) {

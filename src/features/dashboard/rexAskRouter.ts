@@ -3,9 +3,14 @@ import { appNav } from '../../lib/appNav';
 import { handoff } from '../../lib/handoff';
 import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
+import { recordMiss } from '../../lib/rexMisses';
+import { followUpText, forgetTopic, rememberTopic } from './rexContext';
 import { rexBus } from '../../lib/rexBus';
 import type { RexTarget } from './rexDashboard';
 import { dataAnswer, whyAnswer } from './rexData';
+import { moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer } from './rexMove';
+import { planMove } from '../../lib/sessionMove';
+import { addDaysIso } from '../../engine/periodization';
 import { applyMark, currentMark, markAskKgAnswer, type MarkKey, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
 import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, splitAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
 
@@ -21,6 +26,8 @@ export interface RouterApi {
   onWeightLogged?: () => void;
   /** Se acaba de apuntar una marca (PR): la pantalla relee el perfil y recalcula lo que dependa de él. */
   onMarkSaved?: () => void;
+  /** Se acaba de mover o intercambiar sesiones de la semana: la pantalla relee el perfil y la sesión de hoy. */
+  onWeekChanged?: () => void;
   /** Abre la pantalla «Mis marcas» (solo el Dashboard la tiene a mano; el resto va al Dashboard). */
   openMarks?: (key: MarkKey | null) => void;
 }
@@ -71,13 +78,22 @@ const SUPPORT_NODE: Partial<Record<AskIntent['kind'], string>> = { dolor: 'p_zon
  * preparado (la conversación de la molestia en Planificación, el asistente en Objetivos). 'close' = ya se ha hecho algo y RexLab se va.
  */
 export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAnswer | 'close' {
+  const weekday = new Date().getDay();
+  // «¿Y el viernes?» tras «¿qué toca mañana?»: una frase corta se completa con el tema de la última respuesta.
+  const resolved = followUpText(text, weekday) ?? text;
   // «Apunta 82,4 kg y dime qué toca mañana»: varias peticiones que se contestan seguidas, en una sola respuesta.
-  const clauses = splitAsk(text, new Date().getDay());
+  const clauses = splitAsk(resolved, weekday);
   if (clauses) {
-    const results = clauses.map((c) => routeAsk(c, screen, api));
+    forgetTopic();
+    const results = clauses.map((c) => routeSingle(c, screen, api));
     if (results.includes('close')) return 'close';
     return mergeAnswers(results as AskAnswer[]);
   }
+  rememberTopic(parseAsk(resolved, weekday));
+  return routeSingle(resolved, screen, api);
+}
+
+function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer | 'close' {
   const intent = parseAsk(text, new Date().getDay());
   // Los botones de las respuestas de marcas llevan al Análisis: en el Dashboard lo abre; desde otra pantalla va al Dashboard y lo abre allí.
   const analysis: RexTarget = screen === 'dashboard' ? 'marcas' : 'ir-marcas';
@@ -133,6 +149,17 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
       else handoff.put('support-start', SUPPORT_NODE[intent.kind] ?? 'start');
       appNav.goTo('planificacion');
       return 'close';
+    case 'mover': {
+      // Mover sesiones de la semana: se enseña el plan y solo se aplica con el «Sí». El origen queda de descanso elegido; las sesiones movidas se marcan como editadas.
+      const todayIso = api.todayIso;
+      const plan = planMove(athleteRepository.getProfile(), athleteRepository.getHistory(), { from: addDaysIso(todayIso, intent.from), to: intent.to === null ? null : addDaysIso(todayIso, intent.to) }, todayIso);
+      if (typeof plan === 'string') return moveRefusalAnswer(plan);
+      if (!intent.confirmed) return moveProposalAnswer(plan, todayIso);
+      athleteRepository.saveProfile(plan.profile);
+      for (const s of plan.writes) athleteRepository.saveCachedSession(s);
+      api.onWeekChanged?.();
+      return moveDoneAnswer(plan, todayIso);
+    }
     case 'dato':
     case 'por-que': {
       const todayIso = api.todayIso;
@@ -162,6 +189,8 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
     case 'modulo':
       return elsewhereAnswer('Ese módulo está en el Dashboard.', 'ir-dashboard');
     case 'ayuda':
+      // Lo que no se entiende se recuerda (solo en este móvil) para ver dónde falla; se lee desde «Cuenta y datos».
+      recordMiss(text, screen);
       return helpAnswer();
   }
 }

@@ -433,6 +433,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
             routeAsk(text, 'objetivos', {
               todayIso: todayIso(),
               onMarkSaved: () => setProfile(athleteRepository.getProfile()),
+              onWeekChanged: () => setProfile(athleteRepository.getProfile()),
               local: {
                 crear: () => {
                   setActiveSection('asistente');

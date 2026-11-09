@@ -1125,6 +1125,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       todayIso,
       // Una marca nueva cambia los pesos: se relee el perfil y se recalcula la sesión de hoy (como al guardarla desde el perfil).
       onMarkSaved: () => handleSaveProfile(athleteRepository.getProfile()),
+      // Se han movido sesiones de la semana: se relee el perfil y la sesión de hoy (que puede haber cambiado de día o de contenido).
+      onWeekChanged: () => {
+        const fresh = athleteRepository.getProfile();
+        setProfile(fresh);
+        setSession(loadTodaySession(fresh, history, goals, todayIso));
+      },
       local: {
         dolor: () => {
           openSupport('p_zone');

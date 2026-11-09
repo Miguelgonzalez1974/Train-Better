@@ -423,6 +423,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       todayIso,
       onWeightLogged: () => setBodyweightLog(athleteRepository.getBodyweightLog()),
       onMarkSaved: () => setProfile(athleteRepository.getProfile()),
+      onWeekChanged: () => setProfile(athleteRepository.getProfile()),
       openMarks: (key) => setMarks({ key }),
       missing: () => (nutrition ? { protein: Math.max(0, nutrition.protein.target - nutrition.protein.done), carbs: Math.max(0, nutrition.carbs.target - nutrition.carbs.done) } : null),
       local: {
