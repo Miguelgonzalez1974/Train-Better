@@ -68,7 +68,8 @@ import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
-import { AnalysisView } from './AnalysisView';
+import { AnalysisView, type AnalysisTab } from './AnalysisView';
+import { handoff } from '../../lib/handoff';
 import { addSubirPrGoal } from './rexAnalysis';
 import { Movilidad } from '../movilidad/Movilidad';
 import { weeklyMobilityMinutes } from '../../engine/mobility';
@@ -97,7 +98,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showVolume, setShowVolume] = useState(false);
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
-  const [analysisOpen, setAnalysisOpen] = useState(false);
+  // «Mi perfil» (desde Objetivos o RexLab) abre el Análisis directamente en la pestaña Perfil.
+  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>(() => (handoff.peek('analisis-perfil') ? 'perfil' : 'fuerza'));
+  const [analysisOpen, setAnalysisOpen] = useState(analysisStart === 'perfil');
+  useEffect(() => {
+    handoff.take('analisis-perfil');
+  }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
@@ -344,9 +350,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'volumen':
         return setShowVolume(true);
       case 'analisis':
+        setAnalysisStart('fuerza');
         return setAnalysisOpen(true);
       case 'perfil':
-        return onNavigateToObjetivos('perfil');
+        setAnalysisStart('perfil');
+        return setAnalysisOpen(true);
       case 'objetivos':
         return onNavigateToObjetivos();
       case 'nutricion':
@@ -649,6 +657,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             bodyweightKg={latestBodyweightKg}
             stats={stats}
             todayIso={todayIso}
+            initialTab={analysisStart}
+            onSaveProfile={(patch) => {
+              const next = { ...athleteRepository.getProfile(), ...patch };
+              athleteRepository.saveProfile(next);
+              setProfile(next);
+            }}
+            onOpenProgramming={() => {
+              setAnalysisOpen(false);
+              onNavigateToObjetivos('perfil');
+            }}
             onCreateGoal={(movementId) => {
               const next = addSubirPrGoal(athleteRepository.getProfile(), movementId, todayIso);
               athleteRepository.saveProfile(next);

@@ -21,9 +21,11 @@ import { ImbalancesCard } from './ImbalancesCard';
 import { PR_ROWS } from './PersonalRecordsCard';
 import { Term } from '../shell/Term';
 import { ResponseProfileCard } from './ResponseProfileCard';
+import { PerfilAtleta } from '../objetivos/PerfilAtleta';
+import { computeAthleteDiagnosis } from '../../engine/athleteDiagnosis';
 import type { MonthlyStats } from './stats';
 
-type AnalysisTab = 'fuerza' | 'equilibrio' | 'coach';
+export type AnalysisTab = 'fuerza' | 'equilibrio' | 'coach' | 'perfil';
 
 const RANGES: EvolutionRange[] = ['8s', '6m', 'todo'];
 const OLYMPIC_KEYS: (keyof PersonalRecords)[] = ['snatch', 'cleanAndJerk'];
@@ -120,6 +122,9 @@ export function AnalysisView({
   todayIso,
   onCreateGoal,
   onOpenObjetivos,
+  initialTab = 'fuerza',
+  onSaveProfile,
+  onOpenProgramming,
 }: {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
@@ -133,8 +138,14 @@ export function AnalysisView({
   onCreateGoal?: (movementId: string) => void;
   /** Ir a Objetivos para cambiarlo hablando con Rex. */
   onOpenObjetivos?: () => void;
+  /** La pestaña con la que se abre (p. ej. «perfil» cuando se llega desde «Mi perfil»). */
+  initialTab?: AnalysisTab;
+  /** Guarda los cambios del perfil (el «Cuadra / No cuadra» de la pestaña Perfil). */
+  onSaveProfile?: (patch: Partial<AthleteProfile>) => void;
+  /** Ir a Objetivos → cómo programa el coach con el perfil. */
+  onOpenProgramming?: () => void;
 }) {
-  const [tab, setTabRaw] = useState<AnalysisTab>('fuerza');
+  const [tab, setTabRaw] = useState<AnalysisTab>(initialTab);
   // Cambiar de pestaña cierra la propuesta a medias (cada pestaña tiene la suya).
   const setTab = (next: AnalysisTab) => {
     setTabRaw(next);
@@ -175,8 +186,10 @@ export function AnalysisView({
     () => buildProgressionLedger(profile.progressionLog, profile.prLog, profile.progressionSettings, profile.emphasisPlan),
     [profile.progressionLog, profile.prLog, profile.progressionSettings, profile.emphasisPlan],
   );
-  const rex = analysisRexLine({
-    tab,
+  const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
+  const priorities = diagnosis.focus.filter((f) => f.kind === 'prioridad').length;
+  const rexBase = analysisRexLine({
+    tab: tab === 'perfil' ? 'coach' : tab,
     headline,
     strengthRatio,
     perLift: response.perLift,
@@ -188,6 +201,7 @@ export function AnalysisView({
     ledger: { resolved: ledger.resolved, hits: ledger.hits, rows: ledger.rows },
     openGoalMovementIds: openGoalMovements(profile, todayIso),
   });
+  const rex = tab === 'perfil' ? { lead: 'Tu perfil.', tone: 'neutral' as const, text: diagnosis.headline, proposal: null } : rexBase;
 
   // Cuántos levantamientos han subido su PR desde el primer test registrado.
   const rising = useMemo(
@@ -340,7 +354,7 @@ export function AnalysisView({
         </div>
       </section>
 
-      <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Análisis">
+      <div className="grid grid-cols-4 gap-1.5" role="tablist" aria-label="Análisis">
         <TabButton
           active={tab === 'fuerza'}
           onClick={() => setTab('fuerza')}
@@ -362,10 +376,20 @@ export function AnalysisView({
           onClick={() => setTab('coach')}
           label="Coach"
           value={response.confident ? 'Activo' : `${weeks}/${RESPONSE_MIN_WEEKS}`}
-          hint={response.confident ? 'aprende de ti' : 'aprendiendo'}
+          hint={response.confident ? 'afinado' : 'en curso'}
           hintClass={response.confident ? 'text-brand-neon' : 'text-neutral-500'}
         />
+        <TabButton
+          active={tab === 'perfil'}
+          onClick={() => setTab('perfil')}
+          label="Perfil"
+          value={diagnosis.focus.length > 0 ? String(priorities) : '—'}
+          hint={priorities > 0 ? (priorities === 1 ? 'prioridad' : 'prioridades') : 'sin datos'}
+          hintClass={priorities > 0 ? 'text-brand-orange' : 'text-neutral-500'}
+        />
       </div>
+
+      {tab === 'perfil' && onSaveProfile && <PerfilAtleta profile={profile} history={history} onChange={onSaveProfile} mode="analisis" onOpenOther={onOpenProgramming} />}
 
       {tab === 'fuerza' && (
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">

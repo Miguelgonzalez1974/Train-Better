@@ -333,7 +333,24 @@ function EmphasisCard({ profile, diagnosis, history, onChange }: { profile: Athl
 
 // ---------- La pantalla ----------
 
-export function PerfilAtleta({ profile, history, onChange }: { profile: AthleteProfile; history: SessionHistoryEntry[]; onChange: (patch: Partial<AthleteProfile>) => void }) {
+/**
+ * El perfil se reparte en dos sitios: `analisis` (Dashboard → Análisis → Perfil) enseña lo que el coach ve en ti: la rueda, las áreas y lo que
+ * priorizaría; `programacion` (Objetivos) deja decidir cómo programa con eso: la revisión de las 4 semanas y el interruptor.
+ */
+export function PerfilAtleta({
+  profile,
+  history,
+  onChange,
+  mode = 'analisis',
+  onOpenOther,
+}: {
+  profile: AthleteProfile;
+  history: SessionHistoryEntry[];
+  onChange: (patch: Partial<AthleteProfile>) => void;
+  mode?: 'analisis' | 'programacion';
+  /** Lleva al otro sitio: de la programación a la rueda (Dashboard) y de la rueda a la programación (Objetivos). */
+  onOpenOther?: () => void;
+}) {
   const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
   const [asking, setAsking] = useState<DiagnosisArea | null>(null);
   const [reason, setReason] = useState<DiagnosisReason>('cansado');
@@ -353,6 +370,33 @@ export function PerfilAtleta({ profile, history, onChange }: { profile: AthleteP
     setAsking(area);
   }
 
+  if (mode === 'programacion') {
+    return (
+      <section className="flex animate-section-in flex-col gap-4 motion-reduce:animate-none">
+        <div>
+          <p className="text-sm text-neutral-400">Tu perfil de atleta</p>
+          <p className="text-lg font-semibold text-white">Cómo programa el coach</p>
+          <p className="mt-0.5 text-xs text-neutral-500">{diagnosis.headline}</p>
+        </div>
+        {profile.emphasisPlan?.review && (
+          <ReviewCard
+            review={profile.emphasisPlan.review}
+            onSeen={(scroll) => {
+              onChange({ emphasisPlan: { ...profile.emphasisPlan!, review: { ...profile.emphasisPlan!.review!, seen: true, noticed: true } } });
+              if (scroll) setTimeout(() => document.getElementById('emphasis-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }}
+          />
+        )}
+        <EmphasisCard profile={profile} diagnosis={diagnosis} history={history} onChange={onChange} />
+        {onOpenOther && (
+          <button onClick={onOpenOther} className="self-start rounded-full border border-brand-border px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-white/5">
+            Ver mi perfil (la rueda)
+          </button>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section className="flex animate-section-in flex-col gap-4 motion-reduce:animate-none">
       <div className="flex items-start justify-between gap-3">
@@ -370,20 +414,6 @@ export function PerfilAtleta({ profile, history, onChange }: { profile: AthleteP
           {CONFIDENCE_LABEL[diagnosis.confidence]}
         </span>
       </div>
-
-      <div className="rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[14px] leading-relaxed text-neutral-100">{diagnosis.headline}</div>
-
-      {profile.emphasisPlan?.review && (
-        <ReviewCard
-          review={profile.emphasisPlan.review}
-          onSeen={(scroll) => {
-            onChange({ emphasisPlan: { ...profile.emphasisPlan!, review: { ...profile.emphasisPlan!.review!, seen: true, noticed: true } } });
-            if (scroll) setTimeout(() => document.getElementById('emphasis-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-          }}
-        />
-      )}
-
-      <EmphasisCard profile={profile} diagnosis={diagnosis} history={history} onChange={onChange} />
 
       {withScore >= 3 && (
         <div className="rounded-2xl bg-white/[0.03] px-3 py-4">
@@ -484,6 +514,12 @@ export function PerfilAtleta({ profile, history, onChange }: { profile: AthleteP
           </ul>
         )}
       </div>
+
+      {onOpenOther && (
+        <button onClick={onOpenOther} className="self-start rounded-full border border-brand-border px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-white/5">
+          Cómo programa el coach con esto
+        </button>
+      )}
 
       <p className="text-[11px] leading-relaxed text-neutral-500">
         Se recalcula con cada sesión nueva, pero se apoya en medianas y en un mínimo de datos: un día malo no lo cambia. Las marcas de fábrica que nunca has tocado no cuentan.

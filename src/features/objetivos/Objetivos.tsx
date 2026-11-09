@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Pencil,
   Trash2,
@@ -40,6 +40,7 @@ import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
 import { elsewhereAnswer } from '../dashboard/rexAsk';
 import { handoff } from '../../lib/handoff';
+import { appNav } from '../../lib/appNav';
 import { rexBus } from '../../lib/rexBus';
 
 const WEEKDAY_CHIPS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -202,7 +203,7 @@ export type ObjetivosSection = 'perfil' | 'macrociclos' | 'programa' | 'rampa' |
 
 const SECTION_TITLE: Record<ObjetivosSection | 'asistente', string> = {
   asistente: 'Hablar con Rex',
-  perfil: 'Mi perfil',
+  perfil: 'Programar según el perfil',
   macrociclos: 'Macrociclos',
   programa: 'Programa de fuerza',
   rampa: 'Rampa de vuelta',
@@ -212,7 +213,10 @@ const SECTION_TITLE: Record<ObjetivosSection | 'asistente', string> = {
 export function Objetivos({ initialSection }: { initialSection?: ObjetivosSection } = {}) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
-  const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home' | 'asistente'>(() => (handoff.take('objetivos-asistente') ? 'asistente' : (initialSection ?? 'home')));
+  const [activeSection, setActiveSection] = useState<ObjetivosSection | 'home' | 'asistente'>(() => (handoff.peek('objetivos-asistente') ? 'asistente' : (initialSection ?? 'home')));
+  useEffect(() => {
+    handoff.take('objetivos-asistente');
+  }, []);
   /** El asistente tiene un plan a medias sin crear: salir pide confirmación. */
   const [assistantDirty, setAssistantDirty] = useState(false);
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
@@ -241,6 +245,12 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     setPlanMacro(null);
     setSeasonPlanner(null);
     setActiveSection('home');
+  }
+
+  /** La rueda del perfil vive en el Dashboard (Análisis → Perfil): se va allí y se abre sola. */
+  function openProfileWheel() {
+    handoff.put('analisis-perfil', '1');
+    if (!appNav.goTo('dashboard')) handoff.take('analisis-perfil');
   }
 
   function saveRamp(e: React.FormEvent) {
@@ -424,7 +434,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
                   actions: [{ label: 'Hablar con Rex', target: 'objetivos-hablar' }],
                 }),
                 modulo: (intent) => {
-                  if (intent.target === 'perfil') setActiveSection('perfil');
+                  if (intent.target === 'perfil') openProfileWheel();
                   else if (intent.target === 'objetivos') setActiveSection('home');
                   else return elsewhereAnswer('Ese módulo está en el Dashboard.', 'ir-dashboard');
                   return 'close';
@@ -448,7 +458,8 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
                 { label: 'Programa semana a semana', icon: CalendarDays, onClick: () => rexBus.emit('companion-weeks') },
                 { label: 'Mis macros', icon: CalendarRange, onClick: () => setActiveSection('macrociclos') },
                 { label: 'Mis programas', icon: Dumbbell, onClick: () => setActiveSection('programa') },
-                { label: 'Mi perfil', hint: 'qué priorizaría', icon: Radar, onClick: () => setActiveSection('perfil') },
+                { label: 'Mi perfil', hint: 'la rueda, en el Dashboard', icon: Radar, onClick: openProfileWheel },
+                { label: 'Programar según mi perfil', icon: Gauge, onClick: () => setActiveSection('perfil') },
               ],
             },
           ]}
@@ -481,7 +492,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           <span className="font-normal text-neutral-500">/ {SECTION_TITLE[activeSection]}</span>
         </button>
       )}
-      {activeSection === 'perfil' && <PerfilAtleta profile={profile} history={history} onChange={(patch) => persist({ ...profile, ...patch })} />}
+      {activeSection === 'perfil' && <PerfilAtleta mode="programacion" profile={profile} history={history} onChange={(patch) => persist({ ...profile, ...patch })} onOpenOther={openProfileWheel} />}
 
       {activeSection === 'macrociclos' && (
       <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">
