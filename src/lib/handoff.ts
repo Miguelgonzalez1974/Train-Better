@@ -3,7 +3,7 @@
  * pantalla de destino lo recoge una sola vez al montarse. Caduca a los dos minutos, para que algo que no llegó a abrirse no salte días
  * después. Vive en memoria: una recarga lo borra, y está bien.
  */
-export type HandoffKey = 'support-start' | 'plan-act' | 'objetivos-asistente' | 'analisis-perfil';
+export type HandoffKey = 'support-start' | 'plan-act' | 'objetivos-asistente' | 'analisis-tab';
 
 const TTL_MS = 120_000;
 const pending = new Map<HandoffKey, { value: string; at: number }>();

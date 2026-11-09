@@ -50,6 +50,8 @@ export type RexTarget =
   | 'ir-planificacion'
   | 'ir-nutricion'
   | 'ir-objetivos'
+  /** Ir al Dashboard y abrir el Análisis en la pestaña Fuerza (las marcas). */
+  | 'ir-analisis'
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 

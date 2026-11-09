@@ -60,6 +60,9 @@ import { MacroPlanModal } from './MacroPlanModal';
 import { SeasonPlannerModal } from './SeasonPlannerModal';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
 import { PerfilAtleta } from './PerfilAtleta';
+import { ProgrammingSettings } from './ProgrammingSettings';
+import { CuentaYDatos } from './CuentaYDatos';
+import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { buildGoalRows } from '../dashboard/progressOverview';
 import { RexAssistant } from './RexAssistant';
 import { ObjetivosHome, type AddKind, type HomeSuggestion } from './ObjetivosHome';
@@ -203,7 +206,7 @@ export type ObjetivosSection = 'perfil' | 'macrociclos' | 'programa' | 'rampa' |
 
 const SECTION_TITLE: Record<ObjetivosSection | 'asistente', string> = {
   asistente: 'Hablar con Rex',
-  perfil: 'Programar según el perfil',
+  perfil: 'Cómo programa el coach',
   macrociclos: 'Macrociclos',
   programa: 'Programa de fuerza',
   rampa: 'Rampa de vuelta',
@@ -247,10 +250,18 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     setActiveSection('home');
   }
 
+  /** Un ajuste de programación (días, reparto, programaciones del WOD, modo por esfuerzo): se guarda al momento y las sesiones ya generadas se recalculan. */
+  function saveProgramming(patch: Partial<AthleteProfile>) {
+    const next = { ...athleteRepository.getProfile(), ...patch };
+    athleteRepository.saveProfile(next);
+    resetUpcomingSessions(todayIso());
+    setProfile(athleteRepository.getProfile());
+  }
+
   /** La rueda del perfil vive en el Dashboard (Análisis → Perfil): se va allí y se abre sola. */
   function openProfileWheel() {
-    handoff.put('analisis-perfil', '1');
-    if (!appNav.goTo('dashboard')) handoff.take('analisis-perfil');
+    handoff.put('analisis-tab', 'perfil');
+    if (!appNav.goTo('dashboard')) handoff.take('analisis-tab');
   }
 
   function saveRamp(e: React.FormEvent) {
@@ -422,6 +433,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           ask={(text) =>
             routeAsk(text, 'objetivos', {
               todayIso: todayIso(),
+              onMarkSaved: () => setProfile(athleteRepository.getProfile()),
               local: {
                 crear: () => {
                   setActiveSection('asistente');
@@ -459,7 +471,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
                 { label: 'Mis macros', icon: CalendarRange, onClick: () => setActiveSection('macrociclos') },
                 { label: 'Mis programas', icon: Dumbbell, onClick: () => setActiveSection('programa') },
                 { label: 'Mi perfil', hint: 'la rueda, en el Dashboard', icon: Radar, onClick: openProfileWheel },
-                { label: 'Programar según mi perfil', icon: Gauge, onClick: () => setActiveSection('perfil') },
+                { label: 'Cómo programa el coach', hint: 'perfil, días, WODs', icon: Gauge, onClick: () => setActiveSection('perfil') },
               ],
             },
           ]}
@@ -476,6 +488,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           onAdd={addNew}
         />
       )}
+      {activeSection === 'home' && <CuentaYDatos />}
 
       {activeSection === 'asistente' && <RexAssistant profile={profile} onCreate={persist} onClose={goHome} onDirtyChange={setAssistantDirty} />}
 
@@ -493,6 +506,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
         </button>
       )}
       {activeSection === 'perfil' && <PerfilAtleta mode="programacion" profile={profile} history={history} onChange={(patch) => persist({ ...profile, ...patch })} onOpenOther={openProfileWheel} />}
+      {activeSection === 'perfil' && <ProgrammingSettings profile={profile} onChange={saveProgramming} />}
 
       {activeSection === 'macrociclos' && (
       <section className="flex animate-section-in flex-col gap-3 motion-reduce:animate-none">

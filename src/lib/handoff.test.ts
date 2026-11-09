@@ -11,11 +11,11 @@ describe('lo que RexLab deja dicho a la pantalla de destino', () => {
   });
 
   it('peek lee sin borrar (el estado inicial se calcula dos veces en desarrollo) y take lo recoge después', () => {
-    handoff.put('analisis-perfil', '1', 1000);
-    expect(handoff.peek('analisis-perfil', 1500)).toBe('1');
-    expect(handoff.peek('analisis-perfil', 1500)).toBe('1');
-    expect(handoff.take('analisis-perfil', 1600)).toBe('1');
-    expect(handoff.peek('analisis-perfil', 1700)).toBeNull();
+    handoff.put('analisis-tab', 'perfil', 1000);
+    expect(handoff.peek('analisis-tab', 1500)).toBe('perfil');
+    expect(handoff.peek('analisis-tab', 1500)).toBe('perfil');
+    expect(handoff.take('analisis-tab', 1600)).toBe('perfil');
+    expect(handoff.peek('analisis-tab', 1700)).toBeNull();
   });
 
   it('caduca a los dos minutos y no mezcla claves', () => {

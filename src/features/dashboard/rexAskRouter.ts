@@ -2,7 +2,10 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { appNav } from '../../lib/appNav';
 import { handoff } from '../../lib/handoff';
 import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
+import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { rexBus } from '../../lib/rexBus';
+import type { RexTarget } from './rexDashboard';
+import { applyMark, currentMark, markAskKgAnswer, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
 import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
 
 export type RexScreen = 'dashboard' | 'planificacion' | 'nutricion' | 'objetivos';
@@ -15,6 +18,8 @@ export interface RouterApi {
   missing?: () => { protein: number; carbs: number } | null;
   /** Se acaba de apuntar un peso: la pantalla refresca el suyo. */
   onWeightLogged?: () => void;
+  /** Se acaba de apuntar una marca (PR): la pantalla relee el perfil y recalcula lo que dependa de él. */
+  onMarkSaved?: () => void;
 }
 
 /** Apunta el peso de hoy y dice cómo cambia frente al último. */
@@ -48,6 +53,8 @@ const SUPPORT_NODE: Partial<Record<AskIntent['kind'], string>> = { dolor: 'p_zon
  */
 export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAnswer | 'close' {
   const intent = parseAsk(text, new Date().getDay());
+  // Los botones de las respuestas de marcas llevan al Análisis: en el Dashboard lo abre; desde otra pantalla va al Dashboard y lo abre allí.
+  const analysis: RexTarget = screen === 'dashboard' ? 'analisis' : 'ir-analisis';
   const local = api.local?.[intent.kind] as ((i: AskIntent) => AskAnswer | 'close') | undefined;
   if (local) return local(intent);
 
@@ -60,6 +67,22 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
     case 'comida':
       sendMealToNutrition(intent.text, screen === 'nutricion');
       return 'close';
+    case 'marca-ver':
+      return markViewAnswer(athleteRepository.getProfile(), intent.lift?.key ?? null, analysis);
+    case 'marca-estimar':
+      return markEstimateAnswer(athleteRepository.getProfile(), intent.lift, intent.loadKg, intent.reps, analysis);
+    case 'marca-apuntar': {
+      const profile = athleteRepository.getProfile();
+      if (!intent.lift) return markPickAnswer(analysis);
+      if (intent.kg === null) return markAskKgAnswer(profile, intent.lift);
+      if (!intent.confirmed) return markProposalAnswer(profile, intent.lift, intent.kg, analysis);
+      const previous = currentMark(profile, intent.lift.key);
+      if (previous === intent.kg) return markProposalAnswer(profile, intent.lift, intent.kg, analysis);
+      athleteRepository.saveProfile(applyMark(profile, intent.lift, intent.kg));
+      resetUpcomingSessions(api.todayIso);
+      api.onMarkSaved?.();
+      return markSavedAnswer(previous, intent.lift, intent.kg, analysis);
+    }
     case 'falta': {
       const missing = api.missing?.() ?? null;
       if (!missing) return elsewhereAnswer('Para calcular lo que te falta necesito tu peso y tu diario: míralo en Nutrición.', 'ir-nutricion');

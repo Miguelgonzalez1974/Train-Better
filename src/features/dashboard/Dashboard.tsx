@@ -68,8 +68,10 @@ import { VolumeSummaryModal } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
+import { Dumbbell, Trophy } from 'lucide-react';
 import { AnalysisView, type AnalysisTab } from './AnalysisView';
 import { handoff } from '../../lib/handoff';
+import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { addSubirPrGoal } from './rexAnalysis';
 import { Movilidad } from '../movilidad/Movilidad';
 import { weeklyMobilityMinutes } from '../../engine/mobility';
@@ -99,10 +101,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
   // «Mi perfil» (desde Objetivos o RexLab) abre el Análisis directamente en la pestaña Perfil.
-  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>(() => (handoff.peek('analisis-perfil') ? 'perfil' : 'fuerza'));
-  const [analysisOpen, setAnalysisOpen] = useState(analysisStart === 'perfil');
+  const [handedTab] = useState<AnalysisTab | null>(() => {
+    const t = handoff.peek('analisis-tab');
+    return t === 'perfil' || t === 'fuerza' ? t : null;
+  });
+  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>(handedTab ?? 'fuerza');
+  const [analysisOpen, setAnalysisOpen] = useState(handedTab !== null);
   useEffect(() => {
-    handoff.take('analisis-perfil');
+    handoff.take('analisis-tab');
   }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [showConsistency, setShowConsistency] = useState(false);
@@ -412,6 +418,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     return routeAsk(text, 'dashboard', {
       todayIso,
       onWeightLogged: () => setBodyweightLog(athleteRepository.getBodyweightLog()),
+      onMarkSaved: () => setProfile(athleteRepository.getProfile()),
       missing: () => (nutrition ? { protein: Math.max(0, nutrition.protein.target - nutrition.protein.done), carbs: Math.max(0, nutrition.carbs.target - nutrition.carbs.done) } : null),
       local: {
         dia: (intent) => dayAnswer(intent.label, describeDayForAsk({ offset: intent.offset, todayIso, profile, history, todaySession, todayStrain, bias: strainLearned.bias })),
@@ -435,6 +442,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       <RexCorner
         speak={false}
         ask={askRex}
+        lab={[
+          {
+            title: 'Marcas',
+            items: [
+              { label: 'Mis marcas', icon: Trophy, ask: 'mis marcas' },
+              { label: 'Apuntar una marca', hint: 'o escríbela arriba', icon: Dumbbell, ask: 'apuntar marca' },
+            ],
+          },
+        ]}
         dock={{ stats: rexDockStats, tip: ringHintPending && tab === 'resumen' ? 'Toca un aro o un número para ver de dónde sale.' : null }}
         suggestion={rexPick.current}
         waiting={rexPick.waiting}
@@ -659,9 +675,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             todayIso={todayIso}
             initialTab={analysisStart}
             onSaveProfile={(patch) => {
-              const next = { ...athleteRepository.getProfile(), ...patch };
+              const current = athleteRepository.getProfile();
+              const next = { ...current, ...patch };
               athleteRepository.saveProfile(next);
-              setProfile(next);
+              // Una marca distinta cambia los pesos: las sesiones ya generadas se recalculan al abrirlas.
+              if ('prs' in patch || 'variantPrs' in patch) resetUpcomingSessions(todayIso);
+              setProfile(athleteRepository.getProfile());
             }}
             onOpenProgramming={() => {
               setAnalysisOpen(false);

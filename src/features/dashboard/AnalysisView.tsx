@@ -22,6 +22,7 @@ import { PR_ROWS } from './PersonalRecordsCard';
 import { Term } from '../shell/Term';
 import { ResponseProfileCard } from './ResponseProfileCard';
 import { PerfilAtleta } from '../objetivos/PerfilAtleta';
+import { MarksEditor } from './MarksEditor';
 import { computeAthleteDiagnosis } from '../../engine/athleteDiagnosis';
 import type { MonthlyStats } from './stats';
 
@@ -152,6 +153,7 @@ export function AnalysisView({
     setProposalState('idle');
     setCreatedLabel(null);
   };
+  const [marksOpen, setMarksOpen] = useState(false);
   const [liftKey, setLiftKey] = useState<keyof PersonalRecords>('backSquat');
   const [range, setRange] = useState<EvolutionRange>('6m');
   const [energyOpen, setEnergyOpen] = useState(true);
@@ -389,7 +391,9 @@ export function AnalysisView({
         />
       </div>
 
-      {tab === 'perfil' && onSaveProfile && <PerfilAtleta profile={profile} history={history} onChange={onSaveProfile} mode="analisis" onOpenOther={onOpenProgramming} />}
+      {marksOpen && onSaveProfile && <MarksEditor profile={profile} onSave={onSaveProfile} onClose={() => setMarksOpen(false)} />}
+
+      {tab === 'perfil' && onSaveProfile &&<PerfilAtleta profile={profile} history={history} onChange={onSaveProfile} mode="analisis" onOpenOther={onOpenProgramming} />}
 
       {tab === 'fuerza' && (
         <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
@@ -420,6 +424,11 @@ export function AnalysisView({
                   {fmtKg(evo.currentPr)} <span className="text-sm font-medium text-neutral-400">kg</span>
                 </p>
                 {ratio && <p className="text-[11px] text-neutral-500">×{ratio} tu peso</p>}
+                {onSaveProfile && (
+                  <button onClick={() => setMarksOpen(true)} className="mt-1 text-[11px] font-semibold text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-brand-gold">
+                    Editar mis marcas
+                  </button>
+                )}
               </div>
               <div className="flex flex-col items-end gap-1 text-right">
                 <span

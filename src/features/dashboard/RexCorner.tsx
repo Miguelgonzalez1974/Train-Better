@@ -5,6 +5,7 @@ import { RexBar } from './RexBar';
 import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
 import { labReturn } from '../../lib/labReturn';
 import { appNav } from '../../lib/appNav';
+import { handoff } from '../../lib/handoff';
 import type { TabId } from '../shell/navItems';
 import type { RexSuggestion, RexTarget } from './rexDashboard';
 
@@ -451,7 +452,12 @@ export function RexCorner({
                               onClick={() => {
                                 const tab = NAV_TARGET[a.target];
                                 if (a.ask) send(a.ask);
-                                else if (tab) {
+                                else if (a.target === 'ir-analisis') {
+                                  // El Análisis vive en el Dashboard: se va allí y se abre solo, en la pestaña Fuerza.
+                                  handoff.put('analisis-tab', 'fuerza');
+                                  setOpen(false);
+                                  appNav.goTo('dashboard');
+                                } else if (tab) {
                                   setOpen(false);
                                   appNav.goTo(tab);
                                 } else launch(() => bar.onAction(a.target));

@@ -64,7 +64,6 @@ import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEsti
 import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
 import { countsForProgression, evaluateLiftSession, mainLiftBlock, sessionProgressionView, type ProgressionKind } from '../../engine/progression';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
-import { CoachHeader } from './CoachHeader';
 import { WeekStrip } from './WeekStrip';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
@@ -1097,6 +1096,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   function askRex(text: string): AskAnswer | 'close' {
     return routeAsk(text, 'planificacion', {
       todayIso,
+      // Una marca nueva cambia los pesos: se relee el perfil y se recalcula la sesión de hoy (como al guardarla desde el perfil).
+      onMarkSaved: () => handleSaveProfile(athleteRepository.getProfile()),
       local: {
         dolor: () => {
           openSupport('p_zone');
@@ -1161,6 +1162,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           },
         ]
       : []),
+    {
+      title: 'Marcas',
+      items: [
+        { label: 'Mis marcas', icon: Trophy, ask: 'mis marcas' },
+        { label: 'Apuntar una marca', hint: 'o escríbela arriba', icon: Dumbbell, ask: 'apuntar marca' },
+      ],
+    },
     {
       title: 'Más',
       items: [
@@ -1267,13 +1275,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           }}
         />
       )}
-      {/* Sin sesión, el perfil sigue a mano en una fila propia; con sesión vive en la fila del título. */}
-      {!session && (
-        <div className="flex justify-end">
-          <CoachHeader variant="icon" profile={profile} onSaveProfile={handleSaveProfile} />
-        </div>
-      )}
-
       {showComplexes && (
         <ComplexLibrary profile={profile} workLog={workLog} week={complexWeek} onSave={handleSaveComplexes} onClose={() => setShowComplexes(false)} />
       )}
@@ -1393,9 +1394,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 <Info size={15} strokeWidth={2.25} />
               </button>
             )}
-            <div className="ml-auto">
-              <CoachHeader variant="icon" profile={profile} onSaveProfile={handleSaveProfile} />
-            </div>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-400">
             {session.competition && (

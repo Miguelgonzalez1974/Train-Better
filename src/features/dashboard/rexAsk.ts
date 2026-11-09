@@ -5,6 +5,7 @@
  * Pura: sin React, sin reloj propio y sin almacenamiento.
  */
 import type { RexAction, RexTarget } from './rexDashboard';
+import { findLoadReps, findMarkKg, findMarkLift, type MarkLift } from './rexMarks';
 
 export type AskIntent =
   | { kind: 'peso'; kg: number }
@@ -25,6 +26,10 @@ export type AskIntent =
   /** Crear algo con Rex (objetivo, macro, programa, temporada): abre el asistente. */
   | { kind: 'crear'; what: 'objetivo' | 'macro' | 'programa' | 'temporada' }
   | { kind: 'modulo'; target: RexTarget }
+  /** Marcas (PR): ver una o todas, apuntar una (`kg` null = falta decirlo; `confirmed` = ya dijo que sí) o estimar el 1RM de una serie («100 x 3»). */
+  | { kind: 'marca-ver'; lift: MarkLift | null }
+  | { kind: 'marca-apuntar'; lift: MarkLift | null; kg: number | null; confirmed: boolean }
+  | { kind: 'marca-estimar'; lift: MarkLift; loadKg: number; reps: number }
   | { kind: 'ayuda' };
 
 export interface AskAnswer {
@@ -72,12 +77,40 @@ const MODULE_WORDS: { target: RexTarget; words: RegExp }[] = [
   { target: 'planificacion', words: /\b(planificacion|plan de hoy|la sesion|mi sesion|entrenar ya|empezar)\b/ },
 ];
 
+/** Las frases de marcas. null si la frase no va de marcas. */
+function parseMarkAsk(norm: string): AskIntent | null {
+  const lift = findMarkLift(norm);
+  const kg = findMarkKg(norm);
+
+  // El botón «Sí, apuntar» de Rex: «confirmo marca Back Squat 140».
+  if (/^confirmo marca\b/.test(norm)) return lift && kg !== null ? { kind: 'marca-apuntar', lift, kg, confirmed: true } : { kind: 'ayuda' };
+
+  if (lift) {
+    // «Mañana toca sentadilla», «quiero subir mi sentadilla», «me duele al hacer sentadilla»: un levantamiento en medio no es apuntar nada.
+    if (/\b(toca|manana|quiero|duele|dolor|molestia|objetivo|programa|macro)\b/.test(norm) && !/\b(marca|pr|record|1rm)\b/.test(norm)) return null;
+    const series = findLoadReps(norm);
+    if (series) return { kind: 'marca-estimar', lift, loadKg: series.loadKg, reps: series.reps };
+    if (kg !== null) return { kind: 'marca-apuntar', lift, kg, confirmed: false };
+    if (/\b(apunta|apuntar|anota|anotar|registra|registrar|actualiza|actualizar|nueva|nuevo)\b/.test(norm) && /\b(marca|pr|record|1rm|maximo)\b/.test(norm)) return { kind: 'marca-apuntar', lift, kg: null, confirmed: false };
+    if (/\b(marca|marcas|pr|prs|record|records|maximo|1rm|levanto|levantas|tengo)\b/.test(norm)) return { kind: 'marca-ver', lift };
+    return null;
+  }
+
+  if (/\b(apunta|apuntar|anota|anotar|registra|registrar|actualiza|actualizar|nueva|nuevo)\b.*\b(marca|pr|record|1rm)\b/.test(norm)) return { kind: 'marca-apuntar', lift: null, kg: null, confirmed: false };
+  if (/\b(mis|todas mis|tus) (marcas|records|prs|maximos|1rm)\b|\bmi (marca|pr|record)\b/.test(norm)) return { kind: 'marca-ver', lift: null };
+  return null;
+}
+
 /** Lee lo que se ha escrito. La primera regla que encaja gana: peso, comida, día, estado, módulo; si no, ayuda. */
 export function parseAsk(text: string, todayWeekday: number): AskIntent {
   const norm = normalizeAsk(text);
   if (norm === '') return { kind: 'ayuda' };
 
   if (MEAL_START.test(norm)) return { kind: 'comida', text: text.trim() };
+
+  // Marcas: antes que el peso («mi back squat es 140 kg» no es tu peso corporal) y que los módulos («records» abre el Análisis).
+  const mark = parseMarkAsk(norm);
+  if (mark) return mark;
 
   const weight = findWeight(norm);
   if (weight !== null && /\b(kg|kgs|kilos?|peso|pese|pesado|pesa|pesar|bascula)\b/.test(norm)) return { kind: 'peso', kg: weight };
@@ -181,7 +214,7 @@ export function helpAnswer(): AskAnswer {
   return {
     lead: 'No te he entendido.',
     tone: 'mid',
-    text: 'Prueba con «¿qué toca mañana?», «apunta 82,4 kg», «he comido dos huevos y arroz», «¿cómo estoy?» o el nombre de un módulo (nutrición, recovery, objetivos…).',
+    text: 'Prueba con «¿qué toca mañana?», «apunta 82,4 kg», «mi back squat es 140», «he comido dos huevos y arroz», «¿cómo estoy?» o el nombre de un módulo (nutrición, recovery, objetivos…).',
     actions: [],
   };
 }
