@@ -14,6 +14,7 @@ import { MisAlimentosPanel } from './MisAlimentosPanel';
 import { RexMeal } from './RexMeal';
 import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
+import { REX_HINTS } from '../dashboard/rexHints';
 import { rexBus } from '../../lib/rexBus';
 import { QuantityStepper } from './QuantityStepper';
 import { addDays, dayLabel, dayTarget, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
@@ -123,6 +124,7 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
           })
         }
         examples={[]}
+        hints={REX_HINTS.nutricion}
         lab={[
           {
             title: 'Apuntar y ajustar',

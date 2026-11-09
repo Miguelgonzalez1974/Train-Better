@@ -416,14 +416,14 @@ export function saveRexMemory(storage: Pick<Storage, 'setItem'> | null, memory: 
 /** Los módulos que se abren desde «Más» (los botones que antes vivían sueltos arriba). */
 export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'nutricion', label: 'Nutrición' },
-  { target: 'constancia', label: 'Constancia' },
+  // «Constancia y volumen» es una sola ventana con dos pestañas; «volumen» sigue siendo un destino (para la caja de Rex) pero no tiene botón propio.
+  { target: 'constancia', label: 'Constancia y volumen' },
   { target: 'movilidad', label: 'Recovery' },
   { target: 'semana', label: 'Tu semana' },
-  { target: 'volumen', label: 'Volumen por día' },
   { target: 'analisis', label: 'Análisis' },
   { target: 'marcas', label: 'Mis marcas' },
   { target: 'forma', label: 'Tu forma' },
-  { target: 'objetivos', label: 'Objetivos' },
+  // «Objetivos» ya no está aquí: es una pestaña de la barra de abajo (el punto de la revisión del perfil va en esa pestaña).
   // El peso corporal ya no está aquí: se apunta desde Nutrición (que es donde se usa) y con el aviso de Rex cuando lleva días sin apuntarse.
 ];
 

@@ -120,6 +120,12 @@ describe('leer las frases de mover (hoy es lunes)', () => {
     expect(read(ask)).toMatchObject({ kind: 'mover', confirmed: true });
   });
 
+  it('mover la sesión sin decir a qué día pregunta a qué día', () => {
+    expect(read('mover la sesión')).toEqual({ kind: 'mover-ayuda' });
+    expect(read('quiero cambiarla de día')).toEqual({ kind: 'mover-ayuda' });
+    expect(read('mueve el entreno a otro día')).toEqual({ kind: 'mover-ayuda' });
+  });
+
   it('lo que no es mover sigue siendo lo que era', () => {
     expect(read('hoy no entreno').kind).toBe('no-plan');
     expect(read('no voy a poder entrenar esta semana').kind).toBe('faltar');

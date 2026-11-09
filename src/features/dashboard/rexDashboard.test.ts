@@ -248,7 +248,10 @@ describe('Rex en el Dashboard: los módulos de «Más»', () => {
   it('cubre los botones que salen de la cabecera, sin repetir', () => {
     const targets = REX_MODULES.map((m) => m.target);
     expect(new Set(targets).size).toBe(targets.length);
-    for (const t of ['nutricion', 'constancia', 'volumen', 'analisis', 'marcas', 'objetivos', 'movilidad', 'semana']) expect(targets).toContain(t);
+    for (const t of ['nutricion', 'constancia', 'analisis', 'marcas', 'movilidad', 'semana']) expect(targets).toContain(t);
+    // Volumen vive dentro de «Constancia y volumen», y Objetivos es una pestaña de la barra: ninguno tiene botón propio.
+    expect(targets).not.toContain('volumen');
+    expect(targets).not.toContain('objetivos');
     // El peso se apunta desde Nutrición y con el aviso de Rex, no desde «Más».
     expect(targets).not.toContain('peso');
   });

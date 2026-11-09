@@ -63,12 +63,13 @@ import { AcwrGauge } from './AcwrGauge';
 import { ConsistencyDetail } from './ConsistencyDetail';
 import { computeYearConsistency } from '../../engine/yearConsistency';
 import { TrainingHeatmap } from './TrainingHeatmap';
-import { VolumeSummaryModal } from './VolumeSummaryModal';
+import { VolumeContent } from './VolumeSummaryModal';
 import { BodyweightCard } from './BodyweightCard';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { AnalysisView, type AnalysisTab } from './AnalysisView';
 import { MarksScreen } from './MarksScreen';
+import { REX_HINTS } from './rexHints';
 import type { AthleteProfile } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
 import { handoff } from '../../lib/handoff';
@@ -98,7 +99,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     return next;
   });
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
-  const [showVolume, setShowVolume] = useState(false);
+  // «Constancia y volumen»: una sola ventana con dos pestañas (antes eran dos botones de «Más» que miraban el historial).
+  const [trainingView, setTrainingView] = useState<'constancia' | 'volumen' | null>(null);
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
   // Lo que otra pantalla deja dicho al llegar: «Mi perfil» abre el Análisis en su pestaña Perfil; «Mis marcas» abre esa pantalla (con un levantamiento desplegado si viene).
@@ -111,7 +113,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     handoff.take('analisis-tab');
   }, []);
   const [formOpen, setFormOpen] = useState(false);
-  const [showConsistency, setShowConsistency] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [showMobility, setShowMobility] = useState(false);
@@ -209,7 +210,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const plannedToday = strainView.planned?.strain ?? null;
   const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, history, dayIso, todayIso, days, plannedToday, offsetDays), [profile, history, dayIso, todayIso, plannedToday]);
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, history, dayIso, 14) : []), [tab, profile, history, dayIso]);
-  const reviewPending = Boolean(profile.emphasisPlan?.review && !profile.emphasisPlan.review.seen && profile.emphasisPlan.review.entries.some((e) => e.decision !== 'esperar'));
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
   const restMarked = isRestMarked(profile.restDates, todayIso);
@@ -332,8 +332,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Un punto en «Más» (y en el módulo) cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
   const nutritionLow = isToday && nutritionPercent !== null && nutritionPercent < NUTRITION_LOW && new Date().getHours() >= NUTRITION_HOUR;
   const rexDots: RexTarget[] = [
-    // La revisión del perfil de las 4 semanas se decide en Objetivos: el punto va en ese módulo.
-    ...(reviewPending ? (['objetivos'] as RexTarget[]) : []),
     ...(nutritionLow ? (['nutricion'] as RexTarget[]) : []),
     ...(weeklyReview ? (['semana'] as RexTarget[]) : []),
   ];
@@ -347,9 +345,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'revision-enfasis':
         return openEmphasisReview();
       case 'constancia':
-        return setShowConsistency(true);
+        return setTrainingView('constancia');
       case 'volumen':
-        return setShowVolume(true);
+        return setTrainingView('volumen');
       // El Análisis abre en el Perfil (la rueda y las áreas); «Mi perfil» ya no es un botón aparte, pero «perfil» en la caja lleva al mismo sitio.
       case 'analisis':
       case 'perfil':
@@ -358,8 +356,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'marcas':
         return setMarks({ key: null });
       case 'objetivos':
-        // Con una revisión del perfil pendiente, el módulo lleva a ella.
-        return reviewPending ? openEmphasisReview() : onNavigateToObjetivos();
+        return onNavigateToObjetivos();
       case 'nutricion':
         return setShowNutrition(true);
       case 'peso':
@@ -448,6 +445,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       <RexCorner
         speak={false}
         ask={askRex}
+        hints={REX_HINTS.dashboard}
         dock={{ stats: rexDockStats, tip: ringHintPending && tab === 'resumen' ? 'Toca un aro o un número para ver de dónde sale.' : null }}
         suggestion={rexPick.current}
         waiting={rexPick.waiting}
@@ -461,7 +459,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         onNext={() => setRexCursor((c) => c + 1)}
         onTyped={() => updateRexMemory((m) => withTyped(m, rexPick.current.id, todayIso))}
       />
-      {showVolume && <VolumeSummaryModal onClose={() => setShowVolume(false)} />}
       {showNutrition && (
         <NutritionModal
           history={history}
@@ -643,14 +640,31 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </Modal>
       )}
 
-      {showConsistency && (
-        <Modal open onClose={() => setShowConsistency(false)} title="Constancia">
-          <ConsistencyDetail
-            week={weekCount}
-            monthDays={stats.diasEntrenados}
-            year={yearConsistency}
-            calendar={<TrainingHeatmap history={history} trainingDates={profile.trainingDatesLog ?? []} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
-          />
+      {trainingView && (
+        <Modal open onClose={() => setTrainingView(null)} title="Constancia y volumen">
+          <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-white/[0.05] p-1" role="tablist" aria-label="Constancia y volumen">
+            {(['constancia', 'volumen'] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={trainingView === v}
+                onClick={() => setTrainingView(v)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${trainingView === v ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
+              >
+                {v === 'constancia' ? 'Constancia' : 'Volumen por día'}
+              </button>
+            ))}
+          </div>
+          {trainingView === 'constancia' ? (
+            <ConsistencyDetail
+              week={weekCount}
+              monthDays={stats.diasEntrenados}
+              year={yearConsistency}
+              calendar={<TrainingHeatmap history={history} trainingDates={profile.trainingDatesLog ?? []} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
+            />
+          ) : (
+            <VolumeContent />
+          )}
         </Modal>
       )}
 

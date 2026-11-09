@@ -37,6 +37,7 @@ import { newCompanion, supportsCompanion } from '../../engine/strengthCompanion'
 import { SeasonSetupCard } from './SeasonSetupCard';
 import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
+import { REX_HINTS } from '../dashboard/rexHints';
 import { elsewhereAnswer } from '../dashboard/rexAsk';
 import { handoff } from '../../lib/handoff';
 import { appNav } from '../../lib/appNav';
@@ -212,6 +213,9 @@ const SECTION_TITLE: Record<ObjetivosSection | 'asistente', string> = {
   objetivos: 'Objetivos',
 };
 
+/** Del tipo de cosa a crear a la primera pregunta del asistente (`rexFlow.ts`). */
+const ASSISTANT_START: Record<string, string> = { objetivo: 'o_type', macro: 'm_dur', programa: 'p_goal', temporada: 't_when', rampa: 'r_gap', consejo: 'i_suggest' };
+
 export function Objetivos({ initialSection }: { initialSection?: ObjetivosSection } = {}) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());
   const [history] = useState<SessionHistoryEntry[]>(() => athleteRepository.getHistory());
@@ -219,6 +223,12 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
   useEffect(() => {
     handoff.take('objetivos-asistente');
   }, []);
+  // Con qué pregunta arranca el asistente: «Objetivo nuevo» empieza por el tipo de objetivo, «Macro» por su duración… (sin elegir, el menú de siempre).
+  const [assistantStart, setAssistantStart] = useState<string | undefined>(() => ASSISTANT_START[handoff.peek('objetivos-asistente') ?? '']);
+  function openAssistant(what?: string) {
+    setAssistantStart(what ? ASSISTANT_START[what] : undefined);
+    setActiveSection('asistente');
+  }
   /** El asistente tiene un plan a medias sin crear: salir pide confirmación. */
   const [assistantDirty, setAssistantDirty] = useState(false);
   const [macroDraft, setMacroDraft] = useState<Macrocycle | null>(null);
@@ -424,19 +434,20 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           id="objetivos-inicio"
           lead="Objetivos."
           text={objetivosRexLine(openGroups, profile, todayIso())}
-          actions={[{ label: 'Hablar con Rex', target: 'objetivos-hablar' }]}
+          actions={[]}
           onAction={(target) => {
-            if (target === 'objetivos-hablar') setActiveSection('asistente');
+            if (target === 'objetivos-hablar') openAssistant();
           }}
           examples={[]}
+          hints={REX_HINTS.objetivos}
           ask={(text) =>
             routeAsk(text, 'objetivos', {
               todayIso: todayIso(),
               onMarkSaved: () => setProfile(athleteRepository.getProfile()),
               onWeekChanged: () => setProfile(athleteRepository.getProfile()),
               local: {
-                crear: () => {
-                  setActiveSection('asistente');
+                crear: (intent) => {
+                  openAssistant(intent.what);
                   return 'close';
                 },
                 estado: () => ({
@@ -458,10 +469,11 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
             {
               title: 'Crear con Rex',
               items: [
-                { label: 'Objetivo nuevo', icon: Target, onClick: () => setActiveSection('asistente') },
-                { label: 'Macro', icon: CalendarRange, onClick: () => setActiveSection('asistente') },
-                { label: 'Programa de fuerza', hint: 'Texas, 5/3/1…', icon: Dumbbell, onClick: () => setActiveSection('asistente') },
+                { label: 'Objetivo nuevo', icon: Target, onClick: () => openAssistant('objetivo') },
+                { label: 'Macro', icon: CalendarRange, onClick: () => openAssistant('macro') },
+                { label: 'Programa de fuerza', hint: 'Texas, 5/3/1…', icon: Dumbbell, onClick: () => openAssistant('programa') },
                 { label: 'Nueva temporada', hint: 'nov → jun', icon: CalendarDays, onClick: () => rexBus.emit('season-open') },
+                { label: 'No sé por dónde empezar', hint: 'que Rex me aconseje', icon: Sparkles, onClick: () => openAssistant('consejo') },
               ],
             },
             {
@@ -489,7 +501,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
       )}
       {activeSection === 'home' && <CuentaYDatos />}
 
-      {activeSection === 'asistente' && <RexAssistant profile={profile} onCreate={persist} onClose={goHome} onDirtyChange={setAssistantDirty} />}
+      {activeSection === 'asistente' && <RexAssistant profile={profile} onCreate={persist} onClose={goHome} onDirtyChange={setAssistantDirty} startAt={assistantStart} />}
 
       {activeSection !== 'home' && (
         <button

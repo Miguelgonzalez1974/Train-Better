@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Timer, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { CalendarClock, Timer, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -87,6 +87,7 @@ import { buildPlanRexSuggestions } from './rexPlan';
 import { CompanionCard, pickCompanionProgram } from './CompanionCard';
 import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
+import { REX_HINTS } from '../dashboard/rexHints';
 import { dayAnswer, type AskAnswer } from '../dashboard/rexAsk';
 import { adaptDoneAnswer, adaptHowMuchAnswer, adaptProposalAnswer, adaptRefusalAnswer } from '../dashboard/rexAdapt';
 import { planAdaptation, type AdaptRequest } from '../../lib/sessionAdapt';
@@ -1099,6 +1100,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
    * «Sí». La sesión de antes se guarda en memoria para poder deshacer mientras no recargues.
    */
   const adaptUndoRef = useRef<DailySession | null>(null);
+  // Para enseñar «Deshacer el cambio» en el lab mientras haya algo que deshacer (la referencia sola no repinta).
+  const [canUndoAdapt, setCanUndoAdapt] = useState(false);
   function adaptAsk(request: AdaptRequest, confirmed: boolean): AskAnswer {
     if (!session) return adaptRefusalAnswer('sin-sesion');
     if (alreadyCompletedToday) return adaptRefusalAnswer('hecha');
@@ -1107,6 +1110,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     if (plan.removed.length === 0) return adaptProposalAnswer(request, plan);
     if (!confirmed) return adaptProposalAnswer(request, plan);
     adaptUndoRef.current = session;
+    setCanUndoAdapt(true);
     athleteRepository.saveCachedSession(plan.session);
     setSession(plan.session);
     return adaptDoneAnswer(plan);
@@ -1117,6 +1121,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     athleteRepository.saveCachedSession(before);
     setSession(before);
     adaptUndoRef.current = null;
+    setCanUndoAdapt(false);
     return { lead: 'Deshecho.', tone: 'good', text: 'La sesión de hoy vuelve a como estaba.', actions: [] };
   }
   /** La caja de RexLab de Planificación: lo que se hace aquí lo hace esta pantalla; lo demás lo reparte el común (`rexAskRouter.ts`). */
@@ -1172,6 +1177,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
               ...(hasWodBlock ? [{ label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(canHarder ? [{ label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
               { label: 'Acortar la sesión', hint: 'tengo poco tiempo', icon: Timer, ask: 'acortar la sesion' },
+              { label: 'Mover a otro día', hint: 'o intercambiar', icon: CalendarClock, ask: 'mover la sesion' },
+              ...(canUndoAdapt ? [{ label: 'Deshacer el cambio', icon: Undo2, ask: 'deshaz el cambio' }] : []),
               { label: 'Cambiar el tipo', hint: 'recovery, WOD libre', icon: SlidersHorizontal, onClick: () => handleRexAct('tipo') },
               { label: 'Editar sesión', icon: Pencil, onClick: () => handleRexAct('editar') },
             ],
@@ -1192,7 +1199,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             title: 'Programa de fuerza',
             items: [
               ...(companionStat?.kind !== 'aceptada' ? [{ label: 'Hacerla hoy', hint: companionPlan ? `sesión ${companionPlan.index + 1}` : undefined, icon: Dumbbell, onClick: () => programAsk('hacer', null) }] : []),
-              ...(companionStat?.kind !== 'aplazada' ? [{ label: 'Hoy no', hint: 'pasa a mañana', icon: FastForward, onClick: () => programAsk('aplazar', null) }] : []),
+              ...(companionStat?.kind !== 'aplazada' ? [{ label: 'Aplazar la del programa', hint: 'pasa a mañana', icon: FastForward, onClick: () => programAsk('aplazar', null) }] : []),
               { label: 'Ver semana a semana', icon: CalendarDays, onClick: () => rexBus.emit('companion-weeks') },
               { label: 'Pausar 7 días', icon: PauseCircle, onClick: () => programAsk('pausar', 7) },
             ],
@@ -1472,6 +1479,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             ask={askRex}
             lab={rexLab}
             examples={[]}
+            hints={REX_HINTS.planificacion}
             onAction={runPlanTarget}
             onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
             onNext={() => setRexCursor((c) => c + 1)}

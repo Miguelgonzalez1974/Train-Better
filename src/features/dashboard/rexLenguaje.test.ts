@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fixTypos, normalizeAsk, parseAsk, splitAsk } from './rexAsk';
 import { mergeAnswers } from './rexAskRouter';
+import { REX_HINTS } from './rexHints';
 
 const FRIDAY = 5;
 const fix = (t: string) => fixTypos(normalizeAsk(t));
@@ -34,6 +35,19 @@ describe('Rex perdona las faltas de escritura', () => {
     expect(parseAsk('que toca mañna', FRIDAY)).toMatchObject({ kind: 'dia', label: 'mañana' });
     expect(parseAsk('mi rachaa', FRIDAY)).toEqual({ kind: 'dato', question: { what: 'racha' } });
     expect(parseAsk('mis marcsa', FRIDAY)).toEqual({ kind: 'marca-ver', lift: null, open: true });
+  });
+});
+
+describe('las pistas de la caja', () => {
+  it('Rex entiende de verdad cada pista que enseña', () => {
+    for (const [screen, hints] of Object.entries(REX_HINTS)) {
+      for (const h of hints) expect(parseAsk(h, FRIDAY).kind, `${screen}: «${h}»`).not.toBe('ayuda');
+    }
+  });
+
+  it('ninguna pista repite un botón de su pantalla (no son «Acortar la sesión» ni «Objetivo nuevo»)', () => {
+    expect(REX_HINTS.planificacion).not.toContain('acortar la sesión');
+    expect(REX_HINTS.objetivos).not.toContain('objetivo nuevo');
   });
 });
 

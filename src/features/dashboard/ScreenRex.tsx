@@ -19,6 +19,7 @@ export function ScreenRex({
   ask,
   lab,
   examples,
+  hints,
 }: {
   id: string;
   lead: string;
@@ -33,6 +34,8 @@ export function ScreenRex({
   ask?: (text: string) => AskAnswer | 'close';
   lab?: LabSection[];
   examples?: readonly string[];
+  /** Frases que Rex entiende en esta pantalla y que no tienen botón: rotan en el hueco de la caja. */
+  hints?: readonly string[];
 }) {
   const suggestion: RexSuggestion = { id, priority: 50, lead, text: `${lead} ${text}`, tone, mood, actions, dismissible: false };
   return (
@@ -41,6 +44,7 @@ export function ScreenRex({
       ask={ask}
       lab={lab}
       examples={examples}
+      hints={hints}
       modules={false}
       showDate={false}
       dock={{ stats }}

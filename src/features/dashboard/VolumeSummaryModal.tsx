@@ -29,6 +29,15 @@ const COLUMN_PX = 12;
  * Ocupa el hueco del botón de "próxima semana" en el Dashboard.
  */
 export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
+  return (
+    <Modal open onClose={onClose} title="Volumen por día">
+      <VolumeContent />
+    </Modal>
+  );
+}
+
+/** El contenido de «Volumen por día», sin su ventana (para ponerlo junto a la constancia). */
+export function VolumeContent() {
   const [workLog] = useState(() => athleteRepository.getWorkLog());
   const days = buildDailyVolume(workLog, DAYS_SHOWN);
   const totalKg = days.reduce((sum, d) => sum + d.tonnageKg, 0);
@@ -37,7 +46,7 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
   const todayKg = days[days.length - 1]?.tonnageKg ?? 0;
 
   return (
-    <Modal open onClose={onClose} title="Volumen por día">
+    <>
       {totalKg === 0 ? (
         <EmptyState
           Icon={BarChart3}
@@ -77,6 +86,6 @@ export function VolumeSummaryModal({ onClose }: VolumeSummaryModalProps) {
           </div>
         </div>
       )}
-    </Modal>
+    </>
   );
 }

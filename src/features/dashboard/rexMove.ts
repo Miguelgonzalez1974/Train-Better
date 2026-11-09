@@ -48,6 +48,17 @@ export function moveDoneAnswer(plan: MovePlan, todayIso: string): AskAnswer {
   };
 }
 
+/** «Mover la sesión» sin decir a qué día: los días a los que se puede pasar la de hoy, como botones (cada uno es la frase que se escribiría). */
+export function moveWhereAnswer(options: { label: string; ask: string }[]): AskAnswer {
+  if (options.length === 0) return { lead: 'No encuentro a dónde pasarla.', tone: 'mid', text: 'Hoy no hay una sesión que se pueda mover (es descanso, ya está hecha o los días siguientes no admiten cambios). Dime qué día quieres mover: «pasa la del jueves al viernes».', actions: [] };
+  return {
+    lead: '¿A qué día la paso?',
+    tone: 'info',
+    text: 'Elige el día y te enseño cómo queda antes de cambiar nada. Si el día ya tiene sesión, se intercambian.',
+    actions: [...options.map((o) => ({ label: o.label, target: 'planificacion' as const, ask: o.ask })), { label: 'Que elija Rex', target: 'planificacion' as const, ask: 'aplaza la sesion de hoy' }],
+  };
+}
+
 export function moveRefusalAnswer(reason: MoveRefusal): AskAnswer {
   const text: Record<MoveRefusal, [string, string]> = {
     'mismo-dia': ['Es el mismo día.', 'Dime a qué día la paso: «pasa la sesión de hoy al jueves».'],

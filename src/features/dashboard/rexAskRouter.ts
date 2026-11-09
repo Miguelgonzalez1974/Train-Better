@@ -8,8 +8,8 @@ import { followUpText, forgetTopic, rememberTopic } from './rexContext';
 import { rexBus } from '../../lib/rexBus';
 import type { RexTarget } from './rexDashboard';
 import { dataAnswer, whyAnswer } from './rexData';
-import { moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer } from './rexMove';
-import { planMove } from '../../lib/sessionMove';
+import { moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer, moveWhereAnswer } from './rexMove';
+import { dayLabel, planMove } from '../../lib/sessionMove';
 import { addDaysIso } from '../../engine/periodization';
 import { applyMark, currentMark, markAskKgAnswer, type MarkKey, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
 import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, splitAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
@@ -159,6 +159,21 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
       for (const s of plan.writes) athleteRepository.saveCachedSession(s);
       api.onWeekChanged?.();
       return moveDoneAnswer(plan, todayIso);
+    }
+    case 'mover-ayuda': {
+      // Los próximos días a los que se puede pasar la sesión de hoy (como botón cada uno), máximo cuatro.
+      const todayIso = api.todayIso;
+      const profile = athleteRepository.getProfile();
+      const history = athleteRepository.getHistory();
+      const options: { label: string; ask: string }[] = [];
+      for (let i = 1; i <= 6 && options.length < 4; i++) {
+        const iso = addDaysIso(todayIso, i);
+        const plan = planMove(profile, history, { from: todayIso, to: iso }, todayIso);
+        if (typeof plan === 'string') continue;
+        const label = dayLabel(iso, todayIso);
+        options.push({ label: `${label.charAt(0).toUpperCase()}${label.slice(1)}${plan.swap ? ' (intercambio)' : ''}`, ask: `pasa la sesion de hoy ${label === 'mañana' ? 'a mañana' : `al ${label.replace(/^el /, '')}`}` });
+      }
+      return moveWhereAnswer(options);
     }
     case 'dato':
     case 'por-que': {

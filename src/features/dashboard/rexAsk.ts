@@ -40,6 +40,8 @@ export type AskIntent =
   | { kind: 'adaptar-ayuda' }
   /** Mover o intercambiar sesiones de la semana: días como desplazamiento desde hoy (0 = hoy); `to` null = que Rex elija el hueco. */
   | { kind: 'mover'; from: number; to: number | null; confirmed: boolean }
+  /** «Mover la sesión» sin decir a qué día: Rex ofrece los días posibles con botones. */
+  | { kind: 'mover-ayuda' }
   /** Preguntas sobre tus datos: último levantamiento, última marca, racha, sesiones, duración de hoy, peso actual. */
   | { kind: 'dato'; question: DataQuestion }
   /** «¿Por qué este peso / este WOD / hoy así?». */
@@ -166,6 +168,8 @@ function parseMoveAsk(norm: string, todayWeekday: number): AskIntent | null {
   if (/\bwod\b/.test(norm)) return null;
 
   const found = [...norm.matchAll(DAY_WORDS)].map((m) => ({ word: m[1], start: m.index ?? 0 }));
+  // «Mover la sesión» sin decir a qué día: Rex pregunta con botones.
+  if (found.length === 0 && (/\b(mover|mueve|moverla|muevela|pasar|pasala|cambiarla de dia|cambiar de dia)\b.*\b(sesion|entreno|entrenamiento)\b|\b(otro dia|cambiar de dia|cambiarla de dia)\b/.test(norm) || /\bmover (la )?sesion\b/.test(norm))) return { kind: 'mover-ayuda' };
   if (found.length === 0 || found.length > 2) return null;
   const offsetOf = (word: string, asTarget: boolean): number => {
     if (word === 'hoy') return 0;

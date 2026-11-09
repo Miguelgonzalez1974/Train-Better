@@ -19,7 +19,20 @@ const TYPING_MS = 650;
  * temporada entera). Nada se guarda hasta la revisión final; al crear, lo entrega entero a `onCreate`. Las preguntas y lo que crea
  * salen de `rexFlow.ts`, que es lo que se prueba; esto solo las pinta, con la mascota reaccionando a lo que pasa.
  */
-export function RexAssistant({ profile, onCreate, onClose, onDirtyChange }: { profile: AthleteProfile; onCreate: (next: AthleteProfile) => void; onClose: () => void; onDirtyChange?: (dirty: boolean) => void }) {
+export function RexAssistant({
+  profile,
+  onCreate,
+  onClose,
+  onDirtyChange,
+  startAt,
+}: {
+  profile: AthleteProfile;
+  onCreate: (next: AthleteProfile) => void;
+  onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  /** La pregunta con la que arranca (por ejemplo `o_type` para un objetivo): sin ella, el menú de «¿qué montamos?». */
+  startAt?: string;
+}) {
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const ctx = useMemo(() => ({ profile, todayIso }), [profile, todayIso]);
   const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
@@ -148,7 +161,7 @@ export function RexAssistant({ profile, onCreate, onClose, onDirtyChange }: { pr
   }
 
   useEffect(() => {
-    ask('start');
+    ask(startAt ?? 'start');
     return () => {
       tokenRef.current += 1;
     };

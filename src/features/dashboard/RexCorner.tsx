@@ -108,6 +108,7 @@ export function RexCorner({
   ask,
   lab,
   examples,
+  hints,
   dock = null,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
@@ -126,6 +127,8 @@ export function RexCorner({
   lab?: LabSection[];
   /** Los atajos de la caja de esta pantalla (por defecto, los del Dashboard). */
   examples?: readonly string[];
+  /** Frases que Rex entiende y que no tienen botón, para enseñarlas rotando en el hueco de la caja («Prueba: «tengo 30 minutos»»). */
+  hints?: readonly string[];
   /**
    * El globo fijo de la pantalla: Rex dice siempre aquí su frase del momento (estado del día y qué hacer), con una línea de cifras (`stats`),
    * una pista opcional (`tip`), el botón de su primera acción y el botón «RexLab». Se pliega con la flechita a una sola línea, pero no se
@@ -137,6 +140,13 @@ export function RexCorner({
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // La pista del hueco de la caja cambia cada 4 s mientras el panel está abierto y no has escrito nada (se salta con «reducir movimiento»).
+  const [hintIdx, setHintIdx] = useState(0);
+  useEffect(() => {
+    if (!open || !hints || hints.length < 2 || typeof window === 'undefined' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const t = window.setInterval(() => setHintIdx((i) => (i + 1) % hints.length), 4000);
+    return () => window.clearInterval(t);
+  }, [open, hints]);
   const [bubble, setBubble] = useState(false);
   const [folded, setFolded] = useState(() => readFolded());
   const toggleFold = () => {
@@ -403,7 +413,7 @@ export function RexCorner({
                     type="text"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Pregúntale a Rex…"
+                    placeholder={hints && hints.length > 0 ? `Prueba: «${hints[hintIdx % hints.length]}»` : 'Pregúntale a Rex…'}
                     aria-label="Pregúntale a Rex"
                     autoComplete="off"
                     enterKeyHint="send"
