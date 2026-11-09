@@ -101,8 +101,9 @@ const signed = (n: number) => `${n > 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
 /** Un salto mayor que esto sobre la marca actual se confirma como posible errata. */
 const BIG_JUMP = 0.15;
 
-function viewAction(target: RexTarget): { label: string; target: RexTarget }[] {
-  return [{ label: 'Ver la gráfica', target }];
+/** El botón que abre «Mis marcas» con ese levantamiento desplegado (la caja lo lee como «ver la gráfica de…»). */
+function viewAction(target: RexTarget, label?: string): { label: string; target: RexTarget; ask?: string }[] {
+  return [{ label: 'Ver la gráfica', target, ...(label ? { ask: `ver la grafica de ${label}` } : {}) }];
 }
 
 /** «¿Cuánto levanto en…?» / «mis marcas»: la marca de un levantamiento con su fecha y cambio, o todas en una frase. */
@@ -121,13 +122,13 @@ export function markViewAnswer(profile: AthleteProfile, key: MarkKey | null, ana
   const last = log[log.length - 1];
   const before = log.length > 1 ? log[log.length - 2] : null;
   const when = last ? ` Apuntada el ${shortDate(last.date)}${before && before.kg !== last.kg ? `, ${signed(last.kg - before.kg)} kg desde ${fmt(before.kg)}` : ''}.` : '';
-  return { lead: `${label}: ${fmt(kg)} kg.`, tone: 'info', text: when.trim() || 'Es tu marca actual.', actions: viewAction(analysis) };
+  return { lead: `${label}: ${fmt(kg)} kg.`, tone: 'info', text: when.trim() || 'Es tu marca actual.', actions: viewAction(analysis, label) };
 }
 
 /** Lo que Rex ha entendido antes de guardar: el cambio, con aviso si es un salto raro, y el botón para confirmarlo. */
 export function markProposalAnswer(profile: AthleteProfile, lift: MarkLift, kg: number, analysis: RexTarget): AskAnswer {
   const current = currentMark(profile, lift.key);
-  if (current === kg) return { lead: 'Ya la tienes.', tone: 'info', text: `${lift.label} ya está en ${fmt(kg)} kg.`, actions: viewAction(analysis) };
+  if (current === kg) return { lead: 'Ya la tienes.', tone: 'info', text: `${lift.label} ya está en ${fmt(kg)} kg.`, actions: viewAction(analysis, lift.label) };
   const confirm = { label: current > 0 && kg < current ? 'Sí, bajarla' : 'Sí, apuntar', target: analysis, ask: `confirmo marca ${lift.label} ${kg}` };
   if (current <= 0) return { lead: 'Primera marca.', tone: 'info', text: `${lift.label}: ${fmt(kg)} kg. ¿La apunto?`, actions: [confirm] };
   const diff = kg - current;
@@ -142,7 +143,7 @@ export function markProposalAnswer(profile: AthleteProfile, lift: MarkLift, kg: 
 /** Tras guardar. */
 export function markSavedAnswer(previous: number, lift: MarkLift, kg: number, analysis: RexTarget): AskAnswer {
   const text = previous > 0 ? `${lift.label}: ${fmt(previous)} → ${fmt(kg)} kg (${signed(kg - previous)}). Tus cargas se recalculan con la nueva marca.` : `${lift.label}: ${fmt(kg)} kg.`;
-  return { lead: 'Apuntada.', tone: 'good', text, actions: viewAction(analysis) };
+  return { lead: 'Apuntada.', tone: 'good', text, actions: viewAction(analysis, lift.label) };
 }
 
 /** «Apunta una marca» sin decir cuál: se elige el levantamiento. */

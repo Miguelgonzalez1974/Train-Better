@@ -4,6 +4,7 @@
  * después. Vive en memoria: una recarga lo borra, y está bien.
  */
 export type HandoffKey = 'support-start' | 'plan-act' | 'objetivos-asistente' | 'analisis-tab';
+// El valor de 'analisis-tab': 'perfil' (Análisis en su pestaña Perfil), 'marcas' (la pantalla Mis marcas) o 'marcas:backSquat' (con ese levantamiento desplegado).
 
 const TTL_MS = 120_000;
 const pending = new Map<HandoffKey, { value: string; at: number }>();

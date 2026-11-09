@@ -27,7 +27,7 @@ export type AskIntent =
   | { kind: 'crear'; what: 'objetivo' | 'macro' | 'programa' | 'temporada' }
   | { kind: 'modulo'; target: RexTarget }
   /** Marcas (PR): ver una o todas, apuntar una (`kg` null = falta decirlo; `confirmed` = ya dijo que sí) o estimar el 1RM de una serie («100 x 3»). */
-  | { kind: 'marca-ver'; lift: MarkLift | null }
+  | { kind: 'marca-ver'; lift: MarkLift | null; /** true: abrir la pantalla «Mis marcas» (todas, o desplegada en ese levantamiento); false: contestar en una línea. */ open: boolean }
   | { kind: 'marca-apuntar'; lift: MarkLift | null; kg: number | null; confirmed: boolean }
   | { kind: 'marca-estimar'; lift: MarkLift; loadKg: number; reps: number }
   | { kind: 'ayuda' };
@@ -92,12 +92,13 @@ function parseMarkAsk(norm: string): AskIntent | null {
     if (series) return { kind: 'marca-estimar', lift, loadKg: series.loadKg, reps: series.reps };
     if (kg !== null) return { kind: 'marca-apuntar', lift, kg, confirmed: false };
     if (/\b(apunta|apuntar|anota|anotar|registra|registrar|actualiza|actualizar|nueva|nuevo)\b/.test(norm) && /\b(marca|pr|record|1rm|maximo)\b/.test(norm)) return { kind: 'marca-apuntar', lift, kg: null, confirmed: false };
-    if (/\b(marca|marcas|pr|prs|record|records|maximo|1rm|levanto|levantas|tengo)\b/.test(norm)) return { kind: 'marca-ver', lift };
+    if (/\b(grafica|evolucion)\b/.test(norm)) return { kind: 'marca-ver', lift, open: true };
+    if (/\b(marca|marcas|pr|prs|record|records|maximo|1rm|levanto|levantas|tengo)\b/.test(norm)) return { kind: 'marca-ver', lift, open: false };
     return null;
   }
 
   if (/\b(apunta|apuntar|anota|anotar|registra|registrar|actualiza|actualizar|nueva|nuevo)\b.*\b(marca|pr|record|1rm)\b/.test(norm)) return { kind: 'marca-apuntar', lift: null, kg: null, confirmed: false };
-  if (/\b(mis|todas mis|tus) (marcas|records|prs|maximos|1rm)\b|\bmi (marca|pr|record)\b/.test(norm)) return { kind: 'marca-ver', lift: null };
+  if (/\b(mis|todas mis|tus) (marcas|records|prs|maximos|1rm)\b|\bmi (marca|pr|record)\b/.test(norm)) return { kind: 'marca-ver', lift: null, open: true };
   return null;
 }
 

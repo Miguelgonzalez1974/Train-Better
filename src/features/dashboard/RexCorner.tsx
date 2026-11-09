@@ -452,9 +452,9 @@ export function RexCorner({
                               onClick={() => {
                                 const tab = NAV_TARGET[a.target];
                                 if (a.ask) send(a.ask);
-                                else if (a.target === 'ir-analisis') {
-                                  // El Análisis vive en el Dashboard: se va allí y se abre solo, en la pestaña Fuerza.
-                                  handoff.put('analisis-tab', 'fuerza');
+                                else if (a.target === 'ir-marcas') {
+                                  // «Mis marcas» vive en el Dashboard: se va allí y se abre sola.
+                                  handoff.put('analisis-tab', 'marcas');
                                   setOpen(false);
                                   appNav.goTo('dashboard');
                                 } else if (tab) {

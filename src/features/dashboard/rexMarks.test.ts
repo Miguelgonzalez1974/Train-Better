@@ -42,10 +42,12 @@ describe('leer una marca escrita', () => {
   });
 
   it('ver una marca o todas', () => {
-    expect(parseAsk('mis marcas', FRIDAY)).toEqual({ kind: 'marca-ver', lift: null });
-    expect(parseAsk('mis records', FRIDAY)).toEqual({ kind: 'marca-ver', lift: null });
-    expect(parseAsk('cuanto levanto en snatch', FRIDAY)).toMatchObject({ kind: 'marca-ver' });
-    expect(parseAsk('cual es mi marca de sentadilla', FRIDAY)).toMatchObject({ kind: 'marca-ver' });
+    // Todas: abre la pantalla «Mis marcas». Una sola: contesta en una línea, con un botón que abre la pantalla en ese levantamiento.
+    expect(parseAsk('mis marcas', FRIDAY)).toEqual({ kind: 'marca-ver', lift: null, open: true });
+    expect(parseAsk('mis records', FRIDAY)).toEqual({ kind: 'marca-ver', lift: null, open: true });
+    expect(parseAsk('cuanto levanto en snatch', FRIDAY)).toMatchObject({ kind: 'marca-ver', open: false });
+    expect(parseAsk('cual es mi marca de sentadilla', FRIDAY)).toMatchObject({ kind: 'marca-ver', open: false });
+    expect(parseAsk('ver la grafica de Snatch', FRIDAY)).toMatchObject({ kind: 'marca-ver', open: true });
   });
 
   it('una serie con carga y repeticiones es una estimación, no una marca', () => {
@@ -68,6 +70,7 @@ describe('las respuestas de marcas', () => {
     const a = markViewAnswer(p, 'backSquat', 'analisis');
     expect(a.lead).toBe('Back Squat: 135 kg.');
     expect(a.text).toBe('Apuntada el 3 oct, +10 kg desde 125.');
+    expect(a.actions[0]).toMatchObject({ label: 'Ver la gráfica', ask: 'ver la grafica de Back Squat' });
     expect(markViewAnswer(profile, null, 'analisis').text).toMatch(/Back Squat 135 · Front Squat 110/);
     expect(markViewAnswer(makeProfile({ prs: { ...profile.prs, snatch: 0 } }), 'snatch', 'analisis').lead).toBe('Snatch: sin marca.');
   });

@@ -70,6 +70,9 @@ import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { Dumbbell, Trophy } from 'lucide-react';
 import { AnalysisView, type AnalysisTab } from './AnalysisView';
+import { MarksScreen } from './MarksScreen';
+import type { AthleteProfile } from '../../data/athlete/types';
+import type { MarkKey } from './rexMarks';
 import { handoff } from '../../lib/handoff';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { addSubirPrGoal } from './rexAnalysis';
@@ -100,13 +103,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showVolume, setShowVolume] = useState(false);
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
-  // «Mi perfil» (desde Objetivos o RexLab) abre el Análisis directamente en la pestaña Perfil.
-  const [handedTab] = useState<AnalysisTab | null>(() => {
-    const t = handoff.peek('analisis-tab');
-    return t === 'perfil' || t === 'fuerza' ? t : null;
-  });
-  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>(handedTab ?? 'fuerza');
-  const [analysisOpen, setAnalysisOpen] = useState(handedTab !== null);
+  // Lo que otra pantalla deja dicho al llegar: «Mi perfil» abre el Análisis en su pestaña Perfil; «Mis marcas» abre esa pantalla (con un levantamiento desplegado si viene).
+  const [handed] = useState<string | null>(() => handoff.peek('analisis-tab'));
+  const handedMarks = handed === 'marcas' || handed?.startsWith('marcas:') ? { key: (handed.split(':')[1] as MarkKey | undefined) ?? null } : null;
+  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>(handed === 'perfil' ? 'perfil' : 'equilibrio');
+  const [analysisOpen, setAnalysisOpen] = useState(handed === 'perfil');
+  const [marks, setMarks] = useState<{ key: MarkKey | null } | null>(handedMarks);
   useEffect(() => {
     handoff.take('analisis-tab');
   }, []);
@@ -356,8 +358,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'volumen':
         return setShowVolume(true);
       case 'analisis':
-        setAnalysisStart('fuerza');
+        setAnalysisStart('equilibrio');
         return setAnalysisOpen(true);
+      case 'marcas':
+        return setMarks({ key: null });
       case 'perfil':
         setAnalysisStart('perfil');
         return setAnalysisOpen(true);
@@ -413,12 +417,20 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     else onNavigateToPlanificacion();
   }
 
+  /** Guardar las marcas editadas (desde «Mis marcas»): una marca distinta cambia los pesos, así que las sesiones ya generadas se recalculan al abrirlas. */
+  function saveMarks(patch: Pick<AthleteProfile, 'prs' | 'variantPrs'>) {
+    athleteRepository.saveProfile({ ...athleteRepository.getProfile(), ...patch });
+    resetUpcomingSessions(todayIso);
+    setProfile(athleteRepository.getProfile());
+  }
+
   /** «Pregúntale a Rex»: el reparto común de `rexAskRouter.ts`, con lo que el Dashboard hace por su cuenta (qué toca, cómo estás, abrir un módulo). */
   function askRex(text: string): AskAnswer | 'close' {
     return routeAsk(text, 'dashboard', {
       todayIso,
       onWeightLogged: () => setBodyweightLog(athleteRepository.getBodyweightLog()),
       onMarkSaved: () => setProfile(athleteRepository.getProfile()),
+      openMarks: (key) => setMarks({ key }),
       missing: () => (nutrition ? { protein: Math.max(0, nutrition.protein.target - nutrition.protein.done), carbs: Math.max(0, nutrition.carbs.target - nutrition.carbs.done) } : null),
       local: {
         dia: (intent) => dayAnswer(intent.label, describeDayForAsk({ offset: intent.offset, todayIso, profile, history, todaySession, todayStrain, bias: strainLearned.bias })),
@@ -662,6 +674,29 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         Resumen no se alarga. Dentro, los medidores (dominios energéticos, desequilibrios, fuerza) son la puerta a su detalle: solo
         sale la tarjeta del medidor tocado.
       */}
+      {marks && (
+        <MarksScreen
+          profile={profile}
+          history={history}
+          imbalanceGroups={imbalanceGroups}
+          strengthRatio={strengthRatio}
+          bodyweightKg={latestBodyweightKg}
+          todayIso={todayIso}
+          initialKey={marks.key}
+          onSaveProfile={saveMarks}
+          onCreateGoal={(movementId) => {
+            const next = addSubirPrGoal(athleteRepository.getProfile(), movementId, todayIso);
+            athleteRepository.saveProfile(next);
+            setProfile(next);
+          }}
+          onOpenObjetivos={() => {
+            setMarks(null);
+            onNavigateToObjetivos();
+          }}
+          onClose={() => setMarks(null)}
+        />
+      )}
+
       {analysisOpen && (
         <Modal open onClose={() => setAnalysisOpen(false)} title="Análisis">
           <AnalysisView
@@ -675,11 +710,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             todayIso={todayIso}
             initialTab={analysisStart}
             onSaveProfile={(patch) => {
-              const current = athleteRepository.getProfile();
-              const next = { ...current, ...patch };
-              athleteRepository.saveProfile(next);
-              // Una marca distinta cambia los pesos: las sesiones ya generadas se recalculan al abrirlas.
-              if ('prs' in patch || 'variantPrs' in patch) resetUpcomingSessions(todayIso);
+              athleteRepository.saveProfile({ ...athleteRepository.getProfile(), ...patch });
               setProfile(athleteRepository.getProfile());
             }}
             onOpenProgramming={() => {

@@ -50,8 +50,9 @@ export type RexTarget =
   | 'ir-planificacion'
   | 'ir-nutricion'
   | 'ir-objetivos'
-  /** Ir al Dashboard y abrir el Análisis en la pestaña Fuerza (las marcas). */
-  | 'ir-analisis'
+  /** La pantalla «Mis marcas» (en el Dashboard), y la misma desde otra pantalla: va al Dashboard y la abre. */
+  | 'marcas'
+  | 'ir-marcas'
 
 export type RexBarMood = 'idle' | 'think' | 'happy' | 'lift';
 
@@ -166,10 +167,7 @@ export const QUIET_SUGGESTION: RexSuggestion = {
   priority: 0,
   text: 'Todo en orden por hoy. Aquí estoy si me necesitas.',
   mood: 'idle',
-  actions: [
-    { label: 'Ver mi constancia', target: 'constancia' },
-    { label: 'Volumen por día', target: 'volumen' },
-  ],
+  actions: [{ label: 'Ver mi constancia', target: 'constancia' }],
 };
 
 function plural(n: number, one: string, many: string): string {
@@ -178,14 +176,12 @@ function plural(n: number, one: string, many: string): string {
 
 /** Rex comenta el día pasado que se mira: si entrenó, cómo salió el esfuerzo frente al objetivo de ese día; si no, qué hubo. */
 export function daySuggestion(day: RexViewDay): RexSuggestion {
-  const actions: RexAction[] = [
-    { label: 'Volumen por día', target: 'volumen' },
-    { label: 'Volver a hoy', target: 'hoy' },
-  ];
+  // El volumen por día es un botón de «Más»: aquí solo se ofrece volver a hoy.
+  const actions: RexAction[] = [{ label: 'Volver a hoy', target: 'hoy' }];
   const id = `dia-${day.iso}`;
   if (!day.trained) {
     const text = day.rested ? `${day.label} fue de descanso. Recuperar también es entrenar.` : `${day.label} no hay ninguna sesión registrada.`;
-    return { id, priority: 100, text, mood: 'idle', actions: [actions[1]], dismissible: false };
+    return { id, priority: 100, text, mood: 'idle', actions, dismissible: false };
   }
   const real = day.strain;
   if (real === null) return { id, priority: 100, text: `${day.label} entrenaste.`, mood: 'happy', actions, dismissible: false };
@@ -225,7 +221,7 @@ export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restM
 export function closingSuggestion(c: RexClosing | null): RexSuggestion {
   const actions: RexAction[] = [];
   if (c?.hasDetail) actions.push({ label: 'Ver detalle', target: 'detalle-dia' });
-  actions.push({ label: 'Estirar', target: 'movilidad' }, { label: 'Volumen por día', target: 'volumen' });
+  actions.push({ label: 'Estirar', target: 'movilidad' });
   const base = { id: 'cierre', priority: 95, lead: 'Sesión hecha.', actions, dismissible: false };
   if (!c) return { ...base, text: 'Sesión hecha. Buen trabajo.', mood: 'happy', tone: 'good' };
   const range = `${c.low}–${c.high}`;
@@ -425,6 +421,7 @@ export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'semana', label: 'Tu semana' },
   { target: 'volumen', label: 'Volumen por día' },
   { target: 'analisis', label: 'Análisis' },
+  { target: 'marcas', label: 'Marcas' },
   { target: 'forma', label: 'Tu forma' },
   { target: 'perfil', label: 'Mi perfil' },
   { target: 'objetivos', label: 'Objetivos' },

@@ -5,7 +5,7 @@ import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { rexBus } from '../../lib/rexBus';
 import type { RexTarget } from './rexDashboard';
-import { applyMark, currentMark, markAskKgAnswer, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
+import { applyMark, currentMark, markAskKgAnswer, type MarkKey, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
 import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
 
 export type RexScreen = 'dashboard' | 'planificacion' | 'nutricion' | 'objetivos';
@@ -20,6 +20,8 @@ export interface RouterApi {
   onWeightLogged?: () => void;
   /** Se acaba de apuntar una marca (PR): la pantalla relee el perfil y recalcula lo que dependa de él. */
   onMarkSaved?: () => void;
+  /** Abre la pantalla «Mis marcas» (solo el Dashboard la tiene a mano; el resto va al Dashboard). */
+  openMarks?: (key: MarkKey | null) => void;
 }
 
 /** Apunta el peso de hoy y dice cómo cambia frente al último. */
@@ -54,7 +56,7 @@ const SUPPORT_NODE: Partial<Record<AskIntent['kind'], string>> = { dolor: 'p_zon
 export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAnswer | 'close' {
   const intent = parseAsk(text, new Date().getDay());
   // Los botones de las respuestas de marcas llevan al Análisis: en el Dashboard lo abre; desde otra pantalla va al Dashboard y lo abre allí.
-  const analysis: RexTarget = screen === 'dashboard' ? 'analisis' : 'ir-analisis';
+  const analysis: RexTarget = screen === 'dashboard' ? 'marcas' : 'ir-marcas';
   const local = api.local?.[intent.kind] as ((i: AskIntent) => AskAnswer | 'close') | undefined;
   if (local) return local(intent);
 
@@ -67,8 +69,18 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
     case 'comida':
       sendMealToNutrition(intent.text, screen === 'nutricion');
       return 'close';
-    case 'marca-ver':
+    case 'marca-ver': {
+      // «Mis marcas» (o «ver la gráfica de…»): una pantalla propia, no una frase apiñada. En el Dashboard se abre ahí mismo; desde otra pantalla se va al Dashboard y se abre.
+      if (intent.open) {
+        if (api.openMarks) api.openMarks(intent.lift?.key ?? null);
+        else {
+          handoff.put('analisis-tab', intent.lift ? `marcas:${intent.lift.key}` : 'marcas');
+          appNav.goTo('dashboard');
+        }
+        return 'close';
+      }
       return markViewAnswer(athleteRepository.getProfile(), intent.lift?.key ?? null, analysis);
+    }
     case 'marca-estimar':
       return markEstimateAnswer(athleteRepository.getProfile(), intent.lift, intent.loadKg, intent.reps, analysis);
     case 'marca-apuntar': {
