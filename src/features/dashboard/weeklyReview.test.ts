@@ -196,3 +196,47 @@ describe('revisión semanal: aplicar y descartar', () => {
     expect(withMacroWeekReviewed(next, 'otono:7')).toBe(next);
   });
 });
+
+describe('revision semanal: cuenta el programa de fuerza (Texas)', () => {
+  const texas = (extra: Partial<NonNullable<AthleteProfile['strengthPrograms']>[number]> = {}) =>
+    ({ id: 'tx', startDate: '2026-09-01', endDate: '2027-01-30', method: 'texas', lifts: [], companion: { weekdays: [0, 2, 4], weeks: 20, cursor: 6, deferrals: 0 }, ...extra }) as NonNullable<AthleteProfile['strengthPrograms']>[number];
+  const log = (date: string, outcome: 'hecha' | 'saltada', o: Record<string, unknown> = {}) => ({ id: `tx|${date}`, programId: 'tx', index: 0, date, outcome, ...o }) as NonNullable<AthleteProfile['companionLog']>[number];
+  const history = [...OLDER, ...week(FULL)];
+
+  it('sin programa no hay metrica del programa', () => {
+    const r = buildWeeklyReview(makeProfile(), history, MONDAY)!;
+    expect(r.metrics.map((m) => m.label)).not.toContain('Programa de fuerza');
+  });
+
+  it('con programa enseña cuantas sesiones hiciste de las que tocaban', () => {
+    const profile = makeProfile({ strengthPrograms: [texas()], companionLog: [log('2026-11-02', 'hecha', { rpe: 7, durationMin: 40 }), log('2026-11-04', 'hecha', { rpe: 7, durationMin: 40 })] });
+    const m = buildWeeklyReview(profile, history, MONDAY)!.metrics.find((x) => x.label === 'Programa de fuerza')!;
+    // lunes, miercoles y viernes: 3 previstas, 2 hechas
+    expect(m.value).toBe('2 de 3');
+    expect(m.tone).toBe('muted');
+  });
+
+  it('todas hechas: bien; una saltada se avisa', () => {
+    const all = makeProfile({ strengthPrograms: [texas()], companionLog: ['2026-11-02', '2026-11-04', '2026-11-06'].map((d) => log(d, 'hecha')) });
+    const r = buildWeeklyReview(all, history, MONDAY)!;
+    expect(r.metrics.find((x) => x.label === 'Programa de fuerza')).toMatchObject({ value: '3 de 3', tone: 'good' });
+    expect(r.best.join(' ')).toContain('Hiciste las 3 sesiones del programa de fuerza');
+    const skipped = makeProfile({ strengthPrograms: [texas()], companionLog: [log('2026-11-02', 'saltada')] });
+    expect(buildWeeklyReview(skipped, history, MONDAY)!.watch.join(' ')).toContain('Saltaste 1 sesi');
+  });
+
+  it('la marca de 5 del viernes sale entre lo mejor si salio, y entre lo que vigilar si no', () => {
+    const lift = (achieved?: number) => ({ movementId: 'back-squat', sets: 1, reps: 5, loadKg: 100, attempt: true, ...(achieved !== undefined ? { achieved } : {}) });
+    const ok = makeProfile({ strengthPrograms: [texas()], companionLog: [log('2026-11-06', 'hecha', { lifts: [lift(102.5)] })] });
+    expect(buildWeeklyReview(ok, history, MONDAY)!.best.join(' ')).toContain('marca de 5');
+    const ko = makeProfile({ strengthPrograms: [texas()], companionLog: [log('2026-11-06', 'hecha', { lifts: [lift()] })] });
+    expect(buildWeeklyReview(ko, history, MONDAY)!.watch.join(' ')).toContain('no sali');
+  });
+
+  it('el tiempo entrenando suma los minutos del programa', () => {
+    const without = buildWeeklyReview(makeProfile(), history, MONDAY)!.metrics.find((x) => x.label === 'Tiempo entrenando')!.value;
+    const profile = makeProfile({ strengthPrograms: [texas()], companionLog: [log('2026-11-02', 'hecha', { rpe: 7, durationMin: 40 })] });
+    const withTexas = buildWeeklyReview(profile, history, MONDAY)!.metrics.find((x) => x.label === 'Tiempo entrenando')!.value;
+    expect(withTexas).not.toBe(without);
+  });
+});

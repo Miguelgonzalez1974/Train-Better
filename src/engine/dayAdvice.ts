@@ -39,6 +39,8 @@ export interface DayAdviceInput {
   target: { low: number; high: number };
   /** Hoy lo marcaste como descanso a propósito ("Hoy descanso"). */
   restMarked?: boolean;
+  /** El esfuerzo previsto ya suma la sesión del programa de fuerza (el Texas) que aceptaste hacer hoy. */
+  withProgram?: boolean;
 }
 
 const PAIN_LABEL: Record<string, string> = {
@@ -53,9 +55,15 @@ const LOAD_WORD: Record<'baja' | 'optima' | 'moderada' | 'alta', string> = { baj
 const joinAnd = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`);
 
 /** "La sesión (~6) encaja con tu objetivo (5–7)." */
-function fitClause(fit: DayAdviceInput['fit'], target: DayAdviceInput['target']): string {
+function fitClause(fit: DayAdviceInput['fit'], target: DayAdviceInput['target'], withProgram = false): string {
   if (!fit) return '';
   const range = `${target.low}–${target.high}`;
+  // Con el programa de fuerza de hoy sumado, se dice: el aviso de «se pasa» es de macro + programa, y las salidas son quitar algo del macro o aplazar el programa.
+  if (withProgram) {
+    if (fit.kind === 'se-pasa') return `Con el programa de fuerza de hoy llegas a ~${fit.planned}, ${fit.diff} por encima de tu objetivo (${range}): quita el accesorio o aplaza el programa.`;
+    if (fit.kind === 'dentro') return `La sesión y el programa de fuerza (~${fit.planned}) encajan con tu objetivo (${range}).`;
+    return `La sesión y el programa de fuerza (~${fit.planned}) te dejan margen sobre tu objetivo (${range}).`;
+  }
   if (fit.kind === 'dentro') return `La sesión (~${fit.planned}) encaja con tu objetivo (${range}).`;
   if (fit.kind === 'se-pasa') return `La sesión (~${fit.planned}) se pasa ${fit.diff} de tu objetivo (${range}): puedes ajustarla.`;
   return `La sesión (~${fit.planned}) te deja margen sobre tu objetivo (${range}).`;
@@ -68,7 +76,7 @@ export function dayAdvice(input: DayAdviceInput): DayAdvice {
   const { session, hasCheckIn, prep, level, loadZone, hrvLow, painAreas, fit, target, restMarked } = input;
   // Lo que tú has decidido manda: si marcaste el día como descanso, el consejo es descansar.
   if (restMarked) return { lead: 'Hoy descansas.', reason: 'Lo marcaste como descanso: descansar bien también suma para mañana.', tone: 'info', icon: 'moon' };
-  const fitText = fitClause(fit, target);
+  const fitText = fitClause(fit, target, input.withProgram);
   const comp = session?.competition;
   const light = session?.dayLight ?? null;
 

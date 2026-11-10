@@ -1,6 +1,7 @@
 import { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from './periodization';
 import { isRestMarked } from './restDays';
+import { companionTrainedDates } from './companionLoad';
 
 /**
  * Racha de dias de entreno PROGRAMADOS cumplidos sin fallar ninguno, contando hacia atras desde
@@ -10,7 +11,7 @@ import { isRestMarked } from './restDays';
  * lleve semanas sin fallar un dia).
  */
 export function computeAdherenceStreak(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string): number {
-  const completedDates = new Set(history.map((h) => h.date));
+  const completedDates = new Set([...history.map((h) => h.date), ...companionTrainedDates(profile)]);
   let streak = 0;
   const cursor = new Date(`${todayIso}T00:00:00`);
   // Tope de 400 dias de calendario (~13 meses) por seguridad — mismo horizonte que

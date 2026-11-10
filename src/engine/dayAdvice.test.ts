@@ -18,6 +18,23 @@ const base: DayAdviceInput = {
 };
 const advise = (over: Partial<DayAdviceInput>) => dayAdvice({ ...base, ...over });
 
+describe('con el programa de fuerza de hoy sumado', () => {
+  it('si se pasa, lo dice con el programa y da las dos salidas', () => {
+    const a = advise({ withProgram: true, fit: { kind: 'se-pasa', planned: 78, diff: 12 }, target: { low: 45, high: 66 } });
+    expect(a.reason).toContain('Con el programa de fuerza de hoy llegas a ~78, 12 por encima de tu objetivo (45–66)');
+    expect(a.reason).toContain('quita el accesorio o aplaza el programa');
+  });
+
+  it('si encaja o deja margen, también habla de la sesión y el programa', () => {
+    expect(advise({ withProgram: true, fit: { kind: 'dentro', planned: 60, diff: 0 } }).reason).toContain('La sesión y el programa de fuerza (~60) encajan');
+    expect(advise({ withProgram: true, fit: { kind: 'se-queda-corta', planned: 30, diff: 10 } }).reason).toContain('La sesión y el programa de fuerza (~30) te dejan margen');
+  });
+
+  it('sin el programa sumado, el texto de siempre', () => {
+    expect(advise({ fit: { kind: 'se-pasa', planned: 78, diff: 12 }, target: { low: 45, high: 66 } }).reason).toContain('La sesión (~78) se pasa 12 de tu objetivo (45–66): puedes ajustarla.');
+  });
+});
+
 describe('descanso elegido', () => {
   it('si marcaste hoy como descanso, el consejo es descansar, aunque el semáforo diga otra cosa', () => {
     const a = advise({ restMarked: true, session: session({ dayLight: { color: 'verde', reasons: ['Preparación 80 %'] } }) });

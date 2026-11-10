@@ -1,6 +1,7 @@
 import type { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from './periodization';
 import { isRestMarked } from './restDays';
+import { companionTrainedDates } from './companionLoad';
 
 /**
  * Constancia del año: de los días de entreno que te tocaban desde que empezaste a usar la app este año (o desde el 1 de
@@ -27,7 +28,7 @@ export interface YearConsistency {
 export function computeYearConsistency(profile: AthleteProfile, history: SessionHistoryEntry[], today: Date, opts: { windowDays?: number } = {}): YearConsistency {
   const todayIso = toLocalIsoDate(today);
   const jan1 = `${today.getFullYear()}-01-01`;
-  const trained = new Set<string>([...history.map((h) => h.date), ...(profile.trainingDatesLog ?? [])]);
+  const trained = new Set<string>([...history.map((h) => h.date), ...(profile.trainingDatesLog ?? []), ...companionTrainedDates(profile)]);
   const firstTrained = [...trained].sort()[0];
   const started = profile.onboardedAt ? profile.onboardedAt.slice(0, 10) : (firstTrained ?? todayIso);
   let since = started > jan1 ? started : jan1;

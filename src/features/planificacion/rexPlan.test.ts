@@ -33,6 +33,10 @@ describe('Rex en Planificación: la frase del estado del día', () => {
 
   it('dice cuándo la sesión se pasa del objetivo o deja margen', () => {
     expect(planStateSuggestion(mk({ fit: { kind: 'se-pasa', diff: 8 } }))!.text).toContain('se pasa 8 de tu objetivo (55–75)');
+    // Con el programa de fuerza aceptado, el aviso es de macro + programa y da las salidas.
+    const withProgram = planStateSuggestion(mk({ fit: { kind: 'se-pasa', diff: 8 }, program: { title: 'Texas', number: 3, total: 24, accepted: true, late: false, isTest: false } }))!.text;
+    expect(withProgram).toContain('con el programa de fuerza: se pasa 8 de tu objetivo (55–75)');
+    expect(withProgram).toContain('hoy sin accesorio');
     expect(planStateSuggestion(mk({ fit: { kind: 'se-queda-corta', diff: 6 } }))!.text).toContain('te deja margen sobre tu objetivo');
     expect(planStateSuggestion(mk({ fit: null, target: null }))!.text).toBe('Día verde. Esfuerzo previsto ~65.');
     expect(planStateSuggestion(mk({ planned: null, fit: null }))!.text).toBe('Día verde.');

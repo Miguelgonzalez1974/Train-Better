@@ -7,7 +7,7 @@ import { computeReadinessScore } from '../../engine/readinessScore';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { dayStrain, strainStatus } from '../../engine/strain';
 import { buildStrainTarget, ensureStrainTarget, withPlannedStrain } from '../../engine/strainTarget';
-import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companionLoad';
+import { acceptedCompanionLoad, companionTrainedDates, withCompanionLoad } from '../../engine/companionLoad';
 import { generateCompanionSession } from '../../engine/generateSession';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
@@ -134,7 +134,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Deslizar el dedo sobre el anillo cambia de día (también están las flechas de arriba).
   const swipe = useDaySwipe((delta) => setDayIso((cur) => shiftDay(cur, delta, toLocalIsoDate(new Date()))));
 
-  const stats = useMemo(() => getMonthlyStats(history, profile.trainingDatesLog ?? []), [history, profile.trainingDatesLog]);
+  // Los días en que solo hiciste el programa de fuerza también cuentan como entrenados (calendario y días del año).
+  const trainedDates = useMemo(() => [...new Set([...(profile.trainingDatesLog ?? []), ...companionTrainedDates(profile)])], [profile.trainingDatesLog, profile.companionLog]);
+  const stats = useMemo(() => getMonthlyStats(history, trainedDates), [history, trainedDates]);
   // La carga y el esfuerzo cuentan también el programa de fuerza que convive con el macro (Texas): ver `engine/companionLoad.ts`. Lo que aprende el coach de tus aciertos sigue con el historial del macro solo.
   const loadHistory = useMemo(() => withCompanionLoad(history, profile.companionLog), [history, profile.companionLog]);
   const acwr = useMemo(() => computeAcwr(loadHistory), [loadHistory]);
@@ -247,6 +249,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     painAreas: getActivePainFlags(profile.painFlags, todayIso).map((f) => f.area),
     fit: strainView.planned && strainView.fit ? { kind: strainView.fit.fit, planned: strainView.planned.strain, diff: strainView.fit.diff } : null,
     target: strainTarget,
+    withProgram: companionExtra !== null,
   });
 
   // Rex, arriba del todo: qué toca ahora y atajos a los módulos. Lee lo mismo que el resto del Dashboard.
@@ -667,7 +670,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               week={weekCount}
               monthDays={stats.diasEntrenados}
               year={yearConsistency}
-              calendar={<TrainingHeatmap history={history} trainingDates={profile.trainingDatesLog ?? []} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
+              calendar={<TrainingHeatmap history={history} trainingDates={trainedDates} trainingDaysPerWeek={profile.trainingDaysPerWeek} macrocycles={profile.macrocycles} />}
             />
           ) : (
             <VolumeContent />

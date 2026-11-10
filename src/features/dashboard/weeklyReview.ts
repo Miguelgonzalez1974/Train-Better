@@ -10,6 +10,8 @@ import { PAIN_AREA_LABEL, getActivePainFlags } from '../../engine/painFlags';
 import { sessionProgressionView } from '../../engine/progression';
 import { PR_KEY_LABEL } from '../../engine/responseProfile';
 import { getActiveStrengthProgram } from '../../engine/strengthPrograms';
+import { withCompanionLoad } from '../../engine/companionLoad';
+import { isCompanionProgram, weekdayOf } from '../../engine/strengthCompanion';
 
 /**
  * La revisión semanal de Rex: un repaso de la semana de calendario que acaba de cerrarse (lunes a domingo) con lo que la app ya
@@ -80,6 +82,29 @@ function duration(min: number): string {
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 
+export interface CompanionWeek {
+  /** Cuántas sesiones del programa tocaban esa semana (los días del programa que caen dentro de sus fechas). */
+  expected: number;
+  done: number;
+  skipped: number;
+  /** Las marcas de 5 repeticiones del viernes: nombre y peso, con si salieron. */
+  attempts: { movementId: string; kg: number; achieved: boolean }[];
+}
+
+/** Lo del programa de fuerza que convive con el macro en la semana `from`–`to`; null si no había programa esa semana. */
+export function companionWeek(profile: AthleteProfile, from: string, to: string): CompanionWeek | null {
+  const program = (profile.strengthPrograms ?? []).filter(isCompanionProgram).find((p) => from <= p.endDate && to >= p.startDate);
+  if (!program) return null;
+  let expected = 0;
+  for (let d = new Date(`${from}T12:00:00`); toLocalIsoDate(d) <= to; d.setDate(d.getDate() + 1)) {
+    const iso = toLocalIsoDate(d);
+    if (iso >= program.startDate && iso <= program.endDate && program.companion.weekdays.includes(weekdayOf(iso))) expected++;
+  }
+  const log = (profile.companionLog ?? []).filter((c) => c.programId === program.id && c.date >= from && c.date <= to);
+  const attempts = log.filter((c) => c.outcome === 'hecha').flatMap((c) => (c.lifts ?? []).filter((l) => l.attempt).map((l) => ({ movementId: l.movementId, kg: l.achieved ?? l.loadKg, achieved: l.achieved !== undefined })));
+  return { expected, done: log.filter((c) => c.outcome === 'hecha').length, skipped: log.filter((c) => c.outcome === 'saltada').length, attempts };
+}
+
 /** El lunes de la semana de `today`, y las fechas de la semana anterior. */
 export function previousWeek(today: Date): { monday: Date; from: string; to: string } {
   const thisMonday = shiftDays(today, -getWeekdayIndex(today));
@@ -108,13 +133,22 @@ export function buildWeeklyReview(
   const minSessions = Math.max(2, Math.ceil(expectedStrengthSessionsPerWeek(profile.trainingDaysPerWeek) / 2));
   const short = week.length < minSessions;
 
-  const rpe = week.length > 0 ? week.reduce((s, h) => s + h.rpe, 0) / week.length : null;
-  const minutes = week.reduce((s, h) => s + h.durationMin, 0);
-  const acwr = computeAcwr(history, sunday);
+  // El esfuerzo, el tiempo y la carga cuentan también el programa de fuerza que convive con el macro (Texas); las sesiones se cuentan aparte.
+  const loadHistory = withCompanionLoad(history, profile.companionLog, { orphans: true });
+  const loadWeek = loadHistory.filter((h) => h.date >= from && h.date <= to);
+  // Sin programa esa semana, el RPE medio es el de siempre (media simple); con él, se pondera por minutos para que la sesión del programa pese lo que dura.
+  const withProgramLoad = loadWeek.some((h) => h.companionLoadMin !== undefined);
+  const rpe = loadWeek.length === 0 ? null : withProgramLoad ? loadWeek.reduce((s, h) => s + h.rpe * h.durationMin, 0) / loadWeek.reduce((s, h) => s + h.durationMin, 0) : loadWeek.reduce((s, h) => s + h.rpe, 0) / loadWeek.length;
+  const minutes = loadWeek.reduce((s, h) => s + h.durationMin, 0);
+  const acwr = computeAcwr(loadHistory, sunday);
   const load = acwr.coldStart ? null : LOAD_LABEL[acwr.zone];
+  const program = companionWeek(profile, from, to);
 
   const metrics: ReviewMetric[] = [
     { label: 'Sesiones', value: `${count.done} de ${count.planned}`, tone: count.done >= count.planned ? 'good' : short ? 'warn' : 'muted' },
+    ...(program && program.expected > 0
+      ? [{ label: 'Programa de fuerza', value: `${program.done} de ${program.expected}`, tone: (program.done >= program.expected ? 'good' : program.done === 0 && program.skipped > 0 ? 'warn' : 'muted') as ReviewTone }]
+      : []),
     { label: 'RPE medio', value: rpe === null ? '—' : rpeText(rpe), tone: rpe !== null && rpe >= HIGH_RPE ? 'warn' : rpe === null ? 'muted' : 'good' },
     { label: 'Carga', value: load ? load.text : 'Sin datos', tone: load ? load.tone : 'muted' },
     { label: 'Tiempo entrenando', value: minutes > 0 ? duration(minutes) : '—', tone: 'muted' },
@@ -136,6 +170,15 @@ export function buildWeeklyReview(
     for (const e of log.filter((x) => x.date >= from && x.date <= to)) {
       const before = log.filter((x) => x.key === e.key && x.date < from);
       if (before.length > 0 && e.kg > Math.max(...before.map((x) => x.kg))) best.push(`Nuevo PR en ${PR_KEY_LABEL[e.key] ?? e.key}: ${kg(e.kg)}.`);
+    }
+    if (program) {
+      for (const a of program.attempts) {
+        const name = getMovementById(a.movementId)?.name ?? a.movementId;
+        if (a.achieved) best.push(`Programa de fuerza: marca de 5 en ${name} con ${kg(a.kg)}.`);
+        else watch.push(`Programa de fuerza: no salió la marca de 5 en ${name} a ${kg(a.kg)}.`);
+      }
+      if (program.skipped > 0) watch.push(`Saltaste ${program.skipped === 1 ? '1 sesión' : `${program.skipped} sesiones`} del programa de fuerza.`);
+      if (program.expected > 0 && program.done === program.expected && program.expected >= 2) best.push(`Hiciste las ${program.expected} sesiones del programa de fuerza.`);
     }
     if (count.planned >= 3 && count.done >= count.planned) {
       const streak = computeAdherenceStreak(profile, history, to);

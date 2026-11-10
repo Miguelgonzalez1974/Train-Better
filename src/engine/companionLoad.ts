@@ -86,3 +86,12 @@ export function combinedPlannedStrain(macro: { rpe: number; minutes: number }, e
   const srpe = macro.rpe * macro.minutes + extra.rpe * extra.minutes;
   return { strain: strainFromSrpe(srpe), rpe: Math.round((srpe / minutes) * 10) / 10, minutes };
 }
+
+/**
+ * Días en que hiciste una sesión del programa de fuerza (Texas), con o sin sesión del macro. Sirven para que la racha, la constancia
+ * y el calendario cuenten el día como entrenado aunque solo hicieras el programa. Son fechas sueltas: no se mezclan con el historial,
+ * así que «hoy ya entrenaste» y las pantallas de sesión no cambian.
+ */
+export function companionTrainedDates(profile: Pick<AthleteProfile, 'companionLog'>): string[] {
+  return [...new Set((profile.companionLog ?? []).filter((c) => c.outcome === 'hecha').map((c) => c.date))];
+}

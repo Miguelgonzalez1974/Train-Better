@@ -84,7 +84,9 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
         ctx.fit.kind === 'dentro'
           ? `${p}, dentro de tu objetivo (${range}).`
           : ctx.fit.kind === 'se-pasa'
-            ? `${p}: se pasa ${ctx.fit.diff} de tu objetivo (${range}).`
+            ? ctx.program?.accepted
+              ? `${p} con el programa de fuerza: se pasa ${ctx.fit.diff} de tu objetivo (${range}). Di «hoy sin accesorio» o aplaza el programa.`
+              : `${p}: se pasa ${ctx.fit.diff} de tu objetivo (${range}).`
             : `${p}: te deja margen sobre tu objetivo (${range}).`,
       );
     } else parts.push(`${p}.`);

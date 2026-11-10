@@ -1,5 +1,6 @@
 import type { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { getDayPlan, getWeekdayIndex, toLocalIsoDate } from './periodization';
+import { companionTrainedDates } from './companionLoad';
 
 /**
  * Cumplimiento del plan del mes: de los días de entreno que te tocaban este mes (desde el día 1, o desde que empezaste a usar la
@@ -22,7 +23,7 @@ export function computeMonthPlan(profile: AthleteProfile, history: SessionHistor
   const onboarded = profile.onboardedAt ? profile.onboardedAt.slice(0, 10) : monthStart;
   const since = onboarded > monthStart ? onboarded : monthStart;
 
-  const trained = new Set<string>([...history.map((h) => h.date), ...(profile.trainingDatesLog ?? [])]);
+  const trained = new Set<string>([...history.map((h) => h.date), ...(profile.trainingDatesLog ?? []), ...companionTrainedDates(profile)]);
 
   let planned = 0;
   let done = 0;
