@@ -45,11 +45,11 @@ export function dayLabel(iso: string, todayIso: string): string {
   return diff <= 6 ? `el ${name}` : `el ${name} ${Number(iso.slice(8, 10))}`;
 }
 
-function sessionFor(profile: AthleteProfile, history: SessionHistoryEntry[], iso: string): DailySession {
+export function sessionFor(profile: AthleteProfile, history: SessionHistoryEntry[], iso: string): DailySession {
   return profile.sessionCache?.[iso] ?? generateSessionForDate(profile, history.filter((h) => h.date < iso), new Date(`${iso}T00:00:00`), profile.goals);
 }
 
-const restSession = (like: DailySession, date: string, reason: string): DailySession => ({
+export const restSession = (like: DailySession, date: string, reason: string): DailySession => ({
   date,
   mesocycleWeek: like.mesocycleWeek,
   isRestDay: true,

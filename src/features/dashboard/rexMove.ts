@@ -3,6 +3,7 @@
  * `lib/sessionMove.ts` y aplicarlo lo hace el reparto de Rex (`rexAskRouter.ts`).
  */
 import { dayLabel, type MovePlan, type MoveRefusal } from '../../lib/sessionMove';
+import type { WeekPlan, WeekRow } from '../../lib/weekShift';
 import { buildPreviewLine } from './DayRows';
 import type { AskAnswer } from './rexAsk';
 
@@ -44,8 +45,74 @@ export function moveDoneAnswer(plan: MovePlan, todayIso: string): AskAnswer {
     lead: 'Hecho.',
     tone: 'good',
     text: plan.swap ? `${cap(from)} y ${to} han intercambiado su sesión.` : `La sesión de ${from} pasa ${toDay(to)}; ${from} es de descanso.`,
-    actions: [{ label: 'Ver Planificación', target: 'planificacion' }],
+    actions: [
+      { label: 'Deshacer', target: 'planificacion', ask: 'deshaz el cambio de la semana' },
+      { label: 'Ver Planificación', target: 'planificacion' },
+    ],
   };
+}
+
+// ---------- Reorganizar la semana (desplazar / insertar) ----------
+
+const WD = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const wdOf = (iso: string) => WD[new Date(`${iso}T00:00:00`).getDay()];
+const offsetOf = (iso: string, todayIso: string) => Math.round((new Date(`${iso}T00:00:00`).getTime() - new Date(`${todayIso}T00:00:00`).getTime()) / 86_400_000);
+
+/** El nombre corto de una sesión para las tablas de Rex: lo principal de la fila del Dashboard («Floor Press», «Doble WOD»). */
+export const shortSessionLabel = (s: Parameters<typeof buildPreviewLine>[0]): string => buildPreviewLine(s).split(' · ')[0];
+
+/** «mar descanso · mié Floor Press · jue Deadlift»: cómo queda cada día que cambia. */
+export function weekRowsText(rows: WeekRow[]): string {
+  return rows.map((r) => `${wdOf(r.date)} ${r.after}`).join(' · ');
+}
+
+export function confirmWeekText(plan: WeekPlan, todayIso: string): string {
+  const req = plan.request;
+  if (!req) return '';
+  return req.kind === 'desplazar' ? `confirmo desplazar ${offsetOf(req.from, todayIso)}` : `confirmo insertar ${offsetOf(req.from, todayIso)} ${offsetOf(req.to, todayIso)}`;
+}
+
+export function weekProposalAnswer(plan: WeekPlan, confirmAsk: string): AskAnswer {
+  const lead = plan.kind === 'desplazar' ? 'Desplazo la semana:' : 'Reordeno:';
+  return {
+    lead,
+    tone: 'info',
+    text: `${weekRowsText(plan.rows)}. El día que se queda sin sesión cuenta como descanso elegido, no como fallado. ¿Lo hago?`,
+    actions: [{ label: 'Sí, hacerlo', target: 'planificacion', ask: confirmAsk }],
+  };
+}
+
+/** «Pasa el martes al viernes» con sesión en medio: se enseñan las dos formas y se elige. */
+export function moveChoiceAnswer(swapText: string, insertText: string, swapAsk: string, insertAsk: string): AskAnswer {
+  return {
+    lead: 'Hay dos formas:',
+    tone: 'info',
+    text: `Intercambiar — ${swapText}. Insertar (las de entre medias se corren un día) — ${insertText}. ¿Cuál prefieres?`,
+    actions: [
+      { label: 'Intercambiarlas', target: 'planificacion', ask: swapAsk },
+      { label: 'Insertar', target: 'planificacion', ask: insertAsk },
+    ],
+  };
+}
+
+export function weekDoneAnswer(rows: WeekRow[]): AskAnswer {
+  return {
+    lead: 'Hecho.',
+    tone: 'good',
+    text: `La semana queda así: ${weekRowsText(rows)}. Si cambias de idea, «deshaz el cambio de la semana».`,
+    actions: [
+      { label: 'Deshacer', target: 'planificacion', ask: 'deshaz el cambio de la semana' },
+      { label: 'Ver Planificación', target: 'planificacion' },
+    ],
+  };
+}
+
+export function weekUndoneAnswer(label: string): AskAnswer {
+  return { lead: 'Deshecho.', tone: 'good', text: `La semana vuelve a como estaba antes de «${label}».`, actions: [{ label: 'Ver Planificación', target: 'planificacion' }] };
+}
+
+export function weekUndoNoneAnswer(): AskAnswer {
+  return { lead: 'Nada que deshacer.', tone: 'info', text: 'No he cambiado la semana en las últimas 24 horas desde este móvil.', actions: [] };
 }
 
 /** «Mover la sesión» sin decir a qué día: los días a los que se puede pasar la de hoy, como botones (cada uno es la frase que se escribiría). */

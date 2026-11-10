@@ -7,6 +7,7 @@ import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DailySession, DayLightInfo, Goal, SessionHistoryEntry } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
+import { CompanionDayBlock } from './CompanionDayBlock';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { ensureWeekLocked } from './weeklyLock';
 import { LogPastDay } from './LogPastDay';
@@ -420,6 +421,8 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               ) : (
                 <p className="text-sm text-neutral-400">Sin macrociclo activo ese día todavía — ese día decides tú qué hacer.</p>
               )}
+              {/* El programa de fuerza (Texas) de ese día: lo hecho o la sesión prevista. */}
+              <CompanionDayBlock profile={profile} history={history} dateIso={dateIso} todayIso={todayIso} />
             </Modal>
           );
         })()}

@@ -39,7 +39,11 @@ export type AskIntent =
   /** «Acortar la sesión», «tengo poco tiempo» sin decir cuánto: Rex pregunta cuánto con botones. */
   | { kind: 'adaptar-ayuda' }
   /** Mover o intercambiar sesiones de la semana: días como desplazamiento desde hoy (0 = hoy); `to` null = que Rex elija el hueco. */
-  | { kind: 'mover'; from: number; to: number | null; confirmed: boolean }
+  | { kind: 'mover'; from: number; to: number | null; confirmed: boolean; /** `insertar`: la sesión pasa al destino y las de entre medias se corren (en vez de intercambiar). */ mode?: 'insertar' }
+  /** «Desplaza la semana desde mañana»: cada sesión pasa al día siguiente hasta que un descanso lo absorba. */
+  | { kind: 'desplazar'; from: number; confirmed: boolean }
+  /** Deshacer el último cambio de la semana. */
+  | { kind: 'mover-deshacer' }
   /** «Mover la sesión» sin decir a qué día: Rex ofrece los días posibles con botones. */
   | { kind: 'mover-ayuda' }
   /** Preguntas sobre tus datos: último levantamiento, última marca, racha, sesiones, duración de hoy, peso actual. */
@@ -137,7 +141,7 @@ function parseAdaptAsk(norm: string): AskIntent | null {
     const parts = findSessionParts(conf[2]);
     return parts.length > 0 ? { kind: 'adaptar', request: { how: conf[1] as 'sin' | 'solo', parts }, confirmed: true } : { kind: 'ayuda' };
   }
-  if (/\b(deshaz|deshacer|deshazlo|vuelve a la sesion|como estaba|la de antes)\b/.test(norm) && /\b(cambio|sesion|antes|estaba)\b/.test(norm)) return { kind: 'adaptar-deshacer' };
+  if (/\b(deshaz|deshacer|deshazlo|vuelve a la sesion|como estaba|la de antes)\b/.test(norm) && /\b(cambio|sesion|antes|estaba)\b/.test(norm) && !/\b(semana|movimiento|reorden|desplazamiento)\b/.test(norm)) return { kind: 'adaptar-deshacer' };
 
   const parts = findSessionParts(norm);
   const minutes = findMinutes(norm);
@@ -165,9 +169,26 @@ const CANT = /\b(no puedo|no podre|no voy a poder|no me va bien|no me viene bien
 function parseMoveAsk(norm: string, todayWeekday: number): AskIntent | null {
   const conf = norm.match(/^confirmo (?:mover|intercambiar) (-?\d+) (\d+)$/);
   if (conf) return { kind: 'mover', from: Number(conf[1]), to: Number(conf[2]), confirmed: true };
+  const confInsert = norm.match(/^confirmo insertar (-?\d+) (\d+)$/);
+  if (confInsert) return { kind: 'mover', from: Number(confInsert[1]), to: Number(confInsert[2]), confirmed: true, mode: 'insertar' };
+  const confShift = norm.match(/^confirmo desplazar (-?\d+)$/);
+  if (confShift) return { kind: 'desplazar', from: Number(confShift[1]), confirmed: true };
+  // Deshacer el último cambio de la semana.
+  if (/\b(deshaz|deshacer|deshazlo|revierte|revertir|anula|anular)\b/.test(norm) && /\b(semana|movimiento|reorden|desplazamiento|cambio de dias)\b/.test(norm)) return { kind: 'mover-deshacer' };
   if (/\bwod\b/.test(norm)) return null;
 
   const found = [...norm.matchAll(DAY_WORDS)].map((m) => ({ word: m[1], start: m.index ?? 0 }));
+  // «Desplaza la semana desde mañana»: todo un día más tarde hasta que un descanso lo absorba (por defecto desde mañana).
+  if (/\b(desplaza|desplazar|desplazame|corre|correr|empuja|retrasa|retrasar|atrasa|atrasar)\b/.test(norm) && /\b(semana|todo|todas|sesiones|resto)\b/.test(norm) && found.length <= 1) {
+    const w = found[0]?.word;
+    const off = w === undefined ? 1 : w === 'hoy' ? 0 : w === 'manana' ? 1 : w === 'pasado manana' ? 2 : (JS_WEEKDAY.indexOf(w) - todayWeekday + 7) % 7;
+    return { kind: 'desplazar', from: off, confirmed: false };
+  }
+  // «Inserta el martes en el viernes»: la sesión pasa al destino y las de entre medias se corren.
+  if (found.length === 2 && /\b(inserta|insertar|intercala|intercalar)\b/.test(norm)) {
+    const off = (w: string) => (w === 'hoy' ? 0 : w === 'manana' ? 1 : w === 'pasado manana' ? 2 : (JS_WEEKDAY.indexOf(w) - todayWeekday + 7) % 7);
+    return { kind: 'mover', from: off(found[0].word), to: off(found[1].word) || 7, confirmed: false, mode: 'insertar' };
+  }
   // «Mover la sesión» sin decir a qué día: Rex pregunta con botones.
   if (found.length === 0 && (/\b(mover|mueve|moverla|muevela|pasar|pasala|cambiarla de dia|cambiar de dia)\b.*\b(sesion|entreno|entrenamiento)\b|\b(otro dia|cambiar de dia|cambiarla de dia)\b/.test(norm) || /\bmover (la )?sesion\b/.test(norm))) return { kind: 'mover-ayuda' };
   if (found.length === 0 || found.length > 2) return null;

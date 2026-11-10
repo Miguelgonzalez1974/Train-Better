@@ -8,7 +8,9 @@ import { followUpText, forgetTopic, rememberTopic } from './rexContext';
 import { rexBus } from '../../lib/rexBus';
 import type { RexTarget } from './rexDashboard';
 import { dataAnswer, whyAnswer } from './rexData';
-import { moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer, moveWhereAnswer } from './rexMove';
+import { confirmMoveText, confirmWeekText, moveChoiceAnswer, moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer, moveWhereAnswer, shortSessionLabel, weekDoneAnswer, weekProposalAnswer, weekRowsText, weekUndoNoneAnswer, weekUndoneAnswer } from './rexMove';
+import { planWeekChange, weekPlanFromMove, type WeekPlan } from '../../lib/weekShift';
+import { buildUndo, clearUndo, peekUndo, saveUndo } from '../../lib/weekUndo';
 import { dayLabel, planMove } from '../../lib/sessionMove';
 import { addDaysIso } from '../../engine/periodization';
 import { applyMark, currentMark, markAskKgAnswer, type MarkKey, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
@@ -93,6 +95,27 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
   return routeSingle(resolved, screen, api);
 }
 
+/** Guarda cómo estaba la semana (para deshacer) y aplica un cambio de sesiones: perfil con los descansos y las sesiones nuevas en la caché. */
+function applyWeekPlan(plan: WeekPlan, label: string, api: Pick<RouterApi, 'onWeekChanged'>): void {
+  saveUndo(buildUndo(plan, label));
+  athleteRepository.saveProfile(plan.profile);
+  for (const c of plan.changes) athleteRepository.saveCachedSession(c.after);
+  api.onWeekChanged?.();
+}
+
+/** Deshace el último cambio de la semana hecho con Rex: cada día vuelve a como estaba y los descansos elegidos también. */
+export function undoWeekChange(api: Pick<RouterApi, 'onWeekChanged'>): AskAnswer {
+  const undo = peekUndo();
+  if (!undo) return weekUndoNoneAnswer();
+  for (const s of undo.sessions) {
+    if (s.session) athleteRepository.saveCachedSession(s.session);
+    else athleteRepository.deleteCachedSession(s.date);
+  }
+  athleteRepository.saveProfile({ ...athleteRepository.getProfile(), restDates: undo.restDates });
+  clearUndo();
+  api.onWeekChanged?.();
+  return weekUndoneAnswer(undo.label);
+}
 function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer | 'close' {
   const intent = parseAsk(text, new Date().getDay());
   // Los botones de las respuestas de marcas llevan al Análisis: en el Dashboard lo abre; desde otra pantalla va al Dashboard y lo abre allí.
@@ -152,14 +175,44 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
     case 'mover': {
       // Mover sesiones de la semana: se enseña el plan y solo se aplica con el «Sí». El origen queda de descanso elegido; las sesiones movidas se marcan como editadas.
       const todayIso = api.todayIso;
-      const plan = planMove(athleteRepository.getProfile(), athleteRepository.getHistory(), { from: addDaysIso(todayIso, intent.from), to: intent.to === null ? null : addDaysIso(todayIso, intent.to) }, todayIso);
+      const profile = athleteRepository.getProfile();
+      const history = athleteRepository.getHistory();
+      const from = addDaysIso(todayIso, intent.from);
+      const to = intent.to === null ? null : addDaysIso(todayIso, intent.to);
+      // «Inserta el martes en el viernes»: las de entre medias se corren un día.
+      if (intent.mode === 'insertar' && to) {
+        const wp = planWeekChange(profile, history, { kind: 'insertar', from, to }, todayIso, shortSessionLabel);
+        if (typeof wp === 'string') return moveRefusalAnswer(wp);
+        if (!intent.confirmed) return weekProposalAnswer(wp, confirmWeekText(wp, todayIso));
+        applyWeekPlan(wp, 'reordenar la semana', api);
+        return weekDoneAnswer(wp.rows);
+      }
+      const plan = planMove(profile, history, { from, to }, todayIso);
       if (typeof plan === 'string') return moveRefusalAnswer(plan);
-      if (!intent.confirmed) return moveProposalAnswer(plan, todayIso);
-      athleteRepository.saveProfile(plan.profile);
-      for (const s of plan.writes) athleteRepository.saveCachedSession(s);
-      api.onWeekChanged?.();
+      if (!intent.confirmed) {
+        // El destino ya tiene sesión y no es el día de al lado: hay dos formas de hacerlo, intercambiar o insertar, y se elige.
+        if (plan.swap && to && Math.abs(intent.to! - intent.from) > 1) {
+          const ins = planWeekChange(profile, history, { kind: 'insertar', from, to }, todayIso, shortSessionLabel);
+          if (typeof ins === 'object') {
+            return moveChoiceAnswer(weekRowsText(weekPlanFromMove(plan, profile, shortSessionLabel).rows), weekRowsText(ins.rows), confirmMoveText(plan, todayIso), confirmWeekText(ins, todayIso));
+          }
+        }
+        return moveProposalAnswer(plan, todayIso);
+      }
+      applyWeekPlan(weekPlanFromMove(plan, profile, shortSessionLabel), plan.swap ? 'intercambiar dos sesiones' : 'mover una sesión', api);
       return moveDoneAnswer(plan, todayIso);
     }
+    case 'desplazar': {
+      // «Desplaza la semana desde mañana»: cada sesión pasa al día siguiente hasta que un descanso lo absorba.
+      const todayIso = api.todayIso;
+      const wp = planWeekChange(athleteRepository.getProfile(), athleteRepository.getHistory(), { kind: 'desplazar', from: addDaysIso(todayIso, intent.from) }, todayIso, shortSessionLabel);
+      if (typeof wp === 'string') return moveRefusalAnswer(wp);
+      if (!intent.confirmed) return weekProposalAnswer(wp, confirmWeekText(wp, todayIso));
+      applyWeekPlan(wp, 'desplazar la semana', api);
+      return weekDoneAnswer(wp.rows);
+    }
+    case 'mover-deshacer':
+      return undoWeekChange(api);
     case 'mover-ayuda': {
       // Los próximos días a los que se puede pasar la sesión de hoy (como botón cada uno), máximo cuatro.
       const todayIso = api.todayIso;
@@ -188,9 +241,12 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
       };
       return intent.kind === 'dato' ? dataAnswer(intent.question, ctx) : whyAnswer(intent.about, ctx);
     }
+    case 'adaptar-deshacer':
+      // «Deshaz el cambio» sin sesión acortada en esta pantalla: si lo último fue un cambio de la semana, se deshace ese.
+      if (peekUndo()) return undoWeekChange(api);
+      return elsewhereAnswer('La sesión de hoy se cambia desde Planificación: allí te enseño qué quitaría y lo aplico si me dices que sí.', 'ir-planificacion');
     case 'adaptar':
     case 'adaptar-ayuda':
-    case 'adaptar-deshacer':
       return elsewhereAnswer('La sesión de hoy se cambia desde Planificación: allí te enseño qué quitaría y lo aplico si me dices que sí.', 'ir-planificacion');
     case 'programa':
       return elsewhereAnswer('El programa de fuerza se ve y se decide debajo de tu sesión, en Planificación.', 'ir-planificacion');

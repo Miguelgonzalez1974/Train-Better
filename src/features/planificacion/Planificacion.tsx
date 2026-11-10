@@ -86,7 +86,8 @@ import { dismissSuggestion, dockStats, loadRexMemory, pickRexSuggestion, saveRex
 import { buildPlanRexSuggestions } from './rexPlan';
 import { CompanionCard, pickCompanionProgram } from './CompanionCard';
 import { ScreenRex } from '../dashboard/ScreenRex';
-import { routeAsk } from '../dashboard/rexAskRouter';
+import { routeAsk, undoWeekChange } from '../dashboard/rexAskRouter';
+import { peekUndo } from '../../lib/weekUndo';
 import { REX_HINTS } from '../dashboard/rexHints';
 import { dayAnswer, type AskAnswer } from '../dashboard/rexAsk';
 import { adaptDoneAnswer, adaptHowMuchAnswer, adaptProposalAnswer, adaptRefusalAnswer } from '../dashboard/rexAdapt';
@@ -1104,6 +1105,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
    * Cambiar la sesión de hoy hablando («tengo 30 minutos», «sin accesorio», «solo fuerza»): primero se enseña qué se quitaría y solo se aplica con el
    * «Sí». La sesión de antes se guarda en memoria para poder deshacer mientras no recargues.
    */
+  /** Se han movido sesiones de la semana (o se ha deshecho): se relee el perfil y la sesión de hoy, que puede haber cambiado de día o de contenido. */
+  function reloadWeek() {
+    const fresh = athleteRepository.getProfile();
+    setProfile(fresh);
+    setSession(loadTodaySession(fresh, history, goals, todayIso));
+  }
   const adaptUndoRef = useRef<DailySession | null>(null);
   // Para enseñar «Deshacer el cambio» en el lab mientras haya algo que deshacer (la referencia sola no repinta).
   const [canUndoAdapt, setCanUndoAdapt] = useState(false);
@@ -1122,7 +1129,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }
   function adaptUndo(): AskAnswer {
     const before = adaptUndoRef.current;
-    if (!before) return adaptRefusalAnswer('nada-que-deshacer');
+    // Sin sesión acortada que deshacer, «deshaz el cambio» deshace el último cambio de la semana (mover, intercambiar, desplazar).
+    if (!before) return peekUndo() ? undoWeekChange({ onWeekChanged: reloadWeek }) : adaptRefusalAnswer('nada-que-deshacer');
     athleteRepository.saveCachedSession(before);
     setSession(before);
     adaptUndoRef.current = null;
@@ -1136,11 +1144,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       // Una marca nueva cambia los pesos: se relee el perfil y se recalcula la sesión de hoy (como al guardarla desde el perfil).
       onMarkSaved: () => handleSaveProfile(athleteRepository.getProfile()),
       // Se han movido sesiones de la semana: se relee el perfil y la sesión de hoy (que puede haber cambiado de día o de contenido).
-      onWeekChanged: () => {
-        const fresh = athleteRepository.getProfile();
-        setProfile(fresh);
-        setSession(loadTodaySession(fresh, history, goals, todayIso));
-      },
+      onWeekChanged: reloadWeek,
       local: {
         dolor: () => {
           openSupport('p_zone');
