@@ -825,6 +825,7 @@ function goalPreference(
   goals: Goal[],
   appliesTo: (movement: Movement) => boolean,
   history: SessionHistoryEntry[],
+  prs?: Partial<PersonalRecords>,
 ): GoalPreference {
   const goal = pickPriorityGoal(goals, (g) => {
     if (!g.movementId) return false;
@@ -833,8 +834,8 @@ function goalPreference(
   });
   if (!goal || !goal.movementId) return { preferChance: 0, progress: 0, behindSchedule: false };
 
-  const progress = getGoalProgress(goal, history);
-  const behindSchedule = isGoalBehindSchedule(goal, history);
+  const progress = getGoalProgress(goal, history, undefined, prs);
+  const behindSchedule = isGoalBehindSchedule(goal, history, undefined, prs);
   const base = goal.emphasis === 'intensivo' ? 0.9 : 0.6;
   const ramped = goal.emphasis === 'intensivo' ? 0.95 : 0.75;
   // Ir por detras de verdad pesa mas que el enfasis elegido: un objetivo "moderado" que se esta
@@ -898,7 +899,7 @@ function buildStrengthBlock(
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ') || undefined;
   const isStrengthGoal = goals.some((g) => g.type === 'elevar-fuerza' || g.type === 'subir-pr');
   const pref = isStrengthGoal
-    ? goalPreference(goals, (m) => strengthMovements.some((s) => s.id === m.id), history)
+    ? goalPreference(goals, (m) => strengthMovements.some((s) => s.id === m.id), history, prs)
     : { preferChance: 0, progress: 0, behindSchedule: false };
   // Perfil de respuesta: un lift del objetivo que viene progresando despacio (o retrocediendo)
   // recibe algo mas de frecuencia para desbloquearlo — solo si el motor ya se fia del perfil.
@@ -1343,7 +1344,7 @@ function buildOlyBlock(
   const autoregNote = [getAutoregNote(acwrZone, acwrColdStart), rpeAutoreg.note, readiness.note].filter(Boolean).join(' ') || undefined;
   const isOlyGoal = goals.some((g) => g.type === 'mejorar-potencia' || g.type === 'subir-pr');
   const pref = isOlyGoal
-    ? goalPreference(goals, (m) => olyMovements.some((o) => o.id === m.id), history)
+    ? goalPreference(goals, (m) => olyMovements.some((o) => o.id === m.id), history, prs)
     : { preferChance: 0, progress: 0, behindSchedule: false };
   // Perfil de respuesta: un levantamiento olimpico del objetivo que progresa despacio gana algo de frecuencia.
   let responseTag = '';

@@ -1,6 +1,7 @@
 import type { AthleteProfile, Goal, GoalEmphasis, GoalType, IntensityRamp, Macrocycle, PersonalRecords, StrengthMethod, StrengthProgram } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
 import { SKILL_PROGRESSION_TARGETS } from '../../data/movements/skillProgressions';
+import { goalPrKey, goalTargetStatus, KG_GOAL_TYPES, suggestedTargets, targetFeedback } from '../../engine/goalTarget';
 import { HALTERO_TOTAL_WEEKS } from '../../engine/halteroProgram';
 import { MAYHEM_BASE_TOTAL_WEEKS, MAYHEM_PICO_TOTAL_WEEKS, MAYHEM_TECNICA_TOTAL_WEEKS } from '../../engine/mayhemProgram';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -47,6 +48,8 @@ export interface FlowState {
   nextGoalId?: string;
   /** La fecha de la siguiente competición es una estimación. */
   provisional?: boolean;
+  /** La meta en kilos del objetivo de fuerza u oly en marcha. */
+  targetKg?: number;
   /** Al cerrar la competición: de momento no hay otra, así que no se monta nada más. */
   noNext?: boolean;
 }
@@ -90,6 +93,8 @@ export interface RexNode {
   options?: RexOption[];
   /** En vez de botones, un texto corto (el nombre de algo), con una propuesta por si lo dejas vacío. */
   input?: { field: 'label'; suggested: string; max: number; commit: CommitKind };
+  /** En vez de botones, un número (kilos). */
+  number?: { field: 'targetKg'; min: number; max: number; next: string };
   /** En vez de botones, una fecha. */
   date?: { min?: string; field: 'targetDate' | 'eventEndDate' | 'startIso'; next?: string; commit?: CommitKind };
 }
@@ -237,6 +242,27 @@ export function suggestionFromProfile(profile: AthleteProfile): { state: Partial
   return null;
 }
 
+const decimal = (n: number) => String(n).replace('.', ',');
+
+/** La marca actual del levantamiento del objetivo en marcha, si admite meta en kilos y hay una marca de la que partir. */
+function kgTarget(s: FlowState, ctx: RexCtx): { key: keyof PersonalRecords; name: string; current: number } | null {
+  if (!s.type || !s.movementId || !KG_GOAL_TYPES.includes(s.type)) return null;
+  const key = goalPrKey({ movementId: s.movementId });
+  const current = key ? ctx.profile.prs?.[key] : undefined;
+  if (!key || !current) return null;
+  return { key, name: movementLabel(s.movementId) ?? s.detail ?? 'ese levantamiento', current };
+}
+
+/** Un objetivo provisional con la meta contestada hasta ahora, para medirla con el mismo cálculo que la tarjeta. */
+function kgGoalFor(s: FlowState, ctx: RexCtx): Goal {
+  return { id: 'draft', type: s.type as GoalType, movementId: s.movementId, targetDate: s.targetDate ?? addDaysIso(ctx.todayIso, 56), emphasis: 'moderado', createdAt: ctx.todayIso, targetKg: s.targetKg };
+}
+
+/** Tras elegir la fecha: el peso si el objetivo lo admite; si no, el énfasis. */
+function afterDate(s: FlowState, ctx: RexCtx): string {
+  return kgTarget(s, ctx) ? 'o_kg' : 'o_push';
+}
+
 export function getNode(id: string, s: FlowState, ctx: RexCtx, plan: PlanItem[]): RexNode {
   const weeksOptions = (next: string): RexOption[] => [4, 8, 12, 16].map((w) => opt(`${w} semanas`, weeksFromToday(ctx, w), next));
   switch (id) {
@@ -283,10 +309,41 @@ export function getNode(id: string, s: FlowState, ctx: RexCtx, plan: PlanItem[])
     case 'o_when':
       return {
         text: s.type === 'elevar-resistencia' ? 'Más motor, vale. ¿En cuánto tiempo quieres notarlo?' : '¿Para cuándo lo quieres?',
-        options: [...weeksOptions('o_push'), opt('Elegir una fecha', {}, 'o_date')],
+        options: [...weeksOptions(afterDate(s, ctx)), opt('Elegir una fecha', {}, 'o_date')],
       };
     case 'o_date':
-      return { text: '¿Qué fecha?', date: { min: addDaysIso(ctx.todayIso, 7), field: 'targetDate', next: 'o_push' } };
+      return { text: '¿Qué fecha?', date: { min: addDaysIso(ctx.todayIso, 7), field: 'targetDate', next: afterDate(s, ctx) } };
+    // La meta en kilos de un objetivo de fuerza u oly: con tu marca actual al lado y lo que implica llegar a ella a la fecha elegida.
+    case 'o_kg': {
+      const t = kgTarget(s, ctx);
+      if (!t) return getNode('o_push', s, ctx, plan);
+      return {
+        text: `Ahora el peso. Tu marca actual en ${t.name.toLowerCase()} es ${t.current} kg. ¿Qué peso quieres alcanzar?`,
+        options: [
+          ...suggestedTargets(t.current).map((kg) => opt(`${decimal(kg)} kg · +${decimal(Math.round((kg - t.current) * 10) / 10)}`, { targetKg: kg }, 'o_kg_check')),
+          opt('Otro peso', {}, 'o_kg_input'),
+          opt('Sin peso, solo mejorar', { targetKg: undefined }, 'o_push'),
+        ],
+      };
+    }
+    case 'o_kg_input': {
+      const t = kgTarget(s, ctx);
+      return { text: '¿Qué peso quieres alcanzar, en kilos?', number: { field: 'targetKg', min: (t?.current ?? 0) + 0.5, max: 500, next: 'o_kg_check' } };
+    }
+    case 'o_kg_check': {
+      const t = kgTarget(s, ctx);
+      const status = t ? goalTargetStatus(kgGoalFor(s, ctx), ctx.profile.prs, ctx.profile.prLog, new Date(`${ctx.todayIso}T12:00:00`)) : null;
+      if (!t || !status) return getNode('o_push', s, ctx, plan);
+      const fit = status.kind === 'ambiciosa' ? Math.max(t.current + 2.5, Math.round(status.projectedKg / 2.5) * 2.5) : null;
+      return {
+        text: `${targetFeedback(status, shortDate(s.targetDate ?? ctx.todayIso))} ¿Seguimos con ${s.targetKg} kg?`,
+        options: [
+          opt('Sí, esa meta', {}, 'o_push'),
+          ...(fit && fit < (s.targetKg ?? 0) ? [opt(`Mejor ${decimal(fit)} kg`, { targetKg: fit }, 'o_push')] : []),
+          opt('Otra meta', {}, 'o_kg'),
+        ],
+      };
+    }
     case 'o_push':
       return {
         text: '¿Cuánto quieres que mande sobre el resto de tu entreno?',
@@ -451,6 +508,8 @@ function goalItem(s: FlowState, ctx: RexCtx): PlanItem {
   const meta = GOAL_TYPE_META[type];
   const weeks = s.weeks;
   const targetDate = s.targetDate ?? addDaysIso(ctx.todayIso, (weeks ?? 8) * 7);
+  // La meta en kilos solo se guarda si el levantamiento tiene una marca de la que partir.
+  const kgStart = KG_GOAL_TYPES.includes(type) && s.targetKg ? (kgTarget(s, ctx)?.current ?? null) : null;
   const goal: Goal = {
     id: (ctx.newId ?? newIdDefault)(),
     type,
@@ -458,12 +517,13 @@ function goalItem(s: FlowState, ctx: RexCtx): PlanItem {
     targetDate,
     ...(type === 'preparar-competicion' && s.eventEndDate ? { eventEndDate: s.eventEndDate } : {}),
     ...(type === 'preparar-competicion' && s.provisional ? { provisional: true } : {}),
+    ...(kgStart !== null && s.targetKg ? { targetKg: s.targetKg, startKg: kgStart } : {}),
     emphasis: s.push ?? 'moderado',
     createdAt: ctx.todayIso,
     ...(type === 'mejorar-gimnasticos' && s.skillLevel !== undefined ? { skillLevel: s.skillLevel } : {}),
   };
   const title = s.detail ? `${meta.label} · ${s.detail}` : meta.label;
-  const when = type === 'preparar-competicion' ? `${shortDate(targetDate)}${goal.eventEndDate ? ` al ${shortDate(goal.eventEndDate)}` : ''}` : `${shortDate(targetDate)}${weeks ? ` (${weeks} semanas)` : ''}`;
+  const when = type === 'preparar-competicion' ? `${shortDate(targetDate)}${goal.eventEndDate ? ` al ${shortDate(goal.eventEndDate)}` : ''}` : `${goal.targetKg ? `${goal.targetKg} kg · ` : ''}${shortDate(targetDate)}${weeks ? ` (${weeks} semanas)` : ''}`;
   return {
     id: goal.id,
     kind: 'Objetivo',

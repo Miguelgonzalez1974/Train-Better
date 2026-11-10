@@ -1032,6 +1032,13 @@ export interface Goal {
   skillLevel?: number;
   /** Solo `preparar-competicion`: la fecha es una estimación (aún no hay fecha oficial) y se cambia cuando se sepa. */
   provisional?: boolean;
+  /**
+   * Solo objetivos de fuerza y halterofilia (`subir-pr`, `elevar-fuerza`, `mejorar-potencia`) con un levantamiento que tiene PR: el peso que
+   * quieres alcanzar para la fecha objetivo. Con él el coach mide el avance en kilos (`engine/goalTarget.ts`). Ausente = solo cuenta el tiempo.
+   */
+  targetKg?: number;
+  /** El PR de ese levantamiento cuando se puso la meta: el punto de partida de la línea de avance. */
+  startKg?: number;
   /** Solo `preparar-competicion` ya pasada: cómo la viviste (1 muy mal … 5 muy bien) y cuándo se cerró con Rex. */
   result?: { feeling: 1 | 2 | 3 | 4 | 5; closedAt: string };
 }

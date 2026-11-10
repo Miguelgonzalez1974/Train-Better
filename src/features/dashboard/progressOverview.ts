@@ -1,7 +1,7 @@
 import { CalendarRange, type LucideIcon } from 'lucide-react';
-import type { AthleteProfile, Goal, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, Goal, PersonalRecords, SessionHistoryEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
-import { getGoalProgress } from '../../engine/goalProgress';
+import { getGoalProgress, targetKgProgress } from '../../engine/goalProgress';
 import { daysBetween } from '../../engine/loadMetrics';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { currentWeekInRange, getActiveMacrocycle, resolveMacrocyclePhase, totalMacrocycleWeeks } from '../../engine/periodization';
@@ -62,7 +62,7 @@ export function buildStructureRow(profile: AthleteProfile, todayIso: string): Pr
   return null;
 }
 
-export function buildGoalRows(goals: Goal[], history: SessionHistoryEntry[]): ProgressRow[] {
+export function buildGoalRows(goals: Goal[], history: SessionHistoryEntry[], prs?: Partial<PersonalRecords>): ProgressRow[] {
   const today = new Date();
   return goals.map((goal) => {
     const meta = GOAL_TYPE_META[goal.type];
@@ -72,7 +72,7 @@ export function buildGoalRows(goals: Goal[], history: SessionHistoryEntry[]): Pr
       id: goal.id,
       label: movement ? `${meta.label} — ${movement.name}` : meta.label,
       sublabel: remaining >= 0 ? `Vence en ${remaining}d` : 'Objetivo vencido',
-      pct: Math.round(getGoalProgress(goal, history, today) * 100),
+      pct: Math.round((targetKgProgress(goal, prs) ?? getGoalProgress(goal, history, today, prs)) * 100),
       color: GOAL_TYPE_COLOR[goal.type],
       Icon: meta.Icon,
     };

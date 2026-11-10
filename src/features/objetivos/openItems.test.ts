@@ -184,3 +184,30 @@ describe('la frase del Rex fijo', () => {
     expect(line(makeProfile({ goals: [goal({})] }))).toMatch(/^Tienes 1 abierto/);
   });
 });
+
+describe('objetivos con meta en kilos', () => {
+  const kgGoal = (extra: Partial<Goal> = {}): Goal => goal({ targetKg: 190, startKg: 170, createdAt: '2026-10-01', targetDate: '2027-01-13', ...extra });
+
+  it('la barra mide los kilos recorridos, el sub dice la meta y el detalle da los numeros', () => {
+    const profile = makeProfile({ goals: [kgGoal()], prs: { ...fixtureProfile({}).prs, backSquat: 180 } });
+    const [item] = buildOpenItems(profile, [], TODAY).objetivos;
+    expect(item.pct).toBe(50);
+    expect(item.sub).toMatch(/190 kg el 13 ene/);
+    expect(item.facts[0]).toMatch(/Te faltan 10 kg: necesitas subir/);
+    expect(item.facts.join(' ')).toMatch(/A este ritmo llegarías/);
+    expect(item.legend).toMatch(/en kilos/);
+  });
+
+  it('el chip dice conseguida, va por detras o meta ambiciosa segun los numeros', () => {
+    const chip = (kg: number, extra: Partial<Goal> = {}) => buildOpenItems(makeProfile({ goals: [kgGoal(extra)], prs: { ...fixtureProfile({}).prs, backSquat: kg } }), [], TODAY).objetivos[0].chip;
+    expect(chip(190)).toEqual({ text: 'Conseguida', tone: 'good' });
+    expect(chip(172, { targetKg: 185 }).text).toBe('Va por detrás');
+    expect(chip(171, { targetKg: 260 }).text).toBe('Meta ambiciosa');
+  });
+
+  it('sin meta en kilos nada cambia', () => {
+    const [item] = buildOpenItems(makeProfile({ goals: [goal({})] }), [], TODAY).objetivos;
+    expect(item.sub).toMatch(/vence el 13 ene/);
+    expect(item.legend).not.toMatch(/kilos/);
+  });
+});

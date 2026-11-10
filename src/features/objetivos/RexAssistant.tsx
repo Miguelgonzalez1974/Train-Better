@@ -47,6 +47,8 @@ export function RexAssistant({
   const [dateValue, setDateValue] = useState('');
   const [dateError, setDateError] = useState('');
   const [textValue, setTextValue] = useState('');
+  const [numberValue, setNumberValue] = useState('');
+  const [numberError, setNumberError] = useState('');
 
   const stateRef = useRef<FlowState>({});
   const planRef = useRef<PlanItem[]>([]);
@@ -85,6 +87,8 @@ export function RexAssistant({
     setDateValue('');
     setDateError('');
     setTextValue('');
+    setNumberValue('');
+    setNumberError('');
     say(node.text, () => setNodeId(id));
   }
 
@@ -140,6 +144,22 @@ export function RexAssistant({
     push('me', shortDate(dateValue));
     if (kind) commit(kind);
     else ask(next ?? 'more');
+  }
+
+  function submitNumber(spec: NonNullable<RexNode['number']>) {
+    const value = Number(numberValue.replace(',', '.'));
+    if (!numberValue.trim() || !Number.isFinite(value)) {
+      setNumberError('Escribe un peso en kilos');
+      return;
+    }
+    if (value < spec.min || value > spec.max) {
+      setNumberError(`Tiene que estar entre ${Math.ceil(spec.min * 2) / 2} y ${spec.max} kg`);
+      return;
+    }
+    const kg = Math.round(value * 10) / 10;
+    stateRef.current = { ...stateRef.current, [spec.field]: kg };
+    push('me', `${String(kg).replace('.', ',')} kg`);
+    ask(spec.next);
   }
 
   function submitText(input: NonNullable<RexNode['input']>) {
@@ -277,6 +297,40 @@ export function RexAssistant({
             <button type="submit" className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black transition-all duration-200 hover:bg-brand-orange-dark">
               Vale
             </button>
+          </form>
+        )}
+
+        {node?.number && !typing && (
+          <form
+            className="flex animate-section-in flex-col gap-1.5 motion-reduce:animate-none"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (node.number) submitNumber(node.number);
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={numberValue}
+                onChange={(e) => {
+                  setNumberValue(e.target.value);
+                  setNumberError('');
+                }}
+                placeholder="Kilos"
+                aria-label="Peso en kilos"
+                className="w-28 rounded-lg border border-brand-border bg-brand-bg px-2.5 py-2 text-sm text-white transition-colors focus:border-brand-gold focus:outline-none"
+              />
+              <span className="text-sm text-neutral-400">kg</span>
+              <button type="submit" className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black transition-all duration-200 hover:bg-brand-orange-dark">
+                Vale
+              </button>
+            </div>
+            {numberError && (
+              <p className="text-xs text-warn" role="alert">
+                {numberError}
+              </p>
+            )}
           </form>
         )}
 

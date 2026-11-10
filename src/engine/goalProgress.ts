@@ -1,5 +1,6 @@
-import type { Goal, SessionHistoryEntry } from '../data/athlete/types';
+import type { Goal, PersonalRecords, SessionHistoryEntry } from '../data/athlete/types';
 import { getMovementById } from '../data/movements';
+import { goalPrKey } from './goalTarget';
 import { resolveOlyPRKey, resolveStrengthPRKey } from './prResolution';
 
 /**
@@ -15,6 +16,16 @@ export function getTimeProgress(goal: Goal, today: Date): number {
   return Math.min(1, Math.max(0, (now - created) / (target - created)));
 }
 
+/** Fracción (0-1) del camino de la marca de salida a la meta en kilos; null si el objetivo no tiene meta, punto de partida o marca actual. */
+export function targetKgProgress(goal: Goal, prs?: Partial<PersonalRecords>): number | null {
+  if (!goal.targetKg || goal.startKg === undefined || !prs) return null;
+  const key = goalPrKey(goal);
+  const current = key ? prs[key] : undefined;
+  if (!current) return null;
+  if (goal.targetKg <= goal.startKg) return current >= goal.targetKg ? 1 : 0;
+  return Math.min(1, Math.max(0, (current - goal.startKg) / (goal.targetKg - goal.startKg)));
+}
+
 /** Crecimiento de carga en el lift objetivo que un coach consideraria "progreso completo" dentro de un ciclo. */
 const FULL_PROGRESS_LOAD_GROWTH = 0.08;
 
@@ -24,8 +35,11 @@ const FULL_PROGRESS_LOAD_GROWTH = 0.08;
  * desde que se creo el objetivo. Devuelve null si el objetivo no tiene un lift con PR rastreable
  * (p.ej. objetivos gimnasticos o de resistencia) o si aun no hay al menos dos tests que comparar.
  */
-export function getPerformanceProgress(goal: Goal, history: SessionHistoryEntry[]): number | null {
+export function getPerformanceProgress(goal: Goal, history: SessionHistoryEntry[], prs?: Partial<PersonalRecords>): number | null {
   if (!goal.movementId) return null;
+  // Con meta en kilos y punto de partida, el avance es lo que llevas recorrido de salida a meta.
+  const kgProgress = targetKgProgress(goal, prs);
+  if (kgProgress !== null) return kgProgress;
   const goalMovement = getMovementById(goal.movementId);
   if (!goalMovement) return null;
 
@@ -57,9 +71,9 @@ export function getPerformanceProgress(goal: Goal, history: SessionHistoryEntry[
  * que ya esta subiendo carga de verdad no deberia esperar solo a que pase el calendario para que
  * el coach se lo tome en serio.
  */
-export function getGoalProgress(goal: Goal, history: SessionHistoryEntry[] = [], today: Date = new Date()): number {
+export function getGoalProgress(goal: Goal, history: SessionHistoryEntry[] = [], today: Date = new Date(), prs?: Partial<PersonalRecords>): number {
   const timeProgress = getTimeProgress(goal, today);
-  const performanceProgress = getPerformanceProgress(goal, history);
+  const performanceProgress = getPerformanceProgress(goal, history, prs);
   return performanceProgress === null ? timeProgress : Math.max(timeProgress, performanceProgress);
 }
 
@@ -75,9 +89,9 @@ const NO_DATA_BEHIND_THRESHOLD = 0.5;
  * baja del suelo temporal, asi que por si solo no distingue "vas justo a tiempo" de "vas realmente
  * mal" — esta funcion es la que sí lo hace, para no aplicar siempre el mismo sesgo fijo.
  */
-export function isGoalBehindSchedule(goal: Goal, history: SessionHistoryEntry[] = [], today: Date = new Date()): boolean {
+export function isGoalBehindSchedule(goal: Goal, history: SessionHistoryEntry[] = [], today: Date = new Date(), prs?: Partial<PersonalRecords>): boolean {
   const timeProgress = getTimeProgress(goal, today);
-  const performanceProgress = getPerformanceProgress(goal, history);
+  const performanceProgress = getPerformanceProgress(goal, history, prs);
   if (performanceProgress === null) return timeProgress > NO_DATA_BEHIND_THRESHOLD;
   return performanceProgress < timeProgress - BEHIND_SCHEDULE_MARGIN;
 }

@@ -39,6 +39,7 @@ import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
 import { REX_HINTS } from '../dashboard/rexHints';
 import { elsewhereAnswer } from '../dashboard/rexAsk';
+import { goalPrKey, normalizeKgTarget, supportsKgTarget } from '../../engine/goalTarget';
 import { refitSeason } from '../../engine/seasonRefit';
 import { handoff } from '../../lib/handoff';
 import { appNav } from '../../lib/appNav';
@@ -240,7 +241,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
   const [seasonPlanner, setSeasonPlanner] = useState<{ targetDate?: string } | null>(null);
   const [nextMacroDismissed, setNextMacroDismissed] = useState(false);
   const nextMacroSuggestion = useMemo(() => buildNextMacroSuggestion(profile, history), [profile, history]);
-  const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
+  const goalRows = useMemo(() => buildGoalRows(profile.goals, history, profile.prs), [profile.goals, history, profile.prs]);
   const openGroups = useMemo(() => buildOpenItems(profile, history, todayIso()), [profile, history]);
   const activeProgram = getActiveStrengthProgram(profile.strengthPrograms ?? [], todayIso());
 
@@ -345,7 +346,9 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     const before = profile.goals.find((g) => g.id === goalDraft.id);
     // Si cambias la fecha de una competición, ya no es una estimación.
     const moved = Boolean(before && goalDraft.type === 'preparar-competicion' && (before.targetDate !== goalDraft.targetDate || before.eventEndDate !== goalDraft.eventEndDate));
-    const draft: Goal = moved && goalDraft.provisional ? { ...goalDraft, provisional: undefined } : goalDraft;
+    const dated: Goal = moved && goalDraft.provisional ? { ...goalDraft, provisional: undefined } : goalDraft;
+    // La meta en kilos queda coherente: con su punto de partida (la marca de ahora) o sin ninguna de las dos.
+    const draft = normalizeKgTarget(dated, profile.prs, before);
     const goals = before ? profile.goals.map((g) => (g.id === draft.id ? draft : g)) : [...profile.goals, draft];
     let next: AthleteProfile = { ...profile, goals };
     // Los bloques de la temporada que llevan a esa competición se reajustan a la nueva fecha, si lo confirmas.
@@ -1656,6 +1659,30 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
                 </span>
               </label>
             )}
+
+            {supportsKgTarget(goalDraft) &&
+              (() => {
+                const key = goalPrKey(goalDraft);
+                const current = key ? profile.prs?.[key] : undefined;
+                return (
+                  <label className="flex flex-col gap-1 text-xs text-neutral-400">
+                    Peso meta en kg (opcional)
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.5"
+                      min={current ? current + 0.5 : 1}
+                      max={500}
+                      value={goalDraft.targetKg ?? ''}
+                      onChange={(e) => setGoalDraft((prev) => (prev ? { ...prev, targetKg: e.target.value ? Number(e.target.value) : undefined } : prev))}
+                      className={`w-40 ${inputClass}`}
+                    />
+                    <span className="text-[11px] text-neutral-600">
+                      {current ? `Tu marca actual es ${current} kg. ` : 'Aún no tienes una marca de este levantamiento: apúntala en Mis marcas para poder medir el avance. '}Con una meta, el avance se mide en kilos y el coach te dice si vas bien.
+                    </span>
+                  </label>
+                );
+              })()}
 
             <div>
               <p className="mb-2 text-sm font-medium text-neutral-300">Énfasis</p>

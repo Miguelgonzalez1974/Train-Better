@@ -144,7 +144,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const acwrTrend = useMemo(() => getAcwrTrend(loadHistory), [loadHistory]);
   const todayIso = toLocalIsoDate(new Date());
   const formModel = useMemo(() => buildFormModel(profile, loadHistory, todayIso), [profile, loadHistory, todayIso]);
-  const goalRows = useMemo(() => buildGoalRows(profile.goals, history), [profile.goals, history]);
+  const goalRows = useMemo(() => buildGoalRows(profile.goals, history, profile.prs), [profile.goals, history, profile.prs]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
   const yearConsistency = useMemo(() => computeYearConsistency(profile, history, new Date()), [profile, history]);

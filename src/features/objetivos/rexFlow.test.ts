@@ -69,7 +69,7 @@ describe('Rex: que la conversación esté bien cosida', () => {
   const ALL_IDS = [
     'start', 'more', 'o_type', 'o_lift_any', 'o_lift', 'o_oly', 'o_skill', 'o_skill_level', 'o_comp', 'o_comp_days', 'o_comp_end', 'o_when', 'o_date', 'o_push',
     'm_dur', 'm_phase', 'm_start', 'm_name', 'p_goal', 'p_method', 'p_lifts', 'p_dur', 'p_start', 'p_warn', 'r_gap', 't_when', 't_gap', 'i_suggest', 'i_block', 'i_ok',
-    'c_feel', 'c_next', 'c_next_date', 'c_next_days', 'c_next_end', 'c_next_guess',
+    'c_feel', 'c_next', 'c_next_date', 'c_next_days', 'c_next_end', 'c_next_guess', 'o_kg', 'o_kg_input', 'o_kg_check',
   ];
   const rich: FlowState = { type: 'subir-pr', movementId: 'back-squat', detail: 'Sentadilla trasera', cat: 'oly', method: '531', weeks: 8, targetDate: '2027-01-01', why: 'x' };
   const ctx = mkCtx(emptyProfile({ macrocycles: [makeMacro({ id: 'm', label: 'M', startDate: '2026-10-01', endDate: '2026-12-01' })], strengthPrograms: [{ id: 'p', startDate: '2026-10-28', endDate: '2026-12-22', method: '531', lifts: [] }] }));
@@ -78,7 +78,7 @@ describe('Rex: que la conversación esté bien cosida', () => {
     for (const id of ALL_IDS) {
       const node = getNode(id, rich, ctx, []);
       expect(node.text.length, id).toBeGreaterThan(10);
-      expect([Boolean(node.options?.length), Boolean(node.date), Boolean(node.input)].filter(Boolean), `«${id}» tiene botones, una fecha o un texto: una sola cosa`).toHaveLength(1);
+      expect([Boolean(node.options?.length), Boolean(node.date), Boolean(node.input), Boolean(node.number)].filter(Boolean), `«${id}» tiene botones, una fecha o un texto: una sola cosa`).toHaveLength(1);
       for (const o of node.options ?? []) {
         expect(Boolean(o.next) || Boolean(o.commit), `«${id}» → «${o.label}» no lleva a ningún sitio`).toBe(true);
         if (o.next && o.next !== 'review') expect(ALL_IDS, `«${id}» → «${o.label}» apunta a «${o.next}»`).toContain(o.next);
@@ -104,7 +104,7 @@ describe('Rex: que la conversación esté bien cosida', () => {
 
 describe('Rex: un objetivo', () => {
   it('subir un PR (lo primero que se ofrece) con la sentadilla en 12 semanas, intensivo', () => {
-    const { plan, id } = walk(['Un objetivo', 'Subir un PR', 'Sentadilla trasera', '12 semanas', 'Intensivo: casi todo gira alrededor']);
+    const { plan, id } = walk(['Un objetivo', 'Subir un PR', 'Sentadilla trasera', '12 semanas', 'Sin peso, solo mejorar', 'Intensivo: casi todo gira alrededor']);
     expect(id).toBe('more');
     const goal = plan[0].payload.goal!;
     expect(goal).toMatchObject({ type: 'subir-pr', movementId: 'back-squat', targetDate: addDaysIso(TODAY, 84), emphasis: 'intensivo', createdAt: TODAY });
@@ -113,13 +113,13 @@ describe('Rex: un objetivo', () => {
   });
 
   it('subir un PR también vale para halterofilia', () => {
-    const goal = walk(['Un objetivo', 'Subir un PR', 'Snatch', '8 semanas', 'Moderado: se mezcla con lo demás']).plan[0].payload.goal!;
+    const goal = walk(['Un objetivo', 'Subir un PR', 'Snatch', '8 semanas', 'Sin peso, solo mejorar', 'Moderado: se mezcla con lo demás']).plan[0].payload.goal!;
     expect(goal).toMatchObject({ type: 'subir-pr', movementId: 'snatch', emphasis: 'moderado' });
   });
 
   it('ser más fuerte y mejorar la halterofilia usan su propio tipo de objetivo', () => {
-    expect(walk(['Un objetivo', 'Ser más fuerte en general', 'Peso muerto', '4 semanas', 'Moderado: se mezcla con lo demás']).plan[0].payload.goal).toMatchObject({ type: 'elevar-fuerza', movementId: 'deadlift' });
-    expect(walk(['Un objetivo', 'Mejorar mi halterofilia', 'Clean & jerk', '16 semanas', 'Moderado: se mezcla con lo demás']).plan[0].payload.goal).toMatchObject({ type: 'mejorar-potencia', movementId: 'clean-and-jerk' });
+    expect(walk(['Un objetivo', 'Ser más fuerte en general', 'Peso muerto', '4 semanas', 'Sin peso, solo mejorar', 'Moderado: se mezcla con lo demás']).plan[0].payload.goal).toMatchObject({ type: 'elevar-fuerza', movementId: 'deadlift' });
+    expect(walk(['Un objetivo', 'Mejorar mi halterofilia', 'Clean & jerk', '16 semanas', 'Sin peso, solo mejorar', 'Moderado: se mezcla con lo demás']).plan[0].payload.goal).toMatchObject({ type: 'mejorar-potencia', movementId: 'clean-and-jerk' });
   });
 
   it('un gimnástico lleva desde dónde partes (nunca un escalón que ya tienes)', () => {
@@ -145,7 +145,7 @@ describe('Rex: un objetivo', () => {
   });
 
   it('se puede elegir una fecha en vez de semanas', () => {
-    const goal = walk(['Un objetivo', 'Subir un PR', 'Press banca', 'Elegir una fecha', { date: '2027-02-01' }, 'Moderado: se mezcla con lo demás']).plan[0].payload.goal!;
+    const goal = walk(['Un objetivo', 'Subir un PR', 'Press banca', 'Elegir una fecha', { date: '2027-02-01' }, 'Sin peso, solo mejorar', 'Moderado: se mezcla con lo demás']).plan[0].payload.goal!;
     expect(goal.targetDate).toBe('2027-02-01');
   });
 });
@@ -280,7 +280,7 @@ describe('Rex: "no lo sé, ayúdame"', () => {
   it('si el perfil ya prioriza algo, propone eso con su motivo', () => {
     const sug = suggestionFromProfile(withEmphasis('fuerza', 'deadlift'))!;
     expect(sug.state).toMatchObject({ type: 'elevar-fuerza', movementId: 'deadlift' });
-    const out = walk(['No lo sé, ayúdame', 'Sí, adelante', '8 semanas', 'Moderado: se mezcla con lo demás'], withEmphasis('fuerza', 'deadlift'));
+    const out = walk(['No lo sé, ayúdame', 'Sí, adelante', '8 semanas', 'Sin peso, solo mejorar', 'Moderado: se mezcla con lo demás'], withEmphasis('fuerza', 'deadlift'));
     expect(out.plan[0].payload.goal).toMatchObject({ type: 'elevar-fuerza', movementId: 'deadlift' });
     expect(getNode('i_suggest', {}, mkCtx(withEmphasis('fuerza', 'deadlift')), []).text).toMatch(/Mirando tu perfil.*peso muerto/);
   });
@@ -294,7 +294,7 @@ describe('Rex: "no lo sé, ayúdame"', () => {
   it('sin nada que priorizar pregunta qué te frena y no dice que lo ha mirado en el perfil', () => {
     const node = getNode('i_suggest', {}, mkCtx(emptyProfile()), []);
     expect(node.text).toMatch(/Qué te frena/);
-    const out = walk(['No lo sé, ayúdame', 'Me falta fuerza', 'Sí, adelante', '8 semanas', 'Moderado: se mezcla con lo demás']);
+    const out = walk(['No lo sé, ayúdame', 'Me falta fuerza', 'Sí, adelante', '8 semanas', 'Sin peso, solo mejorar', 'Moderado: se mezcla con lo demás']);
     expect(getNode('i_ok', { type: 'elevar-fuerza', detail: 'Sentadilla trasera', why: 'x' }, mkCtx(emptyProfile()), []).text).not.toMatch(/Mirando tu perfil/);
     expect(out.plan[0].payload.goal).toMatchObject({ type: 'elevar-fuerza', movementId: 'back-squat' });
   });
@@ -314,7 +314,7 @@ describe('Rex: "no lo sé, ayúdame"', () => {
 
 describe('Rex: varias cosas y crear el plan', () => {
   it('cada cosa nueva empieza de cero: no arrastra lo contestado en la anterior', () => {
-    const { plan } = walk(['Un objetivo', 'Subir un PR', 'Sentadilla trasera', '12 semanas', 'Intensivo: casi todo gira alrededor', 'Un objetivo', 'Más resistencia', '8 semanas', 'Moderado: se mezcla con lo demás']);
+    const { plan } = walk(['Un objetivo', 'Subir un PR', 'Sentadilla trasera', '12 semanas', 'Sin peso, solo mejorar', 'Intensivo: casi todo gira alrededor', 'Un objetivo', 'Más resistencia', '8 semanas', 'Moderado: se mezcla con lo demás']);
     expect(plan).toHaveLength(2);
     expect(plan[1].payload.goal!.movementId).toBeUndefined();
     expect(plan[1].payload.goal!.emphasis).toBe('moderado');
@@ -533,5 +533,60 @@ describe('Rex: despues de la competicion', () => {
     const macros = plan.filter((p) => p.kind === 'Macrociclo').map((p) => p.payload.macro!);
     expect(macros.length).toBeGreaterThan(0);
     for (const m of macros) expect(m.forGoalId).toBe(goalId);
+  });
+});
+
+
+describe('Rex: meta en kilos', () => {
+  // TODAY (4 nov 2026); la sentadilla del perfil de pruebas es de 170 kg.
+  const base = () => emptyProfile({ prs: { backSquat: 170, frontSquat: 140, benchPress: 110, deadlift: 200, strictPress: 65, clean: 115, snatch: 90, cleanAndJerk: 118 } });
+  const toDate = ['Un objetivo', 'Subir un PR', 'Sentadilla trasera'];
+
+  it('despues de la fecha, pregunta el peso con tu marca actual y metas sugeridas', () => {
+    const w = walk([...toDate, '12 semanas'], base());
+    expect(w.id).toBe('o_kg');
+    const node = getNode('o_kg', w.s, w.ctx, w.plan);
+    expect(node.text).toContain('170 kg');
+    expect(node.options!.map((o) => o.label)).toEqual(['175 kg · +5', '180 kg · +10', '187,5 kg · +17,5', 'Otro peso', 'Sin peso, solo mejorar']);
+  });
+
+  it('elegir una meta la comprueba (cuanto por semana y si es realista) y se guarda con su punto de partida', () => {
+    const w = walk([...toDate, '12 semanas', '180 kg · +10'], base());
+    expect(w.id).toBe('o_kg_check');
+    const text = getNode('o_kg_check', w.s, w.ctx, w.plan).text;
+    expect(text).toContain('por semana');
+    expect(text).toContain('180 kg');
+    const done = walk(['Sí, esa meta', 'Moderado: se mezcla con lo demás'], base(), { s: w.s, node: 'o_kg_check' });
+    const goal = done.plan[0].payload.goal!;
+    expect(goal.targetKg).toBe(180);
+    expect(goal.startKg).toBe(170);
+    expect(done.plan[0].sub).toContain('180 kg');
+  });
+
+  it('una meta muy ambiciosa ofrece una mas ajustada', () => {
+    const w = walk([...toDate, '4 semanas'], base());
+    const node = getNode('o_kg_check', { ...w.s, targetKg: 200 }, w.ctx, w.plan);
+    expect(node.text).toContain('ambiciosa');
+    expect(node.options!.some((o) => /^Mejor \d/.test(o.label))).toBe(true);
+  });
+
+  it('sin peso, el objetivo se crea como siempre (sin meta ni punto de partida)', () => {
+    const w = walk([...toDate, '12 semanas', 'Sin peso, solo mejorar', 'Moderado: se mezcla con lo demás'], base());
+    const goal = w.plan[0].payload.goal!;
+    expect(goal.targetKg).toBeUndefined();
+    expect(goal.startKg).toBeUndefined();
+  });
+
+  it('sin una marca de ese levantamiento no se pregunta el peso; y los objetivos que no son de fuerza tampoco', () => {
+    const noPr = emptyProfile({ prs: { backSquat: 0, frontSquat: 0, benchPress: 0, deadlift: 0, strictPress: 0, clean: 0, snatch: 0, cleanAndJerk: 0 } });
+    expect(walk([...toDate, '12 semanas'], noPr).id).toBe('o_push');
+    expect(walk(['Un objetivo', 'Más resistencia', '12 semanas'], base()).id).toBe('o_push');
+  });
+
+  it('Otro peso pide un numero', () => {
+    const w = walk([...toDate, '12 semanas', 'Otro peso'], base());
+    const node = getNode('o_kg_input', w.s, w.ctx, w.plan);
+    expect(node.number).toMatchObject({ field: 'targetKg', next: 'o_kg_check' });
+    expect(node.number!.min).toBeGreaterThan(170);
   });
 });

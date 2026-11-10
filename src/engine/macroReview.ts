@@ -88,7 +88,7 @@ export function buildWeeklyMacroReview(
     }
   }
 
-  const behindGoal = pickPriorityGoal(profile.goals, (g) => g.emphasis !== 'intensivo' && isGoalBehindSchedule(g, history, today));
+  const behindGoal = pickPriorityGoal(profile.goals, (g) => g.emphasis !== 'intensivo' && isGoalBehindSchedule(g, history, today, profile.prs));
   if (behindGoal) {
     const movement = behindGoal.movementId ? getMovementById(behindGoal.movementId) : undefined;
     return {

@@ -2,6 +2,7 @@ import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/typ
 import { getMovementById } from '../../data/movements';
 import { buildOpenItems } from '../objetivos/openItems';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
+import { goalTargetStatus } from '../../engine/goalTarget';
 import { computeAcwr, type AcwrZone } from '../../engine/loadMetrics';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT, type MacroReviewSuggestion } from '../../engine/macroReview';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
@@ -187,7 +188,21 @@ export function buildWeeklyReview(
     if (count.done < count.planned) watch.push(`Te ${count.planned - count.done === 1 ? 'faltó 1 sesión' : `faltaron ${count.planned - count.done} sesiones`} de las programadas.`);
     if (acwr.zone === 'alta' && !acwr.coldStart) watch.push('Tu carga ha estado en zona alta.');
     if (rpe !== null && rpe >= HIGH_RPE) watch.push(`El esfuerzo medio fue alto (RPE ${rpeText(rpe)}).`);
+    // Los objetivos con meta en kilos se cuentan con sus números; el resto, con el aviso de siempre.
+    const kgGoalIds = new Set<string>();
+    for (const goal of profile.goals) {
+      const s = goalTargetStatus(goal, profile.prs, profile.prLog, today);
+      if (!s) continue;
+      kgGoalIds.add(goal.id);
+      const name = PR_KEY_LABEL[s.key] ?? s.key;
+      if (s.kind === 'conseguida') best.push(`Meta conseguida: ${name} ${kg(s.currentKg)}.`);
+      else if (s.kind !== 'va-al-dia') {
+        const below = s.expectedTodayKg !== null && s.expectedTodayKg > s.currentKg ? `va ${kg(s.expectedTodayKg - s.currentKg)} por debajo de lo previsto para la meta de ${kg(s.targetKg)}` : `no llega a la meta de ${kg(s.targetKg)}`;
+        watch.push(`${name} ${below}. A este ritmo llegarías a unos ${kg(s.projectedKg)}.${s.kind === 'ambiciosa' ? ' La meta es ambiciosa para esa fecha: puedes bajarla o mover la fecha en Objetivos.' : ''}`);
+      }
+    }
     for (const item of buildOpenItems(profile, history, todayIso).objetivos) {
+      if (item.refId && kgGoalIds.has(item.refId)) continue;
       if (item.chip.text === 'Va por detrás') watch.push(`${item.title} va por detrás de lo esperado.`);
       if (item.chip.text === 'Falta un test') watch.push(`${item.title}: falta un test para saber cómo vas.`);
     }

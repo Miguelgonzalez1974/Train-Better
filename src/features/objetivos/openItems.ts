@@ -1,7 +1,8 @@
 import { CalendarRange, Gauge, type LucideIcon } from 'lucide-react';
 import type { AthleteProfile, Goal, Macrocycle, SessionHistoryEntry, StrengthProgram } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
-import { getGoalProgress, getPerformanceProgress, getTimeProgress, isGoalBehindSchedule } from '../../engine/goalProgress';
+import { getGoalProgress, getPerformanceProgress, getTimeProgress, isGoalBehindSchedule, targetKgProgress } from '../../engine/goalProgress';
+import { goalTargetStatus, type GoalTargetStatus } from '../../engine/goalTarget';
 import { describeRampStatus } from '../../engine/intensityRamp';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { currentWeekInRange, getActiveMacrocycle, resolveMacrocyclePhase, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
@@ -89,29 +90,51 @@ export function goalFacts(goal: Goal, name: string | undefined, behind: boolean)
   }
 }
 
-function goalItem(goal: Goal, history: SessionHistoryEntry[], todayIso: string, today: Date, program: StrengthProgram | undefined): { item: OpenItem; overdue: boolean } {
+const kgText = (n: number) => `${String(Math.round(n * 10) / 10).replace('.', ',')} kg`;
+
+/** Las líneas del detalle de un objetivo con meta en kilos: lo que falta, el ritmo necesario, el tuyo y dónde llegarías. */
+function kgFacts(s: GoalTargetStatus): string[] {
+  if (s.kind === 'conseguida') return [`Meta conseguida: ${kgText(s.currentKg)}. Puedes terminar el objetivo o ponerte una meta más alta.`];
+  return [
+    `Te faltan ${kgText(s.remainingKg)}: necesitas subir ${Number.isFinite(s.neededPerWeek) ? kgText(s.neededPerWeek) : '—'} por semana.`,
+    s.rateKnown ? `Tu ritmo real es de ${kgText(s.actualPerWeek)} por semana.` : `Aún sin marcas suficientes: cuento con un ritmo típico de ${kgText(s.actualPerWeek)} por semana.`,
+    `A este ritmo llegarías a unos ${kgText(s.projectedKg)} a la fecha.`,
+  ];
+}
+
+const KG_CHIP: Record<GoalTargetStatus['kind'], OpenItem['chip']> = {
+  conseguida: { text: 'Conseguida', tone: 'good' },
+  'va-al-dia': { text: 'Va al día', tone: 'good' },
+  'va-por-detras': { text: 'Va por detrás', tone: 'warn' },
+  ambiciosa: { text: 'Meta ambiciosa', tone: 'warn' },
+};
+
+function goalItem(goal: Goal, history: SessionHistoryEntry[], todayIso: string, today: Date, program: StrengthProgram | undefined, profile: AthleteProfile): { item: OpenItem; overdue: boolean } {
   const meta = GOAL_TYPE_META[goal.type];
   const movement = goal.movementId ? getMovementById(goal.movementId) : undefined;
   const days = daysUntil(goal.targetDate, todayIso);
   const overdue = days < 0;
   const tracks = Boolean(goal.movementId);
-  const performance = tracks ? getPerformanceProgress(goal, history) : null;
-  const behind = tracks && isGoalBehindSchedule(goal, history, today);
+  const prs = profile.prs;
+  const kg = overdue ? null : goalTargetStatus(goal, prs, profile.prLog, today);
+  const performance = tracks ? getPerformanceProgress(goal, history, prs) : null;
+  const behind = tracks && isGoalBehindSchedule(goal, history, today, prs);
   const isComp = goal.type === 'preparar-competicion';
 
   let chip: OpenItem['chip'];
   if (overdue) chip = { text: 'Vencido', tone: 'muted' };
   else if (program) chip = { text: 'En pausa', tone: 'muted' };
   else if (isComp) chip = { text: days === 0 ? 'Es hoy' : `Faltan ${days} d`, tone: 'accent' };
+  else if (kg) chip = KG_CHIP[kg.kind];
   else if (behind) chip = { text: performance === null ? 'Falta un test' : 'Va por detrás', tone: 'warn' };
   else chip = { text: tracks ? 'Va al día' : 'En marcha', tone: 'good' };
 
-  const dateText = isComp && goal.eventEndDate ? `del ${shortDate(goal.targetDate)} al ${shortDate(goal.eventEndDate)}` : `${isComp ? 'el' : 'vence el'} ${shortDate(goal.targetDate)}`;
+  const dateText = isComp && goal.eventEndDate ? `del ${shortDate(goal.targetDate)} al ${shortDate(goal.eventEndDate)}` : kg || goal.targetKg ? `${kgText(goal.targetKg ?? 0)} el ${shortDate(goal.targetDate)}` : `${isComp ? 'el' : 'vence el'} ${shortDate(goal.targetDate)}`;
   const facts: string[] = overdue
     ? ['La fecha ya pasó: este objetivo no influye en tus sesiones.']
     : program
       ? [`Pausado mientras dure el programa de fuerza (hasta el ${shortDate(program.endDate)}).`, 'Después vuelve solo y recupera su prioridad.']
-      : goalFacts(goal, movement?.name, behind);
+      : [...(kg ? kgFacts(kg) : []), ...goalFacts(goal, movement?.name, behind)];
   if (!overdue && !program && behind && performance === null) facts.push('Con más de la mitad del plazo y sin ningún test registrado, el coach ya lo trata como atrasado: haz un test para ajustarlo.');
 
   return {
@@ -125,10 +148,11 @@ function goalItem(goal: Goal, history: SessionHistoryEntry[], todayIso: string, 
       title: movement ? `${meta.label} · ${movement.name}` : meta.label,
       sub: overdue ? `venció el ${shortDate(goal.targetDate)}${goal.result ? ` · la viviste ${FEELING_LABEL[goal.result.feeling]}` : ''}` : `${dateText} · ${inDays(days)}${goal.provisional ? ' · fecha provisional' : ''}`,
       chip,
-      pct: overdue || isComp ? null : Math.round(getGoalProgress(goal, history, today) * 100),
+      // Con meta en kilos la barra es lo recorrido de la marca de salida a la meta; sin ella, el avance de siempre.
+      pct: overdue || isComp ? null : Math.round((kg ? (targetKgProgress(goal, prs) ?? getGoalProgress(goal, history, today, prs)) : getGoalProgress(goal, history, today, prs)) * 100),
       tick: tracks && !overdue && !isComp ? Math.round(getTimeProgress(goal, today) * 100) : null,
       dim: Boolean(program) || overdue,
-      legend: tracks && !overdue && !isComp ? 'Barra: tu avance · raya: lo esperable a estas alturas' : undefined,
+      legend: tracks && !overdue && !isComp ? (kg ? 'Barra: tu avance en kilos · raya: lo esperable a estas alturas' : 'Barra: tu avance · raya: lo esperable a estas alturas') : undefined,
       facts,
       actions: overdue ? ['terminar'] : ['editar', 'terminar'],
     },
@@ -251,7 +275,7 @@ export function buildOpenItems(profile: AthleteProfile, history: SessionHistoryE
   const viene: OpenItem[] = [];
 
   for (const goal of [...profile.goals].sort((a, b) => a.targetDate.localeCompare(b.targetDate))) {
-    const { item, overdue } = goalItem(goal, history, todayIso, today, program);
+    const { item, overdue } = goalItem(goal, history, todayIso, today, program, profile);
     (overdue ? terminados : objetivos).push(item);
   }
 
