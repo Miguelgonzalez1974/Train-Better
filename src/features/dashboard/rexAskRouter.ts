@@ -8,10 +8,11 @@ import { followUpText, forgetTopic, rememberTopic } from './rexContext';
 import { rexBus } from '../../lib/rexBus';
 import type { RexTarget } from './rexDashboard';
 import { dataAnswer, whyAnswer } from './rexData';
-import { confirmMoveText, confirmWeekText, moveChoiceAnswer, moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer, moveWhereAnswer, shortSessionLabel, weekDoneAnswer, weekProposalAnswer, weekRowsText, weekUndoNoneAnswer, weekUndoneAnswer } from './rexMove';
+import { changeDayActionsAnswer, changeDayPickAnswer } from './rexChangeDay';
+import { confirmMoveText, confirmWeekText, moveChoiceAnswer, moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer, shortSessionLabel, weekDoneAnswer, weekProposalAnswer, weekRowsText, weekUndoNoneAnswer, weekUndoneAnswer } from './rexMove';
 import { planWeekChange, weekPlanFromMove, type WeekPlan } from '../../lib/weekShift';
 import { buildUndo, clearUndo, peekUndo, saveUndo } from '../../lib/weekUndo';
-import { dayLabel, planMove } from '../../lib/sessionMove';
+import { planMove } from '../../lib/sessionMove';
 import { addDaysIso } from '../../engine/periodization';
 import { applyMark, currentMark, markAskKgAnswer, type MarkKey, markEstimateAnswer, markPickAnswer, markProposalAnswer, markSavedAnswer, markViewAnswer } from './rexMarks';
 import { elsewhereAnswer, helpAnswer, missingAnswer, parseAsk, splitAsk, weightAnswer, type AskAnswer, type AskIntent } from './rexAsk';
@@ -116,6 +117,36 @@ export function undoWeekChange(api: Pick<RouterApi, 'onWeekChanged'>): AskAnswer
   api.onWeekChanged?.();
   return weekUndoneAnswer(undo.label);
 }
+/**
+ * «Cambiar día», el menú guiado: sin día elige cuál (de los próximos siete con sesión que se pueden mover); con un día, qué hacer con él (a qué día pasarlo, que elija
+ * Rex el hueco, o desplazar la semana desde ahí). Cada botón es una frase que vuelve a pasar por `parseAsk`, así que el resto (enseñar el resultado, el «Sí», «Deshacer»)
+ * es el de siempre.
+ */
+function changeDayFlow(fromOffset: number | null, todayIso: string): AskAnswer {
+  const profile = athleteRepository.getProfile();
+  const history = athleteRepository.getHistory();
+  const label = shortSessionLabel;
+  const days = Array.from({ length: 7 }, (_, i) => addDaysIso(todayIso, i));
+  // Un día vale si tiene una sesión que se pueda mover: «sin hueco» también (se puede intercambiar o desplazar).
+  const movable = (iso: string) => {
+    const r = planMove(profile, history, { from: iso, to: null }, todayIso);
+    return typeof r === 'object' || r === 'sin-hueco';
+  };
+  if (fromOffset === null) return changeDayPickAnswer(days.filter(movable).map((iso) => ({ iso })), todayIso);
+
+  const from = addDaysIso(todayIso, fromOffset);
+  if (!movable(from)) return moveRefusalAnswer(planMove(profile, history, { from, to: null }, todayIso) as Exclude<ReturnType<typeof planMove>, object>);
+  const targets = days
+    .filter((iso) => iso !== from)
+    .flatMap((iso) => {
+      const r = planMove(profile, history, { from, to: iso }, todayIso);
+      return typeof r === 'object' ? [{ iso, swap: r.swap }] : [];
+    })
+    .slice(0, 5);
+  const canAuto = typeof planMove(profile, history, { from, to: null }, todayIso) === 'object';
+  const canShift = typeof planWeekChange(profile, history, { kind: 'desplazar', from }, todayIso, label) === 'object';
+  return changeDayActionsAnswer(from, targets, canShift, canAuto, todayIso);
+}
 function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer | 'close' {
   const intent = parseAsk(text, new Date().getDay());
   // Los botones de las respuestas de marcas llevan al Análisis: en el Dashboard lo abre; desde otra pantalla va al Dashboard y lo abre allí.
@@ -213,21 +244,10 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
     }
     case 'mover-deshacer':
       return undoWeekChange(api);
-    case 'mover-ayuda': {
-      // Los próximos días a los que se puede pasar la sesión de hoy (como botón cada uno), máximo cuatro.
-      const todayIso = api.todayIso;
-      const profile = athleteRepository.getProfile();
-      const history = athleteRepository.getHistory();
-      const options: { label: string; ask: string }[] = [];
-      for (let i = 1; i <= 6 && options.length < 4; i++) {
-        const iso = addDaysIso(todayIso, i);
-        const plan = planMove(profile, history, { from: todayIso, to: iso }, todayIso);
-        if (typeof plan === 'string') continue;
-        const label = dayLabel(iso, todayIso);
-        options.push({ label: `${label.charAt(0).toUpperCase()}${label.slice(1)}${plan.swap ? ' (intercambio)' : ''}`, ask: `pasa la sesion de hoy ${label === 'mañana' ? 'a mañana' : `al ${label.replace(/^el /, '')}`}` });
-      }
-      return moveWhereAnswer(options);
-    }
+    case 'mover-ayuda':
+      return changeDayFlow(null, api.todayIso);
+    case 'cambiar-dia':
+      return changeDayFlow(intent.from, api.todayIso);
     case 'dato':
     case 'por-que': {
       const todayIso = api.todayIso;

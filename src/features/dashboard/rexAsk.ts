@@ -46,6 +46,8 @@ export type AskIntent =
   | { kind: 'mover-deshacer' }
   /** «Mover la sesión» sin decir a qué día: Rex ofrece los días posibles con botones. */
   | { kind: 'mover-ayuda' }
+  /** «Cambiar día»: el menú guiado. `from` = el día elegido (desplazamiento desde hoy), o null si aún hay que elegirlo. */
+  | { kind: 'cambiar-dia'; from: number | null }
   /** Preguntas sobre tus datos: último levantamiento, última marca, racha, sesiones, duración de hoy, peso actual. */
   | { kind: 'dato'; question: DataQuestion }
   /** «¿Por qué este peso / este WOD / hoy así?». */
@@ -178,6 +180,12 @@ function parseMoveAsk(norm: string, todayWeekday: number): AskIntent | null {
   if (/\bwod\b/.test(norm)) return null;
 
   const found = [...norm.matchAll(DAY_WORDS)].map((m) => ({ word: m[1], start: m.index ?? 0 }));
+  // «Cambiar día» (el menú guiado): sin día pregunta cuál; con un día («cambiar día el jueves») pregunta qué hacer con él.
+  if (/\b(cambiar|cambia|cambiame)\b( de| el| un| mi)? dia\b/.test(norm) && found.length <= 1) {
+    const w = found[0]?.word;
+    const from = w === undefined ? null : w === 'hoy' ? 0 : w === 'manana' ? 1 : w === 'pasado manana' ? 2 : (JS_WEEKDAY.indexOf(w) - todayWeekday + 7) % 7;
+    return { kind: 'cambiar-dia', from };
+  }
   // «Desplaza la semana desde mañana»: todo un día más tarde hasta que un descanso lo absorba (por defecto desde mañana).
   if (/\b(desplaza|desplazar|desplazame|corre|correr|empuja|retrasa|retrasar|atrasa|atrasar)\b/.test(norm) && /\b(semana|todo|todas|sesiones|resto)\b/.test(norm) && found.length <= 1) {
     const w = found[0]?.word;

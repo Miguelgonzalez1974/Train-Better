@@ -1114,6 +1114,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const adaptUndoRef = useRef<DailySession | null>(null);
   // Para enseñar «Deshacer el cambio» en el lab mientras haya algo que deshacer (la referencia sola no repinta).
   const [canUndoAdapt, setCanUndoAdapt] = useState(false);
+  // «Deshacer el último cambio» de la semana: se ve mientras Rex lo recuerde (24 h, en este móvil); se relee al abrir el lab y tras cada cambio.
+  const canUndoWeek = peekUndo() !== null;
   function adaptAsk(request: AdaptRequest, confirmed: boolean): AskAnswer {
     if (!session) return adaptRefusalAnswer('sin-sesion');
     if (alreadyCompletedToday) return adaptRefusalAnswer('hecha');
@@ -1178,6 +1180,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   /** Las opciones de RexLab de Planificación: lo que antes estaba en «¿Cambiar algo?», agrupado, y el programa de fuerza. */
   const canChangeToday = Boolean(session && !session.isRestDay && !alreadyCompletedToday);
   const rexLab: LabSection[] = [
+    // «Cambiar día» está siempre: sirve para cualquier día de la semana, tenga sesión hoy o no (descanso, ya hecha…).
+    {
+      title: 'Tu semana',
+      items: [
+        { label: 'Cambiar día', hint: 'mover, intercambiar, desplazar', icon: CalendarClock, ask: 'cambiar dia' },
+        ...(canUndoWeek ? [{ label: 'Deshacer el último cambio', icon: Undo2, ask: 'deshaz el cambio de la semana' }] : []),
+      ],
+    },
     ...(canChangeToday
       ? [
           {
@@ -1186,7 +1196,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
               ...(hasWodBlock ? [{ label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(canHarder ? [{ label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
               { label: 'Acortar la sesión', hint: 'tengo poco tiempo', icon: Timer, ask: 'acortar la sesion' },
-              { label: 'Mover a otro día', hint: 'o intercambiar', icon: CalendarClock, ask: 'mover la sesion' },
               ...(canUndoAdapt ? [{ label: 'Deshacer el cambio', icon: Undo2, ask: 'deshaz el cambio' }] : []),
               { label: 'Cambiar el tipo', hint: 'recovery, WOD libre', icon: SlidersHorizontal, onClick: () => handleRexAct('tipo') },
               { label: 'Editar sesión', icon: Pencil, onClick: () => handleRexAct('editar') },
