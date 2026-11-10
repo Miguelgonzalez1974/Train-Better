@@ -288,3 +288,14 @@ describe('competicion recien terminada', () => {
     expect(ids({})).not.toContain('competicion-cierre');
   });
 });
+describe('competicion con fecha provisional', () => {
+  it('Rex pide confirmarla cuando falta poco (8 semanas o menos), y solo hoy', () => {
+    const list = buildRexSuggestions({ ...calm, provisionalCompetition: { days: 40, dateText: '2 mar' } });
+    const s = list.find((x) => x.id === 'competicion-fecha')!;
+    expect(s.text).toContain('2 mar');
+    expect(s.text).toContain('40 días');
+    expect(s.actions[0].target).toBe('objetivos');
+    expect(ids({ provisionalCompetition: { days: 57, dateText: '2 mar' } })).not.toContain('competicion-fecha');
+    expect(ids({ provisionalCompetition: null })).not.toContain('competicion-fecha');
+  });
+});

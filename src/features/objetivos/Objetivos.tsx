@@ -39,6 +39,7 @@ import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
 import { REX_HINTS } from '../dashboard/rexHints';
 import { elsewhereAnswer } from '../dashboard/rexAsk';
+import { refitSeason } from '../../engine/seasonRefit';
 import { handoff } from '../../lib/handoff';
 import { appNav } from '../../lib/appNav';
 import { rexBus } from '../../lib/rexBus';
@@ -341,9 +342,22 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
   function saveGoal(e: React.FormEvent) {
     e.preventDefault();
     if (!goalDraft) return;
-    const exists = profile.goals.some((g) => g.id === goalDraft.id);
-    const goals = exists ? profile.goals.map((g) => (g.id === goalDraft.id ? goalDraft : g)) : [...profile.goals, goalDraft];
-    persist({ ...profile, goals });
+    const before = profile.goals.find((g) => g.id === goalDraft.id);
+    // Si cambias la fecha de una competición, ya no es una estimación.
+    const moved = Boolean(before && goalDraft.type === 'preparar-competicion' && (before.targetDate !== goalDraft.targetDate || before.eventEndDate !== goalDraft.eventEndDate));
+    const draft: Goal = moved && goalDraft.provisional ? { ...goalDraft, provisional: undefined } : goalDraft;
+    const goals = before ? profile.goals.map((g) => (g.id === draft.id ? draft : g)) : [...profile.goals, draft];
+    let next: AthleteProfile = { ...profile, goals };
+    // Los bloques de la temporada que llevan a esa competición se reajustan a la nueva fecha, si lo confirmas.
+    const refit = moved ? refitSeason(next, draft.id, todayIso()) : null;
+    const refitted = Boolean(refit && window.confirm(`${refit.summary} ¿Reajusto los bloques de la temporada?`));
+    if (refit && refitted) next = { ...next, macrocycles: refit.macrocycles };
+    persist(next);
+    // Con los bloques cambiados, las sesiones ya preparadas se vuelven a generar.
+    if (refitted) {
+      resetUpcomingSessions(todayIso());
+      setProfile(athleteRepository.getProfile());
+    }
     goHome();
   }
 

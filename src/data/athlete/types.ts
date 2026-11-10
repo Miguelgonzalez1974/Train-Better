@@ -114,6 +114,8 @@ export interface Macrocycle {
    * acumulacion, 6 de intensificacion, 4 de pico y el resto de descarga, por ejemplo.
    */
   phaseWeeks?: [number, number, number, number];
+  /** Bloque de una temporada que lleva a esa competición: si su fecha cambia, los bloques se reajustan (engine/seasonRefit.ts). */
+  forGoalId?: string;
 }
 
 export type StrengthMethod =

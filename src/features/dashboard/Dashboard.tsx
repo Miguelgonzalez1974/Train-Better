@@ -38,7 +38,7 @@ import { buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weekly
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
-import { toLocalIsoDate } from '../../engine/periodization';
+import { isoDiffDays, toLocalIsoDate } from '../../engine/periodization';
 import { buildGoalRows } from './progressOverview';
 import { BalanceBox, DayRing, type DashTab } from './DayRing';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainAction } from '../../engine/explainNumbers';
@@ -74,7 +74,7 @@ import { MarksScreen } from './MarksScreen';
 import { REX_HINTS } from './rexHints';
 import type { AthleteProfile } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
-import { competitionToClose } from '../../engine/postCompetition';
+import { competitionToClose, nextCompetitionGoal } from '../../engine/postCompetition';
 import { handoff } from '../../lib/handoff';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { addSubirPrGoal } from './rexAnalysis';
@@ -267,6 +267,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const dayBalanceNow = isToday
     ? dayBalance({ planned: dayStart.planned, real: shown.strain.real, target: shown.strain.target, status: shown.strain.status, isToday, prepMorning: dayStart.prep, prepNow: shown.readiness.total })
     : null;
+  const provisionalNext = nextCompetitionGoal(profile.goals, todayIso);
   const rexList = buildRexSuggestions({
     // Mirando un día pasado, Rex habla de ese día y no de hoy.
     viewDay: isToday
@@ -302,6 +303,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         : null,
     weeklyReviewRange: weeklyReview ? weekRangeText(weeklyReview.from, weeklyReview.to) : null,
     competitionClosedDaysAgo: competitionToClose(profile.goals, todayIso)?.daysSince ?? null,
+    provisionalCompetition: provisionalNext?.provisional
+      ? { days: isoDiffDays(todayIso, provisionalNext.targetDate), dateText: new Date(`${provisionalNext.targetDate}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', '') }
+      : null,
     emphasisReviewPending: emphasisReviewNew,
     nutritionPercent: isToday ? nutritionPercent : null,
     streak,

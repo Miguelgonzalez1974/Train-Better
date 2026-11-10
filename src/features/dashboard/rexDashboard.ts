@@ -140,6 +140,8 @@ export interface RexContext {
   weeklyReviewRange: string | null;
   /** Días desde que terminó la última competición aún sin cerrar con Rex, o null si no hay ninguna. */
   competitionClosedDaysAgo?: number | null;
+  /** La próxima competición tiene fecha provisional y está a days días: Rex pide confirmarla. */
+  provisionalCompetition?: { days: number; dateText: string } | null;
   /** Revisión de 4 semanas de lo que prioriza el coach, sin ver ni avisar. */
   emphasisReviewPending: boolean;
   nutritionPercent: number | null;
@@ -160,6 +162,8 @@ export function weekRangeText(from: string, to: string): string {
   return `${fmt(from)} al ${fmt(to)}`;
 }
 
+/** Desde cuántos días antes Rex pide confirmar una competición con fecha provisional. */
+export const PROVISIONAL_NUDGE_DAYS = 56;
 const STREAK_MIN = 4;
 export const NUTRITION_HOUR = 15;
 export const NUTRITION_LOW = 60;
@@ -273,6 +277,17 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
       text: `Competición hecha. Terminó ${when}: cuéntame cómo fue y te preparo el camino a la siguiente.`,
       mood: 'lift',
       actions: [{ label: 'Contarle cómo fue', target: 'competicion-cierre' }],
+    });
+  }
+
+  if (ctx.isToday && ctx.provisionalCompetition && ctx.provisionalCompetition.days <= PROVISIONAL_NUDGE_DAYS) {
+    const { days, dateText } = ctx.provisionalCompetition;
+    out.push({
+      id: 'competicion-fecha',
+      priority: 70,
+      text: `Tu competición del ${dateText} sigue con fecha provisional y faltan ${days} ${days === 1 ? 'día' : 'días'}. ¿Ya sabes la fecha? Confírmala y reajusto los bloques.`,
+      mood: 'think',
+      actions: [{ label: 'Confirmar fecha', target: 'objetivos' }],
     });
   }
 

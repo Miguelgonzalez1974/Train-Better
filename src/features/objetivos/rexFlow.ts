@@ -556,7 +556,9 @@ function closeItems(s: FlowState, ctx: RexCtx): PlanItem[] {
   const compStart = s.targetDate ?? addDaysIso(ctx.todayIso, 16 * 7);
   const compEnd = s.eventEndDate && s.eventEndDate >= compStart ? s.eventEndDate : compStart;
   const start = nextMondayIso(ctx.todayIso);
-  const macros = buildBlocksToCompetition(start, compEnd, ctx.newId ?? newIdDefault);
+  // La competición nueva se crea antes que los bloques para que cada bloque sepa a cuál lleva.
+  const nextGoal = s.nextGoalId ? undefined : goalItem({ type: 'preparar-competicion', targetDate: compStart, eventEndDate: s.eventEndDate, provisional: s.provisional }, ctx);
+  const macros = buildBlocksToCompetition(start, compEnd, ctx.newId ?? newIdDefault, s.nextGoalId ?? nextGoal?.id);
   for (const m of macros) {
     const phaseWeeks = m.phaseWeeks;
     out.push({
@@ -572,7 +574,7 @@ function closeItems(s: FlowState, ctx: RexCtx): PlanItem[] {
       replaces: true,
     });
   }
-  if (!s.nextGoalId) out.push(goalItem({ type: 'preparar-competicion', targetDate: compStart, eventEndDate: s.eventEndDate, provisional: s.provisional }, ctx));
+  if (nextGoal) out.push(nextGoal);
   return out;
 }
 

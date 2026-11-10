@@ -126,7 +126,7 @@ export function buildSeasonSetup(todayIso: string, newId: () => string = () => c
   const ramp = { startDate, strengthWeeks: 1, olyWeeks: 2, wodWeeks: 2 };
 
   if (competition) {
-    const macrocycles = buildBlocksToCompetition(startDate, competition.end, newId);
+    const macrocycles = buildBlocksToCompetition(startDate, competition.end, newId, competition.goalId);
     if (macrocycles.length === 0) return null;
     const endDate = macrocycles[macrocycles.length - 1].endDate;
     return { startDate, endDate, totalWeeks: weeksBetweenIso(startDate, endDate), macrocycles, program, ramp, competition };
@@ -227,7 +227,7 @@ export const MIN_BLOCK_WEEKS = 4;
  * posterior quede dentro de un macro). Con 14 semanas o más, tres bloques (base 1, base 2 y pico); de 8 a 13, dos; de 4 a 7, solo el pico;
  * con menos no se monta nada (el modo competición se ocupa de las últimas semanas).
  */
-export function buildBlocksToCompetition(startIso: string, eventEndIso: string, newId: () => string): Macrocycle[] {
+export function buildBlocksToCompetition(startIso: string, eventEndIso: string, newId: () => string, goalId?: string): Macrocycle[] {
   const endDate = addDaysIso(eventEndIso, 7);
   const total = weeksBetweenIso(startIso, endDate);
   if (total < MIN_BLOCK_WEEKS) return [];
@@ -250,7 +250,7 @@ export function buildBlocksToCompetition(startIso: string, eventEndIso: string, 
   shapes.forEach(({ shape, label }, i) => {
     const last = i === shapes.length - 1;
     const end = last ? endDate : addDaysIso(cursor, lengths[i] * 7 - 1);
-    out.push({ id: newId(), label, startDate: cursor, endDate: end, phaseWeeks: blockPhaseWeeks(lengths[i], shape) });
+    out.push({ id: newId(), label, startDate: cursor, endDate: end, phaseWeeks: blockPhaseWeeks(lengths[i], shape), ...(goalId ? { forGoalId: goalId } : {}) });
     cursor = addDaysIso(end, 1);
   });
   return out;

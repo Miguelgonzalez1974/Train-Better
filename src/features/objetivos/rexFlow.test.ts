@@ -526,4 +526,12 @@ describe('Rex: despues de la competicion', () => {
     expect(next.goals.filter((g) => g.type === 'preparar-competicion')).toHaveLength(1);
     expect(next.goals[0].result).toEqual({ feeling: 4, closedAt: NOW });
   });
+
+  it('cada bloque lleva el id de la competicion a la que va, para poder reajustarse si cambia la fecha', () => {
+    const { plan } = run(['Bien', 'Ya tengo fecha', { date: '2027-03-12' }, 'Un solo dia']);
+    const goalId = plan.find((p) => p.kind === 'Objetivo')!.payload.goal!.id;
+    const macros = plan.filter((p) => p.kind === 'Macrociclo').map((p) => p.payload.macro!);
+    expect(macros.length).toBeGreaterThan(0);
+    for (const m of macros) expect(m.forGoalId).toBe(goalId);
+  });
 });
