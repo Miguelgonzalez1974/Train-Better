@@ -45,6 +45,8 @@ export type RexTarget =
   /** Nutrición: ir a la caja «He comido…». Objetivos: hablar con Rex (el asistente). */
   | 'nutri-comido'
   | 'objetivos-hablar'
+  /** Cerrar la competición que acaba de pasar con Rex (en Objetivos) y montar el camino a la siguiente. */
+  | 'competicion-cierre'
   /** Ir a una pestaña de la app (desde RexLab de cualquier pantalla). */
   | 'ir-dashboard'
   | 'ir-planificacion'
@@ -136,6 +138,8 @@ export interface RexContext {
   closing?: RexClosing | null;
   /** Texto de las fechas de la semana a repasar ("2 nov al 8 nov"), o null si no hay revisión pendiente. */
   weeklyReviewRange: string | null;
+  /** Días desde que terminó la última competición aún sin cerrar con Rex, o null si no hay ninguna. */
+  competitionClosedDaysAgo?: number | null;
   /** Revisión de 4 semanas de lo que prioriza el coach, sin ver ni avisar. */
   emphasisReviewPending: boolean;
   nutritionPercent: number | null;
@@ -256,6 +260,19 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
       text: `${GREETING(ctx.hour)}. Antes de nada, cuéntame cómo estás: con el check-in ajusto el esfuerzo de hoy.`,
       mood: 'idle',
       actions: [{ label: 'Hacer el check-in', target: 'checkin' }],
+    });
+  }
+
+  if (ctx.isToday && ctx.competitionClosedDaysAgo != null) {
+    const when = ctx.competitionClosedDaysAgo === 1 ? 'ayer' : `hace ${ctx.competitionClosedDaysAgo} días`;
+    out.push({
+      id: 'competicion-cierre',
+      priority: 96,
+      lead: 'Competición hecha.',
+      tone: 'gold',
+      text: `Competición hecha. Terminó ${when}: cuéntame cómo fue y te preparo el camino a la siguiente.`,
+      mood: 'lift',
+      actions: [{ label: 'Contarle cómo fue', target: 'competicion-cierre' }],
     });
   }
 

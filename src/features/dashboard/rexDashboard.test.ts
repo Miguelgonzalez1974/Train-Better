@@ -274,3 +274,17 @@ describe('la línea de cifras del globo fijo de Rex', () => {
     expect(dockStats({ low: null, high: null, real: null, planned: 0 })).toBeNull();
   });
 });
+describe('competicion recien terminada', () => {
+  it('Rex ofrece cerrarla, con prioridad sobre la revision semanal, y solo hoy', () => {
+    const list = buildRexSuggestions({ ...calm, competitionClosedDaysAgo: 3, weeklyReviewRange: '2 nov al 8 nov' });
+    expect(list.map((s) => s.id).slice(0, 2)).toEqual(['competicion-cierre', 'semana']);
+    expect(list[0].actions).toEqual([{ label: 'Contarle cómo fue', target: 'competicion-cierre' }]);
+    expect(list[0].text).toContain('hace 3 días');
+    expect(buildRexSuggestions({ ...calm, competitionClosedDaysAgo: 1 })[0].text).toContain('ayer');
+  });
+
+  it('sin competicion por cerrar, no aparece', () => {
+    expect(ids({ competitionClosedDaysAgo: null })).not.toContain('competicion-cierre');
+    expect(ids({})).not.toContain('competicion-cierre');
+  });
+});

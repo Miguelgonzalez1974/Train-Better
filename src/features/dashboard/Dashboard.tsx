@@ -74,6 +74,7 @@ import { MarksScreen } from './MarksScreen';
 import { REX_HINTS } from './rexHints';
 import type { AthleteProfile } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
+import { competitionToClose } from '../../engine/postCompetition';
 import { handoff } from '../../lib/handoff';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { addSubirPrGoal } from './rexAnalysis';
@@ -300,6 +301,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           }
         : null,
     weeklyReviewRange: weeklyReview ? weekRangeText(weeklyReview.from, weeklyReview.to) : null,
+    competitionClosedDaysAgo: competitionToClose(profile.goals, todayIso)?.daysSince ?? null,
     emphasisReviewPending: emphasisReviewNew,
     nutritionPercent: isToday ? nutritionPercent : null,
     streak,
@@ -365,6 +367,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'marcas':
         return setMarks({ key: null });
       case 'objetivos':
+        return onNavigateToObjetivos();
+      case 'competicion-cierre':
+        // Objetivos abre directamente el asistente de Rex en el cierre de la competición.
+        handoff.put('objetivos-asistente', 'competicion');
         return onNavigateToObjetivos();
       case 'nutricion':
         return setShowNutrition(true);

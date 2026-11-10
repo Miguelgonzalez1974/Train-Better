@@ -7,6 +7,7 @@ import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import { currentWeekInRange, getActiveMacrocycle, resolveMacrocyclePhase, totalMacrocycleWeeks, weeksSinceStart } from '../../engine/periodization';
 import { getActiveStrengthProgram } from '../../engine/strengthPrograms';
 import { companionStatus, companionTotalSessions, isCompanionProgram } from '../../engine/strengthCompanion';
+import { FEELING_LABEL } from '../../engine/postCompetition';
 import { GOAL_TYPE_COLOR, GOAL_TYPE_META } from './goalMeta';
 import { STRENGTH_METHOD_COLOR, STRENGTH_METHOD_META } from './strengthMethodMeta';
 
@@ -122,7 +123,7 @@ function goalItem(goal: Goal, history: SessionHistoryEntry[], todayIso: string, 
       Icon: meta.Icon,
       color: GOAL_TYPE_COLOR[goal.type],
       title: movement ? `${meta.label} · ${movement.name}` : meta.label,
-      sub: overdue ? `venció el ${shortDate(goal.targetDate)}` : `${dateText} · ${inDays(days)}`,
+      sub: overdue ? `venció el ${shortDate(goal.targetDate)}${goal.result ? ` · la viviste ${FEELING_LABEL[goal.result.feeling]}` : ''}` : `${dateText} · ${inDays(days)}${goal.provisional ? ' · fecha provisional' : ''}`,
       chip,
       pct: overdue || isComp ? null : Math.round(getGoalProgress(goal, history, today) * 100),
       tick: tracks && !overdue && !isComp ? Math.round(getTimeProgress(goal, today) * 100) : null,

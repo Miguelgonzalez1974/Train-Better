@@ -117,6 +117,7 @@ describe('RexLab de cada pantalla: lo nuevo que lee la caja', () => {
     expect(parseAsk('crea un macro', FRIDAY)).toEqual({ kind: 'crear', what: 'macro' });
     expect(parseAsk('quiero un programa nuevo', FRIDAY)).toEqual({ kind: 'crear', what: 'programa' });
     expect(parseAsk('nueva temporada', FRIDAY)).toEqual({ kind: 'crear', what: 'temporada' });
+    for (const phrase of ['ya compiti', 'como fue la competicion', 'cerrar la competicion', 'la siguiente competicion', 'despues de la competicion', 'termine la competicion']) expect(parseAsk(phrase, FRIDAY), phrase).toEqual({ kind: 'crear', what: 'competicion' });
     expect(parseAsk('quiero subir mi sentadilla', FRIDAY)).toEqual({ kind: 'crear', what: 'objetivo' });
     expect(parseAsk('mis objetivos', FRIDAY)).toEqual({ kind: 'modulo', target: 'objetivos' });
     expect(parseAsk('¿qué toca mañana?', FRIDAY)).toEqual({ kind: 'dia', offset: 1, label: 'mañana' });

@@ -214,7 +214,7 @@ const SECTION_TITLE: Record<ObjetivosSection | 'asistente', string> = {
 };
 
 /** Del tipo de cosa a crear a la primera pregunta del asistente (`rexFlow.ts`). */
-const ASSISTANT_START: Record<string, string> = { objetivo: 'o_type', macro: 'm_dur', programa: 'p_goal', temporada: 't_when', rampa: 'r_gap', consejo: 'i_suggest' };
+const ASSISTANT_START: Record<string, string> = { objetivo: 'o_type', macro: 'm_dur', programa: 'p_goal', temporada: 't_when', rampa: 'r_gap', consejo: 'i_suggest', competicion: 'c_feel' };
 
 export function Objetivos({ initialSection }: { initialSection?: ObjetivosSection } = {}) {
   const [profile, setProfile] = useState<AthleteProfile>(() => athleteRepository.getProfile());

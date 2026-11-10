@@ -4,6 +4,7 @@ import { SKILL_PROGRESSION_TARGETS } from '../../data/movements/skillProgression
 import { HALTERO_TOTAL_WEEKS } from '../../engine/halteroProgram';
 import { MAYHEM_BASE_TOTAL_WEEKS, MAYHEM_PICO_TOTAL_WEEKS, MAYHEM_TECNICA_TOTAL_WEEKS } from '../../engine/mayhemProgram';
 import { toLocalIsoDate } from '../../engine/periodization';
+import { buildBlocksToCompetition, competitionToClose, FEELING_LABEL, nextCompetitionGoal } from '../../engine/postCompetition';
 import { activeEmphasisItems } from '../../engine/programmingEmphasis';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { GOAL_TYPE_META } from './goalMeta';
@@ -18,7 +19,7 @@ import { STRENGTH_METHOD_META } from './strengthMethodMeta';
 
 export type PhaseStyle = 'clasico' | 'base' | 'pico';
 export type ProgramCat = 'slow' | 'back' | 'tech' | 'max' | 'oly' | 'test' | 'auto';
-export type CommitKind = 'obj' | 'macro' | 'prog' | 'ramp' | 'season';
+export type CommitKind = 'obj' | 'macro' | 'prog' | 'ramp' | 'season' | 'close';
 
 export interface FlowState {
   type?: GoalType;
@@ -39,6 +40,12 @@ export interface FlowState {
   lifts?: (keyof PersonalRecords)[];
   liftsLabel?: string;
   ramp?: { s: number; o: number; w: number };
+  /** Cierre de una competición: cómo te fue (1-5), cuál se cierra y, si ya está apuntada, la siguiente. */
+  feeling?: 1 | 2 | 3 | 4 | 5;
+  closeGoalId?: string;
+  nextGoalId?: string;
+  /** La fecha de la siguiente competición es una estimación. */
+  provisional?: boolean;
 }
 
 export interface RexCtx {
@@ -48,7 +55,7 @@ export interface RexCtx {
   newId?: () => string;
 }
 
-export type PlanKind = 'Objetivo' | 'Macrociclo' | 'Programa' | 'Rampa';
+export type PlanKind = 'Objetivo' | 'Macrociclo' | 'Programa' | 'Rampa' | 'Cierre';
 
 /** Una cosa que Rex ha preparado: lo que se enseña y lo que se guardará al crear el plan. */
 export interface PlanItem {
@@ -58,7 +65,9 @@ export interface PlanItem {
   title: string;
   sub: string;
   fx: string[];
-  payload: { goal?: Goal; macro?: Macrocycle; program?: StrengthProgram; ramp?: IntensityRamp };
+  payload: { goal?: Goal; macro?: Macrocycle; program?: StrengthProgram; ramp?: IntensityRamp; close?: { goalId: string; feeling: 1 | 2 | 3 | 4 | 5 } };
+  /** Un macrociclo que ocupa su sitio: el que estuviera en esas fechas se recorta o se quita. */
+  replaces?: boolean;
   /** Fechas de lo que ocupa un rango (macrociclo o programa), para detectar solapes. */
   start?: string;
   end?: string;
@@ -356,6 +365,54 @@ export function getNode(id: string, s: FlowState, ctx: RexCtx, plan: PlanItem[])
         options: [{ label: 'No, vengo entrenando', set: { ramp: undefined }, commit: 'season' }, ...RAMP_BY_GAP.slice(1).map((g) => ({ label: `Sí, ${g.label.toLowerCase()}`, set: { ramp: g.ramp }, commit: 'season' as const }))],
       };
 
+    // ----- después de la competición: cerrarla y apuntar la siguiente -----
+    case 'c_feel': {
+      const done = competitionToClose(ctx.profile.goals, ctx.todayIso);
+      if (!done) return getNode('c_next', s, ctx, plan);
+      const when = done.eventEnd > done.eventStart ? `del ${shortDate(done.eventStart)} al ${shortDate(done.eventEnd)}` : `del ${shortDate(done.eventStart)}`;
+      const feel = (feeling: 1 | 2 | 3 | 4 | 5, label: string) => opt(label, { feeling, closeGoalId: done.goal.id }, 'c_next');
+      return {
+        text: `Enhorabuena por competir. La competición ${when} ya pasó: ¿cómo te fue?`,
+        options: [feel(5, 'Muy bien'), feel(4, 'Bien'), feel(3, 'Regular'), feel(2, 'Mal'), feel(1, 'Muy mal')],
+      };
+    }
+    case 'c_next': {
+      const known = nextCompetitionGoal(ctx.profile.goals, ctx.todayIso);
+      const lead = s.feeling ? (s.feeling >= 4 ? 'Me alegro. ' : s.feeling === 3 ? 'Vale, de todo se aprende. ' : 'Ánimo: cada competición suma. ') : '';
+      if (known) {
+        const end = known.eventEndDate && known.eventEndDate > known.targetDate ? known.eventEndDate : undefined;
+        const when = end ? `del ${shortDate(known.targetDate)} al ${shortDate(end)}` : `el ${shortDate(known.targetDate)}`;
+        return {
+          text: `${lead}Ya tienes la siguiente apuntada, ${when}. ¿Monto el camino hasta ella?`,
+          options: [
+            { label: 'Sí, móntalo', set: { nextGoalId: known.id, targetDate: known.targetDate, eventEndDate: end, provisional: false }, commit: 'close' },
+            { label: 'Es otra fecha', set: { nextGoalId: undefined, provisional: false }, next: 'c_next_date' },
+          ],
+        };
+      }
+      return {
+        text: `${lead}Siempre conviene tener la siguiente competición en el horizonte, aunque sea una fecha aproximada. ¿Cuándo es?`,
+        options: [
+          { label: 'Ya tengo fecha', set: { nextGoalId: undefined, provisional: false }, next: 'c_next_date' },
+          { label: 'Aún no la sé', set: { nextGoalId: undefined, provisional: true }, next: 'c_next_guess' },
+        ],
+      };
+    }
+    case 'c_next_date':
+      return { text: '¿Cuándo es? Dime el primer día.', date: { min: addDaysIso(ctx.todayIso, 1), field: 'targetDate', next: 'c_next_days' } };
+    case 'c_next_days':
+      return {
+        text: '¿Dura más de un día?',
+        options: [{ label: 'Un solo día', set: { eventEndDate: undefined }, commit: 'close' }, { label: 'Varios días', set: {}, next: 'c_next_end' }],
+      };
+    case 'c_next_end':
+      return { text: '¿Y el último día?', date: { min: s.targetDate, field: 'eventEndDate', commit: 'close' } };
+    case 'c_next_guess':
+      return {
+        text: 'Pongo una fecha provisional para tener hacia dónde ir, y la cambias en Objetivos cuando la sepas. ¿A cuánto tiempo?',
+        options: [12, 16, 20, 24].map((w) => opt(`${w} semanas`, { targetDate: addDaysIso(ctx.todayIso, w * 7), eventEndDate: undefined, provisional: true }, undefined, 'close')),
+      };
+
     // ----- no lo sé -----
     case 'i_suggest': {
       const sug = suggestionFromProfile(ctx.profile);
@@ -396,6 +453,7 @@ function goalItem(s: FlowState, ctx: RexCtx): PlanItem {
     ...(s.movementId ? { movementId: s.movementId } : {}),
     targetDate,
     ...(type === 'preparar-competicion' && s.eventEndDate ? { eventEndDate: s.eventEndDate } : {}),
+    ...(type === 'preparar-competicion' && s.provisional ? { provisional: true } : {}),
     emphasis: s.push ?? 'moderado',
     createdAt: ctx.todayIso,
     ...(type === 'mejorar-gimnasticos' && s.skillLevel !== undefined ? { skillLevel: s.skillLevel } : {}),
@@ -407,7 +465,7 @@ function goalItem(s: FlowState, ctx: RexCtx): PlanItem {
     kind: 'Objetivo',
     short: title,
     title,
-    sub: `${when}${type === 'preparar-competicion' ? '' : ` · ${goal.emphasis === 'intensivo' ? 'Intensivo' : 'Moderado'}`}`,
+    sub: `${when}${goal.provisional ? ' · fecha provisional' : ''}${type === 'preparar-competicion' ? '' : ` · ${goal.emphasis === 'intensivo' ? 'Intensivo' : 'Moderado'}`}`,
     fx: goalFacts(goal, s.detail, false),
     payload: { goal },
   };
@@ -473,8 +531,48 @@ function rampItem(r: { s: number; o: number; w: number }, ctx: RexCtx): PlanItem
   };
 }
 
+/** Cierre de una competición y camino hasta la siguiente: el resultado, la vuelta suave, los bloques hasta la fecha y la competición. */
+function closeItems(s: FlowState, ctx: RexCtx): PlanItem[] {
+  const out: PlanItem[] = [];
+  const done = s.closeGoalId && s.feeling ? ctx.profile.goals.find((g) => g.id === s.closeGoalId) : undefined;
+  if (done && s.feeling) {
+    out.push({
+      id: `close-${done.id}`,
+      kind: 'Cierre',
+      short: `salió ${FEELING_LABEL[s.feeling]}`,
+      title: 'Cierro la competición',
+      sub: `la viviste: ${FEELING_LABEL[s.feeling]}`,
+      fx: ['Queda guardado cómo te fue.', 'La competición deja de contar atrás y sale de lo que tienes abierto cuando la termines.'],
+      payload: { close: { goalId: done.id, feeling: s.feeling } },
+    });
+  }
+  out.push(rampItem({ s: 1, o: 2, w: 2 }, ctx));
+  const compStart = s.targetDate ?? addDaysIso(ctx.todayIso, 16 * 7);
+  const compEnd = s.eventEndDate && s.eventEndDate >= compStart ? s.eventEndDate : compStart;
+  const start = nextMondayIso(ctx.todayIso);
+  const macros = buildBlocksToCompetition(start, compEnd, ctx.newId ?? newIdDefault);
+  for (const m of macros) {
+    const phaseWeeks = m.phaseWeeks;
+    out.push({
+      id: m.id,
+      kind: 'Macrociclo',
+      short: m.label,
+      title: m.label,
+      sub: `del ${shortDate(m.startDate)} al ${shortDate(m.endDate)}`,
+      fx: [phaseWeeks ? `${phaseWeeks[0]} sem acumulación · ${phaseWeeks[1]} intensificación · ${phaseWeeks[2]} pico · ${phaseWeeks[3]} descarga.` : 'Fases de 4 semanas.', 'Va hacia tu próxima competición; el modo competición toma el mando en las últimas cuatro semanas.'],
+      payload: { macro: m },
+      start: m.startDate,
+      end: m.endDate,
+      replaces: true,
+    });
+  }
+  if (!s.nextGoalId) out.push(goalItem({ type: 'preparar-competicion', targetDate: compStart, eventEndDate: s.eventEndDate, provisional: s.provisional }, ctx));
+  return out;
+}
+
 /** Lo que crea una respuesta final. Una temporada son varias cosas a la vez. */
 export function commitItems(kind: CommitKind, s: FlowState, ctx: RexCtx): PlanItem[] {
+  if (kind === 'close') return closeItems(s, ctx);
   if (kind === 'obj') return [goalItem(s, ctx)];
   if (kind === 'macro') return [macroItem({ weeks: s.weeks ?? 12, startIso: s.startIso ?? ctx.todayIso, phases: s.phases ?? 'clasico', label: s.label?.trim().slice(0, LABEL_MAX) || undefined }, ctx)];
   if (kind === 'prog') return [programItem(s, ctx)];
@@ -489,15 +587,37 @@ export function commitItems(kind: CommitKind, s: FlowState, ctx: RexCtx): PlanIt
 }
 
 /** Aplica el plan al perfil: suma objetivos, macrociclos y programas, y la rampa sustituye a la que hubiera. */
-export function applyPlan(profile: AthleteProfile, items: PlanItem[]): AthleteProfile {
+export function applyPlan(profile: AthleteProfile, items: PlanItem[], todayIso: string = toLocalIsoDate(new Date())): AthleteProfile {
   const goals = items.flatMap((i) => (i.payload.goal ? [i.payload.goal] : []));
   const macros = items.flatMap((i) => (i.payload.macro ? [i.payload.macro] : []));
   const programs = items.flatMap((i) => (i.payload.program ? [i.payload.program] : []));
   const ramp = [...items].reverse().find((i) => i.payload.ramp)?.payload.ramp;
+  // Cerrar una competición guarda cómo te fue en su objetivo.
+  const closes = items.flatMap((i) => (i.payload.close ? [i.payload.close] : []));
+  const closedGoals = profile.goals.map((g) => {
+    const c = closes.find((x) => x.goalId === g.id);
+    return c ? { ...g, result: { feeling: c.feeling, closedAt: todayIso } } : g;
+  });
+  // Un macro que ocupa su sitio recorta el que estuviera en esas fechas, o lo quita si empezaba dentro.
+  const replacing = items.filter((i) => i.replaces && i.payload.macro).map((i) => i.payload.macro as Macrocycle);
+  const keptMacros = replacing.length === 0
+    ? profile.macrocycles
+    : profile.macrocycles.flatMap((m) => {
+        const from = replacing.map((r) => r.startDate).sort()[0];
+        const to = replacing.map((r) => r.endDate).sort().reverse()[0];
+        if (m.endDate < from || m.startDate > to) return [m];
+        if (m.startDate >= from) return [];
+        return [{ ...m, endDate: addDaysIso(from, -1) }];
+      });
+  // Con el macro cambiado, las sesiones y reservas de semana ya preparadas se hicieron con el anterior: desde hoy se vuelven a generar.
+  const keepPast = <T>(record: Record<string, T> | undefined): Record<string, T> | undefined =>
+    record ? Object.fromEntries(Object.entries(record).filter(([date]) => date < todayIso)) : record;
+  const refresh = replacing.length > 0 ? { sessionCache: keepPast(profile.sessionCache), weeklyLocks: keepPast(profile.weeklyLocks), regenVariants: keepPast(profile.regenVariants) } : {};
   return {
     ...profile,
-    goals: [...profile.goals, ...goals],
-    macrocycles: [...profile.macrocycles, ...macros],
+    ...refresh,
+    goals: [...closedGoals, ...goals],
+    macrocycles: [...keptMacros, ...macros],
     strengthPrograms: [...(profile.strengthPrograms ?? []), ...programs],
     ...(ramp ? { intensityRamp: ramp } : {}),
   };
@@ -520,7 +640,13 @@ export function reviewNotes(items: PlanItem[], profile: AthleteProfile, todayIso
     if (clash) notes.push('Dos programas de fuerza se pisan en las mismas fechas: ese día el motor usa el primero que encuentra. Mejor encadenarlos.');
   }
   const existingMacros = profile.macrocycles.filter((m) => m.endDate >= todayIso);
-  for (const m of planMacros) {
+  const replaced = items.some((i) => i.replaces);
+  if (replaced) {
+    const from = planMacros.filter((i) => i.replaces).map((i) => i.start as string).sort()[0];
+    const cut = existingMacros.filter((m) => m.endDate >= from);
+    if (cut.length > 0) notes.push(`El macro actual (${cut.map((m) => m.label).join(', ')}) termina el ${shortDate(addDaysIso(from, -1))} para dar paso al nuevo.`);
+  }
+  for (const m of planMacros.filter((i) => !i.replaces)) {
     const clash = existingMacros.find((e) => overlaps({ start: m.start as string, end: m.end as string }, { start: e.startDate, end: e.endDate }));
     if (clash) notes.push(`«${m.title}» se pisa con «${clash.label}»: ese día manda el primero. Mejor que arranque justo después.`);
   }

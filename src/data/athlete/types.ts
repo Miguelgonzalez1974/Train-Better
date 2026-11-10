@@ -1028,6 +1028,10 @@ export interface Goal {
    * comportamiento anterior (empieza siempre por el escalon mas facil).
    */
   skillLevel?: number;
+  /** Solo `preparar-competicion`: la fecha es una estimación (aún no hay fecha oficial) y se cambia cuando se sepa. */
+  provisional?: boolean;
+  /** Solo `preparar-competicion` ya pasada: cómo la viviste (1 muy mal … 5 muy bien) y cuándo se cerró con Rex. */
+  result?: { feeling: 1 | 2 | 3 | 4 | 5; closedAt: string };
 }
 
 /** Para qué es una rutina de movilidad: estirar tras entrenar, una sesión de movilidad o calentar antes. */

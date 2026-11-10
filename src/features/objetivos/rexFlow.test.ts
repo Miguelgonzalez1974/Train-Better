@@ -69,6 +69,7 @@ describe('Rex: que la conversación esté bien cosida', () => {
   const ALL_IDS = [
     'start', 'more', 'o_type', 'o_lift_any', 'o_lift', 'o_oly', 'o_skill', 'o_skill_level', 'o_comp', 'o_comp_days', 'o_comp_end', 'o_when', 'o_date', 'o_push',
     'm_dur', 'm_phase', 'm_start', 'm_name', 'p_goal', 'p_method', 'p_lifts', 'p_dur', 'p_start', 'p_warn', 'r_gap', 't_when', 't_gap', 'i_suggest', 'i_block', 'i_ok',
+    'c_feel', 'c_next', 'c_next_date', 'c_next_days', 'c_next_end', 'c_next_guess',
   ];
   const rich: FlowState = { type: 'subir-pr', movementId: 'back-squat', detail: 'Sentadilla trasera', cat: 'oly', method: '531', weeks: 8, targetDate: '2027-01-01', why: 'x' };
   const ctx = mkCtx(emptyProfile({ macrocycles: [makeMacro({ id: 'm', label: 'M', startDate: '2026-10-01', endDate: '2026-12-01' })], strengthPrograms: [{ id: 'p', startDate: '2026-10-28', endDate: '2026-12-22', method: '531', lifts: [] }] }));
@@ -429,5 +430,91 @@ describe('Rex: el nombre del macrociclo', () => {
 
   it('una temporada se llama como ella misma, sin preguntar', () => {
     expect(walk(['Una temporada completa', '12 semanas', 'No, vengo entrenando']).plan[0].payload.macro!.label).toMatch(/^Temporada 12 semanas/);
+  });
+});
+
+
+describe('Rex: despues de la competicion', () => {
+  // Competicion del 6 al 7 de noviembre; hoy es 10 (martes siguiente).
+  const NOW = '2026-11-10';
+  const comp = { id: 'g-comp', type: 'preparar-competicion' as const, targetDate: '2026-11-06', eventEndDate: '2026-11-07', emphasis: 'intensivo' as const, createdAt: '2026-09-01' };
+  const otono = makeMacro({ id: 'otono', label: 'Otono', startDate: '2026-09-23', endDate: '2026-12-16' });
+  const profile = () => emptyProfile({ goals: [comp], macrocycles: [otono] });
+  const plain = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const run = (steps: Step[], p: AthleteProfile = profile()) => {
+    const ctx = { profile: p, todayIso: NOW, newId: (() => { let i = 0; return () => `n-${++i}`; })() };
+    let s: FlowState = {};
+    let id = 'c_feel';
+    const plan: PlanItem[] = [];
+    for (const step of steps) {
+      const node = getNode(id, s, ctx, plan);
+      if (typeof step === 'string') {
+        const o = node.options?.find((x) => plain(x.label) === plain(step));
+        if (!o) throw new Error(`En ${id} no hay boton ${step}. Hay: ${node.options?.map((x) => x.label).join(' | ')}`);
+        s = { ...s, ...o.set };
+        if (o.commit) plan.push(...commitItems(o.commit, s, ctx));
+        else id = o.next ?? 'more';
+      } else if ('date' in step) {
+        const d = node.date!;
+        s = { ...s, [d.field]: step.date };
+        if (d.commit) plan.push(...commitItems(d.commit, s, ctx));
+        else id = d.next ?? 'more';
+      }
+    }
+    return { s, plan, ctx };
+  };
+
+  it('pregunta como fue, y con fecha de la siguiente monta cierre, vuelta suave, bloques y la competicion', () => {
+    const { plan } = run(['Bien', 'Ya tengo fecha', { date: '2027-03-12' }, 'Un solo dia']);
+    expect(plan.map((p) => p.kind)).toEqual(['Cierre', 'Rampa', 'Macrociclo', 'Macrociclo', 'Macrociclo', 'Objetivo']);
+    expect(plan[0].payload.close).toEqual({ goalId: 'g-comp', feeling: 4 });
+    const macros = plan.filter((p) => p.kind === 'Macrociclo').map((p) => p.payload.macro!);
+    // empiezan el lunes 16, sin huecos, y el ultimo cubre la competicion y una semana mas
+    expect(macros[0].startDate).toBe('2026-11-16');
+    expect(macros[1].startDate).toBe(addDaysIso(macros[0].endDate, 1));
+    expect(macros[2].startDate).toBe(addDaysIso(macros[1].endDate, 1));
+    expect(macros[2].endDate).toBe('2027-03-19');
+    expect(plan[5].payload.goal).toMatchObject({ type: 'preparar-competicion', targetDate: '2027-03-12' });
+  });
+
+  it('aplicar: guarda el resultado, recorta el macro de otono y deja la nueva competicion', () => {
+    const { plan } = run(['Muy bien', 'Ya tengo fecha', { date: '2027-03-12' }, 'Un solo dia']);
+    const next = applyPlan(profile(), plan, NOW);
+    expect(next.goals.find((g) => g.id === 'g-comp')?.result).toEqual({ feeling: 5, closedAt: NOW });
+    expect(next.goals.filter((g) => g.type === 'preparar-competicion')).toHaveLength(2);
+    expect(next.macrocycles.find((m) => m.id === 'otono')?.endDate).toBe('2026-11-15');
+    expect(next.intensityRamp).toBeDefined();
+    // ningun dia queda cubierto por dos macros
+    const sorted = [...next.macrocycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    for (let i = 1; i < sorted.length; i++) expect(sorted[i].startDate > sorted[i - 1].endDate).toBe(true);
+  });
+
+  it('sin fecha: provisional a las semanas elegidas, marcada como tal', () => {
+    const { plan } = run(['Regular', 'Aun no la se', '16 semanas']);
+    const goal = plan.find((p) => p.kind === 'Objetivo')!.payload.goal!;
+    expect(goal.provisional).toBe(true);
+    expect(goal.targetDate).toBe(addDaysIso(NOW, 16 * 7));
+    expect(plan.find((p) => p.kind === 'Objetivo')!.sub).toContain('provisional');
+  });
+
+  it('si la siguiente ya esta apuntada, la usa sin duplicarla', () => {
+    const next = { ...comp, id: 'g-next', targetDate: '2027-02-06', eventEndDate: '2027-02-07' };
+    const p = emptyProfile({ goals: [comp, next], macrocycles: [otono] });
+    const { plan } = run(['Bien', 'Si, montalo'], p);
+    expect(plan.some((x) => x.kind === 'Objetivo')).toBe(false);
+    expect(plan.filter((x) => x.kind === 'Macrociclo').length).toBeGreaterThan(0);
+    expect(applyPlan(p, plan, NOW).goals.filter((g) => g.type === 'preparar-competicion')).toHaveLength(2);
+  });
+
+  it('con menos de cuatro semanas no monta bloques, solo el cierre, la vuelta y la competicion', () => {
+    const { plan } = run(['Mal', 'Ya tengo fecha', { date: '2026-11-28' }, 'Un solo dia']);
+    expect(plan.map((p) => p.kind)).toEqual(['Cierre', 'Rampa', 'Objetivo']);
+  });
+
+  it('con una competicion de varias dias, el macro cubre hasta el ultimo mas una semana', () => {
+    const { plan } = run(['Bien', 'Ya tengo fecha', { date: '2027-01-15' }, 'Varios dias', { date: '2027-01-17' }]);
+    const macros = plan.filter((p) => p.kind === 'Macrociclo').map((p) => p.payload.macro!);
+    expect(macros[macros.length - 1].endDate).toBe('2027-01-24');
+    expect(plan.find((p) => p.kind === 'Objetivo')!.payload.goal).toMatchObject({ targetDate: '2027-01-15', eventEndDate: '2027-01-17' });
   });
 });

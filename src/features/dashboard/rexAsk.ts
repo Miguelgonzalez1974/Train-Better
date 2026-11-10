@@ -27,7 +27,7 @@ export type AskIntent =
   /** El programa de fuerza que convive con el macro: aplazarlo, saltarlo, pausarlo o hacerlo hoy. */
   | { kind: 'programa'; action: 'aplazar' | 'saltar' | 'pausar' | 'hacer'; days: number | null }
   /** Crear algo con Rex (objetivo, macro, programa, temporada): abre el asistente. */
-  | { kind: 'crear'; what: 'objetivo' | 'macro' | 'programa' | 'temporada' }
+  | { kind: 'crear'; what: 'objetivo' | 'macro' | 'programa' | 'temporada' | 'competicion' }
   | { kind: 'modulo'; target: RexTarget }
   /** Marcas (PR): ver una o todas, apuntar una (`kg` null = falta decirlo; `confirmed` = ya dijo que sí) o estimar el 1RM de una serie («100 x 3»). */
   | { kind: 'marca-ver'; lift: MarkLift | null; /** true: abrir la pantalla «Mis marcas» (todas, o desplegada en ese levantamiento); false: contestar en una línea. */ open: boolean }
@@ -408,6 +408,9 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
   }
 
   if (/\b(como|que tal)\b.*\b(estoy|voy|ando|llevo|vengo)\b|\b(mi estado|mi preparacion|estoy listo|estoy para)\b/.test(norm)) return { kind: 'estado' };
+
+  // Después de competir: «ya compité», «cómo fue la competición», «la siguiente competición» abren el cierre y el camino a la próxima.
+  if (/\b(ya )?compiti\b|\b(termin|acab)\w* la competicion\b|\b(cierra|cerrar|cierro)\b.*\bcompeticion\b|\b(proxima|siguiente) competicion\b|\bdespues de la competicion\b|\bcomo (fue|me fue|salio)\b.*\bcompeticion\b/.test(norm)) return { kind: 'crear', what: 'competicion' };
 
   // Crear con Rex: «crea un macro», «quiero subir mi sentadilla», «nueva temporada».
   if (/\b(crea|crear|nuevo|nueva|monta|montame|prepara|preparame|quiero un|quiero una)\b.*\b(macro|macrociclo|objetivo|programa|temporada)\b/.test(norm)) {
