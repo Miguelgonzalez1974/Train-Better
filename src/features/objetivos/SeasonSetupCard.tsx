@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarRange } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
-import { applySeasonSetup, backupBeforeSeason, buildSeasonSetup, describeRemovals, restoreSeasonBackup, swapToTexas, type SeasonBackup } from '../../engine/seasonSetup';
+import { nextCompetitionGoal } from '../../engine/postCompetition';
+import { applySeasonSetup, backupBeforeSeason, buildSeasonSetup, describeRemovals, restoreSeasonBackup, swapToTexas, type SeasonBackup, type SeasonCompetition } from '../../engine/seasonSetup';
 import { isCompanionProgram } from '../../engine/strengthCompanion';
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { CompanionWeeks } from '../planificacion/CompanionWeeks';
 import { formatIsoDateShort } from '../../lib/dateFormat';
 import { rexBus } from '../../lib/rexBus';
 import { Modal } from '../shell/Modal';
+import { shortDate } from './openItems';
 
 const BACKUP_KEY = 'tb-season-backup';
 const HIDDEN_KEY = 'tb-season-card-hidden';
@@ -22,6 +24,29 @@ function readJson<T>(key: string): T | null {
   }
 }
 
+/** Los bloques de la temporada como una barra proporcional a sus semanas, con el nombre y la fecha de inicio debajo. */
+function SeasonBar({ macros }: { macros: { id: string; label: string; startDate: string; endDate: string }[] }) {
+  const weeks = (m: { startDate: string; endDate: string }) => Math.max(1, Math.round((new Date(`${m.endDate}T00:00:00`).getTime() - new Date(`${m.startDate}T00:00:00`).getTime() + 86400000) / (7 * 86400000)));
+  return (
+    <div aria-label="Bloques de la temporada">
+      <div className="flex gap-0.5">
+        {macros.map((m, i) => (
+          <div key={m.id} style={{ flex: weeks(m) }} className={`flex h-6 items-center justify-center truncate px-1 text-[11px] font-semibold text-neutral-200 ${i === macros.length - 1 ? 'bg-brand-gold/25' : 'bg-white/10'} ${i === 0 ? 'rounded-l-md' : ''} ${i === macros.length - 1 ? 'rounded-r-md' : ''}`}>
+            {m.label.split(' · ')[0]}
+          </div>
+        ))}
+      </div>
+      <div className="mt-1 flex gap-0.5 text-[11px] text-neutral-500">
+        {macros.map((m) => (
+          <span key={m.id} style={{ flex: weeks(m) }} className="truncate">
+            {formatIsoDateShort(m.startDate)} · {weeks(m)} sem
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * «Nueva temporada»: monta de una vez, tras terminar una competición, un macro continuo hasta junio en tres bloques (con sus fases) y un
  * programa de fuerza que convive con él. Enseña lo que se va a quitar y lo que se va a crear, guarda copia de lo anterior y se puede
@@ -29,10 +54,17 @@ function readJson<T>(key: string): T | null {
  */
 export function SeasonSetupCard({ profile, history, onApply }: { profile: AthleteProfile; history: SessionHistoryEntry[]; onApply: (next: AthleteProfile) => void }) {
   const todayIso = toLocalIsoDate(new Date());
-  const setup = useMemo(() => buildSeasonSetup(todayIso), [todayIso]);
+  // Con una competición a la vista la temporada lleva hasta ella; sin competición, hasta junio como siempre.
+  const nextGoal = useMemo(() => nextCompetitionGoal(profile.goals, todayIso), [profile.goals, todayIso]);
+  const competition = useMemo<SeasonCompetition | undefined>(
+    () => (nextGoal ? { goalId: nextGoal.id, start: nextGoal.targetDate, end: nextGoal.eventEndDate && nextGoal.eventEndDate >= nextGoal.targetDate ? nextGoal.eventEndDate : nextGoal.targetDate, provisional: Boolean(nextGoal.provisional) } : undefined),
+    [nextGoal],
+  );
+  const setup = useMemo(() => buildSeasonSetup(todayIso, undefined, { competition }), [todayIso, competition]);
+  const hiddenKey = competition ? `${HIDDEN_KEY}-comp:${competition.goalId}` : HIDDEN_KEY;
   const [open, setOpen] = useState(false);
   const [weeksOpen, setWeeksOpen] = useState(false);
-  const [hidden, setHidden] = useState(() => readJson<boolean>(HIDDEN_KEY) === true);
+  const [hidden, setHidden] = useState(() => readJson<boolean>(hiddenKey) === true);
   const [backup, setBackup] = useState<SeasonBackup | null>(() => readJson<SeasonBackup>(BACKUP_KEY));
   const applied = (profile.strengthPrograms ?? []).some(isCompanionProgram) && backup !== null;
   // RexLab de Objetivos abre la revisión de la temporada o el programa semana a semana.
@@ -74,14 +106,14 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
 
   function hide() {
     try {
-      window.localStorage.setItem(HIDDEN_KEY, 'true');
+      window.localStorage.setItem(hiddenKey, 'true');
     } catch {
       /* se vuelve a ver */
     }
     setHidden(true);
   }
 
-  const removals = describeRemovals(profile);
+  const removals = describeRemovals(profile, setup, todayIso);
 
   const companion = (profile.strengthPrograms ?? []).find(isCompanionProgram);
 
@@ -91,7 +123,7 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
         <section className="flex flex-col gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs text-neutral-400" aria-label="Temporada aplicada">
           <span className="flex items-center gap-2">
             <CalendarRange size={15} aria-hidden="true" className="shrink-0 text-good" />
-            Temporada hasta junio aplicada
+            {competition ? `Temporada hacia tu competición del ${shortDate(competition.start)} aplicada` : 'Temporada hasta junio aplicada'}
             {companion ? <span className="text-neutral-500">· programa: {STRENGTH_METHOD_LABEL[companion.method]}</span> : null}
           </span>
           <div className="flex flex-wrap gap-2">
@@ -125,12 +157,22 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
       <section className="flex flex-col gap-2 rounded-xl border border-brand-neon/30 bg-brand-neon/[0.06] p-3.5" aria-label="Nueva temporada">
         <p className="flex items-center gap-2 text-sm font-semibold text-white">
           <CalendarRange size={16} aria-hidden="true" className="text-brand-neon" />
-          Nueva temporada hasta junio
+          {competition ? `Nueva temporada hacia tu competición del ${shortDate(competition.start)}` : 'Nueva temporada hasta junio'}
         </p>
-        <p className="text-xs leading-relaxed text-neutral-400">
-          Un macro continuo en tres bloques y un programa de fuerza que convive con él, desde el {formatIsoDateShort(setup.startDate)} hasta el {formatIsoDateShort(setup.endDate)}.
-          Antes de aplicar te enseño lo que se quita y lo que se crea.
-        </p>
+        {competition ? (
+          <>
+            <p className="text-xs leading-relaxed text-neutral-400">
+              {setup.macrocycles.length === 1 ? 'Un bloque' : `${setup.macrocycles.length} bloques`} de macro desde el {formatIsoDateShort(setup.startDate)} hasta la competición{competition.provisional ? ' (fecha provisional)' : ''} y un
+              programa de fuerza que convive con ellos. Tu competición y los objetivos que no han vencido se quedan.
+            </p>
+            <SeasonBar macros={setup.macrocycles} />
+          </>
+        ) : (
+          <p className="text-xs leading-relaxed text-neutral-400">
+            Un macro continuo en tres bloques y un programa de fuerza que convive con él, desde el {formatIsoDateShort(setup.startDate)} hasta el {formatIsoDateShort(setup.endDate)}.
+            Antes de aplicar te enseño lo que se quita y lo que se crea.
+          </p>
+        )}
         <div className="flex gap-2">
           <button onClick={() => setOpen(true)} className="rounded-md bg-brand-neon px-3 py-1.5 text-xs font-semibold text-brand-bg hover:bg-brand-neon-soft">
             Revisar y aplicar
@@ -159,6 +201,7 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
                 ))}
               </ul>
             )}
+            {competition && <p className="mt-1.5 text-xs text-neutral-400">Se mantiene: tu competición del {shortDate(competition.start)} y los objetivos que no han vencido. El macro de ahora termina el día antes de que empiece la temporada.</p>}
             <p className="mt-1.5 text-xs text-neutral-500">Guardo una copia: si no te convence, «Deshacer» lo deja como estaba.</p>
           </div>
 

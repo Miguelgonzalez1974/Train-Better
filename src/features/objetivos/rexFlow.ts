@@ -4,7 +4,8 @@ import { SKILL_PROGRESSION_TARGETS } from '../../data/movements/skillProgression
 import { HALTERO_TOTAL_WEEKS } from '../../engine/halteroProgram';
 import { MAYHEM_BASE_TOTAL_WEEKS, MAYHEM_PICO_TOTAL_WEEKS, MAYHEM_TECNICA_TOTAL_WEEKS } from '../../engine/mayhemProgram';
 import { toLocalIsoDate } from '../../engine/periodization';
-import { buildBlocksToCompetition, competitionToClose, FEELING_LABEL, nextCompetitionGoal } from '../../engine/postCompetition';
+import { competitionToClose, FEELING_LABEL, nextCompetitionGoal } from '../../engine/postCompetition';
+import { buildBlocksToCompetition } from '../../engine/seasonSetup';
 import { activeEmphasisItems } from '../../engine/programmingEmphasis';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { GOAL_TYPE_META } from './goalMeta';
@@ -46,6 +47,8 @@ export interface FlowState {
   nextGoalId?: string;
   /** La fecha de la siguiente competición es una estimación. */
   provisional?: boolean;
+  /** Al cerrar la competición: de momento no hay otra, así que no se monta nada más. */
+  noNext?: boolean;
 }
 
 export interface RexCtx {
@@ -385,16 +388,17 @@ export function getNode(id: string, s: FlowState, ctx: RexCtx, plan: PlanItem[])
         return {
           text: `${lead}Ya tienes la siguiente apuntada, ${when}. ¿Monto el camino hasta ella?`,
           options: [
-            { label: 'Sí, móntalo', set: { nextGoalId: known.id, targetDate: known.targetDate, eventEndDate: end, provisional: false }, commit: 'close' },
-            { label: 'Es otra fecha', set: { nextGoalId: undefined, provisional: false }, next: 'c_next_date' },
+            { label: 'Sí, móntalo', set: { nextGoalId: known.id, targetDate: known.targetDate, eventEndDate: end, provisional: false, noNext: false }, commit: 'close' },
+            { label: 'Es otra fecha', set: { nextGoalId: undefined, provisional: false, noNext: false }, next: 'c_next_date' },
           ],
         };
       }
       return {
         text: `${lead}Siempre conviene tener la siguiente competición en el horizonte, aunque sea una fecha aproximada. ¿Cuándo es?`,
         options: [
-          { label: 'Ya tengo fecha', set: { nextGoalId: undefined, provisional: false }, next: 'c_next_date' },
-          { label: 'Aún no la sé', set: { nextGoalId: undefined, provisional: true }, next: 'c_next_guess' },
+          { label: 'Ya tengo fecha', set: { nextGoalId: undefined, provisional: false, noNext: false }, next: 'c_next_date' },
+          { label: 'Aún no la sé', set: { nextGoalId: undefined, provisional: true, noNext: false }, next: 'c_next_guess' },
+          { label: 'Ahora mismo no compito', set: { nextGoalId: undefined, provisional: false, noNext: true }, commit: 'close' },
         ],
       };
     }
@@ -547,6 +551,8 @@ function closeItems(s: FlowState, ctx: RexCtx): PlanItem[] {
     });
   }
   out.push(rampItem({ s: 1, o: 2, w: 2 }, ctx));
+  // Sin otra competición a la vista: el macro y los objetivos siguen como estaban.
+  if (s.noNext) return out;
   const compStart = s.targetDate ?? addDaysIso(ctx.todayIso, 16 * 7);
   const compEnd = s.eventEndDate && s.eventEndDate >= compStart ? s.eventEndDate : compStart;
   const start = nextMondayIso(ctx.todayIso);

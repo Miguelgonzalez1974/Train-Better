@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeProfile } from './__fixtures';
-import { applySeasonSetup, backupBeforeSeason, blockLengths, blockPhaseWeeks, buildSeasonSetup, nextMondayIso, restoreSeasonBackup, seasonEndIso, swapToTexas, TEXAS_WEEKS } from './seasonSetup';
+import { applySeasonSetup, backupBeforeSeason, blockLengths, blockPhaseWeeks, buildSeasonSetup, describeRemovals, nextMondayIso, restoreSeasonBackup, seasonEndIso, swapToTexas, TEXAS_WEEKS } from './seasonSetup';
 import { getActiveMacrocycle, totalMacrocycleWeeks } from './periodization';
 import { generateSessionForDate } from './generateSession';
 import { companionStatus, companionTotalSessions, isCompanionProgram } from './strengthCompanion';
@@ -111,5 +111,56 @@ describe('cambiar el programa que convive por el Texas Method', () => {
     expect(next.strengthPrograms?.map((p) => p.method)).toEqual(['531', 'texas']);
     expect(next.strengthPrograms?.[1]).toMatchObject({ startDate: '2026-11-09' });
     expect(TEXAS_WEEKS).toBe(8);
+  });
+});
+
+
+describe('temporada con una competicion a la vista', () => {
+  const comp = { goalId: 'g', start: '2027-03-02', end: '2027-03-02', provisional: true };
+  const goal = (id: string, targetDate: string, extra = {}) => ({ id, type: 'subir-pr' as const, movementId: 'back-squat', targetDate, emphasis: 'moderado' as const, createdAt: '2026-09-01', ...extra });
+
+  it('los bloques empiezan el lunes siguiente y acaban una semana despues de la competicion', () => {
+    const setup = buildSeasonSetup('2026-11-10', ids, { competition: comp })!;
+    expect(setup.startDate).toBe('2026-11-16');
+    expect(setup.endDate).toBe('2027-03-09');
+    expect(setup.competition).toEqual(comp);
+    expect(setup.macrocycles[0].startDate).toBe('2026-11-16');
+    expect(setup.macrocycles[setup.macrocycles.length - 1].endDate).toBe('2027-03-09');
+  });
+
+  it('sin tiempo para un bloque (menos de 4 semanas) no se propone', () => {
+    expect(buildSeasonSetup('2026-11-10', ids, { competition: { ...comp, start: '2026-11-28', end: '2026-11-28' } })).toBeNull();
+  });
+
+  it('aplicar mantiene la competicion y los objetivos no vencidos, y recorta el macro de ahora', () => {
+    const old = { id: 'otono', label: 'Otono', startDate: '2026-09-23', endDate: '2026-12-16' };
+    const profile = makeProfile({
+      macrocycles: [old],
+      goals: [goal('vigente', '2027-02-01'), goal('vencido', '2026-10-20'), { ...goal('cerrada', '2026-11-06'), type: 'preparar-competicion' as const, result: { feeling: 4 as const, closedAt: '2026-11-10' } }, { ...goal('g', '2027-03-02'), type: 'preparar-competicion' as const }],
+    });
+    const setup = buildSeasonSetup('2026-11-10', ids, { competition: comp })!;
+    const next = applySeasonSetup(profile, setup, '2026-11-10');
+    expect(next.goals.map((g) => g.id).sort()).toEqual(['cerrada', 'g', 'vigente']);
+    expect(next.macrocycles.find((m) => m.id === 'otono')?.endDate).toBe('2026-11-15');
+    expect(next.macrocycles).toHaveLength(1 + setup.macrocycles.length);
+    const sorted = [...next.macrocycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    for (let i = 1; i < sorted.length; i++) expect(sorted[i].startDate > sorted[i - 1].endDate).toBe(true);
+  });
+
+  it('lo que se quita solo cuenta lo que cae en la temporada y los objetivos vencidos', () => {
+    const profile = makeProfile({ macrocycles: [{ id: 'otono', label: 'Otono', startDate: '2026-09-23', endDate: '2026-12-16' }], goals: [goal('vigente', '2027-02-01'), goal('vencido', '2026-10-20')] });
+    const setup = buildSeasonSetup('2026-11-10', ids, { competition: comp })!;
+    const removed = describeRemovals(profile, setup, '2026-11-10');
+    expect(removed.goals).toBe(1);
+    expect(removed.macrocycles).toHaveLength(1);
+    // sin competicion se quita todo, como siempre
+    expect(describeRemovals(profile).goals).toBe(2);
+  });
+
+  it('sin competicion, aplicar sigue sustituyendo macros y objetivos', () => {
+    const profile = makeProfile({ macrocycles: [{ id: 'otono', label: 'Otono', startDate: '2026-09-23', endDate: '2026-12-16' }], goals: [goal('vigente', '2027-02-01')] });
+    const next = applySeasonSetup(profile, buildSeasonSetup('2026-11-10', ids)!, '2026-11-10');
+    expect(next.goals).toEqual([]);
+    expect(next.macrocycles.some((m) => m.id === 'otono')).toBe(false);
   });
 });

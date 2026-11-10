@@ -16,6 +16,15 @@ export interface SeasonSetup {
   macrocycles: Macrocycle[];
   program: CompanionProgram;
   ramp: IntensityRamp;
+  /** Con una competición a la vista: los bloques acaban en ella y los objetivos no vencidos se mantienen. */
+  competition?: SeasonCompetition;
+}
+
+export interface SeasonCompetition {
+  goalId: string;
+  start: string;
+  end: string;
+  provisional: boolean;
 }
 
 /** El primer lunes igual o posterior a la fecha. */
@@ -106,9 +115,23 @@ export function swapToTexas(profile: AthleteProfile, todayIso: string, newId: ()
   return { ...profile, strengthPrograms: [...kept, buildTexasProgram(todayIso, newId)] };
 }
 
-/** El plan completo desde el primer lunes tras `todayIso` hasta junio. `newId` = generador de ids (en tests, uno fijo). */
-export function buildSeasonSetup(todayIso: string, newId: () => string = () => crypto.randomUUID()): SeasonSetup | null {
+/**
+ * El plan completo desde el primer lunes tras `todayIso`: hasta junio, o, con una competición a la vista (`opts.competition`), hasta
+ * una semana después de ella. `newId` = generador de ids (en tests, uno fijo).
+ */
+export function buildSeasonSetup(todayIso: string, newId: () => string = () => crypto.randomUUID(), opts: { competition?: SeasonCompetition } = {}): SeasonSetup | null {
   const startDate = nextMondayIso(todayIso);
+  const competition = opts.competition;
+  const program = buildTexasProgram(todayIso, newId);
+  const ramp = { startDate, strengthWeeks: 1, olyWeeks: 2, wodWeeks: 2 };
+
+  if (competition) {
+    const macrocycles = buildBlocksToCompetition(startDate, competition.end, newId);
+    if (macrocycles.length === 0) return null;
+    const endDate = macrocycles[macrocycles.length - 1].endDate;
+    return { startDate, endDate, totalWeeks: weeksBetweenIso(startDate, endDate), macrocycles, program, ramp, competition };
+  }
+
   const endDate = seasonEndIso(startDate);
   if (isoDiffDays(startDate, endDate) < 14 * 7) return null;
   const totalWeeks = weeksBetweenIso(startDate, endDate);
@@ -123,16 +146,34 @@ export function buildSeasonSetup(todayIso: string, newId: () => string = () => c
     return macro;
   });
 
-  const program = buildTexasProgram(todayIso, newId);
-
-  return { startDate, endDate, totalWeeks, macrocycles, program, ramp: { startDate, strengthWeeks: 1, olyWeeks: 2, wodWeeks: 2 } };
+  return { startDate, endDate, totalWeeks, macrocycles, program, ramp };
 }
 
-/** Lo que se va a quitar: lo que hay ahora en el perfil (macros, objetivos y programas), para enseñarlo antes de aplicar. */
-export function describeRemovals(profile: AthleteProfile): { macrocycles: string[]; goals: number; programs: string[] } {
+/** Los objetivos que se mantienen con una temporada que lleva a una competición: los que no han vencido y las competiciones ya cerradas. */
+function keptGoals(profile: AthleteProfile, todayIso: string): AthleteProfile['goals'] {
+  return profile.goals.filter((g) => g.targetDate >= todayIso || g.result);
+}
+
+/** Con una competición a la vista el macro de ahora se recorta el día antes de que empiece la temporada; sin ella, se sustituye todo. */
+function keptMacros(profile: AthleteProfile, setup: SeasonSetup): AthleteProfile['macrocycles'] {
+  if (!setup.competition) return [];
+  return profile.macrocycles.flatMap((m) => {
+    if (m.endDate < setup.startDate) return [m];
+    if (m.startDate >= setup.startDate) return [];
+    return [{ ...m, endDate: addDaysIso(setup.startDate, -1) }];
+  });
+}
+
+/**
+ * Lo que se va a quitar, para enseñarlo antes de aplicar. Sin competición a la vista, todo lo que hay (macros, objetivos y programas);
+ * con ella, solo la parte de los macros que cae en la temporada nueva, los objetivos ya vencidos y los programas.
+ */
+export function describeRemovals(profile: AthleteProfile, setup?: SeasonSetup | null, todayIso?: string): { macrocycles: string[]; goals: number; programs: string[] } {
+  const withCompetition = Boolean(setup?.competition);
+  const macros = withCompetition && setup ? profile.macrocycles.filter((m) => m.endDate >= setup.startDate) : profile.macrocycles;
   return {
-    macrocycles: profile.macrocycles.map((m) => `${m.label} (${m.startDate} → ${m.endDate})`),
-    goals: profile.goals.length,
+    macrocycles: macros.map((m) => `${m.label} (${m.startDate} → ${m.endDate})`),
+    goals: withCompetition && todayIso ? profile.goals.length - keptGoals(profile, todayIso).length : profile.goals.length,
     programs: (profile.strengthPrograms ?? []).map((p) => `${STRENGTH_METHOD_LABEL[p.method]} (${p.startDate} → ${p.endDate})`),
   };
 }
@@ -162,8 +203,8 @@ export function applySeasonSetup(profile: AthleteProfile, setup: SeasonSetup, to
     record ? Object.fromEntries(Object.entries(record).filter(([date]) => date < todayIso)) : record;
   return {
     ...profile,
-    macrocycles: setup.macrocycles,
-    goals: [],
+    macrocycles: [...keptMacros(profile, setup), ...setup.macrocycles],
+    goals: setup.competition ? keptGoals(profile, todayIso) : [],
     strengthPrograms: [setup.program],
     intensityRamp: setup.ramp,
     // Las sesiones y reservas de semana ya preparadas se hicieron con lo anterior: desde hoy se vuelven a generar.
@@ -176,4 +217,41 @@ export function applySeasonSetup(profile: AthleteProfile, setup: SeasonSetup, to
 /** Deshace `applySeasonSetup` con la copia de antes. */
 export function restoreSeasonBackup(profile: AthleteProfile, backup: SeasonBackup): AthleteProfile {
   return { ...profile, macrocycles: backup.macrocycles, goals: backup.goals, strengthPrograms: backup.strengthPrograms, intensityRamp: backup.intensityRamp };
+}
+
+/** Semanas mínimas hasta la siguiente competición para montar un bloque propio. */
+export const MIN_BLOCK_WEEKS = 4;
+
+/**
+ * Los macros que llevan de `startIso` a la competición, terminando una semana después de su último día (para que la recuperación
+ * posterior quede dentro de un macro). Con 14 semanas o más, tres bloques (base 1, base 2 y pico); de 8 a 13, dos; de 4 a 7, solo el pico;
+ * con menos no se monta nada (el modo competición se ocupa de las últimas semanas).
+ */
+export function buildBlocksToCompetition(startIso: string, eventEndIso: string, newId: () => string): Macrocycle[] {
+  const endDate = addDaysIso(eventEndIso, 7);
+  const total = weeksBetweenIso(startIso, endDate);
+  if (total < MIN_BLOCK_WEEKS) return [];
+  const shapes: { shape: 'base1' | 'base2' | 'pico'; label: string }[] =
+    total >= 14
+      ? [
+          { shape: 'base1', label: 'Base 1 · Reconstrucción' },
+          { shape: 'base2', label: 'Base 2 · Fuerza y motor' },
+          { shape: 'pico', label: 'Pico y competición' },
+        ]
+      : total >= 8
+        ? [
+            { shape: 'base2', label: 'Base · Fuerza y motor' },
+            { shape: 'pico', label: 'Pico y competición' },
+          ]
+        : [{ shape: 'pico', label: 'Pico y competición' }];
+  const lengths = shapes.length === 3 ? blockLengths(total) : shapes.length === 2 ? [Math.round(total * 0.55), total - Math.round(total * 0.55)] : [total];
+  const out: Macrocycle[] = [];
+  let cursor = startIso;
+  shapes.forEach(({ shape, label }, i) => {
+    const last = i === shapes.length - 1;
+    const end = last ? endDate : addDaysIso(cursor, lengths[i] * 7 - 1);
+    out.push({ id: newId(), label, startDate: cursor, endDate: end, phaseWeeks: blockPhaseWeeks(lengths[i], shape) });
+    cursor = addDaysIso(end, 1);
+  });
+  return out;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Goal } from '../data/athlete/types';
-import { buildBlocksToCompetition, competitionToClose, nextCompetitionGoal } from './postCompetition';
+import { competitionToClose, nextCompetitionGoal } from './postCompetition';
+import { buildBlocksToCompetition } from './seasonSetup';
 import { addDaysIso } from './periodization';
 
 const goal = (id: string, targetDate: string, eventEndDate?: string, extra: Partial<Goal> = {}): Goal => ({ id, type: 'preparar-competicion', targetDate, ...(eventEndDate ? { eventEndDate } : {}), emphasis: 'intensivo', createdAt: '2026-09-01', ...extra });

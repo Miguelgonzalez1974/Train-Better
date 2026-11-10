@@ -517,4 +517,13 @@ describe('Rex: despues de la competicion', () => {
     expect(macros[macros.length - 1].endDate).toBe('2027-01-24');
     expect(plan.find((p) => p.kind === 'Objetivo')!.payload.goal).toMatchObject({ targetDate: '2027-01-15', eventEndDate: '2027-01-17' });
   });
+
+  it('Ahora mismo no compito: cierra y pone la rampa, sin crear macros ni otra competicion, y el macro sigue', () => {
+    const { plan } = run(['Bien', 'Ahora mismo no compito']);
+    expect(plan.map((p) => p.kind)).toEqual(['Cierre', 'Rampa']);
+    const next = applyPlan(profile(), plan, NOW);
+    expect(next.macrocycles).toEqual(profile().macrocycles);
+    expect(next.goals.filter((g) => g.type === 'preparar-competicion')).toHaveLength(1);
+    expect(next.goals[0].result).toEqual({ feeling: 4, closedAt: NOW });
+  });
 });
