@@ -587,18 +587,20 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             companionDone={dayCompanion}
             onOpenDone={() => setShowDone(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
+            // Tu nivel: una fila más de «Tu día» que se abre con el radar del perfil; solo hoy y con datos de tres áreas.
+            extra={
+              isToday ? (
+                <LevelCard
+                  profile={profile}
+                  history={history}
+                  onOpen={() => {
+                    setAnalysisStart('perfil');
+                    setAnalysisOpen(true);
+                  }}
+                />
+              ) : null
+            }
           />
-          {/* Tu nivel: el radar del perfil de atleta; solo hoy, y solo cuando hay datos de tres áreas. */}
-          {isToday && (
-            <LevelCard
-              profile={profile}
-              history={history}
-              onOpen={() => {
-                setAnalysisStart('perfil');
-                setAnalysisOpen(true);
-              }}
-            />
-          )}
         </>
       )}
 

@@ -105,6 +105,7 @@ export function DayRows({
   onOpenDone,
   onNavigateToPlanificacion,
   onOpenForm,
+  extra,
 }: {
   isToday: boolean;
   /** La sesión de hoy (null si ya entrenaste, no hay estructura activa o es otro día). */
@@ -123,6 +124,8 @@ export function DayRows({
   onNavigateToPlanificacion: () => void;
   /** Abre la ventana con la curva de forma. */
   onOpenForm: () => void;
+  /** Una fila más al final de «Tu día» (el nivel), con el mismo diseño. */
+  extra?: ReactNode;
 }) {
   const real = strain.real;
   const programDone = companionDone.some((c) => c.outcome === 'hecha');
@@ -201,6 +204,7 @@ export function DayRows({
       {sessionRow}
       {/* Tu forma: la curva de supercompensación; con poco historial dice cuánto falta para tenerla. */}
       {form && formRow}
+      {extra}
     </section>
   );
 }
