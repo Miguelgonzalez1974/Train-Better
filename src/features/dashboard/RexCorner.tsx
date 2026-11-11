@@ -5,6 +5,7 @@ import { RexBar } from './RexBar';
 import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
 import { labReturn } from '../../lib/labReturn';
 import { appNav } from '../../lib/appNav';
+import { useClockActive } from '../../lib/clockState';
 import { handoff } from '../../lib/handoff';
 import type { TabId } from '../shell/navItems';
 import type { RexSuggestion, RexTarget } from './rexDashboard';
@@ -156,6 +157,7 @@ export function RexCorner({
     });
   };
   const blocked = useBlockingOverlay();
+  const clockActive = useClockActive();
   const typingInField = useTyping();
   // Volver al lab: lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse; si te vas a otra pestaña, la app ofrece «Volver al lab».
   // Solo en el Dashboard (`modules`): en Planificación el panel no vuelve solo.
@@ -219,7 +221,8 @@ export function RexCorner({
   // tranquila ni si ya lo dijo en esta visita. La pista de los aros no se recoge sola.
   useEffect(() => {
     const talks = Boolean(dock) || hinting || (speak && !quiet && !suppressed && !spoken.has(key));
-    if (!talks || open || blocked) {
+    // Con el reloj del entreno abierto o en marcha Rex se queda en su botón: no compite con él.
+    if (!talks || open || blocked || clockActive) {
       setBubble(false);
       return;
     }
@@ -230,7 +233,7 @@ export function RexCorner({
       setBubble(false);
     }, BUBBLE_MS);
     return () => window.clearTimeout(timer);
-  }, [hinting, dock !== null, speak, quiet, suppressed, open, blocked, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hinting, dock !== null, speak, quiet, suppressed, open, blocked, clockActive, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const said = hint ?? { lead: suggestion.lead && suggestion.text.startsWith(suggestion.lead) ? suggestion.lead : '', text: '' };
   const leadLen = said.lead.length;

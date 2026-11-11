@@ -8,6 +8,7 @@ import { loadUnitLabel } from '../../data/movements/loadUnits';
 import { parseWorkingReps, SET_FEEL_LABEL } from '../../engine/setFeedback';
 import { adjustRemainingSets } from '../../engine/setAdjust';
 import { localizeWodText } from '../../engine/wodUnits';
+import { clockBus } from '../../lib/clockState';
 import { fmtKgValue } from '../../lib/format';
 import { useVisibleViewport } from '../../lib/useVisibleViewport';
 import { resolveLiftPrKey } from '../../engine/movementProgress';
@@ -614,6 +615,14 @@ export function FocusMode({
             />
           ))}
         </div>
+        {/* El reloj del entreno: descanso entre series, o el cronómetro si el bloque es el WOD. */}
+        <button
+          onClick={() => clockBus.open(group.block === 'wod' ? 'workout' : 'rest')}
+          aria-label="Abrir el reloj"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-colors hover:bg-white/10"
+        >
+          <Timer size={18} />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-40 pt-6">

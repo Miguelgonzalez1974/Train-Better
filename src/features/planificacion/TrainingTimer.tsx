@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { Timer, Pause, Play, RotateCcw, X, Minus, Plus, Maximize2, Minimize2 } from 'lucide-react';
 import { capStep, capView, clockStopToRecord, readClockRuns, recordClockStop } from './workoutClockResult';
 import type { WodCap } from '../../engine/wodCap';
+import { clockBus, clockState } from '../../lib/clockState';
 
 const PRESETS = [60, 90, 120, 180];
 const PRE_START_SECONDS = 10;
@@ -149,18 +150,6 @@ function WakeLockStatusLine({
               ? 'Pantalla activa mientras entrenas.'
               : 'No se pudo activar — si estás en iPhone, añade la app a tu pantalla de inicio; si no, revisa el ahorro de batería.'}
     </p>
-  );
-}
-
-/** Etiqueta sobre el círculo del reloj cerrado con las rondas ("R3", "3/10") — se ven sin abrir el panel. Solo muestra, no actúa: un toque accidental no debe sumar una ronda. */
-function RoundBadge({ text, borderClass }: { text: string; borderClass: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`absolute -right-1 -top-1 flex h-8 min-w-8 items-center justify-center rounded-full border-2 bg-brand-surface px-1.5 text-base font-bold text-white shadow-md ${borderClass}`}
-    >
-      {text}
-    </span>
   );
 }
 
@@ -840,6 +829,22 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
   const capProgress = view?.progress ?? 0;
   const overCap = view?.over ?? 0;
 
+  // El reloj abierto, en marcha o con un resultado sin cerrar: Rex se pliega (ver `lib/clockState`).
+  const clockInUse = expanded || fullscreen || Boolean(preStartFor) || running || done || capHit || workoutRunning || workoutElapsed >= 1 || emomRunning || emomDone || tabataRunning || tabataDone;
+  useEffect(() => {
+    clockState.setActive(clockInUse);
+  }, [clockInUse]);
+  useEffect(() => () => clockState.setActive(false), []);
+  // Cualquier botón «Reloj» de la app (el del WOD, el del modo enfocado) lo abre en el modo que toque.
+  useEffect(
+    () =>
+      clockBus.on((m) => {
+        setMode(m ?? 'workout');
+        setExpanded(true);
+      }),
+    [],
+  );
+
   // Con el reloj a pantalla completa la página de detrás no se desplaza.
   useEffect(() => {
     if (!fullscreen) return;
@@ -954,100 +959,129 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
   }
 
   if (!expanded) {
+    // Cerrado, el reloj no es un botón flotante: parado no se ve (se abre desde el botón «Reloj» del WOD) y en marcha es una cinta fina
+    // arriba, para que no tape lo que lees ni compita con Rex, que vive abajo.
+    type Strip = {
+      label: string;
+      time: string;
+      sub?: string;
+      tone: ClockTone;
+      mode: TimerMode;
+      running: boolean;
+      onToggle?: () => void;
+      toggleLabel?: string;
+      onClose?: () => void;
+      pulse?: boolean;
+      badge?: string;
+      progress?: { value: number; warn: boolean };
+    };
+    let strip: Strip | null = null;
     if (preStartFor) {
-      return (
-        <button
-          onClick={() => openTo(preStartFor)}
-          aria-label="Cuenta atrás de inicio"
-          className="fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
-        >
-          {preStartRemaining}
-        </button>
-      );
+      strip = { label: 'Prepárate', time: String(preStartRemaining), tone: 'orange', mode: preStartFor, running: false, onToggle: skipPreStart, toggleLabel: 'Empezar ya' };
+    } else if (running || done) {
+      strip = { label: done ? 'Descanso listo' : 'Descanso', time: mmss(remaining), tone: done ? 'orange' : 'gold', mode: 'rest', running, onToggle: toggle, toggleLabel: done ? 'Otra vez' : undefined, onClose: done ? reset : undefined, pulse: done };
+    } else if (capHit && !workoutRunning) {
+      strip = {
+        label: capWord,
+        time: mmss(workoutElapsed),
+        sub: effectiveCap?.kind === 'amrap' ? 'reloj parado' : 'no terminado',
+        tone: 'orange',
+        mode: 'workout',
+        running: false,
+        onClose: resetWorkout,
+        pulse: true,
+        badge: rounds > 0 ? `R${rounds}` : undefined,
+      };
+    } else if (workoutRunning) {
+      strip = {
+        label: lastMinute ? 'Último minuto' : 'Entreno',
+        time: mmss(workoutElapsed),
+        sub: effectiveCap ? `${effectiveCap.kind === 'amrap' ? 'AMRAP' : 'cap'} ${mmss(effectiveCap.seconds)}` : undefined,
+        tone: lastMinute ? 'orange' : 'neon',
+        mode: 'workout',
+        running: true,
+        onToggle: toggleWorkout,
+        badge: rounds > 0 ? `R${rounds}` : undefined,
+        progress: effectiveCap ? { value: capProgress, warn: lastMinute } : undefined,
+      };
+    } else if (workoutElapsed >= 1) {
+      strip = {
+        label: 'Entreno en pausa',
+        time: mmss(workoutElapsed),
+        tone: 'neon',
+        mode: 'workout',
+        running: false,
+        onToggle: handleWorkoutButton,
+        onClose: resetWorkout,
+        badge: rounds > 0 ? `R${rounds}` : undefined,
+      };
+    } else if (emomRunning || emomDone) {
+      strip = {
+        label: emomDone ? 'EMOM completo' : 'EMOM',
+        time: emomDone ? 'Listo' : mmss(emomRemaining),
+        tone: emomDone ? 'orange' : 'gold',
+        mode: 'emom',
+        running: emomRunning,
+        onToggle: emomDone ? undefined : toggleEmom,
+        onClose: emomDone ? resetEmom : undefined,
+        pulse: emomDone,
+        badge: !emomDone && emomRound > 0 ? `${emomRound}/${emomTotalRounds}` : undefined,
+      };
+    } else if (tabataRunning || tabataDone) {
+      strip = {
+        label: tabataDone ? 'Tabata completo' : tabataPhase === 'work' ? 'Tabata · trabajo' : 'Tabata · descanso',
+        time: tabataDone ? 'Listo' : mmss(tabataRemaining),
+        tone: tabataDone || tabataPhase === 'work' ? 'orange' : 'gold',
+        mode: 'tabata',
+        running: tabataRunning,
+        onToggle: tabataDone ? undefined : toggleTabata,
+        onClose: tabataDone ? resetTabata : undefined,
+        pulse: tabataDone,
+        badge: !tabataDone && tabataRound > 0 ? `${tabataRound}/${tabataTotalRounds}` : undefined,
+      };
     }
-    if (running || done) {
-      return (
-        <button
-          onClick={() => openTo('rest')}
-          aria-label="Cronómetro de descanso"
-          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
-            done ? 'animate-pulse bg-brand-orange text-black' : 'bg-brand-gold text-black'
-          }`}
-        >
-          {mmss(remaining)}
-        </button>
-      );
-    }
-    if (capHit && !workoutRunning) {
-      return (
-        <button
-          onClick={() => openTo('workout')}
-          aria-label={`${capWord}: reloj parado`}
-          className="fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 animate-pulse items-center justify-center gap-1.5 rounded-full bg-brand-orange px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6"
-        >
-          {effectiveCap?.kind === 'amrap' ? 'Fin' : 'CAP'}
-          {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-orange" />}
-        </button>
-      );
-    }
-    if (workoutRunning) {
-      return (
-        <button
-          onClick={() => openTo('workout')}
-          aria-label={`Reloj de entreno${rounds > 0 ? `, ronda ${rounds}` : ''}${lastMinute ? ', último minuto' : ''}`}
-          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
-            lastMinute ? 'bg-brand-orange' : 'bg-brand-neon'
-          }`}
-        >
-          {mmss(workoutElapsed)}
-          {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-neon" />}
-        </button>
-      );
-    }
-    if (emomRunning || emomDone) {
-      return (
-        <button
-          onClick={() => openTo('emom')}
-          aria-label="Reloj EMOM"
-          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
-            emomDone ? 'animate-pulse bg-brand-orange' : 'bg-brand-gold'
-          }`}
-        >
-          {emomDone ? 'Listo' : mmss(emomRemaining)}
-          {!emomDone && emomRound > 0 && (
-            <RoundBadge text={`${emomRound}/${emomTotalRounds}`} borderClass="border-brand-gold" />
-          )}
-        </button>
-      );
-    }
-    if (tabataRunning || tabataDone) {
-      return (
-        <button
-          onClick={() => openTo('tabata')}
-          aria-label="Reloj Tabata"
-          className={`fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-24 min-w-24 items-center justify-center gap-1.5 rounded-full px-4 text-3xl font-bold text-black shadow-lg shadow-black/40 transition-colors duration-200 md:bottom-6 ${
-            tabataDone ? 'animate-pulse bg-brand-orange' : tabataPhase === 'work' ? 'bg-brand-orange' : 'bg-brand-gold'
-          }`}
-        >
-          {tabataDone ? 'Listo' : mmss(tabataRemaining)}
-          {!tabataDone && tabataRound > 0 && (
-            <RoundBadge
-              text={`${tabataRound}/${tabataTotalRounds}`}
-              borderClass={tabataPhase === 'work' ? 'border-brand-orange' : 'border-brand-gold'}
-            />
-          )}
-        </button>
-      );
-    }
+    if (!strip) return null;
+    const btn = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/15 text-black transition-colors hover:bg-black/25 active:bg-black/30';
     return (
-      <button
-        onClick={() => setExpanded(true)}
-        aria-label="Reloj de entreno"
-        className="fixed bottom-24 left-4 md:left-[17rem] z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-surface/95 text-neutral-300 shadow-lg shadow-black/40 ring-1 ring-brand-border transition-colors duration-200 md:bottom-6"
-      >
-        <Timer size={22} strokeWidth={2.25} />
-        {rounds > 0 && <RoundBadge text={`R${rounds}`} borderClass="border-brand-border" />}
-      </button>
+      <div role="region" aria-label="Reloj del entreno" className="fixed inset-x-0 top-0 z-40 px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:left-[17rem] md:px-6">
+        <div className={`relative mx-auto flex max-w-2xl items-center gap-2 overflow-hidden rounded-2xl px-3 py-2 text-black shadow-lg shadow-black/40 ${TONE_BG[strip.tone]} ${strip.pulse ? 'animate-pulse motion-reduce:animate-none' : ''}`}>
+          <button onClick={() => openTo(strip.mode)} aria-label={`${strip.label}: ${strip.time}. Abrir el reloj`} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
+            <Timer size={18} strokeWidth={2.5} aria-hidden="true" className="shrink-0" />
+            <span className="text-2xl font-extrabold leading-none tabular-nums">{strip.time}</span>
+            <span className="min-w-0 truncate text-xs font-bold uppercase tracking-wide">
+              {strip.label}
+              {strip.sub ? ` · ${strip.sub}` : ''}
+            </span>
+            {strip.badge && <span className="shrink-0 rounded-full bg-black/15 px-2 py-0.5 text-xs font-bold">{strip.badge}</span>}
+          </button>
+          {strip.onToggle && (
+            <button onClick={strip.onToggle} aria-label={strip.toggleLabel ?? (strip.running ? 'Pausa' : 'Reanudar')} className={btn}>
+              {strip.running ? <Pause size={17} strokeWidth={2.75} /> : <Play size={17} strokeWidth={2.75} />}
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setMode(strip.mode);
+              setExpanded(true);
+              enterFullscreen();
+            }}
+            aria-label="Pantalla completa"
+            className={btn}
+          >
+            <Maximize2 size={16} strokeWidth={2.5} />
+          </button>
+          {strip.onClose && (
+            <button onClick={strip.onClose} aria-label="Quitar el reloj" className={btn}>
+              <X size={16} strokeWidth={2.75} />
+            </button>
+          )}
+          {strip.progress && (
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-black/15" role="progressbar" aria-label="Avance hasta el límite de tiempo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(strip.progress.value * 100)}>
+              <div className={`h-full ${strip.progress.warn ? 'bg-black/70' : 'bg-black/45'}`} style={{ width: `${Math.round(strip.progress.value * 1000) / 10}%` }} />
+            </div>
+          )}
+        </div>
+      </div>
     );
   }
 

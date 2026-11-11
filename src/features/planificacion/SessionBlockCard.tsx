@@ -21,6 +21,7 @@ import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
 import { RpeCheckIn } from './RpeCheckIn';
+import { clockBus } from '../../lib/clockState';
 
 export { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
 
@@ -1354,18 +1355,29 @@ export function SessionBlockCard({
 
       <div>
         {asIndex && indexMode ? (
-          <button
-            onClick={indexMode.onToggle}
-            aria-expanded={indexMode.open}
-            className={`flex w-full items-center gap-3 pt-3.5 text-left transition-opacity duration-200 hover:opacity-90 ${indexMode.open ? 'pb-2.5' : 'pb-3.5'}`}
-          >
-            <BlockTile block={block} size={34} active={indexMode.open} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>
-              {!indexMode.open && indexMode.preview}
-            </span>
-            <ChevronDown size={14} strokeWidth={2.25} className={`shrink-0 text-neutral-600 transition-transform duration-200 ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />
-          </button>
+          <div className={`flex w-full items-center gap-2 pt-3.5 ${indexMode.open ? 'pb-2.5' : 'pb-3.5'}`}>
+            <button onClick={indexMode.onToggle} aria-expanded={indexMode.open} className="flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity duration-200 hover:opacity-90">
+              <BlockTile block={block} size={34} active={indexMode.open} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{label}</span>
+                {!indexMode.open && indexMode.preview}
+              </span>
+            </button>
+            {/* El reloj del WOD: parado no hay botón flotante; se abre desde aquí (cronómetro con el cap del WOD). */}
+            {block === 'wod' && (
+              <button
+                onClick={() => clockBus.open('workout')}
+                aria-label="Abrir el reloj del WOD"
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-brand-border px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:bg-white/5"
+              >
+                <Timer size={13} strokeWidth={2.5} aria-hidden />
+                Reloj
+              </button>
+            )}
+            <button onClick={indexMode.onToggle} aria-label={indexMode.open ? 'Cerrar el bloque' : 'Abrir el bloque'} aria-expanded={indexMode.open} className="shrink-0 p-1">
+              <ChevronDown size={14} strokeWidth={2.25} className={`text-neutral-600 transition-transform duration-200 ${indexMode.open ? 'rotate-180' : ''}`} aria-hidden />
+            </button>
+          </div>
         ) : collapsible ? (
           <button
             onClick={() => setOpen((o) => !o)}
