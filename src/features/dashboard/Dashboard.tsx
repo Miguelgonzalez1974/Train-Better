@@ -741,6 +741,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               athleteRepository.saveProfile({ ...athleteRepository.getProfile(), ...patch });
               setProfile(athleteRepository.getProfile());
             }}
+            onCreateWorkGoal={(goal) => {
+              athleteRepository.saveProfile({ ...athleteRepository.getProfile(), goals: [...athleteRepository.getProfile().goals, goal] });
+              // Un objetivo nuevo cambia lo que sale en las sesiones: las ya preparadas se vuelven a generar.
+              resetUpcomingSessions(todayIso);
+              setProfile(athleteRepository.getProfile());
+            }}
             onOpenProgramming={() => {
               setAnalysisOpen(false);
               onNavigateToObjetivos('perfil');

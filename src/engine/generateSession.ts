@@ -2094,6 +2094,34 @@ function realWodMovementIds(catalogId: string): string[] | undefined {
   return getCatalogWod(catalogId)?.movementIds;
 }
 
+/** Un movimiento del WOD de una sesión, para preguntar qué se escaló al cerrarla. */
+export interface SessionWodMovement {
+  movementId: string;
+  /** Parte del WOD (1, o 2 en un doble WOD). */
+  part: 1 | 2;
+  /** Carga Rx prescrita, si el bloque la trae (los WODs reales de tarjeta no la traen). */
+  rxKg?: number;
+}
+
+/** Los movimientos del WOD de una sesión (sin repetir), con su parte y, si se conoce, su carga Rx. */
+export function wodMovementsOfSession(session: DailySession): SessionWodMovement[] {
+  const out: SessionWodMovement[] = [];
+  const seen = new Set<string>();
+  for (const b of session.blocks.filter((x) => x.block === 'wod')) {
+    const part = (b.wodPart === 2 ? 2 : 1) as 1 | 2;
+    let ids: string[];
+    if (b.wodCatalogId) ids = realWodMovementIds(b.wodCatalogId) ?? [b.movementId];
+    else if (b.movementId.startsWith('benchmark:')) ids = benchmarkWorkouts.find((w) => w.id === b.movementId.slice('benchmark:'.length))?.movements ?? [];
+    else ids = [b.movementId];
+    for (const id of ids) {
+      if (!getMovementById(id) || seen.has(`${part}|${id}`)) continue;
+      seen.add(`${part}|${id}`);
+      out.push({ movementId: id, part, ...(!b.wodCatalogId && b.loadKg ? { rxKg: b.loadKg } : {}) });
+    }
+  }
+  return out;
+}
+
 /**
  * WOD REAL de una programación (PushJerk, Mayhem, CompTrain, Invictus, clásicos) elegido para hoy en vez de uno
  * generado: puntúa el catálogo por la duración que pide el día, el sistema energético y el dominio planificados, la
@@ -5744,6 +5772,8 @@ export function toHistoryEntry(
   testLoadKg?: number,
   /** Resultado de la parte 2 de un dia de doble WOD. */
   wodResult2?: WodResult,
+  /** Qué se escaló del WOD y cómo de duro fue (ver `WodScalingEntry`). */
+  wodDetail?: { scaling?: SessionHistoryEntry['wodScaling']; feel?: SessionHistoryEntry['wodFeel'] },
 ): SessionHistoryEntry {
   // Un WOD de programación real servido como tarjeta (`benchmark:…`) aporta sus movimientos reales al análisis de dominios.
   const wodMovementIds = session.blocks
@@ -5793,6 +5823,8 @@ export function toHistoryEntry(
     durationMin,
     wodResult,
     ...(wodResult2 ? { wodResult2 } : {}),
+    ...(wodDetail?.scaling ? { wodScaling: wodDetail.scaling } : {}),
+    ...(wodDetail?.feel ? { wodFeel: wodDetail.feel } : {}),
     testLoadKg,
     wodMovementIds: wodMovementIds.length > 0 ? wodMovementIds : undefined,
     strengthPattern: strengthMovement ? getMovementById(strengthMovement.movementId)?.pattern : undefined,

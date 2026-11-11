@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Minus, Plus } from 'lucide-react';
-import type { DailySession, RxOrScaled, SessionHistoryEntry, WodScoreType } from '../../data/athlete/types';
+import type { DailySession, RxOrScaled, SessionHistoryEntry, WodFeel, WodScalingEntry, WodScoreType } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import { toHistoryEntry } from '../../engine/generateSession';
+import { toHistoryEntry, wodMovementsOfSession } from '../../engine/generateSession';
+import { buildWodDetail } from '../../engine/wodMovements';
 import { EMPTY_WOD_FORM, buildWodResult, getWodParts, getWodScoreType, type WodResultForm } from '../../engine/wodScoring';
 import { wodCapFor } from '../../engine/wodCap';
 import { applySkips, sessionParts, skippedParts, type Skips } from '../../engine/sessionParts';
@@ -133,6 +134,9 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
   const wodCaps = useMemo(() => ({ 1: wodCapFor(session, 1), 2: wodCapFor(session, 2) }), [session]);
   const estimatedMin = useMemo(() => Math.min(120, Math.max(20, Math.round(estimateSessionMinutes(session) / 5) * 5)), [session]);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
+  const wodMovements = useMemo(() => wodMovementsOfSession(session), [session]);
+  const [wodScaling, setWodScaling] = useState<WodScalingEntry[]>([]);
+  const [wodFeel, setWodFeel] = useState<WodFeel | undefined>(undefined);
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(estimatedMin);
   const [forms, setForms] = useState<Record<1 | 2, WodResultForm>>({ 1: EMPTY_WOD_FORM, 2: EMPTY_WOD_FORM });
@@ -144,7 +148,16 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
   function confirm() {
     const notDone = skippedParts(skips);
     saveEntry({
-      ...toHistoryEntry(applySkips(session, skips), rxOrScaled, rpe, durationMin, resultOf(1), undefined, wodParts.includes(2) ? resultOf(2) : undefined),
+      ...toHistoryEntry(
+        applySkips(session, skips),
+        rxOrScaled,
+        rpe,
+        durationMin,
+        resultOf(1),
+        undefined,
+        wodParts.includes(2) ? resultOf(2) : undefined,
+        buildWodDetail(wodMovements.filter((m) => !skips[m.part === 1 ? 'wod1' : 'wod2']), rxOrScaled, wodScaling, wodFeel),
+      ),
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
     });
     // Las series y los pesos, con la fecha de ese día y el mismo registro que el modo enfocado.
@@ -188,6 +201,14 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
         skips={skips}
         onSkipsChange={setSkips}
         onFormChange={(part, patch) => setForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
+        wodMovements={wodMovements}
+        scaling={wodScaling}
+        onScaling={(next) => {
+          setWodScaling(next);
+          if (next.length > 0) setRxOrScaled('scaled');
+        }}
+        feel={wodFeel}
+        onFeel={setWodFeel}
         rxOrScaled={rxOrScaled}
         onRxOrScaled={setRxOrScaled}
         rpe={rpe}

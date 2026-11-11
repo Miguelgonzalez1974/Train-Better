@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Timer, X } from 'lucide-react';
-import type { RxOrScaled, WodScoreType } from '../../data/athlete/types';
+import type { RxOrScaled, WodFeel, WodScalingEntry, WodScoreType } from '../../data/athlete/types';
 import type { WodResultForm } from '../../engine/wodScoring';
 import { WodResultField } from './WodResultField';
+import { WodScalingField, type WodScalingMovement } from './WodScalingField';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { DoneParts } from './DoneParts';
 import type { SessionPart, Skips } from '../../engine/sessionParts';
@@ -28,6 +29,12 @@ interface CompleteSessionPanelProps {
   onFormChange: (part: Part, patch: Partial<WodResultForm>) => void;
   /** Presente solo en un día de test de 1RM. */
   test?: { movementName: string; loadKg: number; onChange: (kg: number) => void };
+  /** Los movimientos del WOD de hoy, para preguntar qué se escaló. Vacío = solo se pregunta Rx o escalado, como siempre. */
+  wodMovements?: WodScalingMovement[];
+  scaling?: WodScalingEntry[];
+  onScaling?: (next: WodScalingEntry[]) => void;
+  feel?: WodFeel;
+  onFeel?: (value: WodFeel | undefined) => void;
   rxOrScaled: RxOrScaled;
   onRxOrScaled: (value: RxOrScaled) => void;
   rpe: number;
@@ -58,6 +65,11 @@ export function CompleteSessionPanel({
   capSeconds,
   onFormChange,
   test,
+  wodMovements = [],
+  scaling = [],
+  onScaling,
+  feel,
+  onFeel,
   rxOrScaled,
   onRxOrScaled,
   rpe,
@@ -69,7 +81,9 @@ export function CompleteSessionPanel({
   onCancel,
 }: CompleteSessionPanelProps) {
   // El paso del resultado existe si hoy había WOD puntuable o test, aunque luego se marque como no hecho (así el paso no desaparece al tocarlo).
-  const hasResultStep = wodParts.some((p) => scoreTypes[p]) || Boolean(test);
+  // Si hoy hay WOD con movimientos que preguntar (qué se escaló y cómo de duro fue), también va en este paso.
+  const hasWodDetail = Boolean(onScaling && onFeel) && wodMovements.length > 0 && wodParts.some((p) => !skips[p === 1 ? 'wod1' : 'wod2']);
+  const hasResultStep = wodParts.some((p) => scoreTypes[p]) || Boolean(test) || hasWodDetail;
   const resultParts = wodParts.filter((p) => scoreTypes[p] && !skips[p === 1 ? 'wod1' : 'wod2']);
   const [step, setStep] = useState<0 | 1>(hasResultStep ? 0 : 1);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -139,6 +153,20 @@ export function CompleteSessionPanel({
             </div>
           ))}
 
+          {hasWodDetail && onScaling && onFeel && (
+            <div className="rounded-xl bg-white/[0.03] p-3">
+              <WodScalingField
+                movements={wodMovements.filter((m) => !skips[m.part === 1 ? 'wod1' : 'wod2'])}
+                rxOrScaled={rxOrScaled}
+                onRxOrScaled={onRxOrScaled}
+                scaling={scaling}
+                onScaling={onScaling}
+                feel={feel}
+                onFeel={onFeel}
+              />
+            </div>
+          )}
+
           {test && (
             <div className="rounded-xl bg-white/[0.03] p-3">
               <p className="mb-2 text-sm font-medium text-neutral-300">Test 1RM · {test.movementName}</p>
@@ -186,6 +214,7 @@ export function CompleteSessionPanel({
 
           <DurationStepper value={durationMin} onChange={onDuration} hint={`El coach estimó ~${estimatedMin} min`} />
 
+          {!hasWodDetail && (
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-neutral-300">¿Lo hiciste como estaba escrito?</p>
             <div className="flex rounded-lg bg-white/5 p-0.5" role="radiogroup" aria-label="Rx o escalado">
@@ -204,6 +233,7 @@ export function CompleteSessionPanel({
               ))}
             </div>
           </div>
+          )}
 
           <div className="flex items-center justify-between gap-2">
             {hasResultStep ? (

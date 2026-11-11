@@ -12,6 +12,8 @@ const LEGACY_GOAL_KEY = 'train-better:goal';
 /** @deprecated La cache de sesiones vive en `profile.sessionCache` para que sincronice — solo se lee para migrar lo que hubiera aqui. */
 const LEGACY_SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
+/** Registro del WOD (qué se escaló): llega mucho más atrás que el historial. */
+const WOD_LOG_LIMIT = 400;
 /**
  * Antes 60 cuando la cache vivia en su propia clave de localStorage — ahora viaja dentro de
  * `profile.sessionCache` en cada sincronizacion, y nada en la app lee sesiones cacheadas mas alla
@@ -236,7 +238,11 @@ export const localAthleteRepository: AthleteRepository = {
       .slice(-TRAINING_DATES_LOG_LIMIT);
     // Si ese día estaba marcado como descanso elegido y al final se entrenó, la marca sobra.
     const restDates = profile.restDates?.filter((d) => d !== entry.date);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, ...(restDates ? { restDates } : {}) }));
+    // El escalado del WOD anotado al cerrar la sesión también va al registro largo (una línea por fecha).
+    const wodLog = entry.wodScaling !== undefined && (entry.wodMovementIds?.length ?? 0) > 0
+      ? [...(profile.wodLog ?? []).filter((e) => e.date !== entry.date), { date: entry.date, movementIds: entry.wodMovementIds as string[], scaling: entry.wodScaling, ...(entry.wodResult?.capped || entry.wodResult2?.capped ? { capped: true } : {}), ...(entry.wodFeel ? { feel: entry.wodFeel } : {}) }].sort((a, b) => a.date.localeCompare(b.date)).slice(-WOD_LOG_LIMIT)
+      : profile.wodLog;
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, ...(wodLog ? { wodLog } : {}), ...(restDates ? { restDates } : {}) }));
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));
@@ -250,7 +256,8 @@ export const localAthleteRepository: AthleteRepository = {
     const workLog = (profile.workLog ?? []).filter((e) => e.date !== date);
     // Si se deshace la sesion, su resultado de progresion tampoco cuenta.
     const progressionLog = (profile.progressionLog ?? []).filter((e) => e.date !== date);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog, progressionLog }));
+    const wodLog = profile.wodLog?.filter((e) => e.date !== date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog, progressionLog, ...(wodLog ? { wodLog } : {}) }));
   },
   updateHistoryTestLoad(date, testLoadKg) {
     const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);

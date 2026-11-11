@@ -22,10 +22,13 @@ import type {
   StrainTarget,
   WorkSetEntry,
   VariantPersonalRecords,
+  WodFeel,
   WodResult,
+  WodScalingEntry,
   WodScoreType,
 } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
+import { buildWodDetail } from '../../engine/wodMovements';
 import { getMovementById } from '../../data/movements';
 import {
   adoptAdditiveEngineFields,
@@ -41,6 +44,7 @@ import {
   resolveStrengthPRKey,
   resolveVariantPRKey,
   toHistoryEntry,
+  wodMovementsOfSession,
   type SessionOverrideType,
 } from '../../engine/generateSession';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
@@ -212,6 +216,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [showComplexes, setShowComplexes] = useState(false);
   const [showHardness, setShowHardness] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
+  // Qué se escaló del WOD (por movimiento) y cómo de duro fue: se anota en el cierre de la sesión.
+  const [wodScaling, setWodScaling] = useState<WodScalingEntry[]>([]);
+  const [wodFeel, setWodFeel] = useState<WodFeel | undefined>(undefined);
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(60);
   const [, setSpinning] = useState(false);
@@ -346,6 +353,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   );
   // Partes de WOD de hoy (1 en un dia normal, 2 en un dia de doble WOD) y como se puntua cada una.
   const wodParts = useMemo(() => (session ? getWodParts(session) : []), [session]);
+  const wodMovements = useMemo(() => (session ? wodMovementsOfSession(session) : []), [session]);
   const wodScoreTypes = useMemo<Record<1 | 2, WodScoreType | null>>(
     () => ({ 1: session ? getWodScoreType(session, 1) : null, 2: session ? getWodScoreType(session, 2) : null }),
     [session],
@@ -364,6 +372,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   useEffect(() => {
     if (!showCompletePanel) return;
     setDurationMin(estimatedMin);
+    setWodScaling([]);
+    setWodFeel(undefined);
+    setRxOrScaled('rx');
     // Si paraste el reloj de entreno en el WOD, su tiempo o sus rondas llegan ya rellenos (editables). Solo se toca un
     // formulario que sigue vacío, y solo el día de hoy.
     if (!session || session.date !== toLocalIsoDate(new Date())) return;
@@ -845,6 +856,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     if (records.length > 0) athleteRepository.appendProgressionRecords(records);
   }
 
+  /** Lo anotado del WOD al cerrar: Rx (sin escalados) o lo que se escaló, y la dureza. Sin movimientos que preguntar o con el WOD sin hacer, nada. */
+  function wodDetailFor(): ReturnType<typeof buildWodDetail> {
+    const asked = wodMovements.filter((m) => !skips[m.part === 1 ? 'wod1' : 'wod2']);
+    if (asked.length === 0) return undefined;
+    return buildWodDetail(asked, rxOrScaled, wodScaling, wodFeel);
+  }
+
   function handleConfirmComplete() {
     if (!session) return;
     let nextMessage: string | null = null;
@@ -877,6 +895,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         buildPartResult(1),
         testDayBlock && testedLoadKg > 0 && !skips[testDayBlock.block as 'strength' | 'oly'] ? testedLoadKg : undefined,
         wodParts.includes(2) ? buildPartResult(2) : undefined,
+        wodDetailFor(),
       ),
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
     });
@@ -1625,6 +1644,15 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
           test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
+          wodMovements={wodMovements}
+          scaling={wodScaling}
+          onScaling={(next) => {
+            setWodScaling(next);
+            // Escalar un movimiento es escalar el WOD; quitarlos todos no vuelve a Rx solo (el interruptor lo decide).
+            if (next.length > 0) setRxOrScaled('scaled');
+          }}
+          feel={wodFeel}
+          onFeel={setWodFeel}
           rxOrScaled={rxOrScaled}
           onRxOrScaled={setRxOrScaled}
           rpe={rpe}

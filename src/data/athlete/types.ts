@@ -361,6 +361,11 @@ export interface AthleteProfile {
    */
   trainingDatesLog?: string[];
   /**
+   * Registro corto de cómo se hizo el WOD de cada día (qué se escaló y cómo de duro fue). El historial solo guarda las últimas 30 sesiones; esto
+   * llega mucho más atrás para ver la evolución en «Tu WOD por zonas». Una entrada por fecha.
+   */
+  wodLog?: WodLogEntry[];
+  /**
    * Días (ISO) que el atleta marcó como descanso a propósito ("Hoy descanso"). Sin marca, un día previsto sin registrar se
    * pinta "no registrado" y cuenta como fallo del plan; con ella es un descanso elegido: se pinta como descanso y no resta.
    * Si ese día se registra una sesión, la marca se quita sola. Ver `engine/restDays.ts`.
@@ -897,8 +902,41 @@ export interface WodResult {
   capSeconds?: number;
 }
 
+/** Qué se escaló de un movimiento del WOD: el peso (usaste menos carga) o el movimiento (lo cambiaste por otro). */
+export interface WodScalingEntry {
+  movementId: string;
+  kind: 'peso' | 'movimiento';
+  /** Parte del WOD (1 o 2 en un doble WOD); ausente = la 1. */
+  part?: 1 | 2;
+  /** Escalado de peso: los kilos que usaste y, si se conocen, los del Rx. */
+  loadKg?: number;
+  rxKg?: number;
+  /** Escalado de movimiento: el movimiento por el que lo cambiaste, si lo dijiste. */
+  substituteId?: string;
+}
+
+/** Una línea del registro del WOD (`AthleteProfile.wodLog`). */
+export interface WodLogEntry {
+  date: string;
+  movementIds: string[];
+  /** Qué se escaló; un array vacío es todo Rx. */
+  scaling: WodScalingEntry[];
+  capped?: boolean;
+  feel?: WodFeel;
+}
+
+/** Cómo de duro fue el WOD: fácil, justo o duro. */
+export type WodFeel = 'facil' | 'justo' | 'duro';
+
 export interface SessionHistoryEntry {
   date: string;
+  /**
+   * Qué movimientos del WOD se escalaron y cómo (peso o movimiento). Ausente = no se anotó (entradas anteriores o días sin WOD); un array vacío
+   * es «lo hice todo Rx». Alimenta «Tu WOD por zonas» (`engine/wodMovements.ts`).
+   */
+  wodScaling?: WodScalingEntry[];
+  /** Cómo de duro fue el WOD (fácil, justo, duro). */
+  wodFeel?: WodFeel;
   /**
    * Minutos del programa de fuerza que convive con el macro que ya están sumados a `durationMin` y a `rpe` de esta entrada (ver `engine/companionLoad.ts`).
    * Solo existe en el historial derivado que se usa para calcular carga y esfuerzo; nunca se guarda. Su presencia evita sumar dos veces lo mismo.

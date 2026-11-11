@@ -1,11 +1,12 @@
 import { CoachAccuracyCard } from './CoachAccuracyCard';
+import { WodZonesCard } from './WodZonesCard';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Dumbbell, Fingerprint } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { analysisRexLine, openGoalMovements, PROPOSAL_WEEKS } from './rexAnalysis';
 import { getImbalanceBias } from '../../engine/imbalances';
 import { buildProgressionLedger } from '../../engine/progression';
-import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, Goal, SessionHistoryEntry } from '../../data/athlete/types';
 import { analysisHeadline } from '../../engine/analysisHeadline';
 import { competitionTile, rpeTrend, topRiser } from '../../engine/analysisStats';
 import { computeMonthPlan } from '../../engine/monthPlan';
@@ -99,6 +100,7 @@ export function AnalysisView({
   initialTab = 'perfil',
   onSaveProfile,
   onOpenProgramming,
+  onCreateWorkGoal,
 }: {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
@@ -116,6 +118,8 @@ export function AnalysisView({
   onSaveProfile?: (patch: Partial<AthleteProfile>) => void;
   /** Ir a Objetivos → cómo programa el coach con el perfil. */
   onOpenProgramming?: () => void;
+  /** «Trabajarlo» en Tu WOD por zonas: guarda el objetivo que crea. */
+  onCreateWorkGoal?: (goal: Goal) => void;
 }) {
   const [tab, setTabRaw] = useState<AnalysisTab>(initialTab);
   // Cambiar de pestaña cierra la propuesta a medias (cada pestaña tiene la suya).
@@ -349,6 +353,7 @@ export function AnalysisView({
             defaultOpen
             hardness={hardness}
           />
+          <WodZonesCard profile={profile} history={history} todayIso={todayIso} onCreateWorkGoal={onCreateWorkGoal} />
           <CoachAccuracyCard profile={profile} todayIso={todayIso} />
           <p className="flex items-center gap-2 px-1 text-[11px] leading-snug text-neutral-500">
             <Dumbbell size={13} className="shrink-0" aria-hidden="true" />

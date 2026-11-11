@@ -429,6 +429,8 @@ export function mergeProfile(
       PR_LOG_LIMIT,
     ),
     trainingDatesLog: mergeStringSet(remote.trainingDatesLog, local.trainingDatesLog, TRAINING_DATES_LOG_LIMIT),
+    // Registro del WOD: una línea por fecha, gana la local (es lo que acabas de anotar).
+    wodLog: mergeByKey(remote.wodLog, local.wodLog, (e) => e.date, (e) => e.date, 400),
     // Descansos elegidos: union, pero quitar la marca ("Deshacer") debe sobrevivir a la sincronizacion como cualquier borrado.
     restDates: dropDeleted(mergeStringSet(remote.restDates, local.restDates, REST_DATES_LIMIT), (d) => d, base?.restDates, remote.restDates, local.restDates),
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
