@@ -1367,11 +1367,14 @@ export function SessionBlockCard({
             {block === 'wod' && (
               <button
                 onClick={() => clockBus.open('workout')}
-                aria-label="Abrir el reloj del WOD"
-                title="Reloj del WOD"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-neon text-black shadow-md shadow-brand-neon/25 transition-all duration-200 hover:brightness-110 active:scale-95"
+                aria-label="Abrir el crono del WOD"
+                title="Crono del WOD"
+                className="group flex shrink-0 flex-col items-center gap-1 transition-all duration-200 active:scale-95"
               >
-                <Timer size={22} strokeWidth={2.5} aria-hidden />
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-orange text-black shadow-md shadow-brand-orange/25 transition-colors duration-200 group-hover:bg-brand-orange-dark">
+                  <Timer size={22} strokeWidth={2.5} aria-hidden />
+                </span>
+                <span className="text-[10px] font-bold uppercase leading-none tracking-[0.12em] text-brand-orange">Crono</span>
               </button>
             )}
             <button onClick={indexMode.onToggle} aria-label={indexMode.open ? 'Cerrar el bloque' : 'Abrir el bloque'} aria-expanded={indexMode.open} className="shrink-0 p-1">

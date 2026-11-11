@@ -618,9 +618,9 @@ export function FocusMode({
         {/* El reloj del entreno: descanso entre series, o el cronómetro si el bloque es el WOD. */}
         <button
           onClick={() => clockBus.open(group.block === 'wod' ? 'workout' : 'rest')}
-          aria-label="Abrir el reloj"
-          title="Reloj"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-neon text-black shadow-md shadow-brand-neon/25 transition-all duration-200 hover:brightness-110 active:scale-95"
+          aria-label="Abrir el crono"
+          title="Crono"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-orange text-black shadow-md shadow-brand-orange/25 transition-all duration-200 hover:bg-brand-orange-dark active:scale-95"
         >
           <Timer size={20} strokeWidth={2.5} />
         </button>
