@@ -41,6 +41,7 @@ import { REX_HINTS } from '../dashboard/rexHints';
 import { elsewhereAnswer } from '../dashboard/rexAsk';
 import { goalPrKey, normalizeKgTarget, supportsKgTarget } from '../../engine/goalTarget';
 import { refitSeason } from '../../engine/seasonRefit';
+import { SeasonMapFull } from './SeasonMap';
 import { handoff } from '../../lib/handoff';
 import { appNav } from '../../lib/appNav';
 import { rexBus } from '../../lib/rexBus';
@@ -505,6 +506,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           ]}
         />
       )}
+      {activeSection === 'home' && <SeasonMapFull profile={profile} todayIso={todayIso()} />}
       {activeSection === 'home' && <SeasonSetupCard profile={profile} history={history} onApply={persist} />}
       {activeSection === 'home' && (
         <ObjetivosHome

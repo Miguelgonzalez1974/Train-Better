@@ -65,6 +65,7 @@ import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setF
 import { countsForProgression, evaluateLiftSession, mainLiftBlock, sessionProgressionView, type ProgressionKind } from '../../engine/progression';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { WeekStrip } from './WeekStrip';
+import { SeasonMapCompact, SeasonMapFull } from '../objetivos/SeasonMap';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
@@ -207,6 +208,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [showCompletePanel, setShowCompletePanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [showDiary, setShowDiary] = useState(false);
+  const [showSeasonMap, setShowSeasonMap] = useState(false);
   const [showComplexes, setShowComplexes] = useState(false);
   const [showHardness, setShowHardness] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
@@ -1334,6 +1336,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         <ComplexLibrary profile={profile} workLog={workLog} week={complexWeek} onSave={handleSaveComplexes} onClose={() => setShowComplexes(false)} />
       )}
 
+      <Modal open={showSeasonMap} onClose={() => setShowSeasonMap(false)} title="Tu temporada">
+        <SeasonMapFull profile={profile} todayIso={todayIso} embedded />
+      </Modal>
+
       {showDiary && (
         <TrainingDiary
           history={history}
@@ -1355,6 +1361,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
         <div className="contents lg:col-start-2 lg:row-start-1 lg:block">
           <div className="flex flex-col gap-3 lg:sticky lg:top-6">
+            <SeasonMapCompact profile={profile} todayIso={todayIso} onOpen={() => setShowSeasonMap(true)} />
             <div className="flex flex-col gap-1.5">
               <WeekStrip
                 profile={profile}
