@@ -294,7 +294,7 @@ describe('competicion con fecha provisional', () => {
     const s = list.find((x) => x.id === 'competicion-fecha')!;
     expect(s.text).toContain('2 mar');
     expect(s.text).toContain('40 días');
-    expect(s.actions[0].target).toBe('objetivos');
+    expect(s.actions[0]).toEqual({ label: 'Ya sé la fecha', target: 'competicion-fecha' });
     expect(ids({ provisionalCompetition: { days: 57, dateText: '2 mar' } })).not.toContain('competicion-fecha');
     expect(ids({ provisionalCompetition: null })).not.toContain('competicion-fecha');
   });

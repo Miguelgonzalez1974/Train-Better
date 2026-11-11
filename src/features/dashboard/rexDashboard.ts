@@ -47,6 +47,8 @@ export type RexTarget =
   | 'objetivos-hablar'
   /** Cerrar la competición que acaba de pasar con Rex (en Objetivos) y montar el camino a la siguiente. */
   | 'competicion-cierre'
+  /** Confirmar la fecha de una competición provisional con Rex (en Objetivos). */
+  | 'competicion-fecha'
   /** Ir a una pestaña de la app (desde RexLab de cualquier pantalla). */
   | 'ir-dashboard'
   | 'ir-planificacion'
@@ -287,7 +289,7 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
       priority: 70,
       text: `Tu competición del ${dateText} sigue con fecha provisional y faltan ${days} ${days === 1 ? 'día' : 'días'}. ¿Ya sabes la fecha? Confírmala y reajusto los bloques.`,
       mood: 'think',
-      actions: [{ label: 'Confirmar fecha', target: 'objetivos' }],
+      actions: [{ label: 'Ya sé la fecha', target: 'competicion-fecha' }],
     });
   }
 

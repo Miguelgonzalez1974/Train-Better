@@ -2,7 +2,7 @@ import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/typ
 import { getMovementById } from '../../data/movements';
 import { buildOpenItems } from '../objetivos/openItems';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
-import { goalTargetStatus } from '../../engine/goalTarget';
+import { goalTargetStatus, proposeTargetAdjustments } from '../../engine/goalTarget';
 import { computeAcwr, type AcwrZone } from '../../engine/loadMetrics';
 import { buildWeeklyMacroReview, REVIEWED_MACRO_WEEKS_LIMIT, type MacroReviewSuggestion } from '../../engine/macroReview';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
@@ -32,6 +32,18 @@ export interface ReviewMetric {
   tone: ReviewTone;
 }
 
+/** La propuesta de Rex para una meta en kilos que no llega: bajarla o mover la fecha. */
+export interface GoalAdjustProposal {
+  goalId: string;
+  name: string;
+  message: string;
+  /** Meta más baja que sí se alcanza al ritmo de ahora, o null. */
+  lowerKg: number | null;
+  /** Fecha en la que llegarías a la meta actual, y cuántas semanas se retrasa; null si no es razonable. */
+  moveDate: string | null;
+  moveWeeks: number | null;
+}
+
 export interface WeeklyReview {
   /** Marca de esta revisión en `reviewedMacroWeeks`. */
   weekKey: string;
@@ -45,6 +57,8 @@ export interface WeeklyReview {
   /** La semana tuvo muy pocas sesiones para sacar conclusiones. */
   short: boolean;
   suggestion: MacroReviewSuggestion | null;
+  /** Un objetivo con meta en kilos que no llega a la fecha: lo que Rex propone hacer con la meta. */
+  goalAdjust: GoalAdjustProposal | null;
   /** Hay una revisión de 4 semanas del énfasis sin ver. */
   emphasisReviewPending: boolean;
   /** Cómo sigue el plan esta semana. */
@@ -157,6 +171,7 @@ export function buildWeeklyReview(
 
   const best: string[] = [];
   const watch: string[] = [];
+  let goalAdjust: GoalAdjustProposal | null = null;
 
   if (!short) {
     for (const record of (profile.progressionLog ?? []).filter((r) => r.date >= from && r.date <= to)) {
@@ -190,15 +205,29 @@ export function buildWeeklyReview(
     if (rpe !== null && rpe >= HIGH_RPE) watch.push(`El esfuerzo medio fue alto (RPE ${rpeText(rpe)}).`);
     // Los objetivos con meta en kilos se cuentan con sus números; el resto, con el aviso de siempre.
     const kgGoalIds = new Set<string>();
-    for (const goal of profile.goals) {
+    for (const goal of [...profile.goals].sort((a, b) => a.targetDate.localeCompare(b.targetDate))) {
       const s = goalTargetStatus(goal, profile.prs, profile.prLog, today);
       if (!s) continue;
       kgGoalIds.add(goal.id);
       const name = PR_KEY_LABEL[s.key] ?? s.key;
       if (s.kind === 'conseguida') best.push(`Meta conseguida: ${name} ${kg(s.currentKg)}.`);
       else if (s.kind !== 'va-al-dia') {
+        // Una propuesta por revisión: la del objetivo con la fecha más cercana.
+        if (!goalAdjust) {
+          const adj = proposeTargetAdjustments(goal, s, todayIso);
+          if (adj.lowerKg !== null || adj.moveDate !== null) {
+            goalAdjust = {
+              goalId: goal.id,
+              name,
+              message: `${name} no llega a ${kg(s.targetKg)} a la fecha: a este ritmo, unos ${kg(s.projectedKg)}. ¿Qué hacemos con la meta?`,
+              lowerKg: adj.lowerKg,
+              moveDate: adj.moveDate,
+              moveWeeks: adj.moveWeeks,
+            };
+          }
+        }
         const below = s.expectedTodayKg !== null && s.expectedTodayKg > s.currentKg ? `va ${kg(s.expectedTodayKg - s.currentKg)} por debajo de lo previsto para la meta de ${kg(s.targetKg)}` : `no llega a la meta de ${kg(s.targetKg)}`;
-        watch.push(`${name} ${below}. A este ritmo llegarías a unos ${kg(s.projectedKg)}.${s.kind === 'ambiciosa' ? ' La meta es ambiciosa para esa fecha: puedes bajarla o mover la fecha en Objetivos.' : ''}`);
+        watch.push(`${name} ${below}. A este ritmo llegarías a unos ${kg(s.projectedKg)}.${s.kind === 'ambiciosa' ? ' La meta es ambiciosa para esa fecha.' : ''}`);
       }
     }
     for (const item of buildOpenItems(profile, history, todayIso).objetivos) {
@@ -237,6 +266,7 @@ export function buildWeeklyReview(
     watch,
     short,
     suggestion: short ? null : buildWeeklyMacroReview(profile, history, macroNow, today),
+    goalAdjust: short ? null : goalAdjust,
     emphasisReviewPending: Boolean(review && !review.seen && review.entries.some((e) => e.decision !== 'esperar')),
     nextLine,
     sessions: count,
@@ -247,4 +277,9 @@ export function buildWeeklyReview(
 export function withWeekReviewed(profile: AthleteProfile, weekKey: string): AthleteProfile {
   if ((profile.reviewedMacroWeeks ?? []).includes(weekKey)) return profile;
   return { ...profile, reviewedMacroWeeks: [...(profile.reviewedMacroWeeks ?? []), weekKey].slice(-REVIEWED_MACRO_WEEKS_LIMIT) };
+}
+
+/** El perfil con la meta de un objetivo cambiada (un peso más bajo o una fecha más tarde): lo que Rex propone en la revisión. */
+export function applyGoalAdjustment(profile: AthleteProfile, goalId: string, patch: { targetKg?: number; targetDate?: string }): AthleteProfile {
+  return { ...profile, goals: profile.goals.map((g) => (g.id === goalId ? { ...g, ...(patch.targetKg !== undefined ? { targetKg: patch.targetKg } : {}), ...(patch.targetDate ? { targetDate: patch.targetDate } : {}) } : g)) };
 }

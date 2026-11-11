@@ -179,3 +179,31 @@ export function normalizeKgTarget(goal: Goal, prs: Partial<PersonalRecords> | un
   const sameLift = before && before.movementId === goal.movementId && before.startKg !== undefined;
   return { ...goal, startKg: sameLift ? (before.startKg as number) : current };
 }
+export interface TargetAdjustments {
+  /** Una meta más baja que sí se alcanza al ritmo de ahora (múltiplo de 2,5 kg, por encima de tu marca), o null si no tiene sentido. */
+  lowerKg: number | null;
+  /** La fecha en la que llegarías a la meta al ritmo de ahora, si es entre 1 y 12 semanas más tarde; null si no. */
+  moveDate: string | null;
+  /** Cuántas semanas se retrasa esa fecha. */
+  moveWeeks: number | null;
+}
+
+/** Lo que se puede proponer cuando la meta no se alcanza a la fecha: bajar el peso o mover la fecha. */
+export function proposeTargetAdjustments(goal: Goal, status: GoalTargetStatus, todayIso: string): TargetAdjustments {
+  const lowered = Math.floor(status.projectedKg / 2.5) * 2.5;
+  const lowerKg = Math.max(status.currentKg + 2.5, lowered);
+  let moveDate: string | null = null;
+  let moveWeeks: number | null = null;
+  if (status.actualPerWeek > 0 && status.remainingKg > 0) {
+    const weeksNeeded = Math.ceil(status.remainingKg / status.actualPerWeek);
+    const target = new Date(`${todayIso}T00:00:00`);
+    target.setDate(target.getDate() + weeksNeeded * 7);
+    const iso = toIso(target);
+    const extra = Math.ceil(isoDiffDays(goal.targetDate, iso) / 7);
+    if (extra >= 1 && extra <= 12) {
+      moveDate = iso;
+      moveWeeks = extra;
+    }
+  }
+  return { lowerKg: lowerKg < status.targetKg ? lowerKg : null, moveDate, moveWeeks };
+}

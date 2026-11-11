@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Goal, PrLogEntry } from '../data/athlete/types';
-import { goalPrKey, goalTargetStatus, liftRatePerWeek, normalizeKgTarget, suggestedTargets, supportsKgTarget, targetFeedback } from './goalTarget';
+import { goalPrKey, goalTargetStatus, liftRatePerWeek, normalizeKgTarget, proposeTargetAdjustments, suggestedTargets, supportsKgTarget, targetFeedback } from './goalTarget';
 import { getGoalProgress, isGoalBehindSchedule, targetKgProgress } from './goalProgress';
 
 const goal = (extra: Partial<Goal> = {}): Goal => ({ id: 'g', type: 'subir-pr', movementId: 'back-squat', targetDate: '2027-03-15', emphasis: 'moderado', createdAt: '2026-11-10', targetKg: 190, startKg: 170, ...extra });
@@ -120,5 +120,31 @@ describe('guardar la meta', () => {
     expect(none.targetKg).toBeUndefined();
     expect(none.startKg).toBeUndefined();
     expect(normalizeKgTarget(goal(), {}).targetKg).toBeUndefined();
+  });
+});
+describe('que proponer cuando la meta no llega', () => {
+  const prs = { backSquat: 175 };
+  const behind = () => goalTargetStatus(goal({ targetKg: 195 }), prs, log(['2026-10-27', 167.5], ['2026-12-22', 175]), TODAY)!;
+
+  it('una meta mas baja que si se alcanza al ritmo de ahora (multiplo de 2,5 y por encima de tu marca)', () => {
+    const adj = proposeTargetAdjustments(goal({ targetKg: 195 }), behind(), '2026-12-22');
+    expect(adj.lowerKg).not.toBeNull();
+    expect(adj.lowerKg! % 2.5).toBe(0);
+    expect(adj.lowerKg!).toBeGreaterThan(175);
+    expect(adj.lowerKg!).toBeLessThan(195);
+  });
+
+  it('la fecha en la que llegarias al ritmo de ahora, si es entre 1 y 12 semanas mas tarde', () => {
+    const adj = proposeTargetAdjustments(goal({ targetKg: 195 }), behind(), '2026-12-22');
+    expect(adj.moveWeeks).toBeGreaterThanOrEqual(1);
+    expect(adj.moveWeeks).toBeLessThanOrEqual(12);
+    expect(adj.moveDate! > '2027-03-15').toBe(true);
+  });
+
+  it('si harian falta mas de 12 semanas, o no subes, no se propone mover la fecha; la meta mas baja si', () => {
+    const slow = goalTargetStatus(goal({ targetKg: 260 }), prs, log(['2026-10-27', 174], ['2026-12-22', 175]), TODAY)!;
+    const adj = proposeTargetAdjustments(goal({ targetKg: 260 }), slow, '2026-12-22');
+    expect(adj.moveDate).toBeNull();
+    expect(adj.lowerKg).not.toBeNull();
   });
 });

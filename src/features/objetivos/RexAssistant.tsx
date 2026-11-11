@@ -106,9 +106,9 @@ export function RexAssistant({
   function commit(kind: CommitKind) {
     const made = commitItems(kind, stateRef.current, ctx);
     setPlanBoth([...planRef.current, ...made]);
-    if (kind === 'close') {
-      // Cerrar la competición y montar el camino a la siguiente es todo uno: directo a la revisión.
-      say('Vale, ya sé hacia dónde vamos. Te preparo el camino a la siguiente competición.', () => review(), 'happy');
+    if (kind === 'close' || kind === 'date') {
+      // Cerrar la competición y montar el camino a la siguiente (o confirmar su fecha) es todo uno: directo a la revisión.
+      say(kind === 'close' ? 'Vale, ya sé hacia dónde vamos. Te preparo el camino a la siguiente competición.' : 'Vale, fecha confirmada. Te enseño qué cambia.', () => review(), 'happy');
       return;
     }
     say(made.length > 1 ? `${made.length} cosas añadidas a tu plan.` : `Añadido a tu plan: ${made[0].title}.`, () => ask('more'), 'happy');

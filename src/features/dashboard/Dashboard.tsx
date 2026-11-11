@@ -34,7 +34,7 @@ import {
 } from './rexDashboard';
 import { buildOpenItems } from '../objetivos/openItems';
 import { RexWeekly } from './RexWeekly';
-import { buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
+import { applyGoalAdjustment, buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
@@ -372,6 +372,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return setMarks({ key: null });
       case 'objetivos':
         return onNavigateToObjetivos();
+      case 'competicion-fecha':
+        // Objetivos abre el asistente de Rex en la pregunta de la fecha de la competición.
+        handoff.put('objetivos-asistente', 'fecha-competicion');
+        return onNavigateToObjetivos();
       case 'competicion-cierre':
         // Objetivos abre directamente el asistente de Rex en el cierre de la competición.
         handoff.put('objetivos-asistente', 'competicion');
@@ -511,6 +515,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               const next = withMacroWeekReviewed(athleteRepository.getProfile(), showWeekly.suggestion.reviewKey);
               athleteRepository.saveProfile(next);
               setProfile(next);
+            }}
+            onAdjustGoal={(goalId, patch) => {
+              const next = applyGoalAdjustment(athleteRepository.getProfile(), goalId, patch);
+              athleteRepository.saveProfile(next);
+              // La meta cambia la prioridad del levantamiento: las sesiones ya preparadas se vuelven a generar.
+              resetUpcomingSessions(todayIso);
+              setProfile(athleteRepository.getProfile());
             }}
             onDone={() => {
               const next = withWeekReviewed(athleteRepository.getProfile(), showWeekly.weekKey);

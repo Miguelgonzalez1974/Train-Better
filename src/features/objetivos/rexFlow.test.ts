@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AthleteProfile } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
 import { SKILL_PROGRESSION_TARGETS } from '../../data/movements/skillProgressions';
+import { buildBlocksToCompetition } from '../../engine/seasonSetup';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS } from '../../engine/strengthPrograms';
 import { makeMacro, makeProfile as fixtureProfile } from '../../engine/__fixtures';
 import {
@@ -69,7 +70,7 @@ describe('Rex: que la conversación esté bien cosida', () => {
   const ALL_IDS = [
     'start', 'more', 'o_type', 'o_lift_any', 'o_lift', 'o_oly', 'o_skill', 'o_skill_level', 'o_comp', 'o_comp_days', 'o_comp_end', 'o_when', 'o_date', 'o_push',
     'm_dur', 'm_phase', 'm_start', 'm_name', 'p_goal', 'p_method', 'p_lifts', 'p_dur', 'p_start', 'p_warn', 'r_gap', 't_when', 't_gap', 'i_suggest', 'i_block', 'i_ok',
-    'c_feel', 'c_next', 'c_next_date', 'c_next_days', 'c_next_end', 'c_next_guess', 'o_kg', 'o_kg_input', 'o_kg_check',
+    'c_feel', 'c_next', 'c_next_date', 'c_next_days', 'c_next_end', 'c_next_guess', 'o_kg', 'o_kg_input', 'o_kg_check', 'd_date', 'd_days', 'd_end',
   ];
   const rich: FlowState = { type: 'subir-pr', movementId: 'back-squat', detail: 'Sentadilla trasera', cat: 'oly', method: '531', weeks: 8, targetDate: '2027-01-01', why: 'x' };
   const ctx = mkCtx(emptyProfile({ macrocycles: [makeMacro({ id: 'm', label: 'M', startDate: '2026-10-01', endDate: '2026-12-01' })], strengthPrograms: [{ id: 'p', startDate: '2026-10-28', endDate: '2026-12-22', method: '531', lifts: [] }] }));
@@ -588,5 +589,42 @@ describe('Rex: meta en kilos', () => {
     const node = getNode('o_kg_input', w.s, w.ctx, w.plan);
     expect(node.number).toMatchObject({ field: 'targetKg', next: 'o_kg_check' });
     expect(node.number!.min).toBeGreaterThan(170);
+  });
+});
+describe('Rex: confirmar la fecha de una competicion provisional', () => {
+  const NOW = '2026-11-10';
+  const provisional = { id: 'gp', type: 'preparar-competicion' as const, targetDate: '2027-03-02', emphasis: 'moderado' as const, createdAt: '2026-11-10', provisional: true };
+  const blocks = buildBlocksToCompetition('2026-11-16', '2027-03-02', (() => { let i = 0; return () => `b${++i}`; })(), 'gp');
+  const otono = makeMacro({ id: 'otono', label: 'Otono', startDate: '2026-09-23', endDate: '2026-11-15' });
+  const profile = () => emptyProfile({ goals: [provisional], macrocycles: [otono, ...blocks] });
+  const ctx = () => ({ profile: profile(), todayIso: NOW, newId: (() => { let i = 0; return () => `n-${++i}`; })() });
+
+  it('pregunta la fecha y, con ella, propone el cambio con lo que se reajusta', () => {
+    const c = ctx();
+    const first = getNode('d_date', {}, c, []);
+    expect(first.text).toContain('provisional');
+    expect(first.date).toMatchObject({ field: 'targetDate', next: 'd_days' });
+    const items = commitItems('date', { targetDate: '2027-03-16' }, c);
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe('Cambio');
+    expect(items[0].sub).toContain('(provisional)');
+    expect(items[0].fx.join(' ')).toMatch(/2 semanas más tarde/);
+  });
+
+  it('aplicar cambia la fecha, quita lo provisional y reajusta los bloques de esa competicion', () => {
+    const c = ctx();
+    const items = commitItems('date', { targetDate: '2027-03-16' }, c);
+    const next = applyPlan(profile(), items, NOW);
+    const goal = next.goals.find((g) => g.id === 'gp')!;
+    expect(goal.targetDate).toBe('2027-03-16');
+    expect(goal.provisional).toBeUndefined();
+    const mine = next.macrocycles.filter((m) => m.forGoalId === 'gp');
+    expect(mine[mine.length - 1].endDate).toBe('2027-03-23');
+  });
+
+  it('sin competicion provisional no hay nada que confirmar', () => {
+    const c = { profile: emptyProfile({ goals: [{ ...provisional, provisional: undefined }] }), todayIso: NOW };
+    expect(commitItems('date', { targetDate: '2027-03-16' }, c)).toEqual([]);
+    expect(getNode('d_date', {}, c, []).options).toBeDefined();
   });
 });

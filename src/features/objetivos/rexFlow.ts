@@ -6,6 +6,7 @@ import { HALTERO_TOTAL_WEEKS } from '../../engine/halteroProgram';
 import { MAYHEM_BASE_TOTAL_WEEKS, MAYHEM_PICO_TOTAL_WEEKS, MAYHEM_TECNICA_TOTAL_WEEKS } from '../../engine/mayhemProgram';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { competitionToClose, FEELING_LABEL, nextCompetitionGoal } from '../../engine/postCompetition';
+import { refitSeason } from '../../engine/seasonRefit';
 import { buildBlocksToCompetition } from '../../engine/seasonSetup';
 import { activeEmphasisItems } from '../../engine/programmingEmphasis';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
@@ -21,7 +22,7 @@ import { STRENGTH_METHOD_META } from './strengthMethodMeta';
 
 export type PhaseStyle = 'clasico' | 'base' | 'pico';
 export type ProgramCat = 'slow' | 'back' | 'tech' | 'max' | 'oly' | 'test' | 'auto';
-export type CommitKind = 'obj' | 'macro' | 'prog' | 'ramp' | 'season' | 'close';
+export type CommitKind = 'obj' | 'macro' | 'prog' | 'ramp' | 'season' | 'close' | 'date';
 
 export interface FlowState {
   type?: GoalType;
@@ -61,7 +62,7 @@ export interface RexCtx {
   newId?: () => string;
 }
 
-export type PlanKind = 'Objetivo' | 'Macrociclo' | 'Programa' | 'Rampa' | 'Cierre';
+export type PlanKind = 'Objetivo' | 'Macrociclo' | 'Programa' | 'Rampa' | 'Cierre' | 'Cambio';
 
 /** Una cosa que Rex ha preparado: lo que se enseña y lo que se guardará al crear el plan. */
 export interface PlanItem {
@@ -71,7 +72,7 @@ export interface PlanItem {
   title: string;
   sub: string;
   fx: string[];
-  payload: { goal?: Goal; macro?: Macrocycle; program?: StrengthProgram; ramp?: IntensityRamp; close?: { goalId: string; feeling: 1 | 2 | 3 | 4 | 5 } };
+  payload: { goal?: Goal; macro?: Macrocycle; program?: StrengthProgram; ramp?: IntensityRamp; close?: { goalId: string; feeling: 1 | 2 | 3 | 4 | 5 }; dateChange?: { goalId: string; targetDate: string; eventEndDate?: string } };
   /** Un macrociclo que ocupa su sitio: el que estuviera en esas fechas se recorta o se quita. */
   replaces?: boolean;
   /** Fechas de lo que ocupa un rango (macrociclo o programa), para detectar solapes. */
@@ -243,6 +244,11 @@ export function suggestionFromProfile(profile: AthleteProfile): { state: Partial
 }
 
 const decimal = (n: number) => String(n).replace('.', ',');
+
+/** La competición con fecha provisional más próxima (la que Rex pide confirmar). */
+function provisionalCompetition(ctx: RexCtx): Goal | null {
+  return ctx.profile.goals.filter((g) => g.type === 'preparar-competicion' && g.provisional && g.targetDate >= ctx.todayIso).sort((a, b) => a.targetDate.localeCompare(b.targetDate))[0] ?? null;
+}
 
 /** La marca actual del levantamiento del objetivo en marcha, si admite meta en kilos y hay una marca de la que partir. */
 function kgTarget(s: FlowState, ctx: RexCtx): { key: keyof PersonalRecords; name: string; current: number } | null {
@@ -474,6 +480,20 @@ export function getNode(id: string, s: FlowState, ctx: RexCtx, plan: PlanItem[])
         options: [12, 16, 20, 24].map((w) => opt(`${w} semanas`, { targetDate: addDaysIso(ctx.todayIso, w * 7), eventEndDate: undefined, provisional: true }, undefined, 'close')),
       };
 
+    // ----- confirmar la fecha de una competición provisional -----
+    case 'd_date': {
+      const g = provisionalCompetition(ctx);
+      if (!g) return { text: 'No tienes ninguna competición apuntada con fecha provisional. Puedes cambiar la fecha de cualquiera desde Objetivos.', options: [opt('Vale', {}, 'start')] };
+      return { text: `Tu competición del ${shortDate(g.targetDate)} tenía fecha provisional. ¿Cuándo es de verdad? Dime el primer día.`, date: { min: addDaysIso(ctx.todayIso, 1), field: 'targetDate', next: 'd_days' } };
+    }
+    case 'd_days':
+      return {
+        text: '¿Dura más de un día?',
+        options: [{ label: 'Un solo día', set: { eventEndDate: undefined }, commit: 'date' }, { label: 'Varios días', set: {}, next: 'd_end' }],
+      };
+    case 'd_end':
+      return { text: '¿Y el último día?', date: { min: s.targetDate, field: 'eventEndDate', commit: 'date' } };
+
     // ----- no lo sé -----
     case 'i_suggest': {
       const sug = suggestionFromProfile(ctx.profile);
@@ -638,8 +658,30 @@ function closeItems(s: FlowState, ctx: RexCtx): PlanItem[] {
   return out;
 }
 
+/** Confirmar la fecha de una competición provisional: la fecha nueva y, si hay bloques que llevaban a ella, cómo se reajustan. */
+function dateItems(s: FlowState, ctx: RexCtx): PlanItem[] {
+  const goal = provisionalCompetition(ctx);
+  if (!goal || !s.targetDate) return [];
+  const eventEndDate = s.eventEndDate && s.eventEndDate >= s.targetDate ? s.eventEndDate : undefined;
+  const moved: Goal = { ...goal, targetDate: s.targetDate, eventEndDate, provisional: undefined };
+  const refit = refitSeason({ ...ctx.profile, goals: ctx.profile.goals.map((g) => (g.id === goal.id ? moved : g)) }, goal.id, ctx.todayIso, ctx.newId ?? newIdDefault);
+  const when = `${shortDate(s.targetDate)}${eventEndDate ? ` al ${shortDate(eventEndDate)}` : ''}`;
+  return [
+    {
+      id: `date-${goal.id}`,
+      kind: 'Cambio',
+      short: `competición el ${when}`,
+      title: 'Confirmo la fecha de la competición',
+      sub: `${shortDate(goal.targetDate)} (provisional) → ${when}`,
+      fx: [refit ? `${refit.summary} Los bloques se reajustan al aplicar.` : 'No hay bloques de temporada que reajustar: solo cambia la fecha.', 'La competición deja de estar marcada como provisional.'],
+      payload: { dateChange: { goalId: goal.id, targetDate: s.targetDate, ...(eventEndDate ? { eventEndDate } : {}) } },
+    },
+  ];
+}
+
 /** Lo que crea una respuesta final. Una temporada son varias cosas a la vez. */
 export function commitItems(kind: CommitKind, s: FlowState, ctx: RexCtx): PlanItem[] {
+  if (kind === 'date') return dateItems(s, ctx);
   if (kind === 'close') return closeItems(s, ctx);
   if (kind === 'obj') return [goalItem(s, ctx)];
   if (kind === 'macro') return [macroItem({ weeks: s.weeks ?? 12, startIso: s.startIso ?? ctx.todayIso, phases: s.phases ?? 'clasico', label: s.label?.trim().slice(0, LABEL_MAX) || undefined }, ctx)];
@@ -662,9 +704,12 @@ export function applyPlan(profile: AthleteProfile, items: PlanItem[], todayIso: 
   const ramp = [...items].reverse().find((i) => i.payload.ramp)?.payload.ramp;
   // Cerrar una competición guarda cómo te fue en su objetivo.
   const closes = items.flatMap((i) => (i.payload.close ? [i.payload.close] : []));
+  const dateChanges = items.flatMap((i) => (i.payload.dateChange ? [i.payload.dateChange] : []));
   const closedGoals = profile.goals.map((g) => {
     const c = closes.find((x) => x.goalId === g.id);
-    return c ? { ...g, result: { feeling: c.feeling, closedAt: todayIso } } : g;
+    const d = dateChanges.find((x) => x.goalId === g.id);
+    const closed = c ? { ...g, result: { feeling: c.feeling, closedAt: todayIso } } : g;
+    return d ? { ...closed, targetDate: d.targetDate, eventEndDate: d.eventEndDate, provisional: undefined } : closed;
   });
   // Un macro que ocupa su sitio recorta el que estuviera en esas fechas, o lo quita si empezaba dentro.
   const replacing = items.filter((i) => i.replaces && i.payload.macro).map((i) => i.payload.macro as Macrocycle);
@@ -681,7 +726,7 @@ export function applyPlan(profile: AthleteProfile, items: PlanItem[], todayIso: 
   const keepPast = <T>(record: Record<string, T> | undefined): Record<string, T> | undefined =>
     record ? Object.fromEntries(Object.entries(record).filter(([date]) => date < todayIso)) : record;
   const refresh = replacing.length > 0 ? { sessionCache: keepPast(profile.sessionCache), weeklyLocks: keepPast(profile.weeklyLocks), regenVariants: keepPast(profile.regenVariants) } : {};
-  return {
+  let result: AthleteProfile = {
     ...profile,
     ...refresh,
     goals: [...closedGoals, ...goals],
@@ -689,6 +734,12 @@ export function applyPlan(profile: AthleteProfile, items: PlanItem[], todayIso: 
     strengthPrograms: [...(profile.strengthPrograms ?? []), ...programs],
     ...(ramp ? { intensityRamp: ramp } : {}),
   };
+  // Con la fecha de una competición confirmada, los bloques que llevaban a ella se reajustan.
+  for (const d of dateChanges) {
+    const refit = refitSeason(result, d.goalId, todayIso);
+    if (refit) result = { ...result, macrocycles: refit.macrocycles, sessionCache: keepPast(result.sessionCache), weeklyLocks: keepPast(result.weeklyLocks), regenVariants: keepPast(result.regenVariants) };
+  }
+  return result;
 }
 
 const overlaps = (a: { start: string; end: string }, b: { start: string; end: string }) => a.start <= b.end && b.start <= a.end;

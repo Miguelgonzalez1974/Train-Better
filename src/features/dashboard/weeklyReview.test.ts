@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AthleteProfile, Goal, ProgressionRecord, SessionHistoryEntry } from '../../data/athlete/types';
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { makeMacro, makeProfile as fixtureProfile } from '../../engine/__fixtures';
-import { buildWeeklyReview, previousWeek, withWeekReviewed } from './weeklyReview';
+import { applyGoalAdjustment, buildWeeklyReview, previousWeek, withWeekReviewed } from './weeklyReview';
 
 // Lunes 9 nov 2026: la semana a repasar es del 2 al 8 de noviembre.
 const MONDAY = new Date('2026-11-09T09:00:00');
@@ -238,5 +238,37 @@ describe('revision semanal: cuenta el programa de fuerza (Texas)', () => {
     const profile = makeProfile({ strengthPrograms: [texas()], companionLog: [log('2026-11-02', 'hecha', { rpe: 7, durationMin: 40 })] });
     const withTexas = buildWeeklyReview(profile, history, MONDAY)!.metrics.find((x) => x.label === 'Tiempo entrenando')!.value;
     expect(withTexas).not.toBe(without);
+  });
+});
+describe('revision semanal: propuesta para una meta en kilos que no llega', () => {
+  const kgGoal = (extra = {}) => ({ id: 'gk', type: 'subir-pr' as const, movementId: 'back-squat', targetDate: '2027-03-15', emphasis: 'moderado' as const, createdAt: '2026-10-01', targetKg: 195, startKg: 170, ...extra });
+  const history = [...OLDER, ...week(FULL)];
+  const prs = { backSquat: 172, frontSquat: 140, benchPress: 110, deadlift: 200, strictPress: 65, clean: 115, snatch: 90, cleanAndJerk: 118 };
+  const slowLog = [{ date: '2026-09-20', key: 'backSquat', kg: 168 }, { date: '2026-11-08', key: 'backSquat', kg: 172 }];
+
+  it('un objetivo que no llega a la fecha trae la propuesta con bajar la meta o mover la fecha', () => {
+    const r = buildWeeklyReview(makeProfile({ goals: [kgGoal()], prs, prLog: slowLog }), history, MONDAY)!;
+    expect(r.goalAdjust).not.toBeNull();
+    expect(r.goalAdjust!.goalId).toBe('gk');
+    expect(r.goalAdjust!.message).toMatch(/no llega a 195 kg/);
+    expect(r.goalAdjust!.lowerKg).not.toBeNull();
+  });
+
+  it('si va al dia, o no hay meta, no hay propuesta', () => {
+    const fast = [{ date: '2026-09-20', key: 'backSquat', kg: 150 }, { date: '2026-11-08', key: 'backSquat', kg: 172 }];
+    expect(buildWeeklyReview(makeProfile({ goals: [kgGoal({ targetKg: 180 })], prs, prLog: fast }), history, MONDAY)!.goalAdjust).toBeNull();
+    expect(buildWeeklyReview(makeProfile({ goals: [kgGoal({ targetKg: undefined, startKg: undefined })], prs }), history, MONDAY)!.goalAdjust).toBeNull();
+  });
+
+  it('con pocas sesiones no se propone nada', () => {
+    expect(buildWeeklyReview(makeProfile({ goals: [kgGoal()], prs, prLog: slowLog }), [...OLDER, entry('2026-11-03')], MONDAY)!.goalAdjust).toBeNull();
+  });
+
+  it('aplicar la propuesta cambia solo la meta o la fecha de ese objetivo', () => {
+    const profile = makeProfile({ goals: [kgGoal(), kgGoal({ id: 'otro', targetKg: 150 })] });
+    const lower = applyGoalAdjustment(profile, 'gk', { targetKg: 185 });
+    expect(lower.goals.find((g) => g.id === 'gk')).toMatchObject({ targetKg: 185, targetDate: '2027-03-15', startKg: 170 });
+    expect(lower.goals.find((g) => g.id === 'otro')!.targetKg).toBe(150);
+    expect(applyGoalAdjustment(profile, 'gk', { targetDate: '2027-04-05' }).goals[0]).toMatchObject({ targetKg: 195, targetDate: '2027-04-05' });
   });
 });

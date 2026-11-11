@@ -31,6 +31,7 @@ export function RexWeekly({
   onAccept,
   onDismiss,
   onDone,
+  onAdjustGoal,
   onOpenEmphasis,
   onGoPlanificacion,
   onClose,
@@ -39,6 +40,8 @@ export function RexWeekly({
   onAccept: () => void;
   onDismiss: () => void;
   onDone: () => void;
+  /** Cambia la meta de un objetivo (un peso más bajo o una fecha más tarde). */
+  onAdjustGoal: (goalId: string, patch: { targetKg?: number; targetDate?: string }) => void;
   onOpenEmphasis: () => void;
   onGoPlanificacion: () => void;
   onClose: () => void;
@@ -126,6 +129,24 @@ export function RexWeekly({
     );
   }
 
+  /** Una meta en kilos que no llega: bajarla, mover la fecha o dejarla; lo que se elige se aplica al momento. */
+  function goalStep() {
+    const g = review.goalAdjust;
+    if (!g) return suggestionStep();
+    const options: Choice[] = [];
+    if (g.lowerKg !== null) {
+      const kg = g.lowerKg;
+      options.push({ label: `Bajar la meta a ${String(kg).replace('.', ',')} kg`, run: () => { onAdjustGoal(g.goalId, { targetKg: kg }); say(`Hecho: la meta de ${g.name} pasa a ${String(kg).replace('.', ',')} kg.`, () => suggestionStep(), 'happy'); } });
+    }
+    if (g.moveDate !== null && g.moveWeeks !== null) {
+      const date = g.moveDate;
+      const weeks = g.moveWeeks;
+      options.push({ label: `Mover la fecha ${weeks} ${weeks === 1 ? 'semana' : 'semanas'}`, run: () => { onAdjustGoal(g.goalId, { targetDate: date }); say(`Hecho: la fecha pasa al ${new Date(`${date}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', '')}.`, () => suggestionStep(), 'happy'); } });
+    }
+    options.push({ label: 'Dejarlo así', run: () => say('Vale, lo dejamos. Lo vuelvo a mirar la semana que viene.', () => suggestionStep()) });
+    say(g.message, () => ask(options));
+  }
+
   function suggestionStep() {
     const s = review.suggestion;
     if (!s) return emphasisStep();
@@ -182,7 +203,7 @@ export function RexWeekly({
           { title: 'Lo mejor', icon: 'best' as const, lines: review.best },
           { title: 'Lo que vigilar', icon: 'watch' as const, lines: review.watch },
         ].filter((l) => l.lines.length > 0);
-        const next = () => suggestionStep();
+        const next = () => goalStep();
         if (lists.length === 0) return say('Una semana sin sobresaltos: nada que destacar ni que vigilar.', next);
         const run = (i: number) => {
           if (i >= lists.length) return next();
