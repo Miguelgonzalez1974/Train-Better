@@ -124,6 +124,7 @@ export function SeasonMapCompact({ profile, todayIso, onOpen }: { profile: Athle
       className="flex flex-col gap-1.5 rounded-xl border border-white/10 px-3 py-2.5 text-left transition-colors duration-200 hover:bg-white/5"
       aria-label={`Tu temporada: ${map.now}. Abrir el mapa`}
     >
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">Tu temporada</span>
       <span className="flex justify-between gap-3 text-xs text-neutral-400">
         <span className="min-w-0 truncate">{map.now}</span>
         {map.toCompetition && <span className="shrink-0">{map.toCompetition.replace(' para la competición', '')}</span>}
