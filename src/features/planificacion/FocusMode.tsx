@@ -619,9 +619,10 @@ export function FocusMode({
         <button
           onClick={() => clockBus.open(group.block === 'wod' ? 'workout' : 'rest')}
           aria-label="Abrir el reloj"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5 text-neutral-300 transition-colors hover:bg-white/10"
+          title="Reloj"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-neon text-black shadow-md shadow-brand-neon/25 transition-all duration-200 hover:brightness-110 active:scale-95"
         >
-          <Timer size={18} />
+          <Timer size={20} strokeWidth={2.5} />
         </button>
       </div>
 
