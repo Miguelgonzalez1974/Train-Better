@@ -34,6 +34,7 @@ import {
 } from './rexDashboard';
 import { buildOpenItems } from '../objetivos/openItems';
 import { RexWeekly } from './RexWeekly';
+import { LevelCard } from './LevelCard';
 import { applyGoalAdjustment, buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { resolveTodaySession } from './todaySession';
@@ -587,6 +588,17 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             onOpenDone={() => setShowDone(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
           />
+          {/* Tu nivel: el radar del perfil de atleta; solo hoy, y solo cuando hay datos de tres áreas. */}
+          {isToday && (
+            <LevelCard
+              profile={profile}
+              history={history}
+              onOpen={() => {
+                setAnalysisStart('perfil');
+                setAnalysisOpen(true);
+              }}
+            />
+          )}
         </>
       )}
 
