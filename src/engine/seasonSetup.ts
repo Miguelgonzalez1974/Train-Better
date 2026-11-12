@@ -1,6 +1,6 @@
 import type { AthleteProfile, IntensityRamp, Macrocycle } from '../data/athlete/types';
 import { addDaysIso, isoDiffDays, weeksBetweenIso } from './periodization';
-import { COMPANION_DEFAULT_WEEKDAYS, newCompanion, weekdayOf, type CompanionProgram } from './strengthCompanion';
+import { COMPANION_DEFAULT_WEEKDAYS, companionStatus, isCompanionProgram, newCompanion, weekdayOf, type CompanionProgram } from './strengthCompanion';
 import { STRENGTH_METHOD_LABEL } from './strengthPrograms';
 
 /**
@@ -154,9 +154,11 @@ function keptGoals(profile: AthleteProfile, todayIso: string): AthleteProfile['g
   return profile.goals.filter((g) => g.targetDate >= todayIso || g.result);
 }
 
-/** Con una competición a la vista el macro de ahora se recorta el día antes de que empiece la temporada; sin ella, se sustituye todo. */
+/**
+ * El macro de ahora se recorta el día antes de que empiece la temporada (nunca se borra del todo): hasta ese día sigue mandando, y así no hay un
+ * hueco sin macro entre aplicar la temporada y su primer lunes. Los que ya terminaron se conservan y los que empezaban dentro de la temporada se quitan.
+ */
 function keptMacros(profile: AthleteProfile, setup: SeasonSetup): AthleteProfile['macrocycles'] {
-  if (!setup.competition) return [];
   return profile.macrocycles.flatMap((m) => {
     if (m.endDate < setup.startDate) return [m];
     if (m.startDate >= setup.startDate) return [];
@@ -170,12 +172,23 @@ function keptMacros(profile: AthleteProfile, setup: SeasonSetup): AthleteProfile
  */
 export function describeRemovals(profile: AthleteProfile, setup?: SeasonSetup | null, todayIso?: string): { macrocycles: string[]; goals: number; programs: string[] } {
   const withCompetition = Boolean(setup?.competition);
-  const macros = withCompetition && setup ? profile.macrocycles.filter((m) => m.endDate >= setup.startDate) : profile.macrocycles;
+  const macros = setup ? profile.macrocycles.filter((m) => m.endDate >= setup.startDate) : profile.macrocycles;
+  const kept = new Set(todayIso ? keptCompanionPrograms(profile, todayIso).map((p) => p.id) : []);
   return {
     macrocycles: macros.map((m) => `${m.label} (${m.startDate} → ${m.endDate})`),
     goals: withCompetition && todayIso ? profile.goals.length - keptGoals(profile, todayIso).length : profile.goals.length,
-    programs: (profile.strengthPrograms ?? []).map((p) => `${STRENGTH_METHOD_LABEL[p.method]} (${p.startDate} → ${p.endDate})`),
+    programs: (profile.strengthPrograms ?? []).filter((p) => !kept.has(p.id)).map((p) => `${STRENGTH_METHOD_LABEL[p.method]} (${p.startDate} → ${p.endDate})`),
   };
+}
+
+/** El programa que convive con el macro (el Texas) que ya está en marcha: al aplicar una temporada sigue donde estaba, con sus sesiones hechas, en vez de empezar de cero. */
+export function keptCompanionPrograms(profile: AthleteProfile, todayIso: string): CompanionProgram[] {
+  return (profile.strengthPrograms ?? []).filter((p): p is CompanionProgram => isCompanionProgram(p) && p.endDate >= todayIso && companionStatus(p, todayIso).kind !== 'terminado');
+}
+
+/** Las sesiones y reservas ya preparadas desde hoy se descartan para generarlas de nuevo, salvo la de hoy si ya la entrenaste: lo hecho no se toca. */
+export function keepSessionRecords<T>(record: Record<string, T> | undefined, todayIso: string, trainedToday: boolean): Record<string, T> | undefined {
+  return record ? Object.fromEntries(Object.entries(record).filter(([date]) => date < todayIso || (trainedToday && date === todayIso))) : record;
 }
 
 /** Lo que había antes, por si hay que volver atrás. */
@@ -199,13 +212,15 @@ export function backupBeforeSeason(profile: AthleteProfile, savedAt: string): Se
 
 /** Aplica el plan: quita macros, objetivos y programas, pone los nuevos y borra las sesiones ya preparadas que dependían de lo anterior. */
 export function applySeasonSetup(profile: AthleteProfile, setup: SeasonSetup, todayIso: string): AthleteProfile {
-  const keepPast = <T>(record: Record<string, T> | undefined): Record<string, T> | undefined =>
-    record ? Object.fromEntries(Object.entries(record).filter(([date]) => date < todayIso)) : record;
+  const trainedToday = (profile.trainingDatesLog ?? []).includes(todayIso);
+  const keepPast = <T>(record: Record<string, T> | undefined) => keepSessionRecords(record, todayIso, trainedToday);
+  // Un Texas ya en marcha sigue (con su cursor y lo hecho); solo se crea uno nuevo si no hay ninguno.
+  const companions = keptCompanionPrograms(profile, todayIso);
   return {
     ...profile,
     macrocycles: [...keptMacros(profile, setup), ...setup.macrocycles],
     goals: setup.competition ? keptGoals(profile, todayIso) : [],
-    strengthPrograms: [setup.program],
+    strengthPrograms: companions.length > 0 ? companions : [setup.program],
     intensityRamp: setup.ramp,
     // Las sesiones y reservas de semana ya preparadas se hicieron con lo anterior: desde hoy se vuelven a generar.
     sessionCache: keepPast(profile.sessionCache),

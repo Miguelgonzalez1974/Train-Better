@@ -34,6 +34,8 @@ export type RexTarget =
   | 'plan-avisos'
   /** Planificación: abrir el resumen de la sesión completada, y el chat «¿Cambiar algo?». */
   | 'plan-resumen'
+  /** Planificación: volver a apuntar los datos de una sesión ya completada (borra el registro de hoy y abre el cierre). */
+  | 'plan-corregir'
   | 'plan-cambiar'
   /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
   | 'plan-empezar'

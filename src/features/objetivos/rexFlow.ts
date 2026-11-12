@@ -7,7 +7,7 @@ import { MAYHEM_BASE_TOTAL_WEEKS, MAYHEM_PICO_TOTAL_WEEKS, MAYHEM_TECNICA_TOTAL_
 import { toLocalIsoDate } from '../../engine/periodization';
 import { competitionToClose, FEELING_LABEL, nextCompetitionGoal } from '../../engine/postCompetition';
 import { refitSeason } from '../../engine/seasonRefit';
-import { buildBlocksToCompetition } from '../../engine/seasonSetup';
+import { buildBlocksToCompetition, keepSessionRecords } from '../../engine/seasonSetup';
 import { activeEmphasisItems } from '../../engine/programmingEmphasis';
 import { DEFAULT_STRENGTH_PROGRAM_LIFTS, TEMPORADA_TOTAL_WEEKS } from '../../engine/strengthPrograms';
 import { GOAL_TYPE_META } from './goalMeta';
@@ -723,8 +723,8 @@ export function applyPlan(profile: AthleteProfile, items: PlanItem[], todayIso: 
         return [{ ...m, endDate: addDaysIso(from, -1) }];
       });
   // Con el macro cambiado, las sesiones y reservas de semana ya preparadas se hicieron con el anterior: desde hoy se vuelven a generar.
-  const keepPast = <T>(record: Record<string, T> | undefined): Record<string, T> | undefined =>
-    record ? Object.fromEntries(Object.entries(record).filter(([date]) => date < todayIso)) : record;
+  const trainedToday = (profile.trainingDatesLog ?? []).includes(todayIso);
+  const keepPast = <T>(record: Record<string, T> | undefined) => keepSessionRecords(record, todayIso, trainedToday);
   const refresh = replacing.length > 0 ? { sessionCache: keepPast(profile.sessionCache), weeklyLocks: keepPast(profile.weeklyLocks), regenVariants: keepPast(profile.regenVariants) } : {};
   let result: AthleteProfile = {
     ...profile,

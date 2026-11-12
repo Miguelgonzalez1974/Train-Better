@@ -129,7 +129,10 @@ export function planCompletedSuggestion(c: PlanCompleted | null | undefined): Re
     tone: 'good',
     text: `${lead} ${body}${pending}`.trim(),
     mood: 'happy',
-    actions: [{ label: 'Ver resumen', target: 'plan-resumen' }],
+    actions: [
+      { label: 'Ver resumen', target: 'plan-resumen' },
+      { label: 'Corregir datos', target: 'plan-corregir' },
+    ],
     dismissible: false,
   };
 }

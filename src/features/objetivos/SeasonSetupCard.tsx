@@ -3,7 +3,7 @@ import { CalendarRange } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { nextCompetitionGoal } from '../../engine/postCompetition';
-import { applySeasonSetup, backupBeforeSeason, buildSeasonSetup, describeRemovals, restoreSeasonBackup, swapToTexas, type SeasonBackup, type SeasonCompetition } from '../../engine/seasonSetup';
+import { applySeasonSetup, backupBeforeSeason, buildSeasonSetup, describeRemovals, keptCompanionPrograms, restoreSeasonBackup, swapToTexas, type SeasonBackup, type SeasonCompetition } from '../../engine/seasonSetup';
 import { isCompanionProgram } from '../../engine/strengthCompanion';
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { CompanionWeeks } from '../planificacion/CompanionWeeks';
@@ -114,6 +114,7 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
   }
 
   const removals = describeRemovals(profile, setup, todayIso);
+  const keptTexas = keptCompanionPrograms(profile, todayIso);
 
   const companion = (profile.strengthPrograms ?? []).find(isCompanionProgram);
 
@@ -201,7 +202,10 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
                 ))}
               </ul>
             )}
-            {competition && <p className="mt-1.5 text-xs text-neutral-400">Se mantiene: tu competición del {shortDate(competition.start)} y los objetivos que no han vencido. El macro de ahora termina el día antes de que empiece la temporada.</p>}
+            <p className="mt-1.5 text-xs text-neutral-400">
+              {competition ? `Se mantiene: tu competición del ${shortDate(competition.start)} y los objetivos que no han vencido. ` : ''}El macro de ahora sigue hasta el día antes de que empiece la temporada ({formatIsoDateShort(setup.startDate)}), así no te quedas sin macro entre medias.
+              {keptTexas.length > 0 ? ' Tu Texas Method sigue donde lo dejaste.' : ''}
+            </p>
             <p className="mt-1.5 text-xs text-neutral-500">Guardo una copia: si no te convence, «Deshacer» lo deja como estaba.</p>
           </div>
 
@@ -225,6 +229,12 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
 
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">Programa de fuerza · convive con el macro</p>
+            {keptTexas.length > 0 ? (
+              <div className="rounded-lg bg-white/[0.04] px-3 py-2">
+                <p className="font-semibold text-white">Texas Method · en marcha</p>
+                <p className="text-xs text-neutral-500">Ya lo tienes empezado: se queda como está, con las sesiones que llevas hechas y su siguiente sesión. No se reinicia.</p>
+              </div>
+            ) : (
             <div className="rounded-lg bg-white/[0.04] px-3 py-2">
               <p className="font-semibold text-white">Texas Method · 8 semanas · 24 sesiones</p>
               <p className="text-xs text-neutral-500">
@@ -236,6 +246,7 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
                 Ver semana a semana
               </button>
             </div>
+            )}
           </div>
 
           <div className="flex gap-2">

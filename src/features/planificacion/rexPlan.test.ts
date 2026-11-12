@@ -89,7 +89,10 @@ describe('Rex en Planificación: la sesión completada', () => {
     const s = planCompletedSuggestion({ ...done, changes: ['Press banca sube a 85 kg el próximo día.'] })!;
     expect(s).toMatchObject({ id: 'plan-completada', lead: 'Sesión completada.', tone: 'good', dismissible: false });
     expect(s.text).toBe('Sesión completada. Press banca sube a 85 kg el próximo día.');
-    expect(s.actions).toEqual([{ label: 'Ver resumen', target: 'plan-resumen' }]);
+    expect(s.actions).toEqual([
+      { label: 'Ver resumen', target: 'plan-resumen' },
+      { label: 'Corregir datos', target: 'plan-corregir' },
+    ]);
   });
 
   it('sin cambios de carga: un PR nuevo, la racha o cómo va la semana', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeProfile } from './__fixtures';
-import { applySeasonSetup, backupBeforeSeason, blockLengths, blockPhaseWeeks, buildSeasonSetup, describeRemovals, nextMondayIso, restoreSeasonBackup, seasonEndIso, swapToTexas, TEXAS_WEEKS } from './seasonSetup';
+import { applySeasonSetup, backupBeforeSeason, blockLengths, blockPhaseWeeks, buildSeasonSetup, buildTexasProgram, describeRemovals, keptCompanionPrograms, nextMondayIso, restoreSeasonBackup, seasonEndIso, swapToTexas, TEXAS_WEEKS } from './seasonSetup';
 import { getActiveMacrocycle, totalMacrocycleWeeks } from './periodization';
 import { generateSessionForDate } from './generateSession';
 import { companionStatus, companionTotalSessions, isCompanionProgram } from './strengthCompanion';
@@ -78,7 +78,8 @@ describe('el plan completo', () => {
     });
     const backup = backupBeforeSeason(old, '2026-11-08T10:00:00Z');
     const next = applySeasonSetup(old, setup, '2026-11-08');
-    expect(next.macrocycles).toHaveLength(3);
+    // el macro viejo ya había terminado: se conserva (es pasado) y se suman los tres nuevos
+    expect(next.macrocycles).toHaveLength(4);
     expect(next.goals).toEqual([]);
     expect(next.strengthPrograms).toEqual([setup.program]);
     expect(Object.keys(next.sessionCache ?? {})).toEqual(['2026-11-07']);
@@ -161,6 +162,51 @@ describe('temporada con una competicion a la vista', () => {
     const profile = makeProfile({ macrocycles: [{ id: 'otono', label: 'Otono', startDate: '2026-09-23', endDate: '2026-12-16' }], goals: [goal('vigente', '2027-02-01')] });
     const next = applySeasonSetup(profile, buildSeasonSetup('2026-11-10', ids)!, '2026-11-10');
     expect(next.goals).toEqual([]);
-    expect(next.macrocycles.some((m) => m.id === 'otono')).toBe(false);
+    // el macro de ahora no se borra: sigue hasta el día antes de que empiece la temporada, para no quedarse sin macro entre medias
+    expect(next.macrocycles.find((m) => m.id === 'otono')?.endDate).toBe('2026-11-15');
+  });
+});
+
+describe('aplicar la temporada a mitad de semana', () => {
+  const TODAY = '2026-11-12';
+  const otono = { id: 'otono', label: 'Otono', startDate: '2026-09-23', endDate: '2026-12-16' };
+
+  it('hoy y los dias hasta el primer lunes siguen teniendo macro: no hay hueco', () => {
+    const next = applySeasonSetup(makeProfile({ macrocycles: [otono] }), buildSeasonSetup(TODAY, ids)!, TODAY);
+    for (const day of ['2026-11-12', '2026-11-13', '2026-11-15', '2026-11-16', '2026-11-17']) expect(getActiveMacrocycle(next.macrocycles, day), day).toBeDefined();
+    expect(getActiveMacrocycle(next.macrocycles, '2026-11-15')?.id).toBe('otono');
+    expect(getActiveMacrocycle(next.macrocycles, '2026-11-16')?.label).toContain('Base 1');
+  });
+
+  it('un Texas ya en marcha sigue con su puntero y sus sesiones; solo se crea uno si no hay ninguno', () => {
+    const base = buildTexasProgram('2026-11-09', () => 'tx');
+    const running = { ...base, companion: { ...base.companion, cursor: 2, lastResolvedOn: '2026-11-11' } };
+    const next = applySeasonSetup(makeProfile({ macrocycles: [otono], strengthPrograms: [running] }), buildSeasonSetup(TODAY, ids)!, TODAY);
+    expect(next.strengthPrograms).toHaveLength(1);
+    expect(next.strengthPrograms![0].id).toBe('tx');
+    expect((next.strengthPrograms![0] as typeof running).companion.cursor).toBe(2);
+    const fresh = applySeasonSetup(makeProfile({ macrocycles: [otono], strengthPrograms: [] }), buildSeasonSetup(TODAY, ids)!, TODAY);
+    expect(fresh.strengthPrograms).toHaveLength(1);
+    expect((fresh.strengthPrograms![0] as typeof running).companion.cursor).toBe(0);
+  });
+
+  it('un programa terminado no se conserva, y lo que se va a quitar no cuenta el Texas que sigue', () => {
+    const finished = { ...buildTexasProgram('2026-09-01', () => 'old'), endDate: '2026-10-30' };
+    expect(keptCompanionPrograms(makeProfile({ strengthPrograms: [finished] }), TODAY)).toHaveLength(0);
+    const running = buildTexasProgram('2026-11-09', () => 'tx');
+    const setup = buildSeasonSetup(TODAY, ids)!;
+    expect(describeRemovals(makeProfile({ macrocycles: [otono], strengthPrograms: [running] }), setup, TODAY).programs).toEqual([]);
+  });
+
+  it('la sesion de hoy ya entrenada no se descarta al aplicar; la de manana y las siguientes si', () => {
+    const cached = (date: string) => ({ date, mesocycleWeek: 1 as const, isRestDay: false, blocks: [] });
+    const profile = makeProfile({
+      macrocycles: [otono],
+      trainingDatesLog: [TODAY],
+      sessionCache: { '2026-11-11': cached('2026-11-11'), [TODAY]: cached(TODAY), '2026-11-13': cached('2026-11-13') },
+    });
+    expect(Object.keys(applySeasonSetup(profile, buildSeasonSetup(TODAY, ids)!, TODAY).sessionCache ?? {}).sort()).toEqual(['2026-11-11', TODAY]);
+    const notTrained = { ...profile, trainingDatesLog: [] };
+    expect(Object.keys(applySeasonSetup(notTrained, buildSeasonSetup(TODAY, ids)!, TODAY).sessionCache ?? {})).toEqual(['2026-11-11']);
   });
 });

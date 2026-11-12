@@ -185,6 +185,53 @@ export function skipCompanion(profile: AthleteProfile, programId: string, todayI
   return resolve(profile, programId, todayIso, 'saltada', { label });
 }
 
+/** Las sesiones hechas o saltadas de un programa que ya no existe (se rehizo la temporada y empezó otro): lo que se puede recuperar. */
+export function orphanCompanionEntries(profile: AthleteProfile, todayIso: string): CompanionLogEntry[] {
+  const ids = new Set((profile.strengthPrograms ?? []).map((p) => p.id));
+  const since = addDaysIso(todayIso, -28);
+  const orphans = (profile.companionLog ?? []).filter((e) => !ids.has(e.programId) && e.date >= since);
+  // Solo el programa más reciente de los que se perdieron, y sin repetir puesto.
+  const latest = [...orphans].sort((a, b) => b.date.localeCompare(a.date))[0]?.programId;
+  const byIndex = new Map<number, CompanionLogEntry>();
+  for (const e of orphans.filter((x) => x.programId === latest)) byIndex.set(e.index, e);
+  return [...byIndex.values()].sort((a, b) => a.index - b.index);
+}
+
+const TEXAS_KEY_BY_MOVEMENT: Record<string, TexasLiftKey> = { 'back-squat': 'backSquat', 'bench-press': 'benchPress', 'strict-press': 'strictPress' };
+
+/**
+ * Recupera las sesiones de un programa que se perdió al rehacer la temporada: el programa actual sigue desde la siguiente a la última hecha,
+ * con las sesiones pasadas a su nombre y, en el Texas, las marcas de los viernes logrados como su 5RM de trabajo. Solo si el programa aún no ha
+ * avanzado (cursor 0): nunca pisa lo que ya llevas.
+ */
+export function recoverCompanion(profile: AthleteProfile, programId: string, todayIso: string): AthleteProfile {
+  const program = (profile.strengthPrograms ?? []).find((p) => p.id === programId);
+  if (!program || !isCompanionProgram(program) || program.companion.cursor !== 0) return profile;
+  const entries = orphanCompanionEntries(profile, todayIso);
+  if (entries.length === 0) return profile;
+  const moved = new Set(entries.map((e) => e.id));
+  const adopted = entries.map((e) => ({ ...e, programId, id: `${programId}|${e.index}` }));
+  const last = entries[entries.length - 1];
+  const first = entries[0];
+  const achieved: Partial<Record<TexasLiftKey, number>> = {};
+  for (const e of entries.filter((x) => x.outcome === 'hecha')) {
+    for (const l of e.lifts ?? []) {
+      const key = TEXAS_KEY_BY_MOVEMENT[l.movementId];
+      if (key && l.attempt && l.achieved) achieved[key] = l.achieved;
+    }
+  }
+  const next = updateProgram(profile, programId, (p) => ({
+    ...p,
+    startDate: first.date < p.startDate ? first.date : p.startDate,
+    companion: {
+      ...(program.method === 'texas' && Object.keys(achieved).length > 0 ? recordFiveRm(p.companion, achieved) : p.companion),
+      cursor: last.index + 1,
+      lastResolvedOn: last.date,
+    },
+  }));
+  return { ...next, companionLog: [...(next.companionLog ?? []).filter((e) => !moved.has(e.id)), ...adopted] };
+}
+
 /** Cuántas sesiones se han hecho y se han saltado hasta ahora. */
 export function companionCounts(profile: AthleteProfile, programId: string): { done: number; skipped: number } {
   const log = (profile.companionLog ?? []).filter((e) => e.programId === programId);

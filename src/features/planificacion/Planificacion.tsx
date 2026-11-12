@@ -90,6 +90,7 @@ import { RexCorner } from '../dashboard/RexCorner';
 import { dismissSuggestion, dockStats, loadRexMemory, pickRexSuggestion, saveRexMemory, wasTyped, withTyped, type RexMemory, type RexTarget } from '../dashboard/rexDashboard';
 import { buildPlanRexSuggestions } from './rexPlan';
 import { CompanionCard, pickCompanionProgram } from './CompanionCard';
+import { CompanionRecover } from './CompanionRecover';
 import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk, undoWeekChange } from '../dashboard/rexAskRouter';
 import { peekUndo } from '../../lib/weekUndo';
@@ -939,6 +940,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setE1rmSuggestions((prev) => prev.filter((s) => s !== suggestion));
   }
 
+  /** «Corregir datos»: quita el registro de hoy y abre el cierre de la sesión, para volver a apuntar el resultado, el RPE y lo que se escaló. */
+  function handleRecordAgain() {
+    if (!session) return;
+    if (!window.confirm('Voy a quitar el registro de hoy para que lo apuntes otra vez (resultado del WOD, RPE, duración…). ¿Sigo?')) return;
+    athleteRepository.deleteHistoryEntry(session.date);
+    setHistory(athleteRepository.getHistory());
+    setWorkLog(athleteRepository.getWorkLog());
+    setPrUpdateMessage(null);
+    setE1rmSuggestions([]);
+    setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+    setShowCompletePanel(true);
+  }
+
   function handleUndoComplete() {
     if (!session) return;
     if (!window.confirm('¿Deshacer el registro de hoy? Esto no se puede deshacer.')) return;
@@ -1300,6 +1314,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     else if (target === 'plan-molestia') setShowPainPicker(true);
     else if (target === 'plan-avisos') setShowNotices(true);
     else if (target === 'plan-resumen') setShowSummary(true);
+    else if (target === 'plan-corregir') handleRecordAgain();
     else if (target === 'plan-cambiar') setShowRex(true);
     else if (target === 'plan-empezar') setFocusMode(true);
     else if (target === 'plan-terminar') setEditMode(false);
@@ -1454,6 +1469,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       )}
 
       {/* Sin macro activo hoy (p. ej. empieza mañana) el programa de fuerza también se ve: aún no ha empezado o se ofrece solo. */}
+      {!session && <CompanionRecover profile={profile} todayIso={todayIso} commit={commitCompanion} />}
       {!session && <CompanionCard profile={profile} history={history} todayIso={todayIso} commit={commitCompanion} light={null} />}
 
       {session && (
@@ -1711,6 +1727,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       )}
 
       {/* El programa de fuerza que convive con el macro: «¿quieres hacerla hoy?» bajo la sesión del día. */}
+      {!editMode && <CompanionRecover profile={profile} todayIso={todayIso} commit={commitCompanion} />}
       {!editMode && <CompanionCard
           profile={profile}
           history={history}
