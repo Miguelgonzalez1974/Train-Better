@@ -34,6 +34,7 @@ import {
 } from './rexDashboard';
 import { buildOpenItems } from '../objetivos/openItems';
 import { RexWeekly } from './RexWeekly';
+import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { LevelCard } from './LevelCard';
 import { applyGoalAdjustment, buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
@@ -673,6 +674,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           session={isToday ? athleteRepository.getCachedSession(dayIso) : (profile.sessionCache?.[dayIso] ?? null)}
           workLog={athleteRepository.getWorkLog()}
           companion={dayCompanion}
+          methodOf={(programId) => {
+            const m = (profile.strengthPrograms ?? []).find((p) => p.id === programId)?.method;
+            return m ? STRENGTH_METHOD_LABEL[m] : null;
+          }}
           onOpenPlan={isToday ? () => {
             setShowDone(false);
             onNavigateToPlanificacion();

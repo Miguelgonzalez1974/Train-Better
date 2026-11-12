@@ -23,6 +23,7 @@ export function DaySummaryModal({
   session,
   workLog,
   companion,
+  methodOf,
   onOpenPlan,
 }: {
   open: boolean;
@@ -32,6 +33,8 @@ export function DaySummaryModal({
   session: DailySession | null;
   workLog: WorkSetEntry[];
   companion: CompanionLogEntry[];
+  /** El nombre del método de un programa («Texas Method»), si se conoce: se enseña junto al título de la sección. */
+  methodOf?: (programId: string) => string | null;
   /** Ir a Planificación (solo hoy). */
   onOpenPlan?: () => void;
 }) {
@@ -42,6 +45,7 @@ export function DaySummaryModal({
     return names.length > 0 ? [{ label: 'Hecho', detail: names.join(' · ') }] : [];
   }, [entry, session, workLog]);
   const programs = useMemo(() => companion.map((c) => summarizeCompanionEntry(c, nameOf)), [companion]);
+  const methods = [...new Set(companion.map((c) => methodOf?.(c.programId)).filter((m): m is string => Boolean(m)))];
 
   return (
     <Modal open={open} onClose={onClose} title={`Lo que hiciste · ${dayLabel}`}>
@@ -72,7 +76,7 @@ export function DaySummaryModal({
         {programs.length > 0 && (
           <section aria-label="Programa de fuerza" className={`flex flex-col gap-2.5 ${entry ? 'border-t border-white/[0.06] pt-4' : ''}`}>
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
-              <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza
+              <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza{methods.length > 0 ? ` · ${methods.join(', ')}` : ''}
             </p>
             {programs.map((p, i) => (
               <div key={`${p.title}-${i}`} className="rounded-lg bg-white/[0.04] px-3 py-2.5">
