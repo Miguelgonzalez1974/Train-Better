@@ -9,6 +9,8 @@
 export type RexTarget =
   | 'checkin'
   | 'semana'
+  /** La ficha donde el coach propone mover un día de la semana (según tu curva de forma). */
+  | 'semana-mover'
   | 'revision-enfasis'
   | 'constancia'
   | 'volumen'
@@ -146,6 +148,8 @@ export interface RexContext {
   competitionClosedDaysAgo?: number | null;
   /** La próxima competición tiene fecha provisional y está a days días: Rex pide confirmarla. */
   provisionalCompetition?: { days: number; dateText: string } | null;
+  /** El coach propone mover un día de la semana (ver `lib/weekCoach.ts`): ya viene hecha la sugerencia, solo para hoy. */
+  weekMove?: RexSuggestion | null;
   /** Revisión de 4 semanas de lo que prioriza el coach, sin ver ni avisar. */
   emphasisReviewPending: boolean;
   nutritionPercent: number | null;
@@ -304,6 +308,8 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
       actions: [{ label: 'Repasar con Rex', target: 'semana' }],
     });
   }
+
+  if (ctx.isToday && ctx.weekMove) out.push(ctx.weekMove);
 
   if (ctx.emphasisReviewPending) {
     out.push({

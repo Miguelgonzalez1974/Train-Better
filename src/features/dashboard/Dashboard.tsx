@@ -47,7 +47,12 @@ import { explainDone, explainEffort, explainLoad, explainObjective, explainPlann
 import { dayBalance } from '../../engine/dayBalance';
 import { macroChip } from './dayHeader';
 import { dayAnswer, type AskAnswer } from './rexAsk';
-import { routeAsk } from './rexAskRouter';
+import { applyWeekPlan, routeAsk, undoWeekChange } from './rexAskRouter';
+import { WeekMoveCard } from './WeekMoveCard';
+import { weekMoveSuggestion, weekMoveTitle } from './rexWeekMove';
+import { shortSessionLabel } from './rexMove';
+import { proposeWeekMove, type WeekMoveProposal } from '../../lib/weekCoach';
+import { loadWeekMoveMemory, saveWeekMoveMemory, withWeekMoveStatus, type WeekMoveMemory, type WeekMoveStatus } from '../../lib/weekMoveMemory';
 import { describeDayForAsk } from './rexAskDay';
 import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
 import { DashTabs, DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
@@ -125,6 +130,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showDone, setShowDone] = useState(false);
   /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
   const [showWeekly, setShowWeekly] = useState<WeeklyReview | null>(null);
+  // El coach propone mover un día de la semana según tu curva de forma (ver `lib/weekCoach.ts`): la ficha y lo que se hizo ya esta semana.
+  // La propuesta abierta se guarda aparte: al aplicarla (o dejarla) deja de salir en Rex, pero la ficha sigue abierta para enseñar «Hecho» y «Deshacer».
+  const [openWeekMove, setOpenWeekMove] = useState<WeekMoveProposal | null>(null);
+  const [weekMoveMemory, setWeekMoveMemory] = useState<WeekMoveMemory>(() => loadWeekMoveMemory(typeof window !== 'undefined' ? window.localStorage : null));
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
   const [dayIso, setDayIso] = useState(() => toLocalIsoDate(new Date()));
   const [tab, setTab] = useState<DashTab>('resumen');
@@ -270,6 +279,23 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     ? dayBalance({ planned: dayStart.planned, real: shown.strain.real, target: shown.strain.target, status: shown.strain.status, isToday, prepMorning: dayStart.prep, prepNow: shown.readiness.total })
     : null;
   const provisionalNext = nextCompetitionGoal(profile.goals, todayIso);
+  // La propuesta del coach de mover un día fuerte a donde llegas mejor: una por semana (si se aplicó o se dejó para luego, no vuelve a salir).
+  const weekMoveProposal = useMemo(() => {
+    if (!isToday) return null;
+    try {
+      const found = proposeWeekMove(profile, history, todayIso, shortSessionLabel);
+      return found && !weekMoveMemory[found.weekKey] ? found : null;
+    } catch {
+      return null;
+    }
+  }, [isToday, profile, history, todayIso, weekMoveMemory]);
+  function markWeekMove(weekKey: string, status: WeekMoveStatus) {
+    setWeekMoveMemory((prev) => {
+      const next = withWeekMoveStatus(prev, weekKey, status);
+      saveWeekMoveMemory(typeof window !== 'undefined' ? window.localStorage : null, next);
+      return next;
+    });
+  }
   const rexList = buildRexSuggestions({
     // Mirando un día pasado, Rex habla de ese día y no de hoy.
     viewDay: isToday
@@ -308,6 +334,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     provisionalCompetition: provisionalNext?.provisional
       ? { days: isoDiffDays(todayIso, provisionalNext.targetDate), dateText: new Date(`${provisionalNext.targetDate}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' }).replace('.', '') }
       : null,
+    weekMove: weekMoveProposal ? weekMoveSuggestion(weekMoveProposal, todayIso) : null,
     emphasisReviewPending: emphasisReviewNew,
     nutritionPercent: isToday ? nutritionPercent : null,
     streak,
@@ -359,6 +386,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'semana':
         // Si hay una revisión pendiente (lunes a miércoles) se abre esa; si no, la última semana completa.
         return reviewable && setShowWeekly(reviewable);
+      case 'semana-mover':
+        return weekMoveProposal && setOpenWeekMove(weekMoveProposal);
       case 'revision-enfasis':
         return openEmphasisReview();
       case 'constancia':
@@ -501,6 +530,23 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             setShowBodyweight(true);
           }}
         />
+      )}
+      {openWeekMove && (
+        <Modal open onClose={() => setOpenWeekMove(null)} title={weekMoveTitle(openWeekMove)}>
+          <WeekMoveCard
+            proposal={openWeekMove}
+            todayIso={todayIso}
+            onApply={() => {
+              applyWeekPlan(openWeekMove.weekPlan, 'mover un día por tu forma', { onWeekChanged: () => setProfile(athleteRepository.getProfile()) });
+              markWeekMove(openWeekMove.weekKey, 'applied');
+            }}
+            onLater={() => markWeekMove(openWeekMove.weekKey, 'later')}
+            onUndo={() => {
+              undoWeekChange({ onWeekChanged: () => setProfile(athleteRepository.getProfile()) });
+            }}
+            onClose={() => setOpenWeekMove(null)}
+          />
+        </Modal>
       )}
       {showWeekly && (
         <Modal open onClose={() => setShowWeekly(null)} title="Revisión semanal">

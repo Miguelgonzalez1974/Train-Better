@@ -97,7 +97,7 @@ export function routeAsk(text: string, screen: RexScreen, api: RouterApi): AskAn
 }
 
 /** Guarda cómo estaba la semana (para deshacer) y aplica un cambio de sesiones: perfil con los descansos y las sesiones nuevas en la caché. */
-function applyWeekPlan(plan: WeekPlan, label: string, api: Pick<RouterApi, 'onWeekChanged'>): void {
+export function applyWeekPlan(plan: WeekPlan, label: string, api: Pick<RouterApi, 'onWeekChanged'>): void {
   saveUndo(buildUndo(plan, label));
   athleteRepository.saveProfile(plan.profile);
   for (const c of plan.changes) athleteRepository.saveCachedSession(c.after);
