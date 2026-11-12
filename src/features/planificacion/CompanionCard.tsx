@@ -15,6 +15,7 @@ import {
   undoDeclineCompanion,
   type CompanionProgram,
 } from '../../engine/strengthCompanion';
+import { summarizeCompanionEntry } from '../../engine/companionSummary';
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { getMovementById } from '../../data/movements';
 import { formatIsoDateShort } from '../../lib/dateFormat';
@@ -118,10 +119,40 @@ export function CompanionCard({
     );
   }
   if (status.kind === 'hecha-hoy') {
+    // Lo que hiciste hoy del programa, a la vista: el título, cómo salió y una línea por levantamiento (antes solo decía que estaba hecha).
+    const entry = (profile.companionLog ?? []).filter((e) => e.programId === id && e.date === todayIso).sort((a, b) => b.index - a.index)[0];
+    const done = entry ? summarizeCompanionEntry(entry, (mid) => getMovementById(mid)?.name ?? mid) : null;
+    if (!done || done.outcome === 'saltada') {
+      return (
+        <p id="companion-card" className="flex items-center gap-1.5 px-1 text-xs text-neutral-400">
+          <Check size={13} className="text-good" aria-hidden="true" /> {done ? 'Sesión del programa de fuerza saltada hoy.' : 'Sesión del programa de fuerza hecha hoy.'}
+        </p>
+      );
+    }
     return (
-      <p id="companion-card" className="flex items-center gap-1.5 px-1 text-xs text-neutral-400">
-        <Check size={13} className="text-good" aria-hidden="true" /> Sesión del programa de fuerza hecha hoy.
-      </p>
+      <section id="companion-card" aria-label="Programa de fuerza: hecha hoy" className="card flex flex-col gap-2 border border-white/10 p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
+            <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza
+          </p>
+          <span className="flex items-center gap-1 rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-semibold text-good">
+            <Check size={11} strokeWidth={3} aria-hidden="true" /> Hecha hoy
+          </span>
+        </div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-[15px] font-semibold leading-snug text-white">{done.title}</p>
+          {done.stats && <span className="text-xs text-neutral-400">{done.stats}</span>}
+        </div>
+        {done.lines.length > 0 && (
+          <ul className="flex flex-col divide-y divide-white/[0.06] rounded-lg bg-white/[0.03] px-3 text-sm text-neutral-200">
+            {done.lines.map((line) => (
+              <li key={line} className="py-2">
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     );
   }
   if (status.kind === 'aplazada') {
