@@ -133,7 +133,7 @@ export function CompanionCard({
       <section id="companion-card" aria-label="Programa de fuerza: hecha hoy" className="card flex flex-col gap-2 border border-white/10 p-3.5">
         <div className="flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
-            <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza
+            <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza · {STRENGTH_METHOD_LABEL[program.method]}
           </p>
           <span className="flex items-center gap-1 rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-semibold text-good">
             <Check size={11} strokeWidth={3} aria-hidden="true" /> Hecha hoy
@@ -217,7 +217,7 @@ export function CompanionCard({
     <section id="companion-card" aria-label="Programa de fuerza" className="card flex flex-col gap-2.5 border border-white/15 p-3.5">
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
-          <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza
+          <Dumbbell size={13} aria-hidden="true" /> Programa de fuerza · {STRENGTH_METHOD_LABEL[program.method]}
         </p>
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${plan.isTest ? 'bg-info/15 text-info' : late ? 'bg-warn/15 text-warn' : 'bg-white/10 text-neutral-300'}`}>{tag}</span>
       </div>
