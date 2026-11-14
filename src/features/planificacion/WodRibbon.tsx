@@ -23,13 +23,16 @@ export interface WodRibbonProps {
   big?: boolean;
   /** Pantalla completa apaisada: la cinta va a todo lo ancho del móvil, así que caben más tramos por fila y es más baja. */
   wide?: boolean;
+  /** Por movimientos la cinta solo enseña una vuelta: esta fila fina (solo apaisado) cuenta las rondas, con cómo fue cada una contra el fantasma. */
+  roundStrip?: { count: number; doneCount: number; deltas: (number | null)[] } | null;
   onTapActive?: () => void;
 }
 
 const MAX_PER_ROW = 6;
 const MAX_PER_ROW_WIDE = 12;
 
-export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDetail, big, wide, onTapActive }: WodRibbonProps) {
+export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDetail, big, wide, roundStrip, onTapActive }: WodRibbonProps) {
+  const strip = wide && roundStrip && roundStrip.count >= 2 ? roundStrip : null;
   const n = labels.length;
   const maxPerRow = wide ? MAX_PER_ROW_WIDE : MAX_PER_ROW;
   const perRow = n > maxPerRow ? Math.ceil(n / 2) : n;
@@ -50,10 +53,32 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
   })();
 
   // En el panel pequeño, con dos filas, cada una baja de altura para que la cinta no empuje el panel fuera de la pantalla.
-  const h = wide ? (rows.length > 1 ? 'h-11' : 'h-14') : big ? 'h-24' : rows.length > 1 ? 'h-11' : 'h-16';
+  const h = wide ? (rows.length > 1 || strip ? 'h-11' : 'h-14') : big ? 'h-24' : rows.length > 1 ? 'h-11' : 'h-16';
   const crowded = perRow > (wide ? 12 : 7);
   return (
-    <div className={`flex flex-col ${big && !wide ? 'gap-5 pt-5' : 'gap-4 pt-4'}`} role="group" aria-label="Tramos del WOD">
+    <div className={`flex flex-col ${big && !wide ? 'gap-5 pt-5' : strip ? 'gap-4 pt-1' : 'gap-4 pt-4'}`} role="group" aria-label="Tramos del WOD">
+      {strip && (
+        <div className="flex h-4 gap-[3px]" role="img" aria-label={`Rondas: ${strip.doneCount} de ${strip.count} hechas`}>
+          {Array.from({ length: strip.count }, (_, r) => {
+            const d = strip.deltas[r] ?? null;
+            const cls =
+              r < strip.doneCount
+                ? d === null
+                  ? 'bg-white/10 text-neutral-200'
+                  : d < -2
+                    ? 'bg-brand-orange/30 text-brand-orange'
+                    : 'bg-brand-neon/25 text-brand-neon'
+                : r === strip.doneCount
+                  ? 'border-[1.5px] border-brand-orange text-white'
+                  : 'border border-white/10 text-neutral-500';
+            return (
+              <div key={r} className={`flex min-w-0 flex-1 items-center justify-center rounded text-[11px] font-semibold leading-none ${cls}`}>
+                {r + 1}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {rows.map((row, r) => (
         <div key={r} className={`relative flex gap-[3px] ${h}`}>
           {row.map((i) => {

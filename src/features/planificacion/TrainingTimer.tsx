@@ -1066,7 +1066,22 @@ export function TrainingTimer({
     const lastMark = done > 0 ? marks[done - 1] : 0;
     const activeName = byMove ? info.movements[done % cycleLen] : `Ronda ${Math.min(done + 1, info.rounds)}`;
     const delta = durations ? liveDelta(durations, marks, workoutElapsed) : null;
+    // Por movimientos la cinta enseña una sola vuelta: la fila fina de rondas (apaisado) dice cuántas llevas y cómo fue cada una contra el fantasma.
+    const roundStrip =
+      byMove && info.rounds >= 2
+        ? {
+            count: info.rounds,
+            doneCount: Math.min(info.rounds, Math.floor(done / cycleLen)),
+            deltas: Array.from({ length: info.rounds }, (_, r) => {
+              if (!durations || done < (r + 1) * cycleLen) return null;
+              let sum = 0;
+              for (let k = r * cycleLen; k < (r + 1) * cycleLen; k++) sum += (durations[k] ?? 0) - (segs[k] ?? 0);
+              return Math.round(sum);
+            }),
+          }
+        : null;
     return {
+      roundStrip,
       labels,
       widths: labels.map((_, j) => durations?.[start + j] ?? 1),
       doneCount,
@@ -1187,7 +1202,7 @@ export function TrainingTimer({
             trackView
               ? {
                   ribbon: <WodRibbon big labels={trackView.labels} widths={trackView.widths} doneCount={trackView.doneCount} deltas={trackView.deltas} ghostAt={trackView.ghostAt} activeDetail={trackView.activeDetail} onTapActive={workoutRunning ? closeSegment : undefined} />,
-                  ribbonWide: <WodRibbon big wide labels={trackView.labels} widths={trackView.widths} doneCount={trackView.doneCount} deltas={trackView.deltas} ghostAt={trackView.ghostAt} activeDetail={trackView.activeDetail} onTapActive={workoutRunning ? closeSegment : undefined} />,
+                  ribbonWide: <WodRibbon big wide roundStrip={trackView.roundStrip} labels={trackView.labels} widths={trackView.widths} doneCount={trackView.doneCount} deltas={trackView.deltas} ghostAt={trackView.ghostAt} activeDetail={trackView.activeDetail} onTapActive={workoutRunning ? closeSegment : undefined} />,
                   roundLine: trackView.roundLine,
                   delta: trackView.deltaText,
                   deltaGood: (trackView.delta ?? 0) >= 0,
