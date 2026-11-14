@@ -185,7 +185,7 @@ interface FullscreenClockProps {
   extras?: { label: string; onClick: () => void }[];
   rounds?: { value: number; onAdd: () => void; onSub: () => void };
   /** Modo fantasma: sustituye al contador de rondas por la cinta de tramos y un botón grande que cierra el tramo activo. */
-  track?: { ribbon: ReactNode; roundLine: string; delta: string | null; deltaGood: boolean; buttonLabel: string; finished: boolean; canUndo: boolean; onTap: () => void; onUndo: () => void };
+  track?: { ribbon: ReactNode; ribbonWide: ReactNode; roundLine: string; delta: string | null; deltaGood: boolean; buttonLabel: string; finished: boolean; canUndo: boolean; onTap: () => void; onUndo: () => void };
   /** Barra de avance hasta un límite (time cap): `warn` la pone en naranja (último minuto o límite alcanzado). */
   progress?: { value: number; warn: boolean };
   onClose: () => void;
@@ -217,13 +217,20 @@ const CLOCK_COLORS = {
  */
 function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extras, rounds, track, progress, onClose }: FullscreenClockProps) {
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col gap-2 bg-black p-4" style={CLOCK_COLORS} role="dialog" aria-label="Reloj a pantalla completa">
+    <div className="fixed inset-0 z-[60] flex flex-col gap-2 bg-black p-4 landscape:pl-[max(1rem,env(safe-area-inset-left))] landscape:pr-[max(1rem,env(safe-area-inset-right))]" style={CLOCK_COLORS} role="dialog" aria-label="Reloj a pantalla completa">
       <div aria-hidden="true" className={`pointer-events-none absolute inset-0 transition-colors duration-300 ${tint ? TONE_TINT[tone] : ''}`} />
       <div className="relative z-10 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className={`truncate text-2xl font-extrabold uppercase tracking-[0.12em] ${TONE_TEXT[tone]}`}>{label}</p>
-          {sub && <p className="truncate text-lg font-semibold text-white">{sub}</p>}
+        {/* Apaisado con cinta: «ENTRENO · Quedan 12:20 · cap 15» en una línea, y a la derecha la ronda y la diferencia con el fantasma. */}
+        <div className={`min-w-0 ${track ? 'landscape:flex landscape:items-baseline landscape:gap-3' : ''}`}>
+          <p className={`truncate font-extrabold uppercase tracking-[0.12em] ${TONE_TEXT[tone]} ${track ? 'text-2xl landscape:text-lg' : 'text-2xl'}`}>{label}</p>
+          {sub && <p className={`truncate font-semibold text-white ${track ? 'text-lg landscape:text-base' : 'text-lg'}`}>{sub}</p>}
         </div>
+        {track && (
+          <div className="ml-auto hidden shrink-0 items-baseline gap-3 landscape:flex" aria-live="polite">
+            <p className="text-base font-semibold text-neutral-300">{track.roundLine}</p>
+            {track.delta !== null && <p className={`text-2xl font-black tabular-nums ${track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta}</p>}
+          </div>
+        )}
         <button onClick={onClose} aria-label="Salir de pantalla completa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-white active:bg-white/30">
           <Minimize2 size={22} />
         </button>
@@ -237,26 +244,53 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col items-stretch gap-3 landscape:flex-row">
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
-          <p className="font-black leading-none tabular-nums text-white" style={{ fontSize: track ? 'min(30vh, 15vw)' : 'min(48vh, 27vw)' }} aria-live="off">
+          <p
+            className={`font-black leading-none tabular-nums text-white ${track ? '[font-size:min(30vh,15vw)] landscape:[font-size:min(46vh,22vw)]' : ''}`}
+            style={track ? undefined : { fontSize: 'min(48vh, 27vw)' }}
+            aria-live="off"
+          >
             {time}
           </p>
         </div>
         {track && (
-          <div className="flex min-h-0 shrink-0 flex-col justify-center gap-3 landscape:w-[58%]" aria-live="polite">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className={`text-3xl font-black tabular-nums ${track.delta === null ? 'text-neutral-300' : track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta ?? track.roundLine}</p>
-              {track.delta !== null && <p className="text-base font-semibold text-neutral-300">{track.roundLine}</p>}
+          <>
+            {/* Vertical: delta, cinta y botón en una columna bajo el reloj. */}
+            <div className="flex min-h-0 shrink-0 flex-col justify-center gap-3 landscape:hidden" aria-live="polite">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className={`text-3xl font-black tabular-nums ${track.delta === null ? 'text-neutral-300' : track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta ?? track.roundLine}</p>
+                {track.delta !== null && <p className="text-base font-semibold text-neutral-300">{track.roundLine}</p>}
+              </div>
+              {track.ribbon}
+              <div className="flex items-stretch gap-2">
+                <button onClick={track.onTap} disabled={track.finished} className="flex flex-1 items-center justify-center rounded-2xl bg-brand-neon py-5 text-2xl font-black text-black active:opacity-80 disabled:opacity-40">
+                  {track.buttonLabel}
+                </button>
+                <button onClick={track.onUndo} disabled={!track.canUndo} className="rounded-2xl border-2 border-white/30 px-5 text-base font-bold text-white active:bg-white/20 disabled:opacity-30">
+                  Deshacer
+                </button>
+              </div>
             </div>
-            {track.ribbon}
-            <div className="flex items-stretch gap-2">
-              <button onClick={track.onTap} disabled={track.finished} className="flex flex-1 items-center justify-center rounded-2xl bg-brand-neon py-5 text-2xl font-black text-black active:opacity-80 disabled:opacity-40">
+            {/* Apaisado: el botón del tramo a la derecha de las cifras, con Deshacer, Pausa y Reiniciar debajo; la cinta va aparte, a todo lo ancho. */}
+            <div className="hidden min-h-0 shrink-0 flex-col justify-center gap-2 landscape:flex landscape:w-[38%]">
+              <button onClick={track.onTap} disabled={track.finished} className="flex min-h-[4.5rem] flex-1 items-center justify-center rounded-2xl bg-brand-neon px-3 text-center text-2xl font-black leading-tight text-black active:opacity-80 disabled:opacity-40">
                 {track.buttonLabel}
               </button>
-              <button onClick={track.onUndo} disabled={!track.canUndo} className="rounded-2xl border-2 border-white/30 px-5 text-base font-bold text-white active:bg-white/20 disabled:opacity-30">
-                Deshacer
-              </button>
+              <div className="flex items-stretch gap-2">
+                <button onClick={track.onUndo} disabled={!track.canUndo} className="rounded-xl border-2 border-white/30 px-3 py-2.5 text-sm font-bold text-white active:bg-white/20 disabled:opacity-30">
+                  Deshacer
+                </button>
+                <button onClick={primary.onClick} className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-base font-extrabold text-black active:opacity-80 ${TONE_BG[tone]}`}>
+                  {primary.running ? <Pause size={18} strokeWidth={3} /> : <Play size={18} strokeWidth={3} />}
+                  {primary.label}
+                </button>
+                {onReset && (
+                  <button onClick={onReset} aria-label="Reiniciar" className="rounded-xl border-2 border-white/30 px-3 text-white active:bg-white/20">
+                    <RotateCcw size={18} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
         {rounds && (
           <div className="flex shrink-0 items-stretch gap-2 landscape:w-[32%] landscape:flex-col">
@@ -279,7 +313,14 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
         )}
       </div>
 
-      <div className="relative z-10 flex items-stretch gap-2">
+      {/* Apaisado: la cinta de tramos a todo lo ancho del móvil, con los nombres completos. */}
+      {track && (
+        <div className="relative z-10 hidden shrink-0 landscape:block" aria-live="polite">
+          {track.ribbonWide}
+        </div>
+      )}
+
+      <div className={`relative z-10 flex items-stretch gap-2 ${track ? 'landscape:hidden' : ''}`}>
         {extras?.map((e) => (
           <button key={e.label} onClick={e.onClick} className="rounded-2xl border-2 border-white/30 px-6 py-4 text-lg font-bold text-white active:bg-white/20">
             {e.label}
@@ -1146,6 +1187,7 @@ export function TrainingTimer({
             trackView
               ? {
                   ribbon: <WodRibbon big labels={trackView.labels} widths={trackView.widths} doneCount={trackView.doneCount} deltas={trackView.deltas} ghostAt={trackView.ghostAt} activeDetail={trackView.activeDetail} onTapActive={workoutRunning ? closeSegment : undefined} />,
+                  ribbonWide: <WodRibbon big wide labels={trackView.labels} widths={trackView.widths} doneCount={trackView.doneCount} deltas={trackView.deltas} ghostAt={trackView.ghostAt} activeDetail={trackView.activeDetail} onTapActive={workoutRunning ? closeSegment : undefined} />,
                   roundLine: trackView.roundLine,
                   delta: trackView.deltaText,
                   deltaGood: (trackView.delta ?? 0) >= 0,

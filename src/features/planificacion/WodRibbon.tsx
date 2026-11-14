@@ -21,14 +21,18 @@ export interface WodRibbonProps {
   activeDetail?: string;
   /** Pantalla completa: más alta y con letra grande. */
   big?: boolean;
+  /** Pantalla completa apaisada: la cinta va a todo lo ancho del móvil, así que caben más tramos por fila y es más baja. */
+  wide?: boolean;
   onTapActive?: () => void;
 }
 
 const MAX_PER_ROW = 6;
+const MAX_PER_ROW_WIDE = 12;
 
-export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDetail, big, onTapActive }: WodRibbonProps) {
+export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDetail, big, wide, onTapActive }: WodRibbonProps) {
   const n = labels.length;
-  const perRow = n > MAX_PER_ROW ? Math.ceil(n / 2) : n;
+  const maxPerRow = wide ? MAX_PER_ROW_WIDE : MAX_PER_ROW;
+  const perRow = n > maxPerRow ? Math.ceil(n / 2) : n;
   const rows = Array.from({ length: Math.ceil(n / perRow) }, (_, r) => Array.from({ length: Math.min(perRow, n - r * perRow) }, (_, i) => r * perRow + i));
   const avg = widths.reduce((s, w) => s + w, 0) / Math.max(1, n) || 1;
   const grow = (i: number) => Math.max(widths[i] || avg, avg * 0.55);
@@ -46,9 +50,10 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
   })();
 
   // En el panel pequeño, con dos filas, cada una baja de altura para que la cinta no empuje el panel fuera de la pantalla.
-  const h = big ? 'h-24' : rows.length > 1 ? 'h-11' : 'h-16';
+  const h = wide ? (rows.length > 1 ? 'h-11' : 'h-14') : big ? 'h-24' : rows.length > 1 ? 'h-11' : 'h-16';
+  const crowded = perRow > (wide ? 12 : 7);
   return (
-    <div className={`flex flex-col ${big ? 'gap-5 pt-5' : 'gap-4 pt-4'}`} role="group" aria-label="Tramos del WOD">
+    <div className={`flex flex-col ${big && !wide ? 'gap-5 pt-5' : 'gap-4 pt-4'}`} role="group" aria-label="Tramos del WOD">
       {rows.map((row, r) => (
         <div key={r} className={`relative flex gap-[3px] ${h}`}>
           {row.map((i) => {
@@ -65,18 +70,17 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
                 ? 'border-2 border-brand-orange bg-white/5 text-white'
                 : 'border border-white/10 text-neutral-500';
             // Con muchas rondas por fila, el rótulo «R12» pasa a «12» y las cifras de abajo a letra pequeña, para que no se corten.
-            const crowded = perRow > 7;
             const label = crowded && /^R\d+$/.test(labels[i]) ? labels[i].slice(1) : labels[i];
             const body = (
               <>
-                <span className={`block w-full truncate font-bold ${big ? 'text-base' : 'text-xs'}`}>{label}</span>
+                <span className={`block w-full truncate font-bold ${big && !wide ? 'text-base' : wide ? 'text-sm' : 'text-xs'}`}>{label}</span>
                 <span className={`block w-full truncate ${big ? 'text-sm' : crowded ? 'text-[10px]' : 'text-[11px]'} ${done ? '' : 'font-medium opacity-80'}`}>
                   {done ? (delta === null ? '✓' : delta > 2 ? `−${secondsText(delta)}` : delta < -2 ? `+${secondsText(delta)}` : '=') : active ? (activeDetail ?? '') : ''}
                 </span>
               </>
             );
             // Con muchos tramos por fila el relleno lateral se reduce: así 20 tramos caben en un móvil de 360 px.
-            const base = `flex min-w-0 flex-col justify-between overflow-hidden rounded-lg py-1.5 text-left ${perRow > 7 ? 'px-0.5' : 'px-1.5'}`;
+            const base = `flex min-w-0 flex-col justify-between overflow-hidden rounded-lg py-1.5 text-left ${crowded ? 'px-0.5' : 'px-1.5'}`;
             return active && onTapActive ? (
               <button key={i} onClick={onTapActive} aria-label={`${labels[i]} hecho`} style={{ flexGrow: grow(i), flexBasis: 0 }} className={`${base} ${cls} active:bg-white/15`}>
                 {body}
@@ -90,7 +94,7 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
           {ghostRow === r && (
             <div aria-hidden="true" className="pointer-events-none absolute -bottom-1 -top-1 w-0.5 rounded-full bg-white" style={{ left: `${ghostLeft}%` }}>
               {/* El rótulo se alinea al borde cuando el fantasma está cerca de un extremo, para que no se salga de la cinta. */}
-              <span className={`absolute -top-3.5 whitespace-nowrap text-[10px] font-semibold text-white ${ghostLeft < 14 ? 'left-0' : ghostLeft > 86 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>Fantasma</span>
+              <span className={`absolute -top-3.5 whitespace-nowrap ${wide ? 'text-xs' : 'text-[10px]'} font-semibold text-white ${ghostLeft < 14 ? 'left-0' : ghostLeft > 86 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>Fantasma</span>
             </div>
           )}
         </div>
