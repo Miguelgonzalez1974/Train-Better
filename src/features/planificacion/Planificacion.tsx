@@ -109,6 +109,7 @@ import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSess
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
+import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type GhostSummary } from '../../engine/wodGhost';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
 import { ProfileEmphasisLine } from './ProfileEmphasis';
@@ -370,7 +371,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // en un día suave (descarga, recuperación, semáforo ámbar o rojo): ahí el coach no empuja a correr contra nadie.
   const trackConfigs = useMemo<Partial<Record<1 | 2, TrackConfig | null>>>(() => {
     if (!session) return {};
-    const soft = Boolean(session.deloadReason) || session.dayLight?.color === 'ambar' || session.dayLight?.color === 'rojo' || session.dayIntensity === 'baja';
+    const soft = isSoftDay(session);
     const out: Partial<Record<1 | 2, TrackConfig | null>> = {};
     for (const part of wodParts) {
       const info = wodTrackInfo(session, part, wodScoreTypes[part]);

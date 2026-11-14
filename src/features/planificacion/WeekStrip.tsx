@@ -9,6 +9,8 @@ import type { AthleteProfile, DailySession, DayLightInfo, Goal, SessionHistoryEn
 import { Modal } from '../shell/Modal';
 import { CompanionDayBlock } from './CompanionDayBlock';
 import { DaySessionBlocks } from './DaySessionBlocks';
+import { TrainingTimer } from './TrainingTimer';
+import { clockPropsFor } from './clockProps';
 import { ensureWeekLocked } from './weeklyLock';
 import { LogPastDay } from './LogPastDay';
 import { wodResultsOf } from '../../engine/wodScoring';
@@ -335,8 +337,14 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           const entry = history.find((h) => h.date === dateIso);
           const isPast = dateIso < todayIso;
           const isToday = dateIso === todayIso;
+          // El crono de la vista previa de otro día: cronometra el WOD de ese día (con su cinta y su fantasma) y no guarda nada.
+          const previewClock =
+            !entry && !isPast && !isToday && expandedPreview && !expandedPreview.isRestDay && expandedPreview.source !== 'custom'
+              ? clockPropsFor(expandedPreview, history, profile.wodGhosts ?? [])
+              : null;
 
           return (
+            <>
             <Modal open onClose={() => { setExpanded(null); setLoggingFor(null); }} title={`${DAY_LABELS[expanded]} · ${dateIso}`}>
               {entry ? (
                 <div className="flex flex-col gap-2 text-sm">
@@ -417,13 +425,15 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               ) : expandedPreview?.isRestDay ? (
                 <p className="text-sm text-neutral-400">Descanso</p>
               ) : expandedPreview ? (
-                <DaySessionBlocks session={expandedPreview} />
+                <DaySessionBlocks session={expandedPreview} clockScope="preview" />
               ) : (
                 <p className="text-sm text-neutral-400">Sin macrociclo activo ese día todavía — ese día decides tú qué hacer.</p>
               )}
               {/* El programa de fuerza (Texas) de ese día: lo hecho o la sesión prevista. */}
               <CompanionDayBlock profile={profile} history={history} dateIso={dateIso} todayIso={todayIso} />
             </Modal>
+            {previewClock && <TrainingTimer scope="preview" caps={previewClock.caps} track={previewClock.track} />}
+            </>
           );
         })()}
     </div>

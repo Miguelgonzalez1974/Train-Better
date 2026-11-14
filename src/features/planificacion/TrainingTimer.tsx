@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { Timer, Pause, Play, RotateCcw, X, Minus, Plus, Maximize2, Minimize2 } from 'lucide-react';
 import { capStep, capView, clockStopToRecord, readClockRuns, recordClockStop } from './workoutClockResult';
 import type { WodCap } from '../../engine/wodCap';
-import { clockBus, clockState } from '../../lib/clockState';
+import { clockBus, clockState, type ClockScope } from '../../lib/clockState';
 import { WodRibbon } from './WodRibbon';
 import { deltaText, ghostPosition, liveDelta, marksToSegments, trackTotal, type Ghost, type TrackMode, type WodTrackInfo } from '../../engine/wodGhost';
 
@@ -510,7 +510,17 @@ function TabataConfigRow({
  * Vive mientras haya una sesión activa en Planificación; el estado se pierde al salir de la
  * pestaña, aceptable para un reloj que solo importa durante el entreno de hoy.
  */
-export function TrainingTimer({ caps, track }: { caps?: Partial<Record<1 | 2, WodCap | null>>; track?: Partial<Record<1 | 2, TrackConfig | null>> } = {}) {
+export function TrainingTimer({
+  caps,
+  track,
+  scope = 'main',
+}: {
+  caps?: Partial<Record<1 | 2, WodCap | null>>;
+  track?: Partial<Record<1 | 2, TrackConfig | null>>;
+  /** `preview`: el reloj de la vista previa de otro día — cronometra el WOD de ese día sin guardar nada y se pinta por encima de su ventana. */
+  scope?: ClockScope;
+} = {}) {
+  const preview = scope === 'preview';
   const [expanded, setExpanded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [mode, setMode] = useState<TimerMode>('rest');
@@ -589,7 +599,7 @@ export function TrainingTimer({ caps, track }: { caps?: Partial<Record<1 | 2, Wo
   const workoutRafRef = useRef<number | null>(null);
   // Tanda del cronómetro de hoy (de arrancar desde cero hasta reiniciar): la siguiente a las ya guardadas. Cada vez que
   // paras, el tiempo y las rondas quedan guardados para el resultado del WOD al cerrar la sesión (ver workoutClockResult).
-  const workoutRunRef = useRef(readClockRuns().length);
+  const workoutRunRef = useRef(preview ? 0 : readClockRuns().length);
 
   // Time cap (o duración del AMRAP): el del WOD de hoy, o el que el atleta ponga a mano. `undefined` = el del WOD, `null` = sin cap.
   const [capOverride, setCapOverride] = useState<number | null | undefined>(undefined);
@@ -656,6 +666,8 @@ export function TrainingTimer({ caps, track }: { caps?: Partial<Record<1 | 2, Wo
   useEffect(() => {
     if (workoutRunning || workoutElapsed < 1) return;
     const stop = clockStopToRecord({ elapsed: workoutElapsed, rounds, snapshot: capSnapshotRef.current, continuedPastCap: capContinued });
+    // La vista previa de otro día no guarda nada: el reloj guarda «lo de hoy» y ensuciaría el resultado del WOD de hoy.
+    if (preview) return;
     recordClockStop(workoutRunRef.current, trackOn && marks.length > 0 ? { ...stop, marks, trackMode } : stop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutRunning, workoutElapsed, rounds, capContinued, marks]);
@@ -1029,18 +1041,24 @@ export function TrainingTimer({ caps, track }: { caps?: Partial<Record<1 | 2, Wo
 
   // El reloj abierto, en marcha o con un resultado sin cerrar: Rex se pliega (ver `lib/clockState`).
   const clockInUse = expanded || fullscreen || Boolean(preStartFor) || running || done || capHit || workoutRunning || workoutElapsed >= 1 || emomRunning || emomDone || tabataRunning || tabataDone;
+  // (El reloj de la vista previa de otro día no toca esto: no es el entreno de hoy.)
   useEffect(() => {
-    clockState.setActive(clockInUse);
-  }, [clockInUse]);
-  useEffect(() => () => clockState.setActive(false), []);
+    if (!preview) clockState.setActive(clockInUse);
+  }, [clockInUse, preview]);
+  useEffect(
+    () => () => {
+      if (!preview) clockState.setActive(false);
+    },
+    [preview],
+  );
   // Cualquier botón «Reloj» de la app (el del WOD, el del modo enfocado) lo abre en el modo que toque.
   useEffect(
     () =>
       clockBus.on((m) => {
         setMode(m ?? 'workout');
         setExpanded(true);
-      }),
-    [],
+      }, scope),
+    [scope],
   );
 
   // Con el reloj a pantalla completa la página de detrás no se desplaza.
@@ -1256,7 +1274,7 @@ export function TrainingTimer({ caps, track }: { caps?: Partial<Record<1 | 2, Wo
     if (!strip) return null;
     const btn = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/15 text-black transition-colors hover:bg-black/25 active:bg-black/30';
     return (
-      <div role="region" aria-label="Reloj del entreno" className="fixed inset-x-0 top-0 z-40 px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:left-[17rem] md:px-6">
+      <div role="region" aria-label="Reloj del entreno" className={`fixed inset-x-0 top-0 ${preview ? 'z-[55]' : 'z-40'} px-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:left-[17rem] md:px-6`}>
         <div className={`relative mx-auto flex max-w-2xl items-center gap-2 overflow-hidden rounded-2xl px-3 py-2 text-black shadow-lg shadow-black/40 ${TONE_BG[strip.tone]} ${strip.pulse ? 'animate-pulse motion-reduce:animate-none' : ''}`}>
           <button onClick={() => openTo(strip.mode)} aria-label={`${strip.label}: ${strip.time}. Abrir el reloj`} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
             <Timer size={18} strokeWidth={2.5} aria-hidden="true" className="shrink-0" />
@@ -1299,7 +1317,8 @@ export function TrainingTimer({ caps, track }: { caps?: Partial<Record<1 | 2, Wo
   }
 
   return (
-    <div className="fixed bottom-24 left-4 md:left-[17rem] z-40 w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6">
+    <div className={`fixed bottom-24 left-4 md:left-[17rem] ${preview ? 'z-[55]' : 'z-40'} w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6`}>
+      {preview && <p className="mb-2 rounded-lg bg-white/5 px-3 py-1.5 text-[11px] leading-relaxed text-neutral-400">Vista previa del WOD de ese día: lo que cronometres aquí no se guarda.</p>}
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex flex-1 gap-0.5 rounded-lg bg-white/5 p-0.5">
           <button

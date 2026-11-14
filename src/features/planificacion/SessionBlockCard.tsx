@@ -21,7 +21,7 @@ import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
 import { RpeCheckIn } from './RpeCheckIn';
-import { clockBus } from '../../lib/clockState';
+import { clockBus, type ClockScope } from '../../lib/clockState';
 
 export { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
 
@@ -1302,6 +1302,8 @@ interface SessionBlockCardProps {
    * al abrirlo. Lo controla quien pinta la lista (`DaySessionBlocks`). No aplica en edición.
    */
   indexMode?: { preview: ReactNode; open: boolean; onToggle: () => void };
+  /** Qué reloj abre el botón «Crono» del WOD: el de hoy (por defecto) o el de la vista previa de otro día. */
+  clockScope?: ClockScope;
 }
 
 export function SessionBlockCard({
@@ -1317,6 +1319,7 @@ export function SessionBlockCard({
   setFeedbackByIndex,
   onRateSet,
   indexMode,
+  clockScope = 'main',
 }: SessionBlockCardProps) {
   if (results.length === 0) return null;
   const asIndex = Boolean(indexMode) && !editable;
@@ -1366,7 +1369,7 @@ export function SessionBlockCard({
             {/* El reloj del WOD: parado no hay botón flotante; se abre desde aquí (cronómetro con el cap del WOD). */}
             {block === 'wod' && (
               <button
-                onClick={() => clockBus.open('workout')}
+                onClick={() => clockBus.open('workout', clockScope)}
                 aria-label="Abrir el crono del WOD"
                 title="Crono del WOD"
                 className="group flex shrink-0 flex-col items-center gap-1 transition-all duration-200 active:scale-95"

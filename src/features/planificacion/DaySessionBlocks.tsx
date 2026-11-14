@@ -7,6 +7,7 @@ import { BlockPreview } from './BlockPreview';
 import { buildTaskSections, SessionTaskView } from './SessionTaskView';
 import type { MovementProgressData } from './LoadStat';
 import { EmphasisTag } from './ProfileEmphasis';
+import type { ClockScope } from '../../lib/clockState';
 
 export const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
 
@@ -24,6 +25,8 @@ interface DaySessionBlocksProps {
   onRateSet?: (index: number, rpe: number) => void;
   /** Al cambiar de día, abrir el bloque principal (fuerza, oly o WOD) y dejar el resto plegado. Una sesión ya hecha entra toda plegada. */
   autoOpenMain?: boolean;
+  /** Qué reloj abre el «Crono» del WOD: el de hoy (por defecto) o el de la vista previa de otro día (`WeekStrip`). */
+  clockScope?: ClockScope;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
@@ -37,6 +40,7 @@ export function DaySessionBlocks({
   setFeedbackByIndex,
   onRateSet,
   autoOpenMain = false,
+  clockScope,
 }: DaySessionBlocksProps) {
   // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
   // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
@@ -117,6 +121,7 @@ export function DaySessionBlocks({
               setFeedbackByIndex={setFeedbackByIndex}
               onRateSet={onRateSet}
               onUpdateEntry={onUpdateEntry}
+              clockScope={clockScope}
               indexMode={{
                 preview: <BlockPreview block={block} results={results} progress={progress} />,
                 open: openBlocks.has(block),

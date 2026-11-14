@@ -12,6 +12,20 @@ describe('clockBus', () => {
     expect(clockBus.open('workout')).toBe(0);
     expect(fn).toHaveBeenCalledTimes(2);
   });
+
+  it('un botón «Crono» abre solo el reloj de su ámbito: el de hoy no se abre desde la vista previa de otro día, ni al revés', () => {
+    const main = vi.fn();
+    const preview = vi.fn();
+    const offMain = clockBus.on(main);
+    const offPreview = clockBus.on(preview, 'preview');
+    expect(clockBus.open('workout')).toBe(1);
+    expect(clockBus.open('workout', 'preview')).toBe(1);
+    expect(main).toHaveBeenCalledTimes(1);
+    expect(preview).toHaveBeenCalledTimes(1);
+    offPreview();
+    expect(clockBus.open('workout', 'preview')).toBe(0);
+    offMain();
+  });
 });
 
 describe('clockState', () => {
