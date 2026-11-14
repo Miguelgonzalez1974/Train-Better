@@ -45,7 +45,8 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
     return ((before + ghostFrac * grow(ghostIndex)) / total) * 100;
   })();
 
-  const h = big ? 'h-24' : 'h-16';
+  // En el panel pequeño, con dos filas, cada una baja de altura para que la cinta no empuje el panel fuera de la pantalla.
+  const h = big ? 'h-24' : rows.length > 1 ? 'h-11' : 'h-16';
   return (
     <div className={`flex flex-col ${big ? 'gap-5 pt-5' : 'gap-4 pt-4'}`} role="group" aria-label="Tramos del WOD">
       {rows.map((row, r) => (
@@ -63,15 +64,19 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
               : active
                 ? 'border-2 border-brand-orange bg-white/5 text-white'
                 : 'border border-white/10 text-neutral-500';
+            // Con muchas rondas por fila, el rótulo «R12» pasa a «12» y las cifras de abajo a letra pequeña, para que no se corten.
+            const crowded = perRow > 7;
+            const label = crowded && /^R\d+$/.test(labels[i]) ? labels[i].slice(1) : labels[i];
             const body = (
               <>
-                <span className={`block w-full truncate font-bold ${big ? 'text-base' : 'text-xs'}`}>{labels[i]}</span>
-                <span className={`block w-full truncate ${big ? 'text-sm' : 'text-[11px]'} ${done ? '' : 'font-medium opacity-80'}`}>
+                <span className={`block w-full truncate font-bold ${big ? 'text-base' : 'text-xs'}`}>{label}</span>
+                <span className={`block w-full truncate ${big ? 'text-sm' : crowded ? 'text-[10px]' : 'text-[11px]'} ${done ? '' : 'font-medium opacity-80'}`}>
                   {done ? (delta === null ? '✓' : delta > 2 ? `−${secondsText(delta)}` : delta < -2 ? `+${secondsText(delta)}` : '=') : active ? (activeDetail ?? '') : ''}
                 </span>
               </>
             );
-            const base = 'flex min-w-0 flex-col justify-between overflow-hidden rounded-lg px-1.5 py-1.5 text-left';
+            // Con muchos tramos por fila el relleno lateral se reduce: así 20 tramos caben en un móvil de 360 px.
+            const base = `flex min-w-0 flex-col justify-between overflow-hidden rounded-lg py-1.5 text-left ${perRow > 7 ? 'px-0.5' : 'px-1.5'}`;
             return active && onTapActive ? (
               <button key={i} onClick={onTapActive} aria-label={`${labels[i]} hecho`} style={{ flexGrow: grow(i), flexBasis: 0 }} className={`${base} ${cls} active:bg-white/15`}>
                 {body}

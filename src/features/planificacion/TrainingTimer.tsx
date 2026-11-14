@@ -1317,7 +1317,9 @@ export function TrainingTimer({
   }
 
   return (
-    <div className={`fixed bottom-24 left-4 md:left-[17rem] ${preview ? 'z-[55]' : 'z-40'} w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6`}>
+    <div
+      className={`fixed bottom-24 left-4 md:left-[17rem] ${preview ? 'z-[55]' : 'z-40'} max-h-[calc(100dvh-9.5rem)] w-[calc(100vw-2rem)] max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-brand-surface p-4 shadow-2xl shadow-black/50 ring-1 ring-brand-border md:bottom-6 md:max-h-[calc(100dvh-5.5rem)]`}
+    >
       {preview && <p className="mb-2 rounded-lg bg-white/5 px-3 py-1.5 text-[11px] leading-relaxed text-neutral-400">Vista previa del WOD de ese día: lo que cronometres aquí no se guarda.</p>}
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex flex-1 gap-0.5 rounded-lg bg-white/5 p-0.5">
@@ -1421,7 +1423,7 @@ export function TrainingTimer({
             editable={!workoutRunning && !capHit}
             onChange={setCapOverride}
           />
-          <p className={`py-1 text-center text-[5.5rem] font-bold leading-none tabular-nums ${capHit || lastMinute ? 'text-brand-orange' : 'text-white'}`}>
+          <p className={`py-1 text-center ${trackView && trackView.labels.length > 6 ? 'text-[4.5rem]' : 'text-[5.5rem]'} font-bold leading-none tabular-nums ${capHit || lastMinute ? 'text-brand-orange' : 'text-white'}`}>
             {mmss(workoutElapsed)}
           </p>
           {effectiveCap && (
@@ -1457,8 +1459,13 @@ export function TrainingTimer({
             />
           )}
 
-          <ScreenLockToggle screenLockOn={screenLockOn} supported={wakeLock.supported} onChange={setScreenLock} />
-          <WakeLockStatusLine supported={wakeLock.supported} screenLockOn={screenLockOn} running={workoutRunning} held={wakeLock.held} />
+          {/* Con la cinta en marcha el panel necesita la altura para el reloj, la cinta y el botón: la pantalla ya está activa y no hace falta repetirlo. */}
+          {!(trackView && workoutRunning) && (
+            <>
+              <ScreenLockToggle screenLockOn={screenLockOn} supported={wakeLock.supported} onChange={setScreenLock} />
+              <WakeLockStatusLine supported={wakeLock.supported} screenLockOn={screenLockOn} running={workoutRunning} held={wakeLock.held} />
+            </>
+          )}
 
           {/* Modo fantasma: la cinta de tramos y un botón grande que cierra el tramo activo (sustituyen al contador de rondas). */}
           {trackView && (
