@@ -26,6 +26,7 @@ import type {
   WodResult,
   WodScalingEntry,
   WodScoreType,
+  WodSplitsRecord,
 } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { buildWodDetail } from '../../engine/wodMovements';
@@ -107,7 +108,8 @@ import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companion
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
-import { TrainingTimer } from './TrainingTimer';
+import { TrainingTimer, type TrackConfig } from './TrainingTimer';
+import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type GhostSummary } from '../../engine/wodGhost';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
 import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
@@ -363,6 +365,42 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const wodCaps = useMemo<Record<1 | 2, WodCap | null>>(
     () => ({ 1: session ? wodCapFor(session, 1) : null, 2: session ? wodCapFor(session, 2) : null }),
     [session],
+  );
+  // El modo fantasma del reloj: los tramos del WOD de cada parte (solo los WODs por tiempo) y el fantasma contra el que correr. Viene apagado
+  // en un día suave (descarga, recuperación, semáforo ámbar o rojo): ahí el coach no empuja a correr contra nadie.
+  const trackConfigs = useMemo<Partial<Record<1 | 2, TrackConfig | null>>>(() => {
+    if (!session) return {};
+    const soft = Boolean(session.deloadReason) || session.dayLight?.color === 'ambar' || session.dayLight?.color === 'rojo' || session.dayIntensity === 'baja';
+    const out: Partial<Record<1 | 2, TrackConfig | null>> = {};
+    for (const part of wodParts) {
+      const info = wodTrackInfo(session, part, wodScoreTypes[part]);
+      out[part] = info ? { info, ghostFor: (mode) => pickGhost({ info, mode, todayIso: session.date, history, ghosts: profile.wodGhosts ?? [] }), ghostDefaultOff: soft } : null;
+    }
+    return out;
+  }, [session, wodParts, wodScoreTypes, history, profile.wodGhosts]);
+  /** Los parciales cronometrados hoy en cada parte del WOD (los del reloj de entreno), como se guardarían. Solo el día de hoy y las partes no saltadas. */
+  function splitRecordsToday(): WodSplitsRecord[] {
+    if (!session || session.date !== toLocalIsoDate(new Date())) return [];
+    const runs = readClockRuns(session.date);
+    const out: WodSplitsRecord[] = [];
+    for (const part of wodParts) {
+      const cfg = trackConfigs[part];
+      const stop = pickClockStop(runs, part, wodParts.length);
+      if (!cfg || !stop?.marks || skips[part === 1 ? 'wod1' : 'wod2']) continue;
+      const record = buildSplitsRecord({ date: session.date, info: cfg.info, mode: stop.trackMode ?? cfg.info.defaultMode, marks: stop.marks, totalSeconds: stop.seconds, rx: rxOrScaled === 'rx', capped: stop.capped });
+      if (record) out.push(record);
+    }
+    return out;
+  }
+  const ghostSummaries = useMemo<Partial<Record<1 | 2, GhostSummary>>>(
+    () => {
+      if (!showCompletePanel) return {};
+      const out: Partial<Record<1 | 2, GhostSummary>> = {};
+      for (const record of splitRecordsToday()) out[record.part] = summarizeGhost(record, trackConfigs[record.part]?.ghostFor(record.mode) ?? null);
+      return out;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showCompletePanel, rxOrScaled, skips, trackConfigs],
   );
   const doneParts = useMemo(() => (session ? sessionParts(session) : []), [session]);
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
@@ -887,6 +925,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
 
     // El historial solo recoge lo que se hizo: las partes marcadas como no hechas se quitan (y se anotan en `skipped`).
     const notDone = skippedParts(skips);
+    const wodSplits = splitRecordsToday();
     athleteRepository.appendHistoryEntry({
       ...toHistoryEntry(
         applySkips(session, skips),
@@ -899,6 +938,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         wodDetailFor(),
       ),
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
+      ...(wodSplits.length > 0 ? { wodSplits } : {}),
     });
     recordProgression();
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
@@ -1340,7 +1380,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       <Modal open={showReasons} onClose={() => setShowReasons(false)} title="Por qué tu sesión es así hoy">
         <CoachReasonsList reasons={session?.coachReasons ?? []} />
       </Modal>
-      {session && !session.isRestDay && <TrainingTimer caps={wodCaps} />}
+      {session && !session.isRestDay && <TrainingTimer caps={wodCaps} track={trackConfigs} />}
       {focusMode && session && !session.isRestDay && (
         <FocusMode
           session={session}
@@ -1657,6 +1697,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           skips={skips}
           onSkipsChange={setSkips}
           clockParts={clockParts}
+          ghostSummaries={ghostSummaries}
           capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
           test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}

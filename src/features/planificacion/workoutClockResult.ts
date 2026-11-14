@@ -15,6 +15,9 @@ export interface ClockStop {
   rounds: number;
   /** El reloj se paró solo en el time cap de un WOD por tiempo: no se terminó. seconds es el cap. */
   capped?: boolean;
+  /** Modo fantasma: los segundos del cronómetro en que se cerró cada tramo, y si eran rondas o movimientos (ver `engine/wodGhost.ts`). */
+  marks?: number[];
+  trackMode?: 'ronda' | 'movimiento';
 }
 
 interface Stored {

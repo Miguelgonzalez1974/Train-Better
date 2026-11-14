@@ -365,6 +365,8 @@ export interface AthleteProfile {
    * llega mucho más atrás para ver la evolución en «Tu WOD por zonas». Una entrada por fecha.
    */
   wodLog?: WodLogEntry[];
+  /** Los parciales de los WODs cronometrados por tramos, para el modo fantasma. Llega más atrás que el historial (30 sesiones). Una entrada por fecha y parte. */
+  wodGhosts?: WodSplitsRecord[];
   /**
    * Días (ISO) que el atleta marcó como descanso a propósito ("Hoy descanso"). Sin marca, un día previsto sin registrar se
    * pinta "no registrado" y cuenta como fallo del plan; con ella es un descanso elegido: se pinta como descanso y no resta.
@@ -925,6 +927,28 @@ export interface WodLogEntry {
   feel?: WodFeel;
 }
 
+/**
+ * Los parciales de un WOD por tiempo cronometrado con el reloj de entreno («modo fantasma», ver `engine/wodGhost.ts`): lo que tardó cada
+ * tramo, por rondas o por movimientos. Sirven de fantasma la próxima vez que se haga el mismo WOD.
+ */
+export interface WodSplitsRecord {
+  date: string;
+  /** Parte del WOD (1 o 2 en un doble WOD). */
+  part: 1 | 2;
+  /** Qué WOD es: el id del benchmark, del catálogo o de la biblioteca, o una huella de formato y movimientos si lo generó el coach. */
+  key: string;
+  /** Tramos por ronda o por movimiento (en cada ronda, los movimientos en orden). */
+  mode: 'ronda' | 'movimiento';
+  /** Nombres de los tramos de una vuelta (los movimientos); vacío por rondas. */
+  labels: string[];
+  /** Lo que tardó cada tramo, en segundos y en orden. Un WOD parado en el cap lleva solo los hechos. */
+  segments: number[];
+  totalSeconds: number;
+  /** Se hizo como estaba escrito (true) o escalado. */
+  rx: boolean;
+  capped?: boolean;
+}
+
 /** Cómo de duro fue el WOD: fácil, justo o duro. */
 export type WodFeel = 'facil' | 'justo' | 'duro';
 
@@ -937,6 +961,8 @@ export interface SessionHistoryEntry {
   wodScaling?: WodScalingEntry[];
   /** Cómo de duro fue el WOD (fácil, justo, duro). */
   wodFeel?: WodFeel;
+  /** Los parciales por tramo del WOD cronometrados con el reloj (una entrada por parte). Ausente = no se cronometró por tramos. */
+  wodSplits?: WodSplitsRecord[];
   /**
    * Minutos del programa de fuerza que convive con el macro que ya están sumados a `durationMin` y a `rpe` de esta entrada (ver `engine/companionLoad.ts`).
    * Solo existe en el historial derivado que se usa para calcular carga y esfuerzo; nunca se guarda. Su presencia evita sumar dos veces lo mismo.

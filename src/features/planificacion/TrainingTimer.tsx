@@ -1,8 +1,23 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Timer, Pause, Play, RotateCcw, X, Minus, Plus, Maximize2, Minimize2 } from 'lucide-react';
 import { capStep, capView, clockStopToRecord, readClockRuns, recordClockStop } from './workoutClockResult';
 import type { WodCap } from '../../engine/wodCap';
 import { clockBus, clockState } from '../../lib/clockState';
+import { WodRibbon } from './WodRibbon';
+import { deltaText, ghostPosition, liveDelta, marksToSegments, trackTotal, type Ghost, type TrackMode, type WodTrackInfo } from '../../engine/wodGhost';
+
+/**
+ * El modo fantasma de una parte del WOD (ver `engine/wodGhost.ts`): de qué tramos consta, el fantasma que toca para cada forma de
+ * cronometrar y si viene apagado (día suave, de descarga, con semáforo ámbar o rojo: ahí no se empuja).
+ */
+export interface TrackConfig {
+  info: WodTrackInfo;
+  ghostFor: (mode: TrackMode) => Ghost | null;
+  ghostDefaultOff: boolean;
+}
+
+const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]}`;
 
 const PRESETS = [60, 90, 120, 180];
 const PRE_START_SECONDS = 10;
@@ -169,6 +184,8 @@ interface FullscreenClockProps {
   onReset?: () => void;
   extras?: { label: string; onClick: () => void }[];
   rounds?: { value: number; onAdd: () => void; onSub: () => void };
+  /** Modo fantasma: sustituye al contador de rondas por la cinta de tramos y un botón grande que cierra el tramo activo. */
+  track?: { ribbon: ReactNode; roundLine: string; delta: string | null; deltaGood: boolean; buttonLabel: string; finished: boolean; canUndo: boolean; onTap: () => void; onUndo: () => void };
   /** Barra de avance hasta un límite (time cap): `warn` la pone en naranja (último minuto o límite alcanzado). */
   progress?: { value: number; warn: boolean };
   onClose: () => void;
@@ -198,7 +215,7 @@ const CLOCK_COLORS = {
  * pantalla, apaisado se pone al lado el contador de rondas y los botones van abajo, grandes y con colores sólidos. Es la
  * misma máquina del reloj de siempre; esto solo cambia cómo se ve.
  */
-function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extras, rounds, progress, onClose }: FullscreenClockProps) {
+function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extras, rounds, track, progress, onClose }: FullscreenClockProps) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col gap-2 bg-black p-4" style={CLOCK_COLORS} role="dialog" aria-label="Reloj a pantalla completa">
       <div aria-hidden="true" className={`pointer-events-none absolute inset-0 transition-colors duration-300 ${tint ? TONE_TINT[tone] : ''}`} />
@@ -220,10 +237,27 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col items-stretch gap-3 landscape:flex-row">
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
-          <p className="font-black leading-none tabular-nums text-white" style={{ fontSize: 'min(48vh, 27vw)' }} aria-live="off">
+          <p className="font-black leading-none tabular-nums text-white" style={{ fontSize: track ? 'min(30vh, 15vw)' : 'min(48vh, 27vw)' }} aria-live="off">
             {time}
           </p>
         </div>
+        {track && (
+          <div className="flex min-h-0 shrink-0 flex-col justify-center gap-3 landscape:w-[58%]" aria-live="polite">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className={`text-3xl font-black tabular-nums ${track.delta === null ? 'text-neutral-300' : track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta ?? track.roundLine}</p>
+              {track.delta !== null && <p className="text-base font-semibold text-neutral-300">{track.roundLine}</p>}
+            </div>
+            {track.ribbon}
+            <div className="flex items-stretch gap-2">
+              <button onClick={track.onTap} disabled={track.finished} className="flex flex-1 items-center justify-center rounded-2xl bg-brand-neon py-5 text-2xl font-black text-black active:opacity-80 disabled:opacity-40">
+                {track.buttonLabel}
+              </button>
+              <button onClick={track.onUndo} disabled={!track.canUndo} className="rounded-2xl border-2 border-white/30 px-5 text-base font-bold text-white active:bg-white/20 disabled:opacity-30">
+                Deshacer
+              </button>
+            </div>
+          </div>
+        )}
         {rounds && (
           <div className="flex shrink-0 items-stretch gap-2 landscape:w-[32%] landscape:flex-col">
             <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border-2 border-white/30 py-2" aria-live="polite">
@@ -335,6 +369,86 @@ function CapRow({
   );
 }
 
+/**
+ * Antes de empezar un WOD por tiempo: cronometrarlo por tramos (la cinta), si es por rondas o por movimientos, y el fantasma contra el que
+ * correr. Sin ninguna marca anterior se dice que hoy se guardan los parciales para la próxima vez.
+ */
+function TrackSetup({
+  cfg,
+  on,
+  onOn,
+  mode,
+  onMode,
+  ghost,
+  ghostOn,
+  onGhostOn,
+}: {
+  cfg: TrackConfig;
+  on: boolean;
+  onOn: (v: boolean) => void;
+  mode: TrackMode;
+  onMode: (m: TrackMode) => void;
+  ghost: Ghost | null;
+  ghostOn: boolean;
+  onGhostOn: (v: boolean) => void;
+}) {
+  const ghostText = ghost
+    ? ghost.kind === 'parciales'
+      ? `${mmss(ghost.totalSeconds)} · ${shortDate(ghost.date!)} · ${ghost.rx ? 'Rx' : 'escalado'}`
+      : ghost.kind === 'marca'
+        ? `${mmss(ghost.totalSeconds)} · ${shortDate(ghost.date!)} · sin parciales, a ritmo constante`
+        : `${mmss(ghost.totalSeconds)} · objetivo del coach (estimado)`
+    : null;
+  const toggle = (checked: boolean, label: string, onChange: (v: boolean) => void) => (
+    <button
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${checked ? 'bg-brand-neon' : 'bg-white/15'}`}
+    >
+      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-black/80 transition-transform duration-200 ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+    </button>
+  );
+  return (
+    <div className="mb-2 flex flex-col gap-1.5 rounded-lg bg-white/5 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-neutral-300">Cronometrar por tramos</span>
+        {toggle(on, 'Cronometrar por tramos', onOn)}
+      </div>
+      {on && cfg.info.modes.length > 1 && (
+        <div className="flex rounded-md bg-black/20 p-0.5" role="radiogroup" aria-label="Forma de cronometrar">
+          {cfg.info.modes.map((m) => (
+            <button
+              key={m}
+              role="radio"
+              aria-checked={mode === m}
+              onClick={() => onMode(m)}
+              className={`flex-1 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${mode === m ? 'bg-white/15 text-white' : 'text-neutral-500 hover:text-neutral-200'}`}
+            >
+              {m === 'ronda' ? 'Por rondas' : 'Por movimientos'}
+            </button>
+          ))}
+        </div>
+      )}
+      {on &&
+        (ghost ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-neutral-300">Correr contra el fantasma</p>
+              <p className="truncate text-[11px] text-neutral-500">{ghostText}</p>
+              {ghostOn && ghost.rx === false && <p className="text-[11px] text-warn">Esa marca fue escalada: ve a Rx solo si quieres compararlas.</p>}
+            </div>
+            {toggle(ghostOn, 'Correr contra el fantasma', onGhostOn)}
+          </div>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-neutral-500">Aún no hay una marca de este WOD: hoy se guardan tus parciales y serán el fantasma de la próxima vez.</p>
+        ))}
+      {on && ghost && !ghostOn && cfg.ghostDefaultOff && <p className="text-[11px] text-neutral-500">Apagado hoy: en un día suave el coach no te empuja a correr contra nadie.</p>}
+    </div>
+  );
+}
+
 /** Fila de ajuste ±paso para la configuración del Tabata (trabajo/descanso/rondas). */
 function TabataConfigRow({
   label,
@@ -396,7 +510,7 @@ function TabataConfigRow({
  * Vive mientras haya una sesión activa en Planificación; el estado se pierde al salir de la
  * pestaña, aceptable para un reloj que solo importa durante el entreno de hoy.
  */
-export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | null>> } = {}) {
+export function TrainingTimer({ caps, track }: { caps?: Partial<Record<1 | 2, WodCap | null>>; track?: Partial<Record<1 | 2, TrackConfig | null>> } = {}) {
   const [expanded, setExpanded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [mode, setMode] = useState<TimerMode>('rest');
@@ -486,6 +600,21 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
   // Los refs llevan el valor vivo al tick (sus dependencias son estables) y al efecto que guarda la parada.
   const capRef = useRef<WodCap | null>(null);
   capRef.current = effectiveCap;
+  // Modo fantasma: el WOD de esta tanda por tramos (rondas o movimientos), con el fantasma si toca. Los tramos se cierran a mano
+  // (`marks` = los segundos del cronómetro en que se cerró cada uno).
+  const trackCfg = track?.[runPart] ?? null;
+  const [trackOff, setTrackOff] = useState(false);
+  const [trackModeSel, setTrackModeSel] = useState<TrackMode | null>(null);
+  const [ghostSel, setGhostSel] = useState<boolean | null>(null);
+  const [marks, setMarks] = useState<number[]>([]);
+  const trackOn = trackCfg !== null && !trackOff;
+  const trackMode: TrackMode = trackCfg ? (trackModeSel && trackCfg.info.modes.includes(trackModeSel) ? trackModeSel : trackCfg.info.defaultMode) : 'ronda';
+  const trackSegments = trackCfg ? trackTotal(trackCfg.info, trackMode) : 0;
+  const cycleLen = trackCfg && trackMode === 'movimiento' ? trackCfg.info.movements.length : 1;
+  const ghostEnabled = ghostSel === null ? Boolean(trackCfg) && !trackCfg!.ghostDefaultOff : ghostSel;
+  const ghostAvailable = trackOn && trackCfg ? trackCfg.ghostFor(trackMode) : null;
+  const ghost = ghostEnabled ? ghostAvailable : null;
+  const trackFinished = trackOn && marks.length >= trackSegments && trackSegments > 0;
   const roundsRef = useRef(0);
   const capHitRef = useRef(false);
   const warnedRef = useRef(false);
@@ -526,8 +655,10 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
 
   useEffect(() => {
     if (workoutRunning || workoutElapsed < 1) return;
-    recordClockStop(workoutRunRef.current, clockStopToRecord({ elapsed: workoutElapsed, rounds, snapshot: capSnapshotRef.current, continuedPastCap: capContinued }));
-  }, [workoutRunning, workoutElapsed, rounds, capContinued]);
+    const stop = clockStopToRecord({ elapsed: workoutElapsed, rounds, snapshot: capSnapshotRef.current, continuedPastCap: capContinued });
+    recordClockStop(workoutRunRef.current, trackOn && marks.length > 0 ? { ...stop, marks, trackMode } : stop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workoutRunning, workoutElapsed, rounds, capContinued, marks]);
 
   // Al llegar al cap no hace falta seguir con la pantalla encendida.
   useEffect(() => {
@@ -564,11 +695,43 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
     capHitRef.current = false;
     warnedRef.current = false;
     capSnapshotRef.current = null;
+    setMarks([]);
     setCapHit(false);
     setCapContinued(false);
     // El cap de la tanda nueva vuelve a ser el de su WOD (la parte 2 de un doble WOD puede tener otro).
     setCapOverride(undefined);
     wakeLock.release();
+  };
+  // Cierra el tramo activo (el que toca): guarda el segundo exacto, suma la ronda si era el último movimiento de la vuelta y, con el último
+  // tramo, para el reloj (el WOD está hecho).
+  const closeSegment = () => {
+    if (!trackOn || !workoutRunning || marks.length >= trackSegments) return;
+    const elapsed = workoutStartRef.current != null ? (Date.now() - workoutStartRef.current) / 1000 : workoutElapsed;
+    const next = [...marks, Math.round(elapsed * 10) / 10];
+    setMarks(next);
+    setRounds(Math.floor(next.length / cycleLen));
+    if (next.length >= trackSegments) {
+      workoutStartRef.current = null;
+      setWorkoutElapsed(elapsed);
+      setWorkoutRunning(false);
+      wakeLock.release();
+      beep(660, 700);
+      navigator.vibrate?.([200, 100, 200]);
+    } else {
+      navigator.vibrate?.(40);
+    }
+  };
+  // Deshace el último tramo cerrado; si el WOD estaba terminado, el reloj sigue donde lo dejó.
+  const undoSegment = () => {
+    if (!trackOn || marks.length === 0) return;
+    const wasFinished = marks.length >= trackSegments;
+    const next = marks.slice(0, -1);
+    setMarks(next);
+    setRounds(Math.floor(next.length / cycleLen));
+    if (wasFinished) {
+      setWorkoutRunning(true);
+      if (screenLockOn) wakeLock.request();
+    }
   };
   const setScreenLock = (on: boolean) => {
     setScreenLockOn(on);
@@ -829,6 +992,41 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
   const capProgress = view?.progress ?? 0;
   const overCap = view?.over ?? 0;
 
+  // La cinta del modo fantasma: lo que ve la pantalla (tramos, colores, el fantasma, el texto del botón) sale de aquí.
+  const trackView = (() => {
+    if (!trackOn || !trackCfg) return null;
+    const info = trackCfg.info;
+    const durations = ghost?.durations ?? null;
+    const done = marks.length;
+    const segs = marksToSegments(marks);
+    const byMove = trackMode === 'movimiento';
+    const cycle = byMove ? Math.min(Math.floor(done / cycleLen), info.rounds - 1) : 0;
+    const start = byMove ? cycle * cycleLen : 0;
+    const len = byMove ? cycleLen : trackSegments;
+    const labels = byMove ? info.movements : Array.from({ length: trackSegments }, (_, i) => `R${i + 1}`);
+    const doneCount = Math.max(0, Math.min(len, done - start));
+    let ghostAt: number | null = null;
+    if (durations) {
+      const p = ghostPosition(durations, workoutElapsed);
+      ghostAt = Math.max(0, Math.min(len, (p.finished ? durations.length : p.index + p.frac) - start));
+    }
+    const lastMark = done > 0 ? marks[done - 1] : 0;
+    const activeName = byMove ? info.movements[done % cycleLen] : `Ronda ${Math.min(done + 1, info.rounds)}`;
+    const delta = durations ? liveDelta(durations, marks, workoutElapsed) : null;
+    return {
+      labels,
+      widths: labels.map((_, j) => durations?.[start + j] ?? 1),
+      doneCount,
+      deltas: labels.map((_, j) => (j < doneCount && durations ? Math.round(durations[start + j] - segs[start + j]) : null)),
+      ghostAt,
+      activeDetail: trackFinished ? undefined : `${mmss(Math.max(0, workoutElapsed - lastMark))}${durations && done < durations.length ? ` / ${mmss(durations[done])}` : ''}`,
+      buttonLabel: trackFinished ? 'WOD terminado' : `${activeName} hecho`,
+      roundLine: byMove ? (info.rounds > 1 ? `Ronda ${cycle + 1} de ${info.rounds}` : `Tramo ${Math.min(done + 1, trackSegments)} de ${trackSegments}`) : `Ronda ${Math.min(done + 1, info.rounds)} de ${info.rounds}`,
+      delta,
+      deltaText: delta !== null ? deltaText(delta) : null,
+    };
+  })();
+
   // El reloj abierto, en marcha o con un resultado sin cerrar: Rex se pliega (ver `lib/clockState`).
   const clockInUse = expanded || fullscreen || Boolean(preStartFor) || running || done || capHit || workoutRunning || workoutElapsed >= 1 || emomRunning || emomDone || tabataRunning || tabataDone;
   useEffect(() => {
@@ -925,7 +1123,22 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
             onClick: handleWorkoutButton,
           }}
           onReset={resetWorkout}
-          rounds={{ value: rounds, onAdd: () => setRounds((r) => r + 1), onSub: () => setRounds((r) => Math.max(0, r - 1)) }}
+          rounds={trackView ? undefined : { value: rounds, onAdd: () => setRounds((r) => r + 1), onSub: () => setRounds((r) => Math.max(0, r - 1)) }}
+          track={
+            trackView
+              ? {
+                  ribbon: <WodRibbon big labels={trackView.labels} widths={trackView.widths} doneCount={trackView.doneCount} deltas={trackView.deltas} ghostAt={trackView.ghostAt} activeDetail={trackView.activeDetail} onTapActive={workoutRunning ? closeSegment : undefined} />,
+                  roundLine: trackView.roundLine,
+                  delta: trackView.deltaText,
+                  deltaGood: (trackView.delta ?? 0) >= 0,
+                  buttonLabel: trackView.buttonLabel,
+                  finished: trackFinished || !workoutRunning,
+                  canUndo: marks.length > 0,
+                  onTap: closeSegment,
+                  onUndo: undoSegment,
+                }
+              : undefined
+          }
         />
       );
     }
@@ -996,7 +1209,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
       strip = {
         label: lastMinute ? 'Último minuto' : 'Entreno',
         time: mmss(workoutElapsed),
-        sub: effectiveCap ? `${effectiveCap.kind === 'amrap' ? 'AMRAP' : 'cap'} ${mmss(effectiveCap.seconds)}` : undefined,
+        sub: [trackView?.deltaText, effectiveCap ? `${effectiveCap.kind === 'amrap' ? 'AMRAP' : 'cap'} ${mmss(effectiveCap.seconds)}` : null].filter(Boolean).join(' · ') || undefined,
         tone: lastMinute ? 'orange' : 'neon',
         mode: 'workout',
         running: true,
@@ -1212,11 +1425,54 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
             </div>
           )}
 
+          {trackCfg && !workoutRunning && workoutElapsed < 1 && (
+            <TrackSetup
+              cfg={trackCfg}
+              on={trackOn}
+              onOn={(v) => setTrackOff(!v)}
+              mode={trackMode}
+              onMode={setTrackModeSel}
+              ghost={ghostAvailable}
+              ghostOn={ghostEnabled}
+              onGhostOn={setGhostSel}
+            />
+          )}
+
           <ScreenLockToggle screenLockOn={screenLockOn} supported={wakeLock.supported} onChange={setScreenLock} />
           <WakeLockStatusLine supported={wakeLock.supported} screenLockOn={screenLockOn} running={workoutRunning} held={wakeLock.held} />
 
+          {/* Modo fantasma: la cinta de tramos y un botón grande que cierra el tramo activo (sustituyen al contador de rondas). */}
+          {trackView && (
+            <div className="my-2.5 flex flex-col gap-2" aria-live="polite">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className={`text-lg font-bold tabular-nums ${trackView.deltaText === null ? 'text-neutral-300' : (trackView.delta ?? 0) >= 0 ? 'text-brand-neon' : 'text-brand-orange'}`}>
+                  {trackView.deltaText ?? 'Cinta de tramos'}
+                </p>
+                <p className="text-xs text-neutral-400">{trackView.roundLine}</p>
+              </div>
+              <WodRibbon labels={trackView.labels} widths={trackView.widths} doneCount={trackView.doneCount} deltas={trackView.deltas} ghostAt={trackView.ghostAt} activeDetail={trackView.activeDetail} onTapActive={workoutRunning ? closeSegment : undefined} />
+              <div className="flex gap-1.5">
+                <button
+                  onClick={closeSegment}
+                  disabled={!workoutRunning || trackFinished}
+                  className="flex min-h-[3.5rem] flex-1 items-center justify-center rounded-xl bg-brand-neon px-3 text-base font-bold text-black transition-colors hover:opacity-90 active:opacity-80 disabled:opacity-40"
+                >
+                  {trackView.buttonLabel}
+                </button>
+                <button
+                  onClick={undoSegment}
+                  disabled={marks.length === 0}
+                  className="rounded-xl bg-white/5 px-4 text-xs font-semibold text-neutral-300 transition-colors hover:bg-white/10 disabled:opacity-30"
+                >
+                  Deshacer
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Contador de rondas pensado para tocarlo en pleno WOD: cifra enorme y un "+1" grande (no hace
               falta apuntar); el "−" queda pequeño y aparte, solo para corregir un toque de más. */}
+          {!trackView && (
           <div className="my-2.5 flex gap-2">
             <button
               onClick={() => setRounds((r) => Math.max(0, r - 1))}
@@ -1238,6 +1494,7 @@ export function TrainingTimer({ caps }: { caps?: Partial<Record<1 | 2, WodCap | 
               <span className="mt-1.5 text-xs font-medium opacity-80">al acabar ronda</span>
             </button>
           </div>
+          )}
 
           <div className="flex items-center gap-1.5">
             <button

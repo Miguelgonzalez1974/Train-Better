@@ -4,6 +4,8 @@ import type { RxOrScaled, WodFeel, WodScalingEntry, WodScoreType } from '../../d
 import type { WodResultForm } from '../../engine/wodScoring';
 import { WodResultField } from './WodResultField';
 import { WodScalingField, type WodScalingMovement } from './WodScalingField';
+import { GhostSummaryCard } from './GhostSummaryCard';
+import type { GhostSummary } from '../../engine/wodGhost';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { DoneParts } from './DoneParts';
 import type { SessionPart, Skips } from '../../engine/sessionParts';
@@ -24,6 +26,8 @@ interface CompleteSessionPanelProps {
   onSkipsChange: (next: Skips) => void;
   /** Partes cuyo resultado vino prellenado del reloj de entreno — se marca para que se sepa de dónde sale. */
   clockParts?: Part[];
+  /** Modo fantasma: los parciales por tramo de cada parte cronometrada con el reloj, comparados con el fantasma. */
+  ghostSummaries?: Partial<Record<Part, GhostSummary>>;
   /** Time cap de cada parte del WOD, si se conoce (segundos): se guarda con un resultado no terminado. */
   capSeconds?: Partial<Record<Part, number>>;
   onFormChange: (part: Part, patch: Partial<WodResultForm>) => void;
@@ -62,6 +66,7 @@ export function CompleteSessionPanel({
   skips,
   onSkipsChange,
   clockParts = [],
+  ghostSummaries = {},
   capSeconds,
   onFormChange,
   test,
@@ -152,6 +157,8 @@ export function CompleteSessionPanel({
               <WodResultField scoreType={scoreTypes[part]!} form={forms[part]} onChange={(patch) => onFormChange(part, patch)} capSeconds={capSeconds?.[part]} />
             </div>
           ))}
+
+          {resultParts.map((part) => (ghostSummaries[part] ? <GhostSummaryCard key={`ghost-${part}`} summary={ghostSummaries[part]!} /> : null))}
 
           {hasWodDetail && onScaling && onFeel && (
             <div className="rounded-xl bg-white/[0.03] p-3">

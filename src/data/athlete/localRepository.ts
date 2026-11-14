@@ -14,6 +14,7 @@ const LEGACY_SESSION_CACHE_KEY = 'train-better:session-cache';
 const HISTORY_LIMIT = 30;
 /** Registro del WOD (qué se escaló): llega mucho más atrás que el historial. */
 const WOD_LOG_LIMIT = 400;
+const WOD_GHOSTS_LIMIT = 120;
 /**
  * Antes 60 cuando la cache vivia en su propia clave de localStorage — ahora viaja dentro de
  * `profile.sessionCache` en cada sincronizacion, y nada en la app lee sesiones cacheadas mas alla
@@ -242,7 +243,11 @@ export const localAthleteRepository: AthleteRepository = {
     const wodLog = entry.wodScaling !== undefined && (entry.wodMovementIds?.length ?? 0) > 0
       ? [...(profile.wodLog ?? []).filter((e) => e.date !== entry.date), { date: entry.date, movementIds: entry.wodMovementIds as string[], scaling: entry.wodScaling, ...(entry.wodResult?.capped || entry.wodResult2?.capped ? { capped: true } : {}), ...(entry.wodFeel ? { feel: entry.wodFeel } : {}) }].sort((a, b) => a.date.localeCompare(b.date)).slice(-WOD_LOG_LIMIT)
       : profile.wodLog;
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, ...(wodLog ? { wodLog } : {}), ...(restDates ? { restDates } : {}) }));
+    // Los parciales del WOD (modo fantasma) también van al registro largo: una entrada por fecha y parte.
+    const wodGhosts = entry.wodSplits && entry.wodSplits.length > 0
+      ? [...(profile.wodGhosts ?? []).filter((g) => g.date !== entry.date), ...entry.wodSplits].sort((a, b) => a.date.localeCompare(b.date) || a.part - b.part).slice(-WOD_GHOSTS_LIMIT)
+      : profile.wodGhosts;
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, ...(wodLog ? { wodLog } : {}), ...(wodGhosts ? { wodGhosts } : {}), ...(restDates ? { restDates } : {}) }));
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));
@@ -257,7 +262,8 @@ export const localAthleteRepository: AthleteRepository = {
     // Si se deshace la sesion, su resultado de progresion tampoco cuenta.
     const progressionLog = (profile.progressionLog ?? []).filter((e) => e.date !== date);
     const wodLog = profile.wodLog?.filter((e) => e.date !== date);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog, progressionLog, ...(wodLog ? { wodLog } : {}) }));
+    const wodGhosts = profile.wodGhosts?.filter((g) => g.date !== date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog, progressionLog, ...(wodLog ? { wodLog } : {}), ...(wodGhosts ? { wodGhosts } : {}) }));
   },
   updateHistoryTestLoad(date, testLoadKg) {
     const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
