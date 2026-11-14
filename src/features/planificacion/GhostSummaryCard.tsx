@@ -22,7 +22,7 @@ export function GhostSummaryCard({ summary }: { summary: GhostSummary }) {
             ? 'WOD sin terminar: no se compara con el fantasma'
             : 'Tus parciales';
   const tone = outcome === 'gana' ? 'text-good' : outcome === 'pierde' ? 'text-warn' : 'text-neutral-300';
-  const against = ghost ? (ghost.kind === 'estimado' ? 'objetivo del coach' : ghost.date ? `fantasma del ${shortDate(ghost.date)}` : 'fantasma') : null;
+  const against = ghost ? (ghost.kind === 'pauta' ? 'la pauta de Rex' : ghost.kind === 'estimado' ? 'objetivo del coach' : ghost.date ? `fantasma del ${shortDate(ghost.date)}` : 'fantasma') : null;
   return (
     <section className="flex flex-col gap-2.5 rounded-xl bg-white/[0.03] p-3" aria-label="Parciales del WOD">
       <div className="flex items-center justify-between gap-2">

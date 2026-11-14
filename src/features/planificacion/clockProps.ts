@@ -1,6 +1,7 @@
 import type { DailySession, SessionHistoryEntry, WodSplitsRecord } from '../../data/athlete/types';
 import { wodCapFor, type WodCap } from '../../engine/wodCap';
 import { pickGhost, wodTrackInfo } from '../../engine/wodGhost';
+import { paceTip } from '../../engine/wodPace';
 import { getWodParts, getWodScoreType } from '../../engine/wodScoring';
 import type { TrackConfig } from './TrainingTimer';
 
@@ -22,7 +23,14 @@ export function clockPropsFor(
   const track: Partial<Record<1 | 2, TrackConfig | null>> = {};
   for (const part of getWodParts(session)) {
     const info = wodTrackInfo(session, part, getWodScoreType(session, part));
-    track[part] = info ? { info, ghostFor: (mode) => pickGhost({ info, mode, todayIso: session.date, history, ghosts }), ghostDefaultOff: isSoftDay(session) } : null;
+    track[part] = info
+      ? {
+          info,
+          ghostFor: (mode) => pickGhost({ info, mode, todayIso: session.date, history, ghosts }),
+          ghostDefaultOff: isSoftDay(session),
+          paceFor: () => paceTip({ info, todayIso: session.date, history, ghosts }),
+        }
+      : null;
   }
   return { caps, track };
 }

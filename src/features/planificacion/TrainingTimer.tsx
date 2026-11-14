@@ -4,7 +4,9 @@ import { capStep, capView, clockStopToRecord, readClockRuns, recordClockStop } f
 import type { WodCap } from '../../engine/wodCap';
 import { clockBus, clockState, type ClockScope } from '../../lib/clockState';
 import { WodRibbon } from './WodRibbon';
+import { RexPaceCard } from './RexPaceCard';
 import { deltaText, ghostPosition, liveDelta, marksToSegments, trackTotal, type Ghost, type TrackMode, type WodTrackInfo } from '../../engine/wodGhost';
+import { paceGhost, type PaceTip } from '../../engine/wodPace';
 
 /**
  * El modo fantasma de una parte del WOD (ver `engine/wodGhost.ts`): de qué tramos consta, el fantasma que toca para cada forma de
@@ -14,6 +16,8 @@ export interface TrackConfig {
   info: WodTrackInfo;
   ghostFor: (mode: TrackMode) => Ghost | null;
   ghostDefaultOff: boolean;
+  /** La pauta de ritmo de Rex para este WOD (ver `engine/wodPace.ts`), o null si no tiene nada que decir. */
+  paceFor?: () => PaceTip | null;
 }
 
 const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -438,7 +442,9 @@ function TrackSetup({
       ? `${mmss(ghost.totalSeconds)} · ${shortDate(ghost.date!)} · ${ghost.rx ? 'Rx' : 'escalado'}`
       : ghost.kind === 'marca'
         ? `${mmss(ghost.totalSeconds)} · ${shortDate(ghost.date!)} · sin parciales, a ritmo constante`
-        : `${mmss(ghost.totalSeconds)} · objetivo del coach (estimado)`
+        : ghost.kind === 'pauta'
+          ? `${mmss(ghost.totalSeconds)} · pauta de ritmo de Rex, constante`
+          : `${mmss(ghost.totalSeconds)} · objetivo del coach (estimado)`
     : null;
   const toggle = (checked: boolean, label: string, onChange: (v: boolean) => void) => (
     <button
@@ -663,7 +669,11 @@ export function TrainingTimer({
   const trackSegments = trackCfg ? trackTotal(trackCfg.info, trackMode) : 0;
   const cycleLen = trackCfg && trackMode === 'movimiento' ? trackCfg.info.movements.length : 1;
   const ghostEnabled = ghostSel === null ? Boolean(trackCfg) && !trackCfg!.ghostDefaultOff : ghostSel;
-  const ghostAvailable = trackOn && trackCfg ? trackCfg.ghostFor(trackMode) : null;
+  // La pauta de Rex (solo con la cinta puesta, sin empezar, y no en un día suave: ahí no se empuja): si la aceptas, es el fantasma de hoy.
+  const [paceSel, setPaceSel] = useState<'on' | 'off' | null>(null);
+  const paceTip = trackOn && trackCfg && !trackCfg.ghostDefaultOff ? (trackCfg.paceFor?.() ?? null) : null;
+  const paceOn = paceSel === 'on' && paceTip !== null;
+  const ghostAvailable = trackOn && trackCfg ? (paceOn ? paceGhost(paceTip!.pace, trackCfg.info, trackMode) : trackCfg.ghostFor(trackMode)) : null;
   const ghost = ghostEnabled ? ghostAvailable : null;
   const trackFinished = trackOn && marks.length >= trackSegments && trackSegments > 0;
   const roundsRef = useRef(0);
@@ -709,7 +719,10 @@ export function TrainingTimer({
     const stop = clockStopToRecord({ elapsed: workoutElapsed, rounds, snapshot: capSnapshotRef.current, continuedPastCap: capContinued });
     // La vista previa de otro día no guarda nada: el reloj guarda «lo de hoy» y ensuciaría el resultado del WOD de hoy.
     if (preview) return;
-    recordClockStop(workoutRunRef.current, trackOn && marks.length > 0 ? { ...stop, marks, trackMode } : stop);
+    recordClockStop(
+      workoutRunRef.current,
+      trackOn && marks.length > 0 ? { ...stop, marks, trackMode, ...(paceOn && ghostEnabled ? { paceSeconds: paceTip!.pace } : {}) } : stop,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutRunning, workoutElapsed, rounds, capContinued, marks]);
 
@@ -1514,6 +1527,10 @@ export function TrainingTimer({
               ghostOn={ghostEnabled}
               onGhostOn={setGhostSel}
             />
+          )}
+
+          {trackCfg && !workoutRunning && workoutElapsed < 1 && paceTip && paceSel !== 'off' && (
+            <RexPaceCard tip={paceTip} active={paceOn} onUse={() => setPaceSel('on')} onDismiss={() => setPaceSel('off')} onRemove={() => setPaceSel('off')} />
           )}
 
           {/* Con la cinta en marcha el panel necesita la altura para el reloj, la cinta y el botón: la pantalla ya está activa y no hace falta repetirlo. */}

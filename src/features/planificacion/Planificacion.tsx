@@ -29,7 +29,7 @@ import type {
   WodSplitsRecord,
 } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import { buildWodDetail } from '../../engine/wodMovements';
+import { buildWodDetail, buildWorkGoal } from '../../engine/wodMovements';
 import { getMovementById } from '../../data/movements';
 import {
   adoptAdditiveEngineFields,
@@ -110,7 +110,10 @@ import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
-import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type GhostSummary } from '../../engine/wodGhost';
+import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
+import { paceGhost, paceTip } from '../../engine/wodPace';
+import { readWod, type WodReading } from '../../engine/wodRead';
+import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
 import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
@@ -375,7 +378,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     const out: Partial<Record<1 | 2, TrackConfig | null>> = {};
     for (const part of wodParts) {
       const info = wodTrackInfo(session, part, wodScoreTypes[part]);
-      out[part] = info ? { info, ghostFor: (mode) => pickGhost({ info, mode, todayIso: session.date, history, ghosts: profile.wodGhosts ?? [] }), ghostDefaultOff: soft } : null;
+      out[part] = info
+        ? {
+            info,
+            ghostFor: (mode) => pickGhost({ info, mode, todayIso: session.date, history, ghosts: profile.wodGhosts ?? [] }),
+            ghostDefaultOff: soft,
+            paceFor: () => paceTip({ info, todayIso: session.date, history, ghosts: profile.wodGhosts ?? [] }),
+          }
+        : null;
     }
     return out;
   }, [session, wodParts, wodScoreTypes, history, profile.wodGhosts]);
@@ -393,16 +403,47 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     }
     return out;
   }
+  /** Contra qué corriste hoy: la pauta de Rex si la aceptaste en el reloj, o tu fantasma de siempre. */
+  function ghostOfRecord(record: WodSplitsRecord): Ghost | null {
+    const cfg = trackConfigs[record.part];
+    if (!cfg || !session) return null;
+    const stop = pickClockStop(readClockRuns(session.date), record.part, wodParts.length);
+    return stop?.paceSeconds ? paceGhost(stop.paceSeconds, cfg.info, record.mode) : cfg.ghostFor(record.mode);
+  }
   const ghostSummaries = useMemo<Partial<Record<1 | 2, GhostSummary>>>(
     () => {
       if (!showCompletePanel) return {};
       const out: Partial<Record<1 | 2, GhostSummary>> = {};
-      for (const record of splitRecordsToday()) out[record.part] = summarizeGhost(record, trackConfigs[record.part]?.ghostFor(record.mode) ?? null);
+      for (const record of splitRecordsToday()) out[record.part] = summarizeGhost(record, ghostOfRecord(record));
       return out;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [showCompletePanel, rxOrScaled, skips, trackConfigs],
   );
+  // La lectura de Rex de cada parte (solo si hay algo que decir): dónde se hundió el ritmo y qué movimiento cede más.
+  const wodReadings = useMemo<Partial<Record<1 | 2, WodReading>>>(
+    () => {
+      if (!showCompletePanel) return {};
+      const out: Partial<Record<1 | 2, WodReading>> = {};
+      for (const record of splitRecordsToday()) {
+        const reading = readWod(record, ghostOfRecord(record));
+        if (reading) out[record.part] = reading;
+      }
+      return out;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showCompletePanel, rxOrScaled, skips, trackConfigs],
+  );
+  /** «Trabajar» el movimiento flojo desde la lectura de Rex: un objetivo normal (se quita en Objetivos) y las sesiones por venir se vuelven a preparar. */
+  function createWorkGoal(movementId: string): boolean {
+    const goal = buildWorkGoal(movementId, todayIso);
+    if (!goal) return false;
+    const current = athleteRepository.getProfile();
+    athleteRepository.saveProfile({ ...current, goals: [...current.goals, goal] });
+    resetUpcomingSessions(todayIso);
+    setProfile(athleteRepository.getProfile());
+    return true;
+  }
   const doneParts = useMemo(() => (session ? sessionParts(session) : []), [session]);
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
@@ -1699,6 +1740,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           onSkipsChange={setSkips}
           clockParts={clockParts}
           ghostSummaries={ghostSummaries}
+          wodReadings={wodReadings}
+          onWorkMovement={createWorkGoal}
           capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
           test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}

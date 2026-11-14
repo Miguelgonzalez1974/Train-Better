@@ -5,7 +5,9 @@ import type { WodResultForm } from '../../engine/wodScoring';
 import { WodResultField } from './WodResultField';
 import { WodScalingField, type WodScalingMovement } from './WodScalingField';
 import { GhostSummaryCard } from './GhostSummaryCard';
+import { RexWodReading } from './RexWodReading';
 import type { GhostSummary } from '../../engine/wodGhost';
+import type { WodReading } from '../../engine/wodRead';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { DoneParts } from './DoneParts';
 import type { SessionPart, Skips } from '../../engine/sessionParts';
@@ -28,6 +30,9 @@ interface CompleteSessionPanelProps {
   clockParts?: Part[];
   /** Modo fantasma: los parciales por tramo de cada parte cronometrada con el reloj, comparados con el fantasma. */
   ghostSummaries?: Partial<Record<Part, GhostSummary>>;
+  /** Lo que ve Rex de cada parte cronometrada (dónde se hundió el ritmo, qué movimiento cede) y cómo trabajar el flojo; solo si hay algo que decir. */
+  wodReadings?: Partial<Record<Part, WodReading>>;
+  onWorkMovement?: (movementId: string) => boolean;
   /** Time cap de cada parte del WOD, si se conoce (segundos): se guarda con un resultado no terminado. */
   capSeconds?: Partial<Record<Part, number>>;
   onFormChange: (part: Part, patch: Partial<WodResultForm>) => void;
@@ -67,6 +72,8 @@ export function CompleteSessionPanel({
   onSkipsChange,
   clockParts = [],
   ghostSummaries = {},
+  wodReadings = {},
+  onWorkMovement,
   capSeconds,
   onFormChange,
   test,
@@ -158,7 +165,15 @@ export function CompleteSessionPanel({
             </div>
           ))}
 
-          {resultParts.map((part) => (ghostSummaries[part] ? <GhostSummaryCard key={`ghost-${part}`} summary={ghostSummaries[part]!} /> : null))}
+          {resultParts.map((part) =>
+            ghostSummaries[part] ? (
+              <div key={`ghost-${part}`} className="flex flex-col gap-2">
+                {/* Si Rex tiene lectura, la frase suelta del resumen sobra: dice lo mismo en menos. */}
+                <GhostSummaryCard summary={wodReadings[part] ? { ...ghostSummaries[part]!, insight: null } : ghostSummaries[part]!} />
+                {wodReadings[part] && <RexWodReading reading={wodReadings[part]!} onWork={onWorkMovement} />}
+              </div>
+            ) : null,
+          )}
 
           {hasWodDetail && onScaling && onFeel && (
             <div className="rounded-xl bg-white/[0.03] p-3">

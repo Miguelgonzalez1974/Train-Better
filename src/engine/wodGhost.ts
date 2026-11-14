@@ -121,8 +121,11 @@ export function wodTrackInfo(session: DailySession, part: 1 | 2, scoreType: WodS
 // ---------------------------------------------------------------------------------------------
 
 export interface Ghost {
-  /** parciales: una marca tuya con sus tramos reales; marca: solo el tiempo final, a ritmo constante; estimado: el objetivo del coach, a ritmo constante. */
-  kind: 'parciales' | 'marca' | 'estimado';
+  /**
+   * parciales: una marca tuya con sus tramos reales; marca: solo el tiempo final, a ritmo constante; estimado: el objetivo del coach, a ritmo
+   * constante; pauta: el ritmo que propone Rex (ver `engine/wodPace.ts`), constante.
+   */
+  kind: 'parciales' | 'marca' | 'estimado' | 'pauta';
   date?: string;
   /** Lo que tarda el fantasma en cada tramo, en segundos. */
   durations: number[];

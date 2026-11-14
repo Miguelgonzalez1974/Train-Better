@@ -18,6 +18,8 @@ export interface ClockStop {
   /** Modo fantasma: los segundos del cronómetro en que se cerró cada tramo, y si eran rondas o movimientos (ver `engine/wodGhost.ts`). */
   marks?: number[];
   trackMode?: 'ronda' | 'movimiento';
+  /** Corriste contra la pauta de ritmo de Rex (segundos por ronda): el resumen del WOD compara contra ella y no contra tu mejor marca. */
+  paceSeconds?: number;
 }
 
 interface Stored {
