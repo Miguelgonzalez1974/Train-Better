@@ -53,16 +53,16 @@ export interface MovementAnimation {
   pose: (t: number) => FigurePose;
 }
 
-const RAD = Math.PI / 180;
-const L_UPPER = 30;
-const L_FORE = 28;
-const L_THIGH = 50;
-const L_SHANK = 48;
-const L_TORSO = 52;
+export const RAD = Math.PI / 180;
+export const L_UPPER = 30;
+export const L_FORE = 28;
+export const L_THIGH = 50;
+export const L_SHANK = 48;
+export const L_TORSO = 52;
 
-type Keyframes = [number, number[]][];
+export type Keyframes = [number, number[]][];
 
-const ease = (x: number) => x * x * (3 - 2 * x);
+export const ease = (x: number) => x * x * (3 - 2 * x);
 
 /** Interpola (con suavizado) entre las posturas de una lista con tiempos; fuera de rango, la primera o la última. */
 export function interpolate(keyframes: Keyframes, t: number): number[] {
@@ -82,7 +82,7 @@ export function interpolate(keyframes: Keyframes, t: number): number[] {
  * Codo de un brazo de dos tramos entre `from` y `to` (cinemática inversa). `pick` dice hacia dónde dobla: `down` (el codo más bajo) o
  * `back` (el codo más atrás, a la izquierda). Si `to` queda más lejos de lo que alcanza el brazo, se estira del todo.
  */
-export function elbow(from: Point, to: Point, l1: number, l2: number, pick: 'down' | 'back' | 'front'): Point {
+export function elbow(from: Point, to: Point, l1: number, l2: number, pick: 'down' | 'back' | 'front' | 'up'): Point {
   const dx = to[0] - from[0];
   const dy = to[1] - from[1];
   const d0 = Math.hypot(dx, dy);
@@ -97,11 +97,12 @@ export function elbow(from: Point, to: Point, l1: number, l2: number, pick: 'dow
   const c2: Point = [px + uy * h, py - ux * h];
   if (pick === 'down') return c1[1] >= c2[1] ? c1 : c2;
   if (pick === 'front') return c1[0] >= c2[0] ? c1 : c2;
+  if (pick === 'up') return c1[1] <= c2[1] ? c1 : c2;
   return c1[0] <= c2[0] ? c1 : c2;
 }
 
 /** El punto a `length` de `origin` en la dirección `angleDeg` medida desde «recto hacia abajo» (positivo = hacia la derecha). */
-const at = (origin: Point, length: number, angleDeg: number): Point => [origin[0] + length * Math.sin(angleDeg * RAD), origin[1] + length * Math.cos(angleDeg * RAD)];
+export const at = (origin: Point, length: number, angleDeg: number): Point => [origin[0] + length * Math.sin(angleDeg * RAD), origin[1] + length * Math.cos(angleDeg * RAD)];
 
 // --- Row (remo ergómetro): sentado, pies fijos en el estribo. Params: [rodilla, muslo, torso, brazo, antebrazo] en grados. ---
 const ROW_CATCH = [10, 104, 25, 70, 70];
@@ -139,12 +140,12 @@ function rowPose(t: number): FigurePose {
 }
 
 // --- Colgado de una barra recta arriba. Params: [hombro x, hombro y, torso, muslo, pierna] (hombro en coordenadas, resto en grados). ---
-const BAR_Y = 34;
-const BAR_X = 150;
+export const BAR_Y = 34;
+export const BAR_X = 150;
 // Con los brazos casi del todo estirados (el hombro a ~57 de la mano): así el codo apenas se dobla colgado.
-const HANG = [150, 91.5, 0, 0, 0];
-const KIP_ARCH = [146, 91.5, -12, -18, -30];
-const KIP_HOLLOW = [158, 91.5, 16, 32, 26];
+export const HANG = [150, 91.5, 0, 0, 0];
+export const KIP_ARCH = [146, 91.5, -12, -18, -30];
+export const KIP_HOLLOW = [158, 91.5, 16, 32, 26];
 const PULL_MID = [134, 62, 14, 24, 0];
 const PULL_TOP = [128, 40, 12, 10, -8];
 const KIPPING_KF: Keyframes = [
@@ -159,7 +160,7 @@ const KIPPING_KF: Keyframes = [
 ];
 
 /** Cuerpo que cuelga o se apoya con las manos fijas: el hombro va donde dice la postura y el brazo se dobla para llegar a la mano. */
-function bodyFromHands(hand: Point, p: number[], bend: 'down' | 'back'): FigurePose {
+export function bodyFromHands(hand: Point, p: number[], bend: 'down' | 'back'): FigurePose {
   const shoulder: Point = [p[0], p[1]];
   const el = elbow(hand, shoulder, L_FORE, L_UPPER, bend);
   const hip = at(shoulder, L_TORSO, p[2]);
@@ -176,7 +177,7 @@ function bodyFromHands(hand: Point, p: number[], bend: 'down' | 'back'): FigureP
 }
 
 // --- Fondos en anillas, de lado: manos fijas en las anillas, el cuerpo sube y baja. ---
-const RING_HAND: Point = [150, 104];
+export const RING_HAND: Point = [150, 104];
 const DIP_SUPPORT = [150, 46.5, -4, -6, -30];
 const DIP_BOTTOM = [146, 112, -22, -8, -40];
 const DIP_KF: Keyframes = [
@@ -191,7 +192,7 @@ const DIP_KF: Keyframes = [
 const TTB_HOLLOW = [158, 91.5, 18, 35, 32];
 // Hombro a 57,5 de la barra: tronco (52) + piernas (98) cierran el triángulo con los pies en la barra.
 const TTB_TOES = [150, 91.5, 52, 204.7, 204.7];
-const TTB_KF: Keyframes = [
+export const TTB_KF: Keyframes = [
   [0, HANG],
   [0.5, KIP_ARCH],
   [1.0, TTB_HOLLOW],
@@ -202,7 +203,7 @@ const TTB_KF: Keyframes = [
 ];
 
 /** Cuerpo de pie con los pies fijos en `ankle`, de abajo arriba: [rodilla, muslo, torso, brazo, antebrazo] en grados (hacia delante = positivo). */
-function standingBody(ankle: Point, p: number[]): FigurePose {
+export function standingBody(ankle: Point, p: number[]): FigurePose {
   const knee: Point = [ankle[0] + L_SHANK * Math.sin(p[0] * RAD), ankle[1] - L_SHANK * Math.cos(p[0] * RAD)];
   const hip: Point = [knee[0] - L_THIGH * Math.sin(p[1] * RAD), knee[1] - L_THIGH * Math.cos(p[1] * RAD)];
   const shoulder: Point = [hip[0] + L_TORSO * Math.sin(p[2] * RAD), hip[1] - L_TORSO * Math.cos(p[2] * RAD)];
@@ -219,11 +220,11 @@ function standingBody(ankle: Point, p: number[]): FigurePose {
 }
 
 // --- Thruster: sentadilla frontal y empuje por encima de la cabeza en un solo gesto. ---
-const TH_RACK = [0, 0, 2, 75, 175];
+export const TH_RACK = [0, 0, 2, 75, 175];
 const TH_BOTTOM = [38, 78, 22, 75, 175];
 const TH_DRIVE = [4, 4, 0, 115, 178];
 const TH_LOCK = [0, 0, 0, 180, 180];
-const THRUSTER_KF: Keyframes = [
+export const THRUSTER_KF: Keyframes = [
   [0, TH_RACK],
   [0.8, TH_BOTTOM],
   [1.0, TH_BOTTOM],
@@ -288,7 +289,7 @@ function wallBallPose(t: number): FigurePose {
 const DL_START = [32, 82, 42, 0, 0];
 const DL_MID = [16, 62, 38, 0, 0];
 const DL_LOCK = [0, 0, 0, 0, 0];
-const DEADLIFT_KF: Keyframes = [
+export const DEADLIFT_KF: Keyframes = [
   [0, DL_START],
   [0.4, DL_START],
   [1.3, DL_MID],
@@ -446,14 +447,14 @@ const C2B_KF: Keyframes = [
 ];
 
 // --- Bar muscle-up: tirón explosivo, transición por encima de la barra y apoyo con los brazos estirados; baja igual. ---
-const BMU_BAR: Point = [150, 98];
+export const BMU_BAR: Point = [150, 98];
 const BMU_HANG = [150, 155.5, 0, 0, 0];
 const BMU_ARCH = [146, 155.5, -12, -18, -30];
 const BMU_HOLLOW = [158, 155.5, 16, 32, 26];
 const BMU_PULL = [138, 106, 26, 22, 8];
 const BMU_TRANS = [140, 78, 40, 34, 18];
 const BMU_SUPPORT = [150, 40.5, -6, -10, -24];
-const BMU_KF: Keyframes = [
+export const BMU_KF: Keyframes = [
   [0, BMU_HANG],
   [0.5, BMU_ARCH],
   [1.0, BMU_HOLLOW],
@@ -473,7 +474,7 @@ const PS_MID = [18, 60, 38, 0, 0];
 const PS_EXTEND = [2, 6, -3, 80, 30];
 const PS_CATCH = [22, 50, 8, 178, 180];
 const PS_LOCK = [0, 0, 0, 180, 180];
-const POWER_SNATCH_KF: Keyframes = [
+export const POWER_SNATCH_KF: Keyframes = [
   [0, PS_START],
   [0.5, PS_START],
   [1.1, PS_MID],
@@ -492,10 +493,10 @@ function powerSnatchPose(t: number): FigurePose {
 }
 
 // --- Plancha (flexiones y burpee): pies y manos fijos, el cuerpo es una línea recta que gira sobre los pies. ---
-const BODY_LENGTH = L_TORSO + L_THIGH + L_SHANK;
+export const BODY_LENGTH = L_TORSO + L_THIGH + L_SHANK;
 
 /** Cuerpo en plancha con la punta de los pies en `ankle`, las manos en `hand` y el hombro a la altura `shoulderY`. */
-function plankPose(ankle: Point, hand: Point, shoulderY: number): FigurePose {
+export function plankPose(ankle: Point, hand: Point, shoulderY: number): FigurePose {
   const dy = ankle[1] - shoulderY;
   const shoulder: Point = [ankle[0] + Math.sqrt(Math.max(1, BODY_LENGTH * BODY_LENGTH - dy * dy)), shoulderY];
   const along = (len: number): Point => [ankle[0] + ((shoulder[0] - ankle[0]) * len) / BODY_LENGTH, ankle[1] + ((shoulder[1] - ankle[1]) * len) / BODY_LENGTH];
@@ -524,8 +525,8 @@ const PU_KF: Keyframes = [
 ];
 
 // --- Handstand push-up: pino contra la pared, las manos fijas en el suelo y la cabeza baja hasta casi tocarlo. ---
-const HS_HAND: Point = [150, 238];
-const HS_WALL = 182;
+export const HS_HAND: Point = [150, 238];
+export const HS_WALL = 182;
 const HS_KF: Keyframes = [
   [0, [152, 180.5]],
   [1.0, [158, 200]],
@@ -534,7 +535,7 @@ const HS_KF: Keyframes = [
   [2.4, [152, 180.5]],
 ];
 
-function handstandPose(t: number): FigurePose {
+export function handstandPose(t: number): FigurePose {
   const p = interpolate(HS_KF, t);
   const shoulder: Point = [p[0], p[1]];
   const a = Math.asin(Math.max(-0.5, Math.min(0.5, (HS_WALL - shoulder[0]) / BODY_LENGTH)));
@@ -556,11 +557,11 @@ function handstandPose(t: number): FigurePose {
 // posturas con anclajes distintos (de pie, plancha, en el aire) interpolan punto a punto. ---
 const BURPEE_BAR: Point = [222, 216];
 
-const lerpPoint = (a: Point, b: Point, k: number): Point => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
-const lerpPoints = (a: Point[], b: Point[], k: number): Point[] => a.map((p, i) => lerpPoint(p, b[i], k));
+export const lerpPoint = (a: Point, b: Point, k: number): Point => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+export const lerpPoints = (a: Point[], b: Point[], k: number): Point[] => a.map((p, i) => lerpPoint(p, b[i], k));
 
 /** Mezcla dos posturas con la misma estructura (mismas listas de puntos). */
-function mixPoses(a: FigurePose, b: FigurePose, k: number): FigurePose {
+export function mixPoses(a: FigurePose, b: FigurePose, k: number): FigurePose {
   return {
     legs: lerpPoints(a.legs, b.legs, k),
     torso: lerpPoints(a.torso, b.torso, k),
@@ -571,12 +572,12 @@ function mixPoses(a: FigurePose, b: FigurePose, k: number): FigurePose {
   };
 }
 
-const BURPEE_STAND = standingBody([170, 238], [0, 0, 0, 0, 0]);
-const BURPEE_SQUAT = standingBody([170, 238], [45, 100, 51, 0, 0]);
+export const BURPEE_STAND = standingBody([170, 238], [0, 0, 0, 0, 0]);
+export const BURPEE_SQUAT = standingBody([170, 238], [45, 100, 51, 0, 0]);
 const BURPEE_HANDS = BURPEE_SQUAT.hand;
-const BURPEE_PLANK_UP = plankPose([BURPEE_HANDS[0] - 140, 234], [BURPEE_HANDS[0], 238], 180.5);
-const BURPEE_PLANK_DOWN = plankPose([BURPEE_HANDS[0] - 140, 234], [BURPEE_HANDS[0], 238], 224);
-const BURPEE_CROUCH = standingBody([170, 238], [20, 40, 20, 0, 0]);
+export const BURPEE_PLANK_UP = plankPose([BURPEE_HANDS[0] - 140, 234], [BURPEE_HANDS[0], 238], 180.5);
+export const BURPEE_PLANK_DOWN = plankPose([BURPEE_HANDS[0] - 140, 234], [BURPEE_HANDS[0], 238], 224);
+export const BURPEE_CROUCH = standingBody([170, 238], [20, 40, 20, 0, 0]);
 const BURPEE_AIR = standingBody([222, 182], [35, 75, 2, 25, 20]);
 const BURPEE_LAND = standingBody([272, 238], [20, 40, 20, 0, 0]);
 const BURPEE_STAND_FAR = standingBody([272, 238], [0, 0, 0, 0, 0]);
@@ -609,9 +610,10 @@ function burpeePose(t: number): FigurePose {
   return BURPEE_KF[BURPEE_KF.length - 1][1];
 }
 
-const line = (x1: number, y1: number, x2: number, y2: number, role: 'floor' | 'frame' | 'thin'): PropShape => ({ kind: 'line', x1, y1, x2, y2, role });
+export const line = (x1: number, y1: number, x2: number, y2: number, role: 'floor' | 'frame' | 'thin'): PropShape => ({ kind: 'line', x1, y1, x2, y2, role });
 
-export const ANIMATIONS: Record<string, MovementAnimation> = {
+/** Las primeras animaciones (con su dibujo a mano). El registro completo, con los alias, está en `movementAnimations.ts`. */
+export const BASE_ANIMATIONS: Record<string, MovementAnimation> = {
   'push-up': {
     box: [55, 150, 200, 95],
     duration: 1.8,
@@ -723,13 +725,3 @@ export const ANIMATIONS: Record<string, MovementAnimation> = {
     pose: (t) => bodyFromHands(RING_HAND, interpolate(DIP_KF, t), 'back'),
   },
 };
-
-/** La animación de un movimiento del catálogo, o null si aún no la tiene. */
-export function animationFor(movementId: string): MovementAnimation | null {
-  return ANIMATIONS[movementId] ?? null;
-}
-
-/** Los movimientos que ya tienen animación. */
-export function animatedMovementIds(): string[] {
-  return Object.keys(ANIMATIONS);
-}

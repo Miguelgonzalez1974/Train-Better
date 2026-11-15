@@ -22,7 +22,7 @@ import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
 import { RpeCheckIn } from './RpeCheckIn';
 import { MovementFigureButton } from './MovementFigure';
-import { animationFor } from '../../engine/movementAnimation';
+import { animationFor } from '../../engine/movementAnimations';
 import { clockBus, type ClockScope } from '../../lib/clockState';
 
 export { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';

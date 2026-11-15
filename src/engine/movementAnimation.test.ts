@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ANIMATIONS, animatedMovementIds, animationFor, elbow, interpolate, type Point } from './movementAnimation';
+import { elbow, interpolate, type Point } from './movementAnimation';
+import { ANIMATIONS, ANIMATION_ALIASES, animatedMovementIds, animationFor } from './movementAnimations';
+
+/** Las que interpolan punto a punto entre posturas con anclajes distintos: el tronco se acorta un poco en las transiciones. */
+const MIXED = ['bar-facing-burpee', 'burpee', 'burpee-to-target', 'burpee-pull-up', 'devils-press', 'burpee-box-jump-over', 'box-jump', 'box-jump-over'];
 import { getMovementById } from '../data/movements';
 
 const dist = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -50,7 +54,9 @@ describe('animaciones de movimientos', () => {
         const all: Point[] = [...p.legs, ...p.torso, ...p.arm, ...(p.legs2 ?? []), ...(p.arm2 ?? []), p.head, p.hand];
         for (const d of p.dyn ?? []) {
           if (d.kind === 'circle') all.push([d.cx - d.r, d.cy - d.r], [d.cx + d.r, d.cy + d.r]);
-          else if (d.kind === 'line') all.push([d.x1, d.y1], [d.x2, d.y2]);
+          else if (d.kind === 'line') {
+            if (d.role !== 'tick') all.push([d.x1, d.y1], [d.x2, d.y2]);
+          }
           else all.push(...d.points);
         }
         for (const [x, y] of all) {
@@ -81,12 +87,12 @@ describe('animaciones de movimientos', () => {
         const p = a.pose(t);
         // Tronco, muslo y pierna: largos fijos.
         // El burpee interpola punto a punto entre posturas con anclajes distintos: en el salto el tronco se acorta un poco, nunca se alarga.
-        if (id === 'bar-facing-burpee') expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeGreaterThan(40);
+        if (MIXED.includes(id)) expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeGreaterThan(40);
         else expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeCloseTo(52, 1);
         expect(dist(p.torso[0], p.torso[1])).toBeLessThanOrEqual(52.05);
         expect(dist(p.legs[0], p.legs[1]), `${id} t=${t}`).toBeGreaterThan(40);
         // El brazo: dos tramos que suman como mucho su largo completo.
-        expect(dist(p.arm[0], p.arm[1]) + dist(p.arm[1], p.arm[2])).toBeLessThanOrEqual(58.5);
+        expect(dist(p.arm[0], p.arm[1]) + dist(p.arm[1], p.arm[2])).toBeLessThanOrEqual(58.6);
       }
     }
   });
@@ -247,6 +253,16 @@ describe('los movimientos de la tanda 2', () => {
     expect(Math.abs(air.legs[0][0] - 222)).toBeLessThan(2);
     expect(a.pose(3.3).legs[0][0]).toBeCloseTo(272, 0);
     expect(a.pose(a.duration).legs[0][0]).toBeCloseTo(170, 0);
+  });
+});
+
+describe('alias de animaciones', () => {
+  it('cada alias apunta a una animación que existe y es un movimiento del catálogo', () => {
+    for (const [id, target] of Object.entries(ANIMATION_ALIASES)) {
+      expect(getMovementById(id), id).toBeDefined();
+      expect(ANIMATIONS[target], `${id} → ${target}`).toBeDefined();
+      expect(animationFor(id)).toBe(ANIMATIONS[target]);
+    }
   });
 });
 

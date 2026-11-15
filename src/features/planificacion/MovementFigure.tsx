@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { animationFor, type DynShape, type FigurePose, type MovementAnimation, type Point, type PropShape } from '../../engine/movementAnimation';
+import type { DynShape, FigurePose, MovementAnimation, Point, PropShape } from '../../engine/movementAnimation';
+import { animationFor } from '../../engine/movementAnimations';
 import { subscribeAnimation } from '../../lib/animationClock';
 import { Modal } from '../shell/Modal';
 
