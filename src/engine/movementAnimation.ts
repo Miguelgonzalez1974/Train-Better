@@ -431,9 +431,223 @@ function airBikePose(t: number): FigurePose {
   };
 }
 
+// --- Chest-to-bar: como la dominada, pero el pecho sube hasta la barra: el cuerpo se echa atrás y las caderas van delante. ---
+const C2B_MID = [136, 70, 22, 26, 8];
+const C2B_TOP = [138, 50, 30, 34, 18];
+const C2B_KF: Keyframes = [
+  [0, HANG],
+  [0.5, KIP_ARCH],
+  [1.1, KIP_HOLLOW],
+  [1.7, C2B_MID],
+  [2.3, C2B_TOP],
+  [2.6, C2B_TOP],
+  [3.6, HANG],
+  [3.8, HANG],
+];
+
+// --- Bar muscle-up: tirón explosivo, transición por encima de la barra y apoyo con los brazos estirados; baja igual. ---
+const BMU_BAR: Point = [150, 98];
+const BMU_HANG = [150, 155.5, 0, 0, 0];
+const BMU_ARCH = [146, 155.5, -12, -18, -30];
+const BMU_HOLLOW = [158, 155.5, 16, 32, 26];
+const BMU_PULL = [138, 106, 26, 22, 8];
+const BMU_TRANS = [140, 78, 40, 34, 18];
+const BMU_SUPPORT = [150, 40.5, -6, -10, -24];
+const BMU_KF: Keyframes = [
+  [0, BMU_HANG],
+  [0.5, BMU_ARCH],
+  [1.0, BMU_HOLLOW],
+  [1.45, BMU_PULL],
+  [1.8, BMU_TRANS],
+  [2.3, BMU_SUPPORT],
+  [3.0, BMU_SUPPORT],
+  [3.5, BMU_TRANS],
+  [4.0, BMU_PULL],
+  [4.8, BMU_HANG],
+  [5.1, BMU_HANG],
+];
+
+// --- Power snatch: de la barra en el suelo a la cabeza en un solo tirón, recibida en un cuarto de sentadilla. ---
+const PS_START = [32, 82, 42, 0, 0];
+const PS_MID = [18, 60, 38, 0, 0];
+const PS_EXTEND = [2, 6, -3, 80, 30];
+const PS_CATCH = [22, 50, 8, 178, 180];
+const PS_LOCK = [0, 0, 0, 180, 180];
+const POWER_SNATCH_KF: Keyframes = [
+  [0, PS_START],
+  [0.5, PS_START],
+  [1.1, PS_MID],
+  [1.35, PS_EXTEND],
+  [1.7, PS_CATCH],
+  [2.2, PS_LOCK],
+  [2.8, PS_LOCK],
+  [3.5, [0, 0, 0, 0, 0]],
+  [4.1, PS_START],
+  [4.4, PS_START],
+];
+
+function powerSnatchPose(t: number): FigurePose {
+  const pose = standingBody([130, 238], interpolate(POWER_SNATCH_KF, t));
+  return { ...pose, dyn: [{ kind: 'circle', cx: pose.hand[0], cy: pose.hand[1], r: 26, role: 'plate' }] };
+}
+
+// --- Plancha (flexiones y burpee): pies y manos fijos, el cuerpo es una línea recta que gira sobre los pies. ---
+const BODY_LENGTH = L_TORSO + L_THIGH + L_SHANK;
+
+/** Cuerpo en plancha con la punta de los pies en `ankle`, las manos en `hand` y el hombro a la altura `shoulderY`. */
+function plankPose(ankle: Point, hand: Point, shoulderY: number): FigurePose {
+  const dy = ankle[1] - shoulderY;
+  const shoulder: Point = [ankle[0] + Math.sqrt(Math.max(1, BODY_LENGTH * BODY_LENGTH - dy * dy)), shoulderY];
+  const along = (len: number): Point => [ankle[0] + ((shoulder[0] - ankle[0]) * len) / BODY_LENGTH, ankle[1] + ((shoulder[1] - ankle[1]) * len) / BODY_LENGTH];
+  const knee = along(L_SHANK);
+  const hip = along(L_SHANK + L_THIGH);
+  const el = elbow(hand, shoulder, L_FORE, L_UPPER, 'back');
+  const angle = Math.atan2(dy, shoulder[0] - ankle[0]);
+  return {
+    legs: [ankle, knee, hip],
+    torso: [hip, shoulder],
+    arm: [shoulder, el, hand],
+    head: [shoulder[0] + 22 * Math.cos(angle + 0.35), shoulder[1] - 22 * Math.sin(angle + 0.35)],
+    foot: [ankle[0], ankle[1], ankle[0] + 7, 238],
+    hand,
+  };
+}
+
+// --- Flexión: sube y baja el pecho hasta casi tocar el suelo. ---
+const PU_ANKLE: Point = [65, 234];
+const PU_HAND: Point = [205, 238];
+const PU_KF: Keyframes = [
+  [0, [180.5]],
+  [0.9, [224]],
+  [1.0, [224]],
+  [1.8, [180.5]],
+];
+
+// --- Handstand push-up: pino contra la pared, las manos fijas en el suelo y la cabeza baja hasta casi tocarlo. ---
+const HS_HAND: Point = [150, 238];
+const HS_WALL = 182;
+const HS_KF: Keyframes = [
+  [0, [152, 180.5]],
+  [1.0, [158, 200]],
+  [1.2, [158, 200]],
+  [2.2, [152, 180.5]],
+  [2.4, [152, 180.5]],
+];
+
+function handstandPose(t: number): FigurePose {
+  const p = interpolate(HS_KF, t);
+  const shoulder: Point = [p[0], p[1]];
+  const a = Math.asin(Math.max(-0.5, Math.min(0.5, (HS_WALL - shoulder[0]) / BODY_LENGTH)));
+  const up = (from: Point, len: number): Point => [from[0] + len * Math.sin(a), from[1] - len * Math.cos(a)];
+  const hip = up(shoulder, L_TORSO);
+  const knee = up(hip, L_THIGH);
+  const ankle = up(knee, L_SHANK);
+  return {
+    legs: [hip, knee, ankle],
+    torso: [shoulder, hip],
+    arm: [HS_HAND, elbow(HS_HAND, shoulder, L_FORE, L_UPPER, 'back'), shoulder],
+    head: [shoulder[0] - 22 * Math.sin(a) + 2, shoulder[1] + 22 * Math.cos(a)],
+    foot: [ankle[0], ankle[1], ankle[0] + 7, ankle[1] - 2],
+    hand: HS_HAND,
+  };
+}
+
+// --- Bar-facing burpee: burpee de cara a la barra y salto por encima de ella (y vuelta, para poder repetir). Las transiciones entre
+// posturas con anclajes distintos (de pie, plancha, en el aire) interpolan punto a punto. ---
+const BURPEE_BAR: Point = [222, 216];
+
+const lerpPoint = (a: Point, b: Point, k: number): Point => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+const lerpPoints = (a: Point[], b: Point[], k: number): Point[] => a.map((p, i) => lerpPoint(p, b[i], k));
+
+/** Mezcla dos posturas con la misma estructura (mismas listas de puntos). */
+function mixPoses(a: FigurePose, b: FigurePose, k: number): FigurePose {
+  return {
+    legs: lerpPoints(a.legs, b.legs, k),
+    torso: lerpPoints(a.torso, b.torso, k),
+    arm: lerpPoints(a.arm, b.arm, k),
+    head: lerpPoint(a.head, b.head, k),
+    foot: [0, 1, 2, 3].map((i) => a.foot[i] + (b.foot[i] - a.foot[i]) * k) as [number, number, number, number],
+    hand: lerpPoint(a.hand, b.hand, k),
+  };
+}
+
+const BURPEE_STAND = standingBody([170, 238], [0, 0, 0, 0, 0]);
+const BURPEE_SQUAT = standingBody([170, 238], [45, 100, 51, 0, 0]);
+const BURPEE_HANDS = BURPEE_SQUAT.hand;
+const BURPEE_PLANK_UP = plankPose([BURPEE_HANDS[0] - 140, 234], [BURPEE_HANDS[0], 238], 180.5);
+const BURPEE_PLANK_DOWN = plankPose([BURPEE_HANDS[0] - 140, 234], [BURPEE_HANDS[0], 238], 224);
+const BURPEE_CROUCH = standingBody([170, 238], [20, 40, 20, 0, 0]);
+const BURPEE_AIR = standingBody([222, 182], [35, 75, 2, 25, 20]);
+const BURPEE_LAND = standingBody([272, 238], [20, 40, 20, 0, 0]);
+const BURPEE_STAND_FAR = standingBody([272, 238], [0, 0, 0, 0, 0]);
+const BURPEE_KF: [number, FigurePose][] = [
+  [0, BURPEE_STAND],
+  [0.45, BURPEE_SQUAT],
+  [0.75, BURPEE_PLANK_UP],
+  [1.15, BURPEE_PLANK_DOWN],
+  [1.55, BURPEE_PLANK_UP],
+  [1.85, BURPEE_SQUAT],
+  [2.2, BURPEE_STAND],
+  [2.45, BURPEE_CROUCH],
+  [2.75, BURPEE_AIR],
+  [3.05, BURPEE_LAND],
+  [3.3, BURPEE_STAND_FAR],
+  [3.6, standingBody([272, 238], [20, 40, 20, 0, 0])],
+  [3.9, BURPEE_AIR],
+  [4.2, BURPEE_CROUCH],
+  [4.45, BURPEE_STAND],
+];
+const BURPEE_DURATION = 4.45;
+
+function burpeePose(t: number): FigurePose {
+  if (t <= 0) return BURPEE_KF[0][1];
+  for (let i = 0; i < BURPEE_KF.length - 1; i++) {
+    const [t0, a] = BURPEE_KF[i];
+    const [t1, b] = BURPEE_KF[i + 1];
+    if (t >= t0 && t <= t1) return mixPoses(a, b, ease((t - t0) / (t1 - t0)));
+  }
+  return BURPEE_KF[BURPEE_KF.length - 1][1];
+}
+
 const line = (x1: number, y1: number, x2: number, y2: number, role: 'floor' | 'frame' | 'thin'): PropShape => ({ kind: 'line', x1, y1, x2, y2, role });
 
 export const ANIMATIONS: Record<string, MovementAnimation> = {
+  'push-up': {
+    box: [55, 150, 200, 95],
+    duration: 1.8,
+    props: [line(55, 240, 250, 240, 'floor')],
+    pose: (t) => plankPose(PU_ANKLE, PU_HAND, interpolate(PU_KF, t)[0]),
+  },
+  'chest-to-bar-pull-up': {
+    box: [60, 0, 200, 250],
+    duration: 3.8,
+    props: [line(62, BAR_Y, 250, BAR_Y, 'frame')],
+    pose: (t) => bodyFromHands([BAR_X, BAR_Y], interpolate(C2B_KF, t), 'down'),
+  },
+  'bar-muscle-up': {
+    box: [60, 0, 200, 312],
+    duration: 5.1,
+    props: [line(62, BMU_BAR[1], 250, BMU_BAR[1], 'frame')],
+    pose: (t) => bodyFromHands(BMU_BAR, interpolate(BMU_KF, t), 'back'),
+  },
+  'power-snatch': {
+    box: [85, 0, 125, 250],
+    duration: 4.4,
+    props: [line(90, 238, 205, 238, 'floor')],
+    pose: powerSnatchPose,
+  },
+  'handstand-push-up': {
+    box: [100, 10, 100, 235],
+    duration: 2.4,
+    props: [line(100, 240, 200, 240, 'floor'), line(HS_WALL, 10, HS_WALL, 240, 'frame')],
+    pose: handstandPose,
+  },
+  'bar-facing-burpee': {
+    box: [45, 20, 265, 225],
+    duration: BURPEE_DURATION,
+    props: [line(45, 240, 310, 240, 'floor'), { kind: 'circle', cx: BURPEE_BAR[0], cy: BURPEE_BAR[1], r: 22, role: 'frame' }],
+    pose: burpeePose,
+  },
   thruster: {
     box: [85, 5, 125, 245],
     duration: 3.6,

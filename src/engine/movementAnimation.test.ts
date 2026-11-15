@@ -8,7 +8,8 @@ const samples = (duration: number, n = 40) => Array.from({ length: n + 1 }, (_, 
 describe('animaciones de movimientos', () => {
   it('solo hay animación para movimientos que existen en el catálogo', () => {
     for (const id of animatedMovementIds()) expect(getMovementById(id), id).toBeDefined();
-    for (const id of ['row', 'kipping-pull-up', 'ring-dip', 'thruster', 'toes-to-bar', 'double-under', 'run', 'air-bike', 'wall-ball', 'deadlift']) expect(animationFor(id), id).not.toBeNull();
+    for (const id of ['row', 'kipping-pull-up', 'ring-dip', 'thruster', 'toes-to-bar', 'double-under', 'run', 'air-bike', 'wall-ball', 'deadlift', 'push-up', 'chest-to-bar-pull-up', 'bar-muscle-up', 'bar-facing-burpee', 'power-snatch', 'handstand-push-up'])
+      expect(animationFor(id), id).not.toBeNull();
     expect(animationFor('movimiento-sin-dibujo')).toBeNull();
   });
 
@@ -64,7 +65,7 @@ describe('animaciones de movimientos', () => {
   });
 
   it('colgado o apoyado, la mano no se mueve; sentado en el remo, el pie tampoco', () => {
-    for (const id of ['kipping-pull-up', 'ring-dip', 'toes-to-bar']) {
+    for (const id of ['kipping-pull-up', 'ring-dip', 'toes-to-bar', 'chest-to-bar-pull-up', 'bar-muscle-up', 'push-up', 'handstand-push-up']) {
       const a = ANIMATIONS[id];
       const h0 = a.pose(0).hand;
       for (const t of samples(a.duration)) expect(dist(a.pose(t).hand, h0), `${id} t=${t}`).toBeLessThan(0.001);
@@ -79,7 +80,10 @@ describe('animaciones de movimientos', () => {
       for (const t of samples(a.duration)) {
         const p = a.pose(t);
         // Tronco, muslo y pierna: largos fijos.
-        expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeCloseTo(52, 1);
+        // El burpee interpola punto a punto entre posturas con anclajes distintos: en el salto el tronco se acorta un poco, nunca se alarga.
+        if (id === 'bar-facing-burpee') expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeGreaterThan(40);
+        else expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeCloseTo(52, 1);
+        expect(dist(p.torso[0], p.torso[1])).toBeLessThanOrEqual(52.05);
         expect(dist(p.legs[0], p.legs[1]), `${id} t=${t}`).toBeGreaterThan(40);
         // El brazo: dos tramos que suman como mucho su largo completo.
         expect(dist(p.arm[0], p.arm[1]) + dist(p.arm[1], p.arm[2])).toBeLessThanOrEqual(58.5);
@@ -187,6 +191,62 @@ describe('los movimientos de la tanda 1', () => {
       expect(n[0] + f[0]).toBeCloseTo(2 * crank[0], 1);
       expect(n[1] + f[1]).toBeCloseTo(2 * crank[1], 1);
     }
+  });
+});
+
+describe('los movimientos de la tanda 2', () => {
+  it('flexión: los pies no se mueven y el cuerpo es una línea recta de largo constante que baja y sube', () => {
+    const a = ANIMATIONS['push-up'];
+    const ankle0 = a.pose(0).legs[0];
+    for (const t of samples(a.duration, 30)) {
+      const p = a.pose(t);
+      expect(dist(p.legs[0], ankle0)).toBeLessThan(0.001);
+      expect(dist(p.legs[0], p.torso[1])).toBeCloseTo(150, 1);
+    }
+    expect(a.pose(0.95).torso[1][1]).toBeGreaterThan(a.pose(0).torso[1][1] + 35);
+  });
+
+  it('handstand push-up: los pies quedan en la pared, la cabeza casi toca el suelo abajo y está lejos arriba', () => {
+    const a = ANIMATIONS['handstand-push-up'];
+    for (const t of samples(a.duration, 30)) expect(Math.abs(a.pose(t).legs[2][0] - 182), `t=${t}`).toBeLessThan(1);
+    expect(a.pose(1.1).head[1]).toBeGreaterThan(215);
+    expect(a.pose(0).head[1]).toBeLessThan(a.pose(1.1).head[1] - 15);
+  });
+
+  it('chest-to-bar: arriba el pecho llega más cerca de la barra que en la dominada con la barbilla', () => {
+    const c2b = ANIMATIONS['chest-to-bar-pull-up'].pose(2.4);
+    const kip = ANIMATIONS['kipping-pull-up'].pose(2.4);
+    expect(c2b.torso[0][1]).toBeGreaterThan(kip.torso[0][1] - 1);
+    expect(c2b.torso[0][1]).toBeLessThan(60);
+    expect(c2b.legs[0][0]).toBeGreaterThan(c2b.torso[0][0] + 20);
+  });
+
+  it('bar muscle-up: colgado el hombro está bajo la barra y en el apoyo por encima de ella', () => {
+    const a = ANIMATIONS['bar-muscle-up'];
+    expect(a.pose(0).torso[0][1]).toBeGreaterThan(98 + 40);
+    expect(a.pose(2.6).torso[0][1]).toBeLessThan(98 - 40);
+    expect(a.pose(2.6).head[1]).toBeLessThan(98 - 50);
+  });
+
+  it('power snatch: acaba con la barra sobre la cabeza y empieza cerca del suelo', () => {
+    const a = ANIMATIONS['power-snatch'];
+    const top = a.pose(2.5);
+    expect(top.hand[1]).toBeLessThan(top.head[1] - 20);
+    expect(a.pose(0).hand[1]).toBeGreaterThan(200);
+  });
+
+  it('bar-facing burpee: de pie, plancha con el pecho abajo, y salto por encima de la barra', () => {
+    const a = ANIMATIONS['bar-facing-burpee'];
+    const stand = a.pose(0);
+    expect(stand.head[1]).toBeLessThan(80);
+    const plank = a.pose(1.15);
+    expect(Math.abs(plank.torso[1][1] - plank.legs[0][1])).toBeLessThan(15);
+    expect(plank.head[1]).toBeGreaterThan(205);
+    const air = a.pose(2.75);
+    expect(air.legs[0][1]).toBeLessThan(200);
+    expect(Math.abs(air.legs[0][0] - 222)).toBeLessThan(2);
+    expect(a.pose(3.3).legs[0][0]).toBeCloseTo(272, 0);
+    expect(a.pose(a.duration).legs[0][0]).toBeCloseTo(170, 0);
   });
 });
 
