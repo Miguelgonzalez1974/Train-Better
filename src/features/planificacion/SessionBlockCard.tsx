@@ -21,6 +21,8 @@ import { LoadStat, type MovementProgressData } from './LoadStat';
 import { noteHead } from './noteText';
 import { groupWodByPart } from './wodPartGroups';
 import { RpeCheckIn } from './RpeCheckIn';
+import { MovementFigureButton } from './MovementFigure';
+import { animationFor } from '../../engine/movementAnimation';
 import { clockBus, type ClockScope } from '../../lib/clockState';
 
 export { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
@@ -406,6 +408,7 @@ function BenchmarkWodCard({
           if (!displayMovement) return null;
           return (
             <div key={`${movementId}-${idx}`} className="flex items-center gap-3 py-2">
+              <MovementFigureButton movementId={swappedTo ?? movementId} name={displayMovement.name} />
               <div className="min-w-0 flex-1">
                 <p className="break-words text-sm font-semibold text-white">{displayMovement.name}</p>
                 {swappedTo && (
@@ -518,7 +521,12 @@ function CustomWodCard({
               Clean" salia con una letra por linea. */}
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
                 <span className="num w-4 shrink-0 text-[11px] text-neutral-600">{idx + 1}</span>
-                <div className="min-w-[8rem] flex-1">
+                {/* El muñeco del movimiento (si ya está dibujado): pequeño y en bucle, y al tocarlo se abre grande. */}
+                <span className="self-center">
+                  <MovementFigureButton movementId={entry.movementId} name={movement.name} />
+                </span>
+                {/* Con el muñeco delante el nombre cede un poco de ancho mínimo, para que las reps y el cambio no bajen solos a otra línea. */}
+                <div className={`${animationFor(entry.movementId) ? 'min-w-[6rem]' : 'min-w-[8rem]'} flex-1`}>
                   {/* Sin `truncate`: en el movil "Kettlebell Swing (Russian)" o "Row (remo ergometro)" quedaban cortados con "…" y el atleta no veia que movimiento era. */}
                   <p className={`${NAME_STEP} break-words`}>{movement.name}</p>
                   {entry.scaledFrom && <p className="mt-0.5 text-[11px] text-neutral-400">Escalado desde {entry.scaledFrom}</p>}
