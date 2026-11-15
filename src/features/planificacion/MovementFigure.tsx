@@ -143,21 +143,16 @@ function Figure({ anim, stroke, playing, speed, respectReducedMotion, className 
 }
 
 /**
- * El muñeco pequeño junto a un movimiento del WOD; al tocarlo se abre grande, con pausa y cámara lenta. Si el movimiento no tiene
+ * El muñeco pequeño junto a un movimiento del WOD; al tocarlo se abre grande, solo el dibujo en bucle. Si el movimiento no tiene
  * animación, no se pinta nada (la fila queda como siempre).
  */
 export function MovementFigureButton({ movementId, name }: { movementId: string; name: string }) {
   const [open, setOpen] = useState(false);
-  const [playing, setPlaying] = useState(true);
-  const [slow, setSlow] = useState(false);
   if (!animationFor(movementId)) return null;
   return (
     <>
       <button
-        onClick={() => {
-          setPlaying(true);
-          setOpen(true);
-        }}
+        onClick={() => setOpen(true)}
         aria-label={`Ver ${name} ampliado`}
         className="h-10 w-14 shrink-0 overflow-hidden rounded-lg bg-white/[0.04] transition-colors hover:bg-white/10 active:bg-white/15"
       >
@@ -165,26 +160,7 @@ export function MovementFigureButton({ movementId, name }: { movementId: string;
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={name}>
         <div className="rounded-xl bg-white/[0.03] p-2">
-          <MovementFigure movementId={movementId} stroke={7} playing={playing} speed={slow ? 0.5 : 1} respectReducedMotion={false} className="h-64 w-full" />
-        </div>
-        <div className="mt-3 flex gap-2">
-          <button onClick={() => setPlaying((p) => !p)} className="flex-1 rounded-lg border border-brand-border py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-white/5">
-            {playing ? 'Pausa' : 'Seguir'}
-          </button>
-          <button
-            onClick={() => setSlow(false)}
-            aria-pressed={!slow}
-            className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors ${!slow ? 'border-white/30 bg-white/10 text-white' : 'border-brand-border text-neutral-300 hover:bg-white/5'}`}
-          >
-            1x
-          </button>
-          <button
-            onClick={() => setSlow(true)}
-            aria-pressed={slow}
-            className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors ${slow ? 'border-white/30 bg-white/10 text-white' : 'border-brand-border text-neutral-300 hover:bg-white/5'}`}
-          >
-            0,5x
-          </button>
+          <MovementFigure movementId={movementId} stroke={7} respectReducedMotion={false} className="h-64 w-full" />
         </div>
       </Modal>
     </>
