@@ -35,17 +35,23 @@ export const EVEN_SECONDS = 2;
 export const WEAK_SEGMENT_SECONDS = 5;
 
 /** Los bloques de WOD de una parte: en un día normal todos; en un doble WOD, los de esa parte. */
-function partBlocks(session: DailySession, part: 1 | 2) {
-  const all = session.blocks.filter((b) => b.block === 'wod');
+function partBlocksOf(source: { block: string; wodPart?: 1 | 2 }[], part: 1 | 2) {
+  const all = source.filter((b) => b.block === 'wod');
   return all.some((b) => b.wodPart !== undefined) ? all.filter((b) => (b.wodPart ?? 1) === part) : part === 1 ? all : [];
 }
+const partBlocks = (session: DailySession, part: 1 | 2) => partBlocksOf(session.blocks, part) as DailySession['blocks'];
 
 /**
  * Qué WOD es: el id del benchmark, del catálogo o de la biblioteca; si lo generó el coach, una huella de su formato y sus movimientos (el
  * mismo WOD generado dos veces sale igual solo si coinciden los dos, que es lo que hace falta para compararlos).
  */
 export function wodKeyOf(session: DailySession, part: 1 | 2): string | null {
-  const blocks = partBlocks(session, part);
+  return wodKeyOfBlocks(session.blocks, part);
+}
+
+/** La misma clave a partir de los bloques de un WOD (los de una sesión, o los guardados en el historial). */
+export function wodKeyOfBlocks(allBlocks: DailySession['blocks'], part: 1 | 2): string | null {
+  const blocks = partBlocksOf(allBlocks, part) as DailySession['blocks'];
   if (blocks.length === 0) return null;
   const bench = blocks.find((b) => b.movementId.startsWith('benchmark:'));
   if (bench) return bench.movementId;
@@ -56,11 +62,13 @@ export function wodKeyOf(session: DailySession, part: 1 | 2): string | null {
   return `gen:${blocks[0].format ?? ''}|${blocks.map((b) => `${b.movementId}${b.reps ? `x${b.reps}` : ''}`).join(',')}`;
 }
 
-/** La misma clave, leída de lo que quedó en el historial (los WODs generados no se pueden reconocer de ahí, así que no tienen). */
+/** La misma clave, leída de lo que quedó en el historial (un WOD generado solo se reconoce si se guardaron sus bloques: entradas nuevas). */
 export function historyWodKey(entry: SessionHistoryEntry): string | null {
   if (entry.wodCatalogId) return entry.wodCatalogId;
   if (entry.wodLibraryId) return `lib:${entry.wodLibraryId}`;
-  return entry.movementIds.find((id) => id.startsWith('benchmark:')) ?? null;
+  const bench = entry.movementIds.find((id) => id.startsWith('benchmark:'));
+  if (bench) return bench;
+  return entry.wodBlocks && entry.wodBlocks.length > 0 ? wodKeyOfBlocks(entry.wodBlocks, 1) : null;
 }
 
 /** Cuántas rondas hay en un formato: «For Time (5 rondas)», «5 Rounds For Time», o una escalera «21-15-9» (3 escalones). */

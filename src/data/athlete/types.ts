@@ -1022,6 +1022,11 @@ export interface SessionHistoryEntry {
   /** Un día de doble WOD: los ids de catálogo (`lib:…` / `bm:…`) de sus dos partes, para no repetir ninguna. */
   wodCatalogIds?: string[];
   /**
+   * Los bloques del WOD que se hizo ese día (sin las notas largas): permiten repetirlo después, también si lo generó el coach, que no tiene
+   * id de catálogo. Ausente en las entradas anteriores a esta función.
+   */
+  wodBlocks?: SessionBlockResult[];
+  /**
    * Punto medio de la banda BASE (sin calibrar) del objetivo del WOD de ese dia, con su formato y
    * unidad — junto a `wodResult` permite medir cuanto rinde el atleta respecto a la estimacion del
    * motor y calibrarla (ver `getWodPerformance`). Ausente en benchmarks, objetivos cualitativos y

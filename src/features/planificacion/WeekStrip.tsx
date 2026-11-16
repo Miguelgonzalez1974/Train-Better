@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Check, ChevronLeft, ChevronRight, Dumbbell, Moon, Shuffle, Trash2, Zap } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Dumbbell, Ghost, Moon, Shuffle, Trash2, Zap } from 'lucide-react';
 import { addDaysIso, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { buildFormModel } from '../dashboard/formModel';
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
@@ -13,6 +13,8 @@ import { TrainingTimer } from './TrainingTimer';
 import { clockPropsFor } from './clockProps';
 import { ensureWeekLocked } from './weeklyLock';
 import { LogPastDay } from './LogPastDay';
+import { RepeatWodModal } from './RepeatWodModal';
+import { applyRepeatedWod, listRepeatableWods } from '../../engine/wodRepeat';
 import { wodResultsOf } from '../../engine/wodScoring';
 import { describeSkipped } from '../../engine/sessionParts';
 import { estimatePlannedStrain, strainFit } from '../../engine/plannedStrain';
@@ -89,7 +91,13 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
   const [loggingFor, setLoggingFor] = useState<number | null>(null);
   /** Aviso de «Otro WOD» en la ventana de un día (por ejemplo, que ese WOD está fijado). */
   const [wodNote, setWodNote] = useState<string | null>(null);
-  useEffect(() => setWodNote(null), [expanded, weekOffset]);
+  /** El selector «Repetir un WOD que ya hice» abierto desde la ventana de un día. */
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  useEffect(() => {
+    setWodNote(null);
+    setRepeatOpen(false);
+  }, [expanded, weekOffset]);
+  const repeatableWods = useMemo(() => (repeatOpen ? listRepeatableWods(history, profile) : []), [repeatOpen, history, profile]);
   const todayIso = toLocalIsoDate(today);
   // Los días en ventana de supercompensación (ver `Tu forma`): los que se pueden aprovechar para una sesión exigente.
   const windowDays = useMemo(() => {
@@ -468,6 +476,13 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                         <Shuffle size={13} strokeWidth={2.5} aria-hidden="true" />
                         Otro WOD para este día
                       </button>
+                      <button
+                        onClick={() => setRepeatOpen(true)}
+                        className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:bg-white/[0.08]"
+                      >
+                        <Ghost size={13} strokeWidth={2.5} aria-hidden="true" />
+                        Repetir un WOD que ya hice
+                      </button>
                       {wodNote && <p className="text-[11px] leading-relaxed text-warn">{wodNote}</p>}
                     </div>
                   )}
@@ -478,6 +493,17 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               {/* El programa de fuerza (Texas) de ese día: lo hecho o la sesión prevista. */}
               <CompanionDayBlock profile={profile} history={history} dateIso={dateIso} todayIso={todayIso} />
             </Modal>
+            <RepeatWodModal
+              open={repeatOpen && Boolean(expandedPreview)}
+              onClose={() => setRepeatOpen(false)}
+              list={repeatableWods}
+              onPick={(w) => {
+                if (!expandedPreview) return;
+                athleteRepository.saveCachedSession(applyRepeatedWod(expandedPreview, w.blocks));
+                setRepeatOpen(false);
+                onRestChange?.();
+              }}
+            />
             {previewClock && <TrainingTimer scope="preview" caps={previewClock.caps} track={previewClock.track} />}
             </>
           );

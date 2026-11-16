@@ -5836,5 +5836,51 @@ export function toHistoryEntry(
     wodCatalogId: session.blocks.find((b) => b.block === 'wod' && b.wodCatalogId)?.wodCatalogId,
     ...(catalogIdsOfDay.length > 1 ? { wodCatalogIds: catalogIdsOfDay } : {}),
     wodTargetBase: wodBase,
+    // Los bloques del WOD (sin las notas largas), para poder repetirlo luego y correr contra la marca de entonces.
+    ...(wodBlocksToKeep(session).length > 0 ? { wodBlocks: wodBlocksToKeep(session) } : {}),
   };
+}
+
+/** Los bloques de WOD de la sesión que se guardan en el historial: sin las notas (son largas y se regeneran) ni la nota libre de una sesión propia. */
+function wodBlocksToKeep(session: DailySession): SessionBlockResult[] {
+  return session.blocks
+    .filter((b) => b.block === 'wod' && b.movementId !== 'custom-wod-note')
+    .map((b) => {
+      const { notes: _notes, ...rest } = b;
+      void _notes;
+      return rest;
+    });
+}
+
+/**
+ * Los bloques de un WOD de programación real (`lib:…` / `bm:…`) tal como se sirven, con las cargas del coach para ti hoy y sin recortes. Sirve
+ * para volver a poner un WOD ya hecho, también uno anterior a que se guardaran los bloques. null si el id ya no está en el catálogo.
+ */
+export function serveCatalogWodBlocks(catalogId: string, profile: AthleteProfile): SessionBlockResult[] | null {
+  const wod = getWodCatalog().find((w) => w.id === catalogId);
+  if (!wod) return null;
+  const bodyweightKg = latestBodyweightKg(profile.bodyweightLog);
+  const notes = `Repites un WOD de la programación de ${SOURCE_LABEL[wod.source]} (${wod.name}): correrás contra tu marca de entonces.`;
+  if (wod.origin === 'library') {
+    const lw = getLibraryWod(wod.refId);
+    return lw ? serveLibraryWod(lw, notes, profile.prs, bodyweightKg, 1) : null;
+  }
+  const bm = benchmarkWorkouts.find((w) => w.id === wod.refId);
+  if (!bm) return null;
+  const benchmarkLoads: Record<string, number> = {};
+  for (const id of bm.movements) {
+    const m = getMovementById(id);
+    const kg = m ? wodMovementLoadKg(m, profile.prs, bodyweightKg, 1) : undefined;
+    if (kg !== undefined && kg > 0) benchmarkLoads[id] = kg;
+  }
+  return [
+    {
+      block: 'wod',
+      movementId: `benchmark:${bm.id}`,
+      format: bm.format,
+      notes: `${bm.name} — ${localizeWodText(bm.format)}. ${notes}`,
+      wodCatalogId: wod.id,
+      ...(Object.keys(benchmarkLoads).length > 0 ? { benchmarkLoads } : {}),
+    },
+  ];
 }

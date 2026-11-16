@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Timer, NotebookPen, Brain, Shuffle, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -112,6 +112,8 @@ import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
 import { paceGhost, paceTip } from '../../engine/wodPace';
+import { applyRepeatedWod, listRepeatableWods } from '../../engine/wodRepeat';
+import { RepeatWodModal } from './RepeatWodModal';
 import { readWod, type WodReading } from '../../engine/wodRead';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
@@ -221,6 +223,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [showDiary, setShowDiary] = useState(false);
   const [showSeasonMap, setShowSeasonMap] = useState(false);
   const [showComplexes, setShowComplexes] = useState(false);
+  /** «Repetir un WOD que ya hice»: el selector abierto. */
+  const [showRepeat, setShowRepeat] = useState(false);
   const [showHardness, setShowHardness] = useState(false);
   const [rxOrScaled, setRxOrScaled] = useState<RxOrScaled>('rx');
   // Qué se escaló del WOD (por movimiento) y cómo de duro fue: se anota en el cierre de la sesión.
@@ -316,6 +320,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const complexPool = useMemo(() => buildComplexPool(profile.customComplexes, profile.complexPrefs), [profile.customComplexes, profile.complexPrefs]);
   const complexWeek: 1 | 2 | 3 | 4 = session && session.mesocycleWeek >= 1 && session.mesocycleWeek <= 4 ? (session.mesocycleWeek as 1 | 2 | 3 | 4) : 2;
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
+  // Los WODs que ya hiciste y se pueden repetir (para correr contra tu marca); solo se calcula con el selector abierto.
+  const repeatableWods = useMemo(() => (showRepeat ? listRepeatableWods(history, profile) : []), [showRepeat, history, profile]);
   // Objetivo de esfuerzo de hoy (el de la mañana, ver `engine/strainTarget.ts`): lo fija el Dashboard al contestar el
   // check-in; aquí se lee (y se fija si entras antes aquí) para comparar con la sesión prevista.
   const [strainTarget, setStrainTarget] = useState<StrainTarget | null>(() => profile.strainTargets?.[todayIso] ?? null);
@@ -1311,6 +1317,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             title: 'Cambiar la sesión de hoy',
             items: [
               ...(hasWodBlock ? [{ label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
+              ...(hasWodBlock ? [{ label: 'Repetir un WOD que ya hice', hint: 'correr contra ti', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
               ...(canHarder ? [{ label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
               { label: 'Acortar la sesión', hint: 'tengo poco tiempo', icon: Timer, ask: 'acortar la sesion' },
               ...(canUndoAdapt ? [{ label: 'Deshacer el cambio', icon: Undo2, ask: 'deshaz el cambio' }] : []),
@@ -1895,6 +1902,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           </div>
         </div>
       </Modal>
+
+      <RepeatWodModal
+        open={showRepeat}
+        onClose={() => setShowRepeat(false)}
+        list={repeatableWods}
+        onPick={(w) => {
+          if (!session || alreadyCompletedToday) return;
+          const next = applyRepeatedWod(session, w.blocks);
+          athleteRepository.saveCachedSession(next);
+          setSession(next);
+          setShowRepeat(false);
+        }}
+      />
 
       <Modal open={showTypePicker} onClose={() => setShowTypePicker(false)} title="Elige tu sesión de hoy">
         <div className="flex flex-col gap-2">
