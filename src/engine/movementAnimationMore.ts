@@ -44,10 +44,10 @@ import {
  */
 
 type Load = 'bar' | 'db' | 'kb' | 'none';
-const FLOOR = 238;
+export const FLOOR = 238;
 
 /** La carga que lleva el muñeco, como pieza móvil (`none` = ninguna). */
-function loadShape(load: Load, at: Point, r = 18): DynShape[] {
+export function loadShape(load: Load, at: Point, r = 18): DynShape[] {
   if (load === 'bar') return [{ kind: 'circle', cx: at[0], cy: at[1], r, role: 'plate' }];
   if (load === 'db') return [{ kind: 'circle', cx: at[0], cy: at[1], r: 9, role: 'plate' }];
   if (load === 'kb') return [{ kind: 'circle', cx: at[0], cy: at[1], r: 11, role: 'ball' }];
@@ -59,7 +59,7 @@ function propPoints(props: PropShape[]): Point[] {
 }
 
 /** El cuadro visible a partir de todo lo que recorre el muñeco (y el material fijo), con un margen. */
-function fitBox(pose: (t: number) => FigurePose, duration: number, props: PropShape[], withFloor: boolean): [number, number, number, number] {
+export function fitBox(pose: (t: number) => FigurePose, duration: number, props: PropShape[], withFloor: boolean): [number, number, number, number] {
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -90,26 +90,26 @@ function fitBox(pose: (t: number) => FigurePose, duration: number, props: PropSh
 }
 
 /** Una animación con el cuadro calculado y, si hay suelo, la línea del suelo a todo lo ancho del cuadro. */
-function makeAnim(pose: (t: number) => FigurePose, duration: number, props: PropShape[] = [], floor = true): MovementAnimation {
+export function makeAnim(pose: (t: number) => FigurePose, duration: number, props: PropShape[] = [], floor = true): MovementAnimation {
   const box = fitBox(pose, duration, props, floor);
   const all: PropShape[] = floor ? [{ kind: 'line', x1: box[0], y1: FLOOR, x2: box[0] + box[2], y2: FLOOR, role: 'floor' }, ...props] : props;
   return { box, duration, props: all, pose };
 }
 
-const line = (x1: number, y1: number, x2: number, y2: number, role: 'floor' | 'frame' | 'thin' = 'frame'): PropShape => ({ kind: 'line', x1, y1, x2, y2, role });
+export const line = (x1: number, y1: number, x2: number, y2: number, role: 'floor' | 'frame' | 'thin' = 'frame'): PropShape => ({ kind: 'line', x1, y1, x2, y2, role });
 
 // ---------------------------------------------------------------------------------------------
 // Levantamientos de pie (barra, mancuerna, kettlebell): cuerpo de pie con los pies fijos y la carga en la mano
 // ---------------------------------------------------------------------------------------------
 
-const ARMS_DOWN = [0, 0, 0, 0, 0];
-const START = [32, 82, 42, 0, 0];
+export const ARMS_DOWN = [0, 0, 0, 0, 0];
+export const START = [32, 82, 42, 0, 0];
 const MID = [16, 62, 38, 0, 0];
 const EXT = [2, 6, -3, 80, 30];
-const RACK = [0, 0, 2, 75, 175];
+export const RACK = [0, 0, 2, 75, 175];
 const RACK_DEEP = [55, 105, 14, 75, 175];
 const RACK_QUARTER = [20, 45, 8, 75, 175];
-const OH_STAND = [0, 0, 0, 180, 180];
+export const OH_STAND = [0, 0, 0, 180, 180];
 const OH_DEEP = [55, 105, 22, 178, 180];
 const OH_QUARTER = [22, 50, 8, 178, 180];
 const HANG_KNEE = [8, 40, 50, 0, 0];
@@ -126,7 +126,7 @@ interface LiftOptions {
   props?: PropShape[];
 }
 
-function lift(kf: Keyframes, duration: number, o: LiftOptions): MovementAnimation {
+export function lift(kf: Keyframes, duration: number, o: LiftOptions): MovementAnimation {
   const ankle = o.ankle ?? [130, FLOOR];
   const pose = (t: number): FigurePose => {
     const p = standingBody(ankle, interpolate(kf, t));
@@ -382,7 +382,7 @@ const devilsPressKf: [number, FigurePose][] = [
 ];
 
 const BOX_TOP = 190;
-const boxProps = (x1: number, x2: number): PropShape[] => [line(x1, BOX_TOP, x2, BOX_TOP), line(x1, BOX_TOP, x1, FLOOR), line(x2, BOX_TOP, x2, FLOOR)];
+export const boxProps = (x1: number, x2: number): PropShape[] => [line(x1, BOX_TOP, x2, BOX_TOP), line(x1, BOX_TOP, x1, FLOOR), line(x2, BOX_TOP, x2, FLOOR)];
 const crouch = (x: number, y = FLOOR) => standingBody([x, y], [20, 40, 20, 0, 0]);
 const stand = (x: number, y = FLOOR) => standingBody([x, y], [0, 0, 0, 0, 0]);
 const air = (x: number, y: number) => standingBody([x, y], [35, 75, 2, 25, 20]);
@@ -432,12 +432,12 @@ const burpeeBoxJumpOverKf: [number, FigurePose][] = [
 // ---------------------------------------------------------------------------------------------
 
 /** Pierna con la cadera en `hip` y el pie en `foot`: la rodilla dobla hacia delante. */
-function legTo(hip: Point, foot: Point): { legs: Point[]; foot: [number, number, number, number] } {
+export function legTo(hip: Point, foot: Point): { legs: Point[]; foot: [number, number, number, number] } {
   return { legs: [foot, elbow(hip, foot, L_THIGH, L_SHANK, 'front'), hip], foot: [foot[0] - 3, foot[1], foot[0] + 14, foot[1]] };
 }
 
 /** [cadera x, cadera y, pie cercano x, y, pie lejano x, y, inclinación del tronco, brazo, antebrazo] */
-function twoLegPose(p: number[], extra: (pose: FigurePose) => DynShape[] = () => []): FigurePose {
+export function twoLegPose(p: number[], extra: (pose: FigurePose) => DynShape[] = () => []): FigurePose {
   const hip: Point = [p[0], p[1]];
   const near = legTo(hip, [p[2], p[3]]);
   const far = legTo(hip, [p[4], p[5]]);
@@ -494,7 +494,7 @@ function lungeAnim(kf: Keyframes, duration: number, load: Load = 'none', props: 
 }
 
 /** Rayitas en el suelo que pasan hacia atrás, para dar sensación de avance. */
-function groundTicks(t: number, duration: number, from: number, span: number): DynShape[] {
+export function groundTicks(t: number, duration: number, from: number, span: number): DynShape[] {
   const out: DynShape[] = [];
   for (let i = 0; i < 3; i++) {
     const x = (((i * (span / 3) - span * (t / duration)) % span) + span) % span;
@@ -552,8 +552,8 @@ function sledPose(t: number): FigurePose {
 // Suelo y máquinas: abdominales, GHD, V-up, L-sit, planchas, banco
 // ---------------------------------------------------------------------------------------------
 
-const dir = (deg: number): Point => [Math.cos(deg * RAD), -Math.sin(deg * RAD)];
-const plus = (a: Point, d: Point, k: number): Point => [a[0] + d[0] * k, a[1] + d[1] * k];
+export const dir = (deg: number): Point => [Math.cos(deg * RAD), -Math.sin(deg * RAD)];
+export const plus = (a: Point, d: Point, k: number): Point => [a[0] + d[0] * k, a[1] + d[1] * k];
 
 /** Abdominal en el suelo: tronco que se levanta (θ) y brazos desde arriba de la cabeza hasta los pies (ψ). */
 function abmatPose(p: number[]): FigurePose {
@@ -684,7 +684,7 @@ const BENCH_KF: Keyframes = [
   [2.0, [100, 128]],
   [2.3, [100, 128]],
 ];
-const benchProps: PropShape[] = [line(80, 196, 178, 196), line(92, 196, 92, FLOOR), line(168, 196, 168, FLOOR)];
+export const benchProps: PropShape[] = [line(80, 196, 178, 196), line(92, 196, 92, FLOOR), line(168, 196, 168, FLOOR)];
 
 const PLANK_ANKLE: Point = [65, 234];
 const PLANK_HAND: Point = [205, 238];

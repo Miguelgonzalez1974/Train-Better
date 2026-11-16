@@ -736,11 +736,14 @@ function ComplexCard({
               const feedback = feedbackIndex !== undefined ? setFeedbackByIndex?.get(feedbackIndex) : undefined;
               return (
                 <div key={`${entry.movementId}-${idx}`} className={idx > 0 ? 'border-t border-white/5 pt-3' : ''}>
-                  <div className="flex items-baseline gap-2">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
-                      {String.fromCharCode(65 + idx)}
-                    </span>
-                    <p className={NAME_MAIN}>{entry.complex?.name ?? movement.name}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-baseline gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
+                        {String.fromCharCode(65 + idx)}
+                      </span>
+                      <p className={NAME_MAIN}>{entry.complex?.name ?? movement.name}</p>
+                    </div>
+                    {!entry.complex && <MovementFigureButton movementId={entry.movementId} name={movement.name} />}
                   </div>
                   {entry.format && (
                     <div className="ml-7 mt-1">
@@ -909,7 +912,10 @@ function PairedFormatEntry({
           return (
             <div key={entry.movementId} className="py-2">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <p className={NAME_STEP}>{movement.name}</p>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <MovementFigureButton movementId={entry.movementId} name={movement.name} />
+                  <p className={NAME_STEP}>{movement.name}</p>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-neutral-500">
                     {entry.sets && `${entry.sets} series`}
@@ -975,6 +981,7 @@ function AccessoryGroupCard({ entries }: { entries: SessionBlockResult[] }) {
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
                     {idx + 1}
                   </span>
+                  <MovementFigureButton movementId={entry.movementId} name={movement.name} />
                   <div>
                     <p className={NAME_STEP}>{movement.name}</p>
                     {(entry.sets || entry.reps) && (
@@ -1019,7 +1026,11 @@ function EntryRow({
   return (
     <div className="py-0.5">
       {entry.format && <FormatBadge format={entry.format} />}
-      <p className={NAME_MAIN}>{entry.complex?.name ?? movement.name}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className={NAME_MAIN}>{entry.complex?.name ?? movement.name}</p>
+        {/* El muñeco del movimiento (si ya está dibujado); un complejo no lleva, porque es una cadena de varios. */}
+        {!entry.complex && <MovementFigureButton movementId={entry.movementId} name={movement.name} />}
+      </div>
 
       {(entry.sets || entry.reps || entry.loadKg || entry.tempo) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-y-2">

@@ -1,12 +1,13 @@
 import { BASE_ANIMATIONS, type MovementAnimation } from './movementAnimation';
 import { MORE_ANIMATIONS } from './movementAnimationMore';
+import { ACCESSORY_ANIMATIONS } from './movementAnimationAccessory';
 
 /**
  * El registro de las animaciones de movimientos: cada movimiento del catálogo con su dibujo propio, más los alias (variantes que se ven
- * igual de perfil, como el sumo y el convencional, o la dominada con banda y la estricta). Lo que no está aquí no pinta nada en el WOD.
+ * igual de perfil, como el sumo y el convencional, o la dominada con banda y la estricta). Lo que no está aquí no pinta nada.
  */
 
-export const ANIMATIONS: Record<string, MovementAnimation> = { ...BASE_ANIMATIONS, ...MORE_ANIMATIONS };
+export const ANIMATIONS: Record<string, MovementAnimation> = { ...BASE_ANIMATIONS, ...MORE_ANIMATIONS, ...ACCESSORY_ANIMATIONS };
 
 /** Movimiento → animación que comparte (variantes que de perfil se ven igual o casi). */
 export const ANIMATION_ALIASES: Record<string, string> = {
@@ -27,6 +28,12 @@ export const ANIMATION_ALIASES: Record<string, string> = {
   'floor-press': 'bench-press',
   'man-maker': 'devils-press',
   'single-under': 'double-under',
+  // Accesorios que de perfil se ven como otro
+  'hammer-curl': 'bicep-curl',
+  'dumbbell-floor-press': 'dumbbell-bench-press',
+  'band-pull-apart': 'face-pull',
+  'side-plank-hold': 'plank',
+  'cossack-squat': 'air-squat',
 };
 
 /** La animación de un movimiento del catálogo, o null si aún no la tiene. */
