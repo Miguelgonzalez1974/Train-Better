@@ -104,17 +104,17 @@ export const line = (x1: number, y1: number, x2: number, y2: number, role: 'floo
 
 export const ARMS_DOWN = [0, 0, 0, 0, 0];
 export const START = [32, 82, 42, 0, 0];
-const MID = [16, 62, 38, 0, 0];
-const EXT = [2, 6, -3, 80, 30];
+export const MID = [16, 62, 38, 0, 0];
+export const EXT = [2, 6, -3, 80, 30];
 export const RACK = [0, 0, 2, 75, 175];
-const RACK_DEEP = [55, 105, 14, 75, 175];
-const RACK_QUARTER = [20, 45, 8, 75, 175];
+export const RACK_DEEP = [55, 105, 14, 75, 175];
+export const RACK_QUARTER = [20, 45, 8, 75, 175];
 export const OH_STAND = [0, 0, 0, 180, 180];
-const OH_DEEP = [55, 105, 22, 178, 180];
-const OH_QUARTER = [22, 50, 8, 178, 180];
-const HANG_KNEE = [8, 40, 50, 0, 0];
+export const OH_DEEP = [55, 105, 22, 178, 180];
+export const OH_QUARTER = [22, 50, 8, 178, 180];
+export const HANG_KNEE = [8, 40, 50, 0, 0];
 const HANG_ABOVE = [4, 25, 35, 0, 0];
-const DIP = [14, 30, 2, 75, 175];
+export const DIP = [14, 30, 2, 75, 175];
 
 interface LiftOptions {
   load: Load;
