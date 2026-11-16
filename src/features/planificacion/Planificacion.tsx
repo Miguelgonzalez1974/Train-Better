@@ -73,6 +73,7 @@ import { WeekStrip } from './WeekStrip';
 import { SeasonMapCompact, SeasonMapFull } from '../objetivos/SeasonMap';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
+import { wodDoneInfos } from '../../engine/wodDone';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
@@ -303,6 +304,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // Reconstruido desde el historial persistido (no desde estado efimero de la sesion) para que el
   // resumen post-sesion sobreviva a un refresco de pagina, igual que `alreadyCompletedToday`.
   const todayHistoryEntry = useMemo(() => history.find((h) => h.date === todayIso), [history, todayIso]);
+  // El resultado del WOD de hoy al pie de su tarjeta cuando la sesión ya está registrada.
+  const wodDone = useMemo(
+    () => (session && alreadyCompletedToday && todayHistoryEntry ? wodDoneInfos(session, todayHistoryEntry, history) : undefined),
+    [session, alreadyCompletedToday, todayHistoryEntry, history],
+  );
   const adherenceStreak = useMemo(
     () => (alreadyCompletedToday ? computeAdherenceStreak(profile, history, todayIso) : 0),
     [alreadyCompletedToday, profile, history, todayIso],
@@ -1720,6 +1726,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         <DaySessionBlocks
           session={session}
           autoOpenMain={!alreadyCompletedToday}
+          wodDone={wodDone}
           editable={editMode}
           onUpdateEntry={handleUpdateEntry}
           onAddEntry={handleAddEntry}

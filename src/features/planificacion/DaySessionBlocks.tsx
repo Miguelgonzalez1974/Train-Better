@@ -7,6 +7,8 @@ import { BlockPreview } from './BlockPreview';
 import { buildTaskSections, SessionTaskView } from './SessionTaskView';
 import type { MovementProgressData } from './LoadStat';
 import { EmphasisTag } from './ProfileEmphasis';
+import { WodDoneLine } from './WodDoneLine';
+import type { WodDoneInfo } from '../../engine/wodDone';
 import type { ClockScope } from '../../lib/clockState';
 
 export const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
@@ -27,6 +29,8 @@ interface DaySessionBlocksProps {
   autoOpenMain?: boolean;
   /** Qué reloj abre el «Crono» del WOD: el de hoy (por defecto) o el de la vista previa de otro día (`WeekStrip`). */
   clockScope?: ClockScope;
+  /** El resultado de cada parte del WOD si la sesión ya está hecha: se enseña como una línea al pie de la tarjeta del WOD. */
+  wodDone?: Partial<Record<1 | 2, WodDoneInfo>>;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
@@ -41,6 +45,7 @@ export function DaySessionBlocks({
   onRateSet,
   autoOpenMain = false,
   clockScope,
+  wodDone,
 }: DaySessionBlocksProps) {
   // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
   // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
@@ -139,6 +144,9 @@ export function DaySessionBlocks({
             {(block === 'strength' || block === 'oly' || block === 'wod' || block === 'accessory') && session.profileEmphasis?.blocks[block] && (
               <EmphasisTag label={session.profileEmphasis.blocks[block]!.label} why={session.profileEmphasis.blocks[block]!.why} />
             )}
+            {block === 'wod' &&
+              wodDone &&
+              ([1, 2] as const).filter((p) => wodDone[p]).map((p, _i, shown) => <WodDoneLine key={p} info={wodDone[p]!} label={shown.length > 1 ? `Parte ${p}` : undefined} />)}
             </Fragment>
           ))}
         </div>
