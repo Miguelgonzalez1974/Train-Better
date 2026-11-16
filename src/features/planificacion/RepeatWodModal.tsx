@@ -11,9 +11,9 @@ const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[N
  */
 export function RepeatWodModal({ open, onClose, list, onPick }: { open: boolean; onClose: () => void; list: RepeatableWod[]; onPick: (wod: RepeatableWod) => void }) {
   return (
-    <Modal open={open} onClose={onClose} title="Repetir un WOD que ya hice">
+    <Modal open={open} onClose={onClose} title="Repetir WOD fantasma">
       <p className="mb-3 text-sm leading-relaxed text-neutral-400">
-        Elige uno y el crono correrá contra tu marca de entonces: tu fantasma de verdad, no una estimación.
+        Elige un WOD que ya hiciste y el crono correrá contra tu marca de entonces: tu fantasma de verdad, no una estimación.
       </p>
       {list.length === 0 ? (
         <p className="rounded-lg bg-white/[0.04] px-3 py-3 text-sm leading-relaxed text-neutral-300">

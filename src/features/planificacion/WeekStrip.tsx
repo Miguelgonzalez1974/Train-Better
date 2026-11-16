@@ -481,7 +481,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                         className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:bg-white/[0.08]"
                       >
                         <Ghost size={13} strokeWidth={2.5} aria-hidden="true" />
-                        Repetir un WOD que ya hice
+                        Repetir WOD fantasma
                       </button>
                       {wodNote && <p className="text-[11px] leading-relaxed text-warn">{wodNote}</p>}
                     </div>

@@ -1317,7 +1317,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             title: 'Cambiar la sesión de hoy',
             items: [
               ...(hasWodBlock ? [{ label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
-              ...(hasWodBlock ? [{ label: 'Repetir un WOD que ya hice', hint: 'correr contra ti', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
+              ...(hasWodBlock ? [{ label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
               ...(canHarder ? [{ label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
               { label: 'Acortar la sesión', hint: 'tengo poco tiempo', icon: Timer, ask: 'acortar la sesion' },
               ...(canUndoAdapt ? [{ label: 'Deshacer el cambio', icon: Undo2, ask: 'deshaz el cambio' }] : []),
