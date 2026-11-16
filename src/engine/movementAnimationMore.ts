@@ -147,11 +147,11 @@ const cleanKf = (catchPose: number[]): Keyframes => [
   [4.0, START],
   [4.3, START],
 ];
-const hangCleanKf = (from: number[]): Keyframes => [
+const hangCleanKf = (from: number[], catchPose: number[] = RACK_QUARTER): Keyframes => [
   [0, from],
   [0.4, from],
   [0.9, EXT],
-  [1.3, RACK_QUARTER],
+  [1.3, catchPose],
   [1.9, RACK],
   [2.4, RACK],
   [3.0, from],
@@ -169,11 +169,11 @@ const snatchKf: Keyframes = [
   [4.0, START],
   [4.3, START],
 ];
-const hangSnatchKf = (from: number[]): Keyframes => [
+const hangSnatchKf = (from: number[], catchPose: number[] = OH_QUARTER): Keyframes => [
   [0, from],
   [0.4, from],
   [0.85, EXT],
-  [1.2, OH_QUARTER],
+  [1.2, catchPose],
   [1.9, OH_STAND],
   [2.4, OH_STAND],
   [3.1, from],
@@ -212,12 +212,12 @@ const pushJerkKf: Keyframes = [
   [2.7, RACK],
   [3.1, RACK],
 ];
-const cleanAndJerkKf: Keyframes = [
+const cleanAndJerkKf = (catchPose: number[]): Keyframes => [
   [0, START],
   [0.4, START],
   [0.9, MID],
   [1.15, EXT],
-  [1.45, RACK_DEEP],
+  [1.45, catchPose],
   [1.9, RACK],
   [2.2, RACK],
   [2.45, DIP],
@@ -875,14 +875,19 @@ export const MORE_ANIMATIONS: Record<string, MovementAnimation> = {
   clean: lift(cleanKf(RACK_DEEP), 4.3, { load: 'bar', r: 24 }),
   'power-clean': lift(cleanKf(RACK_QUARTER), 4.3, { load: 'bar', r: 24 }),
   'hang-clean': lift(hangCleanKf(HANG_KNEE), 3.3, { load: 'bar', r: 22 }),
+  'hang-power-clean': lift(hangCleanKf(HANG_KNEE), 3.3, { load: 'bar', r: 22 }),
+  'hang-squat-clean': lift(hangCleanKf(HANG_KNEE, RACK_DEEP), 3.3, { load: 'bar', r: 22 }),
+  'power-clean-and-jerk': lift(cleanAndJerkKf(RACK_QUARTER), 5.3, { load: 'bar', r: 22 }),
   'hang-clean-above-knee': lift(hangCleanKf(HANG_ABOVE), 3.3, { load: 'bar', r: 22 }),
   'dumbbell-hang-clean': lift(hangCleanKf(HANG_KNEE), 3.3, { load: 'db' }),
   'sandbag-clean': lift(cleanKf(RACK_QUARTER), 4.3, { load: 'kb' }),
-  'clean-and-jerk': lift(cleanAndJerkKf, 5.3, { load: 'bar', r: 22 }),
-  'dumbbell-clean-and-jerk': lift(cleanAndJerkKf, 5.3, { load: 'db' }),
+  'clean-and-jerk': lift(cleanAndJerkKf(RACK_DEEP), 5.3, { load: 'bar', r: 22 }),
+  'dumbbell-clean-and-jerk': lift(cleanAndJerkKf(RACK_QUARTER), 5.3, { load: 'db' }),
   cluster: lift(clusterKf, 4.9, { load: 'bar', r: 22 }),
   snatch: lift(snatchKf, 4.3, { load: 'bar', r: 22 }),
   'hang-snatch': lift(hangSnatchKf(HANG_KNEE), 3.4, { load: 'bar', r: 22 }),
+  'hang-power-snatch': lift(hangSnatchKf(HANG_KNEE), 3.4, { load: 'bar', r: 22 }),
+  'hang-squat-snatch': lift(hangSnatchKf(HANG_KNEE, OH_DEEP), 3.4, { load: 'bar', r: 22 }),
   'hang-snatch-above-knee': lift(hangSnatchKf(HANG_ABOVE), 3.4, { load: 'bar', r: 22 }),
   'dumbbell-snatch': lift(dbSnatchKf, 3.9, { load: 'db' }),
   'dumbbell-power-snatch': lift(dbSnatchKf, 3.9, { load: 'db' }),

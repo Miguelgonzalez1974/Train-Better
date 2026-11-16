@@ -63,11 +63,10 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
             const d = strip.deltas[r] ?? null;
             const cls =
               r < strip.doneCount
-                ? d === null
-                  ? 'bg-white/10 text-neutral-200'
-                  : d < -2
-                    ? 'bg-brand-orange/30 text-brand-orange'
-                    : 'bg-brand-neon/25 text-brand-neon'
+                ? // Hecha: verde si ganas al fantasma o no hay con quién compararse (la ronda está hecha); naranja solo si vas por detrás.
+                  d !== null && d < -2
+                  ? 'bg-brand-orange/30 text-brand-orange'
+                  : 'bg-brand-neon/25 text-brand-neon'
                 : r === strip.doneCount
                   ? 'border-[1.5px] border-brand-orange text-white'
                   : 'border border-white/10 text-neutral-500';
@@ -88,9 +87,7 @@ export function WodRibbon({ labels, widths, doneCount, deltas, ghostAt, activeDe
             const cls = done
               ? delta !== null && delta < -2
                 ? 'bg-brand-orange/25 text-brand-orange'
-                : delta === null
-                  ? 'bg-white/10 text-neutral-200'
-                  : 'bg-brand-neon/20 text-brand-neon'
+                : 'bg-brand-neon/20 text-brand-neon'
               : active
                 ? 'border-2 border-brand-orange bg-white/5 text-white'
                 : 'border border-white/10 text-neutral-500';
