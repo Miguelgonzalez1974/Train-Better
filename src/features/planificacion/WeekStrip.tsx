@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { Check, ChevronLeft, ChevronRight, Dumbbell, Moon, Trash2, Zap } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Check, ChevronLeft, ChevronRight, Dumbbell, Moon, Shuffle, Trash2, Zap } from 'lucide-react';
 import { addDaysIso, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { buildFormModel } from '../dashboard/formModel';
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
@@ -87,6 +87,9 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
   const [expanded, setExpanded] = useState<number | null>(null);
   /** Día (índice de la semana) cuyo formulario de registro está abierto. */
   const [loggingFor, setLoggingFor] = useState<number | null>(null);
+  /** Aviso de «Otro WOD» en la ventana de un día (por ejemplo, que ese WOD está fijado). */
+  const [wodNote, setWodNote] = useState<string | null>(null);
+  useEffect(() => setWodNote(null), [expanded, weekOffset]);
   const todayIso = toLocalIsoDate(today);
   // Los días en ventana de supercompensación (ver `Tu forma`): los que se pueden aprovechar para una sesión exigente.
   const windowDays = useMemo(() => {
@@ -125,7 +128,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     if (
       cached &&
       !isCachedSessionOrphaned(cached, profile, dateIso) &&
-      !isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[dateIso], history, lockedProfile.painFlags)
+      !isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[dateIso], history, lockedProfile.painFlags, lockedProfile.regenVariants?.[dateIso] ?? 0)
     ) {
       return cached;
     }
@@ -135,6 +138,34 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
     const fresh = generateSessionForDate(lockedProfile, history, date, goals);
     athleteRepository.saveCachedSession(fresh);
     return fresh;
+  };
+
+  /**
+   * «Otro WOD» para un día que aún no ha llegado: sube la variante de ese día (`profile.regenVariants`, la misma que usa «Otro WOD» de hoy) hasta
+   * que sale un WOD distinto, y deja esa sesión guardada para ese día. Si el WOD está fijado por la semana (test, referencia), lo dice y no cambia nada.
+   */
+  const regenerateWodFor = (date: Date) => {
+    const dateIso = toLocalIsoDate(date);
+    const wodSignature = (s: DailySession | null) =>
+      (s?.blocks ?? []).filter((b) => b.block === 'wod').map((b) => `${b.movementId}|${b.reps ?? ''}|${b.format ?? ''}|${b.wodPart ?? ''}`).join(';');
+    const current = athleteRepository.getProfile();
+    const structured = hasActiveTrainingStructure(current, dateIso);
+    const locked = structured ? ensureWeekLocked(current, history, goals, dateIso) : current;
+    const before = wodSignature(sessionFor(date));
+    const base = locked.regenVariants?.[dateIso] ?? 0;
+    for (let k = 1; k <= 4; k++) {
+      const merged = { ...(locked.regenVariants ?? {}), [dateIso]: base + k };
+      const recent = Object.fromEntries(Object.keys(merged).sort().slice(-14).map((d) => [d, merged[d]]));
+      const candidateProfile: AthleteProfile = { ...locked, regenVariants: recent };
+      const candidate = generateSessionForDate(candidateProfile, history, date, candidateProfile.goals);
+      if (wodSignature(candidate) === before) continue;
+      athleteRepository.saveProfile(candidateProfile);
+      athleteRepository.saveCachedSession(candidate);
+      setWodNote(null);
+      onRestChange?.();
+      return;
+    }
+    setWodNote('El WOD de ese día está fijado por la semana (día de test o de referencia), así que no hay otro que dar.');
   };
 
   /** La sesión que había prevista para un día pasado sin registrar: la cacheada (la que se vio ese día) o, si no, la que se generó con el historial de entonces. */
@@ -425,7 +456,22 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               ) : expandedPreview?.isRestDay ? (
                 <p className="text-sm text-neutral-400">Descanso</p>
               ) : expandedPreview ? (
-                <DaySessionBlocks session={expandedPreview} clockScope="preview" />
+                <>
+                  <DaySessionBlocks session={expandedPreview} clockScope="preview" />
+                  {/* Cambiar el WOD de un día que aún no ha llegado (el de hoy se cambia desde RexLab). */}
+                  {expandedPreview.blocks.some((b) => b.block === 'wod') && (
+                    <div className="mt-3 flex flex-col items-start gap-2">
+                      <button
+                        onClick={() => regenerateWodFor(date)}
+                        className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:bg-white/[0.08]"
+                      >
+                        <Shuffle size={13} strokeWidth={2.5} aria-hidden="true" />
+                        Otro WOD para este día
+                      </button>
+                      {wodNote && <p className="text-[11px] leading-relaxed text-warn">{wodNote}</p>}
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-neutral-400">Sin macrociclo activo ese día todavía — ese día decides tú qué hacer.</p>
               )}
