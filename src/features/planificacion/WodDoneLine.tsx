@@ -1,6 +1,6 @@
-import { Check, Trophy } from 'lucide-react';
+import { Check, Timer, Trophy } from 'lucide-react';
 import { secondsText } from '../../engine/wodGhost';
-import type { WodDoneInfo } from '../../engine/wodDone';
+import { capProgressText, type WodDoneInfo } from '../../engine/wodDone';
 
 const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]}`;
@@ -19,6 +19,29 @@ function versusText(info: NonNullable<WodDoneInfo['versus']>): { top: string; bo
 export function WodDoneLine({ info, label }: { info: WodDoneInfo; label?: string }) {
   const versus = info.versus ? versusText(info.versus) : null;
   const mode = info.rx ? 'Rx' : 'Escalado';
+
+  // Parado en el time cap: no hay tiempo que comparar, así que se dice lo que hiciste y a qué minuto se paró.
+  if (info.capped) {
+    return (
+      <div className="mb-2 mt-1 flex items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2.5" data-testid="wod-done-line">
+        <Timer size={24} strokeWidth={2} className="shrink-0 text-warn" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-warn">
+            Time cap · {mode}
+            {label ? ` · ${label}` : ''}
+          </p>
+          <p className="text-[22px] font-bold leading-tight text-white">{capProgressText(info.value)}</p>
+        </div>
+        {info.capSeconds ? (
+          <p className="shrink-0 text-right text-xs leading-snug text-neutral-400">
+            parado a los
+            <br />
+            <span className="text-warn">{secondsText(info.capSeconds)}</span>
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
   if (info.best) {
     return (

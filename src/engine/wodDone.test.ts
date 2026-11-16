@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DailySession, SessionBlockResult, SessionHistoryEntry } from '../data/athlete/types';
 import { toHistoryEntry } from './generateSession';
-import { wodDoneInfos } from './wodDone';
+import { capProgressText, wodDoneInfos } from './wodDone';
 
 const wod = (): SessionBlockResult[] => [
   { block: 'wod', movementId: 'row', reps: '200m', format: 'For Time (5 rondas)' },
@@ -39,6 +39,16 @@ describe('el pie del WOD de una sesión hecha', () => {
     const e = entry('2026-11-16', 'CAP · 3+7', { capped: true }, 'scaled');
     const info = wodDoneInfos(session('2026-11-16'), e, [a, e])[1]!;
     expect(info).toMatchObject({ value: 'CAP · 3+7', capped: true, rx: false, best: false, versus: null });
+  });
+
+  it('un WOD parado en el cap lleva los segundos del cap, y lo hecho se dice en palabras', () => {
+    const e = entry('2026-11-16', 'CAP · 6', { capped: true, capSeconds: 1200 });
+    expect(wodDoneInfos(session('2026-11-16'), e, [e])[1]!.capSeconds).toBe(1200);
+    expect(capProgressText('CAP · 6')).toBe('6 rondas');
+    expect(capProgressText('CAP · 1')).toBe('1 ronda');
+    expect(capProgressText('CAP · 3+7')).toBe('3 rondas + 7 reps');
+    expect(capProgressText('CAP · 40 reps')).toBe('40 reps');
+    expect(capProgressText('CAP')).toBe('Sin acabar');
   });
 
   it('una sesión sin resultado anotado no enseña nada', () => {

@@ -10,11 +10,23 @@ export interface WodDoneInfo {
   /** El resultado tal como se anotó: «14:30», «8+12», «CAP · 3+7»… */
   value: string;
   capped: boolean;
+  /** Segundos del time cap en el que se paró (solo con `capped`, si se anotó). */
+  capSeconds?: number;
   rx: boolean;
   /** Es tu mejor tiempo de este WOD (solo por tiempo, terminado y habiéndolo hecho antes). */
   best: boolean;
   /** Frente a tu mejor marca anterior del mismo WOD: segundos de diferencia (+ = más rápido) y de cuándo era. null sin marca anterior o sin tiempo. */
   versus: { delta: number; date: string; outcome: 'gana' | 'pierde' | 'empata' } | null;
+}
+
+/** Lo hecho al llegar al cap, en palabras: «CAP · 6» → «6 rondas», «CAP · 3+7» → «3 rondas + 7 reps», «CAP · 40 reps» → «40 reps», «CAP» → «Sin acabar». */
+export function capProgressText(value: string): string {
+  const done = value.replace(/^CAP\s*·?\s*/i, '').trim();
+  if (!done) return 'Sin acabar';
+  const rr = done.match(/^(\d+)\+(\d+)$/);
+  if (rr) return `${rr[1]} ${Number(rr[1]) === 1 ? 'ronda' : 'rondas'} + ${rr[2]} reps`;
+  if (/^\d+$/.test(done)) return `${done} ${Number(done) === 1 ? 'ronda' : 'rondas'}`;
+  return done;
 }
 
 /** El mejor tiempo (no parado en el cap) de las entradas anteriores a `beforeDate` con la misma clave de WOD. */
@@ -53,7 +65,15 @@ export function wodDoneInfos(session: DailySession, entry: SessionHistoryEntry, 
         versus = { delta, date: prev.date, outcome: Math.abs(delta) <= EVEN_SECONDS ? 'empata' : delta > 0 ? 'gana' : 'pierde' };
       }
     }
-    out[part] = { part, value: result.value, capped: Boolean(result.capped), rx: entry.rxOrScaled === 'rx', best, versus };
+    out[part] = {
+      part,
+      value: result.value,
+      capped: Boolean(result.capped),
+      ...(result.capped && result.capSeconds ? { capSeconds: result.capSeconds } : {}),
+      rx: entry.rxOrScaled === 'rx',
+      best,
+      versus,
+    };
   }
   return out;
 }
