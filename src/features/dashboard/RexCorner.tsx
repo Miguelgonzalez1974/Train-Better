@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { ChevronDown, ChevronUp, FlaskConical, MousePointerClick, Send, X, type LucideIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, FlaskConical, Keyboard, Mic, MicOff, MousePointerClick, Send, X, type LucideIcon } from 'lucide-react';
+import { createRecognizer, getSpeechCtor, numberWordsToDigits, speechProblem, type Recognizer, type SpeechProblem } from '../../lib/speech';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
 import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
@@ -332,6 +333,71 @@ export function RexCorner({
     setQuestion('');
   };
 
+  // --- La voz: dictar en lugar de escribir. La frase dicha pasa por la misma caja de Rex que la escrita (con los números en cifras). ---
+  const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState('');
+  /** Lo que Rex entendió de lo último que dijiste: se enseña sobre su respuesta, para ver si te oyó bien. */
+  const [heard, setHeard] = useState('');
+  const [voiceProblem, setVoiceProblem] = useState<SpeechProblem | null>(null);
+  const recRef = useRef<Recognizer | null>(null);
+  const voiceState = useRef({ final: false, error: false, cancelled: false });
+  const speechCtor = getSpeechCtor();
+  const cancelVoice = () => {
+    voiceState.current.cancelled = true;
+    recRef.current?.abort();
+    recRef.current = null;
+    setListening(false);
+    setInterim('');
+  };
+  const startVoice = () => {
+    const Ctor = getSpeechCtor();
+    if (!Ctor) {
+      setVoiceProblem(speechProblem('unsupported'));
+      return;
+    }
+    recRef.current?.abort();
+    voiceState.current = { final: false, error: false, cancelled: false };
+    setAnswer(null);
+    setHeard('');
+    setInterim('');
+    setQuestion('');
+    setVoiceProblem(null);
+    const rec = createRecognizer(Ctor, {
+      onStart: () => setListening(true),
+      onInterim: (text) => setInterim(numberWordsToDigits(text)),
+      onFinal: (text) => {
+        if (voiceState.current.cancelled) return;
+        voiceState.current.final = true;
+        const said = numberWordsToDigits(text);
+        setHeard(said);
+        setInterim('');
+        send(said);
+      },
+      onError: (code) => {
+        if (code === 'aborted' || voiceState.current.cancelled) return;
+        voiceState.current.error = true;
+        setVoiceProblem(speechProblem(code));
+      },
+      onEnd: () => {
+        setListening(false);
+        setInterim('');
+        const s = voiceState.current;
+        if (!s.final && !s.error && !s.cancelled) setVoiceProblem(speechProblem('no-speech'));
+      },
+    });
+    recRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      setVoiceProblem(speechProblem('audio-capture'));
+    }
+  };
+  // Al cerrar el panel o irse de la pantalla, se deja de escuchar.
+  useEffect(() => {
+    if (!open) cancelVoice();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => recRef.current?.abort(), []);
+
   return (
     <>
       {!open && !typingInField && (
@@ -463,6 +529,65 @@ export function RexCorner({
             {/* Pregúntale a Rex: escribes como lo dirías y Rex lo lee con reglas (peso, comida, qué toca, cómo estás, módulos). */}
             {ask && (
               <div className="mb-3">
+                {/* La voz: un botón grande para hablar; mientras escucha, enseña lo que va entendiendo; si falla, lo dice y deja reintentar o escribir. */}
+                {speechCtor && !listening && (
+                  <button
+                    type="button"
+                    onClick={startVoice}
+                    data-testid="rex-mic"
+                    aria-label="Hablar con Rex"
+                    className="mb-2 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-brand-orange text-base font-semibold text-black transition-colors hover:bg-brand-orange-dark active:scale-[0.99]"
+                  >
+                    <Mic size={24} strokeWidth={2.25} aria-hidden="true" />
+                    Toca y habla
+                  </button>
+                )}
+                {listening && (
+                  <div className="mb-2 rounded-2xl border border-brand-orange/40 bg-brand-surface px-4 py-4 text-center" data-testid="rex-listening" aria-live="polite">
+                    <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+                      <span className="absolute inset-0 animate-ping rounded-full bg-brand-orange/30 motion-reduce:animate-none" aria-hidden="true" />
+                      <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-brand-orange text-black">
+                        <Mic size={30} strokeWidth={2.25} aria-hidden="true" />
+                      </span>
+                    </div>
+                    <p className="mt-3 min-h-[2rem] text-xl font-semibold leading-snug text-white">{interim ? `«${interim}»` : <span className="text-neutral-400">Te escucho…</span>}</p>
+                    <div className="mt-3 flex gap-2">
+                      <button type="button" onClick={() => recRef.current?.stop()} className="h-12 flex-1 rounded-xl bg-brand-orange text-base font-semibold text-black transition-colors hover:bg-brand-orange-dark">
+                        Ya está
+                      </button>
+                      <button type="button" onClick={cancelVoice} className="h-12 flex-1 rounded-xl border border-brand-border text-base font-semibold text-neutral-200 transition-colors hover:bg-white/5">
+                        Cancelar
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-neutral-500">Se para solo cuando dejas de hablar</p>
+                  </div>
+                )}
+                {voiceProblem && !listening && (
+                  <div className="mb-2 rounded-2xl border border-white/15 bg-brand-surface px-4 py-3 text-center" data-testid="rex-voice-problem" role="alert">
+                    <MicOff size={26} strokeWidth={2} aria-hidden="true" className="mx-auto text-brand-gold" />
+                    <p className="mt-1 text-base font-semibold text-white">{voiceProblem.title}</p>
+                    <p className="mt-0.5 text-[13px] text-neutral-400">{voiceProblem.detail}</p>
+                    <div className="mt-3 flex gap-2">
+                      {voiceProblem.canRetry && speechCtor && (
+                        <button type="button" onClick={startVoice} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-brand-orange text-base font-semibold text-black transition-colors hover:bg-brand-orange-dark">
+                          <Mic size={18} aria-hidden="true" />
+                          Otra vez
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVoiceProblem(null);
+                          inputRef.current?.focus();
+                        }}
+                        className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-brand-border text-base font-semibold text-neutral-200 transition-colors hover:bg-white/5"
+                      >
+                        <Keyboard size={18} aria-hidden="true" />
+                        Escribir
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <form
                   className="mb-2 flex gap-2"
                   onSubmit={(e) => {
@@ -506,6 +631,11 @@ export function RexCorner({
                     </button>
                   ))}
                 </div>
+                {answer && heard && (
+                  <p className="mb-1 px-1 text-xs text-neutral-500" data-testid="rex-heard">
+                    Has dicho: «{heard}»
+                  </p>
+                )}
                 {answer && (
                   <div className="mb-2 flex items-start gap-3 rounded-2xl border border-white/15 bg-brand-surface px-3.5 py-3" aria-live="polite">
                     <RexMascot size={32} mood="think" />
