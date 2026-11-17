@@ -531,16 +531,18 @@ export function RexCorner({
               <div className="mb-3">
                 {/* La voz: un botón grande para hablar; mientras escucha, enseña lo que va entendiendo; si falla, lo dice y deja reintentar o escribir. */}
                 {speechCtor && !listening && (
-                  <button
-                    type="button"
-                    onClick={startVoice}
-                    data-testid="rex-mic"
-                    aria-label="Hablar con Rex"
-                    className="mb-2 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-brand-orange text-base font-semibold text-black transition-colors hover:bg-brand-orange-dark active:scale-[0.99]"
-                  >
-                    <Mic size={24} strokeWidth={2.25} aria-hidden="true" />
-                    Toca y habla
-                  </button>
+                  <div className="mb-3 flex flex-col items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={startVoice}
+                      data-testid="rex-mic"
+                      aria-label="Hablar con Rex"
+                      className="flex h-[88px] w-[88px] items-center justify-center rounded-full bg-brand-orange text-black shadow-lg shadow-brand-orange/20 ring-4 ring-brand-orange/15 transition-transform duration-200 hover:bg-brand-orange-dark active:scale-95"
+                    >
+                      <Mic size={40} strokeWidth={2.25} aria-hidden="true" />
+                    </button>
+                    <span className="text-base font-semibold text-white">Toca y habla</span>
+                  </div>
                 )}
                 {listening && (
                   <div className="mb-2 rounded-2xl border border-brand-orange/40 bg-brand-surface px-4 py-4 text-center" data-testid="rex-listening" aria-live="polite">
