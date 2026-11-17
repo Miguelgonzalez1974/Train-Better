@@ -74,6 +74,7 @@ import { SeasonMapCompact, SeasonMapFull } from '../objetivos/SeasonMap';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { wodDoneInfos } from '../../engine/wodDone';
+import { workDoneLines } from './workDoneLines';
 import { invalidGroups, repairSession } from '../../engine/sessionRepair';
 import { applyManualCorrection } from '../../engine/oneOffCorrections';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
@@ -346,6 +347,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [setFeedbackLog, setSetFeedbackLog] = useState<SetFeedbackEntry[]>(() => athleteRepository.getSetFeedbackLog());
   const [workLog, setWorkLog] = useState<WorkSetEntry[]>(() => athleteRepository.getWorkLog());
   const todayWorkLog = useMemo(() => workLog.filter((e) => e.date === todayIso), [workLog, todayIso]);
+  // Lo hecho de verdad en fuerza y oly (series anotadas) bajo cada bloque, tanto con la sesión en marcha como ya cerrada.
+  const workDone = useMemo(() => (session && !session.isRestDay ? workDoneLines(session, todayWorkLog) : undefined), [session, todayWorkLog]);
   /** Bundle para el popup de progresión del movimiento (tocar la carga de una serie de fuerza/oly). */
   const movementProgress = useMemo(
     () => ({ prs: profile.prs, variantPrs: profile.variantPrs, prLog: profile.prLog ?? [], workLog }),
@@ -1411,6 +1414,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
 
   const rexList = buildPlanRexSuggestions({
     canStart: Boolean(session && !alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && !session.isRestDay),
+    inProgress: !alreadyCompletedToday && todayWorkLog.length > 0 ? { sets: todayWorkLog.length } : null,
     editing: editMode && Boolean(session && !session.isRestDay),
     restDay: Boolean(session?.isRestDay && !session.competition?.eventDay),
     completed: completedInfo,
@@ -1445,6 +1449,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     else if (target === 'plan-corregir') handleRecordAgain();
     else if (target === 'plan-cambiar') setShowRex(true);
     else if (target === 'plan-empezar') setFocusMode(true);
+    else if (target === 'plan-cerrar') {
+      // Lo mismo que «Sí, completada» abajo del todo, pero sin tener que buscarlo: abre el cierre y baja a él.
+      setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+      setPrUpdateMessage(null);
+      setShowCompletePanel(true);
+      window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+    }
     else if (target === 'plan-terminar') setEditMode(false);
     else if (target === 'plan-programa') document.getElementById('companion-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -1760,6 +1771,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           session={session}
           autoOpenMain={!alreadyCompletedToday}
           wodDone={wodDone}
+          workDone={workDone}
           editable={editMode}
           onUpdateEntry={handleUpdateEntry}
           onAddEntry={handleAddEntry}
@@ -1775,6 +1787,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       {/* Cierre de la sesión: va tras los bloques, donde se usa. Una vez completada, el estado vive
           en la cabecera ("Sesión completada") y deshacer en el menú "···". */}
       {!session.isRestDay && !alreadyCompletedToday && showCompletePanel && (
+        <div id="complete-panel" className="scroll-mt-4">
         <CompleteSessionPanel
           wodParts={wodParts}
           scoreTypes={wodScoreTypes}
@@ -1811,6 +1824,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           onConfirm={handleConfirmComplete}
           onCancel={() => setShowCompletePanel(false)}
         />
+        </div>
       )}
 
       {!session.isRestDay && !alreadyCompletedToday && !showCompletePanel && (

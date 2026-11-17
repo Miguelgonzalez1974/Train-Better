@@ -314,6 +314,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     hasCheckIn: Boolean(todayReadiness),
     trainedToday: todayStrain !== null,
     hasSessionToday: todaySession !== null && !todaySession.isRestDay,
+    sessionInProgress: todaySession !== null && athleteRepository.getWorkLog().some((e) => e.date === todayIso),
     restMarked,
     canRest,
     advice: isToday && todayStrain === null ? { lead: advice.lead, reason: advice.reason, tone: advice.tone, overTarget: strainView.fit?.fit === 'se-pasa' } : null,

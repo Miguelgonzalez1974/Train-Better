@@ -62,6 +62,20 @@ describe('Rex en Planificación: la frase del estado del día', () => {
     expect(planStateSuggestion(mk({ canStart: true, hardness: 2, painLabels: ['Rodilla'] }))!.actions.map((a) => a.target)).not.toContain('plan-dureza');
   });
 
+  it('con series ya anotadas el botón principal es «Continuar sesión», con «Cerrar sesión» al lado, y Rex dice cuántas llevas', () => {
+    const s = planStateSuggestion(mk({ canStart: true, inProgress: { sets: 6 } }))!;
+    expect(s.actions).toEqual([
+      { label: 'Continuar sesión', target: 'plan-empezar' },
+      { label: 'Cerrar sesión', target: 'plan-cerrar' },
+      { label: 'Por qué', target: 'plan-detalle' },
+    ]);
+    expect(s.text).toBe('Día verde. Sesión en marcha: llevas 6 series anotadas. Esfuerzo previsto ~65, dentro de tu objetivo (55–75).');
+    expect(planStateSuggestion(mk({ canStart: true, inProgress: { sets: 1 } }))!.text).toContain('llevas 1 serie anotada.');
+    // Sin series anotadas (o sin poder empezar) sigue siendo «Empezar sesión» y no se ofrece cerrar.
+    expect(planStateSuggestion(mk({ canStart: true, inProgress: null }))!.actions.map((a) => a.label)).toEqual(['Empezar sesión', 'Por qué']);
+    expect(planStateSuggestion(mk({ canStart: false, inProgress: { sets: 3 } }))!.actions.map((a) => a.target)).toEqual(['plan-detalle']);
+  });
+
   it('mientras se edita, Rex solo ofrece terminar la edición y manda sobre lo demás', () => {
     const s = planEditingSuggestion(true)!;
     expect(s).toMatchObject({ id: 'plan-editando', actions: [{ label: 'Terminar edición', target: 'plan-terminar' }], dismissible: false });

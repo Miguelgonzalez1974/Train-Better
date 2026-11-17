@@ -2,7 +2,8 @@ import { Flame, CalendarCheck2, TrendingUp, PartyPopper } from 'lucide-react';
 import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { getMovementById } from '../../data/movements';
 import { complexLogId } from '../../data/complexes';
-import { fmtKg, fmtNumber } from '../../lib/format';
+import { fmtKg } from '../../lib/format';
+import { workSummary } from './workDoneLines';
 import { buildWodRecapLines } from '../../engine/wodScoring';
 import { NutritionTip } from './NutritionTip';
 import { ProgressionResult } from './ProgressionResult';
@@ -21,18 +22,6 @@ interface SessionSummaryCardProps {
   e1rmSuggestions: E1rmSuggestion[];
   onConfirmE1rm: (s: E1rmSuggestion) => void;
   onDismissE1rm: (s: E1rmSuggestion) => void;
-}
-
-/** "4/5 series · 90 kg" (o rango "85–95 kg") a partir del registro serie a serie, o null si no hay. */
-function workSummary(workLog: WorkSetEntry[], movementId: string, prescribedSets: number): string | null {
-  const sets = workLog.filter((e) => e.movementId === movementId).sort((a, b) => a.setNumber - b.setNumber);
-  if (sets.length === 0) return null;
-  const kgs = sets.map((s) => s.kg).filter((k) => k > 0);
-  const min = Math.min(...kgs);
-  const max = Math.max(...kgs);
-  const kgLabel = kgs.length === 0 ? '' : min === max ? ` · ${fmtKg(max)}` : ` · ${fmtNumber(min)}–${fmtKg(max)}`;
-  const total = prescribedSets > 0 ? `${sets.length}/${prescribedSets}` : String(sets.length);
-  return `${total} series${kgLabel}`;
 }
 
 /**

@@ -41,6 +41,7 @@ export type RexTarget =
   | 'plan-cambiar'
   /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
   | 'plan-empezar'
+  | 'plan-cerrar'
   | 'plan-terminar'
   /** Planificación: ir a la tarjeta del programa de fuerza que convive con el macro. */
   | 'plan-programa'
@@ -135,6 +136,8 @@ export interface RexContext {
   trainedToday: boolean;
   /** Hoy hay sesión prevista (no es descanso ni está marcado como descanso). */
   hasSessionToday: boolean;
+  /** Hoy ya hay series anotadas en el modo enfocado y la sesión aún no se ha cerrado. */
+  sessionInProgress?: boolean;
   restMarked: boolean;
   /** Se puede marcar hoy como descanso (o deshacerlo): hay sesión que descansar y aún no se entrenó. */
   canRest?: boolean;
@@ -211,12 +214,13 @@ export function daySuggestion(day: RexViewDay): RexSuggestion {
 const ADVICE_MOOD: Record<RexAdvice['tone'], RexBarMood> = { good: 'happy', mid: 'think', bad: 'think', info: 'idle', gold: 'lift' };
 
 /** El consejo del día como frase de Rex: el verbo en color y el motivo, con los atajos de la sesión y del descanso. */
-export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restMarked' | 'canRest' | 'hasSessionToday'>): RexSuggestion {
+export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restMarked' | 'canRest' | 'hasSessionToday' | 'sessionInProgress'>): RexSuggestion {
   const actions: RexAction[] = [];
   if (ctx.restMarked) {
     actions.push({ label: 'Deshacer: voy a entrenar', target: 'descanso' }, { label: 'Hacer recovery', target: 'movilidad' });
   } else {
-    if (ctx.hasSessionToday) actions.push({ label: advice.overTarget ? 'Ajustar sesión' : 'Ver la sesión', target: 'planificacion' });
+    // El mismo botón que en Planificación: con series ya anotadas, «Continuar sesión» (no «Ver la sesión»).
+    if (ctx.hasSessionToday) actions.push({ label: advice.overTarget ? 'Ajustar sesión' : ctx.sessionInProgress ? 'Continuar sesión' : 'Ver la sesión', target: 'planificacion' });
     if (ctx.canRest) actions.push({ label: 'Hoy descanso', target: 'descanso' });
     // Un día sin sesión es un buen día para moverse sin cargar.
     if (!ctx.hasSessionToday) actions.push({ label: 'Hacer recovery', target: 'movilidad' });

@@ -83,6 +83,8 @@ describe('Rex en el Dashboard: qué sugiere', () => {
       { label: 'Ver la sesión', target: 'planificacion' },
       { label: 'Hoy descanso', target: 'descanso' },
     ]);
+    // Con series ya anotadas hoy, el mismo botón que en Planificación: «Continuar sesión».
+    expect(buildRexSuggestions({ ...calm, advice, canRest: true, sessionInProgress: true })[0].actions[0]).toEqual({ label: 'Continuar sesión', target: 'planificacion' });
     // Si la sesión se pasa del objetivo, el atajo principal es ajustarla.
     expect(buildRexSuggestions({ ...calm, advice: { ...advice, overTarget: true }, canRest: true })[0].actions[0].label).toBe('Ajustar sesión');
     // Sin sesión prevista no ofrece verla; con el descanso marcado ofrece deshacerlo.

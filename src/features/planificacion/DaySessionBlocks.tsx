@@ -8,6 +8,8 @@ import { buildTaskSections, SessionTaskView } from './SessionTaskView';
 import type { MovementProgressData } from './LoadStat';
 import { EmphasisTag } from './ProfileEmphasis';
 import { WodDoneLine } from './WodDoneLine';
+import { WorkDoneList } from './WorkDoneList';
+import type { WorkDoneLine } from './workDoneLines';
 import type { WodDoneInfo } from '../../engine/wodDone';
 import type { ClockScope } from '../../lib/clockState';
 
@@ -31,6 +33,8 @@ interface DaySessionBlocksProps {
   clockScope?: ClockScope;
   /** El resultado de cada parte del WOD si la sesión ya está hecha: se enseña como una línea al pie de la tarjeta del WOD. */
   wodDone?: Partial<Record<1 | 2, WodDoneInfo>>;
+  /** Lo hecho de verdad en fuerza y oly (series anotadas), bajo cada bloque: en una sesión en marcha o ya cerrada. */
+  workDone?: Partial<Record<'strength' | 'oly', WorkDoneLine[]>>;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
@@ -46,6 +50,7 @@ export function DaySessionBlocks({
   autoOpenMain = false,
   clockScope,
   wodDone,
+  workDone,
 }: DaySessionBlocksProps) {
   // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
   // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
@@ -144,6 +149,7 @@ export function DaySessionBlocks({
             {(block === 'strength' || block === 'oly' || block === 'wod' || block === 'accessory') && session.profileEmphasis?.blocks[block] && (
               <EmphasisTag label={session.profileEmphasis.blocks[block]!.label} why={session.profileEmphasis.blocks[block]!.why} />
             )}
+            {(block === 'strength' || block === 'oly') && workDone?.[block] && workDone[block]!.length > 0 && <WorkDoneList lines={workDone[block]!} />}
             {block === 'wod' &&
               wodDone &&
               ([1, 2] as const).filter((p) => wodDone[p]).map((p, _i, shown) => <WodDoneLine key={p} info={wodDone[p]!} label={shown.length > 1 ? `Parte ${p}` : undefined} />)}

@@ -22,6 +22,8 @@ export interface PlanCompleted {
 export interface PlanRexContext {
   /** Se puede empezar la sesión (hay bloques que hacer, no es una sesión propia y aún no está hecha). */
   canStart?: boolean;
+  /** La sesión de hoy está en marcha: hay series anotadas y aún no se ha cerrado (cuántas). El botón principal pasa a «Continuar sesión». */
+  inProgress?: { sets: number } | null;
   /** Se está editando la sesión de hoy: Rex solo ofrece terminar la edición. */
   editing?: boolean;
   /** Hoy es un día de descanso: Rex ofrece, al menos, contarle algo. */
@@ -76,6 +78,7 @@ function stop(s: string): string {
 export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
   if (!ctx.hasTrainingSession) return null;
   const parts: string[] = [];
+  if (ctx.inProgress && ctx.inProgress.sets > 0) parts.push(`Sesión en marcha: llevas ${ctx.inProgress.sets} ${ctx.inProgress.sets === 1 ? 'serie anotada' : 'series anotadas'}.`);
   const range = ctx.target ? `${ctx.target.low}–${ctx.target.high}` : null;
   if (ctx.planned !== null) {
     const p = `Esfuerzo previsto ~${Math.round(ctx.planned)}`;
@@ -101,7 +104,9 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
   const tone = ctx.light ? LIGHT_TONE[ctx.light.color] : 'info';
   // Empezar es el botón principal; los cambios (más dura, me duele algo, otro WOD…) viven en RexLab.
   const actions: RexAction[] = [];
-  if (ctx.canStart) actions.push({ label: 'Empezar sesión', target: 'plan-empezar' });
+  // El mismo botón que en el Dashboard: empezar, o continuar si ya hay series anotadas (y entonces también cerrar, sin buscarlo abajo).
+  if (ctx.canStart) actions.push({ label: ctx.inProgress ? 'Continuar sesión' : 'Empezar sesión', target: 'plan-empezar' });
+  if (ctx.canStart && ctx.inProgress) actions.push({ label: 'Cerrar sesión', target: 'plan-cerrar' });
   actions.push({ label: 'Por qué', target: 'plan-detalle' });
   return {
     id: 'plan-estado',
