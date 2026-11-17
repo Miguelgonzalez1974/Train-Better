@@ -753,7 +753,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 79;
+export const SESSION_GEN_VERSION = 80;
 
 /** Un día en que el atleta subió la dureza: lo que se sabía en ese momento, para compararlo después con lo que pasó. */
 export interface HardnessLogEntry {

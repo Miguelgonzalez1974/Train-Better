@@ -23,7 +23,7 @@ interface Props {
 
 /**
  * Cambiar el complejo del día por otro de la librería, en el modo enfocado: el rack está ocupado, no te apetece o hoy no sale. Salen
- * los de la misma familia (y los mixtos), con su peso ya recalculado para hoy; se conservan las series y el ajuste del día.
+ * los de la misma familia (snatch con snatch, clean con clean), con su peso ya recalculado para hoy; se conservan las series y el ajuste del día.
  */
 export function ComplexSwapButton({ entry, index, pool, week, prs, variantPrs, disabled, onSwap }: Props) {
   const [open, setOpen] = useState(false);
@@ -32,7 +32,7 @@ export function ComplexSwapButton({ entry, index, pool, week, prs, variantPrs, d
   const options = useMemo(() => {
     const hidden = new Set(pool.hidden);
     return pool.all
-      .filter((x) => x.id !== entry.complex?.id && !hidden.has(x.id) && (x.family === family || x.family === 'mixto'))
+      .filter((x) => x.id !== entry.complex?.id && !hidden.has(x.id) && x.family === family)
       .map((x) => ({ complex: x, patch: swapComplexPatch(entry, x, week, prs, variantPrs, nameOf, current) }))
       .filter((o): o is { complex: OlyComplex; patch: Partial<SessionBlockResult> } => o.patch !== null);
   }, [pool, entry, family, week, prs, variantPrs, current]);

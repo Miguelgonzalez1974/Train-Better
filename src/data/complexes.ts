@@ -5,6 +5,7 @@
  * movimiento): lo leen el motor, la sesión y la pantalla de la librería.
  */
 
+/** `mixto` solo queda por compatibilidad con complejos propios antiguos: nunca sale solo en una sesión ni en el cambio de complejo. */
 export type ComplexFamily = 'snatch' | 'clean' | 'mixto';
 export type ComplexFocus = 'tecnica' | 'potencia' | 'recepcion' | 'jerk' | 'fuerza';
 
@@ -75,10 +76,8 @@ export const BUILTIN_COMPLEXES: OlyComplex[] = [
   c('cl-clean-fs-hole', 'Clean + front squat desde abajo', 'clean', ['fuerza'], ['clean', 1], ['in-the-hole-front-squat', 2]),
   c('cl-hang-clean-jerk', 'Hang clean + jerk', 'clean', ['potencia', 'jerk'], ['hang-clean', 2], ['split-jerk', 1]),
 
-  // --- Mixtos ---
-  c('mx-snatch-cj', 'Snatch + clean + jerk', 'mixto', ['fuerza'], ['snatch', 1], ['clean', 1], ['split-jerk', 1]),
-  c('mx-power', 'Power snatch + power clean + push jerk', 'mixto', ['potencia'], ['power-snatch', 1], ['power-clean', 1], ['push-jerk', 1]),
-  c('mx-hang', 'Hang snatch + hang clean + split jerk', 'mixto', ['tecnica', 'potencia'], ['hang-snatch', 1], ['hang-clean', 1], ['split-jerk', 1]),
+  // Sin complejos mixtos de fábrica: snatch y clean no se encadenan sin soltar la barra (cambia el agarre), y un día de clean no puede
+  // llevar snatch cuando al día siguiente toca snatch.
 ];
 
 /** `1+2+1`: las repeticiones de cada paso, en orden. */

@@ -21,7 +21,6 @@ const FAMILY_FILTERS: { key: FamilyFilter; label: string }[] = [
   { key: 'todos', label: 'Todos' },
   { key: 'snatch', label: 'Snatch' },
   { key: 'clean', label: 'Clean' },
-  { key: 'mixto', label: 'Mixtos' },
   { key: 'mios', label: 'Míos' },
   { key: 'ocultos', label: 'Ocultos' },
 ];
@@ -289,7 +288,7 @@ function ComplexEditor({
         <div>
           <p className="mb-1.5 text-xs font-semibold text-neutral-400">Familia (en qué día de la semana puede salir)</p>
           <div className="flex gap-1.5">
-            {(['snatch', 'clean', 'mixto'] as const).map((f) => (
+            {(['snatch', 'clean'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFamily(f)}

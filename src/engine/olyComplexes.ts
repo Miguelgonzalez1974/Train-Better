@@ -115,7 +115,7 @@ export interface PickComplexInput {
 }
 
 /**
- * El complejo de hoy, o null si no hay ninguno que valga. Primero los de la familia del día (y los mixtos); luego se prefiere el
+ * El complejo de hoy, o null si no hay ninguno que valga. Solo los de la familia del día; luego se prefiere el
  * enfoque de la semana (o la recepción si toca); entre ellos, el que menos movimientos repita de los últimos días, con los
  * favoritos y los propios con ventaja; el sorteo decide entre los que empatan.
  */
@@ -123,7 +123,8 @@ export function pickComplex(input: PickComplexInput): OlyComplex | null {
   const { family, week, pool, recentMovementIds, receivingFocus, draw } = input;
   const roll = draw();
   const hidden = new Set(pool.hidden);
-  const eligible = pool.all.filter((x) => !hidden.has(x.id) && (x.family === family || x.family === 'mixto') && x.steps.length >= 2);
+  // Solo de la familia del día: un complejo mixto (snatch + clean) no sale nunca, ni siquiera uno propio antiguo.
+  const eligible = pool.all.filter((x) => !hidden.has(x.id) && x.family === family && x.steps.length >= 2);
   if (eligible.length === 0) return null;
   const wanted = receivingFocus ? (['recepcion'] as OlyComplex['focus']) : WEEK_FOCUS[week];
   const byFocus = eligible.filter((x) => x.focus.some((f) => wanted.includes(f)));

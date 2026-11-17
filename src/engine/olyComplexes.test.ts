@@ -29,9 +29,16 @@ describe('librería de complejos', () => {
     }
   });
 
-  it('hay complejos de las tres familias, de varios enfoques', () => {
+  it('hay complejos de snatch y de clean, de varios enfoques, y ninguno mezcla las dos familias', () => {
     const fams = new Set(BUILTIN_COMPLEXES.map((x) => x.family));
-    expect(fams).toEqual(new Set(['snatch', 'clean', 'mixto']));
+    expect(fams).toEqual(new Set(['snatch', 'clean']));
+    // Un complejo de snatch no lleva pasos de clean (ni al revés): se hace sin soltar la barra y el agarre es otro.
+    for (const x of BUILTIN_COMPLEXES) {
+      const ids = x.steps.map((s) => s.movementId);
+      expect(ids.some((id) => id.includes('snatch')) && ids.some((id) => id.includes('clean')), x.id).toBe(false);
+      if (x.family === 'snatch') expect(ids.some((id) => id.includes('clean') || id.includes('jerk')), x.id).toBe(false);
+      if (x.family === 'clean') expect(ids.some((id) => id.includes('snatch')), x.id).toBe(false);
+    }
     expect(new Set(BUILTIN_COMPLEXES.flatMap((x) => x.focus)).size).toBeGreaterThanOrEqual(5);
     expect(BUILTIN_COMPLEXES.length).toBeGreaterThanOrEqual(25);
   });
@@ -98,10 +105,14 @@ describe('elección del complejo', () => {
   const pool = buildComplexPool(undefined, undefined);
   const draw = (v: number) => () => v;
 
-  it('solo de la familia del día (y mixtos)', () => {
-    for (const v of [0, 0.3, 0.6, 0.99]) {
-      const x = pickComplex({ family: 'snatch', week: 2, pool, recentMovementIds: new Set(), receivingFocus: false, draw: draw(v) })!;
-      expect(['snatch', 'mixto']).toContain(x.family);
+  it('solo de la familia del día, y nunca un complejo mixto (ni uno propio antiguo)', () => {
+    const oldMixed: OlyComplex = { id: 'viejo-mixto', name: 'Viejo mixto', family: 'mixto', focus: ['tecnica', 'potencia', 'recepcion', 'jerk', 'fuerza'], custom: true, steps: [{ movementId: 'snatch', reps: 1 }, { movementId: 'clean', reps: 1 }] };
+    const withMixed = buildComplexPool([oldMixed], undefined);
+    for (const family of ['snatch', 'clean'] as const) {
+      for (const v of [0, 0.1, 0.3, 0.5, 0.6, 0.8, 0.99]) {
+        const x = pickComplex({ family, week: 2, pool: withMixed, recentMovementIds: new Set(), receivingFocus: false, draw: draw(v) })!;
+        expect(x.family).toBe(family);
+      }
     }
   });
 
@@ -120,7 +131,7 @@ describe('elección del complejo', () => {
   it('un complejo oculto no sale nunca', () => {
     const all = buildComplexPool(undefined, undefined).all.filter((x) => x.family === 'clean');
     const hiddenPool = buildComplexPool(undefined, { favorites: [], hidden: all.map((x) => x.id) });
-    // Solo quedan los mixtos.
+    // Si se ocultan todos los de clean no sale ninguno de otra familia en su lugar: no hay complejo ese día.
     for (const v of [0, 0.5, 0.99]) {
       const x = pickComplex({ family: 'clean', week: 2, pool: hiddenPool, recentMovementIds: new Set(), receivingFocus: false, draw: draw(v) });
       expect(x?.family === 'clean').toBe(false);
@@ -132,7 +143,7 @@ describe('elección del complejo', () => {
     const x = pickComplex({ family: 'snatch', week: 2, pool, recentMovementIds: recent, receivingFocus: false, draw: draw(0.4) })!;
     const overlap = x.steps.filter((s) => recent.has(s.movementId)).length;
     const minOverlap = Math.min(
-      ...pool.all.filter((y) => (y.family === 'snatch' || y.family === 'mixto') && y.focus.some((f) => f === 'potencia' || f === 'recepcion')).map((y) => y.steps.filter((s) => recent.has(s.movementId)).length),
+      ...pool.all.filter((y) => y.family === 'snatch' && y.focus.some((f) => f === 'potencia' || f === 'recepcion')).map((y) => y.steps.filter((s) => recent.has(s.movementId)).length),
     );
     expect(overlap).toBe(minOverlap);
   });
@@ -189,7 +200,7 @@ describe('complejos en las sesiones generadas', () => {
         d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
         return d.toISOString().slice(0, 10);
       })();
-      const fam = block.complex!.id.startsWith('sn-') ? 'snatch' : block.complex!.id.startsWith('cl-') ? 'clean' : 'mixto';
+      const fam = block.complex!.id.startsWith('sn-') ? 'snatch' : block.complex!.id.startsWith('cl-') ? 'clean' : 'otro';
       const key = `${mondayKey}|${fam}`;
       perWeek.set(key, (perWeek.get(key) ?? 0) + 1);
     }
@@ -256,5 +267,32 @@ describe('complejos en las sesiones generadas', () => {
     const ids = out.map((b) => b.complex!.id);
     expect(ids.some((id) => id === 'custom-prueba')).toBe(true);
     expect(ids.filter((id) => id.startsWith('cl-') || id.startsWith('mx-'))).toEqual([]);
+  });
+
+  it('un día de clean nunca lleva pasos de snatch en su complejo, ni uno de snatch pasos de clean (aunque el bloqueo diga otra cosa)', () => {
+    const p = makeProfile({ trainingDaysPerWeek: 6 });
+    const days = consecutiveDates('2026-01-05', 84).flatMap((d) => {
+      const s = generateSessionForDate(p, [], d, p.goals);
+      return s.blocks.filter((b) => b.complex).map((b) => ({ date: s.date, steps: b.complex!.steps.map((x) => x.movementId) }));
+    });
+    expect(days.length).toBeGreaterThan(10);
+    for (const d of days) {
+      const hasSnatch = d.steps.some((id) => id.includes('snatch'));
+      const hasClean = d.steps.some((id) => id.includes('clean') || id.includes('jerk'));
+      expect(hasSnatch && hasClean, `${d.date}: ${d.steps.join('+')}`).toBe(false);
+    }
+  });
+
+  it('un bloqueo antiguo con un complejo mixto se ignora y sale uno de la familia del día', () => {
+    const monday = new Date('2026-03-02T12:00:00');
+    const locks = planWeekLocks(profile, [], monday, profile.goals);
+    const stale = Object.fromEntries(Object.entries(locks).map(([iso, l]) => [iso, l.olyComplexId ? { ...l, olyComplexId: 'mx-power' } : l]));
+    const withStale = { ...profile, weeklyLocks: stale };
+    for (const [iso, l] of Object.entries(stale)) {
+      if (!l.olyComplexId) continue;
+      const s = generateSessionForDate(withStale, [], new Date(`${iso}T12:00:00`), withStale.goals);
+      const steps = s.blocks.find((b) => b.complex)?.complex?.steps.map((x) => x.movementId) ?? [];
+      expect(steps.some((id) => id.includes('snatch')) && steps.some((id) => id.includes('clean')), iso).toBe(false);
+    }
   });
 });

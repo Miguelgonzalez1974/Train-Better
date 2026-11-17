@@ -114,6 +114,7 @@ import { soreRoleLevels, soreStrongPatterns } from './morningCheckIn';
 import { AMBER_MAX_SUPERSETS, AMBER_STRENGTH_SETS, AMBER_WOD_VOLUME, GREEN_WOD_VOLUME, lightReason, resolveDayLight } from './dayLight';
 import { resolveTrainingWeek, DELOAD_REASON_NOTE } from './deload';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR, resolveVariantPRKey } from './prResolution';
+import { PER_DUMBBELL_ACCESSORY_IDS } from '../data/movements/loadUnits';
 import {
   avoidOlyFamilyRepeat,
   avoidPatternRepeat,
@@ -922,7 +923,9 @@ function buildStrengthBlock(
   // Movimiento bloqueado por la planificacion semanal (ver AthleteProfile.weeklyLocks): valido solo
   // si existe y su patron no esta evitado por un aviso de dolor nuevo desde que se bloqueo la semana
   // — nunca se fuerza un movimiento contraindicado, ese dia se decide como si no hubiera bloqueo.
-  const lockedMovement = lockedMovementId ? getMovementById(lockedMovementId) : undefined;
+  // Un movimiento de mancuernas (Dumbbell Bench Press) nunca es el levantamiento principal de fuerza: su carga se calcula como un % del
+  // 1RM de la barra, y con una mancuerna en cada mano ese número es absurdo (62,5 kg «c/u»). Un bloqueo antiguo que lo traiga se ignora.
+  const lockedMovement = lockedMovementId && !PER_DUMBBELL_ACCESSORY_IDS.has(lockedMovementId) ? getMovementById(lockedMovementId) : undefined;
   const lockedValid = Boolean(lockedMovement && !avoidsMovement(avoidedPatterns, lockedMovement));
 
   let pattern: MovementPattern;
@@ -999,7 +1002,7 @@ function buildStrengthBlock(
       }
     }
 
-    const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern);
+    const candidates = getMovementsByBlock('strength').filter((m) => m.pattern === pattern && !PER_DUMBBELL_ACCESSORY_IDS.has(m.id));
 
     // Sesgo de desbalance: dentro del patron que ya toca hoy, inclina hacia el levantamiento
     // infra-desarrollado de un par en desbalance. Solo si ningun objetivo reclama movimiento y
@@ -1626,7 +1629,8 @@ function buildOlyBlock(
     };
     const draw = seededRng(`oly-complex|${toLocalIsoDate(date)}|${family}`);
     const hiddenIds = new Set(complexPool.hidden);
-    const forced = lockedComplexId ? safePool.all.find((x) => x.id === lockedComplexId && !hiddenIds.has(x.id)) : undefined;
+    // Un bloqueo solo vale si el complejo es de la familia del día: un complejo mixto (snatch + clean sin soltar la barra) no se puede hacer.
+    const forced = lockedComplexId ? safePool.all.find((x) => x.id === lockedComplexId && x.family === family && !hiddenIds.has(x.id)) : undefined;
     const picked =
       forced ??
       pickComplex({
@@ -5704,7 +5708,8 @@ function cachedSessionDisagreesWithLock(session: DailySession, lock: WeeklyLock)
       return true;
     }
   }
-  if (lock.strengthMovementId) {
+  // Un bloqueo que fijó un movimiento de mancuernas como principal de fuerza (error antiguo) ya no opina: ese movimiento se ignora al generar.
+  if (lock.strengthMovementId && !PER_DUMBBELL_ACCESSORY_IDS.has(lock.strengthMovementId)) {
     const id = session.blocks.find((b) => b.block === 'strength')?.movementId;
     if (id && id !== lock.strengthMovementId) return true;
   }
