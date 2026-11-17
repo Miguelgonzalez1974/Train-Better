@@ -36,9 +36,6 @@ export type SyncStatus = 'idle' | 'syncing' | 'error';
 let syncStatus: SyncStatus = 'idle';
 const statusListeners = new Set<(s: SyncStatus) => void>();
 
-export function getSyncStatus(): SyncStatus {
-  return syncStatus;
-}
 /** Suscribe a los cambios de estado de sincronizacion (para un indicador en la UI). Devuelve la baja. */
 export function onSyncStatus(fn: (s: SyncStatus) => void): () => void {
   statusListeners.add(fn);

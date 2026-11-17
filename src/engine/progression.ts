@@ -49,14 +49,10 @@ export const PROGRESSION_RULES: Record<ProgressionKind, ProgressionRule> = {
   oly: { up: 0.02, down: 0.04, max: 1.04, min: 0.92, cleanNeeded: 3, failNeeded: 2 },
 };
 
-export const PROGRESSION_UP_STEP = PROGRESSION_RULES.strength.up;
-export const PROGRESSION_DOWN_STEP = PROGRESSION_RULES.strength.down;
 export const PROGRESSION_MAX = PROGRESSION_RULES.strength.max;
 export const PROGRESSION_MIN = PROGRESSION_RULES.strength.min;
 /** Sesiones limpias seguidas para subir en fuerza (2 por defecto; el atleta puede aceptar 3). */
 export const DEFAULT_CLEAN_NEEDED = PROGRESSION_RULES.strength.cleanNeeded;
-/** Sesiones con fallos seguidas para bajar. */
-export const FAIL_NEEDED = PROGRESSION_RULES.strength.failNeeded;
 /** RPE de la serie más pesada hasta el que una sesión cuenta como limpia. */
 export const CLEAN_RPE_MAX = 8.5;
 /** Si el peso más alto movido queda por debajo de este tramo de lo prescrito, la sesión cuenta como fallo (no se pudo con el peso pedido). */

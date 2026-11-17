@@ -112,12 +112,6 @@ export const MOBILITY_LIBRARY: MobilityExercise[] = [
   { id: 'cue-trapecio', name: 'Trapecio superior', zones: ['cuello', 'hombros'], kind: 'estatico', seconds: 30, sides: 2, how: 'Sentado agarrando el asiento con una mano, inclina la cabeza hacia el lado contrario y gira la nariz hacia abajo.', gentle: true },
 ];
 
-const BY_ID = new Map(MOBILITY_LIBRARY.map((e) => [e.id, e]));
-
-export function getMobilityExercise(id: string): MobilityExercise | undefined {
-  return BY_ID.get(id);
-}
-
 /** Enlace de búsqueda de vídeos del ejercicio. Una búsqueda no caduca como un vídeo concreto. */
 export function mobilityVideoUrl(exercise: Pick<MobilityExercise, 'name'>): string {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${exercise.name} movilidad ejercicio`)}`;

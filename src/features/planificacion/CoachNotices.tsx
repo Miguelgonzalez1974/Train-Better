@@ -1,4 +1,4 @@
-import { Brain, Gauge, Lightbulb, Map, Target } from 'lucide-react';
+import { Gauge, Lightbulb, Map, Target } from 'lucide-react';
 import type { PainFlag } from '../../data/athlete/types';
 import type { RetestHeadsUp } from '../../engine/generateSession';
 import type { ReturnRampSuggestion } from '../../engine/intensityRamp';
@@ -50,27 +50,6 @@ export function summarizeNotices(p: CoachNoticesProps): { count: number; actiona
     (p.nextMacroSuggestion ? 1 : 0) +
     (p.retestHeadsUp ? 1 : 0);
   return { count, actionable };
-}
-
-/**
- * El icono de los avisos, en la fila de arriba junto al perfil — siempre visible. El punto solo se enciende (naranja)
- * si hay algo que decidir; con avisos meramente informativos el icono se ve normal y sin punto, y sin ningún aviso
- * queda atenuado (la hoja dice que no hay nada).
- */
-export function CoachNoticesButton({ count, actionable, onClick }: { count: number; actionable: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      title="Avisos del coach"
-      aria-label={actionable ? 'Avisos del coach — hay algo que decidir' : 'Avisos del coach'}
-      className={`relative flex h-9 w-9 items-center justify-center rounded-lg border border-brand-border transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold ${
-        count === 0 ? 'text-neutral-600' : 'text-neutral-300'
-      }`}
-    >
-      <Brain size={16} strokeWidth={2.25} />
-      {actionable && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-brand-orange ring-2 ring-brand-bg" />}
-    </button>
-  );
 }
 
 const rowClass = 'flex items-start gap-2.5 border-l-2 py-1.5 pl-3 text-sm';

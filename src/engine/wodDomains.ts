@@ -9,37 +9,6 @@ import type { BenchmarkWorkout } from '../data/movements/types';
 import { olyMovements, strengthMovements } from '../data/movements';
 import { rng } from './rng';
 
-export const GYMNASTICS_IDS = [
-  'strict-pull-up',
-  'kipping-pull-up',
-  'chest-to-bar-pull-up',
-  'butterfly-pull-up',
-  'toes-to-bar',
-  'knees-to-elbow',
-  'push-up',
-  'handstand-push-up',
-  'kipping-hspu',
-  'ring-dip',
-  'bar-muscle-up',
-  'ring-muscle-up',
-  'handstand-walk',
-  'wall-walk',
-  'rope-climb',
-  'box-jump',
-  'box-jump-over',
-  'burpee',
-  'burpee-box-jump-over',
-  'air-squat',
-  'abmat-situp',
-  'l-sit',
-  'burpee-pull-up',
-  'bar-facing-burpee',
-  'burpee-to-target',
-  'lateral-burpee',
-  'ring-row',
-  'hand-release-push-up',
-];
-
 export const MONOSTRUCTURAL_IDS = ['run', 'row', 'air-bike', 'ski-erg', 'double-under', 'single-under', 'shuttle-run'];
 
 /** De los monoestructurales, las máquinas de cardio de pie/sentado (remo, bici, ski erg) — se sienten

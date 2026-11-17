@@ -1398,7 +1398,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       handoff.put('dash-act', 'resumen');
       appNav.goTo('dashboard');
     }
-    else if (target === 'plan-corregir') handleRecordAgain();
     else if (target === 'plan-cambiar') setShowRex(true);
     else if (target === 'plan-empezar') setFocusMode(true);
     else if (target === 'plan-cerrar') {

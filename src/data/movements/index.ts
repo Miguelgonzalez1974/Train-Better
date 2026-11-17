@@ -45,20 +45,6 @@ export function resolveMovementDisplayName(id: string): string {
   return movementsById.get(id)?.name ?? id;
 }
 
-export function getMovementsByTag(tag: string): Movement[] {
-  return allMovements.filter((m) => m.tags.includes(tag));
-}
-
-export function getProgressionChain(id: string): Movement[] {
-  const chain: Movement[] = [];
-  let current = getMovementById(id);
-  while (current) {
-    chain.unshift(current);
-    current = current.progressionOf ? getMovementById(current.progressionOf) : undefined;
-  }
-  return chain;
-}
-
 export {
   strengthMovements,
   olyMovements,

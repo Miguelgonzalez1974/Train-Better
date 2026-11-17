@@ -9,9 +9,6 @@ import type { ExplainAction, ExplainId, Explanation } from '../../engine/explain
 import { RexExplainBubble } from './RexExplainBubble';
 
 export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
-/** Lo que se abre al tocar un número del anillo: una pestaña, o la carga (que vive en el icono de arriba). */
-export type RingTarget = 'esfuerzo' | 'preparacion' | 'carga';
-
 const NEUTRAL = '#525252';
 
 /** El color del aro de preparación: los mismos tramos que recoveryColor, con tonos propios del aro (en el tema claro, más cercanos a los del oscuro). */

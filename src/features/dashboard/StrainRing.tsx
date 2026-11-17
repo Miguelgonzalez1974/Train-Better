@@ -44,19 +44,6 @@ export function strainColor(v: StrainView): string {
   return v.fit ? FIT_COLOR[v.fit.fit] : STATUS_COLOR['sin-entrenar'];
 }
 
-/** La frase de veredicto de una línea sobre el esfuerzo de hoy (real si ya entrenaste; si no, cómo encaja la sesión prevista). */
-export function strainVerdict(v: StrainView): string {
-  if (v.real !== null) {
-    if (v.status === 'dentro') return 'Dentro del objetivo · justo lo que tocaba';
-    if (v.status === 'por-debajo') return 'Por debajo del objetivo · aún tenías margen';
-    return 'Te pasaste del objetivo · mañana, con cuidado';
-  }
-  if (!v.fit) return 'Sin sesión prevista hoy';
-  if (v.fit.fit === 'dentro') return 'Encaja con tu objetivo';
-  if (v.fit.fit === 'se-pasa') return `Se pasa ${v.fit.diff} de tu objetivo`;
-  return 'Te deja margen: puedes apretar un poco más';
-}
-
 /** El detalle que se abre al tocar una columna del medidor: objetivo, previsto, real y el porqué. */
 export function StrainDetail({
   view,

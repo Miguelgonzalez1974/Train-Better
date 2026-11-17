@@ -43,16 +43,6 @@ export function rng(): number {
   return active();
 }
 
-/** `Math.floor(rng() * n)` — índice aleatorio en [0, n). */
-export function randInt(n: number): number {
-  return Math.floor(rng() * n);
-}
-
-/** Elemento aleatorio de un array no vacío. */
-export function randPick<T>(arr: readonly T[]): T {
-  return arr[randInt(arr.length)];
-}
-
 /**
  * Ejecuta `fn` con el RNG del motor sembrado desde `key`, y lo restaura al terminar (incluso si
  * `fn` lanza). SÍNCRONO — no usar con funciones asíncronas.

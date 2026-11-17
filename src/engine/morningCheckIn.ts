@@ -15,8 +15,6 @@ import type { MovementPattern } from '../data/movements/types';
 /** Zona de la silueta agrupada por músculo (izquierda y derecha cuentan igual para el motor). */
 export type SoreArea = 'cuello' | 'hombro' | 'codo' | 'lumbar' | 'cadera' | 'muslo' | 'gemelo';
 
-export const SORE_ZONE_ORDER: SoreZoneId[] = ['cuello', 'hombro-i', 'hombro-d', 'codo-i', 'codo-d', 'lumbar', 'cadera-i', 'cadera-d', 'muslo-i', 'muslo-d', 'gemelo-i', 'gemelo-d'];
-
 export const SORE_ZONE_AREA: Record<SoreZoneId, SoreArea> = {
   cuello: 'cuello',
   'hombro-i': 'hombro',

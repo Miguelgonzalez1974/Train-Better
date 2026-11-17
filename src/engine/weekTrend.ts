@@ -46,36 +46,10 @@ export function effortFit(p: Pick<TrendPoint, 'strain' | 'target'>): EffortFit {
 
 /** Días con algún dato real (sesión o preparación): sin al menos 4 la gráfica no dice nada. */
 export const MIN_TREND_DAYS = 4;
-/** Con 7 o más días con datos los dos histogramas ya cuentan algo. */
-export const MIN_HISTOGRAM_DAYS = 7;
-
 export function dataDays(points: TrendPoint[]): number {
   return points.filter((p) => (p.strain !== null && p.strain > 0) || p.readiness !== null).length;
 }
 
-export interface TrendBins {
-  /** Días con sesión por debajo / dentro / por encima de su objetivo. */
-  effort: [number, number, number];
-  /** Días de preparación en cansancio / normal / con ganas. */
-  readiness: [number, number, number];
-}
-
-/** `todayIso`: hoy el día no ha terminado, así que un esfuerzo bajo todavía no cuenta como "debajo" (puede que aún falte sesión). */
-export function trendBins(points: TrendPoint[], todayIso?: string): TrendBins {
-  const effort: [number, number, number] = [0, 0, 0];
-  const readiness: [number, number, number] = [0, 0, 0];
-  for (const p of points) {
-    const fit = effortFit(p);
-    if (fit === 'below' && p.iso !== todayIso) effort[0]++;
-    else if (fit === 'within') effort[1]++;
-    else if (fit === 'over') effort[2]++;
-    if (p.readiness !== null) {
-      const band = readinessBand(p.readiness);
-      readiness[band === 'low' ? 0 : band === 'mid' ? 1 : 2]++;
-    }
-  }
-  return { effort, readiness };
-}
 const DAY_NAME = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 function dayWord(iso: string, long: boolean): string {

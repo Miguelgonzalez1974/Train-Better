@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dataDays, effortFit, readinessBand, trendBins, trendSentence, type TrendPoint } from './weekTrend';
+import { dataDays, effortFit, readinessBand, trendSentence, type TrendPoint } from './weekTrend';
 
 const T = { low: 45, high: 65 };
 const day = (n: number, strain: number | null, readiness: number | null, target: TrendPoint['target'] = T): TrendPoint => ({
@@ -27,13 +27,6 @@ describe('weekTrend', () => {
     expect(effortFit({ strain: 50, target: null })).toBe('unknown');
   });
 
-  it('trendBins cuenta los días de cada tramo y no cuenta los descansos', () => {
-    const pts = [day(1, 30, 30), day(2, 55, 50), day(3, 60, 70), day(4, 71, 90), day(5, 0, 80), day(6, null, null)];
-    const bins = trendBins(pts);
-    expect(bins.effort).toEqual([1, 2, 1]);
-    expect(bins.readiness).toEqual([1, 1, 3]);
-  });
-
   it('con menos de 4 días con datos no hay frase', () => {
     expect(dataDays([day(1, 50, 60), day(2, null, null), day(3, 0, null)])).toBe(1);
     expect(trendSentence([day(1, 50, 60), day(2, 55, 62), day(3, null, null)])).toBeNull();
@@ -58,8 +51,6 @@ describe('weekTrend', () => {
   it('hoy no se cuenta por debajo mientras el día no ha terminado', () => {
     // Una semana como la real: cuatro descansos, dentro dos días y hoy con poco esfuerzo registrado.
     const pts = [day(1, 0, 63), day(2, 0, 73), day(3, 0, 69), day(4, 0, 72), day(5, 55, 75), day(6, 60, 76), day(7, 21, 79)];
-    expect(trendBins(pts).effort).toEqual([1, 2, 0]);
-    expect(trendBins(pts, pts[6].iso).effort).toEqual([0, 2, 0]);
     expect(trendSentence(pts, pts[6].iso)).toContain('así se gana forma');
   });
 

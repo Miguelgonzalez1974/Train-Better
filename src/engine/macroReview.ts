@@ -7,8 +7,6 @@ import { isGoalBehindSchedule } from './goalProgress';
 import { pickPriorityGoal } from './goalPriority';
 import { computeResponseProfile, engineResponseProfile } from './responseProfile';
 
-export type MacroReviewKind = 'extend-phase' | 'goal-behind';
-
 interface ExtendPhaseSuggestion {
   kind: 'extend-phase';
   reviewKey: string;

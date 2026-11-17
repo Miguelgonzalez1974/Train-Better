@@ -81,21 +81,6 @@ function rowNow(diagnosis: Diagnosis, area: EmphasisItem['area'], row: string): 
   return a && r && r.ratio !== null ? { ratio: r.ratio, samples: r.n ?? a.samples } : null;
 }
 
-/** De qué se habla al avisar de una revisión ("tu motor largo", "tu empuje horizontal"). */
-export function emphasisSubject(area: EmphasisItem['area'], row: string): string {
-  const l = leverFor(area, row);
-  if (l?.engine === 'base-aerobica') return 'tu motor largo';
-  if (l?.engine === 'umbral') return 'tu trabajo a umbral';
-  if (l?.engine === 'potencia') return 'tu potencia';
-  if (l?.pattern === 'horizontalPush') return 'tu empuje horizontal';
-  if (l?.pattern === 'verticalPush') return 'tu empuje vertical';
-  if (l?.pattern === 'hinge') return 'tu bisagra de cadera';
-  if (l?.pattern === 'squat') return 'tu sentadilla';
-  if (l?.olyFamily) return l.olyFamily === 'snatch' ? 'tu arrancada' : 'tu clean y jerk';
-  if (l?.gymnastics) return 'tus gimnásticos';
-  return 'este punto';
-}
-
 /** Un ratio como se enseña: el motor, como "−22 %" frente a lo estimado; el resto, como "78 % de lo esperable". */
 export function formatRatio(area: EmphasisItem['area'], ratio: number): string {
   if (area === 'motor') {
