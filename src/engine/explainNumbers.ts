@@ -6,8 +6,8 @@ import type { StrainStatus } from './strain';
 
 /**
  * «Pregúntale a Rex» sobre los números del anillo del Dashboard: de dónde sale la preparación, la carga, lo realizado, lo previsto y el
- * objetivo, en palabras y con el desglose real (los mismos datos con los que se calculan, nada inventado). Puro: lo pinta
- * `RexExplainBubble`, y los botones de cada explicación llevan a una pantalla con un `ExplainAction`.
+ * objetivo, en palabras y con el desglose real (los mismos datos con los que se calculan, nada inventado). Puro: se abre en el panel de
+ * Rex (ver `features/dashboard/rexRing.ts`), y los botones de cada explicación llevan a una pantalla con un `ExplainAction`.
  */
 
 export type ExplainId = 'preparacion' | 'carga' | 'esfuerzo' | 'realizado' | 'previsto' | 'objetivo';

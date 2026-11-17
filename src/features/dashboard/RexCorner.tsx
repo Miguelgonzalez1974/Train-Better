@@ -12,6 +12,7 @@ import type { TabId } from '../shell/navItems';
 import type { RexSuggestion, RexTarget } from './rexDashboard';
 import type { RexScreen } from './rexAskRouter';
 import { RexTileGrid, type PanelTile } from './RexTileGrid';
+import { ExplainRows } from './ExplainRows';
 import { TILE_ICONS } from './rexTileIcons';
 import { GLOBAL_TILES, groupOfSection, loadTilePrefs, saveTilePrefs, type TileContext, type TilePrefs } from './rexTiles';
 
@@ -129,8 +130,11 @@ export function RexCorner({
   dock = null,
   screen = 'dashboard',
   tileContext,
+  openWith = null,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
+  /** Abrir el panel con una pregunta ya hecha y su respuesta (tocar un aro del Dashboard): cada `id` nuevo vuelve a abrirlo. */
+  openWith?: { id: number; question: string; answer: AskAnswer } | null;
   /** En qué pantalla está Rex: decide qué atajos suben. */
   screen?: RexScreen;
   /** Cómo está el momento (la sesión de hoy, si llegas cansado, si hay una molestia) para colocar los atajos. */
@@ -168,6 +172,18 @@ export function RexCorner({
   };
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
+  /** La pregunta que se hizo al tocar un aro: sale a la derecha, como un mensaje tuyo, sobre la respuesta. */
+  const [topic, setTopic] = useState<string | null>(null);
+  // Tocar un aro o un número del Dashboard abre a Rex con esa pregunta ya hecha y su respuesta.
+  useEffect(() => {
+    if (!openWith) return;
+    setOpen(true);
+    setAnswer(openWith.answer);
+    setTopic(openWith.question);
+    setQuestion('');
+    setHeard('');
+    setVoiceProblem(null);
+  }, [openWith?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const inputRef = useRef<HTMLInputElement>(null);
   // La pista del hueco de la caja cambia cada 4 s mientras el panel está abierto y no has escrito nada (se salta con «reducir movimiento»).
   const [hintIdx, setHintIdx] = useState(0);
@@ -317,6 +333,7 @@ export function RexCorner({
   const openPanel = () => {
     if (!hinting) spoken.add(key);
     setAnswer(null);
+    setTopic(null);
     setQuestion('');
     setOpen(true);
   };
@@ -330,6 +347,7 @@ export function RexCorner({
       return;
     }
     setAnswer(result);
+    setTopic(null);
     setQuestion('');
   };
 
@@ -633,6 +651,11 @@ export function RexCorner({
                     </button>
                   ))}
                 </div>
+                {answer && topic && (
+                  <div className="mb-1.5 flex justify-end" data-testid="rex-topic">
+                    <p className="max-w-[88%] rounded-2xl rounded-br-md bg-white/10 px-3.5 py-2 text-[13px] text-neutral-100">{topic}</p>
+                  </div>
+                )}
                 {answer && heard && (
                   <p className="mb-1 px-1 text-xs text-neutral-500" data-testid="rex-heard">
                     Has dicho: «{heard}»
@@ -648,6 +671,8 @@ export function RexCorner({
                         </strong>{' '}
                         {answer.text}
                       </p>
+                      {answer.rows && answer.rows.length > 0 && <ExplainRows rows={answer.rows} />}
+                      {answer.foot && <p className="mt-2 text-[11px] leading-snug text-neutral-500">{answer.foot}</p>}
                       {answer.actions.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {answer.actions.map((a, i) => (

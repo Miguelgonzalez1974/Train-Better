@@ -20,8 +20,10 @@ export type RexTarget =
   | 'nutricion'
   | 'peso'
   | 'forma'
-  /** La pestaña Preparación del Dashboard. */
+  /** La pestaña Preparación del Dashboard, la pestaña Esfuerzo y la ventana de la Carga (desde las respuestas de «de dónde sale este número»). */
   | 'preparacion'
+  | 'esfuerzo'
+  | 'carga'
   | 'planificacion'
   /** Volver al día de hoy en el selector de día. */
   | 'hoy'

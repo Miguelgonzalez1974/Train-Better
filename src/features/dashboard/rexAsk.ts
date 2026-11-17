@@ -9,6 +9,7 @@ import { findLoadReps, findMarkKg, findMarkLift, type MarkLift } from './rexMark
 import type { DataQuestion, WhyAbout } from './rexData';
 import type { AdaptRequest } from '../../lib/sessionAdapt';
 import type { PartKey } from '../../engine/sessionParts';
+import type { ExplainRow } from '../../engine/explainNumbers';
 
 export type AskIntent =
   | { kind: 'peso'; kg: number }
@@ -59,6 +60,10 @@ export interface AskAnswer {
   tone: 'good' | 'mid' | 'bad' | 'info' | 'gold';
   text: string;
   actions: RexAction[];
+  /** El desglose con los datos reales (una nota con su barra, lo que suma o resta, un dato): lo llevan las respuestas de «de dónde sale este número». */
+  rows?: ExplainRow[];
+  /** Una nota al pie, más pequeña. */
+  foot?: string;
 }
 
 /** Minúsculas, sin acentos y con los espacios normalizados. */

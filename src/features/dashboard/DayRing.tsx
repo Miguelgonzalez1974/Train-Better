@@ -5,8 +5,7 @@ import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
-import type { ExplainAction, ExplainId, Explanation } from '../../engine/explainNumbers';
-import { RexExplainBubble } from './RexExplainBubble';
+import type { ExplainId } from '../../engine/explainNumbers';
 
 export type DashTab = 'resumen' | 'esfuerzo' | 'preparacion' | 'sueno';
 const NEUTRAL = '#525252';
@@ -241,8 +240,7 @@ export function DayRing({
   notDone,
   centerLabel,
   isToday,
-  explanations,
-  onExplainAction,
+  onAsk,
   hintPending,
   onHintSeen,
 }: {
@@ -260,26 +258,19 @@ export function DayRing({
   /** Lo que va en el centro del anillo: "Hoy", "Ayer" o el día. */
   centerLabel: string;
   isToday: boolean;
-  /** Lo que Rex cuenta de cada número al tocarlo («Pregúntale a Rex»). */
-  explanations: Partial<Record<ExplainId, Explanation>>;
-  /** Lo que hace cada botón de la explicación (abrir una pestaña, la carga o Planificación). */
-  onExplainAction: (action: ExplainAction) => void;
+  /** Tocar un aro o un número es preguntar a Rex de dónde sale: el Dashboard abre el panel de Rex con esa pregunta y su respuesta. */
+  onAsk: (id: ExplainId) => void;
 }) {
   const [filled, setFilled] = useState(false);
-  // El número por el que se ha preguntado a Rex (su globo sale bajo los anillos); se cierra al cambiar de día.
-  const [asked, setAsked] = useState<ExplainId | null>(null);
   useEffect(() => {
     setFilled(false);
-    setAsked(null);
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
   }, [centerLabel]);
   const ask = (id: ExplainId) => {
-    setAsked((cur) => (cur === id ? null : id));
+    onAsk(id);
     if (hintPending) onHintSeen();
   };
-  const askedExplanation = asked ? explanations[asked] : undefined;
-  const askedAnchor: 'left' | 'center' | 'right' = asked === 'preparacion' || asked === 'carga' ? 'left' : asked === 'objetivo' ? 'center' : 'right';
   /** Un aro tocable: la zona táctil es un círculo transparente más ancho que el aro, y se maneja también con el teclado. */
   const ringHit = (r: number, id: ExplainId, label: string) => (
     <circle
@@ -293,7 +284,6 @@ export function DayRing({
       role="button"
       tabIndex={0}
       aria-label={label}
-      aria-expanded={asked === id}
       onClick={() => ask(id)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -304,7 +294,6 @@ export function DayRing({
       className="cursor-pointer outline-none focus-visible:stroke-white/20"
     />
   );
-  const asking = (id: ExplainId) => (asked === id ? 'rounded-lg bg-white/10' : '');
 
   const { total } = readiness;
   const prepTint = total !== null ? ringPrepColor(total) : NEUTRAL;
@@ -332,7 +321,7 @@ export function DayRing({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-5 gap-y-2.5">
         {/* Preparación */}
         <div className="flex flex-col items-end text-right">
-          <button onClick={() => ask('preparacion')} aria-expanded={asked === 'preparacion'} className={`flex flex-col items-end -mx-1 px-1 py-0.5 ${asking('preparacion')}`}>
+          <button onClick={() => ask('preparacion')} className="flex flex-col items-end -mx-1 px-1 py-0.5">
             <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: prepTint }}>
               Preparación
             </span>
@@ -343,7 +332,7 @@ export function DayRing({
             {balance?.prep && <span className="mt-1.5 text-[11px] leading-tight text-neutral-500">{balance.prep.morning} por la mañana</span>}
           </button>
           {hasLoad ? (
-            <button onClick={() => ask('carga')} aria-expanded={asked === 'carga'} className={`mt-3 flex flex-col items-end -mx-1 px-1 py-0.5 ${asking('carga')}`}>
+            <button onClick={() => ask('carga')} className="mt-3 flex flex-col items-end -mx-1 px-1 py-0.5">
               <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500 underline decoration-dotted decoration-1 underline-offset-[3px]">Carga</span>
               <span className="flex items-center gap-1 text-sm font-semibold text-neutral-200">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ZONE_COLOR[acwr.zone] }} />
@@ -412,7 +401,7 @@ export function DayRing({
 
         {/* Esfuerzo: lo realizado y lo previsto, siempre a la vista, cada uno con el color que tiene en el aro. El objetivo va escrito sobre el arco. */}
         <div className="flex flex-col items-start text-left">
-          <button onClick={() => ask('realizado')} aria-expanded={asked === 'realizado'} className={`flex flex-col items-start text-left -mx-1 px-1 py-0.5 ${asking('realizado')}`}>
+          <button onClick={() => ask('realizado')} className="flex flex-col items-start text-left -mx-1 px-1 py-0.5">
             <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: doneColor }}>
               Realizado
             </span>
@@ -420,7 +409,7 @@ export function DayRing({
               {real !== null ? real : '—'}
             </span>
           </button>
-          <button onClick={() => ask('previsto')} aria-expanded={asked === 'previsto'} className={`mt-2.5 flex flex-col items-start text-left -mx-1 px-1 py-0.5 ${asking('previsto')}`}>
+          <button onClick={() => ask('previsto')} className="mt-2.5 flex flex-col items-start text-left -mx-1 px-1 py-0.5">
             <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: PLAN }}>
               Previsto
             </span>
@@ -433,7 +422,6 @@ export function DayRing({
 
       {/* Pregúntale a Rex: el globo con la explicación del número tocado */}
       {/* La pista de que los aros se tocan y de que Rex tiene su lab la dice el globo de la esquina (RexCorner), no una línea aquí. */}
-      {askedExplanation && <RexExplainBubble explanation={askedExplanation} anchor={askedAnchor} onAction={onExplainAction} onClose={() => setAsked(null)} />}
 
       {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}
       {!isToday &&

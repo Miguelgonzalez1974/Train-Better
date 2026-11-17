@@ -43,7 +43,8 @@ import type { StrainView } from './StrainRing';
 import { isoDiffDays, toLocalIsoDate } from '../../engine/periodization';
 import { buildGoalRows } from './progressOverview';
 import { BalanceBox, DayRing, type DashTab } from './DayRing';
-import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainAction } from '../../engine/explainNumbers';
+import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainId } from '../../engine/explainNumbers';
+import { explanationToAnswer, ringQuestion } from './rexRing';
 import { dayBalance } from '../../engine/dayBalance';
 import { macroChip } from './dayHeader';
 import { dayAnswer, type AskAnswer } from './rexAsk';
@@ -134,6 +135,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   useEffect(() => {
     handoff.take('dash-act');
   }, []);
+  /** La pregunta que se hizo a Rex tocando un aro (con su respuesta): abre el panel de Rex. */
+  const [ringAsk, setRingAsk] = useState<{ id: number; question: string; answer: AskAnswer } | null>(null);
   /** Sugerencias de 1RM de hoy que se dijo «Ahora no»: no vuelven a salir en esta visita. */
   const [dismissedE1rm, setDismissedE1rm] = useState<string[]>([]);
   /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
@@ -447,6 +450,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return setFormOpen(true);
       case 'preparacion':
         return setTab('preparacion');
+      case 'esfuerzo':
+        return setTab('esfuerzo');
+      case 'carga':
+        return setShowLoad(true);
       case 'planificacion':
         return onNavigateToPlanificacion();
       case 'planificacion-continuar':
@@ -487,12 +494,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     previsto: explainPlanned(shown.strain.planned, shown.strain.target, shown.strain.fit),
     objetivo: explainObjective(shown.strain.target),
   };
-  function runExplainAction(action: ExplainAction) {
-    if (action === 'ver-preparacion') setTab('preparacion');
-    else if (action === 'ver-esfuerzo') setTab('esfuerzo');
-    else if (action === 'ver-carga') setShowLoad(true);
-    else if (action === 'recovery') setShowMobility(true);
-    else onNavigateToPlanificacion();
+  /** Tocar un aro o un número: el panel de Rex se abre con la pregunta ya hecha («¿Por qué mi preparación es 72?») y la explicación con su desglose. */
+  function askRing(id: ExplainId) {
+    const explanation = explanations[id];
+    if (!explanation) return;
+    setRingAsk({
+      id: Date.now(),
+      question: ringQuestion(id, { readiness: shown.readiness.total, real: shown.strain.real, planned: shown.strain.planned?.strain ?? null }),
+      answer: explanationToAnswer(explanation),
+    });
   }
 
   /** Guardar las marcas editadas (desde «Mis marcas»): una marca distinta cambia los pesos, así que las sesiones ya generadas se recalculan al abrirlas. */
@@ -532,6 +542,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {/* Rex, abajo a la derecha y siempre a la vista: dice el estado del día y qué hacer, y su botón RexLab abre el lab con atajos y módulos. */}
       <RexCorner
         speak={false}
+        openWith={ringAsk}
         screen="dashboard"
         tileContext={{
           session: todayStrain !== null ? 'done' : todaySession === null ? 'none' : todaySession.isRestDay ? 'rest' : athleteRepository.getWorkLog().some((e) => e.date === todayIso) ? 'in-progress' : 'pending',
@@ -655,8 +666,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             acwr={shown.acwr}
             centerLabel={ringDayLabel(dayIso, todayIso)}
             isToday={isToday}
-            explanations={explanations}
-            onExplainAction={runExplainAction}
+            onAsk={askRing}
             hintPending={ringHintPending}
             onHintSeen={markRingHint}
           />
