@@ -42,6 +42,7 @@ export type RexTarget =
   /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
   | 'plan-empezar'
   | 'plan-cerrar'
+  | 'planificacion-continuar'
   | 'plan-terminar'
   /** Planificación: ir a la tarjeta del programa de fuerza que convive con el macro. */
   | 'plan-programa'
@@ -220,7 +221,12 @@ export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restM
     actions.push({ label: 'Deshacer: voy a entrenar', target: 'descanso' }, { label: 'Hacer recovery', target: 'movilidad' });
   } else {
     // El mismo botón que en Planificación: con series ya anotadas, «Continuar sesión» (no «Ver la sesión»).
-    if (ctx.hasSessionToday) actions.push({ label: advice.overTarget ? 'Ajustar sesión' : ctx.sessionInProgress ? 'Continuar sesión' : 'Ver la sesión', target: 'planificacion' });
+    if (ctx.hasSessionToday) {
+      if (advice.overTarget) actions.push({ label: 'Ajustar sesión', target: 'planificacion' });
+      // «Continuar sesión» lleva directo al modo enfocado (con las series ya anotadas), no solo a la pantalla de Planificación.
+      else if (ctx.sessionInProgress) actions.push({ label: 'Continuar sesión', target: 'planificacion-continuar' });
+      else actions.push({ label: 'Ver la sesión', target: 'planificacion' });
+    }
     if (ctx.canRest) actions.push({ label: 'Hoy descanso', target: 'descanso' });
     // Un día sin sesión es un buen día para moverse sin cargar.
     if (!ctx.hasSessionToday) actions.push({ label: 'Hacer recovery', target: 'movilidad' });

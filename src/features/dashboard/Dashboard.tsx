@@ -422,6 +422,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return setTab('preparacion');
       case 'planificacion':
         return onNavigateToPlanificacion();
+      case 'planificacion-continuar':
+        // Planificación recoge esto al montarse y abre el modo enfocado.
+        handoff.put('plan-act', 'continuar');
+        return onNavigateToPlanificacion();
       case 'hoy':
         return setDayIso(todayIso);
       case 'descanso':

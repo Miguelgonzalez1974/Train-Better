@@ -75,6 +75,7 @@ import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { wodDoneInfos } from '../../engine/wodDone';
 import { workDoneLines } from './workDoneLines';
+import { SessionDoneHeader } from './SessionDoneHeader';
 import { invalidGroups, repairSession } from '../../engine/sessionRepair';
 import { applyManualCorrection } from '../../engine/oneOffCorrections';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
@@ -1401,10 +1402,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   ];
 
   // Si RexLab de otra pantalla dejó dicho qué abrir (la molestia, «hoy no», faltar, otro WOD), se abre al llegar.
+  // «Continuar sesión» del Dashboard: se mira al montar (sin gastarlo) para que el modo desarrollo, que repite los efectos, no lo pierda.
+  const continueFromDashboard = useRef(handoff.peek('plan-act') === 'continuar');
   useEffect(() => {
     const node = handoff.take('support-start');
-    const act = handoff.take('plan-act');
+    const act = handoff.take('plan-act') ?? (continueFromDashboard.current ? 'continuar' : null);
     if (node) openSupport(node);
+    // «Continuar sesión» desde el Dashboard: se abre directamente el modo enfocado, donde estaban las series anotadas.
+    else if (act === 'continuar' && session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday) setFocusMode(true);
     else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
       const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
       return () => window.clearTimeout(t);
@@ -1502,6 +1507,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             setTestedLoadKg(testDayBlock?.loadKg ?? 0);
             setPrUpdateMessage(null);
             setShowCompletePanel(true);
+            // Al acabar el último bloque, el cierre ya está a la vista: se baja a él en vez de dejarte en lo alto de la página.
+            window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
           }}
         />
       )}
@@ -1741,6 +1748,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         </Modal>
       )}
 
+
+      {/* La sesión ya hecha: el estado dicho claro y sus dos botones, encima de los bloques (que debajo enseñan lo hecho de verdad). */}
+      {alreadyCompletedToday && todayHistoryEntry && !session.isRestDay && (
+        <SessionDoneHeader entry={todayHistoryEntry} onSummary={() => setShowSummary(true)} onCorrect={handleRecordAgain} />
+      )}
 
       {session.competition?.eventDay ? (
         <div className="card flex flex-col gap-2 p-4">
