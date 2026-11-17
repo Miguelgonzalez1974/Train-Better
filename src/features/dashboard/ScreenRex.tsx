@@ -1,4 +1,6 @@
+import type { ComponentProps } from 'react';
 import { RexCorner, type LabSection } from './RexCorner';
+import type { RexScreen } from './rexAskRouter';
 import type { AskAnswer } from './rexAsk';
 import type { RexAction, RexSuggestion, RexTarget } from './rexDashboard';
 
@@ -20,7 +22,12 @@ export function ScreenRex({
   lab,
   examples,
   hints,
+  screen,
+  tileContext,
 }: {
+  /** En qué pantalla está (decide qué atajos suben en el panel) y cómo está el momento. */
+  screen?: RexScreen;
+  tileContext?: ComponentProps<typeof RexCorner>['tileContext'];
   id: string;
   lead: string;
   text: string;
@@ -45,6 +52,8 @@ export function ScreenRex({
       lab={lab}
       examples={examples}
       hints={hints}
+      screen={screen}
+      tileContext={tileContext}
       modules={false}
       showDate={false}
       dock={{ stats }}

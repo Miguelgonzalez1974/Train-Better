@@ -464,6 +464,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
       {activeSection === 'home' && (
         <ScreenRex
           id="objetivos-inicio"
+          screen="objetivos"
           lead="Objetivos."
           text={objetivosRexLine(openGroups, profile, todayIso())}
           actions={[]}

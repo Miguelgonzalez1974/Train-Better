@@ -73,7 +73,7 @@ export function Nutricion() {
 
       {!shared ? (
         <div className="flex flex-col gap-3 pb-44">
-          <ScreenRex id="nutricion-sin-peso" lead="Nutrición." text="Para calcular lo que te toca cada día primero necesito tu peso. Apúntalo aquí y lo preparo." tone="mid" />
+          <ScreenRex id="nutricion-sin-peso" screen="nutricion" lead="Nutrición." text="Para calcular lo que te toca cada día primero necesito tu peso. Apúntalo aquí y lo preparo." tone="mid" />
           <div className="card p-4 text-sm text-neutral-300">
             <p className="mb-3">Los objetivos de cada día se calculan por kilo de peso corporal, así que primero necesito tu peso.</p>
             <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} embedded />

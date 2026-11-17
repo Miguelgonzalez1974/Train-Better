@@ -532,6 +532,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {/* Rex, abajo a la derecha y siempre a la vista: dice el estado del día y qué hacer, y su botón RexLab abre el lab con atajos y módulos. */}
       <RexCorner
         speak={false}
+        screen="dashboard"
+        tileContext={{
+          session: todayStrain !== null ? 'done' : todaySession === null ? 'none' : todaySession.isRestDay ? 'rest' : athleteRepository.getWorkLog().some((e) => e.date === todayIso) ? 'in-progress' : 'pending',
+          tired: advice.tone === 'mid' || advice.tone === 'bad',
+          pain: (profile.painFlags ?? []).length > 0,
+        }}
         ask={askRex}
         hints={REX_HINTS.dashboard}
         dock={{ stats: rexDockStats, tip: ringHintPending && tab === 'resumen' ? 'Toca un aro o un número para ver de dónde sale.' : null }}

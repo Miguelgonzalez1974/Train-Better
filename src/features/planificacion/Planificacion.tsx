@@ -1292,8 +1292,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     {
       title: 'Tu semana',
       items: [
-        { label: 'Cambiar día', hint: 'mover, intercambiar, desplazar', icon: CalendarClock, ask: 'cambiar dia' },
-        ...(canUndoWeek ? [{ label: 'Deshacer el último cambio', icon: Undo2, ask: 'deshaz el cambio de la semana' }] : []),
+        { id: 'cambiar-dia', label: 'Cambiar día', hint: 'mover, intercambiar, desplazar', icon: CalendarClock, ask: 'cambiar dia' },
+        ...(canUndoWeek ? [{ id: 'deshacer-semana', label: 'Deshacer el último cambio', icon: Undo2, ask: 'deshaz el cambio de la semana' }] : []),
       ],
     },
     ...(canChangeToday
@@ -1301,13 +1301,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           {
             title: 'Cambiar la sesión de hoy',
             items: [
-              ...(hasWodBlock ? [{ label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
-              ...(hasWodBlock ? [{ label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
-              ...(canHarder ? [{ label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
-              { label: 'Acortar la sesión', hint: 'tengo poco tiempo', icon: Timer, ask: 'acortar la sesion' },
-              ...(canUndoAdapt ? [{ label: 'Deshacer el cambio', icon: Undo2, ask: 'deshaz el cambio' }] : []),
-              { label: 'Cambiar el tipo', hint: 'recovery, WOD libre', icon: SlidersHorizontal, onClick: () => handleRexAct('tipo') },
-              { label: 'Editar sesión', icon: Pencil, onClick: () => handleRexAct('editar') },
+              ...(hasWodBlock ? [{ id: 'otro-wod', label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
+              ...(hasWodBlock ? [{ id: 'wod-fantasma', label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
+              ...(canHarder ? [{ id: 'mas-dura', label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
+              { id: 'acortar', label: 'Acortar la sesión', hint: 'tengo poco tiempo', icon: Timer, ask: 'acortar la sesion' },
+              ...(canUndoAdapt ? [{ id: 'deshacer-cambio', label: 'Deshacer el cambio', icon: Undo2, ask: 'deshaz el cambio' }] : []),
+              { id: 'tipo', label: 'Cambiar el tipo', hint: 'recovery, WOD libre', icon: SlidersHorizontal, onClick: () => handleRexAct('tipo') },
+              { id: 'editar', label: 'Editar sesión', icon: Pencil, onClick: () => handleRexAct('editar') },
             ],
           },
         ]
@@ -1315,9 +1315,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     {
       title: 'Si algo ha pasado',
       items: [
-        { label: 'Me duele algo', icon: HeartPulse, onClick: () => openSupport('p_zone') },
-        ...(!alreadyCompletedToday ? [{ label: 'Hoy no estoy para el plan', icon: Frown, onClick: () => openSupport('t_what') }] : []),
-        { label: 'Voy a faltar unos días', icon: Plane, onClick: () => openSupport('a_why') },
+        { id: 'me-duele', label: 'Me duele algo', icon: HeartPulse, onClick: () => openSupport('p_zone') },
+        ...(!alreadyCompletedToday ? [{ id: 'no-estoy', label: 'Hoy no estoy para el plan', icon: Frown, onClick: () => openSupport('t_what') }] : []),
+        { id: 'faltar', label: 'Voy a faltar unos días', icon: Plane, onClick: () => openSupport('a_why') },
       ],
     },
     ...(companionProgram && companionLive
@@ -1325,10 +1325,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           {
             title: 'Programa de fuerza',
             items: [
-              ...(companionStat?.kind !== 'aceptada' ? [{ label: 'Hacerla hoy', hint: companionPlan ? `sesión ${companionPlan.index + 1}` : undefined, icon: Dumbbell, onClick: () => programAsk('hacer', null) }] : []),
-              ...(companionStat?.kind !== 'aplazada' ? [{ label: 'Aplazar la del programa', hint: 'pasa a mañana', icon: FastForward, onClick: () => programAsk('aplazar', null) }] : []),
-              { label: 'Ver semana a semana', icon: CalendarDays, onClick: () => rexBus.emit('companion-weeks') },
-              { label: 'Pausar 7 días', icon: PauseCircle, onClick: () => programAsk('pausar', 7) },
+              ...(companionStat?.kind !== 'aceptada' ? [{ id: 'prog-hacer', label: 'Hacerla hoy', hint: companionPlan ? `sesión ${companionPlan.index + 1}` : undefined, icon: Dumbbell, onClick: () => programAsk('hacer', null) }] : []),
+              ...(companionStat?.kind !== 'aplazada' ? [{ id: 'prog-aplazar', label: 'Aplazar la del programa', hint: 'pasa a mañana', icon: FastForward, onClick: () => programAsk('aplazar', null) }] : []),
+              { id: 'prog-semanas', label: 'Ver semana a semana', icon: CalendarDays, onClick: () => rexBus.emit('companion-weeks') },
+              { id: 'prog-pausar', label: 'Pausar 7 días', icon: PauseCircle, onClick: () => programAsk('pausar', 7) },
             ],
           },
         ]
@@ -1336,10 +1336,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     {
       title: 'Más',
       items: [
-        { label: 'Librería de complejos', icon: Library, onClick: () => handleRexAct('complejos') },
-        ...(noticeSummary.count > 0 ? [{ label: 'Avisos del coach', hint: String(noticeSummary.count), icon: Bell, onClick: () => handleRexAct('avisos') }] : []),
-        ...(alreadyCompletedToday ? [{ label: 'Corregir datos', hint: 'apuntar otra vez', icon: Pencil, onClick: () => handleRecordAgain() }] : []),
-        ...(alreadyCompletedToday ? [{ label: 'Deshacer el registro', icon: Undo2, onClick: () => handleRexAct('deshacer') }] : []),
+        { id: 'complejos', label: 'Librería de complejos', icon: Library, onClick: () => handleRexAct('complejos') },
+        ...(noticeSummary.count > 0 ? [{ id: 'avisos', label: 'Avisos del coach', hint: String(noticeSummary.count), icon: Bell, onClick: () => handleRexAct('avisos') }] : []),
+        ...(alreadyCompletedToday ? [{ id: 'corregir', label: 'Corregir datos', hint: 'apuntar otra vez', icon: Pencil, onClick: () => handleRecordAgain() }] : []),
+        ...(alreadyCompletedToday ? [{ id: 'deshacer-registro', label: 'Deshacer el registro', icon: Undo2, onClick: () => handleRexAct('deshacer') }] : []),
       ],
     },
   ];
@@ -1553,6 +1553,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       {!session && (
         <ScreenRex
           id="plan-sin-sesion"
+          screen="planificacion"
+          tileContext={{ session: 'none' }}
           lead="Sin sesión hoy."
           text={nextMacroStart ? `Tu macro empieza el ${nextMacroStart}. Hasta entonces decides tú qué haces cada día.` : 'Decides tú qué haces cada día.'}
         />
@@ -1618,6 +1620,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {showRexBar && !focusMode && (
           <RexCorner
             speak
+            screen="planificacion"
+            tileContext={{
+              session: session.isRestDay ? 'rest' : alreadyCompletedToday ? 'done' : todayWorkLog.length > 0 ? 'in-progress' : 'pending',
+              tired: session.dayLight ? session.dayLight.color !== 'verde' : false,
+              pain: activePainFlags.length > 0,
+            }}
             dock={{ stats: dockStats({ low: strainTarget?.low ?? null, high: strainTarget?.high ?? null, real: null, planned: plannedStrain?.strain ?? null }) }}
             suggestion={rexPick.current}
             waiting={rexPick.waiting}

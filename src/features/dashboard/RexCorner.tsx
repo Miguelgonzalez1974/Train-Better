@@ -9,6 +9,19 @@ import { useClockActive } from '../../lib/clockState';
 import { handoff } from '../../lib/handoff';
 import type { TabId } from '../shell/navItems';
 import type { RexSuggestion, RexTarget } from './rexDashboard';
+import type { RexScreen } from './rexAskRouter';
+import { RexTileGrid, type PanelTile } from './RexTileGrid';
+import { TILE_ICONS } from './rexTileIcons';
+import { GLOBAL_TILES, groupOfSection, loadTilePrefs, saveTilePrefs, type TileContext, type TilePrefs } from './rexTiles';
+
+/** El nombre de una opción sin id: la etiqueta en minúsculas, sin acentos y con guiones. */
+const slug = (s: string): string =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 
 /** Cuánto se queda el globo de la esquina antes de recogerse solo (la pista de los aros no se recoge: se queda hasta que se toca un aro). */
 const BUBBLE_MS = 9000;
@@ -42,6 +55,8 @@ function writeFolded(folded: boolean): void {
 
 /** Una opción de RexLab de la pantalla: abre algo (onClick) o hace una pregunta ahí mismo (sk). */
 export interface LabItem {
+  /** Cómo se llama en la biblioteca de teselas (para fijarla, esconderla y puntuarla según el momento). Sin él, sale de la etiqueta. */
+  id?: string;
   label: string;
   hint?: string;
   icon: LucideIcon;
@@ -111,8 +126,14 @@ export function RexCorner({
   examples,
   hints,
   dock = null,
+  screen = 'dashboard',
+  tileContext,
   ...bar
 }: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
+  /** En qué pantalla está Rex: decide qué atajos suben. */
+  screen?: RexScreen;
+  /** Cómo está el momento (la sesión de hoy, si llegas cansado, si hay una molestia) para colocar los atajos. */
+  tileContext?: Partial<Omit<TileContext, 'screen' | 'hour'>>;
   /** El globo de la esquina puede hablar solo (hoy sí; mirando un día pasado, no). */
   speak: boolean;
   /** Una pista que va antes que cualquier otra cosa (p. ej. «Toca un aro…») y se queda hasta que ya no hace falta; null si no hay. */
@@ -138,6 +159,12 @@ export function RexCorner({
   dock?: { stats?: string | null; tip?: string | null } | null;
 }) {
   const [open, setOpen] = useState(false);
+  // Los atajos que el atleta fija o esconde: se recuerdan en este dispositivo, para todas las pantallas.
+  const [tilePrefs, setTilePrefs] = useState<TilePrefs>(() => loadTilePrefs(typeof window !== 'undefined' ? window.localStorage : null));
+  const updateTilePrefs = (next: TilePrefs) => {
+    setTilePrefs(next);
+    saveTilePrefs(typeof window !== 'undefined' ? window.localStorage : null, next);
+  };
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +279,38 @@ export function RexCorner({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
+
+  // La biblioteca de teselas: las opciones de esta pantalla (con su id, si lo tienen) más las globales, que son frases que la caja de Rex entiende.
+  // Si una opción de la pantalla comparte id con una global, manda la de la pantalla (sabe hacerlo ahí mismo).
+  const labTiles: PanelTile[] = (lab ?? []).flatMap((section) =>
+    section.items.map((item) => ({
+      id: item.id ?? slug(item.label),
+      label: item.label,
+      hint: item.hint,
+      Icon: item.icon,
+      group: groupOfSection(section.title),
+      run: () => {
+        if (item.ask) send(item.ask);
+        else if (item.onClick) launch(item.onClick);
+      },
+    })),
+  );
+  const globalTiles: PanelTile[] = ask
+    ? GLOBAL_TILES.filter((g) => !labTiles.some((l) => l.id === g.id)).map((g) => ({
+        id: g.id,
+        label: g.label,
+        hint: g.hint,
+        Icon: TILE_ICONS[g.iconKey] ?? FlaskConical,
+        group: g.group,
+        run: () => {
+          if (g.prefill) {
+            setQuestion(g.prefill);
+            inputRef.current?.focus();
+          } else if (g.ask) send(g.ask);
+        },
+      }))
+    : [];
+  const panelTiles = [...labTiles, ...globalTiles];
 
   const attention = cornerNeedsAttention(suggestion, dots);
   const openPanel = () => {
@@ -496,38 +555,15 @@ export function RexCorner({
               {...bar}
               showDate={showDate}
               modules={modules}
-              defaultMore={modules}
+              // Los módulos de «Más» van recogidos: los atajos de debajo son lo primero a mano; «Más» sigue a un toque.
+              defaultMore={false}
               // El globo ya la había dicho (o el panel se abre a pedido): sale entera, sin volver a escribirse.
               typedAlready
               onAction={(target) => launch(() => bar.onAction(target))}
             />
 
-            {lab?.map((section) => (
-              <div key={section.title} className="mt-4">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">{section.title}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {section.items.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.label}
-                        onClick={() => {
-                          if (item.ask) send(item.ask);
-                          else if (item.onClick) launch(item.onClick);
-                        }}
-                        className="flex items-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-left text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
-                      >
-                        <Icon size={15} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
-                        <span className="min-w-0">
-                          <span className="block leading-snug">{item.label}</span>
-                          {item.hint && <span className="block text-[11px] font-normal text-neutral-500">{item.hint}</span>}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+            {/* Los atajos como teselas: las opciones de esta pantalla y las frases que Rex entiende desde cualquiera, colocadas según el momento. */}
+            <RexTileGrid tiles={panelTiles} ctx={{ screen, hour: new Date().getHours(), ...tileContext }} prefs={tilePrefs} onPrefs={updateTilePrefs} />
           </section>
         </div>
       )}

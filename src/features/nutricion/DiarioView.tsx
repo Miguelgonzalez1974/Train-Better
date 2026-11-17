@@ -100,6 +100,7 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
       {/* Rex, en su esquina de siempre: dice cómo vas de comida hoy y lleva a la caja «He comido…». */}
       <ScreenRex
         id="nutricion-dia"
+        screen="nutricion"
         lead={covered ? 'Día cubierto.' : 'Nutrición.'}
         tone={covered ? 'good' : 'info'}
         mood={covered ? 'happy' : 'idle'}
