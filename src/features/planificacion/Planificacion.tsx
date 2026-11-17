@@ -75,6 +75,7 @@ import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { wodDoneInfos } from '../../engine/wodDone';
 import { invalidGroups, repairSession } from '../../engine/sessionRepair';
+import { applyManualCorrection } from '../../engine/oneOffCorrections';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
@@ -174,6 +175,25 @@ function isAdjustableSetBlock(b: SessionBlockResult): boolean {
  * Sin macrociclo ni programa activo y nada elegido, devuelve `null`.
  */
 function loadTodaySession(
+  profile: AthleteProfile,
+  history: SessionHistoryEntry[],
+  goals: Goal[],
+  todayIso: string,
+): DailySession | null {
+  const session = loadTodaySessionBase(profile, history, goals, todayIso);
+  if (!session || history.some((h) => h.date === todayIso)) return session;
+  // Corrección puntual de la sesión del 17 nov (ver `engine/oneOffCorrections.ts`): se aplica una vez y deja el complejo en la librería.
+  const fix = applyManualCorrection(session, athleteRepository.getProfile());
+  if (!fix) return session;
+  const current = athleteRepository.getProfile();
+  if (!(current.customComplexes ?? []).some((c) => c.id === fix.newComplex.id)) {
+    athleteRepository.saveProfile({ ...current, customComplexes: [...(current.customComplexes ?? []), fix.newComplex] });
+  }
+  athleteRepository.saveCachedSession(fix.session);
+  return fix.session;
+}
+
+function loadTodaySessionBase(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
   goals: Goal[],

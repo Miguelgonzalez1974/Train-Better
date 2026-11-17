@@ -888,6 +888,8 @@ export interface DailySession {
    * (`mergeSessionCache`) — lo que el atleta puso a mano prevalece sobre lo generado.
    */
   editedByAthlete?: boolean;
+  /** Corrección puntual ya aplicada a esta sesión (ver `engine/oneOffCorrections.ts`): evita aplicarla dos veces. */
+  manualFix?: string;
 }
 
 export type RxOrScaled = 'rx' | 'scaled';
