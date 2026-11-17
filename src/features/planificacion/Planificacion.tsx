@@ -74,6 +74,7 @@ import { SeasonMapCompact, SeasonMapFull } from '../objetivos/SeasonMap';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { wodDoneInfos } from '../../engine/wodDone';
+import { invalidGroups, repairSession } from '../../engine/sessionRepair';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
@@ -187,6 +188,14 @@ function loadTodaySession(
     if (isCachedSessionOrphaned(cached, profile, todayIso)) {
       athleteRepository.deleteCachedSession(todayIso);
     } else if (!isCachedSessionStale(cached, lockedProfile.weeklyLocks?.[todayIso], history, lockedProfile.painFlags, lockedProfile.regenVariants?.[todayIso] ?? 0)) {
+      // Una sesión de hoy aún sin registrar con bloques que el motor ya no programa (un press con mancuernas como fuerza principal, un
+      // complejo que mezcla snatch y clean) se repara: una sesión que se registró y se deshizo queda «editada» y no se regeneraría sola.
+      if (structured && invalidGroups(cached).length > 0 && !history.some((h) => h.date === todayIso)) {
+        const fresh = generateSessionForDate(lockedProfile, history, new Date(), goals);
+        const repaired = repairSession(cached, fresh);
+        if (repaired !== cached) athleteRepository.saveCachedSession(repaired);
+        return repaired;
+      }
       return cached;
     } else if (history.some((h) => h.date === todayIso)) {
       const adopted = adoptAdditiveEngineFields(cached, profile, history, new Date(), goals);
@@ -1051,10 +1060,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     if (!session) return;
     if (!window.confirm('¿Deshacer el registro de hoy? Esto no se puede deshacer.')) return;
     athleteRepository.deleteHistoryEntry(session.date);
-    setHistory(athleteRepository.getHistory());
+    const nextHistory = athleteRepository.getHistory();
+    setHistory(nextHistory);
     setWorkLog(athleteRepository.getWorkLog());
     setPrUpdateMessage(null);
     setE1rmSuggestions([]);
+    // Sin el registro, la sesión vuelve a poder repararse (ver `loadTodaySession`) y se enseña ya con lo corregido.
+    setSession(loadTodaySession(athleteRepository.getProfile(), nextHistory, goals, todayIso));
+    setProfile(athleteRepository.getProfile());
   }
 
   /**
