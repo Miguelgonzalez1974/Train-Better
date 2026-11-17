@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseAsk } from './rexAsk';
-import { EMPTY_PREFS, GLOBAL_TILES, groupOfSection, loadTilePrefs, MAX_SHOWN, rankTiles, saveTilePrefs, scoreTile, toggleHidden, togglePinned, type TileContext } from './rexTiles';
+import { EMPTY_PREFS, GLOBAL_TILES, groupOfSection, loadTilePrefs, MAX_SHOWN, rankTiles, saveTilePrefs, scoreTile, setSlot, type TileContext } from './rexTiles';
 
 const ctx = (o: Partial<TileContext> = {}): TileContext => ({ screen: 'planificacion', hour: 18, session: 'pending', ...o });
 const ALL = ['acortar', 'otro-wod', 'wod-fantasma', 'mas-dura', 'tipo', 'editar', 'cambiar-dia', 'me-duele', 'no-estoy', 'faltar', 'apuntar-comida', 'apuntar-peso', 'que-falta', 'mis-marcas', 'corregir', 'deshacer-registro', 'complejos'];
@@ -72,51 +72,67 @@ describe('cuáles salen a la vista', () => {
     expect(rankTiles(ALL, ctx(), EMPTY_PREFS)).toEqual(rankTiles([...ALL].reverse(), ctx(), EMPTY_PREFS));
   });
 
-  it('las fijadas salen siempre y primero, en el orden en que se fijaron; las escondidas no salen pero siguen en «Todos»', () => {
-    let prefs = togglePinned(EMPTY_PREFS, 'complejos');
-    prefs = togglePinned(prefs, 'faltar');
-    prefs = toggleHidden(prefs, 'acortar');
-    const { shown, rest } = rankTiles(ALL, ctx({ tired: true }), prefs);
-    expect(shown.slice(0, 2)).toEqual(['complejos', 'faltar']);
+  it('una tesela fijada sale en su hueco y los demás huecos los rellena Rex por orden', () => {
+    let prefs = setSlot(EMPTY_PREFS, 2, 'complejos');
+    prefs = setSlot(prefs, 4, 'faltar');
+    const auto = rankTiles(ALL, ctx({ tired: true }), EMPTY_PREFS).shown;
+    const { shown, fixed, rest } = rankTiles(ALL, ctx({ tired: true }), prefs);
     expect(shown).toHaveLength(MAX_SHOWN);
-    expect(shown).not.toContain('acortar');
-    expect(rest).toContain('acortar');
-    expect(rest[rest.length - 1]).toBe('acortar'); // las escondidas, al final
+    expect(shown[2]).toBe('complejos');
+    expect(shown[4]).toBe('faltar');
+    expect(fixed.sort()).toEqual(['complejos', 'faltar']);
+    // Los otros cuatro huecos, las que más puntúan que no están fijadas, en su orden.
+    const free = auto.filter((id) => id !== 'complejos' && id !== 'faltar').slice(0, 4);
+    expect([shown[0], shown[1], shown[3], shown[5]]).toEqual(free);
+    expect([...shown, ...rest].sort()).toEqual([...ALL].sort());
   });
 
-  it('una fijada que no está disponible en esta pantalla se ignora, sin romper nada', () => {
-    const prefs = togglePinned(EMPTY_PREFS, 'no-existe');
+  it('una fijada que no está disponible en esta pantalla se ignora (su hueco pasa a automático), sin romper nada', () => {
+    const prefs = setSlot(EMPTY_PREFS, 0, 'no-existe');
     const { shown } = rankTiles(ALL, ctx(), prefs);
     expect(shown).not.toContain('no-existe');
-    expect(shown).toHaveLength(MAX_SHOWN);
+    expect(shown).toEqual(rankTiles(ALL, ctx(), EMPTY_PREFS).shown);
   });
 });
 
-describe('lo que el atleta fija y esconde', () => {
-  it('no se fijan más de 6; fijar una escondida la enseña y esconder una fijada la suelta', () => {
-    let prefs = EMPTY_PREFS;
-    for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g']) prefs = togglePinned(prefs, id);
-    expect(prefs.pinned).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
-    prefs = toggleHidden(prefs, 'a');
-    expect(prefs.pinned).not.toContain('a');
-    expect(prefs.hidden).toEqual(['a']);
-    prefs = togglePinned(prefs, 'a');
-    expect(prefs.hidden).toEqual([]);
-    expect(prefs.pinned).toContain('a');
-    // Soltar y volver a enseñar.
-    expect(togglePinned(prefs, 'a').pinned).not.toContain('a');
-    expect(toggleHidden(toggleHidden(EMPTY_PREFS, 'x'), 'x').hidden).toEqual([]);
+describe('lo que el atleta pone en cada hueco', () => {
+  it('poner una tesela en un hueco no mueve los demás; poner otra en el mismo la sustituye', () => {
+    let prefs = setSlot(EMPTY_PREFS, 1, 'acortar');
+    prefs = setSlot(prefs, 3, 'faltar');
+    expect(prefs.slots).toEqual([null, 'acortar', null, 'faltar', null, null]);
+    prefs = setSlot(prefs, 1, 'mis-marcas');
+    expect(prefs.slots).toEqual([null, 'mis-marcas', null, 'faltar', null, null]);
+    prefs = setSlot(prefs, 3, null);
+    expect(prefs.slots).toEqual([null, 'mis-marcas', null, null, null, null]);
+  });
+
+  it('si la tesela ya estaba en otro hueco, los dos se intercambian (nunca sale repetida)', () => {
+    let prefs = setSlot(EMPTY_PREFS, 0, 'a');
+    prefs = setSlot(prefs, 1, 'b');
+    prefs = setSlot(prefs, 1, 'a');
+    expect(prefs.slots).toEqual(['b', 'a', null, null, null, null]);
+    prefs = setSlot(prefs, 5, 'a');
+    expect(prefs.slots).toEqual(['b', null, null, null, null, 'a']);
+    // Un hueco que no existe no cambia nada.
+    expect(setSlot(prefs, 6, 'z')).toBe(prefs);
+    expect(setSlot(prefs, -1, 'z')).toBe(prefs);
   });
 
   it('se guarda y se recupera; un almacenamiento roto o vacío da las elecciones vacías', () => {
     const store = new Map<string, string>();
     const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
-    saveTilePrefs(storage, { pinned: ['faltar', 'faltar', 'acortar'], hidden: ['mi-racha'] });
-    expect(loadTilePrefs(storage)).toEqual({ pinned: ['faltar', 'acortar'], hidden: ['mi-racha'] });
+    saveTilePrefs(storage, { slots: ['faltar', null, 'acortar', null, null, null] });
+    expect(loadTilePrefs(storage)).toEqual({ slots: ['faltar', null, 'acortar', null, null, null] });
     expect(loadTilePrefs(null)).toEqual(EMPTY_PREFS);
     store.set('tb-rex-tiles', '{no es json');
     expect(loadTilePrefs(storage)).toEqual(EMPTY_PREFS);
-    store.set('tb-rex-tiles', JSON.stringify({ pinned: [1, 'ok'], hidden: 'mal' }));
-    expect(loadTilePrefs(storage)).toEqual({ pinned: ['ok'], hidden: [] });
+    store.set('tb-rex-tiles', JSON.stringify({ slots: [1, 'ok', 'ok', null] }));
+    expect(loadTilePrefs(storage)).toEqual({ slots: [null, 'ok', null, null, null, null] });
+  });
+
+  it('lo guardado con el formato anterior (fijadas y escondidas) pasa a los primeros huecos y lo escondido se olvida', () => {
+    const store = new Map<string, string>([['tb-rex-tiles', JSON.stringify({ pinned: ['faltar', 'faltar', 'acortar'], hidden: ['mi-racha'] })]]);
+    const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: () => undefined };
+    expect(loadTilePrefs(storage)).toEqual({ slots: ['faltar', 'acortar', null, null, null, null] });
   });
 });

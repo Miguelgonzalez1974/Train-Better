@@ -136,27 +136,49 @@ export function scoreTile(id: string, ctx: TileContext): number {
   return s;
 }
 
-/** Lo que el atleta ha elegido: las que fija (salen siempre y primero, en ese orden) y las que esconde (no salen entre las principales). */
+/** Cuántas teselas salen a la vista (cuántos huecos hay). */
+export const MAX_SHOWN = 6;
+
+/**
+ * Lo que el atleta ha elegido: seis huecos, cada uno con una tesela fija (esa sale siempre en ese hueco) o `null` (lo decide Rex según el momento).
+ * Se elige hueco a hueco, sin reordenar nada más.
+ */
 export interface TilePrefs {
-  pinned: string[];
-  hidden: string[];
+  slots: (string | null)[];
 }
 
-export const EMPTY_PREFS: TilePrefs = { pinned: [], hidden: [] };
-/** Cuántas teselas salen a la vista. */
-export const MAX_SHOWN = 6;
+const emptySlots = (): (string | null)[] => Array.from({ length: MAX_SHOWN }, () => null);
+
+export const EMPTY_PREFS: TilePrefs = { slots: emptySlots() };
 
 const PREFS_KEY = 'tb-rex-tiles';
 
 type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem'>;
 
+/** Siempre seis huecos, sin repetir tesela (la primera vez que sale manda). */
+function normalizeSlots(raw: unknown): (string | null)[] {
+  const slots = emptySlots();
+  if (!Array.isArray(raw)) return slots;
+  const seen = new Set<string>();
+  for (let i = 0; i < MAX_SHOWN; i++) {
+    const v = raw[i];
+    if (typeof v === 'string' && v && !seen.has(v)) {
+      slots[i] = v;
+      seen.add(v);
+    }
+  }
+  return slots;
+}
+
 export function loadTilePrefs(storage: Storage | null | undefined): TilePrefs {
   try {
     const raw = storage?.getItem(PREFS_KEY);
     if (!raw) return EMPTY_PREFS;
-    const parsed = JSON.parse(raw) as Partial<TilePrefs>;
-    const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-    return { pinned: [...new Set(strings(parsed.pinned))].slice(0, MAX_SHOWN), hidden: [...new Set(strings(parsed.hidden))] };
+    const parsed = JSON.parse(raw) as { slots?: unknown; pinned?: unknown };
+    // El formato anterior (fijadas + escondidas): las fijadas pasan a los primeros huecos; lo escondido ya no existe.
+    if (parsed.slots !== undefined) return { slots: normalizeSlots(parsed.slots) };
+    const pinned = Array.isArray(parsed.pinned) ? [...new Set(parsed.pinned.filter((x): x is string => typeof x === 'string'))] : [];
+    return { slots: normalizeSlots(pinned) };
   } catch {
     return EMPTY_PREFS;
   }
@@ -170,41 +192,52 @@ export function saveTilePrefs(storage: Storage | null | undefined, prefs: TilePr
   }
 }
 
-/** Fija una tesela (al final de las fijadas) o la suelta si ya lo estaba. Con el máximo ya fijado no se añade otra. Una fijada deja de estar escondida. */
-export function togglePinned(prefs: TilePrefs, id: string): TilePrefs {
-  if (prefs.pinned.includes(id)) return { ...prefs, pinned: prefs.pinned.filter((x) => x !== id) };
-  if (prefs.pinned.length >= MAX_SHOWN) return prefs;
-  return { pinned: [...prefs.pinned, id], hidden: prefs.hidden.filter((x) => x !== id) };
+/**
+ * Pone una tesela en un hueco (o `null` para que lo decida Rex). Si esa tesela ya estaba en otro hueco, los dos se intercambian: nada más se mueve.
+ */
+export function setSlot(prefs: TilePrefs, index: number, id: string | null): TilePrefs {
+  if (index < 0 || index >= MAX_SHOWN) return prefs;
+  const slots = normalizeSlots(prefs.slots);
+  if (id) {
+    const from = slots.indexOf(id);
+    if (from === index) return { slots };
+    if (from >= 0) slots[from] = slots[index];
+    slots[index] = id;
+  } else {
+    slots[index] = null;
+  }
+  return { slots };
 }
 
-/** Esconde una tesela de las principales (sigue en «Todos»), o la vuelve a enseñar. Esconder una fijada la suelta. */
-export function toggleHidden(prefs: TilePrefs, id: string): TilePrefs {
-  if (prefs.hidden.includes(id)) return { ...prefs, hidden: prefs.hidden.filter((x) => x !== id) };
-  return { pinned: prefs.pinned.filter((x) => x !== id), hidden: [...prefs.hidden, id] };
-}
-
-/** Quita lo fijado y lo escondido: vuelve a decidir Rex. */
+/** Quita todo lo elegido: vuelve a decidir Rex. */
 export const resetPrefs = (): TilePrefs => EMPTY_PREFS;
 
+/** ¿Hay algún hueco elegido a mano? */
+export const hasChosenSlots = (prefs: TilePrefs): boolean => prefs.slots.some((s) => !!s);
+
 export interface RankedTiles {
-  /** Las que salen a la vista: primero las fijadas, luego las que más puntúan, hasta `max`. */
+  /** Las que salen a la vista, en su orden: cada fijada en su hueco y los demás huecos con las que más puntúan. */
   shown: string[];
-  /** El resto, de más a menos puntuación (las escondidas al final). */
+  /** Cuáles de las que salen están fijadas a mano. */
+  fixed: string[];
+  /** El resto, de más a menos puntuación. */
   rest: string[];
 }
 
-/** De entre las teselas disponibles (`ids`), cuáles salen a la vista según el momento y lo que el atleta ha fijado o escondido. */
+/** De entre las teselas disponibles (`ids`), cuáles salen a la vista según el momento y lo que el atleta ha puesto en cada hueco. */
 export function rankTiles(ids: string[], ctx: TileContext, prefs: TilePrefs, max = MAX_SHOWN): RankedTiles {
   const available = new Set(ids);
-  const pinned = prefs.pinned.filter((id) => available.has(id));
-  const hidden = new Set(prefs.hidden);
-  const scored = ids
-    .filter((id) => !pinned.includes(id))
+  const slots = normalizeSlots(prefs.slots).slice(0, max).map((id) => (id && available.has(id) ? id : null));
+  const fixedSet = new Set(slots.filter((s): s is string => !!s));
+  const pool = ids
+    .filter((id) => !fixedSet.has(id))
     .map((id) => ({ id, score: scoreTile(id, ctx) }))
-    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
-  const visible = scored.filter((t) => !hidden.has(t.id)).map((t) => t.id);
-  const hiddenIds = scored.filter((t) => hidden.has(t.id)).map((t) => t.id);
-  const shown = [...pinned, ...visible].slice(0, max);
-  const rest = [...visible.slice(Math.max(0, max - pinned.length)), ...hiddenIds];
-  return { shown, rest };
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+    .map((t) => t.id);
+  const shown: string[] = [];
+  for (const slot of slots) {
+    const id = slot ?? pool.shift();
+    if (id) shown.push(id);
+  }
+  return { shown, fixed: [...fixedSet], rest: pool };
 }

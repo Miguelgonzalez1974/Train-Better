@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, EyeOff, Eye, Pin, PinOff, Pencil, RotateCcw, type LucideIcon } from 'lucide-react';
-import { MAX_SHOWN, rankTiles, resetPrefs, TILE_GROUP_LABEL, toggleHidden, togglePinned, type TileContext, type TileGroup, type TilePrefs } from './rexTiles';
+import { Check, ChevronDown, ChevronUp, Pin, Pencil, RotateCcw, Sparkles, type LucideIcon } from 'lucide-react';
+import { hasChosenSlots, MAX_SHOWN, rankTiles, resetPrefs, setSlot, TILE_GROUP_LABEL, type TileContext, type TileGroup, type TilePrefs } from './rexTiles';
 
 /** Una tesela lista para dibujar y tocar: lo que la pantalla (o la biblioteca) pone y lo que hace al tocarla. */
 export interface PanelTile {
@@ -32,12 +32,14 @@ function Tile({ tile, pinned, onClick }: { tile: PanelTile; pinned: boolean; onC
 }
 
 /**
- * Los atajos del panel de Rex como teselas: las que más encajan con el momento a la vista (hasta 6, con las que has fijado primero),
- * «Todos» para el resto agrupado, y «Editar» para fijar o esconder cada una. Lo que se elige se guarda en este dispositivo.
+ * Los atajos del panel de Rex como teselas: las que más encajan con el momento a la vista (6 huecos), «Todos» para el resto agrupado, y «Editar»
+ * para elegir de una en una qué tesela va en cada hueco (o dejar que lo decida Rex). Lo que se elige se guarda en este dispositivo.
  */
 export function RexTileGrid({ tiles, ctx, prefs, onPrefs }: { tiles: PanelTile[]; ctx: TileContext; prefs: TilePrefs; onPrefs: (next: TilePrefs) => void }) {
   const [all, setAll] = useState(false);
   const [editing, setEditing] = useState(false);
+  /** El hueco que se está eligiendo (0-5), o null. */
+  const [picking, setPicking] = useState<number | null>(null);
   const byId = useMemo(() => new Map(tiles.map((t) => [t.id, t])), [tiles]);
   const { shown, rest } = useMemo(() => rankTiles(tiles.map((t) => t.id), ctx, prefs), [tiles, ctx, prefs]);
   if (tiles.length === 0) return null;
@@ -45,61 +47,116 @@ export function RexTileGrid({ tiles, ctx, prefs, onPrefs }: { tiles: PanelTile[]
   const grouped = (ids: string[]) =>
     GROUP_ORDER.map((g) => ({ group: g, items: ids.map((id) => byId.get(id)!).filter((t) => t && t.group === g) })).filter((x) => x.items.length > 0);
 
+  const isFixed = (i: number) => {
+    const id = prefs.slots[i];
+    return !!id && byId.has(id);
+  };
+
   if (editing) {
-    const everything = [...shown, ...rest];
+    const done = () => {
+      setPicking(null);
+      setEditing(false);
+    };
+    const choose = (index: number, id: string | null) => {
+      onPrefs(setSlot(prefs, index, id));
+      setPicking(null);
+    };
+    // La biblioteca del selector: siempre en el mismo orden (por grupo, y dentro del grupo como las pone la pantalla), nunca reordenada por puntuación.
+    const library = grouped(tiles.map((t) => t.id));
+    const pickedFixed = picking !== null ? prefs.slots[picking] : null;
+
     return (
       <div className="mt-4" data-testid="rex-tiles-edit">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">Editar atajos</p>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => onPrefs(resetPrefs())} className="flex items-center gap-1 rounded-full border border-brand-border px-2.5 py-1 text-[11px] font-semibold text-neutral-300 hover:bg-white/5">
-              <RotateCcw size={12} aria-hidden="true" />
-              Que decida Rex
-            </button>
-            <button onClick={() => setEditing(false)} className="flex items-center gap-1 rounded-full bg-brand-orange px-3 py-1 text-[11px] font-semibold text-black hover:bg-brand-orange-dark">
+            {hasChosenSlots(prefs) && (
+              <button onClick={() => { onPrefs(resetPrefs()); setPicking(null); }} className="flex items-center gap-1 rounded-full border border-brand-border px-2.5 py-1 text-[11px] font-semibold text-neutral-300 hover:bg-white/5">
+                <RotateCcw size={12} aria-hidden="true" />
+                Todo automático
+              </button>
+            )}
+            <button onClick={done} className="flex items-center gap-1 rounded-full bg-brand-orange px-3 py-1 text-[11px] font-semibold text-black hover:bg-brand-orange-dark">
               <Check size={12} aria-hidden="true" />
               Listo
             </button>
           </div>
         </div>
-        <p className="mb-3 text-xs leading-relaxed text-neutral-400">
-          Fija hasta {MAX_SHOWN} para tenerlas siempre a la vista. Las que escondas siguen en «Todos». El resto lo coloca Rex según el momento.
-        </p>
-        {grouped(everything).map(({ group, items }) => (
-          <div key={group} className="mb-3">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">{TILE_GROUP_LABEL[group]}</p>
-            <div className="flex flex-col gap-1.5">
-              {items.map((t) => {
-                const pinned = prefs.pinned.includes(t.id);
-                const hidden = prefs.hidden.includes(t.id);
-                const Icon = t.Icon;
-                return (
-                  <div key={t.id} data-tile-id={t.id} className={`flex items-center gap-2.5 rounded-xl border border-white/10 bg-brand-surface px-3 py-2 ${hidden ? 'opacity-50' : ''}`}>
-                    <Icon size={18} aria-hidden="true" className="shrink-0 text-brand-orange" />
-                    <span className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-neutral-100">{t.label}</span>
-                    <button
-                      onClick={() => onPrefs(togglePinned(prefs, t.id))}
-                      aria-pressed={pinned}
-                      aria-label={pinned ? `Soltar ${t.label}` : `Fijar ${t.label}`}
-                      disabled={!pinned && prefs.pinned.length >= MAX_SHOWN}
-                      className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors disabled:opacity-30 ${pinned ? 'border-brand-gold bg-brand-gold/15 text-brand-gold' : 'border-brand-border text-neutral-400 hover:text-white'}`}
-                    >
-                      {pinned ? <Pin size={16} /> : <PinOff size={16} />}
-                    </button>
-                    <button
-                      onClick={() => onPrefs(toggleHidden(prefs, t.id))}
-                      aria-pressed={hidden}
-                      aria-label={hidden ? `Volver a enseñar ${t.label}` : `Esconder ${t.label}`}
-                      className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${hidden ? 'border-white/30 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'}`}
-                    >
-                      {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+        <p className="mb-3 text-xs leading-relaxed text-neutral-400">Toca un hueco y elige qué atajo quieres en él. Los huecos «Automático» los rellena Rex según el momento.</p>
+
+        <div className="grid grid-cols-3 gap-2" data-testid="rex-slots">
+          {Array.from({ length: MAX_SHOWN }, (_, i) => {
+            const t = shown[i] ? byId.get(shown[i]) : undefined;
+            const fixed = isFixed(i);
+            const Icon = t?.Icon;
+            const active = picking === i;
+            return (
+              <button
+                key={i}
+                onClick={() => setPicking(active ? null : i)}
+                aria-pressed={active}
+                aria-label={`Hueco ${i + 1}: ${t ? t.label : 'vacío'}${fixed ? ', fijado' : ', automático'}`}
+                data-slot={i}
+                className={`relative flex min-h-[84px] flex-col items-center justify-center gap-1 rounded-2xl border px-1.5 py-2 text-center transition-colors ${
+                  active ? 'border-brand-orange bg-brand-orange/10' : fixed ? 'border-brand-gold/60 bg-brand-surface' : 'border-dashed border-white/20 bg-brand-surface/60'
+                }`}
+              >
+                <span className="absolute left-2 top-1.5 text-[10px] font-semibold text-neutral-500">{i + 1}</span>
+                {fixed ? <Pin size={11} aria-hidden="true" className="absolute right-2 top-2 text-brand-gold" /> : <Sparkles size={11} aria-hidden="true" className="absolute right-2 top-2 text-neutral-500" />}
+                {Icon && <Icon size={24} strokeWidth={2} aria-hidden="true" className={fixed ? 'text-brand-orange' : 'text-neutral-400'} />}
+                <span className={`block text-[12px] font-semibold leading-tight ${fixed ? 'text-neutral-100' : 'text-neutral-400'}`}>{t ? t.label : 'Vacío'}</span>
+                <span className="block text-[10px] leading-tight text-neutral-500">{fixed ? 'Fijado' : 'Automático'}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {picking !== null && (
+          <div className="mt-3 rounded-2xl border border-brand-orange/40 bg-brand-surface p-3" data-testid="rex-slot-picker">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-orange">Hueco {picking + 1}: ¿qué atajo?</p>
+            <button
+              onClick={() => choose(picking, null)}
+              aria-pressed={!pickedFixed}
+              data-pick="auto"
+              className={`mb-3 flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${!pickedFixed ? 'border-brand-orange bg-brand-orange/10' : 'border-white/10 hover:bg-white/5'}`}
+            >
+              <Sparkles size={18} aria-hidden="true" className="shrink-0 text-brand-orange" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold leading-tight text-neutral-100">Automático</span>
+                <span className="block text-[11px] leading-tight text-neutral-500">Que lo decida Rex según el momento</span>
+              </span>
+              {!pickedFixed && <Check size={16} aria-hidden="true" className="shrink-0 text-brand-orange" />}
+            </button>
+            {library.map(({ group, items }) => (
+              <div key={group} className="mb-2.5 last:mb-0">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">{TILE_GROUP_LABEL[group]}</p>
+                <div className="flex flex-col gap-1">
+                  {items.map((t) => {
+                    const Icon = t.Icon;
+                    const at = prefs.slots.indexOf(t.id);
+                    const here = at === picking;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => choose(picking, t.id)}
+                        data-pick={t.id}
+                        className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors ${here ? 'border-brand-orange bg-brand-orange/10' : 'border-white/10 hover:bg-white/5'}`}
+                      >
+                        <Icon size={18} aria-hidden="true" className="shrink-0 text-brand-orange" />
+                        <span className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-neutral-100">{t.label}</span>
+                        {here ? (
+                          <Check size={16} aria-hidden="true" className="shrink-0 text-brand-orange" />
+                        ) : at >= 0 ? (
+                          <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-400">en el {at + 1}</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     );
   }
@@ -121,9 +178,9 @@ export function RexTileGrid({ tiles, ctx, prefs, onPrefs }: { tiles: PanelTile[]
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {shown.map((id) => {
+        {shown.map((id, i) => {
           const t = byId.get(id);
-          return t ? <Tile key={id} tile={t} pinned={prefs.pinned.includes(id)} onClick={t.run} /> : null;
+          return t ? <Tile key={id} tile={t} pinned={isFixed(i)} onClick={t.run} /> : null;
         })}
       </div>
       {all &&
