@@ -29,6 +29,11 @@ import type {
   WodSplitsRecord,
 } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
+import type { DaySnapshot } from '../../data/athlete/localRepository';
+import { toast } from '../../lib/toast';
+import { confirmSheet } from '../../lib/confirmSheet';
+import { complexLogId } from '../../data/complexes';
+import { fmtKg } from '../../lib/format';
 import { buildWodDetail, buildWorkGoal } from '../../engine/wodMovements';
 import { getMovementById } from '../../data/movements';
 import {
@@ -668,6 +673,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     if (!session) return;
     athleteRepository.saveWorkSet({ date: session.date, movementId, block, setNumber, kg, reps, ...(quality ? { quality } : {}) });
     setWorkLog(athleteRepository.getWorkLog());
+    // Aviso corto: una serie tras otra se sustituyen entre sí (mismo id) en vez de apilarse.
+    const planned = session.blocks.find((b) => b.block === block && b.movementId === movementId)?.sets;
+    const name = getMovementById(movementId)?.name ?? session.blocks.find((b) => b.complex?.id && complexLogId(b.complex.id) === movementId)?.complex?.name ?? 'Serie';
+    toast.show(`Serie guardada · ${name} ${setNumber}${planned ? `/${planned}` : ''}${kg > 0 ? ` · ${fmtKg(kg)}` : ''}`, { id: 'serie', ttlMs: 2500 });
   }
 
   /** Cómo salió una serie ya hecha (justa, fallada) o de vuelta a bien: se guarda en la propia serie. */
@@ -828,6 +837,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       athleteRepository.saveCachedSession(candidate);
       setSession(candidate);
       setRegenNote(null);
+      toast.show('WOD cambiado');
       return;
     }
     setRegenNote('Hoy el WOD está fijado por la semana (día de test o de referencia), así que no hay otro que dar.');
@@ -1043,6 +1053,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowCompletePanel(false);
     setPrUpdateMessage(nextMessage);
     setE1rmSuggestions(findE1rmSuggestions());
+    toast.show('Sesión registrada', { action: { label: 'Ver resumen', run: () => setShowSummary(true) } });
   }
 
   function handleConfirmE1rmSuggestion(suggestion: E1rmSuggestion) {
@@ -1070,7 +1081,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   /** «Corregir datos»: quita el registro de hoy y abre el cierre de la sesión, para volver a apuntar el resultado, el RPE y lo que se escaló. */
   function handleRecordAgain() {
     if (!session) return;
-    if (!window.confirm('Voy a quitar el registro de hoy para que lo apuntes otra vez (resultado del WOD, RPE, duración…). ¿Sigo?')) return;
+    // Sin pregunta: se puede devolver todo como estaba con el aviso («Dejarlo como estaba»).
+    const snapshot = athleteRepository.snapshotDay(session.date);
+    const sessionBefore = session;
     athleteRepository.deleteHistoryEntry(session.date);
     setHistory(athleteRepository.getHistory());
     setWorkLog(athleteRepository.getWorkLog());
@@ -1078,11 +1091,29 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setE1rmSuggestions([]);
     setTestedLoadKg(testDayBlock?.loadKg ?? 0);
     setShowCompletePanel(true);
+    toast.show('Registro quitado: apúntalo otra vez', { action: { label: 'Dejarlo como estaba', run: () => restoreRegistration(snapshot, sessionBefore) } });
+  }
+
+  /** Devuelve un registro que se acaba de quitar («Volver a registrar»): la entrada, las series, la progresión y la sesión tal como estaba. */
+  function restoreRegistration(snapshot: DaySnapshot, sessionBefore: DailySession) {
+    if (!athleteRepository.restoreDay(snapshot)) {
+      toast.show('Ese día ya tiene otro registro: no se ha tocado', { tone: 'warn' });
+      return;
+    }
+    athleteRepository.saveCachedSession(sessionBefore);
+    setSession(sessionBefore);
+    setHistory(athleteRepository.getHistory());
+    setWorkLog(athleteRepository.getWorkLog());
+    setProfile(athleteRepository.getProfile());
+    setShowCompletePanel(false);
+    toast.show('Registro devuelto');
   }
 
   function handleUndoComplete() {
     if (!session) return;
-    if (!window.confirm('¿Deshacer el registro de hoy? Esto no se puede deshacer.')) return;
+    // Sin pregunta: es reversible con el aviso («Volver a registrar»).
+    const snapshot = athleteRepository.snapshotDay(session.date);
+    const sessionBefore = session;
     athleteRepository.deleteHistoryEntry(session.date);
     const nextHistory = athleteRepository.getHistory();
     setHistory(nextHistory);
@@ -1092,6 +1123,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // Sin el registro, la sesión vuelve a poder repararse (ver `loadTodaySession`) y se enseña ya con lo corregido.
     setSession(loadTodaySession(athleteRepository.getProfile(), nextHistory, goals, todayIso));
     setProfile(athleteRepository.getProfile());
+    toast.show('Registro de hoy deshecho', { action: { label: 'Volver a registrar', run: () => restoreRegistration(snapshot, sessionBefore) } });
   }
 
   /**
@@ -1137,10 +1169,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     }
   }
 
-  function handleDeleteTodaySession() {
+  async function handleDeleteTodaySession() {
     if (!session) return;
-    if (!window.confirm('¿Borrar la sesión de hoy? Volverás a elegir qué hacer.')) return;
+    const ok = await confirmSheet({ title: '¿Borrar la sesión de hoy?', body: 'Volverás a elegir qué hacer hoy.', confirmLabel: 'Borrar sesión', danger: true });
+    if (!ok) return;
     athleteRepository.deleteCachedSession(session.date);
+    toast.show('Sesión de hoy borrada');
     setSession(hasActiveTrainingStructure(profile, session.date) ? generateAndCache(profile) : null);
     setEditMode(false);
     setShowCompletePanel(false);
@@ -1975,10 +2009,20 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         list={repeatableWods}
         onPick={(w) => {
           if (!session || alreadyCompletedToday) return;
+          const previous = session;
           const next = applyRepeatedWod(session, w.blocks);
           athleteRepository.saveCachedSession(next);
           setSession(next);
           setShowRepeat(false);
+          toast.show(`WOD cambiado a «${w.title}»`, {
+            action: {
+              label: 'Deshacer',
+              run: () => {
+                athleteRepository.saveCachedSession(previous);
+                setSession(previous);
+              },
+            },
+          });
         }}
       />
 

@@ -3,6 +3,9 @@ import { Sidebar } from './features/shell/Sidebar';
 import { BottomNav } from './features/shell/BottomNav';
 import { SyncIndicator } from './features/shell/SyncIndicator';
 import { BackToLab } from './features/shell/BackToLab';
+import { UpdateBanner } from './features/shell/UpdateBanner';
+import { ToastHost } from './features/shell/ToastHost';
+import { ConfirmHost } from './features/shell/ConfirmHost';
 import { labReturn } from './lib/labReturn';
 import { appNav } from './lib/appNav';
 import type { TabId } from './features/shell/navItems';
@@ -115,6 +118,7 @@ export default function App() {
       <SyncIndicator />
       <Sidebar active={activeTab} onChange={(t) => goTo(t)} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-36 md:pb-24 lg:max-w-5xl">
+        <UpdateBanner />
         <Suspense fallback={<TabLoading />}>
           {activeTab === 'dashboard' && (
             <Dashboard
@@ -147,6 +151,9 @@ export default function App() {
           <MorningCard mode={morning} onClose={closeMorning} />
         </Suspense>
       )}
+      {/* Avisos cortos tras una acción y la hoja de confirmación (en lugar de la ventana del navegador). */}
+      <ToastHost />
+      <ConfirmHost />
     </div>
   );
 }

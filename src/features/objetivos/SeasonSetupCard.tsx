@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { confirmSheet } from '../../lib/confirmSheet';
 import { CalendarRange } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -93,8 +94,8 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
     setOpen(false);
   }
 
-  function undo() {
-    if (!backup || !window.confirm('¿Volver a tus macros, objetivos y programas de antes?')) return;
+  async function undo() {
+    if (!backup || !(await confirmSheet({ title: '¿Volver a lo de antes?', body: 'Vuelven tus macros, objetivos y programas de antes de aplicar la temporada.', confirmLabel: 'Volver a lo de antes' }))) return;
     onApply(restoreSeasonBackup(profile, backup));
     try {
       window.localStorage.removeItem(BACKUP_KEY);
@@ -135,8 +136,9 @@ export function SeasonSetupCard({ profile, history, onApply }: { profile: Athlet
             )}
             {companion && companion.method !== 'texas' && (
               <button
-                onClick={() => {
-                  if (window.confirm('¿Cambiar tu programa de fuerza por el Texas Method de 8 semanas, desde mañana? El macro no cambia.')) onApply(swapToTexas(profile, todayIso));
+                onClick={async () => {
+                  const ok = await confirmSheet({ title: '¿Cambiar a Texas Method?', body: 'Tu programa de fuerza pasa al Texas Method de 8 semanas, desde mañana. El macro no cambia.', confirmLabel: 'Cambiar a Texas Method' });
+                  if (ok) onApply(swapToTexas(profile, todayIso));
                 }}
                 className="rounded-full border border-brand-border px-3 py-1 font-semibold text-neutral-200 hover:bg-white/5"
               >

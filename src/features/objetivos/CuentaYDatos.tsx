@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { confirmSheet } from '../../lib/confirmSheet';
+import { toast } from '../../lib/toast';
 import { ChevronDown } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { pushRemote } from '../../data/athlete/remoteSync';
@@ -59,16 +61,19 @@ export function CuentaYDatos() {
   const [resetting, setResetting] = useState(false);
 
   async function handleResetTrainingData() {
-    const confirmed = window.confirm(
-      'Esto borra tu historial de sesiones, la caché de sesiones generadas y el contador de días entrenados, y pone tus PRs a 0. Tus macrociclos, objetivos y peso corporal no se tocan. Es irreversible. ¿Seguro?',
-    );
+    const confirmed = await confirmSheet({
+      title: '¿Empezar en blanco?',
+      body: 'Esto borra tu historial de sesiones, la caché de sesiones generadas y el contador de días entrenados, y pone tus PRs a 0. Tus macrociclos, objetivos y peso corporal no se tocan. Es irreversible.',
+      confirmLabel: 'Borrar mis datos de entreno',
+      danger: true,
+    });
     if (!confirmed) return;
     setResetting(true);
     try {
       athleteRepository.resetTrainingData();
       const { ok } = await pushRemote();
       if (!ok) {
-        window.alert('Se reinició localmente, pero no se pudo sincronizar con el servidor. No recargues todavía o los datos antiguos podrían volver — inténtalo de nuevo cuando tengas conexión.');
+        toast.show('Se reinició localmente, pero no se pudo sincronizar con el servidor. No recargues todavía o los datos antiguos podrían volver — inténtalo de nuevo cuando tengas conexión.', { tone: 'warn', ttlMs: 15000 });
         setResetting(false);
         return;
       }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { confirmSheet } from '../../lib/confirmSheet';
 import { Check, ChevronDown, RotateCcw, X } from 'lucide-react';
 import type { AthleteProfile } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
@@ -170,8 +171,8 @@ export function RexAssistant({
   }
 
   /** Salir del asistente sin crear nada: si hay un plan a medias, se pregunta antes de descartarlo. */
-  function leave() {
-    if (planRef.current.length > 0 && phase !== 'done' && !window.confirm('Tienes un plan sin crear. ¿Salir y descartarlo?')) return;
+  async function leave() {
+    if (planRef.current.length > 0 && phase !== 'done' && !(await confirmSheet({ title: 'Tienes un plan sin crear', body: '¿Salir y descartarlo?', confirmLabel: 'Salir y descartar', danger: true }))) return;
     onClose();
   }
 

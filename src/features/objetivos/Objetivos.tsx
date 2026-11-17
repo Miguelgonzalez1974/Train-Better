@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from '../../lib/toast';
+import { confirmSheet } from '../../lib/confirmSheet';
 import {
   Pencil,
   Trash2,
@@ -298,9 +300,9 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     goHome();
   }
 
-  function deleteStrengthProgram(id: string) {
+  async function deleteStrengthProgram(id: string) {
     const program = (profile.strengthPrograms ?? []).find((p) => p.id === id);
-    if (!window.confirm('¿Eliminar este programa de fuerza? Las sesiones que ya generó dejarán de mostrarse.')) return;
+    if (!(await confirmSheet({ title: '¿Eliminar este programa de fuerza?', body: 'Las sesiones que ya generó dejarán de mostrarse.', confirmLabel: 'Eliminar programa', danger: true }))) return;
     // Sin esto, las sesiones periodizadas que el programa ya dejó cacheadas se seguirían mostrando
     // en Planificación aunque el programa ya no exista (ver `isCachedSessionOrphaned`).
     if (program) athleteRepository.deleteCachedSessionsInRange(program.startDate, program.endDate);
@@ -332,16 +334,16 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     goHome();
   }
 
-  function deleteMacro(id: string) {
+  async function deleteMacro(id: string) {
     const macro = profile.macrocycles.find((m) => m.id === id);
-    if (!window.confirm('¿Eliminar este macrociclo? Las sesiones que ya generó dejarán de mostrarse.')) return;
+    if (!(await confirmSheet({ title: '¿Eliminar este macrociclo?', body: 'Las sesiones que ya generó dejarán de mostrarse.', confirmLabel: 'Eliminar macrociclo', danger: true }))) return;
     // Sin esto, las sesiones periodizadas que el macro ya dejó cacheadas se seguirían mostrando en
     // Planificación aunque el macro ya no exista (ver `isCachedSessionOrphaned`).
     if (macro) athleteRepository.deleteCachedSessionsInRange(macro.startDate, macro.endDate);
     persist({ ...profile, macrocycles: profile.macrocycles.filter((m) => m.id !== id) });
   }
 
-  function saveGoal(e: React.FormEvent) {
+  async function saveGoal(e: React.FormEvent) {
     e.preventDefault();
     if (!goalDraft) return;
     const before = profile.goals.find((g) => g.id === goalDraft.id);
@@ -354,7 +356,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
     let next: AthleteProfile = { ...profile, goals };
     // Los bloques de la temporada que llevan a esa competición se reajustan a la nueva fecha, si lo confirmas.
     const refit = moved ? refitSeason(next, draft.id, todayIso()) : null;
-    const refitted = Boolean(refit && window.confirm(`${refit.summary} ¿Reajusto los bloques de la temporada?`));
+    const refitted = Boolean(refit && (await confirmSheet({ title: '¿Reajusto los bloques de la temporada?', body: refit.summary, confirmLabel: 'Reajustar bloques' })));
     if (refit && refitted) next = { ...next, macrocycles: refit.macrocycles };
     persist(next);
     // Con los bloques cambiados, las sesiones ya preparadas se vuelven a generar.
@@ -367,6 +369,18 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
 
   function deleteGoal(id: string) {
     persist({ ...profile, goals: profile.goals.filter((g) => g.id !== id) });
+  }
+
+  async function endGoal(id: string) {
+    if (!(await confirmSheet({ title: '¿Terminar este objetivo?', body: 'Dejará de influir en tus sesiones.', confirmLabel: 'Terminar objetivo', danger: true }))) return;
+    deleteGoal(id);
+    toast.show('Objetivo terminado');
+  }
+
+  async function removeRamp() {
+    if (!(await confirmSheet({ title: '¿Quitar la rampa de vuelta?', confirmLabel: 'Quitar rampa', danger: true }))) return;
+    persist({ ...profile, intensityRamp: undefined });
+    toast.show('Rampa quitada');
   }
 
   /** Crear algo nuevo desde Añadir: abre el editor que toca, ya con un borrador nuevo. */
@@ -397,7 +411,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
       if (action === 'editar') {
         setGoalDraft(goal);
         setActiveSection('objetivos');
-      } else if (window.confirm('¿Terminar este objetivo? Dejará de influir en tus sesiones.')) deleteGoal(goal.id);
+      } else void endGoal(goal.id);
     } else if (item.kind === 'macro') {
       const macro = profile.macrocycles.find((m) => m.id === item.refId);
       if (!macro) return;
@@ -419,7 +433,7 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
       if (action === 'editar') {
         setRampDraft(profile.intensityRamp);
         setActiveSection('rampa');
-      } else if (window.confirm('¿Quitar la rampa de vuelta?')) persist({ ...profile, intensityRamp: undefined });
+      } else void removeRamp();
     }
   }
 
@@ -524,8 +538,8 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
 
       {activeSection !== 'home' && (
         <button
-          onClick={() => {
-            if (activeSection === 'asistente' && assistantDirty && !window.confirm('Tienes un plan sin crear. ¿Salir y descartarlo?')) return;
+          onClick={async () => {
+            if (activeSection === 'asistente' && assistantDirty && !(await confirmSheet({ title: 'Tienes un plan sin crear', body: '¿Salir y descartarlo?', confirmLabel: 'Salir y descartar', danger: true }))) return;
             goHome();
           }}
           className="flex items-center gap-1.5 self-start rounded-lg py-1 pr-2 text-sm font-semibold text-neutral-300 transition-colors duration-200 hover:text-white"

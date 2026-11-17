@@ -34,6 +34,14 @@ const WORK_LOG_LIMIT = 300;
 /** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
 const TRAINING_DATES_LOG_LIMIT = 400;
 
+/** Lo registrado de un día: la entrada del historial más lo que se borra con ella (series del modo enfocado y progresión). */
+export interface DaySnapshot {
+  date: string;
+  entry: SessionHistoryEntry | null;
+  workLog: WorkSetEntry[];
+  progressionLog: ProgressionRecord[];
+}
+
 export interface AthleteRepository {
   getProfile(): AthleteProfile;
   saveProfile(profile: AthleteProfile): void;
@@ -46,6 +54,10 @@ export interface AthleteRepository {
    * Tambien saca esa fecha de `trainingDatesLog` para que no siga contando en "dias entrenados".
    */
   deleteHistoryEntry(date: string): void;
+  /** Lo que `deleteHistoryEntry` quita de un día (la entrada, las series anotadas y el resultado de progresión), para poder devolverlo con `restoreDay`. */
+  snapshotDay(date: string): DaySnapshot;
+  /** Devuelve lo que quitó `deleteHistoryEntry` («Volver a registrar»). false si no hay nada que devolver o ese día ya tiene otro registro. */
+  restoreDay(snapshot: DaySnapshot): boolean;
   /** Rellena a posteriori el testLoadKg de un dia ya registrado — para cuando una estimacion de e1RM (ver src/engine/e1rm.ts) se confirma despues de guardar la sesion, y el punto debil/progreso de objetivo (que leen testLoadKg) tambien deben verlo. */
   updateHistoryTestLoad(date: string, testLoadKg: number): void;
   getCachedSession(dateIso: string): DailySession | null;
@@ -251,6 +263,28 @@ export const localAthleteRepository: AthleteRepository = {
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));
+  },
+  snapshotDay(date) {
+    const profile = localAthleteRepository.getProfile();
+    return {
+      date,
+      entry: readJson<SessionHistoryEntry[]>(HISTORY_KEY, []).find((e) => e.date === date) ?? null,
+      workLog: (profile.workLog ?? []).filter((e) => e.date === date),
+      progressionLog: (profile.progressionLog ?? []).filter((e) => e.date === date),
+    };
+  },
+  restoreDay(snapshot) {
+    const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
+    if (!snapshot.entry || history.some((e) => e.date === snapshot.date)) return false;
+    // Devuelve la entrada (que también rehace los días entrenados, el registro del WOD y los parciales) y la deja en su sitio por fecha.
+    localAthleteRepository.appendHistoryEntry(snapshot.entry);
+    const sorted = [...readJson<SessionHistoryEntry[]>(HISTORY_KEY, [])].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(sorted));
+    const profile = localAthleteRepository.getProfile();
+    const workLog = [...(profile.workLog ?? []).filter((e) => e.date !== snapshot.date), ...snapshot.workLog].slice(-WORK_LOG_LIMIT);
+    const progressionLog = [...(profile.progressionLog ?? []).filter((e) => e.date !== snapshot.date), ...snapshot.progressionLog].slice(-PROGRESSION_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, workLog, progressionLog }));
+    return true;
   },
   deleteHistoryEntry(date) {
     const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);

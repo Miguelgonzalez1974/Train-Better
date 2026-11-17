@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { toast } from '../../lib/toast';
+import { confirmSheet } from '../../lib/confirmSheet';
 import { Check, ChevronLeft, ChevronRight, Dumbbell, Ghost, Moon, Shuffle, Trash2, Zap } from 'lucide-react';
 import { addDaysIso, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { buildFormModel } from '../dashboard/formModel';
@@ -406,10 +408,12 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                   {describeSkipped(entry.skipped) && <p className="text-xs font-semibold text-warn">{describeSkipped(entry.skipped)}</p>}
                   {onDeleteHistoryEntry && (
                     <button
-                      onClick={() => {
-                        if (!window.confirm(`¿Borrar la sesión registrada el ${dateIso}? Esto no se puede deshacer.`)) return;
+                      onClick={async () => {
+                        const ok = await confirmSheet({ title: `¿Borrar la sesión del ${dateIso}?`, body: 'Se borra del historial y de tus días entrenados. No se puede deshacer.', confirmLabel: 'Borrar sesión', danger: true });
+                        if (!ok) return;
                         onDeleteHistoryEntry(dateIso);
                         setExpanded(null);
+                        toast.show('Sesión borrada');
                       }}
                       className="mt-2 flex items-center gap-1.5 self-start rounded-lg border border-bad/30 bg-bad/10 px-3 py-1.5 text-xs font-semibold text-bad transition-colors duration-200 hover:border-bad/60 hover:bg-bad/20"
                     >

@@ -17,6 +17,11 @@ export const athleteRepository: AthleteRepository = {
     localAthleteRepository.deleteHistoryEntry(date);
     void pushRemote();
   },
+  restoreDay(snapshot) {
+    const restored = localAthleteRepository.restoreDay(snapshot);
+    if (restored) void pushRemote();
+    return restored;
+  },
   updateHistoryTestLoad(date, testLoadKg) {
     localAthleteRepository.updateHistoryTestLoad(date, testLoadKg);
     void pushRemote();

@@ -27,14 +27,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // `prompt`: la version nueva se descarga y espera; la app avisa («Hay una version nueva · Actualizar», ver `lib/appUpdate.ts`) y el
+      // atleta la aplica con un toque. Si no lo hace, se activa sola la proxima vez que abra la app. Antes (`autoUpdate` con skipWaiting)
+      // la version nueva tomaba el control sin avisar y la pagina abierta se quedaba con trozos de JS viejos hasta recargar.
+      registerType: 'prompt',
       workbox: {
-        // Sin esto, un service worker ya instalado puede seguir sirviendo el bundle viejo
-        // (con pantallas/funciones desactualizadas) hasta que el usuario cierre y reabra la
-        // app varias veces — clientsClaim + skipWaiting hacen que la version nueva tome el
-        // control de las pestañas ya abiertas en cuanto termina de instalarse.
         clientsClaim: true,
-        skipWaiting: true,
         // La app es en español: solo se precachean las fuentes latinas. Los subsets cirílico/
         // griego/vietnamita van con `unicode-range`, así que el navegador nunca los pide aquí —
         // no tiene sentido meterlos en el precache del service worker.

@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { toast } from '../../lib/toast';
+import { confirmSheet } from '../../lib/confirmSheet';
 import { ChevronDown, ChevronRight, Dumbbell, NotebookPen, Trash2 } from 'lucide-react';
 import type { CompanionLogEntry, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { resolveMovementDisplayName } from '../../data/movements';
@@ -165,8 +167,11 @@ function DiaryRow({ day, sets, onDelete }: { day: DiaryDay; sets: WorkSetEntry[]
           )}
           {entry && (
             <button
-              onClick={() => {
-                if (window.confirm(`¿Borrar la sesión del ${entry.date}? Esto no se puede deshacer.`)) onDelete();
+              onClick={async () => {
+                const ok = await confirmSheet({ title: `¿Borrar la sesión del ${entry.date}?`, body: 'Se borra del historial y de tus días entrenados. No se puede deshacer.', confirmLabel: 'Borrar sesión', danger: true });
+                if (!ok) return;
+                onDelete();
+                toast.show('Sesión borrada');
               }}
               className="flex items-center gap-1.5 self-start rounded-lg border border-bad/30 bg-bad/10 px-2.5 py-1 text-[11px] font-semibold text-bad transition-colors duration-200 hover:border-bad/60 hover:bg-bad/20"
             >

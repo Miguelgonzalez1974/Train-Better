@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from '../../lib/toast';
+import { confirmSheet } from '../../lib/confirmSheet';
 import { Check, ChevronDown, Dumbbell } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
 import { generateCompanionSession, type CompanionSessionPlan } from '../../engine/generateSession';
@@ -309,8 +311,11 @@ export function CompanionCard({
             <div className="flex flex-wrap gap-2 border-t border-white/[0.06] pt-2.5">
               {!plan.isTest && (
                 <button
-                  onClick={() => {
-                    if (window.confirm('¿Saltar esta sesión? El programa avanza a la siguiente sin hacerla.')) commit((p) => skipCompanion(p, id, todayIso, plan.title));
+                  onClick={async () => {
+                    const ok = await confirmSheet({ title: '¿Saltar esta sesión?', body: 'El programa avanza a la siguiente sin hacerla.', confirmLabel: 'Saltar sesión' });
+                    if (!ok) return;
+                    commit((p) => skipCompanion(p, id, todayIso, plan.title));
+                    toast.show('Sesión del programa saltada');
                   }}
                   className="rounded-full border border-brand-border px-3 py-1.5 text-xs font-semibold text-neutral-300 hover:bg-white/5"
                 >

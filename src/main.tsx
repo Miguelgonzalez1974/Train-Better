@@ -5,6 +5,7 @@ import '@fontsource-variable/space-grotesk/wght.css';
 import App from './App';
 import { ErrorBoundary } from './features/shell/ErrorBoundary';
 import { recoverFromChunkError } from './lib/chunkError';
+import { initAppUpdate } from './lib/appUpdate';
 import './index.css';
 
 // Tras publicar una versión nueva, un móvil con la app instalada puede pedir trozos de JavaScript que ya no existen. Vite avisa con este
@@ -15,6 +16,9 @@ window.addEventListener('vite:preloadError', () => {
 window.addEventListener('unhandledrejection', (event) => {
   recoverFromChunkError(event.reason);
 });
+
+// Registra el service worker y avisa cuando hay una versión nueva (franja «Actualizar» de `UpdateBanner`).
+void initAppUpdate();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
