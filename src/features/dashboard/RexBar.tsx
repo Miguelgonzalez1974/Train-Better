@@ -70,7 +70,8 @@ export function RexBar({
   badges: Partial<Record<RexTarget, string>>;
   /** Módulos con un aviso sin ver (un punto naranja). */
   dots: RexTarget[];
-  onAction: (target: RexTarget) => void;
+  /** `ask`: el botón no lleva a ningún sitio, le dice esa frase a Rex (si quien lo pinta sabe hacerlo; si no, vale el destino). */
+  onAction: (target: RexTarget, ask?: string) => void;
   onDismiss: () => void;
   onTyped: () => void;
 }) {
@@ -135,7 +136,7 @@ export function RexBar({
             {suggestion.actions.map((a, i) => (
               <button
                 key={a.label}
-                onClick={() => onAction(a.target)}
+                onClick={() => onAction(a.target, a.ask)}
                 className={
                   i === 0
                     ? 'rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors duration-200 hover:bg-brand-orange-dark'

@@ -51,6 +51,27 @@ export interface PlanRexContext {
   notices: { count: number; actionable: boolean };
   /** La sesión del programa de fuerza que convive con el macro, si hoy toca ofrecerla o ya se aceptó. */
   program?: PlanProgram | null;
+  /** Hoy es un día en que dijiste que tienes poco tiempo («los jueves solo tengo 45 minutos») y la sesión se pasa: Rex propone acortarla. */
+  timeNote?: { day: string; minutes: number; sessionMinutes: number } | null;
+}
+
+/** Cuántos minutos puede pasarse la sesión del tiempo que dijiste sin que Rex lo mencione. */
+export const TIME_NOTE_SLACK = 5;
+
+/** «Los jueves me dijiste 45 min y hoy toca ~70: ¿la acorto?» El botón no cambia nada: le dice «tengo 45 minutos» a Rex, que enseña qué quitaría y pide confirmar. */
+export function planTimeSuggestion(ctx: Pick<PlanRexContext, 'timeNote' | 'canStart' | 'inProgress'>): RexSuggestion | null {
+  const t = ctx.timeNote;
+  if (!t || !ctx.canStart || ctx.inProgress || t.sessionMinutes <= t.minutes + TIME_NOTE_SLACK) return null;
+  const lead = 'Poco tiempo hoy.';
+  return {
+    id: 'plan-tiempo',
+    priority: 93,
+    lead,
+    tone: 'mid',
+    text: `${lead} ${t.day.charAt(0).toUpperCase()}${t.day.slice(1)} me dijiste que cuentas con ${t.minutes} min y hoy toca una sesión de ~${t.sessionMinutes}. ¿La acorto?`,
+    mood: 'think',
+    actions: [{ label: `Acortar a ${t.minutes} min`, target: 'plan-detalle', ask: `tengo ${t.minutes} minutos` }],
+  };
 }
 
 /** Lo que Rex dice del programa de fuerza que convive con el macro. */
@@ -224,6 +245,7 @@ export function buildPlanRexSuggestions(ctx: PlanRexContext): RexSuggestion[] {
     planEditingSuggestion(ctx.editing),
     planCompletedSuggestion(ctx.completed),
     planStateSuggestion(ctx),
+    planTimeSuggestion(ctx),
     planProgramSuggestion(ctx.program, ctx.light),
     planRestSuggestion(ctx.restDay),
     planNoticesSuggestion(ctx.notices),

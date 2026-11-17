@@ -376,6 +376,21 @@ describe('borrados: no vuelven tras sincronizar (fusion de tres vias con la ulti
     expect(mergeProfile(synced, local, undefined, undefined, snapshotSyncBase(synced, [])).restDates).toEqual(['2026-03-02']);
   });
 
+  it('lo que Rex recuerda se suma de los dos dispositivos, olvidarlo aqui no lo revive, y queda un recuerdo de tiempo por dia', () => {
+    const note = (id: string, text: string) => ({ id, kind: 'nota' as const, text, createdAt: '2026-11-17' });
+    const time = (id: string, weekday: number, minutes: number, createdAt: string) => ({ id, kind: 'tiempo' as const, weekday, minutes, createdAt });
+    expect(mergeProfile({ ...base(), rexNotes: [note('a', 'A')] }, { ...base(), rexNotes: [note('b', 'B')] }).rexNotes?.map((n) => n.id).sort()).toEqual(['a', 'b']);
+    // Olvidado aqui: el servidor aun lo tiene pero estaba en la base.
+    const synced = { ...base(), rexNotes: [note('a', 'A'), note('b', 'B')] };
+    const forgot = mergeProfile(synced, { ...base(), rexNotes: [note('b', 'B')] }, undefined, undefined, snapshotSyncBase(synced, []));
+    expect(forgot.rexNotes?.map((n) => n.id)).toEqual(['b']);
+    // Dos dispositivos cambian el tiempo del jueves: se queda el mas reciente.
+    const merged = mergeProfile({ ...base(), rexNotes: [time('t1', 4, 45, '2026-11-10')] }, { ...base(), rexNotes: [time('t2', 4, 30, '2026-11-17')] });
+    expect(merged.rexNotes).toEqual([time('t2', 4, 30, '2026-11-17')]);
+    // Sin nada en ningun lado no aparece el campo.
+    expect(mergeProfile(base(), base()).rexNotes).toBeUndefined();
+  });
+
   it('sin base (primera sincronizacion) se comporta como la union de siempre', () => {
     const remote = { ...base(), macrocycles: [macro('invierno')] };
     const local = { ...base(), macrocycles: [macro('verano')] };

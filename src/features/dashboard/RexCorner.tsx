@@ -469,7 +469,7 @@ export function RexCorner({
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {bubbleAction && (
                       <button
-                        onClick={() => bar.onAction(bubbleAction.target)}
+                        onClick={() => (bubbleAction.ask && ask ? (setOpen(true), send(bubbleAction.ask)) : bar.onAction(bubbleAction.target))}
                         className="rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark"
                       >
                         {bubbleAction.label}
@@ -506,7 +506,10 @@ export function RexCorner({
                   onClick={() => {
                     spoken.add(key);
                     setBubble(false);
-                    bar.onAction(bubbleAction.target);
+                    if (bubbleAction.ask && ask) {
+                      setOpen(true);
+                      send(bubbleAction.ask);
+                    } else bar.onAction(bubbleAction.target);
                   }}
                   className="mt-2 rounded-full bg-brand-orange px-3.5 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-brand-orange-dark"
                 >
@@ -716,7 +719,11 @@ export function RexCorner({
               defaultMore={false}
               // El globo ya la había dicho (o el panel se abre a pedido): sale entera, sin volver a escribirse.
               typedAlready
-              onAction={(target) => launch(() => bar.onAction(target))}
+              onAction={(target, askText) => {
+                // Un botón que es una frase (el seguimiento de una molestia, acortar a tus minutos): se le dice a Rex ahí mismo.
+                if (askText && ask) send(askText);
+                else launch(() => bar.onAction(target));
+              }}
             />
 
             {/* Los atajos como teselas: las opciones de esta pantalla y las frases que Rex entiende desde cualquiera, colocadas según el momento. */}

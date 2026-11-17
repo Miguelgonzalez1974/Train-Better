@@ -4,6 +4,9 @@ import { handoff } from '../../lib/handoff';
 import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { recordMiss } from '../../lib/rexMisses';
+import { addNote, removeNotes } from '../../engine/rexNotes';
+import { applyPainFollowUps, getActivePainFlags, type PainFollowUp } from '../../engine/painFlags';
+import { forgotAnswer, noPainAnswer, painFollowAnswer, recallAnswer, rememberedAnswer } from './rexMemoryAsk';
 import { followUpText, forgetTopic, rememberTopic } from './rexContext';
 import { rexBus } from '../../lib/rexBus';
 import type { RexTarget } from './rexDashboard';
@@ -260,6 +263,32 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
         planTarget: (screen === 'dashboard' ? 'planificacion' : 'ir-planificacion') as RexTarget,
       };
       return intent.kind === 'dato' ? dataAnswer(intent.question, ctx) : whyAnswer(intent.about, ctx);
+    }
+    case 'recordar': {
+      const profile = athleteRepository.getProfile();
+      const { notes, note } = addNote(profile.rexNotes, intent.note);
+      athleteRepository.saveProfile({ ...profile, rexNotes: notes });
+      return rememberedAnswer(note);
+    }
+    case 'recuerdos':
+      return recallAnswer(athleteRepository.getProfile().rexNotes);
+    case 'olvidar': {
+      const profile = athleteRepository.getProfile();
+      const { notes, removed } = removeNotes(profile.rexNotes, intent.by);
+      if (removed.length > 0) athleteRepository.saveProfile({ ...profile, rexNotes: notes });
+      return forgotAnswer(removed, intent.by);
+    }
+    case 'dolor-estado': {
+      const profile = athleteRepository.getProfile();
+      const active = getActivePainFlags(profile.painFlags, api.todayIso);
+      const targets = intent.zone ? active.filter((f) => f.area === intent.zone) : active;
+      if (targets.length === 0) return noPainAnswer();
+      const answers = Object.fromEntries(targets.map((f) => [f.id, intent.answer])) as Record<string, PainFollowUp>;
+      athleteRepository.saveProfile({ ...profile, painFlags: applyPainFollowUps(profile.painFlags, answers, api.todayIso) });
+      // Los días que vienen se rehacen con el aviso nuevo; la sesión de hoy no se toca (podría estar a medias).
+      for (const date of Object.keys(profile.sessionCache ?? {})) if (date > api.todayIso) athleteRepository.deleteCachedSession(date);
+      api.onWeekChanged?.();
+      return painFollowAnswer(intent.answer, [...new Set(targets.map((f) => f.area))]);
     }
     case 'adaptar-deshacer':
       // «Deshaz el cambio» sin sesión acortada en esta pantalla: si lo último fue un cambio de la semana, se deshace ese.

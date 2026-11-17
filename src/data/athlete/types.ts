@@ -223,6 +223,14 @@ export interface IntensityRamp {
 
 export type PainArea = 'hombro' | 'cadera-lumbar' | 'rodilla' | 'codo-muneca';
 
+/**
+ * Algo que el atleta le ha dicho a Rex que recuerde. `tiempo`: un día de la semana en que solo tiene unos minutos (0 = domingo … 6 = sábado);
+ * `nota`: una frase libre. Rex solo propone con esto (acortar ese día): nunca cambia la sesión sin que el atleta lo confirme.
+ */
+export type RexNote =
+  | { id: string; kind: 'tiempo'; weekday: number; minutes: number; createdAt: string }
+  | { id: string; kind: 'nota'; text: string; createdAt: string };
+
 export interface PainFlag {
   id: string;
   area: PainArea;
@@ -414,6 +422,8 @@ export interface AthleteProfile {
   mobilityFocus?: MobilityZone[];
   /** Cómo nota el atleta cada zona prioritaria (1 = muy limitada, 5 = fenomenal), para ver si la movilidad le sirve. */
   mobilityRatings?: MobilityRating[];
+  /** Lo que el atleta le ha pedido a Rex que recuerde («los jueves solo tengo 45 minutos», una nota libre). Ver `engine/rexNotes.ts`. */
+  rexNotes?: RexNote[];
   /**
    * Claves `macroId:semana` de revisiones semanales del macrociclo ya mostradas (confirmadas o
    * descartadas) — ver `src/engine/macroReview.ts`. Evita repetir el mismo aviso cada dia dentro de

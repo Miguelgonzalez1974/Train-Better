@@ -10,6 +10,10 @@ import type { DataQuestion, WhyAbout } from './rexData';
 import type { AdaptRequest } from '../../lib/sessionAdapt';
 import type { PartKey } from '../../engine/sessionParts';
 import type { ExplainRow } from '../../engine/explainNumbers';
+import type { PainArea } from '../../data/athlete/types';
+import type { PainFollowUp } from '../../engine/painFlags';
+import type { NewRexNote, NoteSelector } from '../../engine/rexNotes';
+import { parseMemoryAsk } from './rexMemoryAsk';
 
 export type AskIntent =
   | { kind: 'peso'; kg: number }
@@ -53,6 +57,11 @@ export type AskIntent =
   | { kind: 'dato'; question: DataQuestion }
   /** «¿Por qué este peso / este WOD / hoy así?». */
   | { kind: 'por-que'; about: WhyAbout }
+  /** La memoria de Rex: apuntar algo, contar qué recuerda, olvidarlo, y cómo sigue una molestia («el hombro va mejor»). */
+  | { kind: 'recordar'; note: NewRexNote }
+  | { kind: 'recuerdos' }
+  | { kind: 'olvidar'; by: NoteSelector }
+  | { kind: 'dolor-estado'; zone: PainArea | null; answer: PainFollowUp }
   | { kind: 'ayuda' };
 
 export interface AskAnswer {
@@ -355,6 +364,10 @@ export function splitAsk(text: string, todayWeekday: number): string[] | null {
 export function parseAsk(text: string, todayWeekday: number): AskIntent {
   const norm = fixTypos(normalizeAsk(text));
   if (norm === '') return { kind: 'ayuda' };
+
+  // La memoria de Rex (apuntar, contar, olvidar, cómo sigue una molestia): antes que lo demás, que lee «duele», «apunta»…
+  const memory = parseMemoryAsk(text, norm);
+  if (memory) return memory;
 
   if (MEAL_START.test(norm)) return { kind: 'comida', text: text.trim() };
 

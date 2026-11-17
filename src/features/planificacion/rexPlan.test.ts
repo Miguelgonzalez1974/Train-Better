@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlanRexSuggestions, planCompletedSuggestion, planEditingSuggestion, planNoticesSuggestion, planProgramSuggestion, planRestSuggestion, planStateSuggestion, programSentence, type PlanRexContext } from './rexPlan';
+import { buildPlanRexSuggestions, planCompletedSuggestion, planEditingSuggestion, planNoticesSuggestion, planProgramSuggestion, planRestSuggestion, planStateSuggestion, planTimeSuggestion, programSentence, type PlanRexContext } from './rexPlan';
+import { parseAsk } from '../dashboard/rexAsk';
 
 const base: PlanRexContext = {
   hasTrainingSession: true,
@@ -15,6 +16,33 @@ const base: PlanRexContext = {
   notices: { count: 0, actionable: false },
 };
 const mk = (o: Partial<PlanRexContext> = {}): PlanRexContext => ({ ...base, ...o });
+
+describe('Rex en Planificación: poco tiempo hoy (lo que dijiste de tu día de la semana)', () => {
+  const note = { day: 'los jueves', minutes: 45, sessionMinutes: 70 };
+
+  it('si la sesión se pasa de tus minutos, propone acortarla con un botón que le dice «tengo N minutos» a Rex', () => {
+    const s = planTimeSuggestion({ canStart: true, timeNote: note });
+    expect(s?.text).toContain('Los jueves me dijiste que cuentas con 45 min');
+    expect(s?.text).toContain('~70');
+    expect(s?.actions[0]).toMatchObject({ label: 'Acortar a 45 min', ask: 'tengo 45 minutos' });
+    expect(parseAsk(s!.actions[0].ask!, 4).kind).toBe('adaptar');
+  });
+
+  it('no sale si cabe (con un margen), si no se puede empezar o si la sesión ya está en marcha', () => {
+    expect(planTimeSuggestion({ canStart: true, timeNote: { ...note, sessionMinutes: 50 } })).toBeNull();
+    expect(planTimeSuggestion({ canStart: true, timeNote: { ...note, sessionMinutes: 51 } })).not.toBeNull(); // pasa del margen de 5 min
+    expect(planTimeSuggestion({ canStart: false, timeNote: note })).toBeNull();
+    expect(planTimeSuggestion({ canStart: true, inProgress: { sets: 3 }, timeNote: note })).toBeNull();
+    expect(planTimeSuggestion({ canStart: true, timeNote: null })).toBeNull();
+  });
+
+  it('entra en la lista de Rex y se aparta con «Ahora no»', () => {
+    const list = buildPlanRexSuggestions(mk({ canStart: true, timeNote: note }));
+    const s = list.find((x) => x.id === 'plan-tiempo');
+    expect(s).toBeTruthy();
+    expect(s?.dismissible).not.toBe(false);
+  });
+});
 
 describe('Rex en Planificación: la frase del estado del día', () => {
   it('semáforo como verbo en color y el esfuerzo previsto frente al objetivo', () => {

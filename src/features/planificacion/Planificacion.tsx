@@ -128,6 +128,7 @@ import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
 import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
+import { timeLimitFor, weekdayPlural } from '../../engine/rexNotes';
 import { Modal } from '../shell/Modal';
 
 
@@ -1360,6 +1361,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Lo que le dijiste a Rex de tu tiempo en este día de la semana («los jueves solo tengo 45 minutos»).
+  const todayWeekday = new Date(`${todayIso}T12:00:00`).getDay();
+  const todayTimeNote = timeLimitFor(profile.rexNotes, todayWeekday);
   const rexList = buildPlanRexSuggestions({
     canStart: Boolean(session && !alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && !session.isRestDay),
     inProgress: !alreadyCompletedToday && todayWorkLog.length > 0 ? { sets: todayWorkLog.length } : null,
@@ -1378,6 +1382,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     emphasis: session?.profileEmphasis?.summary ?? null,
     notices: { count: noticesWithoutPain, actionable: noticeSummary.actionable },
     program: companionForRex,
+    timeNote: todayTimeNote ? { day: weekdayPlural(todayWeekday), minutes: todayTimeNote, sessionMinutes: estimatedMin } : null,
   });
   const rexPick = pickRexSuggestion(rexList, rexMemory, todayIso, rexCursor);
   const showRexBar = rexList.length > 0 && rexPick.current.id !== 'quiet';

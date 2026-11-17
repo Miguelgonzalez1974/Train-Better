@@ -25,6 +25,8 @@ export interface SyncBase {
   strengthPrograms?: string[];
   customComplexes?: string[];
   customFoods?: string[];
+  /** Ids de lo que Rex recuerda (`AthleteProfile.rexNotes`). */
+  rexNotes?: string[];
   /** `fecha|id` de cada apunte del diario de nutricion. */
   extraFoods?: string[];
   workLog?: string[];
@@ -49,6 +51,7 @@ export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistor
     strengthPrograms: (profile.strengthPrograms ?? []).map((p) => p.id),
     customComplexes: (profile.customComplexes ?? []).map((c) => c.id),
     customFoods: (profile.nutritionPrefs?.customFoods ?? []).map((f) => f.id),
+    rexNotes: (profile.rexNotes ?? []).map((n) => n.id),
     extraFoods: Object.entries(profile.nutritionPrefs?.extraFoods ?? {}).flatMap(([iso, list]) => list.map((e) => `${iso}|${e.id}`)),
     workLog: (profile.workLog ?? []).map(workKey),
     setFeedbackLog: (profile.setFeedbackLog ?? []).map(feedbackKey),
@@ -72,6 +75,13 @@ function dropDeleted<T>(merged: T[], keyOf: (x: T) => string, baseKeys: string[]
     const k = keyOf(x);
     return !base.has(k) || (inRemote.has(k) && inLocal.has(k));
   });
+}
+
+/** Los recuerdos de tiempo se quedan en uno por día de la semana (el más reciente, y a igual fecha el último de la lista). */
+function mergeRexNotes(notes: NonNullable<AthleteProfile['rexNotes']>): NonNullable<AthleteProfile['rexNotes']> {
+  const lastTimeById = new Map<number, string>();
+  for (const n of notes) if (n.kind === 'tiempo') lastTimeById.set(n.weekday, n.id);
+  return notes.filter((n) => n.kind !== 'tiempo' || lastTimeById.get(n.weekday) === n.id);
 }
 
 /**
@@ -396,6 +406,11 @@ export function mergeProfile(
     mobilityRatings:
       remote.mobilityRatings || local.mobilityRatings ? mergeByKey(remote.mobilityRatings, local.mobilityRatings, (r) => `${r.date}|${r.zone}`, (r) => r.date, 200) : undefined,
     mobilityFocus: local.mobilityFocus ?? remote.mobilityFocus,
+    // Lo que Rex recuerda: union por id (gana el local); lo olvidado desde la ultima sincronizacion no vuelve. Un recuerdo de tiempo por dia: gana el mas reciente.
+    rexNotes:
+      remote.rexNotes || local.rexNotes
+        ? mergeRexNotes(dropDeleted(mergeByKey(remote.rexNotes, local.rexNotes, (n) => n.id, (n) => n.createdAt, 60), (n) => n.id, base?.rexNotes, remote.rexNotes, local.rexNotes))
+        : undefined,
 
     // --- logs: union por clave ---
     workLog: dropDeleted(
