@@ -74,6 +74,18 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     expect(buildRexSuggestions({ ...calm, trainedToday: true })[0].text).toBe('Sesión hecha. Buen trabajo.');
   });
 
+  it('con resumen de la sesión: «Ver resumen» va primero y lo más importante (PR, cambio de carga, 1RM) entra en la frase', () => {
+    const closing = { real: 52, low: 45, high: 65, planned: 50, status: 'dentro' as const, notDone: null, hasDetail: true, hasSummary: true, highlight: 'Nuevo PR registrado: Bench Press a 105 kg. Una sugerencia de 1RM por confirmar.' };
+    const s = buildRexSuggestions({ ...calm, trainedToday: true, closing })[0];
+    expect(s.actions).toEqual([
+      { label: 'Ver resumen', target: 'resumen-sesion' },
+      { label: 'Ver detalle', target: 'detalle-dia' },
+    ]);
+    expect(s.text).toBe('Sesión hecha. Esfuerzo 52 con ~50 previstos, dentro de tu objetivo (45–65). Nuevo PR registrado: Bench Press a 105 kg. Una sugerencia de 1RM por confirmar.');
+    // Sin resumen (o sin nada destacable) no cambia nada.
+    expect(buildRexSuggestions({ ...calm, trainedToday: true, closing: { ...closing, hasSummary: false, highlight: null } })[0].actions.map((a) => a.target)).toEqual(['detalle-dia']);
+  });
+
   it('el consejo del día es la frase principal: verbo en color, motivo y atajos de la sesión y el descanso', () => {
     const advice = { lead: 'Buen día para apretar.', reason: 'Preparación 82 % y carga óptima.', tone: 'good' as const, overTarget: false };
     const list = buildRexSuggestions({ ...calm, advice, canRest: true });

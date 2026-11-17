@@ -12,7 +12,6 @@ import type {
   DailySession,
   Goal,
   PainArea,
-  PersonalRecords,
   RxOrScaled,
   SessionBlockResult,
   SessionHistoryEntry,
@@ -21,7 +20,6 @@ import type {
   SetQuality,
   StrainTarget,
   WorkSetEntry,
-  VariantPersonalRecords,
   WodFeel,
   WodResult,
   WodScalingEntry,
@@ -55,7 +53,7 @@ import {
 } from '../../engine/generateSession';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { ensureWeekLocked } from './weeklyLock';
-import { MESOCYCLE_PHASE, roundToNearestPlate } from '../../engine/oneRepMaxTables';
+import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import {
   buildWodResult,
   EMPTY_WOD_FORM,
@@ -70,17 +68,17 @@ import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUnt
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { applyMacroReview, buildWeeklyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
-import { estimateE1RM, estimateE1RMFromRpe, parseCleanReps, qualifiesForE1RMEstimate } from '../../engine/e1rm';
+import { estimateE1RMFromRpe, qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
-import { countsForProgression, evaluateLiftSession, mainLiftBlock, sessionProgressionView, type ProgressionKind } from '../../engine/progression';
-import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
+import { countsForProgression, evaluateLiftSession, mainLiftBlock, type ProgressionKind } from '../../engine/progression';
 import { WeekStrip } from './WeekStrip';
 import { SeasonMapCompact, SeasonMapFull } from '../objetivos/SeasonMap';
 import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { wodDoneInfos } from '../../engine/wodDone';
 import { workDoneLines } from './workDoneLines';
-import { SessionDoneHeader } from './SessionDoneHeader';
+import { buildSessionSummaryData } from '../../engine/sessionSummary';
+import { appNav } from '../../lib/appNav';
 import { invalidGroups, repairSession } from '../../engine/sessionRepair';
 import { applyManualCorrection } from '../../engine/oneOffCorrections';
 import { competitionCountdown, competitionHeadline } from '../shell/competitionMeta';
@@ -94,7 +92,6 @@ import {
   summarizeNotices,
   type CoachNoticesProps,
 } from './CoachNotices';
-import { SessionSummaryCard } from './SessionSummaryCard';
 import { RexSupport } from './RexSupport';
 import type { SupportAction, SupportEffect } from './rexSupportFlow';
 import { RexCorner } from '../dashboard/RexCorner';
@@ -140,16 +137,6 @@ const PAIN_DURATION_OPTIONS: { value: PainDuration; label: string }[] = [
   { value: 'semanas', label: '1-2 semanas' },
   { value: 'indefinido', label: 'Hasta quitarlo' },
 ];
-
-/** A que PR se escribiria la estimacion — raiz (prs) o de variante (variantPrs), segun de cual se calculo la carga de hoy. */
-export type E1rmTarget = { kind: 'root'; key: keyof PersonalRecords } | { kind: 'variant'; key: keyof VariantPersonalRecords };
-
-export interface E1rmSuggestion {
-  target: E1rmTarget;
-  movementName: string;
-  estimatedKg: number;
-  currentKg: number;
-}
 
 /**
  * Un bloque admite feedback en caliente de la primera serie si es fuerza u oly con carga y con
@@ -282,8 +269,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // Partes del WOD cuyo resultado salió prellenado desde el reloj de entreno (ver workoutClockResult).
   const [clockParts, setClockParts] = useState<(1 | 2)[]>([]);
   const [testedLoadKg, setTestedLoadKg] = useState(0);
-  const [prUpdateMessage, setPrUpdateMessage] = useState<string | null>(null);
-  const [e1rmSuggestions, setE1rmSuggestions] = useState<E1rmSuggestion[]>([]);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [customEditorMode, setCustomEditorMode] = useState<'replace' | 'append'>('replace');
   const [customTitleDraft, setCustomTitleDraft] = useState('');
@@ -298,8 +283,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [showNotices, setShowNotices] = useState(false);
   // Rex en Planificación: el detalle del estado del día se abre con «Por qué»; lo apartado se recuerda en este dispositivo.
   const [showPlanDetail, setShowPlanDetail] = useState(false);
-  /** El resumen de la sesión completada se abre desde el globo de Rex, no ocupa la pantalla al entrar. */
-  const [showSummary, setShowSummary] = useState(false);
   const [rexMemory, setRexMemory] = useState<RexMemory>(() => loadRexMemory(typeof window !== 'undefined' ? window.localStorage : null));
   const [rexCursor, setRexCursor] = useState(0);
   const [regenNote, setRegenNote] = useState<string | null>(null);
@@ -340,16 +323,16 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // Reconstruido desde el historial persistido (no desde estado efimero de la sesion) para que el
   // resumen post-sesion sobreviva a un refresco de pagina, igual que `alreadyCompletedToday`.
   const todayHistoryEntry = useMemo(() => history.find((h) => h.date === todayIso), [history, todayIso]);
+  // Lo del resumen de la sesión hecha (progresión, PR, sugerencias de 1RM, racha), desde lo guardado: Rex lo cuenta en una frase.
+  const summaryData = useMemo(
+    () => (session && alreadyCompletedToday && todayHistoryEntry ? buildSessionSummaryData({ session, entry: todayHistoryEntry, profile, history, now: new Date() }) : null),
+    [session, alreadyCompletedToday, todayHistoryEntry, profile, history],
+  );
   // El resultado del WOD de hoy al pie de su tarjeta cuando la sesión ya está registrada.
   const wodDone = useMemo(
     () => (session && alreadyCompletedToday && todayHistoryEntry ? wodDoneInfos(session, todayHistoryEntry, history) : undefined),
     [session, alreadyCompletedToday, todayHistoryEntry, history],
   );
-  const adherenceStreak = useMemo(
-    () => (alreadyCompletedToday ? computeAdherenceStreak(profile, history, todayIso) : 0),
-    [alreadyCompletedToday, profile, history, todayIso],
-  );
-  const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history, todayIso]);
   const [setFeedbackLog, setSetFeedbackLog] = useState<SetFeedbackEntry[]>(() => athleteRepository.getSetFeedbackLog());
   const [workLog, setWorkLog] = useState<WorkSetEntry[]>(() => athleteRepository.getWorkLog());
   const todayWorkLog = useMemo(() => workLog.filter((e) => e.date === todayIso), [workLog, todayIso]);
@@ -529,16 +512,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }, [showCompletePanel]);
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
-  /** Lo que decidió el coach con el resultado de fuerza y de oly de hoy (tarjeta al cerrar la sesión). */
-  const progressionViews = useMemo(() => {
-    if (!session) return [];
-    return (['strength', 'oly'] as const).flatMap((kind) => {
-      const main = mainLiftBlock(session.blocks, kind);
-      if (!main) return [];
-      const view = sessionProgressionView(profile.progressionLog, profile.prLog, profile.progressionSettings, session.date, main.movementId);
-      return view ? [view] : [];
-    });
-  }, [session, profile.progressionLog, profile.prLog, profile.progressionSettings]);
   /**
    * Bloques de fuerza/oly de hoy con una serie ya registrada en `workLog` (modo enfocado) — solo esos
    * admiten el check-in de RPE: el peso y las reps salen de ahí, no se vuelven a pedir. Sin serie
@@ -714,8 +687,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowCompletePanel(false);
     setFocusMode(false);
     setEditMode(false);
-    setPrUpdateMessage(null);
-    setE1rmSuggestions([]);
     setReturnRampDismissed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayIso]);
@@ -928,43 +899,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }
 
   /**
-   * Busca series principales de fuerza/oly que hoy podrian actualizar un PR sin haber sido un
-   * dia de test formal — ver src/engine/e1rm.ts. Solo se llama cuando ya se sabe que la sesion
-   * califica (Rx + RPE alto), nunca en un dia de test real (ese ya tiene su propio flujo exacto).
-   */
-  function findE1rmSuggestions(): E1rmSuggestion[] {
-    if (!session || testDayBlock) return [];
-    if (!qualifiesForE1RMEstimate(rxOrScaled, rpe)) return [];
-
-    const suggestions: E1rmSuggestion[] = [];
-    for (const block of session.blocks) {
-      if (block.block !== 'strength' && block.block !== 'oly') continue;
-      if (skips[block.block]) continue; // una parte no hecha no puede subir un PR
-      if (!block.loadKg || !block.reps) continue;
-      const reps = parseCleanReps(block.reps);
-      if (reps === null) continue;
-      const movement = getMovementById(block.movementId);
-      if (!movement) continue;
-
-      // La carga de hoy pudo calcularse sobre un PR de variante (p.ej. sumo deadlift), no sobre el
-      // lift raiz — comparar y escribir contra el raiz corromperia un PR que no tiene nada que ver
-      // con lo que de verdad se entreno hoy.
-      const variantKey = resolveVariantPRKey(movement);
-      const rootKey = (block.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
-      const target: E1rmTarget | null =
-        variantKey && profile.variantPrs?.[variantKey] ? { kind: 'variant', key: variantKey } : rootKey ? { kind: 'root', key: rootKey } : null;
-      if (!target) continue;
-
-      const currentKg = target.kind === 'variant' ? (profile.variantPrs?.[target.key] ?? 0) : profile.prs[target.key];
-      const estimatedKg = roundToNearestPlate(estimateE1RM(block.loadKg, reps));
-      if (estimatedKg > currentKg) {
-        suggestions.push({ target, movementName: movement.name, estimatedKg, currentKg });
-      }
-    }
-    return suggestions;
-  }
-
-  /**
    * Anota cómo salió el levantamiento principal de fuerza y el de oly de hoy (limpia, hecha, dura, fallo) para la progresión por
    * resultados. No anota nada de una parte que se marcó como no hecha, si no se registraron todas sus series o si el formato no es
    * de reps limpias (rampas, olas, complejos, series únicas).
@@ -1051,31 +985,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // hasta el proximo guardado de perfil o recarga.
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
-    setPrUpdateMessage(nextMessage);
-    setE1rmSuggestions(findE1rmSuggestions());
-    toast.show('Sesión registrada', { action: { label: 'Ver resumen', run: () => setShowSummary(true) } });
-  }
-
-  function handleConfirmE1rmSuggestion(suggestion: E1rmSuggestion) {
-    const nextProfile =
-      suggestion.target.kind === 'variant'
-        ? { ...profile, variantPrs: { ...profile.variantPrs, [suggestion.target.key]: suggestion.estimatedKg } }
-        : { ...profile, prs: { ...profile.prs, [suggestion.target.key]: suggestion.estimatedKg } };
-    athleteRepository.saveProfile(nextProfile);
-    setProfile(nextProfile);
-
-    // El PR ya se actualiza arriba, pero sin esto el punto debil y el progreso de objetivo (que
-    // leen testLoadKg del historial, no profile.prs) seguirian ciegos a esta subida real.
-    if (session) {
-      athleteRepository.updateHistoryTestLoad(session.date, suggestion.estimatedKg);
-      setHistory(athleteRepository.getHistory());
-    }
-
-    setE1rmSuggestions((prev) => prev.filter((s) => s !== suggestion));
-  }
-
-  function handleDismissE1rmSuggestion(suggestion: E1rmSuggestion) {
-    setE1rmSuggestions((prev) => prev.filter((s) => s !== suggestion));
+    toast.show('Sesión registrada');
+    // Un test que no actualizó el PR no deja rastro en el registro de PRs: se dice aquí, antes de pasar al Dashboard.
+    if (nextMessage && !nextMessage.startsWith('Nuevo PR')) toast.show(nextMessage, { tone: 'warn', ttlMs: 12000 });
+    // El entreno acaba en el Dashboard: ahí están los aros con lo realizado frente a lo previsto y el resumen de la sesión.
+    appNav.goTo('dashboard');
   }
 
   /** «Corregir datos»: quita el registro de hoy y abre el cierre de la sesión, para volver a apuntar el resultado, el RPE y lo que se escaló. */
@@ -1087,8 +1001,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     athleteRepository.deleteHistoryEntry(session.date);
     setHistory(athleteRepository.getHistory());
     setWorkLog(athleteRepository.getWorkLog());
-    setPrUpdateMessage(null);
-    setE1rmSuggestions([]);
     setTestedLoadKg(testDayBlock?.loadKg ?? 0);
     setShowCompletePanel(true);
     toast.show('Registro quitado: apúntalo otra vez', { action: { label: 'Dejarlo como estaba', run: () => restoreRegistration(snapshot, sessionBefore) } });
@@ -1118,8 +1030,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     const nextHistory = athleteRepository.getHistory();
     setHistory(nextHistory);
     setWorkLog(athleteRepository.getWorkLog());
-    setPrUpdateMessage(null);
-    setE1rmSuggestions([]);
     // Sin el registro, la sesión vuelve a poder repararse (ver `loadTodaySession`) y se enseña ya con lo corregido.
     setSession(loadTodaySession(athleteRepository.getProfile(), nextHistory, goals, todayIso));
     setProfile(athleteRepository.getProfile());
@@ -1178,8 +1088,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setSession(hasActiveTrainingStructure(profile, session.date) ? generateAndCache(profile) : null);
     setEditMode(false);
     setShowCompletePanel(false);
-    setPrUpdateMessage(null);
-    setE1rmSuggestions([]);
   }
 
   function handleSavePainFlag() {
@@ -1239,19 +1147,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // Con la sesión hecha, Rex cuenta lo que importa en una frase (cambios de carga, un PR, la racha) y el resumen entero se abre aparte.
   const kgText = (n: number) => `${String(Math.round(n * 10) / 10).replace('.', ',')} kg`;
   const completedInfo =
-    alreadyCompletedToday && session
+    alreadyCompletedToday && session && summaryData
       ? {
-          changes: progressionViews.flatMap((v) => {
+          changes: summaryData.progression.flatMap((v) => {
             const name = getMovementById(v.record.movementId)?.name ?? v.record.movementId;
             if (v.change === 'subio' && v.nextKg) return [`${name} sube a ${kgText(v.nextKg)} el próximo día.`];
             if (v.change === 'bajo' && v.nextKg) return [`${name} baja a ${kgText(v.nextKg)} el próximo día: te están costando las series.`];
             return [];
           }),
-          prMessage: prUpdateMessage,
-          e1rmPending: e1rmSuggestions.length,
-          streak: adherenceStreak,
-          weekDone: weekCount.done,
-          weekPlanned: weekCount.planned,
+          prMessage: summaryData.prMessage,
+          e1rmPending: summaryData.e1rmSuggestions.length,
+          streak: summaryData.streak,
+          weekDone: summaryData.weekCount.done,
+          weekPlanned: summaryData.weekCount.planned,
         }
       : null;
   // El programa de fuerza que convive con el macro: si hoy toca ofrecerlo (o ya lo aceptaste), Rex lo anuncia y la tarjeta cuelga bajo la sesión.
@@ -1430,6 +1338,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       items: [
         { label: 'Librería de complejos', icon: Library, onClick: () => handleRexAct('complejos') },
         ...(noticeSummary.count > 0 ? [{ label: 'Avisos del coach', hint: String(noticeSummary.count), icon: Bell, onClick: () => handleRexAct('avisos') }] : []),
+        ...(alreadyCompletedToday ? [{ label: 'Corregir datos', hint: 'apuntar otra vez', icon: Pencil, onClick: () => handleRecordAgain() }] : []),
         ...(alreadyCompletedToday ? [{ label: 'Deshacer el registro', icon: Undo2, onClick: () => handleRexAct('deshacer') }] : []),
       ],
     },
@@ -1484,14 +1393,17 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     else if (target === 'plan-dureza') setShowHardness(true);
     else if (target === 'plan-molestia') setShowPainPicker(true);
     else if (target === 'plan-avisos') setShowNotices(true);
-    else if (target === 'plan-resumen') setShowSummary(true);
+    else if (target === 'plan-resumen') {
+      // El resumen de la sesión hecha está en el Dashboard: se va allí y se abre.
+      handoff.put('dash-act', 'resumen');
+      appNav.goTo('dashboard');
+    }
     else if (target === 'plan-corregir') handleRecordAgain();
     else if (target === 'plan-cambiar') setShowRex(true);
     else if (target === 'plan-empezar') setFocusMode(true);
     else if (target === 'plan-cerrar') {
       // Lo mismo que «Sí, completada» abajo del todo, pero sin tener que buscarlo: abre el cierre y baja a él.
       setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-      setPrUpdateMessage(null);
       setShowCompletePanel(true);
       window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
     }
@@ -1539,7 +1451,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           onFinish={() => {
             setFocusMode(false);
             setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-            setPrUpdateMessage(null);
             setShowCompletePanel(true);
             // Al acabar el último bloque, el cierre ya está a la vista: se baja a él en vez de dejarte en lo alto de la página.
             window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
@@ -1764,29 +1675,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         />
       )}
 
-      {/* El resumen de la sesión completada vive detrás del globo de Rex («Ver resumen»): ya no ocupa la pantalla al entrar. */}
-      {alreadyCompletedToday && todayHistoryEntry && (
-        <Modal open={showSummary} onClose={() => setShowSummary(false)} title="Resumen de la sesión">
-          <SessionSummaryCard
-            session={session}
-            entry={todayHistoryEntry}
-            workLog={todayWorkLog}
-            progression={progressionViews}
-            streak={adherenceStreak}
-            weekCount={weekCount}
-            prUpdateMessage={prUpdateMessage}
-            e1rmSuggestions={e1rmSuggestions}
-            onConfirmE1rm={handleConfirmE1rmSuggestion}
-            onDismissE1rm={handleDismissE1rmSuggestion}
-          />
-        </Modal>
-      )}
-
-
-      {/* La sesión ya hecha: el estado dicho claro y sus dos botones, encima de los bloques (que debajo enseñan lo hecho de verdad). */}
-      {alreadyCompletedToday && todayHistoryEntry && !session.isRestDay && (
-        <SessionDoneHeader entry={todayHistoryEntry} onSummary={() => setShowSummary(true)} onCorrect={handleRecordAgain} />
-      )}
+      {/* El resumen de la sesión hecha vive en el Dashboard («Sesión completada» → Lo que hiciste); aquí solo queda la sesión y lo hecho bajo cada bloque. */}
 
       {session.competition?.eventDay ? (
         <div className="card flex flex-col gap-2 p-4">
@@ -1880,7 +1769,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             <button
               onClick={() => {
                 setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-                setPrUpdateMessage(null);
                 setShowCompletePanel(true);
               }}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-orange/40 bg-brand-orange/10 px-3 py-2.5 text-sm font-semibold text-brand-orange transition-colors duration-200 hover:bg-brand-orange/20"

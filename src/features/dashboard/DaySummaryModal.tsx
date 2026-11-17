@@ -4,7 +4,8 @@ import type { CompanionLogEntry, DailySession, SessionHistoryEntry, WorkSetEntry
 import { getMovementById } from '../../data/movements';
 import { summarizeCompanionEntry } from '../../engine/companionSummary';
 import { Modal } from '../shell/Modal';
-import { buildRecapLines } from '../planificacion/SessionSummaryCard';
+import { buildRecapLines, SessionSummaryCard } from '../planificacion/SessionSummaryCard';
+import type { E1rmSuggestion, SessionSummaryData } from '../../engine/sessionSummary';
 
 const nameOf = (id: string) => getMovementById(id)?.name ?? id;
 
@@ -25,6 +26,7 @@ export function DaySummaryModal({
   companion,
   methodOf,
   onOpenPlan,
+  summary,
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,6 +39,11 @@ export function DaySummaryModal({
   methodOf?: (programId: string) => string | null;
   /** Ir a Planificación (solo hoy). */
   onOpenPlan?: () => void;
+  /**
+   * Solo hoy: el resumen completo de la sesión (titular del coach, lo que decide con tus resultados, logros de hoy con las sugerencias de 1RM
+   * por confirmar, racha y semana). Sustituye a la sección «Sesión del macro» de abajo, que sería lo mismo con menos.
+   */
+  summary?: { data: SessionSummaryData; e1rmSuggestions: E1rmSuggestion[]; onConfirmE1rm: (s: E1rmSuggestion) => void; onDismissE1rm: (s: E1rmSuggestion) => void };
 }) {
   const recap = useMemo(() => {
     if (!entry) return [];
@@ -50,7 +57,21 @@ export function DaySummaryModal({
   return (
     <Modal open={open} onClose={onClose} title={`Lo que hiciste · ${dayLabel}`}>
       <div className="flex flex-col gap-4">
-        {entry && (
+        {entry && session && summary && (
+          <SessionSummaryCard
+            session={session}
+            entry={entry}
+            workLog={workLog}
+            progression={summary.data.progression}
+            streak={summary.data.streak}
+            weekCount={summary.data.weekCount}
+            prUpdateMessage={summary.data.prMessage}
+            e1rmSuggestions={summary.e1rmSuggestions}
+            onConfirmE1rm={summary.onConfirmE1rm}
+            onDismissE1rm={summary.onDismissE1rm}
+          />
+        )}
+        {entry && !(session && summary) && (
           <section aria-label="Sesión del macro" className="flex flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-1.5">
               <p className="mr-1 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">Sesión del macro</p>

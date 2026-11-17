@@ -8,7 +8,7 @@ import { buildWodRecapLines } from '../../engine/wodScoring';
 import { NutritionTip } from './NutritionTip';
 import { ProgressionResult } from './ProgressionResult';
 import type { SessionProgressionView } from '../../engine/progression';
-import type { E1rmSuggestion } from './Planificacion';
+import type { E1rmSuggestion } from '../../engine/sessionSummary';
 
 interface SessionSummaryCardProps {
   session: DailySession;

@@ -42,6 +42,7 @@ export type RexTarget =
   /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
   | 'plan-empezar'
   | 'plan-cerrar'
+  | 'resumen-sesion'
   | 'planificacion-continuar'
   | 'plan-terminar'
   /** Planificación: ir a la tarjeta del programa de fuerza que convive con el macro. */
@@ -109,6 +110,10 @@ export interface RexClosing {
   notDone: string | null;
   /** Hay balance (previsto frente a hecho) para abrir. */
   hasDetail: boolean;
+  /** Hay resumen de la sesión de hoy que abrir («Ver resumen»). */
+  hasSummary?: boolean;
+  /** Lo más importante del resumen en una frase: un cambio de carga, un PR nuevo o las sugerencias de 1RM por confirmar. */
+  highlight?: string | null;
 }
 
 /** El día que se está mirando cuando no es hoy: Rex lo comenta en vez de hablar de hoy. */
@@ -246,6 +251,8 @@ export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restM
 /** Hoy ya entrenado: «Sesión hecha.» y el esfuerzo frente al objetivo, con el detalle (previsto frente a hecho) a un toque. */
 export function closingSuggestion(c: RexClosing | null): RexSuggestion {
   const actions: RexAction[] = [];
+  // El resumen de la sesión es lo principal tras entrenar; después, el detalle del día (previsto frente a hecho).
+  if (c?.hasSummary) actions.push({ label: 'Ver resumen', target: 'resumen-sesion' });
   // Estirar es el botón «Recovery» de «Más»: aquí solo el detalle del día.
   if (c?.hasDetail) actions.push({ label: 'Ver detalle', target: 'detalle-dia' });
   const base = { id: 'cierre', priority: 95, lead: 'Sesión hecha.', actions, dismissible: false };
@@ -267,7 +274,8 @@ export function closingSuggestion(c: RexClosing | null): RexSuggestion {
     body = `Esfuerzo ${c.real}${planned}, dentro de tu objetivo (${range}).`;
   }
   const notDone = c.notDone ? ` ${c.notDone}` : '';
-  return { ...base, text: `Sesión hecha. ${body}${notDone}`, mood, tone };
+  const highlight = c.highlight ? ` ${c.highlight}` : '';
+  return { ...base, text: `Sesión hecha. ${body}${notDone}${highlight}`, mood, tone };
 }
 
 /** Todas las sugerencias que tocan ahora, de más a menos importante. Nunca incluye la tranquila (`QUIET_SUGGESTION`). */

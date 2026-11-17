@@ -3,7 +3,8 @@
  * pantalla de destino lo recoge una sola vez al montarse. Caduca a los dos minutos, para que algo que no llegó a abrirse no salte días
  * después. Vive en memoria: una recarga lo borra, y está bien.
  */
-export type HandoffKey = 'support-start' | 'plan-act' | 'objetivos-asistente' | 'analisis-tab';
+export type HandoffKey = 'support-start' | 'plan-act' | 'objetivos-asistente' | 'analisis-tab' | 'dash-act';
+// El valor de 'dash-act': 'resumen' (el Dashboard abre «Lo que hiciste» de hoy, con el resumen de la sesión).
 // El valor de 'analisis-tab': 'perfil' (Análisis en su pestaña Perfil), 'marcas' (la pantalla Mis marcas) o 'marcas:backSquat' (con ese levantamiento desplegado).
 
 const TTL_MS = 120_000;

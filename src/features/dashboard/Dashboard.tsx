@@ -83,6 +83,8 @@ import type { AthleteProfile } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
 import { competitionToClose, nextCompetitionGoal } from '../../engine/postCompetition';
 import { handoff } from '../../lib/handoff';
+import { toast } from '../../lib/toast';
+import { buildSessionSummaryData, e1rmSuggestionKey, summaryHighlight, type E1rmSuggestion } from '../../engine/sessionSummary';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { addSubirPrGoal } from './rexAnalysis';
 import { Movilidad } from '../movilidad/Movilidad';
@@ -127,7 +129,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [showMobility, setShowMobility] = useState(false);
   /** «Lo que hiciste»: la sesión del macro y la del programa de fuerza del día elegido. */
-  const [showDone, setShowDone] = useState(false);
+  // Se abre sola cuando Planificación manda aquí a ver el resumen («Ver resumen» de Rex tras cerrar la sesión).
+  const [showDone, setShowDone] = useState(() => handoff.peek('dash-act') === 'resumen');
+  useEffect(() => {
+    handoff.take('dash-act');
+  }, []);
+  /** Sugerencias de 1RM de hoy que se dijo «Ahora no»: no vuelven a salir en esta visita. */
+  const [dismissedE1rm, setDismissedE1rm] = useState<string[]>([]);
   /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
   const [showWeekly, setShowWeekly] = useState<WeeklyReview | null>(null);
   // El coach propone mover un día de la semana según tu curva de forma (ver `lib/weekCoach.ts`): la ficha y lo que se hizo ya esta semana.
@@ -176,6 +184,23 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, loadHistory, todayIso);
   const strainState = strainStatus(todayStrain, strainTarget);
   const todaySession = useMemo(() => resolveTodaySession(profile, history, todayIso), [profile, history, todayIso]);
+  // El resumen de la sesión de hoy (ya hecha): lo que decide el coach, el PR, las sugerencias de 1RM y la racha, desde lo guardado.
+  const todayEntry = useMemo(() => history.find((h) => h.date === todayIso), [history, todayIso]);
+  const todayCached = useMemo(() => (todayEntry ? athleteRepository.getCachedSession(todayIso) : null), [todayEntry, todayIso]);
+  const summaryData = useMemo(
+    () => (todayEntry && todayCached ? buildSessionSummaryData({ session: todayCached, entry: todayEntry, profile, history, now: new Date() }) : null),
+    [todayEntry, todayCached, profile, history],
+  );
+  const e1rmSuggestions = useMemo(() => (summaryData ? summaryData.e1rmSuggestions.filter((s) => !dismissedE1rm.includes(e1rmSuggestionKey(s))) : []), [summaryData, dismissedE1rm]);
+  function confirmE1rm(s: E1rmSuggestion) {
+    const next = s.target.kind === 'variant' ? { ...profile, variantPrs: { ...profile.variantPrs, [s.target.key]: s.estimatedKg } } : { ...profile, prs: { ...profile.prs, [s.target.key]: s.estimatedKg } };
+    athleteRepository.saveProfile(next);
+    setProfile(next);
+    // Sin esto, el punto débil y el progreso de un objetivo (que leen testLoadKg del historial y no los PRs) no verían esta subida real.
+    athleteRepository.updateHistoryTestLoad(todayIso, s.estimatedKg);
+    toast.show(`PR de ${s.movementName} actualizado a ${s.estimatedKg} kg`);
+  }
+  const dismissE1rm = (s: E1rmSuggestion) => setDismissedE1rm((prev) => [...prev, e1rmSuggestionKey(s)]);
   const strainLearned = useMemo(() => learnStrain(profile, history, todayIso), [profile, history, todayIso]);
   // La sesión del programa que has aceptado hacer hoy se suma al esfuerzo previsto (el anillo y el aviso de «se pasa» cuentan con ella).
   const companionExtra = useMemo(() => acceptedCompanionLoad(profile, todayIso, (p) => generateCompanionSession(profile, history, p, todayIso, { neutral: true })), [profile, history, todayIso]);
@@ -328,6 +353,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             status: strainState,
             notDone: describeSkipped(shown.entry?.skipped),
             hasDetail: dayBalanceNow !== null,
+            hasSummary: summaryData !== null,
+            highlight: summaryData ? summaryHighlight({ ...summaryData, e1rmSuggestions }) : null,
           }
         : null,
     weeklyReviewRange: weeklyReview ? weekRangeText(weeklyReview.from, weeklyReview.to) : null,
@@ -432,6 +459,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return toggleRest();
       case 'detalle-dia':
         return setShowDayDetail(true);
+      case 'resumen-sesion':
+        return setShowDone(true);
       case 'movilidad':
         return setShowMobility(true);
     }
@@ -733,6 +762,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             setShowDone(false);
             onNavigateToPlanificacion();
           } : undefined}
+          summary={isToday && summaryData ? { data: summaryData, e1rmSuggestions, onConfirmE1rm: confirmE1rm, onDismissE1rm: dismissE1rm } : undefined}
         />
       )}
       {showLoad && (
