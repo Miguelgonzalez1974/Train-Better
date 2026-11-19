@@ -888,7 +888,7 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
     expect(missing).toEqual([]);
   });
 
-  it('skill solo cae en 2 días del microciclo y no consecutivos', () => {
+  it('skill cae en 3 días del microciclo (foco de handstand walk y muscle-up) y no consecutivos', () => {
     const profile = makeProfile({ trainingDaysPerWeek: 5 });
     // trainingDayIndex 0..4 = lunes..viernes del fixture.
     const skillDays: number[] = [];
@@ -896,8 +896,32 @@ describe('generateSessionForDate — composición de la sesión (esqueleto fijo)
       const s = generateSessionForDate(profile, [], d, profile.goals);
       if (s.blocks.some((b) => b.block === 'skill')) skillDays.push(i);
     });
-    expect(skillDays.length).toBe(2);
+    expect(skillDays.length).toBe(3);
     expect(skillDays[1] - skillDays[0]).toBeGreaterThan(1);
+    expect(skillDays[2] - skillDays[1]).toBeGreaterThan(1);
+  });
+
+  it('el skill alterna: una semana 2 de muscle-up y 1 de handstand walk, y la siguiente al revés', () => {
+    const profile = makeProfile({ trainingDaysPerWeek: 5 });
+    const muscleUp = new Set(['chest-to-bar-pull-up', 'muscle-up-transition-drill', 'banded-muscle-up', 'bar-muscle-up', 'ring-muscle-up', 'false-grip-hang', 'ring-support-hold']);
+    const split: { mu: number; hsw: number }[] = [];
+    for (const weekStart of ['2026-01-05', '2026-01-12', '2026-01-19', '2026-01-26']) {
+      let mu = 0;
+      let hsw = 0;
+      for (const d of consecutiveDates(weekStart, 5)) {
+        const s = generateSessionForDate(profile, [], d, profile.goals);
+        const main = s.blocks.filter((b) => b.block === 'skill').slice(-1)[0];
+        if (!main) continue;
+        if (muscleUp.has(main.movementId)) mu++;
+        else hsw++;
+      }
+      split.push({ mu, hsw });
+    }
+    expect(split.map((w) => w.mu + w.hsw)).toEqual([3, 3, 3, 3]);
+    // Semanas consecutivas: el reparto 2+1 se invierte.
+    expect(split[0].mu).not.toBe(split[1].mu);
+    expect(split[0].mu).toBe(split[2].mu);
+    expect(Math.abs(split[0].mu - split[0].hsw)).toBe(1);
   });
 
   it('accesorios en ≤ 2 días por semana; core en ≤ 3 y no consecutivos', () => {

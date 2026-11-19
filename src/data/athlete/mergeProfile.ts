@@ -349,6 +349,7 @@ export function mergeProfile(
     strengthSplit: (localIsFresh ? remote.strengthSplit : local.strengthSplit) ?? remote.strengthSplit,
     wodSources: (localIsFresh ? remote.wodSources : local.wodSources) ?? remote.wodSources,
     wodEffortMode: (localIsFresh ? remote.wodEffortMode : local.wodEffortMode) ?? remote.wodEffortMode,
+    skillFocus: (localIsFresh ? remote.skillFocus : local.skillFocus) ?? remote.skillFocus,
     onboardedAt: local.onboardedAt ?? remote.onboardedAt,
     intensityRamp: mergeRamp(remote, local, localIsFresh, base),
 

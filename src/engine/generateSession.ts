@@ -9,6 +9,7 @@ import {
 } from '../data/movements';
 import { usesExcludedMovement } from '../data/movements/excluded';
 import { getSkillProgressionFor, skillProgressionStepAt, type SkillProgression } from '../data/movements/skillProgressions';
+import { buildSkillFocusEntries, type SkillFocusSettings } from './skillFocus';
 import { benchmarkHasExplicitScheme } from '../data/movements/benchmarkCompleteness';
 import type {
   AthleteProfile,
@@ -3315,14 +3316,15 @@ const SKILL_SESSIONS_PER_RUNG = 6;
 
 /**
  * En que dias de entreno de la semana (por `trainingDayIndex`) se programa el bloque de skill —
- * 2 por microciclo, espaciados y evitando (salvo en 3 dias/semana) el dia 0, que ya abre con el
- * benchmark. El resto de dias no llevan skill: se entrena una progresion, no se toca a diario.
+ * 3 por microciclo (foco de handstand walk y muscle-up, ver `engine/skillFocus.ts`: 2 + 1 una semana y
+ * 1 + 2 la siguiente), lo mas espaciados que permite el calendario. El resto de dias no llevan skill:
+ * se entrena una progresion, no se toca a diario.
  */
 const SKILL_DAY_INDICES: Record<3 | 4 | 5 | 6, readonly number[]> = {
-  3: [0, 2],
-  4: [1, 3],
-  5: [1, 3],
-  6: [1, 5],
+  3: [0, 1, 2],
+  4: [0, 2, 3],
+  5: [0, 2, 4],
+  6: [1, 3, 5],
 };
 
 /**
@@ -3438,11 +3440,16 @@ function resolveSkillProgression(
 /** Factor de la vuelta progresiva por debajo del cual el skill de peso corporal sigue evitando el patron (ver `generateDailySession`). */
 const SKILL_REINTRO_MIN_FACTOR = 0.8;
 
+/** Objetivos de gimnasticos que ya cubre el foco de skill (handstand walk y muscle-up): no lo desplazan. */
+const SKILL_FOCUS_TARGETS = new Set(['handstand-walk', 'bar-muscle-up', 'ring-muscle-up']);
+
 function buildSkillBlock(
   history: SessionHistoryEntry[],
   goals: Goal[],
   avoidedPatterns: Set<MovementPattern>,
   date: Date = new Date(),
+  /** Foco de skill: el nivel guardado y el hueco (0-2) de hoy entre los 3 dias de skill de la semana. Sin el, la rotacion de siempre. */
+  focus?: { settings: SkillFocusSettings | undefined; slot: number },
 ): SessionBlockResult[] {
   const candidates = filterAvoidingPain(getMovementsByBlock('skill'), avoidedPatterns);
 
@@ -3452,6 +3459,16 @@ function buildSkillBlock(
   // toque del siguiente cuando ya se lleva rodaje. Dentro del escalon, la prescripcion tambien
   // progresa (`SKILL_RUNG_BLOCKS`).
   const progressionGoal = pickPriorityGoal(goals, (g) => g.type === 'mejorar-gimnasticos' && Boolean(g.movementId));
+
+  // Foco de skill: handstand walk y muscle-up con su escalera propia (2 + 1 dias una semana, 1 + 2 la siguiente). Solo lo desplaza un objetivo
+  // de gimnasticos explicito de OTRA habilidad; si hoy toca un patron con molestia en ambas, sigue la rotacion de siempre.
+  if (focus && (!progressionGoal?.movementId || SKILL_FOCUS_TARGETS.has(progressionGoal.movementId))) {
+    const entries = buildSkillFocusEntries(focus.settings, toLocalIsoDate(date), focus.slot, (id) => {
+      const m = getMovementById(id);
+      return Boolean(m) && avoidsMovement(avoidedPatterns, m!);
+    });
+    if (entries) return entries;
+  }
   if (progressionGoal?.movementId) {
     const progression = getSkillProgressionFor(progressionGoal.movementId);
     if (progression) {
@@ -4822,7 +4839,7 @@ function generateDailySessionCore(
   // caducar el aviso de rodilla no es una "carga al 60%".
   const skillAvoided = new Set<MovementPattern>(avoidedPatterns);
   for (const [pattern, factor] of painReintro) if (factor < SKILL_REINTRO_MIN_FACTOR) skillAvoided.add(pattern);
-  const skillBlock = skillToday ? buildSkillBlock(history, goals, skillAvoided, date) : [];
+  const skillBlock = skillToday ? buildSkillBlock(history, goals, skillAvoided, date, { settings: profile.skillFocus, slot: SKILL_DAY_INDICES[n].indexOf(idx) }) : [];
   // El especifico del WOD se calienta con los movimientos reales de hoy (rampa progresiva), no con
   // estiramientos genericos — ver `buildWarmupBlock`. En dia de benchmark el WOD es una pieza unica
   // conocida, asi que no hay rampa y cae al calentamiento clasico.

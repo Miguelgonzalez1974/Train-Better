@@ -427,6 +427,15 @@ export interface AthleteProfile {
   /** Lo que el atleta le ha pedido a Rex que recuerde («los jueves solo tengo 45 minutos», una nota libre). Ver `engine/rexNotes.ts`. */
   rexNotes?: RexNote[];
   /**
+   * Foco de skill (handstand walk y muscle-up): si el muscle-up es en barra o en anillas y en qué paso de su escalera está cada habilidad (el
+   * paso base y desde qué día cuenta; sube solo cada 4 semanas). Ver `engine/skillFocus.ts`. Sin guardar, empieza el 23 nov 2026 por el primer paso.
+   */
+  skillFocus?: {
+    muKind?: 'bar' | 'ring';
+    mu?: { step: number; since: string };
+    hsw?: { step: number; since: string };
+  };
+  /**
    * Claves `macroId:semana` de revisiones semanales del macrociclo ya mostradas (confirmadas o
    * descartadas) — ver `src/engine/macroReview.ts`. Evita repetir el mismo aviso cada dia dentro de
    * la misma semana del macrociclo.
@@ -765,7 +774,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 81;
+export const SESSION_GEN_VERSION = 82;
 
 /** Un día en que el atleta subió la dureza: lo que se sabía en ese momento, para compararlo después con lo que pasó. */
 export interface HardnessLogEntry {

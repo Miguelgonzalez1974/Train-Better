@@ -1,4 +1,6 @@
 import type { AthleteProfile } from '../../data/athlete/types';
+import { toLocalIsoDate } from '../../engine/periodization';
+import { skillLabel, skillLadder, skillPosition, skillWeekSplit, SKILL_WAVE_WEEKS, type MuKind, type SkillFocusKey } from '../../engine/skillFocus';
 
 type WodSourceId = NonNullable<AthleteProfile['wodSources']>[number];
 
@@ -31,6 +33,80 @@ function Chip({ on, onClick, role, children }: { on: boolean; onClick: () => voi
     >
       {children}
     </button>
+  );
+}
+
+/** «lun 18 ene»: cuándo empieza el paso siguiente. */
+function shortDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/[.,]/g, '');
+}
+
+/**
+ * Foco de skill (handstand walk y muscle-up): en qué paso de su escalera estás en cada una. Cambiar el paso lo hace empezar hoy y cada 4 semanas
+ * sube solo; la 4ª semana de cada paso es de test, y si no lo clavas lo repites desde aquí.
+ */
+function SkillFocusSettings({ profile, onChange }: { profile: AthleteProfile; onChange: (patch: Partial<AthleteProfile>) => void }) {
+  const today = toLocalIsoDate(new Date());
+  const focus = profile.skillFocus;
+  const muKind: MuKind = focus?.muKind ?? 'bar';
+  const split = skillWeekSplit(today);
+
+  function setStep(skill: SkillFocusKey, step: number) {
+    onChange({ skillFocus: { ...focus, [skill]: { step, since: today } } });
+  }
+  function setKind(kind: MuKind) {
+    if (kind === muKind) return;
+    const len = skillLadder('mu', kind).length;
+    onChange({ skillFocus: { ...focus, muKind: kind, mu: { step: Math.min(focus?.mu?.step ?? 0, len - 1), since: today } } });
+  }
+
+  const row = (skill: SkillFocusKey) => {
+    const ladder = skillLadder(skill, muKind);
+    const pos = skillPosition(focus, skill, today);
+    return (
+      <div key={skill} className="flex flex-col gap-1.5 rounded-xl bg-white/[0.04] p-3">
+        <label className="flex flex-col gap-1 text-xs text-neutral-400">
+          {skillLabel(skill, muKind)}: en qué paso estás
+          <select value={pos.stepIndex} onChange={(e) => setStep(skill, Number(e.target.value))} className={`w-full ${selectClass}`} aria-label={`Paso de ${skillLabel(skill, muKind)}`}>
+            {ladder.map((s, i) => (
+              <option key={s.movementId + i} value={i}>
+                {i + 1}. {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-[11px] text-neutral-500">
+          Paso {pos.stepIndex + 1} de {pos.stepCount} · semana {pos.waveWeek + 1} de {SKILL_WAVE_WEEKS}
+          {pos.waveWeek === SKILL_WAVE_WEEKS - 1 ? ' (test)' : ''}
+          {pos.nextStepFrom ? ` · el paso siguiente empieza el ${shortDate(pos.nextStepFrom)}` : ' · último paso: la ola se repite con más exigencia'}
+        </p>
+        <button type="button" onClick={() => setStep(skill, pos.stepIndex)} className="self-start text-[11px] font-semibold text-neutral-400 underline decoration-dotted hover:text-white">
+          Repetir este paso desde hoy
+        </button>
+      </div>
+    );
+  };
+
+  return (
+    <fieldset className="flex flex-col gap-2" aria-label="Foco de skill">
+      <legend className="mb-1 text-xs text-neutral-400">Skill: handstand walk y muscle-up</legend>
+      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Muscle-up en barra o en anillas">
+        <span className="text-xs text-neutral-500">Muscle-up en</span>
+        <Chip role="radio" on={muKind === 'bar'} onClick={() => setKind('bar')}>
+          Barra
+        </Chip>
+        <Chip role="radio" on={muKind === 'ring'} onClick={() => setKind('ring')}>
+          Anillas
+        </Chip>
+      </div>
+      {row('mu')}
+      {row('hsw')}
+      <span className="text-[11px] text-neutral-600">
+        Tres días de skill por semana: esta semana {split.mu} de muscle-up y {split.hsw} de handstand walk, y la siguiente al revés. Cada paso dura 4 semanas con series y repeticiones que
+        suben; la última es de test. Con un objetivo de gimnásticos de otra habilidad, el coach trabaja ese.
+      </span>
+    </fieldset>
   );
 }
 
@@ -100,6 +176,8 @@ export function ProgrammingSettings({ profile, onChange }: { profile: AthletePro
         </div>
         <span className="text-[11px] text-neutral-600">{EFFORT_MODE_OPTIONS.find((o) => o.key === effort)?.hint} Nunca toca el simulacro, la activación ni la víspera de la competición.</span>
       </fieldset>
+
+      <SkillFocusSettings profile={profile} onChange={onChange} />
     </section>
   );
 }
