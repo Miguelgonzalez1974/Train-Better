@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { ChevronDown, ChevronUp, FlaskConical, Keyboard, Mic, MicOff, MousePointerClick, Send, X, type LucideIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronUp, FlaskConical, Keyboard, Mic, MicOff, MousePointerClick, Send, X, type LucideIcon } from 'lucide-react';
 import { createRecognizer, getSpeechCtor, numberWordsToDigits, speechProblem, type Recognizer, type SpeechProblem } from '../../lib/speech';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
@@ -337,6 +337,13 @@ export function RexCorner({
     setQuestion('');
     setOpen(true);
   };
+  /** De la respuesta de Rex a la vista de inicio (la sugerencia del momento y las teselas). */
+  const backToHome = () => {
+    setAnswer(null);
+    setTopic(null);
+    setHeard('');
+    setVoiceProblem(null);
+  };
   const send = (text: string) => {
     const value = text.trim();
     if (!value || !ask) return;
@@ -638,7 +645,7 @@ export function RexCorner({
                     <Send size={17} strokeWidth={2.25} />
                   </button>
                 </form>
-                <div className={`mb-2 flex flex-wrap gap-1.5 ${(examples ?? ASK_EXAMPLES).length === 0 ? 'hidden' : ''}`}>
+                <div className={`mb-2 flex flex-wrap gap-1.5 ${(examples ?? ASK_EXAMPLES).length === 0 || answer ? 'hidden' : ''}`}>
                   {(examples ?? ASK_EXAMPLES).map((example) => (
                     <button
                       key={example}
@@ -654,6 +661,17 @@ export function RexCorner({
                     </button>
                   ))}
                 </div>
+                {answer && (
+                  <button
+                    type="button"
+                    onClick={backToHome}
+                    data-testid="rex-back"
+                    className="mb-2 flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-neutral-400 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    <ChevronLeft size={14} aria-hidden="true" />
+                    Volver
+                  </button>
+                )}
                 {answer && topic && (
                   <div className="mb-1.5 flex justify-end" data-testid="rex-topic">
                     <p className="max-w-[88%] rounded-2xl rounded-br-md bg-white/10 px-3.5 py-2 text-[13px] text-neutral-100">{topic}</p>
@@ -711,6 +729,9 @@ export function RexCorner({
               </div>
             )}
 
+            {/* Con una respuesta a la vista solo se ve ella (y la caja de arriba): la sugerencia del momento y las teselas vuelven con «Volver» o al reabrir a Rex. */}
+            {!answer && (
+              <>
             <RexBar
               {...bar}
               showDate={showDate}
@@ -728,6 +749,8 @@ export function RexCorner({
 
             {/* Los atajos como teselas: las opciones de esta pantalla y las frases que Rex entiende desde cualquiera, colocadas según el momento. */}
             <RexTileGrid tiles={panelTiles} ctx={{ screen, hour: new Date().getHours(), ...tileContext }} prefs={tilePrefs} onPrefs={updateTilePrefs} />
+              </>
+            )}
           </section>
         </div>
       )}
