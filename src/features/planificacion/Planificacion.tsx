@@ -411,7 +411,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     const soft = isSoftDay(session);
     const out: Partial<Record<1 | 2, TrackConfig | null>> = {};
     for (const part of wodParts) {
-      const info = wodTrackInfo(session, part, wodScoreTypes[part]);
+      const info = wodTrackInfo(session, part, wodScoreTypes[part], wodCaps[part]);
       out[part] = info
         ? {
             info,
@@ -422,7 +422,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         : null;
     }
     return out;
-  }, [session, wodParts, wodScoreTypes, history, profile.wodGhosts]);
+  }, [session, wodParts, wodScoreTypes, wodCaps, history, profile.wodGhosts]);
   /** Los parciales cronometrados hoy en cada parte del WOD (los del reloj de entreno), como se guardarían. Solo el día de hoy y las partes no saltadas. */
   function splitRecordsToday(): WodSplitsRecord[] {
     if (!session || session.date !== toLocalIsoDate(new Date())) return [];

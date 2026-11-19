@@ -1,6 +1,7 @@
 import type { DailySession, SessionHistoryEntry, WodResult, WodScoreType, WodSplitsRecord } from '../data/athlete/types';
 import { benchmarkWorkouts, getMovementById } from '../data/movements';
 import { wodMovementsOfSession } from './generateSession';
+import type { WodCap } from './wodCap';
 
 /**
  * El modo fantasma del reloj de entreno: cronometrar un WOD por tiempo tramo a tramo (por rondas o por movimientos) y correr contra tu
@@ -25,6 +26,22 @@ export interface WodTrackInfo {
   defaultMode: TrackMode;
   /** Objetivo del coach en segundos, si lo hay: el fantasma «estimado» corre a ese ritmo. */
   targetSeconds: number | null;
+  /** `amrap`: «tantas rondas en N minutos» (la recuperación activa, Cindy…): cada toque cierra una ronda y no hay un total fijo. Ausente = por tiempo. */
+  kind?: 'tiempo' | 'amrap';
+  /** Duración del AMRAP en segundos, si se conoce. */
+  capSeconds?: number | null;
+  /** Rondas que el coach espera de un AMRAP (el punto medio de su objetivo), si las hay. */
+  targetRounds?: number | null;
+  /** La familia del WOD (formato y duración, sin los movimientos): da un fantasma aproximado cuando el WOD exacto no se repite. */
+  family?: string | null;
+}
+
+/** Tope de rondas que se pueden marcar en un AMRAP (por encima, el reloj no deja seguir marcando). */
+export const AMRAP_MAX_ROUNDS = 60;
+
+/** La familia de un AMRAP: su duración y si es la recuperación activa (ritmo conversacional, otra clase de rondas). */
+export function amrapFamily(minutes: number | null, format: string | undefined): string {
+  return `amrap|${minutes ?? 'x'}${format?.startsWith('RPE 2') ? '|rec' : ''}`;
 }
 
 /** Más tramos que esto no se pueden tocar a mano en pleno WOD. */
@@ -94,7 +111,9 @@ export function trackLabels(info: Pick<WodTrackInfo, 'movements'>, mode: TrackMo
  * De qué tramos consta el WOD de hoy, o null si no se puede cronometrar por tramos (no es por tiempo, o no hay dos rondas ni dos
  * movimientos que separar). Solo los WODs por tiempo: un AMRAP se cuenta en rondas completas, no en tramos.
  */
-export function wodTrackInfo(session: DailySession, part: 1 | 2, scoreType: WodScoreType | null): WodTrackInfo | null {
+export function wodTrackInfo(session: DailySession, part: 1 | 2, scoreType: WodScoreType | null, cap?: WodCap | null): WodTrackInfo | null {
+  // Un AMRAP («tantas rondas en N minutos»): el reloj marca cada ronda terminada, y de ahí sale el fantasma (rondas y ritmo).
+  if (scoreType === 'rounds+reps' && cap?.kind === 'amrap') return amrapTrackInfo(session, part, cap);
   if (scoreType !== 'time') return null;
   const key = wodKeyOf(session, part);
   if (!key) return null;
@@ -121,6 +140,34 @@ export function wodTrackInfo(session: DailySession, part: 1 | 2, scoreType: WodS
     modes,
     defaultMode: rounds >= 2 ? 'ronda' : 'movimiento',
     targetSeconds: target ? Math.round((target.low + target.high) / 2) : null,
+    // Un WOD por tiempo con rondas se parece a otro con las mismas rondas: sirve de fantasma aproximado si el exacto no existe.
+    family: rounds >= 2 ? `time|${rounds}r` : null,
+  };
+}
+
+/** El WOD de un AMRAP para el reloj: tramos = rondas, sin total fijo; el fantasma son tus rondas de la última vez (o de uno parecido). */
+function amrapTrackInfo(session: DailySession, part: 1 | 2, cap: WodCap): WodTrackInfo | null {
+  const key = wodKeyOf(session, part);
+  if (!key) return null;
+  const blocks = partBlocks(session, part);
+  const movements = wodMovementsOfSession(session)
+    .filter((m) => m.part === part)
+    .map((m) => getMovementById(m.movementId)?.name)
+    .filter((n): n is string => Boolean(n));
+  const target = blocks.find((b) => b.wodTarget && b.wodTarget.unit === 'rounds' && b.wodTarget.high > 0)?.wodTarget;
+  const minutes = Math.round(cap.seconds / 60);
+  return {
+    key,
+    part,
+    rounds: AMRAP_MAX_ROUNDS,
+    movements,
+    modes: ['ronda'],
+    defaultMode: 'ronda',
+    targetSeconds: null,
+    kind: 'amrap',
+    capSeconds: cap.seconds,
+    targetRounds: target ? Math.max(1, Math.round((target.low + target.high) / 2)) : null,
+    family: amrapFamily(minutes, blocks[0]?.format),
   };
 }
 
@@ -140,6 +187,8 @@ export interface Ghost {
   totalSeconds: number;
   /** Se hizo Rx (true), escalado (false) o no se sabe (null). */
   rx: boolean | null;
+  /** Viene de un WOD parecido (misma familia: formato y duración) y no del mismo: la comparación es aproximada. */
+  approx?: boolean;
 }
 
 /** «12:40» o «1:02:03» → segundos; null si no es un tiempo. */
@@ -154,6 +203,9 @@ const even = (total: number, n: number) => Array.from({ length: n }, () => total
 
 /** Los parciales de una marca pasados al modo pedido; null si no se pueden (más tramos de los que hay, o de otra forma). */
 function durationsFor(record: WodSplitsRecord, info: WodTrackInfo, mode: TrackMode): number[] | null {
+  // Un AMRAP solo se compara con otro AMRAP (cada tramo es una ronda y no hay un total fijo), y al revés.
+  if ((info.kind === 'amrap') !== Boolean(record.amrap)) return null;
+  if (info.kind === 'amrap') return record.segments.length > 0 ? record.segments : null;
   const total = trackTotal(info, mode);
   if (record.mode === mode) return record.segments.length === total ? record.segments : null;
   // Una marca por movimientos también sirve por rondas: se suman los movimientos de cada ronda.
@@ -177,16 +229,57 @@ export function pickGhost(args: {
   const { info, mode, todayIso, history, ghosts } = args;
   const total = trackTotal(info, mode);
 
+  const amrap = info.kind === 'amrap';
   const byId = new Map<string, WodSplitsRecord>();
   for (const r of [...ghosts, ...history.flatMap((h) => h.wodSplits ?? [])]) byId.set(`${r.date}|${r.part}`, r);
-  let best: { durations: number[]; record: WodSplitsRecord } | null = null;
-  for (const r of byId.values()) {
-    if (r.key !== info.key || r.date >= todayIso || r.capped) continue;
-    const durations = durationsFor(r, info, mode);
-    if (!durations || sum(durations) <= 0) continue;
-    if (!best || sum(durations) < sum(best.durations)) best = { durations, record: r };
+
+  /** La mejor marca con parciales entre las que cumplen `match`: la más rápida; en un AMRAP, la de más rondas (y a igualdad, la más rápida). */
+  const bestRecord = (match: (r: WodSplitsRecord) => boolean) => {
+    let best: { durations: number[]; record: WodSplitsRecord } | null = null;
+    for (const r of byId.values()) {
+      if (!match(r) || r.date >= todayIso || r.capped) continue;
+      const durations = durationsFor(r, info, mode);
+      if (!durations || sum(durations) <= 0) continue;
+      const better = !best || (amrap ? durations.length > best.durations.length || (durations.length === best.durations.length && sum(durations) < sum(best.durations)) : sum(durations) < sum(best.durations));
+      if (better) best = { durations, record: r };
+    }
+    return best;
+  };
+  const fromRecord = (best: { durations: number[]; record: WodSplitsRecord }, approx: boolean): Ghost => ({
+    kind: 'parciales',
+    date: best.record.date,
+    durations: best.durations,
+    totalSeconds: Math.round(sum(best.durations)),
+    rx: best.record.rx,
+    ...(approx ? { approx: true } : {}),
+  });
+
+  const exact = bestRecord((r) => r.key === info.key);
+  if (exact) return fromRecord(exact, false);
+
+  if (amrap) {
+    // Tu última vez en un AMRAP de la misma familia (misma duración): una referencia aproximada, no el mismo WOD.
+    const family = info.family ? bestRecord((r) => r.family === info.family) : null;
+    if (family) return fromRecord(family, true);
+    // Sin parciales: las rondas que anotaste en este WOD (o en uno de su familia), repartidas a ritmo constante durante el AMRAP.
+    if (info.capSeconds && info.capSeconds > 0) {
+      let mark: { rounds: number; date: string; rx: boolean } | null = null;
+      for (const h of history) {
+        if (h.date >= todayIso) continue;
+        const sameWod = historyWodKey(h) === info.key;
+        const result: WodResult | undefined = info.part === 2 ? h.wodResult2 : h.wodResult;
+        if (!sameWod || !result || result.scoreType !== 'rounds+reps') continue;
+        const rounds = Number(result.value.split('+')[0]);
+        if (!Number.isFinite(rounds) || rounds < 1) continue;
+        if (!mark || rounds > mark.rounds) mark = { rounds, date: h.date, rx: h.rxOrScaled === 'rx' };
+      }
+      if (mark) return { kind: 'marca', date: mark.date, durations: even(info.capSeconds, Math.min(mark.rounds, AMRAP_MAX_ROUNDS)), totalSeconds: info.capSeconds, rx: mark.rx };
+      if (info.targetRounds && info.targetRounds > 0) {
+        return { kind: 'estimado', durations: even(info.capSeconds, Math.min(info.targetRounds, AMRAP_MAX_ROUNDS)), totalSeconds: info.capSeconds, rx: null };
+      }
+    }
+    return null;
   }
-  if (best) return { kind: 'parciales', date: best.record.date, durations: best.durations, totalSeconds: Math.round(sum(best.durations)), rx: best.record.rx };
 
   let mark: { seconds: number; date: string; rx: boolean } | null = null;
   for (const h of history) {
@@ -198,6 +291,12 @@ export function pickGhost(args: {
     if (!mark || seconds < mark.seconds) mark = { seconds, date: h.date, rx: h.rxOrScaled === 'rx' };
   }
   if (mark) return { kind: 'marca', date: mark.date, durations: even(mark.seconds, total), totalSeconds: mark.seconds, rx: mark.rx };
+
+  // Un WOD por tiempo con las mismas rondas (aunque cambien los movimientos): tus parciales de la última vez como referencia aproximada.
+  if (mode === 'ronda' && info.family) {
+    const family = bestRecord((r) => r.family === info.family && r.mode === 'ronda');
+    if (family) return fromRecord(family, true);
+  }
 
   if (info.targetSeconds && info.targetSeconds > 0) return { kind: 'estimado', durations: even(info.targetSeconds, total), totalSeconds: info.targetSeconds, rx: null };
   return null;
@@ -256,6 +355,7 @@ export function buildSplitsRecord(args: {
   if (marks.length === 0) return null;
   const total = trackTotal(info, mode);
   const used = marks.slice(0, total);
+  const amrap = info.kind === 'amrap';
   return {
     date,
     part: info.part,
@@ -265,7 +365,9 @@ export function buildSplitsRecord(args: {
     segments: marksToSegments(used),
     totalSeconds: Math.round(totalSeconds),
     rx,
-    ...(capped || used.length < total ? { capped: true } : {}),
+    // Un AMRAP termina en el tiempo, no en un total de tramos: nunca queda «sin terminar».
+    ...(amrap ? { amrap: true } : capped || used.length < total ? { capped: true } : {}),
+    ...(info.family ? { family: info.family } : {}),
   };
 }
 
@@ -278,7 +380,9 @@ export interface GhostSummaryRow {
 
 export interface GhostSummary {
   rows: GhostSummaryRow[];
-  ghost: { kind: Ghost['kind']; date?: string; totalSeconds: number } | null;
+  ghost: { kind: Ghost['kind']; date?: string; totalSeconds: number; approx?: boolean } | null;
+  /** Solo en un AMRAP: tus rondas, las del fantasma y la diferencia (+ = más rondas que él). */
+  amrap?: { rounds: number; ghostRounds: number | null; roundsDiff: number | null };
   /** Diferencia total con el fantasma (+ = lo has batido); null si no se puede comparar (sin fantasma o sin acabar). */
   totalDelta: number | null;
   outcome: 'gana' | 'pierde' | 'empata' | null;
@@ -298,6 +402,7 @@ function rowLabel(record: WodSplitsRecord, i: number): string {
 
 /** Lo que se enseña al cerrar: cada tramo con su diferencia, el total frente al fantasma y una lectura del coach. */
 export function summarizeGhost(record: WodSplitsRecord, ghost: Ghost | null): GhostSummary {
+  if (record.amrap) return summarizeAmrap(record, ghost);
   const comparable = ghost !== null && ghost.durations.length === record.segments.length;
   const rows: GhostSummaryRow[] = record.segments.map((s, i) => ({
     label: rowLabel(record, i),
@@ -335,11 +440,69 @@ export function summarizeGhost(record: WodSplitsRecord, ghost: Ghost | null): Gh
     if (slowest && list.length >= 2) insight = `El tramo que más te costó: ${slowest[0]}.`;
   }
 
-  let note: string | null = null;
+  const notes: string[] = [];
+  if (ghost?.approx) notes.push('Comparación aproximada: no es exactamente el mismo WOD, sino uno con las mismas rondas.');
   if (ghost && ghost.rx !== null && ghost.rx !== record.rx) {
-    note = record.rx ? 'El fantasma fue escalado y hoy lo hiciste Rx: la comparación no es limpia.' : 'Hoy escalaste y el fantasma fue Rx: la comparación no es limpia.';
+    notes.push(record.rx ? 'El fantasma fue escalado y hoy lo hiciste Rx: la comparación no es limpia.' : 'Hoy escalaste y el fantasma fue Rx: la comparación no es limpia.');
   }
-  return { rows, ghost: ghost ? { kind: ghost.kind, date: ghost.date, totalSeconds: ghost.totalSeconds } : null, totalDelta, outcome, insight, note };
+  const note = notes.length > 0 ? notes.join(' ') : null;
+  return { rows, ghost: ghost ? { kind: ghost.kind, date: ghost.date, totalSeconds: ghost.totalSeconds, ...(ghost.approx ? { approx: true } : {}) } : null, totalDelta, outcome, insight, note };
+}
+
+/** Una frase sobre el ritmo de un AMRAP: si cayó en la segunda mitad, si fue constante o si acabaste más rápido. null con menos de 4 rondas. */
+export function amrapPaceInsight(segments: number[]): string | null {
+  if (segments.length < 4) return null;
+  const half = Math.floor(segments.length / 2);
+  const first = sum(segments.slice(0, half)) / half;
+  const last = sum(segments.slice(-half)) / half;
+  if (first <= 0) return null;
+  const change = Math.round((last / first - 1) * 100);
+  if (change >= 15) return `Tu ritmo cayó un ${change} % en la segunda mitad: la ronda más lenta tardó ${secondsText(Math.max(...segments))}.`;
+  if (change <= -10) return `Acabaste más rápido que empezaste (${Math.abs(change)} % menos por ronda).`;
+  return `Ritmo constante: ${secondsText(first)} por ronda al principio y ${secondsText(last)} al final.`;
+}
+
+/** El resumen de un AMRAP: tus rondas frente a las del fantasma (más rondas gana; con las mismas, el tiempo) y cómo fue el ritmo. */
+function summarizeAmrap(record: WodSplitsRecord, ghost: Ghost | null): GhostSummary {
+  const gDur = ghost?.durations ?? null;
+  const rows: GhostSummaryRow[] = record.segments.map((s, i) => ({ label: `Ronda ${i + 1}`, seconds: s, delta: gDur && i < gDur.length ? Math.round(gDur[i] - s) : null }));
+  const rounds = record.segments.length;
+  const ghostRounds = gDur ? gDur.length : null;
+  const roundsDiff = ghostRounds === null ? null : rounds - ghostRounds;
+  const totalDelta = gDur && roundsDiff === 0 ? Math.round(sum(gDur) - sum(record.segments)) : null;
+  const outcome: GhostSummary['outcome'] =
+    roundsDiff === null ? null : roundsDiff > 0 ? 'gana' : roundsDiff < 0 ? 'pierde' : totalDelta !== null && Math.abs(totalDelta) <= EVEN_SECONDS ? 'empata' : totalDelta !== null && totalDelta > 0 ? 'gana' : 'pierde';
+
+  const pace = amrapPaceInsight(record.segments);
+  const notes: string[] = [];
+  if (ghost?.approx) notes.push('Comparación aproximada: no es exactamente el mismo WOD, sino uno parecido (mismo formato y duración).');
+  if (ghost && ghost.rx !== null && ghost.rx !== record.rx) {
+    notes.push(record.rx ? 'El fantasma fue escalado y hoy lo hiciste Rx: la comparación no es limpia.' : 'Hoy escalaste y el fantasma fue Rx: la comparación no es limpia.');
+  }
+  return {
+    rows,
+    ghost: ghost ? { kind: ghost.kind, date: ghost.date, totalSeconds: ghost.totalSeconds, ...(ghost.approx ? { approx: true } : {}) } : null,
+    amrap: { rounds, ghostRounds, roundsDiff },
+    totalDelta,
+    outcome,
+    insight: pace,
+    note: notes.length > 0 ? notes.join(' ') : null,
+  };
+}
+
+/**
+ * Cómo vas en un AMRAP frente al fantasma. Con rondas del fantasma por delante, la diferencia es el tiempo (como en un WOD por tiempo); si ya has
+ * hecho más rondas que él, cuentas rondas de ventaja.
+ */
+export function amrapStanding(durations: number[], marks: number[], elapsed: number): { delta: number; extraRounds: number } {
+  const extraRounds = Math.max(0, marks.length - durations.length);
+  return { delta: liveDelta(durations, marks, elapsed), extraRounds };
+}
+
+/** «+1 ronda sobre el fantasma» / «11 s por delante» / «igualado». */
+export function amrapDeltaText(standing: { delta: number; extraRounds: number }): string {
+  if (standing.extraRounds > 0) return `+${standing.extraRounds} ${standing.extraRounds === 1 ? 'ronda' : 'rondas'} sobre el fantasma`;
+  return deltaText(standing.delta);
 }
 
 /** «11 s», «1:05». */

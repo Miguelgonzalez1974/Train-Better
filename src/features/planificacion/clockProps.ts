@@ -22,7 +22,7 @@ export function clockPropsFor(
   const caps: Record<1 | 2, WodCap | null> = { 1: wodCapFor(session, 1), 2: wodCapFor(session, 2) };
   const track: Partial<Record<1 | 2, TrackConfig | null>> = {};
   for (const part of getWodParts(session)) {
-    const info = wodTrackInfo(session, part, getWodScoreType(session, part));
+    const info = wodTrackInfo(session, part, getWodScoreType(session, part), caps[part]);
     track[part] = info
       ? {
           info,

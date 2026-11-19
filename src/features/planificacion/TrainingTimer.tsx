@@ -5,7 +5,7 @@ import type { WodCap } from '../../engine/wodCap';
 import { clockBus, clockState, type ClockScope } from '../../lib/clockState';
 import { WodRibbon } from './WodRibbon';
 import { RexPaceCard } from './RexPaceCard';
-import { deltaText, ghostPosition, liveDelta, marksToSegments, trackTotal, type Ghost, type TrackMode, type WodTrackInfo } from '../../engine/wodGhost';
+import { amrapDeltaText, amrapStanding, deltaText, ghostPosition, liveDelta, marksToSegments, trackTotal, type Ghost, type TrackMode, type WodTrackInfo } from '../../engine/wodGhost';
 import { paceGhost, type PaceTip } from '../../engine/wodPace';
 
 /**
@@ -19,6 +19,9 @@ export interface TrackConfig {
   /** La pauta de ritmo de Rex para este WOD (ver `engine/wodPace.ts`), o null si no tiene nada que decir. */
   paceFor?: () => PaceTip | null;
 }
+
+/** Cuántas casillas de ronda caben en la cinta de un AMRAP (si haces más, la cinta se desplaza). */
+const AMRAP_WINDOW = 18;
 
 const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]}`;
@@ -189,7 +192,7 @@ interface FullscreenClockProps {
   extras?: { label: string; onClick: () => void }[];
   rounds?: { value: number; onAdd: () => void; onSub: () => void };
   /** Modo fantasma: sustituye al contador de rondas por la cinta de tramos y un botón grande que cierra el tramo activo. */
-  track?: { ribbon: ReactNode; ribbonWide: ReactNode; roundLine: string; delta: string | null; deltaGood: boolean; buttonLabel: string; finished: boolean; canUndo: boolean; onTap: () => void; onUndo: () => void };
+  track?: { ribbon: ReactNode; ribbonWide: ReactNode; roundLine: string; delta: string | null; deltaGood: boolean; neutral?: boolean; buttonLabel: string; finished: boolean; canUndo: boolean; onTap: () => void; onUndo: () => void };
   /** Barra de avance hasta un límite (time cap): `warn` la pone en naranja (último minuto o límite alcanzado). */
   progress?: { value: number; warn: boolean };
   onClose: () => void;
@@ -232,7 +235,7 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
         {track && (
           <div className="ml-auto hidden shrink-0 items-baseline gap-3 landscape:flex" aria-live="polite">
             <p className="text-base font-semibold text-neutral-300">{track.roundLine}</p>
-            {track.delta !== null && <p className={`text-2xl font-black tabular-nums ${track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta}</p>}
+            {track.delta !== null && <p className={`text-2xl font-black tabular-nums ${track.neutral ? 'text-neutral-200' : track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta}</p>}
           </div>
         )}
         <button onClick={onClose} aria-label="Salir de pantalla completa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-white active:bg-white/30">
@@ -261,7 +264,7 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
             {/* Vertical: delta, cinta y botón en una columna bajo el reloj. */}
             <div className="flex min-h-0 shrink-0 flex-col justify-center gap-3 landscape:hidden" aria-live="polite">
               <div className="flex items-baseline justify-between gap-3">
-                <p className={`text-3xl font-black tabular-nums ${track.delta === null ? 'text-neutral-300' : track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta ?? track.roundLine}</p>
+                <p className={`text-3xl font-black tabular-nums ${track.delta === null || track.neutral ? 'text-neutral-300' : track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta ?? track.roundLine}</p>
                 {track.delta !== null && <p className="text-base font-semibold text-neutral-300">{track.roundLine}</p>}
               </div>
               {track.ribbon}
@@ -437,14 +440,17 @@ function TrackSetup({
   ghostOn: boolean;
   onGhostOn: (v: boolean) => void;
 }) {
+  const amrap = cfg.info.kind === 'amrap';
+  // Un AMRAP se cuenta en rondas; un WOD por tiempo, en tiempo. `approx` = viene de un WOD parecido, no del mismo.
+  const ghostBig = ghost ? (amrap ? `${ghost.durations.length} ${ghost.durations.length === 1 ? 'ronda' : 'rondas'}` : mmss(ghost.totalSeconds)) : '';
   const ghostText = ghost
     ? ghost.kind === 'parciales'
-      ? `${mmss(ghost.totalSeconds)} · ${shortDate(ghost.date!)} · ${ghost.rx ? 'Rx' : 'escalado'}`
+      ? `${ghostBig} · ${shortDate(ghost.date!)} · ${ghost.approx ? 'un WOD parecido (mismo formato)' : ghost.rx ? 'Rx' : 'escalado'}`
       : ghost.kind === 'marca'
-        ? `${mmss(ghost.totalSeconds)} · ${shortDate(ghost.date!)} · sin parciales, a ritmo constante`
+        ? `${ghostBig} · ${shortDate(ghost.date!)} · sin parciales, a ritmo constante`
         : ghost.kind === 'pauta'
-          ? `${mmss(ghost.totalSeconds)} · pauta de ritmo de Rex, constante`
-          : `${mmss(ghost.totalSeconds)} · objetivo del coach (estimado)`
+          ? `${ghostBig} · pauta de ritmo de Rex, constante`
+          : `${amrap ? '~' : ''}${ghostBig} · objetivo del coach (estimado)`
     : null;
   const toggle = (checked: boolean, label: string, onChange: (v: boolean) => void) => (
     <button
@@ -460,8 +466,8 @@ function TrackSetup({
   return (
     <div className="mb-2 flex flex-col gap-1.5 rounded-lg bg-white/5 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-neutral-300">Cronometrar por tramos</span>
-        {toggle(on, 'Cronometrar por tramos', onOn)}
+        <span className="text-xs font-semibold text-neutral-300">{amrap ? 'Marcar cada ronda' : 'Cronometrar por tramos'}</span>
+        {toggle(on, amrap ? 'Marcar cada ronda' : 'Cronometrar por tramos', onOn)}
       </div>
       {on && cfg.info.modes.length > 1 && (
         <div className="flex rounded-md bg-black/20 p-0.5" role="radiogroup" aria-label="Forma de cronometrar">
@@ -489,9 +495,11 @@ function TrackSetup({
             {toggle(ghostOn, 'Correr contra el fantasma', onGhostOn)}
           </div>
         ) : (
-          <p className="text-[11px] leading-relaxed text-neutral-500">Aún no hay una marca de este WOD: hoy se guardan tus parciales y serán el fantasma de la próxima vez.</p>
+          <p className="text-[11px] leading-relaxed text-neutral-500">
+            {amrap ? 'Aún no hay rondas anteriores de un AMRAP así: hoy se guardan las tuyas y serán el fantasma de la próxima vez.' : 'Aún no hay una marca de este WOD: hoy se guardan tus parciales y serán el fantasma de la próxima vez.'}
+          </p>
         ))}
-      {on && ghost && !ghostOn && cfg.ghostDefaultOff && <p className="text-[11px] text-neutral-500">Apagado hoy: en un día suave el coach no te empuja a correr contra nadie.</p>}
+      {on && ghost && !ghostOn && cfg.ghostDefaultOff && <p className="text-[11px] text-neutral-500">Apagado hoy: en un día suave el coach no te empuja a correr contra nadie. Se guardan tus rondas igualmente.</p>}
     </div>
   );
 }
@@ -1065,6 +1073,35 @@ export function TrainingTimer({
     const durations = ghost?.durations ?? null;
     const done = marks.length;
     const segs = marksToSegments(marks);
+    // Un AMRAP («tantas rondas en N minutos»): la cinta son las rondas (las del fantasma y la que toca), que se alarga si las superas; cada toque cierra una.
+    if (info.kind === 'amrap') {
+      const gLen = durations?.length ?? 0;
+      const n = Math.min(AMRAP_WINDOW, Math.max(gLen, done + 1, 4));
+      const first = Math.max(0, done + 1 - n);
+      const labels = Array.from({ length: n }, (_, j) => `R${first + j + 1}`);
+      const avgG = durations && gLen > 0 ? durations.reduce((s, d) => s + d, 0) / gLen : 1;
+      const lastMark = done > 0 ? marks[done - 1] : 0;
+      let ghostAt: number | null = null;
+      if (durations) {
+        const p = ghostPosition(durations, workoutElapsed);
+        ghostAt = Math.max(0, Math.min(n, (p.finished ? durations.length : p.index + p.frac) - first));
+      }
+      const standing = durations ? amrapStanding(durations, marks, workoutElapsed) : null;
+      return {
+        roundStrip: null,
+        labels,
+        widths: labels.map((_, j) => durations?.[first + j] ?? avgG),
+        doneCount: done - first,
+        deltas: labels.map((_, j) => (first + j < done && durations && durations[first + j] !== undefined ? Math.round(durations[first + j] - segs[first + j]) : null)),
+        ghostAt,
+        activeDetail: `${mmss(Math.max(0, workoutElapsed - lastMark))}${durations && done < gLen ? ` / ${mmss(durations[done])}` : ''}`,
+        buttonLabel: `Ronda ${done + 1} hecha`,
+        roundLine: gLen > 0 ? `Ronda ${done + 1} · fantasma ${gLen}` : `Ronda ${done + 1}`,
+        delta: standing ? (standing.extraRounds > 0 ? 1 : standing.delta) : null,
+        deltaText: standing ? amrapDeltaText(standing) : null,
+        neutral: trackCfg.ghostDefaultOff,
+      };
+    }
     const byMove = trackMode === 'movimiento';
     const cycle = byMove ? Math.min(Math.floor(done / cycleLen), info.rounds - 1) : 0;
     const start = byMove ? cycle * cycleLen : 0;
@@ -1105,6 +1142,7 @@ export function TrainingTimer({
       roundLine: byMove ? (info.rounds > 1 ? `Ronda ${cycle + 1} de ${info.rounds}` : `Tramo ${Math.min(done + 1, trackSegments)} de ${trackSegments}`) : `Ronda ${Math.min(done + 1, info.rounds)} de ${info.rounds}`,
       delta,
       deltaText: delta !== null ? deltaText(delta) : null,
+      neutral: trackCfg.ghostDefaultOff,
     };
   })();
 
@@ -1219,6 +1257,7 @@ export function TrainingTimer({
                   roundLine: trackView.roundLine,
                   delta: trackView.deltaText,
                   deltaGood: (trackView.delta ?? 0) >= 0,
+                  neutral: trackView.neutral,
                   buttonLabel: trackView.buttonLabel,
                   finished: trackFinished || !workoutRunning,
                   canUndo: marks.length > 0,
@@ -1545,7 +1584,7 @@ export function TrainingTimer({
           {trackView && (
             <div className="my-2.5 flex flex-col gap-2" aria-live="polite">
               <div className="flex items-baseline justify-between gap-2">
-                <p className={`text-lg font-bold tabular-nums ${trackView.deltaText === null ? 'text-neutral-300' : (trackView.delta ?? 0) >= 0 ? 'text-brand-neon' : 'text-brand-orange'}`}>
+                <p className={`text-lg font-bold tabular-nums ${trackView.deltaText === null || trackView.neutral ? 'text-neutral-300' : (trackView.delta ?? 0) >= 0 ? 'text-brand-neon' : 'text-brand-orange'}`}>
                   {trackView.deltaText ?? 'Cinta de tramos'}
                 </p>
                 <p className="text-xs text-neutral-400">{trackView.roundLine}</p>

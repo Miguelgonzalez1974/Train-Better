@@ -10,9 +10,25 @@ const mmss = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.rou
  * coach («tu punto flojo: pull-ups»). Solo informa; el registro se guarda al confirmar la sesión y será el fantasma de la próxima vez.
  */
 export function GhostSummaryCard({ summary }: { summary: GhostSummary }) {
-  const { rows, ghost, totalDelta, outcome, insight, note } = summary;
+  const { rows, ghost, totalDelta, outcome, insight, note, amrap } = summary;
+  const rondas = (n: number) => `${n} ${n === 1 ? 'ronda' : 'rondas'}`;
+  // Un AMRAP se compara en rondas (más rondas gana; con las mismas, el tiempo): «8 rondas: 1 más que tu fantasma».
+  const amrapHeadline = amrap
+    ? amrap.roundsDiff === null
+      ? `${rondas(amrap.rounds)} hechas`
+      : amrap.roundsDiff > 0
+        ? `${rondas(amrap.rounds)}: ${rondas(amrap.roundsDiff)} más que tu fantasma (${amrap.ghostRounds})`
+        : amrap.roundsDiff < 0
+          ? `${rondas(amrap.rounds)}: ${rondas(-amrap.roundsDiff)} menos que tu fantasma (${amrap.ghostRounds})`
+          : outcome === 'gana'
+            ? `${rondas(amrap.rounds)} como tu fantasma, pero ${secondsText(totalDelta!)} más rápido`
+            : outcome === 'pierde'
+              ? `${rondas(amrap.rounds)} como tu fantasma, pero ${secondsText(totalDelta!)} más lento`
+              : `${rondas(amrap.rounds)}: empate con tu fantasma`
+    : null;
   const headline =
-    outcome === 'gana'
+    amrapHeadline ??
+    (outcome === 'gana'
       ? `Has batido a tu fantasma por ${secondsText(totalDelta!)}`
       : outcome === 'pierde'
         ? `Tu fantasma te gana por ${secondsText(totalDelta!)}`
@@ -20,14 +36,14 @@ export function GhostSummaryCard({ summary }: { summary: GhostSummary }) {
           ? 'Empate con tu fantasma'
           : ghost
             ? 'WOD sin terminar: no se compara con el fantasma'
-            : 'Tus parciales';
+            : 'Tus parciales');
   const tone = outcome === 'gana' ? 'text-good' : outcome === 'pierde' ? 'text-warn' : 'text-neutral-300';
-  const against = ghost ? (ghost.kind === 'pauta' ? 'la pauta de Rex' : ghost.kind === 'estimado' ? 'objetivo del coach' : ghost.date ? `fantasma del ${shortDate(ghost.date)}` : 'fantasma') : null;
+  const against = ghost ? (ghost.kind === 'pauta' ? 'la pauta de Rex' : ghost.kind === 'estimado' ? 'objetivo del coach' : ghost.date ? `fantasma del ${shortDate(ghost.date)}${ghost.approx ? ' (parecido)' : ''}` : 'fantasma') : null;
   return (
     <section className="flex flex-col gap-2.5 rounded-xl bg-white/[0.03] p-3" aria-label="Parciales del WOD">
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">
-          <GhostIcon size={13} aria-hidden="true" /> Por tramos
+          <GhostIcon size={13} aria-hidden="true" /> {amrap ? 'Por rondas' : 'Por tramos'}
         </p>
         {against && <span className="text-[11px] text-neutral-500">contra {against}{ghost && ghost.kind !== 'parciales' ? ' · ritmo constante' : ''}</span>}
       </div>
@@ -47,7 +63,7 @@ export function GhostSummaryCard({ summary }: { summary: GhostSummary }) {
       </ul>
       {insight && <p className="text-xs leading-relaxed text-neutral-300">{insight}</p>}
       {note && <p className="text-[11px] leading-relaxed text-warn">{note}</p>}
-      <p className="text-[11px] leading-relaxed text-neutral-500">Al guardar la sesión, estos parciales serán tu fantasma la próxima vez que hagas este WOD.</p>
+      <p className="text-[11px] leading-relaxed text-neutral-500">{amrap ? 'Al guardar la sesión, estas rondas serán tu fantasma la próxima vez que hagas un AMRAP así.' : 'Al guardar la sesión, estos parciales serán tu fantasma la próxima vez que hagas este WOD.'}</p>
     </section>
   );
 }

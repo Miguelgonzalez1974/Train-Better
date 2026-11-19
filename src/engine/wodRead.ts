@@ -50,6 +50,8 @@ function toRounds(values: number[], cycle: number): number[] {
 }
 
 export function readWod(record: WodSplitsRecord, ghost: Ghost | null): WodReading | null {
+  // Un AMRAP no tiene un total de rondas: su lectura (ritmo y rondas) va en el resumen del fantasma.
+  if (record.amrap) return null;
   const cycle = record.mode === 'movimiento' ? record.labels.length : 1;
   if (cycle < 1) return null;
   const roundsDone = Math.floor(record.segments.length / cycle);

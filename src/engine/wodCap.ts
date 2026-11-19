@@ -26,7 +26,10 @@ function partEntries(session: DailySession, part: 1 | 2): SessionBlockResult[] {
 /** Minutos de un AMRAP escritos en el formato ("AMRAP 12 min", "AMRAP 10:00"), o null. */
 function amrapMinutes(format: string | undefined): number | null {
   const m = format?.match(/^AMRAP\s*(\d+)\s*(?:min|:00)?/i);
-  return m ? Number(m[1]) : null;
+  if (m) return Number(m[1]);
+  // La recuperación activa («RPE 2 · 45 min total») es un «tantas vueltas en 45 minutos»: el reloj para a los 45.
+  const total = format?.match(/(\d+)\s*min total/i);
+  return total ? Number(total[1]) : null;
 }
 
 export function wodCapFor(session: DailySession, part: 1 | 2 = 1): WodCap | null {

@@ -959,6 +959,13 @@ export interface WodSplitsRecord {
   /** Se hizo como estaba escrito (true) o escalado. */
   rx: boolean;
   capped?: boolean;
+  /** Un AMRAP («tantas rondas en N minutos»): cada tramo es una ronda completada y no hay un total fijo de tramos. */
+  amrap?: boolean;
+  /**
+   * La familia del WOD (formato y duración, sin los movimientos: «amrap|45|rec», «time|5r»). Sirve de fantasma aproximado cuando el WOD exacto no
+   * se ha repetido nunca, que es lo normal en uno generado por el coach.
+   */
+  family?: string;
 }
 
 /** Cómo de duro fue el WOD: fácil, justo o duro. */

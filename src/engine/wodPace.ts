@@ -62,12 +62,13 @@ export interface PaceTip {
 export function paceTip(args: { info: WodTrackInfo; todayIso: string; history: SessionHistoryEntry[]; ghosts: WodSplitsRecord[] }): PaceTip | null {
   const { info, todayIso, history, ghosts } = args;
   const rounds = info.rounds;
-  if (rounds < PACE_MIN_ROUNDS) return null;
+  // Un AMRAP no tiene un total de rondas con el que repartir un ritmo: la pauta es de los WODs por tiempo.
+  if (info.kind === 'amrap' || rounds < PACE_MIN_ROUNDS) return null;
 
   const byId = new Map<string, WodSplitsRecord>();
   for (const r of [...ghosts, ...history.flatMap((h) => h.wodSplits ?? [])]) byId.set(`${r.date}|${r.part}`, r);
   const similar = [...byId.values()]
-    .filter((r) => r.date < todayIso && !r.capped)
+    .filter((r) => r.date < todayIso && !r.capped && !r.amrap)
     .map((record) => ({ record, times: roundTimes(record, rounds) }))
     .filter((s): s is { record: WodSplitsRecord; times: number[] } => s.times !== null && s.times.every((t) => t > 0))
     .sort((a, b) => (a.record.date < b.record.date ? 1 : a.record.date > b.record.date ? -1 : 0))

@@ -5,6 +5,8 @@ import type { DailySession, SessionBlockResult, SessionHistoryEntry, WodResult, 
 function inferScoreTypeFromFormat(format: string): WodScoreType {
   if (format.startsWith('For Time')) return 'time';
   if (format.startsWith('AMRAP')) return 'rounds+reps';
+  // La recuperación activa («RPE 2 · 45 min total»): bici y un corte, una y otra vez durante 45 minutos. Se cuenta en vueltas (rondas) hechas en ese tiempo.
+  if (/\bmin total\b/i.test(format)) return 'rounds+reps';
   if (format.startsWith('EMOM')) return 'reps';
   // "Al máximo · N x 3:00 …" -> se puntúa por repeticiones totales.
   if (format.startsWith('Al máximo')) return 'reps';
