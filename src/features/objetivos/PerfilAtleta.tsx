@@ -15,8 +15,10 @@ import {
 import { toLocalIsoDate } from '../../engine/periodization';
 import { describeLever, ensureEmphasisPlan, formatRatio, leverFor, nextReviewOn } from '../../engine/programmingEmphasis';
 import { Modal } from '../shell/Modal';
-import { ProfileRadar } from './ProfileRadar';
 import { SectionLabel } from '../shell/SectionLabel';
+import { computeLevel, LEVEL_ORDER, levelSeries, recentOfCategory, type LevelKey, type RecentItem } from '../../engine/levelCategories';
+import { CategoryRadar } from '../dashboard/CategoryRadar';
+import { CategoryRecent } from '../dashboard/CategoryRecent';
 
 const TONE_COLOR: Record<Tone, string> = {
   good: 'rgb(var(--c-state-good))',
@@ -305,11 +307,16 @@ export function PerfilAtleta({
   extra?: React.ReactNode;
 }) {
   const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
+  // Tu nivel con las 8 categorías: la foto de hoy, su evolución mes a mes y los 3 últimos entrenos de cada una (solo se calcula en la pantalla del perfil).
+  const level = useMemo(() => (mode === 'analisis' ? computeLevel({ profile, history }) : null), [mode, profile, history]);
+  const series = useMemo(() => (mode === 'analisis' ? levelSeries({ profile, history }) : null), [mode, profile, history]);
+  const recents = useMemo(
+    () => (mode === 'analisis' ? Object.fromEntries(LEVEL_ORDER.map((k) => [k, recentOfCategory({ profile, history, key: k })])) as Record<LevelKey, RecentItem[]> : null),
+    [mode, profile, history],
+  );
   const [asking, setAsking] = useState<DiagnosisArea | null>(null);
   const [reason, setReason] = useState<DiagnosisReason>('cansado');
   const checks = profile.diagnosisChecks ?? {};
-  const radarAreas = diagnosis.areas;
-  const withScore = radarAreas.filter((a) => a.score !== null).length;
 
   function saveCheck(key: DiagnosisAreaKey, check: DiagnosisCheck | null) {
     const next = { ...checks };
@@ -355,27 +362,114 @@ export function PerfilAtleta({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm text-neutral-400">Lo que el coach ve en ti</p>
-          <p className="text-lg font-semibold text-white">Tu perfil de atleta</p>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            Con tus últimas {diagnosis.sessions} sesiones y {diagnosis.wods} {diagnosis.wods === 1 ? 'WOD puntuado' : 'WODs puntuados'} en Rx.
-          </p>
+          <p className="text-lg font-semibold text-white">Tu nivel</p>
+          <p className="mt-0.5 text-xs text-neutral-500">Contra tus propias marcas: 100 es tu mejor marca de cada categoría en el último año.</p>
         </div>
-        <span
-          className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em]"
-          style={{ color: TONE_COLOR[diagnosis.confidence === 'fiable' ? 'good' : diagnosis.confidence === 'provisional' ? 'mid' : 'none'], backgroundColor: 'rgb(var(--c-white) / 0.07)' }}
-        >
-          {CONFIDENCE_LABEL[diagnosis.confidence]}
-        </span>
+        {level && (
+          <span
+            className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em]"
+            style={{ color: TONE_COLOR[level.filled >= 6 ? 'good' : level.filled >= 3 ? 'mid' : 'none'], backgroundColor: 'rgb(var(--c-white) / 0.07)' }}
+          >
+            {level.filled} de {level.categories.length}
+          </span>
+        )}
       </div>
 
-      {withScore >= 3 && (
-        <div className="rounded-2xl bg-white/[0.03] px-3 py-4">
-          <ProfileRadar areas={radarAreas} />
-          <p className="mt-1 text-center text-[11px] text-neutral-500">El aro punteado es lo esperable: lo que sale por fuera es tu fuerte; lo que queda dentro, tu margen.</p>
-        </div>
+      {level && series && recents && (
+        <>
+          <div className="rounded-2xl bg-white/[0.03] px-3 py-4" data-testid="level-profile">
+            <div className="flex items-baseline gap-2.5 px-1">
+              <span className="num text-[44px] font-semibold leading-none text-white">{level.overall ?? '—'}</span>
+              {level.delta !== null && (
+                <span className="text-sm font-semibold" style={{ color: level.delta > 0 ? TONE_COLOR.good : level.delta < 0 ? TONE_COLOR.mid : TONE_COLOR.none }}>
+                  {level.delta > 0 ? '+' : level.delta < 0 ? '−' : ''}
+                  {Math.abs(level.delta)} en 3 meses
+                </span>
+              )}
+            </div>
+            {level.overall === null && (
+              <p className="mt-1 px-1 text-xs text-neutral-400">
+                {level.filled} de {level.categories.length} categorías con datos. Hacen falta al menos 3 para dar un número.
+              </p>
+            )}
+            <CategoryRadar categories={level.categories} />
+            <div className="flex items-center justify-center gap-4 text-[11px] text-neutral-500">
+              <span className="flex items-center gap-1.5">
+                <span className="h-0.5 w-3.5 bg-brand-orange" aria-hidden="true" />
+                Hoy
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 border-t-2 border-dashed border-white/50" aria-hidden="true" />
+                Hace 3 meses
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {level.categories.map((c) => (
+              <article key={c.key} className="rounded-2xl bg-white/[0.03] p-4" data-testid="profile-category" data-key={c.key}>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[15px] font-semibold text-white">{c.label}</h3>
+                  <span className="flex items-baseline gap-2">
+                    {c.confidence === 'provisional' && <span className="rounded-md bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold text-warn">provisional</span>}
+                    {c.score !== null && <span className="num text-lg font-bold text-white">{c.score}</span>}
+                    {c.delta !== null && (
+                      <span className="num text-xs font-semibold" style={{ color: c.delta > 0 ? TONE_COLOR.good : c.delta < 0 ? TONE_COLOR.mid : TONE_COLOR.none }}>
+                        {c.delta > 0 ? '▲' : c.delta < 0 ? '▼' : '='} {Math.abs(c.delta)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-400">{c.detail}</p>
+                <div className="mt-3">
+                  <CategoryRecent items={recents[c.key]} series={series[c.key]} need={c.need} />
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {level.consistencyPct !== null && (
+            <p className="flex items-center gap-3 rounded-2xl border border-dashed border-white/15 px-4 py-3 text-xs leading-relaxed text-neutral-400">
+              <span className="num text-xl font-semibold text-neutral-300">{level.consistencyPct} %</span>
+              Constancia: tus días de entreno de las últimas 8 semanas. Es un hábito, no cuenta en tu nivel.
+            </p>
+          )}
+        </>
       )}
 
-      <div className="flex flex-col gap-3">
+      <div>
+        <SectionLabel className="mb-2">Qué priorizaría estas semanas</SectionLabel>
+        {diagnosis.focus.length === 0 ? (
+          <p className="rounded-2xl bg-white/[0.03] px-4 py-3 text-xs leading-relaxed text-neutral-500">
+            Aún no hay nada claro que priorizar: con más marcas reales y WODs puntuados en Rx, aquí saldrá lo que más margen tiene.
+          </p>
+        ) : (
+          <ul className="divide-y divide-white/[0.06] rounded-2xl bg-white/[0.03] px-4">
+            {diagnosis.focus.map((f, i) => (
+              <li key={`${f.key}-${i}`} className="flex items-start gap-3 py-3">
+                <span
+                  className="mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-extrabold"
+                  style={f.kind === 'prioridad' ? { color: 'rgb(var(--c-brand-orange))', backgroundColor: 'rgb(var(--c-brand-orange) / 0.16)' } : { color: TONE_COLOR.good, backgroundColor: 'rgb(var(--c-state-good) / 0.14)' }}
+                  aria-hidden="true"
+                >
+                  {f.kind === 'prioridad' ? i + 1 : <Check size={12} strokeWidth={3} />}
+                </span>
+                <p className="text-[13px] leading-snug text-neutral-200">
+                  <strong className="font-semibold text-white">{f.action}.</strong>
+                  <span className="mt-0.5 block text-xs text-neutral-500">{f.why}</span>
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <details className="rounded-2xl bg-white/[0.03] px-4 py-3" data-testid="coach-reading">
+        <summary className="cursor-pointer list-none text-[13px] font-semibold text-neutral-200">Cómo lo lee el coach para programar</summary>
+        <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+          El coach usa estas cinco áreas (fuerza, halterofilia, motor, gimnásticos y constancia) para inclinar tus semanas. Son las proporciones entre tus levantamientos y lo que rindes frente a lo que estimó; aquí puedes decir si «cuadra» o «no cuadra».
+        </p>
+      <div className="mt-3 flex flex-col gap-3">
         {diagnosis.areas.map((area) => {
           const check = checks[area.key];
           const state = checkState(area, check);
@@ -440,33 +534,7 @@ export function PerfilAtleta({
           );
         })}
       </div>
-
-      <div>
-        <SectionLabel className="mb-2">Qué priorizaría estas semanas</SectionLabel>
-        {diagnosis.focus.length === 0 ? (
-          <p className="rounded-2xl bg-white/[0.03] px-4 py-3 text-xs leading-relaxed text-neutral-500">
-            Aún no hay nada claro que priorizar: con más marcas reales y WODs puntuados en Rx, aquí saldrá lo que más margen tiene.
-          </p>
-        ) : (
-          <ul className="divide-y divide-white/[0.06] rounded-2xl bg-white/[0.03] px-4">
-            {diagnosis.focus.map((f, i) => (
-              <li key={`${f.key}-${i}`} className="flex items-start gap-3 py-3">
-                <span
-                  className="mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-extrabold"
-                  style={f.kind === 'prioridad' ? { color: 'rgb(var(--c-brand-orange))', backgroundColor: 'rgb(var(--c-brand-orange) / 0.16)' } : { color: TONE_COLOR.good, backgroundColor: 'rgb(var(--c-state-good) / 0.14)' }}
-                  aria-hidden="true"
-                >
-                  {f.kind === 'prioridad' ? i + 1 : <Check size={12} strokeWidth={3} />}
-                </span>
-                <p className="text-[13px] leading-snug text-neutral-200">
-                  <strong className="font-semibold text-white">{f.action}.</strong>
-                  <span className="mt-0.5 block text-xs text-neutral-500">{f.why}</span>
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      </details>
 
       {extra}
 

@@ -1,29 +1,34 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
-import { computeLevel, type CategoryLevel } from '../../engine/levelCategories';
+import { computeLevel, levelSeries, recentOfCategory, type CategoryLevel, type LevelKey } from '../../engine/levelCategories';
 import { CategoryRadar, MiniCategoryRadar } from './CategoryRadar';
+import { CategoryRecent } from './CategoryRecent';
 
 const deltaText = (d: number) => `${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${Math.abs(d)}`;
 const deltaClass = (d: number) => (d > 0 ? 'text-good' : d < 0 ? 'text-warn' : 'text-neutral-500');
 
-/** La fila de una categoría: su nombre con lo que hay detrás, la puntuación con su cambio y una barra. Provisional = un solo resultado. */
-function CategoryRow({ c }: { c: CategoryLevel }) {
+/** La fila de una categoría: su nombre con lo que hay detrás, la puntuación con su cambio y una barra. Al tocarla se abren sus 3 últimos entrenos y su evolución. */
+function CategoryRow({ c, expanded, onToggle, children }: { c: CategoryLevel; expanded: boolean; onToggle: () => void; children?: React.ReactNode }) {
   const empty = c.score === null;
   return (
-    <div className="bg-white/[0.03] px-3 py-2.5" data-testid="level-category" data-key={c.key}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className={`text-sm font-semibold ${empty ? 'text-neutral-500' : 'text-white'}`}>{c.label}</span>
-        <span className="flex shrink-0 items-baseline gap-2">
-          {c.confidence === 'provisional' && <span className="rounded-md bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold text-warn">provisional</span>}
-          {!empty && <span className="num text-sm font-bold text-white">{c.score}</span>}
-          {c.delta !== null && <span className={`num text-[11px] font-semibold ${deltaClass(c.delta)}`}>{deltaText(c.delta)}</span>}
-        </span>
-      </div>
-      <div className="mt-1.5 h-1 rounded-full bg-white/10" aria-hidden="true">
-        <div className={`h-1 rounded-full bg-brand-orange ${c.confidence === 'provisional' ? 'opacity-55' : ''}`} style={{ width: `${c.score ?? 0}%` }} />
-      </div>
-      <p className="mt-1.5 text-[11px] leading-snug text-neutral-500">{c.need && c.confidence !== 'sin-datos' ? `${c.detail}. ${c.need}` : empty ? c.need : c.detail}</p>
+    <div className="bg-white/[0.03]" data-testid="level-category" data-key={c.key}>
+      <button type="button" onClick={onToggle} aria-expanded={expanded} className="block w-full px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04]">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className={`text-sm font-semibold ${empty ? 'text-neutral-500' : 'text-white'}`}>{c.label}</span>
+          <span className="flex shrink-0 items-baseline gap-2">
+            {c.confidence === 'provisional' && <span className="rounded-md bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold text-warn">provisional</span>}
+            {!empty && <span className="num text-sm font-bold text-white">{c.score}</span>}
+            {c.delta !== null && <span className={`num text-[11px] font-semibold ${deltaClass(c.delta)}`}>{deltaText(c.delta)}</span>}
+            <ChevronDown size={13} className={`self-center text-neutral-600 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+          </span>
+        </div>
+        <div className="mt-1.5 h-1 rounded-full bg-white/10" aria-hidden="true">
+          <div className={`h-1 rounded-full bg-brand-orange ${c.confidence === 'provisional' ? 'opacity-55' : ''}`} style={{ width: `${c.score ?? 0}%` }} />
+        </div>
+        <p className="mt-1.5 text-[11px] leading-snug text-neutral-500">{c.need && c.confidence !== 'sin-datos' ? `${c.detail}. ${c.need}` : empty ? c.need : c.detail}</p>
+      </button>
+      {expanded && <div className="px-3 pb-3">{children}</div>}
     </div>
   );
 }
@@ -36,6 +41,10 @@ function CategoryRow({ c }: { c: CategoryLevel }) {
 export function LevelCard({ profile, history, onOpen }: { profile: AthleteProfile; history: SessionHistoryEntry[]; onOpen: () => void }) {
   const level = useMemo(() => computeLevel({ profile, history }), [profile, history]);
   const [open, setOpen] = useState(false);
+  const [openKey, setOpenKey] = useState<LevelKey | null>(null);
+  // La evolución mes a mes solo se calcula con el panel abierto; los últimos entrenos, de la categoría abierta.
+  const series = useMemo(() => (open ? levelSeries({ profile, history }) : null), [open, profile, history]);
+  const recent = useMemo(() => (openKey ? recentOfCategory({ profile, history, key: openKey }) : []), [openKey, profile, history]);
   if (level.filled === 0) return null;
 
   const title = level.overall !== null ? `Tu nivel · ${level.overall}` : `Tu nivel · ${level.filled} de ${level.categories.length} categorías`;
@@ -90,7 +99,9 @@ export function LevelCard({ profile, history, onOpen }: { profile: AthleteProfil
 
           <div className="flex flex-col gap-px overflow-hidden rounded-xl bg-white/[0.08]" data-testid="level-categories">
             {level.categories.map((c) => (
-              <CategoryRow key={c.key} c={c} />
+              <CategoryRow key={c.key} c={c} expanded={openKey === c.key} onToggle={() => setOpenKey(openKey === c.key ? null : c.key)}>
+                <CategoryRecent items={recent} series={series?.[c.key] ?? []} need={null} />
+              </CategoryRow>
             ))}
           </div>
 

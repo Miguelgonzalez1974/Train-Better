@@ -1,9 +1,10 @@
 import type { AthleteProfile, LevelResult, PersonalRecords, SessionBlockResult, SessionHistoryEntry, WodResult } from '../data/athlete/types';
-import { getMovementById } from '../data/movements';
+import { benchmarkWorkouts, getMovementById } from '../data/movements';
 import { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 import { toLocalIsoDate } from './periodization';
 import { classifyWodBlocks, WOD_CATEGORY_LABEL, type WodCategory } from './wodCategory';
 import { historyWodKey, parseTimeSeconds, wodKeyOfBlocks } from './wodGhost';
+import { getCatalogWod } from './wodCatalog';
 import { computeYearConsistency } from './yearConsistency';
 
 /**
@@ -339,4 +340,155 @@ export function computeLevel(input: { profile: AthleteProfile; history: SessionH
     filled: scored.length,
     consistencyPct: consistency.pct,
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Evolución y últimos entrenos de cada categoría
+// ---------------------------------------------------------------------------------------------
+
+/** Cuántos meses atrás llega la evolución de cada categoría. */
+export const SERIES_MONTHS = 12;
+
+/** La nota de cada categoría en los últimos 12 meses, mes a mes (de hace 11 meses hasta hoy; null donde no había datos). */
+export function levelSeries(input: { profile: AthleteProfile; history: SessionHistoryEntry[]; today?: Date }): Record<LevelKey, (number | null)[]> {
+  const today = input.today ?? new Date();
+  const out = Object.fromEntries(LEVEL_ORDER.map((k) => [k, [] as (number | null)[]])) as Record<LevelKey, (number | null)[]>;
+  const baseIso = toLocalIsoDate(today);
+  for (let m = SERIES_MONTHS - 1; m >= 0; m--) {
+    const at = new Date(`${addDays(baseIso, -30 * m)}T12:00:00`);
+    const snap = computeLevel({ profile: input.profile, history: input.history, today: at });
+    for (const c of snap.categories) out[c.key].push(c.score);
+  }
+  return out;
+}
+
+/** Un entreno reciente de una categoría: qué fue, qué hiciste, cómo quedó frente a tu mejor marca y si cuenta para el nivel. */
+export interface RecentItem {
+  date: string;
+  title: string;
+  /** Lo que hiciste («6:12», «120 kg × 5», «8+12»). */
+  value: string;
+  /** Frente a tu mejor marca de eso («tu mejor marca», «+8 % más lento», «92 % de tu mejor»), o null. */
+  vs: string | null;
+  /** Cuenta para el nivel (un WOD escalado no). */
+  counts: boolean;
+  note: string | null;
+}
+
+/** El nombre de un WOD a partir de su clave (la del modo fantasma): el del benchmark o del catálogo, o los movimientos de uno generado. */
+export function wodTitleOfKey(key: string): string {
+  if (key.startsWith('benchmark:')) {
+    const id = key.slice('benchmark:'.length);
+    return benchmarkWorkouts.find((w) => w.id === id)?.name ?? id;
+  }
+  if (key.startsWith('bm:') || key.startsWith('lib:')) return getCatalogWod(key)?.name ?? key.replace(/^(bm|lib):/, '');
+  if (key.startsWith('gen:')) {
+    const [format, list = ''] = key.slice(4).split('|');
+    const names = list
+      .split(',')
+      .map((s) => s.replace(/x\d.*$/, ''))
+      .map((id) => getMovementById(id)?.name)
+      .filter((n): n is string => Boolean(n));
+    const uniq = [...new Set(names)].slice(0, 3);
+    return uniq.length > 0 ? `${uniq.join(', ')}${format ? ` · ${format}` : ''}` : format || 'WOD';
+  }
+  return key;
+}
+
+const secText = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
+function valueText(r: LevelResult): string {
+  if (r.scoreType === 'time') return secText(r.value);
+  if (r.scoreType === 'rounds+reps') {
+    const rounds = Math.floor(r.value);
+    const extra = Math.round((r.value - rounds) * 100);
+    return extra > 0 ? `${rounds}+${extra}` : `${rounds}`;
+  }
+  return r.scoreType === 'reps' ? `${Math.round(r.value)} reps` : `${Math.round(r.value)} kg`;
+}
+
+/** Cómo quedó un resultado frente a tus resultados anteriores del mismo WOD. */
+function versusEarlier(r: LevelResult, all: LevelResult[]): string | null {
+  const earlier = all.filter((x) => x.key === r.key && x.date < r.date);
+  if (earlier.length === 0) return 'primera vez';
+  const lowerIsBetter = r.scoreType === 'time';
+  const best = earlier.reduce((b, x) => ((lowerIsBetter ? x.value < b : x.value > b) ? x.value : b), earlier[0].value);
+  const better = lowerIsBetter ? r.value <= best : r.value >= best;
+  if (better) return 'tu mejor marca';
+  const pct = Math.round(Math.abs(r.value / best - 1) * 100);
+  return pct === 0 ? 'como tu mejor marca' : lowerIsBetter ? `${pct} % más lento que tu mejor` : `${pct} % menos que tu mejor`;
+}
+
+/**
+ * Los últimos entrenos de una categoría (hasta `n`, de más reciente a más antiguo). Las de WOD: los resultados en Rx del registro largo y del historial, más los entrenos
+ * clasificados que no cuentan (escalados), para entender por qué no se mueve. Las de barra: tus mejores series de cada día (con su 1RM estimado frente a tu mejor marca) y tus tests.
+ */
+export function recentOfCategory(input: { profile: AthleteProfile; history: SessionHistoryEntry[]; key: LevelKey; n?: number }): RecentItem[] {
+  const { profile, history, key } = input;
+  const n = input.n ?? 3;
+  if (key === 'power-lifts' || key === 'olimpicos') {
+    const keys = new Set<string>(key === 'power-lifts' ? POWER_KEYS : OLY_KEYS);
+    const marks = liftMarks(profile, history).filter((m) => keys.has(m.key));
+    const sets: { date: string; lift: keyof PersonalRecords; kg: number; reps: number; est: number; test: boolean }[] = [];
+    for (const s of profile.workLog ?? []) {
+      const m = getMovementById(s.movementId);
+      const root = m && (STRENGTH_ROOT_PR_MAP[m.id] ?? OLY_ROOT_PR_MAP[m.id]);
+      if (!root || !keys.has(root) || s.quality === 'fallada') continue;
+      const est = estimate1rm(s.kg, s.reps);
+      if (est === null) continue;
+      const cur = sets.find((x) => x.date === s.date && x.lift === root);
+      if (!cur) sets.push({ date: s.date, lift: root, kg: s.kg, reps: s.reps, est, test: false });
+      else if (est > cur.est) Object.assign(cur, { kg: s.kg, reps: s.reps, est });
+    }
+    for (const e of history) {
+      if (e.testLoadKg == null || e.testLoadKg <= 0) continue;
+      for (const id of e.movementIds) {
+        const m = id.startsWith('benchmark:') ? undefined : getMovementById(id);
+        const k = m && (resolveStrengthPRKey(m) ?? resolveOlyPRKey(m));
+        if (k && keys.has(k) && !sets.some((x) => x.date === e.date && x.lift === k && x.test)) sets.push({ date: e.date, lift: k, kg: e.testLoadKg, reps: 1, est: e.testLoadKg, test: true });
+      }
+    }
+    return sets
+      .sort((a, b) => b.date.localeCompare(a.date) || b.est - a.est)
+      .slice(0, n)
+      .map((s) => {
+        const best = Math.max(...marks.filter((m) => m.key === s.lift && m.date <= s.date).map((m) => m.kg), s.est);
+        const pct = Math.round((s.est / best) * 100);
+        return {
+          date: s.date,
+          title: LIFT_LABEL[s.lift] + (s.test ? ' · test' : ''),
+          value: `${Math.round(s.kg * 10) / 10} kg × ${s.reps}`,
+          vs: pct >= 100 ? 'tu mejor marca' : `${pct} % de tu mejor`,
+          counts: true,
+          note: s.reps > 1 ? `1RM estimado ~${Math.round(s.est)} kg` : null,
+        };
+      });
+  }
+
+  // WODs: los que cuentan (Rx) y los clasificados que no cuentan.
+  const counted = allLevelResults(profile, history);
+  // Un WOD generado tiene nombre propio en el historial («Tormenta Salvaje»); el resto, el de su clave.
+  const titleByDate = new Map<string, string>();
+  for (const e of history) for (const part of [1, 2] as const) {
+    const blocks = e.wodBlocks?.filter((b) => (b.wodPart ?? 1) === part && b.title);
+    if (blocks && blocks.length > 0) titleByDate.set(`${e.date}|${part}`, blocks[0].title!);
+  }
+  const items: RecentItem[] = counted
+    .filter((r) => r.category === key)
+    .map((r) => ({ date: r.date, title: titleByDate.get(`${r.date}|${r.part}`) ?? wodTitleOfKey(r.key), value: valueText(r), vs: versusEarlier(r, counted), counts: true, note: null }));
+  const have = new Set(counted.filter((r) => r.category === key).map((r) => `${r.date}|${r.part}`));
+  for (const e of history) {
+    for (const part of [1, 2] as const) {
+      const result = part === 1 ? e.wodResult : e.wodResult2;
+      if (!result || have.has(`${e.date}|${part}`) || (e.skipped ?? []).some((s) => s.block === 'wod' && (s.part ?? 1) === part)) continue;
+      let category: LevelResult['category'] | null = e.wodCategories?.[part] ?? null;
+      if (!category) {
+        const blocks = blocksOfEntry(e, part);
+        if (blocks) category = classifyWodBlocks(blocks, { prs: profile.prs }, part).category;
+      }
+      if (category !== key) continue;
+      const k = part === 1 ? historyWodKey(e) : null;
+      items.push({ date: e.date, title: k ? wodTitleOfKey(k) : (e.wodBlocks?.[0]?.title ?? 'WOD'), value: result.value, vs: null, counts: false, note: e.rxOrScaled === 'rx' ? 'No cuenta: no se pudo medir' : 'Escalado: no cuenta' });
+    }
+  }
+  return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, n);
 }

@@ -7,8 +7,12 @@ import {
   computeLevel,
   LEVEL_ORDER,
   levelResultsOfEntry,
+  levelSeries,
   recency,
+  recentOfCategory,
   resultValue,
+  SERIES_MONTHS,
+  wodTitleOfKey,
 } from './levelCategories';
 
 const TODAY = new Date('2026-11-19T12:00:00');
@@ -168,6 +172,76 @@ describe('el número único', () => {
     expect(s.overallBefore).not.toBeNull();
     expect(s.delta).not.toBeNull();
     expect(s.delta!).toBeLessThan(0); // hoy rindes menos que entonces
+  });
+});
+
+describe('los últimos entrenos de una categoría', () => {
+  it('de WOD: los 3 últimos con su resultado y cómo quedaron frente a tu mejor marca de ese WOD', () => {
+    const profile = makeProfile({
+      levelLog: [
+        res(120, 'pesado', 'benchmark:diane', 420),
+        res(70, 'pesado', 'benchmark:diane', 400),
+        res(30, 'pesado', 'benchmark:diane', 432),
+        res(9, 'pesado', 'benchmark:diane', 372),
+      ],
+    });
+    const items = recentOfCategory({ profile, history: [], key: 'pesado' });
+    expect(items).toHaveLength(3);
+    expect(items.map((i) => i.value)).toEqual(['6:12', '7:12', '6:40']); // de más reciente a más antiguo
+    expect(items[0].title).toBe('Diane');
+    expect(items[0].vs).toBe('tu mejor marca');
+    expect(items[1].vs).toBe('8 % más lento que tu mejor'); // 432 frente a 400
+    expect(items.every((i) => i.counts)).toBe(true);
+  });
+
+  it('un WOD escalado de esa categoría sale atenuado, con el motivo, y no cuenta', () => {
+    const e = entry(5, { movementIds: ['benchmark:diane'], rxOrScaled: 'scaled', wodResult: { scoreType: 'time', value: '8:00' }, wodCategories: { 1: 'pesado' } });
+    const items = recentOfCategory({ profile: makeProfile(), history: [e], key: 'pesado' });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ title: 'Diane', value: '8:00', counts: false, note: 'Escalado: no cuenta' });
+  });
+
+  it('de barra: tus mejores series por día con el 1RM estimado y el porcentaje de tu mejor marca; los tests también', () => {
+    const profile = makeProfile({
+      prLog: [{ date: iso(200), key: 'backSquat', kg: 150 }],
+      workLog: [
+        { date: iso(14), movementId: 'back-squat', block: 'strength', setNumber: 1, kg: 120, reps: 5 },
+        { date: iso(14), movementId: 'back-squat', block: 'strength', setNumber: 2, kg: 110, reps: 5 },
+        { date: iso(3), movementId: 'back-squat', block: 'strength', setNumber: 1, kg: 135, reps: 3 },
+        { date: iso(2), movementId: 'back-squat', block: 'strength', setNumber: 1, kg: 300, reps: 1, quality: 'fallada' },
+      ],
+    });
+    const items = recentOfCategory({ profile, history: [], key: 'power-lifts' });
+    expect(items.map((i) => i.date)).toEqual([iso(3), iso(14)]);
+    expect(items[0]).toMatchObject({ title: 'Sentadilla', value: '135 kg × 3' });
+    expect(items[0].note).toContain('1RM estimado ~149');
+    expect(items[0].vs).toBe('99 % de tu mejor');
+    expect(items[1].value).toBe('120 kg × 5');
+    const test = recentOfCategory({ profile: makeProfile({ prLog: [] }), history: [entry(4, { movementIds: ['back-squat'], testLoadKg: 150 })], key: 'power-lifts' });
+    expect(test[0]).toMatchObject({ title: 'Sentadilla · test', value: '150 kg × 1', vs: 'tu mejor marca' });
+  });
+
+  it('una categoría sin entrenos devuelve una lista vacía', () => {
+    expect(recentOfCategory({ profile: makeProfile(), history: [], key: 'largo' })).toEqual([]);
+  });
+});
+
+describe('la evolución y los nombres de los WODs', () => {
+  it('12 puntos mensuales por categoría, de hace 11 meses a hoy, con huecos donde no había datos', () => {
+    const profile = makeProfile({ onboardedAt: undefined, levelLog: [res(200, 'pesado', 'a', 400), res(20, 'pesado', 'a', 400)] });
+    const series = levelSeries({ profile, history: [], today: TODAY });
+    expect(series.pesado).toHaveLength(SERIES_MONTHS);
+    expect(series.pesado[SERIES_MONTHS - 1]).not.toBeNull();
+    expect(series.pesado[0]).toBeNull(); // hace 11 meses aún no había nada
+    expect(series.largo.every((v) => v === null)).toBe(true);
+  });
+
+  it('el nombre de un WOD sale de su clave', () => {
+    expect(wodTitleOfKey('benchmark:fran')).toBe('Fran');
+    expect(wodTitleOfKey('gen:For Time (3 rondas)|thrusterx10,box-jumpx12')).toContain('Thruster');
+    expect(wodTitleOfKey('gen:For Time (3 rondas)|thrusterx10,box-jumpx12')).toContain('Box');
+    expect(wodTitleOfKey('gen:For Time (3 rondas)|thrusterx10,box-jumpx12')).toContain('For Time (3 rondas)');
+    expect(wodTitleOfKey('algo raro')).toBe('algo raro');
   });
 });
 

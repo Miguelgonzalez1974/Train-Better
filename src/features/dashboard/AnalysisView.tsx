@@ -21,6 +21,7 @@ import { Term } from '../shell/Term';
 import { ResponseProfileCard } from './ResponseProfileCard';
 import { PerfilAtleta } from '../objetivos/PerfilAtleta';
 import { computeAthleteDiagnosis } from '../../engine/athleteDiagnosis';
+import { computeLevel } from '../../engine/levelCategories';
 import type { MonthlyStats } from './stats';
 
 export type AnalysisTab = 'coach' | 'perfil';
@@ -177,7 +178,12 @@ export function AnalysisView({
     ledger: { resolved: ledger.resolved, hits: ledger.hits, rows: ledger.rows },
     openGoalMovementIds: openGoalMovements(profile, todayIso),
   });
-  const rex = tab === 'perfil' ? { lead: 'Tu perfil.', tone: 'neutral' as const, text: diagnosis.headline, proposal: rexBase.proposal } : rexBase;
+  const levelNow = useMemo(() => computeLevel({ profile, history }), [profile, history]);
+  const levelText =
+    levelNow.overall !== null
+      ? `Tu nivel es ${levelNow.overall}${levelNow.delta ? ` (${levelNow.delta > 0 ? '+' : '−'}${Math.abs(levelNow.delta)} en 3 meses)` : ''}, con ${levelNow.filled} de ${levelNow.categories.length} categorías con datos. Toca una para ver sus últimos entrenos.`
+      : `Tienes ${levelNow.filled} de ${levelNow.categories.length} categorías con datos. Se van rellenando con tus marcas de barra y tus WODs en Rx.`;
+  const rex = tab === 'perfil' ? { lead: 'Tu nivel.', tone: 'neutral' as const, text: levelText, proposal: rexBase.proposal } : rexBase;
 
   const weeks = Math.floor(response.dataWeeks);
 
