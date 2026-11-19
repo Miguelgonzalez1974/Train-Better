@@ -24,6 +24,7 @@ import { RpeCheckIn } from './RpeCheckIn';
 import { MovementFigureButton } from './MovementFigure';
 import { animationFor } from '../../engine/movementAnimations';
 import { clockBus, type ClockScope } from '../../lib/clockState';
+import { WodCategoryPill } from './WodCategoryPill';
 
 export { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
 
@@ -399,6 +400,7 @@ function BenchmarkWodCard({
 
   return (
     <div className="py-0.5">
+      <WodCategoryPill entries={[entry]} part={entry.wodPart ?? null} />
       <p className={NAME_HEADLINE}>{wod.name}</p>
       <p className="text-sm text-neutral-300">{localizeWodText(wod.format)}</p>
       <div className="mt-2 flex flex-col divide-y divide-white/5 border-y border-white/5">
@@ -495,6 +497,7 @@ function CustomWodCard({
   return (
     <div className="py-0.5">
       {part ? <WodPartLabel part={part} /> : null}
+      <WodCategoryPill entries={entries} part={part} />
       {title && <p className={`mb-1 ${NAME_HEADLINE}`}>"{title}"</p>}
       {format && <FormatBadge format={format} />}
       {/* Pizarra: un movimiento por línea, reps y carga alineados a la derecha con cifra tabular. */}

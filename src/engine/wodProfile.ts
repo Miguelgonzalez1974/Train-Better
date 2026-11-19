@@ -117,7 +117,7 @@ export function modelMinutes(s: WodStructure, m: TimeModel = DEFAULT_TIME_MODEL)
 // ---------------------------------------------------------------------------------------------
 
 /** Carga Rx típica (kg, masculino) por repetición cuando el texto no la dice: barra a 61/43, mancuerna 22, kettlebell 24, balón 9. */
-const TYPICAL_KG: Record<string, number> = {
+export const TYPICAL_KG: Record<string, number> = {
   thruster: 43, 'shoulder-to-overhead': 43, 'push-press': 43, 'push-jerk': 43, 'front-squat': 61, 'back-squat': 70, 'overhead-squat': 43,
   deadlift: 102, 'sumo-deadlift-high-pull': 34, 'power-clean': 61, 'hang-power-clean': 61, 'hang-clean': 61, clean: 61, 'hang-squat-clean': 61,
   snatch: 43, 'power-snatch': 43, 'hang-power-snatch': 43, 'hang-snatch': 43, 'hang-squat-snatch': 43, 'clean-and-jerk': 61, 'power-clean-and-jerk': 61,

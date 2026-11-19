@@ -129,6 +129,7 @@ import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './w
 import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { timeLimitFor, weekdayPlural } from '../../engine/rexNotes';
+import { classifyWod } from '../../engine/wodCategory';
 import { Modal } from '../shell/Modal';
 
 
@@ -958,6 +959,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // El historial solo recoge lo que se hizo: las partes marcadas como no hechas se quitan (y se anotan en `skipped`).
     const notDone = skippedParts(skips);
     const wodSplits = splitRecordsToday();
+    // A qué categoría de «Tu nivel» contó cada parte del WOD que se hizo (con tus marcas de hoy).
+    const wodCategories: NonNullable<SessionHistoryEntry['wodCategories']> = {};
+    for (const part of wodParts) {
+      if (skips[part === 1 ? 'wod1' : 'wod2']) continue;
+      const verdict = classifyWod(session, part, { prs: profile.prs });
+      if (verdict.category) wodCategories[part] = verdict.category;
+    }
     athleteRepository.appendHistoryEntry({
       ...toHistoryEntry(
         applySkips(session, skips),
@@ -971,6 +979,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       ),
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
       ...(wodSplits.length > 0 ? { wodSplits } : {}),
+      ...(Object.keys(wodCategories).length > 0 ? { wodCategories } : {}),
     });
     recordProgression();
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con

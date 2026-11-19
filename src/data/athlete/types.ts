@@ -1046,6 +1046,11 @@ export interface SessionHistoryEntry {
    */
   wodBlocks?: SessionBlockResult[];
   /**
+   * La categoría de «Tu nivel» a la que contó cada parte del WOD de ese día (ver `engine/wodCategory.ts`); una parte sin categoría clara no aparece. Se guarda al
+   * cerrar la sesión con tus marcas de entonces, para no tener que volver a clasificar con marcas que ya cambiaron. Ausente en entradas anteriores.
+   */
+  wodCategories?: Partial<Record<1 | 2, 'velocidad' | 'resistencia' | 'peso-corporal' | 'pesado' | 'ligero' | 'largo'>>;
+  /**
    * Punto medio de la banda BASE (sin calibrar) del objetivo del WOD de ese dia, con su formato y
    * unidad — junto a `wodResult` permite medir cuanto rinde el atleta respecto a la estimacion del
    * motor y calibrarla (ver `getWodPerformance`). Ausente en benchmarks, objetivos cualitativos y
