@@ -375,6 +375,8 @@ export interface AthleteProfile {
   wodLog?: WodLogEntry[];
   /** Los parciales de los WODs cronometrados por tramos, para el modo fantasma. Llega más atrás que el historial (30 sesiones). Una entrada por fecha y parte. */
   wodGhosts?: WodSplitsRecord[];
+  /** Los resultados de WOD (en Rx) que cuentan para cada categoría de «Tu nivel», de más atrás que el historial. Ver `engine/levelCategories.ts`. */
+  levelLog?: LevelResult[];
   /**
    * Días (ISO) que el atleta marcó como descanso a propósito ("Hoy descanso"). Sin marca, un día previsto sin registrar se
    * pinta "no registrado" y cuenta como fallo del plan; con ella es un descanso elegido: se pinta como descanso y no resta.
@@ -929,6 +931,23 @@ export interface WodScalingEntry {
   substituteId?: string;
 }
 
+/**
+ * Un resultado de WOD que cuenta para «Tu nivel» (`AthleteProfile.levelLog`): la categoría a la que contó, de qué WOD era, lo que hiciste (en segundos, rondas, repeticiones o
+ * kilos según cómo se puntúa) y, si lo había, lo que el motor estimaba (la banda base). Registro largo: el historial solo guarda las últimas 30 sesiones. Solo cuentan los hechos en Rx.
+ * Ver `engine/levelCategories.ts`.
+ */
+export interface LevelResult {
+  date: string;
+  part: 1 | 2;
+  category: 'velocidad' | 'resistencia' | 'peso-corporal' | 'pesado' | 'ligero' | 'largo';
+  /** Qué WOD es (la misma clave del modo fantasma): con ella se comparan las veces que lo repites. */
+  key: string;
+  scoreType: 'time' | 'reps' | 'load' | 'rounds+reps';
+  value: number;
+  /** Lo que el motor estimaba para ese WOD (misma unidad que `value`), si lo sabía. */
+  ref?: number;
+}
+
 /** Una línea del registro del WOD (`AthleteProfile.wodLog`). */
 export interface WodLogEntry {
   date: string;
@@ -1050,6 +1069,8 @@ export interface SessionHistoryEntry {
    * cerrar la sesión con tus marcas de entonces, para no tener que volver a clasificar con marcas que ya cambiaron. Ausente en entradas anteriores.
    */
   wodCategories?: Partial<Record<1 | 2, 'velocidad' | 'resistencia' | 'peso-corporal' | 'pesado' | 'ligero' | 'largo'>>;
+  /** Los resultados de este día que cuentan para «Tu nivel» (van también al registro largo `levelLog` del perfil al guardar la entrada). */
+  levelResults?: LevelResult[];
   /**
    * Punto medio de la banda BASE (sin calibrar) del objetivo del WOD de ese dia, con su formato y
    * unidad — junto a `wodResult` permite medir cuanto rinde el atleta respecto a la estimacion del

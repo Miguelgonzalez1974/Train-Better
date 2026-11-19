@@ -130,6 +130,7 @@ import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { timeLimitFor, weekdayPlural } from '../../engine/rexNotes';
 import { classifyWod } from '../../engine/wodCategory';
+import { levelResultsOfEntry } from '../../engine/levelCategories';
 import { Modal } from '../shell/Modal';
 
 
@@ -966,7 +967,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       const verdict = classifyWod(session, part, { prs: profile.prs });
       if (verdict.category) wodCategories[part] = verdict.category;
     }
-    athleteRepository.appendHistoryEntry({
+    const builtEntry: SessionHistoryEntry = {
       ...toHistoryEntry(
         applySkips(session, skips),
         rxOrScaled,
@@ -980,7 +981,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
       ...(wodSplits.length > 0 ? { wodSplits } : {}),
       ...(Object.keys(wodCategories).length > 0 ? { wodCategories } : {}),
-    });
+    };
+    // Los resultados de WOD en Rx que cuentan para «Tu nivel» (van también al registro largo del perfil).
+    const levelResults = levelResultsOfEntry(builtEntry, profile.prs);
+    athleteRepository.appendHistoryEntry({ ...builtEntry, ...(levelResults.length > 0 ? { levelResults } : {}) });
     recordProgression();
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
     // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes

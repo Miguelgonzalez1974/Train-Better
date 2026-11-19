@@ -448,6 +448,8 @@ export function mergeProfile(
     wodLog: mergeByKey(remote.wodLog, local.wodLog, (e) => e.date, (e) => e.date, 400),
     // Parciales del WOD (modo fantasma): una entrada por fecha y parte, gana la local.
     wodGhosts: mergeByKey(remote.wodGhosts, local.wodGhosts, (e) => `${e.date}|${e.part}`, (e) => e.date, 120),
+    // Resultados de WOD para «Tu nivel»: uno por fecha y parte, gana el local.
+    levelLog: remote.levelLog || local.levelLog ? mergeByKey(remote.levelLog, local.levelLog, (e) => `${e.date}|${e.part}`, (e) => e.date, 400) : undefined,
     // Descansos elegidos: union, pero quitar la marca ("Deshacer") debe sobrevivir a la sincronizacion como cualquier borrado.
     restDates: dropDeleted(mergeStringSet(remote.restDates, local.restDates, REST_DATES_LIMIT), (d) => d, base?.restDates, remote.restDates, local.restDates),
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
