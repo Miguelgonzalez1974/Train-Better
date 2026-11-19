@@ -250,6 +250,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [focusMode, setFocusMode] = useState(false);
   /** Entreno en tarjetas (a prueba): convive con el modo enfocado de siempre. */
   const [cardsMode, setCardsMode] = useState(false);
+  /** El atleta tocó Rx/escalado o la dureza en la tarjeta del WOD: al abrir el cierre no se reinician. */
+  const wodDetailFromCards = useRef(false);
   const [showDiary, setShowDiary] = useState(false);
   const [showSeasonMap, setShowSeasonMap] = useState(false);
   const [showComplexes, setShowComplexes] = useState(false);
@@ -492,9 +494,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   useEffect(() => {
     if (!showCompletePanel) return;
     setDurationMin(estimatedMin);
-    setWodScaling([]);
-    setWodFeel(undefined);
-    setRxOrScaled('rx');
+    // Lo que ya anotaste en la tarjeta del WOD (entreno en tarjetas) llega al cierre tal cual; si no, arranca en Rx.
+    if (!wodDetailFromCards.current) {
+      setWodScaling([]);
+      setWodFeel(undefined);
+      setRxOrScaled('rx');
+    }
+    wodDetailFromCards.current = false;
     // Si paraste el reloj de entreno en el WOD, su tiempo o sus rondas llegan ya rellenos (editables). Solo se toca un
     // formulario que sigue vacío, y solo el día de hoy.
     if (!session || session.date !== toLocalIsoDate(new Date())) return;
@@ -1496,6 +1502,30 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           complexPool={complexPool}
           complexWeek={complexWeek}
           onExit={() => setCardsMode(false)}
+          onPain={() => openSupport('p_zone')}
+          wod={
+            wodMovements.length > 0
+              ? {
+                  movements: wodMovements,
+                  rxOrScaled,
+                  onRxOrScaled: (v) => {
+                    wodDetailFromCards.current = true;
+                    setRxOrScaled(v);
+                  },
+                  scaling: wodScaling,
+                  onScaling: (next) => {
+                    wodDetailFromCards.current = true;
+                    setWodScaling(next);
+                    if (next.length > 0) setRxOrScaled('scaled');
+                  },
+                  feel: wodFeel,
+                  onFeel: (v) => {
+                    wodDetailFromCards.current = true;
+                    setWodFeel(v);
+                  },
+                }
+              : undefined
+          }
           onFinish={() => {
             setCardsMode(false);
             setTestedLoadKg(testDayBlock?.loadKg ?? 0);

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Check, Timer, Minus, Plus, ChartSpline, ArrowRight, Undo2, Flag } from 'lucide-react';
+import { X, Check, Timer, Minus, Plus, ChartSpline, ArrowRight, Undo2, Flag, HeartPulse, History } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { SessionBlockResult, SetFeel, SetQuality } from '../../data/athlete/types';
+import type { RxOrScaled, SessionBlockResult, SetFeel, SetQuality, WodFeel, WodScalingEntry } from '../../data/athlete/types';
+import { scalingAlternatives } from '../../engine/wodMovements';
+import type { WodScalingMovement } from './WodScalingField';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { complexLogId } from '../../data/complexes';
 import { loadUnitLabel } from '../../data/movements/loadUnits';
@@ -103,6 +105,170 @@ function Cta({ onClick, children, testId, tone }: { onClick: () => void; childre
 
 const round4 = (v: number) => Math.max(0, Math.round(v * 4) / 4);
 
+/** Lo del WOD que se anota en el cierre (Rx/escalado por movimiento y dureza), para hacerlo desde la propia tarjeta: es el mismo estado del padre. */
+export interface TrainCardsWod {
+  movements: WodScalingMovement[];
+  rxOrScaled: RxOrScaled;
+  onRxOrScaled: (value: RxOrScaled) => void;
+  scaling: WodScalingEntry[];
+  onScaling: (next: WodScalingEntry[]) => void;
+  feel: WodFeel | undefined;
+  onFeel: (value: WodFeel | undefined) => void;
+}
+
+export interface TrainCardsProps extends FocusModeProps {
+  /** Abre «¿Algo ha pasado?» (me duele algo) encima de las tarjetas. */
+  onPain?: () => void;
+  wod?: TrainCardsWod;
+}
+
+type RowKind = 'rx' | 'peso' | 'movimiento';
+
+/** Selector de varias opciones en una píldora, con el color de la tarjeta. */
+function Seg<T extends string>({ options, value, onChange, label, accent, full }: { options: { value: T; label: string }[]; value: T | undefined; onChange: (v: T) => void; label: string; accent: string; full?: boolean }) {
+  return (
+    <div className={`flex overflow-hidden rounded-xl ${full ? 'w-full [&>button]:flex-1' : ''}`} role="radiogroup" aria-label={label} style={{ background: 'rgba(255,255,255,0.08)' }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.value)}
+            className="whitespace-nowrap px-3 py-2 text-xs font-bold transition-colors"
+            style={on ? { background: `${accent}30`, color: accent } : { color: 'rgba(255,255,255,0.55)' }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** ¿Rx o escalado? por movimiento y cómo de duro fue, dentro de la tarjeta del WOD (alimenta «Tu WOD por zonas», igual que el cierre). */
+function WodScaleBox({ wod, part, accent }: { wod: TrainCardsWod; part: 1 | 2; accent: string }) {
+  const movements = wod.movements.filter((m) => m.part === part);
+  if (movements.length === 0) return null;
+  const entryOf = (m: WodScalingMovement) => wod.scaling.find((e) => e.movementId === m.movementId && (e.part ?? 1) === m.part);
+  const setRow = (m: WodScalingMovement, kind: RowKind) => {
+    const rest = wod.scaling.filter((e) => !(e.movementId === m.movementId && (e.part ?? 1) === m.part));
+    if (kind === 'rx') return wod.onScaling(rest);
+    wod.onScaling([...rest, { movementId: m.movementId, kind, part: m.part, ...(kind === 'peso' && m.rxKg ? { rxKg: m.rxKg } : {}) }]);
+  };
+  const patchRow = (m: WodScalingMovement, patch: Partial<WodScalingEntry>) =>
+    wod.onScaling(wod.scaling.map((e) => (e.movementId === m.movementId && (e.part ?? 1) === m.part ? { ...e, ...patch } : e)));
+  const scaled = wod.rxOrScaled === 'scaled';
+  const field = 'rounded-lg border px-2 py-1 text-sm text-white';
+  const fieldStyle = { background: 'rgba(0,0,0,0.35)', borderColor: 'rgba(255,255,255,0.18)' };
+  return (
+    <div className="mt-4 flex flex-col gap-3 rounded-2xl bg-white/[0.06] p-3.5" data-testid="cards-wod-scale">
+      <div className="flex flex-col gap-1.5">
+        <p className="text-sm font-bold text-white">¿Rx o escalado?</p>
+        <Seg
+          full
+          label="Rx o escalado"
+          accent={accent}
+          value={scaled ? 'scaled' : 'rx'}
+          options={[
+            { value: 'rx', label: 'Rx' },
+            { value: 'scaled', label: 'Escalo algo' },
+          ]}
+          onChange={(v) => {
+            wod.onRxOrScaled(v);
+            if (v === 'rx') wod.onScaling([]);
+          }}
+        />
+      </div>
+      {scaled && (
+        <div className="flex flex-col divide-y divide-white/10">
+          {movements.map((m) => {
+            const mv = getMovementById(m.movementId);
+            if (!mv) return null;
+            const e = entryOf(m);
+            const kind: RowKind = e ? e.kind : 'rx';
+            const alternatives = scalingAlternatives(m.movementId);
+            return (
+              <div key={`${m.part}|${m.movementId}`} className="flex flex-col gap-2 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-white">
+                    {mv.name}
+                    {m.rxKg ? <span className="ml-1.5 text-[11px] font-normal text-white/50">Rx {m.rxKg} kg</span> : null}
+                  </p>
+                  <Seg<RowKind>
+                    full
+                    label={`${mv.name}: qué escalaste`}
+                    accent={accent}
+                    value={kind}
+                    options={[
+                      { value: 'rx', label: 'Rx' },
+                      { value: 'peso', label: 'Peso' },
+                      { value: 'movimiento', label: 'Mov.' },
+                    ]}
+                    onChange={(v) => setRow(m, v)}
+                  />
+                </div>
+                {kind === 'peso' && (
+                  <label className="flex items-center gap-2 text-xs text-white/55">
+                    Kilos que usaste
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step={0.5}
+                      value={e?.loadKg ?? ''}
+                      onChange={(ev) => patchRow(m, { loadKg: ev.target.value ? Number(ev.target.value) : undefined })}
+                      className={`w-20 text-center ${field}`}
+                      style={fieldStyle}
+                      aria-label={`Kilos que usaste en ${mv.name}`}
+                    />
+                    <span>kg (opcional)</span>
+                  </label>
+                )}
+                {kind === 'movimiento' && alternatives.length > 0 && (
+                  <label className="flex items-center gap-2 text-xs text-white/55">
+                    Lo cambié por
+                    <select
+                      value={e?.substituteId ?? ''}
+                      onChange={(ev) => patchRow(m, { substituteId: ev.target.value || undefined })}
+                      className={field}
+                      style={fieldStyle}
+                      aria-label={`Por qué cambiaste ${mv.name}`}
+                    >
+                      <option value="">Prefiero no decirlo</option>
+                      {alternatives.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-sm font-bold text-white">¿Cómo de duro fue?</p>
+        <Seg<WodFeel>
+          full
+          label="Dureza del WOD"
+          accent={accent}
+          value={wod.feel}
+          options={[
+            { value: 'facil', label: 'Fácil' },
+            { value: 'justo', label: 'Justo' },
+            { value: 'duro', label: 'Duro' },
+          ]}
+          onChange={(v) => wod.onFeel(wod.feel === v ? undefined : v)}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function TrainCards({
   session,
   setFeedbackByIndex,
@@ -120,7 +286,9 @@ export function TrainCards({
   complexWeek,
   onExit,
   onFinish,
-}: FocusModeProps) {
+  onPain,
+  wod,
+}: TrainCardsProps) {
   const swapCtx = useMemo(() => ({ prs: progress.prs, variantPrs: progress.variantPrs, painFlags, todayIso: session.date }), [progress.prs, progress.variantPrs, painFlags, session.date]);
   const visible = useVisibleViewport();
 
@@ -160,6 +328,8 @@ export function TrainCards({
   const [progressTarget, setProgressTarget] = useState<{ movementId: string; targetKg: number } | null>(null);
   /** Ejercicios cuyas series sin marcar ya se resolvieron en el cierre (las hice / no salieron / las salté). */
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
+  /** «Lo anoto después»: se entrena sin pantalla y se rellena al acabar, con calma. Sin descansos ni avisos; todo se puede marcar o cambiar. */
+  const [later, setLater] = useState(false);
   /** El descanso en curso (uno a la vez): hora de fin con reloj de pared, para que siga contando con la app en segundo plano. */
   const [rest, setRest] = useState<{ key: string; movementId: string; next: number; endsAt: number; total: number; notified: boolean } | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -493,7 +663,7 @@ export function TrainCards({
       if (nextN !== undefined) {
         setSelected((p) => ({ ...p, [card.key]: nextN }));
         // Solo hay descanso si el entreno lo prescribe (y queda alguna serie).
-        if (restSecs) {
+        if (restSecs && !later) {
           const t0 = Date.now();
           setNow(t0);
           setRest({ key: card.key, movementId: mid, next: nextN, endsAt: t0 + restSecs * 1000, total: restSecs, notified: false });
@@ -699,9 +869,24 @@ export function TrainCards({
             </Cta>
           )}
           {loggable && !allDone && (
-            <button onClick={() => goTo(i + 1)} className="self-center text-xs font-semibold text-white/50 underline decoration-dotted" data-testid="cards-skip">
-              Pasar al siguiente
-            </button>
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={() => {
+                  // Todo como estaba previsto (con los pesos que hayas cambiado): para anotar de golpe al acabar.
+                  Array.from({ length: rowCount }, (_, s) => s + 1)
+                    .filter((n) => !setIsDone(mid, n))
+                    .forEach((n) => onLogWorkSet(mid, blk, n, kgFor(mid, n, plannedKg(n)), repsOf(n)));
+                  setSelected((p) => ({ ...p, [card.key]: rowCount }));
+                }}
+                className="text-xs font-semibold text-white/60 underline decoration-dotted"
+                data-testid="cards-all-planned"
+              >
+                Todas como estaban previstas
+              </button>
+              <button onClick={() => goTo(i + 1)} className="text-xs font-semibold text-white/50 underline decoration-dotted" data-testid="cards-skip">
+                Pasar al siguiente
+              </button>
+            </div>
           )}
         </div>
       </>
@@ -713,8 +898,8 @@ export function TrainCards({
     const entries = card.entries;
     const first = entries[0].entry;
     const isBench = first.movementId.startsWith('benchmark:');
-    const wod = isBench ? benchmarkWorkouts.find((w) => w.id === first.movementId.replace('benchmark:', '')) : undefined;
-    const format = isBench ? ((first.format || wod?.format) as string | undefined) : first.format;
+    const benchWod = isBench ? benchmarkWorkouts.find((w) => w.id === first.movementId.replace('benchmark:', '')) : undefined;
+    const format = isBench ? ((first.format || benchWod?.format) as string | undefined) : first.format;
     return (
       <>
         {header(theme, card.part ? `WOD · parte ${card.part} de 2` : 'WOD', 'a cronómetro')}
@@ -725,11 +910,11 @@ export function TrainCards({
             </p>
           )}
           <WodCategoryPill entries={entries.map((e) => e.entry)} part={card.part ?? undefined} />
-          <h2 className="text-[28px] font-extrabold leading-[1.1] text-white">{isBench ? wod?.name ?? 'Benchmark' : first.title ?? 'WOD'}</h2>
+          <h2 className="text-[28px] font-extrabold leading-[1.1] text-white">{isBench ? benchWod?.name ?? 'Benchmark' : first.title ?? 'WOD'}</h2>
           {format && <p className="mt-1 text-lg font-bold leading-snug" style={{ color: theme.accent }}>{localizeWodText(format)}</p>}
           <ul className="mt-3 flex flex-col divide-y divide-white/10">
-            {isBench && wod
-              ? wod.movements.map((m) => {
+            {isBench && benchWod
+              ? benchWod.movements.map((m) => {
                   const swapped = first.benchmarkSwaps?.[m];
                   const kgv = first.benchmarkLoads?.[m];
                   const setSwap = (toId: string | undefined) => {
@@ -784,6 +969,7 @@ export function TrainCards({
               <NoteLine text={first.notes} />
             </div>
           )}
+          {wod && <WodScaleBox wod={wod} part={card.part ?? 1} accent={theme.accent} />}
         </div>
         <div className="flex flex-col gap-2 px-5 pb-5 pt-1">
           <button
@@ -931,6 +1117,25 @@ export function TrainCards({
             </button>
           ))}
         </div>
+        {onPain && (
+          <button onClick={onPain} aria-label="Me duele algo" title="Me duele algo" data-testid="cards-pain" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20">
+            <HeartPulse size={19} strokeWidth={2.4} />
+          </button>
+        )}
+        <button
+          onClick={() => {
+            setLater((v) => !v);
+            setRest(null);
+          }}
+          aria-label="Lo anoto después"
+          aria-pressed={later}
+          title="Lo anoto después: sin descansos ni avisos"
+          data-testid="cards-later"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full active:bg-white/20"
+          style={later ? { background: '#fff', color: '#000' } : { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.8)' }}
+        >
+          <History size={19} strokeWidth={2.4} />
+        </button>
         <button
           onClick={() => clockBus.open(cards[cur]?.kind === 'wod' ? 'workout' : 'rest')}
           aria-label="Abrir el crono"
@@ -939,6 +1144,11 @@ export function TrainCards({
           <Timer size={19} strokeWidth={2.4} />
         </button>
       </div>
+      {later && (
+        <p className="mx-4 mt-1 rounded-xl bg-white/10 px-3 py-1.5 text-center text-xs font-semibold text-white/80" data-testid="cards-later-banner">
+          Lo anotas después: sin descansos. Marca las series cuando acabes o toca «Todas como estaban previstas».
+        </p>
+      )}
 
       <div
         ref={trackRef}
