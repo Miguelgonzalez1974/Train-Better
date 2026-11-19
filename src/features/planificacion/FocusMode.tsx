@@ -31,7 +31,7 @@ export interface FocusSetFeedback {
   estimated1rm?: number;
 }
 
-interface FocusModeProps {
+export interface FocusModeProps {
   session: DailySession;
   setFeedbackByIndex: Map<number, FocusSetFeedback>;
   onRateSet: (index: number, rpe: number) => void;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -115,6 +115,7 @@ import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companion
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
+import { TrainCards } from './TrainCards';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
@@ -247,6 +248,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  /** Entreno en tarjetas (a prueba): convive con el modo enfocado de siempre. */
+  const [cardsMode, setCardsMode] = useState(false);
   const [showDiary, setShowDiary] = useState(false);
   const [showSeasonMap, setShowSeasonMap] = useState(false);
   const [showComplexes, setShowComplexes] = useState(false);
@@ -689,6 +692,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
     setFocusMode(false);
+    setCardsMode(false);
     setEditMode(false);
     setReturnRampDismissed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1315,6 +1319,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           {
             title: 'Cambiar la sesión de hoy',
             items: [
+              { id: 'entrenar-tarjetas', label: 'Entrenar en tarjetas', hint: 'a prueba', icon: GalleryHorizontalEnd, onClick: () => setCardsMode(true) },
               ...(hasWodBlock ? [{ id: 'otro-wod', label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(hasWodBlock ? [{ id: 'wod-fantasma', label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
               ...(canHarder ? [{ id: 'mas-dura', label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
@@ -1470,6 +1475,31 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             setTestedLoadKg(testDayBlock?.loadKg ?? 0);
             setShowCompletePanel(true);
             // Al acabar el último bloque, el cierre ya está a la vista: se baja a él en vez de dejarte en lo alto de la página.
+            window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+          }}
+        />
+      )}
+      {cardsMode && session && !session.isRestDay && (
+        <TrainCards
+          session={session}
+          setFeedbackByIndex={setFeedbackByIndex}
+          onRateSet={handleRateSet}
+          todayWorkLog={todayWorkLog}
+          progress={movementProgress}
+          onLogWorkSet={handleLogWorkSet}
+          onSetQuality={handleSetQuality}
+          onClearWorkSet={handleClearWorkSet}
+          canRaise={session.dayLight?.color !== 'ambar' && activePainFlags.length === 0}
+          onFeel={handleFeelSet}
+          painFlags={activePainFlags}
+          onSwap={handleUpdateEntry}
+          complexPool={complexPool}
+          complexWeek={complexWeek}
+          onExit={() => setCardsMode(false)}
+          onFinish={() => {
+            setCardsMode(false);
+            setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+            setShowCompletePanel(true);
             window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
           }}
         />
@@ -1635,7 +1665,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {/* Rex, en la esquina, cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y
             avisa de lo que el coach tiene para ti; sus botones (Empezar sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
             Las casillas con todo el detalle quedan detrás de «Por qué». */}
-        {showRexBar && !focusMode && (
+        {showRexBar && !focusMode && !cardsMode && (
           <RexCorner
             speak
             screen="planificacion"
