@@ -1,5 +1,6 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import { Brain, ArrowLeftRight, Link2, History, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, Timer, Trophy } from 'lucide-react';
+import { Brain, ArrowLeftRight, Link2, History, Hourglass, Info, ChevronDown, ChevronRight, Plus, Trash2, Search, Timer, Trophy } from 'lucide-react';
+import { prescribedRestSeconds, restLabel } from '../../engine/restPrescription';
 import type { Block } from '../../data/movements/types';
 import {
   getMovementById,
@@ -185,6 +186,19 @@ function LastTimeHint({ movementId, block, progress }: { movementId: string; blo
         {last.reps > 0 ? ` × ${last.reps}` : ''}
       </span>{' '}
       · {fmtDay(last.date)}
+    </p>
+  );
+}
+
+/** El descanso que prescribe el entreno entre las series (solo fuerza y oly con más de una serie): se ve antes de entrenar y es el que usa el entreno en tarjetas. */
+function RestLine({ entry }: { entry: SessionBlockResult }) {
+  const seconds = prescribedRestSeconds(entry);
+  const series = entry.setPlan && entry.setPlan.length >= 2 ? entry.setPlan.length : (entry.sets ?? 0);
+  if (seconds === null || series < 2) return null;
+  return (
+    <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-neutral-500" data-testid="rest-line">
+      <Hourglass size={11} strokeWidth={2.25} aria-hidden="true" />
+      Descanso {restLabel(seconds)} entre series
     </p>
   );
 }
@@ -776,6 +790,7 @@ function ComplexCard({
                     </div>
                   )}
                   <div className="ml-7">
+                    <RestLine entry={entry} />
                     {!entry.complex && <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />}
                   </div>
 
@@ -1052,6 +1067,7 @@ function EntryRow({
         </div>
       )}
       {entry.setPlan && entry.setPlan.length >= 2 && <SetPlanLine plan={entry.setPlan} waveSize={entry.waveSize} notation={entry.complex ? entry.reps : undefined} />}
+      <RestLine entry={entry} />
       {!entry.complex && <LastTimeHint movementId={entry.movementId} block={entry.block} progress={progress} />}
       {feedback && onRateSet && index !== undefined && (
         <div className="mt-2">
