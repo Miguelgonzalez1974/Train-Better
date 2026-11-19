@@ -343,6 +343,82 @@ export function computeLevel(input: { profile: AthleteProfile; history: SessionH
 }
 
 // ---------------------------------------------------------------------------------------------
+// Qué categoría de WOD le falta al atleta (lo que el coach intenta completar)
+// ---------------------------------------------------------------------------------------------
+
+/** Una categoría vista hace menos de esto no se vuelve a pedir (ni se pide otra vez la que ya salió esta semana). */
+export const NEED_PAUSE_DAYS = 7;
+/** Una categoría fiable sin resultados desde hace más de esto vuelve a faltar (se desgasta y conviene refrescarla). */
+export const STALE_DAYS = 56;
+
+export interface WodNeed {
+  category: WodCategory;
+  /** completar: tiene un solo resultado y falta el segundo; estrenar: aún ninguno; repetir: lleva mucho sin resultados. */
+  kind: 'completar' | 'estrenar' | 'repetir';
+  /** Id de catálogo del WOD que ya hiciste en esa categoría: repetirlo da el segundo resultado comparable. */
+  repeatCatalogId?: string;
+  /** Una frase para la nota del WOD y para Rex. */
+  reason: string;
+}
+
+const WOD_CATEGORIES: WodCategory[] = ['velocidad', 'resistencia', 'peso-corporal', 'pesado', 'ligero', 'largo'];
+
+/** La clave de un resultado como id de catálogo, si lo es (para volver a ponerlo). */
+function catalogIdOfKey(key: string): string | undefined {
+  if (key.startsWith('benchmark:')) return `bm:${key.slice('benchmark:'.length)}`;
+  return key.startsWith('bm:') || key.startsWith('lib:') ? key : undefined;
+}
+
+/** La categoría de cada parte de una entrada del historial, con la guardada o clasificando de nuevo. */
+function categoryOfEntryPart(e: SessionHistoryEntry, part: 1 | 2, prs: Partial<PersonalRecords>): LevelResult['category'] | null {
+  const stored = e.wodCategories?.[part];
+  if (stored) return stored;
+  const blocks = blocksOfEntry(e, part);
+  return blocks ? classifyWodBlocks(blocks, { prs }, part).category : null;
+}
+
+/**
+ * La categoría de WOD que más conviene completar hoy, o null: primero la que tiene un solo resultado (el segundo la hace fiable), luego la que no tiene ninguno y, por último,
+ * la que lleva más de `STALE_DAYS` sin resultados. No se pide una categoría que ya salió en los últimos `NEED_PAUSE_DAYS` días, y mientras no tengas ningún resultado de WOD
+ * (empezando) no se empuja nada: el coach programa como siempre. Solo sugiere: el coach lo usa como un pequeño empujón al elegir el WOD (`engine/wodSelection.ts`).
+ */
+export function wodCategoryNeed(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string): WodNeed | null {
+  const results = allLevelResults(profile, history);
+  if (results.length === 0) return null;
+  const since = addDays(todayIso, -NEED_PAUSE_DAYS);
+  const served = new Set<string>();
+  for (const e of history) {
+    if (e.date < since || e.date > todayIso) continue;
+    for (const part of [1, 2] as const) {
+      const c = (part === 1 ? e.wodResult : e.wodResult2) ? categoryOfEntryPart(e, part, profile.prs) : null;
+      if (c) served.add(c);
+    }
+  }
+  const mine = (c: WodCategory) => results.filter((r) => r.category === c && daysBetween(r.date, todayIso) <= WINDOW_DAYS).sort((a, b) => b.date.localeCompare(a.date));
+  const label = (c: WodCategory) => WOD_CATEGORY_LABEL[c].toLowerCase();
+  const open = WOD_CATEGORIES.filter((c) => !served.has(c));
+  const one = open.find((c) => mine(c).length === 1);
+  if (one) {
+    const only = mine(one)[0];
+    const repeat = catalogIdOfKey(only.key);
+    return {
+      category: one,
+      kind: 'completar',
+      ...(repeat ? { repeatCatalogId: repeat } : {}),
+      reason: `Solo tienes un resultado de ${label(one)}: otro WOD de ese tipo hace fiable tu nivel.`,
+    };
+  }
+  const none = open.find((c) => mine(c).length === 0);
+  if (none) return { category: none, kind: 'estrenar', reason: `Aún no tienes ningún WOD de ${label(none)} en tu nivel: hoy toca uno.` };
+  const stale = open
+    .map((c) => ({ c, last: mine(c)[0]?.date }))
+    .filter((x): x is { c: WodCategory; last: string } => Boolean(x.last) && daysBetween(x.last!, todayIso) > STALE_DAYS)
+    .sort((a, b) => a.last.localeCompare(b.last))[0];
+  if (stale) return { category: stale.c, kind: 'repetir', reason: `Llevas ${Math.round(daysBetween(stale.last, todayIso) / 7)} semanas sin un WOD de ${label(stale.c)}: se te desgasta en tu nivel.` };
+  return null;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Evolución y últimos entrenos de cada categoría
 // ---------------------------------------------------------------------------------------------
 

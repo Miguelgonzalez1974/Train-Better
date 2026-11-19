@@ -160,6 +160,22 @@ export function classifyWodBlocks(blocks: SessionBlockResult[], ctx: WodCategory
   return { category: null, reason: 'Mezcla de cargas y movimientos: no encaja en una sola categoría.', minutes };
 }
 
+const catalogCategoryCache = new Map<string, WodCategory | null>();
+const prsSignature = (prs: Partial<PersonalRecords> | undefined) => Object.values(prs ?? {}).map((v) => Math.round((v ?? 0) / 5)).join('.');
+
+/**
+ * La categoría de un WOD del catálogo (PushJerk, Mayhem, referencia…) con tus marcas, con caché: el coach la usa para elegir el que te falta para completar tu nivel.
+ * null si no encaja con claridad en ninguna.
+ */
+export function categoryOfCatalogWod(w: { id: string; movementIds: string[] }, prs: Partial<PersonalRecords> | undefined): WodCategory | null {
+  const key = `${prsSignature(prs)}|${w.id}`;
+  if (catalogCategoryCache.has(key)) return catalogCategoryCache.get(key) ?? null;
+  const blocks: SessionBlockResult[] = [{ block: 'wod', movementId: w.movementIds[0] ?? 'thruster', wodCatalogId: w.id }];
+  const category = classifyWodBlocks(blocks, { prs }).category;
+  catalogCategoryCache.set(key, category);
+  return category;
+}
+
 /** La categoría de la parte de un WOD de una sesión del día (con las marcas del atleta). */
 export function classifyWod(session: Pick<DailySession, 'blocks'>, part: 1 | 2, ctx: WodCategoryContext = {}): WodCategoryVerdict {
   return classifyWodBlocks(session.blocks, ctx, part);

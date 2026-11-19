@@ -162,6 +162,8 @@ export interface RexContext {
   weekMove?: RexSuggestion | null;
   /** Revisión de 4 semanas de lo que prioriza el coach, sin ver ni avisar. */
   emphasisReviewPending: boolean;
+  /** Una categoría de «Tu nivel» que conviene completar (ver `wodCategoryNeed`): Rex lo cuenta y lleva a verla. null = nada que decir. */
+  levelNeed?: { category: string; reason: string } | null;
   nutritionPercent: number | null;
   /** Días de entreno previstos cumplidos seguidos. */
   streak: number;
@@ -354,6 +356,17 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
       text: `Llevas un ${ctx.nutritionPercent} % de la nutrición de hoy. ¿Lo repasamos?`,
       mood: 'idle',
       actions: [{ label: 'Abrir nutrición', target: 'nutricion' }],
+    });
+  }
+
+  // Tu nivel: falta una categoría por completar. El coach ya la tiene en cuenta al elegir el WOD; esto lo cuenta y lleva a verla.
+  if (ctx.isToday && ctx.levelNeed && !ctx.trainedToday) {
+    out.push({
+      id: 'nivel',
+      priority: 58,
+      text: `Para completar tu nivel: ${ctx.levelNeed.reason} Tu coach lo tendrá en cuenta en los próximos WODs.`,
+      mood: 'think',
+      actions: [{ label: 'Ver mi nivel', target: 'perfil' }],
     });
   }
 

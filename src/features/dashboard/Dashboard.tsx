@@ -63,6 +63,7 @@ import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
 import { buildFormModel, formRowNote } from './formModel';
 import { formToday } from '../../engine/formCurve';
+import { wodCategoryNeed } from '../../engine/levelCategories';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { dayTarget, eatenFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
@@ -280,6 +281,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   }
   // El consejo de hoy: lee lo mismo que los anillos y el semáforo del coach, así que nunca los contradice.
   const formNowForAdvice = useMemo(() => formToday(formModel.plan), [formModel]);
+  // La categoría de «Tu nivel» que conviene completar (el coach también la tiene en cuenta al elegir el WOD).
+  const wodNeed = useMemo(() => wodCategoryNeed(profile, history, todayIso), [profile, history, todayIso]);
   const advice = dayAdvice({
     restMarked,
     session: todaySession,
@@ -370,6 +373,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       : null,
     weekMove: weekMoveProposal ? weekMoveSuggestion(weekMoveProposal, todayIso) : null,
     emphasisReviewPending: emphasisReviewNew,
+    levelNeed: wodNeed ? { category: wodNeed.category, reason: wodNeed.reason } : null,
     nutritionPercent: isToday ? nutritionPercent : null,
     streak,
     goalsBehind,

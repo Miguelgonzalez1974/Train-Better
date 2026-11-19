@@ -7,6 +7,8 @@ import { getMovementById } from '../../data/movements';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { resolveLiftPrTarget } from '../../engine/movementProgress';
 import { sessionParts } from '../../engine/sessionParts';
+import { computeLevel, wodCategoryNeed } from '../../engine/levelCategories';
+import { WOD_CATEGORY_LABEL } from '../../engine/wodCategory';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import type { AskAnswer } from './rexAsk';
 import type { RexTarget } from './rexDashboard';
@@ -18,7 +20,9 @@ export type DataQuestion =
   | { what: 'racha' }
   | { what: 'sesiones' }
   | { what: 'duracion' }
-  | { what: 'peso-actual' };
+  | { what: 'peso-actual' }
+  /** «¿Cómo va mi nivel?», «¿qué categorías me faltan?»: las 8 categorías de Tu nivel y cuáles faltan por completar. */
+  | { what: 'nivel' };
 
 export interface DataCtx {
   profile: AthleteProfile;
@@ -63,9 +67,34 @@ function viewAction(ctx: DataCtx, label: string, variant: boolean) {
   return variant ? [] : [{ label: 'Ver la gráfica', target: ctx.marksTarget, ask: `ver la grafica de ${label}` }];
 }
 
+const joinList = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`);
+
+/** La respuesta a «¿cómo va mi nivel?»: el número, cuántas categorías están rellenas, cuáles faltan y qué hará el coach. */
+export function levelAnswer(ctx: Pick<DataCtx, 'profile' | 'history' | 'todayIso'>): AskAnswer {
+  const { profile, history, todayIso } = ctx;
+  const snap = computeLevel({ profile, history, today: new Date(`${todayIso}T12:00:00`) });
+  const see = [{ label: 'Ver mi nivel', target: 'perfil' as const }];
+  if (snap.filled === 0) {
+    return { lead: 'Tu nivel aún está vacío.', tone: 'info', text: 'Se rellena con tus marcas de barra y con tus WODs hechos en Rx. Cada WOD lleva una pastilla con la categoría a la que cuenta.', actions: see };
+  }
+  const total = snap.categories.length;
+  const none = snap.categories.filter((c) => c.confidence === 'sin-datos').map((c) => c.label.toLowerCase());
+  const provisional = snap.categories.filter((c) => c.confidence === 'provisional').map((c) => c.label.toLowerCase());
+  const head = snap.overall !== null ? `Tu nivel es ${snap.overall}${snap.delta ? ` (${snap.delta > 0 ? '+' : '−'}${Math.abs(snap.delta)} en 3 meses)` : ''}.` : `Tienes ${snap.filled} de ${total} categorías con datos.`;
+  const parts = [`${snap.filled} de ${total} categorías con datos.`];
+  if (provisional.length > 0) parts.push(`Provisionales (falta un segundo resultado): ${joinList(provisional)}.`);
+  if (none.length > 0) parts.push(`Sin datos: ${joinList(none)}.`);
+  const need = wodCategoryNeed(profile, history, todayIso);
+  if (need) parts.push(`El coach intentará ponerte un WOD de ${WOD_CATEGORY_LABEL[need.category].toLowerCase()} en cuanto encaje con tu semana.`);
+  else if (none.length === 0 && provisional.length === 0) parts.push('Todas tienen datos fiables: sigue así y las mantendrás al día.');
+  return { lead: head, tone: snap.delta !== null && snap.delta < 0 ? 'mid' : 'info', text: parts.join(' '), actions: see };
+}
+
 export function dataAnswer(q: DataQuestion, ctx: DataCtx): AskAnswer {
   const { profile, history, todayIso } = ctx;
   switch (q.what) {
+    case 'nivel':
+      return levelAnswer(ctx);
     case 'ultimo-levantamiento': {
       const id = LIFT_MOVEMENT[q.lift.key];
       const sets = (profile.workLog ?? []).filter((e) => e.movementId === id && e.kg > 0 && e.quality !== 'fallada');

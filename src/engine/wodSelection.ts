@@ -54,15 +54,22 @@ export interface SelectionContext {
    * formato (pesa mucho en la puntuación).
    */
   complement?: { domain: WodDomain | null; patterns: Set<MovementPattern>; format: CatalogFormat | null };
+  /**
+   * La categoría de «Tu nivel» que conviene completar hoy (ver `wodCategoryNeed`): un pequeño empujón a los WODs de esa categoría, y más si es el que ya hiciste y hay que
+   * repetir. `categoryOf` clasifica un WOD del catálogo; viene de fuera para no enredar los módulos. Sin esto, la selección es la de siempre.
+   */
+  wanted?: { category: string; categoryLabel: string; repeatCatalogId?: string; reason: string; categoryOf: (w: CatalogWod) => string | null };
 }
 
 export interface RankedWod {
   wod: CatalogWod;
   score: number;
-  parts: { duration: number; energy: number; domain: number; demand: number; interference: number; variety: number; balance: number; competition: number; complement: number };
+  parts: { duration: number; energy: number; domain: number; demand: number; interference: number; variety: number; balance: number; competition: number; complement: number; category: number };
 }
 
-const WEIGHTS = { duration: 0.3, energy: 0.17, domain: 0.12, demand: 0.16, interference: 0.1, variety: 0.05, balance: 0.06, competition: 0.04, complement: 0 };
+const WEIGHTS = { duration: 0.3, energy: 0.17, domain: 0.12, demand: 0.16, interference: 0.1, variety: 0.05, balance: 0.06, competition: 0.04, complement: 0, category: 0 };
+/** Lo que pesa completar una categoría de «Tu nivel»: un empujón (menos que la duración o la energía de hoy), no una orden. */
+const CATEGORY_WEIGHT = 0.2;
 /** La parte 2 de un doble WOD pesa sobre todo por cuánto complementa a la parte 1. */
 const COMPLEMENT_WEIGHT = 0.3;
 /** Cuántos de los últimos WODs reales cuentan para repartir entre fuentes. */
@@ -171,6 +178,14 @@ function complementFit(w: CatalogWod, ctx: SelectionContext): number {
   return 0.5 * domain + 0.3 * (1 - shared) + 0.2 * format;
 }
 
+/** Cuánto ayuda un WOD a completar la categoría que falta: el que ya hiciste (repetirlo) lo máximo, uno de esa categoría casi, y el resto poco. */
+function categoryFit(w: CatalogWod, ctx: SelectionContext): number {
+  const want = ctx.wanted;
+  if (!want) return 0.5;
+  if (want.repeatCatalogId && w.id === want.repeatCatalogId) return 1;
+  return want.categoryOf(w) === want.category ? 0.85 : 0.2;
+}
+
 function competitionFit(w: CatalogWod, ctx: SelectionContext): number {
   if (!ctx.competitionPeak) return 0.5;
   return COMPETITION_SOURCES.includes(w.source) ? 1 : 0.2;
@@ -192,7 +207,7 @@ export function rankCatalogWods(catalog: CatalogWod[], ctx: SelectionContext): R
       !(ctx.excludeMovementIds && w.movementIds.some((id) => ctx.excludeMovementIds!.has(id))) &&
       !conflictsWithPain(w, ctx.painAvoided),
   );
-  const weights = ctx.complement ? { ...WEIGHTS, complement: COMPLEMENT_WEIGHT } : WEIGHTS;
+  const weights = { ...WEIGHTS, ...(ctx.complement ? { complement: COMPLEMENT_WEIGHT } : {}), ...(ctx.wanted ? { category: CATEGORY_WEIGHT } : {}) };
   const strict = base.filter((w) => !patternsOf(w).some((p) => ctx.excludePatterns.has(p)));
   const pool = strict.length >= MIN_POOL ? strict : base;
   return pool
@@ -207,6 +222,7 @@ export function rankCatalogWods(catalog: CatalogWod[], ctx: SelectionContext): R
         balance: balanceFit(wod, ctx),
         competition: competitionFit(wod, ctx),
         complement: complementFit(wod, ctx),
+        category: categoryFit(wod, ctx),
       };
       const score = (Object.keys(weights) as (keyof typeof weights)[]).reduce((s, k) => s + weights[k] * parts[k], 0);
       return { wod, score, parts };
@@ -253,6 +269,10 @@ export function explainChoice(r: RankedWod, ctx: SelectionContext): string[] {
   if (ctx.lightPref >= 0.4) out.push('Llegas justo hoy: se prefiere un WOD más corto y menos exigente.');
   else if (ctx.lowInterference) out.push('Es día de fuerza: se prefiere un WOD que no compita con la barra pesada.');
   if (ctx.competitionPeak && COMPETITION_SOURCES.includes(w.source)) out.push('Tu competición está cerca: se prefieren las programaciones de competición.');
+  const want = ctx.wanted;
+  if (want && (want.repeatCatalogId === w.id || want.categoryOf(w) === want.category)) {
+    out.push(`${want.reason} Este cuenta para ${want.categoryLabel}${want.repeatCatalogId === w.id ? ' y lo repites para poder compararlo' : ''}.`);
+  }
   return out;
 }
 

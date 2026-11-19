@@ -256,6 +256,8 @@ function parseDataAsk(norm: string): AskIntent | null {
   if (lift && /\b(ultimo|ultima|cuando)\b/.test(norm)) {
     return { kind: 'dato', question: { what: /\b(test|probe|marca|pr|record|max|maximo)\b/.test(norm) ? 'ultimo-test' : 'ultimo-levantamiento', lift } };
   }
+  // Tu nivel (las 8 categorías): «mi nivel», «qué categorías me faltan», «qué me falta para completar mi nivel».
+  if (/\b(mi nivel|mis categorias|que categorias|nivel de fitness)\b/.test(norm) || (/\bnivel\b/.test(norm) && /\b(falta|faltan|completar|rellenar)\b/.test(norm))) return { kind: 'dato', question: { what: 'nivel' } };
   if (/\b(racha|seguidos|consecutivos|sin fallar)\b/.test(norm)) return { kind: 'dato', question: { what: 'racha' } };
   if (/\bcuantas? (sesiones|entrenos|entrenamientos|dias)\b/.test(norm) && /\b(llevo|he hecho|hecho|entrenado|esta semana|este mes|van|hay)\b/.test(norm)) return { kind: 'dato', question: { what: 'sesiones' } };
   if (/\bcuanto (dura|tarda|me lleva|va a durar|durara)\b/.test(norm) || /\bduracion de (hoy|la sesion)\b/.test(norm)) return { kind: 'dato', question: { what: 'duracion' } };

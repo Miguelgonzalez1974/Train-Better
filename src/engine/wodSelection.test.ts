@@ -43,6 +43,48 @@ const ctx = (over: Partial<SelectionContext> = {}): SelectionContext => ({
 
 const top = (catalog: CatalogWod[], c: SelectionContext) => rankCatalogWods(catalog, c)[0]?.wod;
 
+describe('selección del WOD real — completar una categoría de «Tu nivel»', () => {
+  const categoryOf = (w: CatalogWod) => (w.refId === 'largo' ? 'largo' : w.refId === 'pesado' ? 'pesado' : null);
+  const wanted = (over: Partial<NonNullable<SelectionContext['wanted']>> = {}): SelectionContext['wanted'] => ({
+    category: 'largo',
+    categoryLabel: 'Largo',
+    reason: 'Aún no tienes ningún WOD de largo en tu nivel: hoy toca uno.',
+    categoryOf,
+    ...over,
+  });
+
+  it('sin categoría que completar, la selección es la de siempre (no cambia ni el orden ni la puntuación)', () => {
+    const a = wod({ refId: 'largo', durationMin: 14 });
+    const b = wod({ refId: 'otro', durationMin: 12 });
+    const plain = rankCatalogWods([a, b], ctx());
+    expect(plain[0].wod.id).toBe(b.id); // 12 min encaja mejor que 14
+    expect(plain.every((r) => r.parts.category === 0.5)).toBe(true);
+  });
+
+  it('un WOD de la categoría que falta sube: gana a uno que encajaba algo mejor', () => {
+    const fits = wod({ refId: 'otro', durationMin: 12 });
+    const missing = wod({ refId: 'largo', durationMin: 14 });
+    expect(top([fits, missing], ctx())?.id).toBe(fits.id);
+    expect(top([fits, missing], ctx({ wanted: wanted() }))?.id).toBe(missing.id);
+  });
+
+  it('es un empujón, no una orden: uno de la categoría que no encaja con el día no gana a uno que sí', () => {
+    const fits = wod({ refId: 'otro', durationMin: 12 });
+    const wayOff = wod({ refId: 'largo', durationMin: 40, energy: 'base-aerobica' });
+    expect(top([fits, wayOff], ctx({ wanted: wanted() }))?.id).toBe(fits.id);
+  });
+
+  it('repetir el WOD que ya hiciste vale más que otro de la misma categoría, y lo explica', () => {
+    const same = wod({ refId: 'largo', durationMin: 13 });
+    const sameCategory = wod({ refId: 'largo', durationMin: 12 });
+    const c = ctx({ wanted: wanted({ repeatCatalogId: same.id, reason: 'Solo tienes un resultado de largo: otro hace fiable tu nivel.' }) });
+    const ranked = rankCatalogWods([sameCategory, same], c);
+    expect(ranked[0].wod.id).toBe(same.id);
+    expect(explainChoice(ranked[0], c).join(' ')).toContain('lo repites para poder compararlo');
+    expect(explainChoice(ranked[1], c).join(' ')).toContain('Este cuenta para Largo');
+  });
+});
+
 describe('selección del WOD real — filtros duros', () => {
   it('descarta lo no programable, lo reciente y lo de otras fuentes', () => {
     const ok = wod();

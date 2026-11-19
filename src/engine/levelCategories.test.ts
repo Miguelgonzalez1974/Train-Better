@@ -12,6 +12,7 @@ import {
   recentOfCategory,
   resultValue,
   SERIES_MONTHS,
+  wodCategoryNeed,
   wodTitleOfKey,
 } from './levelCategories';
 
@@ -242,6 +243,47 @@ describe('la evolución y los nombres de los WODs', () => {
     expect(wodTitleOfKey('gen:For Time (3 rondas)|thrusterx10,box-jumpx12')).toContain('Box');
     expect(wodTitleOfKey('gen:For Time (3 rondas)|thrusterx10,box-jumpx12')).toContain('For Time (3 rondas)');
     expect(wodTitleOfKey('algo raro')).toBe('algo raro');
+  });
+});
+
+describe('qué categoría de WOD conviene completar hoy', () => {
+  const need = (profile = makeProfile(), history: SessionHistoryEntry[] = []) => wodCategoryNeed(profile, history, iso(0));
+
+  it('sin ningún resultado de WOD (empezando) no se empuja nada', () => {
+    expect(need()).toBeNull();
+  });
+
+  it('primero la que tiene un solo resultado, y se propone repetir ese WOD', () => {
+    const n = need(makeProfile({ levelLog: [res(20, 'pesado', 'benchmark:diane', 400)] }));
+    expect(n).toMatchObject({ category: 'pesado', kind: 'completar', repeatCatalogId: 'bm:diane' });
+    expect(n!.reason).toContain('un resultado de pesado');
+  });
+
+  it('un WOD generado no se puede repetir, pero la categoría sigue faltando', () => {
+    const n = need(makeProfile({ levelLog: [res(20, 'largo', 'gen:For Time|thrusterx10', 900)] }));
+    expect(n).toMatchObject({ category: 'largo', kind: 'completar' });
+    expect(n!.repeatCatalogId).toBeUndefined();
+  });
+
+  it('si todas tienen datos fiables, ninguna falta; si alguna no tiene ninguno, se estrena', () => {
+    const twoEach = (['velocidad', 'resistencia', 'peso-corporal', 'pesado', 'ligero'] as const).flatMap((c, i) => [res(10 + i, c, `k-${c}`, 400), res(30 + i, c, `k-${c}`, 410)]);
+    expect(need(makeProfile({ levelLog: twoEach }))).toMatchObject({ category: 'largo', kind: 'estrenar' });
+    const all = [...twoEach, res(17, 'largo', 'k-largo', 1200), res(38, 'largo', 'k-largo', 1210)];
+    expect(need(makeProfile({ levelLog: all }))).toBeNull();
+  });
+
+  it('una categoría que lleva mucho sin resultados vuelve a faltar', () => {
+    const all = (['velocidad', 'resistencia', 'peso-corporal', 'pesado', 'ligero', 'largo'] as const).flatMap((c, i) => {
+      const age = c === 'ligero' ? 130 : 10 + i;
+      return [res(age, c, `k-${c}`, 400), res(age + 20, c, `k-${c}`, 410)];
+    });
+    expect(need(makeProfile({ levelLog: all }))).toMatchObject({ category: 'ligero', kind: 'repetir' });
+  });
+
+  it('no se pide una categoría que ya salió esta semana, aunque no contara (escalado)', () => {
+    const served = entry(2, { movementIds: ['benchmark:karen'], rxOrScaled: 'scaled', wodResult: { scoreType: 'time', value: '9:00' }, wodCategories: { 1: 'pesado' } });
+    const n = need(makeProfile({ levelLog: [res(20, 'pesado', 'benchmark:diane', 400), res(21, 'velocidad', 'benchmark:fran', 250)] }), [served]);
+    expect(n).toMatchObject({ category: 'velocidad', kind: 'completar' }); // pesado salió hace 2 días
   });
 });
 

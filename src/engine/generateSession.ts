@@ -92,6 +92,8 @@ import { sustainedLowReadiness } from './readinessTrend';
 import { PREHAB_GROUP_LABEL, prehabNeeds, prehabNote, prehabTag, type PrehabNeed } from './prehab';
 import { localizeWodText } from './wodUnits';
 import { explainChoice, rankCatalogWods, rankedSequence, SOURCE_LABEL, type RankedWod, type SelectionContext } from './wodSelection';
+import { categoryOfCatalogWod, WOD_CATEGORY_LABEL } from './wodCategory';
+import { wodCategoryNeed, type WodNeed } from './levelCategories';
 import { DEFAULT_WOD_EFFORT_MODE, KEEP_IF_FIT_ATLEAST, MIN_FIT_GAIN, effortFitScore, rerankByEffort } from './wodEffort';
 import { getWodProfile } from './wodProfile';
 import { estimatePlannedStrain } from './plannedStrain';
@@ -2174,12 +2176,26 @@ function pickRealWodUnparted(a: Parameters<typeof pickRealWod>[0]): { blocks: Se
     }
   }
   for (const id of a.recentBenchmarkIds) recentCatalogIds.add(`bm:${id}`);
+  // La categoría que falta en «Tu nivel» solo empuja en un día normal (no en pico o taper de competición, ni llegando justo, ni de recuperación, ni en la parte 2 de un doble WOD).
+  const need = wantedWodNeed;
+  const nudge = need !== null && !a.ctx.competitionPeak && a.ctx.lightPref < 0.4 && a.ctx.energy !== 'recuperacion' && !a.ctx.complement;
   const ctx: SelectionContext = {
     ...a.ctx,
     recentCatalogIds,
     lastSource: recentSeq[0]?.source,
     recentFormats: recentSeq.map((w) => w.format),
     recentSources: recentSeq.map((w) => w.source),
+    ...(nudge
+      ? {
+          wanted: {
+            category: need.category,
+            categoryLabel: WOD_CATEGORY_LABEL[need.category],
+            ...(need.repeatCatalogId ? { repeatCatalogId: need.repeatCatalogId } : {}),
+            reason: need.reason,
+            categoryOf: (w: CatalogWod) => categoryOfCatalogWod(w, a.prs),
+          },
+        }
+      : {}),
   };
   const ranked = rankCatalogWods(getWodCatalog(), ctx);
   // El WOD "de siempre" del dia sale de un sorteo con semilla propia (macro + fecha + parte), no del flujo del dia; cada
@@ -5414,9 +5430,12 @@ export function generateSessionForDate(
   const prevVariant = wodVariant;
   const prevSeedKey = wodSeedKey;
   const prevPick = lastRealPick;
+  const prevNeed = wantedWodNeed;
   wodVariant = variant;
   wodSeedKey = seedKey;
   lastRealPick = null;
+  // La categoría de «Tu nivel» que conviene completar hoy: empuja un poco la elección del WOD real (ver `wodCategoryNeed`).
+  wantedWodNeed = realWodSelection ? wodCategoryNeed(profile, history, dateIso) : null;
   try {
     const generated = withSeededRng(seedKey, () => {
       if (activeProgram) return generateStrengthProgramSession(profile, history, activeProgram, date);
@@ -5430,6 +5449,7 @@ export function generateSessionForDate(
     wodVariant = prevVariant;
     wodSeedKey = prevSeedKey;
     lastRealPick = prevPick;
+    wantedWodNeed = prevNeed;
   }
 }
 
@@ -5506,6 +5526,8 @@ function applyWodEffort(session: DailySession, profile: AthleteProfile, history:
 let wodVariant = 0;
 /** Clave (macro + fecha) del dia que se esta generando: semilla del sorteo del WOD real, independiente del flujo del resto del dia. */
 let wodSeedKey = 'x';
+/** La categoría de «Tu nivel» que falta hoy (ver `wodCategoryNeed`); null = la selección del WOD es la de siempre. */
+let wantedWodNeed: WodNeed | null = null;
 function withWodVariant<T>(macroId: string, dateIso: string, fn: () => T): T {
   return wodVariant > 0 ? withSeededRng(`wod:${macroId}:${dateIso}:v${wodVariant}`, fn) : fn();
 }
