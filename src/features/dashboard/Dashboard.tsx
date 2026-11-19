@@ -62,6 +62,7 @@ import { DaySummaryModal } from './DaySummaryModal';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
 import { buildFormModel, formRowNote } from './formModel';
+import { formToday } from '../../engine/formCurve';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { dayTarget, eatenFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
@@ -278,6 +279,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     onNavigateToObjetivos('perfil');
   }
   // El consejo de hoy: lee lo mismo que los anillos y el semáforo del coach, así que nunca los contradice.
+  const formNowForAdvice = useMemo(() => formToday(formModel.plan), [formModel]);
   const advice = dayAdvice({
     restMarked,
     session: todaySession,
@@ -290,6 +292,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     fit: strainView.planned && strainView.fit ? { kind: strainView.fit.fit, planned: strainView.planned.strain, diff: strainView.fit.diff } : null,
     target: strainTarget,
     withProgram: companionExtra !== null,
+    energy: isToday && formNowForAdvice ? { state: formNowForAdvice.state, reason: formNowForAdvice.reason } : null,
   });
 
   // Rex, arriba del todo: qué toca ahora y atajos a los módulos. Lee lo mismo que el resto del Dashboard.

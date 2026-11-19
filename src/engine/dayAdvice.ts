@@ -1,4 +1,5 @@
 import type { DailySession } from '../data/athlete/types';
+import type { FormState } from './formCurve';
 import type { RecoveryLevel } from './recovery';
 
 /**
@@ -37,6 +38,8 @@ export interface DayAdviceInput {
   /** Lo que se prevé de la sesión frente a tu objetivo de esfuerzo; null si no hay sesión o no se puede estimar. */
   fit: { kind: 'dentro' | 'se-pasa' | 'se-queda-corta'; planned: number; diff: number } | null;
   target: { low: number; high: number };
+  /** Tu energía de hoy (la curva «Tu forma»: lo que has gastado, no cómo respondes) y por qué; null sin historial suficiente. */
+  energy?: { state: FormState; reason: string | null } | null;
   /** Hoy lo marcaste como descanso a propósito ("Hoy descanso"). */
   restMarked?: boolean;
   /** El esfuerzo previsto ya suma la sesión del programa de fuerza (el Texas) que aceptaste hacer hoy. */
@@ -73,7 +76,7 @@ const sentence = (...parts: (string | false | null | undefined)[]) => parts.filt
 const withStop = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
 
 export function dayAdvice(input: DayAdviceInput): DayAdvice {
-  const { session, hasCheckIn, prep, level, loadZone, hrvLow, painAreas, fit, target, restMarked } = input;
+  const { session, hasCheckIn, prep, level, loadZone, hrvLow, painAreas, fit, target, restMarked, energy } = input;
   // Lo que tú has decidido manda: si marcaste el día como descanso, el consejo es descansar.
   if (restMarked) return { lead: 'Hoy descansas.', reason: 'Lo marcaste como descanso: descansar bien también suma para mañana.', tone: 'info', icon: 'moon' };
   const fitText = fitClause(fit, target, input.withProgram);
@@ -130,6 +133,11 @@ export function dayAdvice(input: DayAdviceInput): DayAdvice {
   if (comp?.phase === 'taper') {
     return { lead: 'Entrena, pero sin pasarte.', reason: sentence(`${near}, el volumen ya baja: mantén la intensidad y no añadas nada.`, fitText), tone: 'good', icon: 'check' };
   }
+  // Preparación buena pero vienes cargado (tu forma: lo gastado, no cómo respondes): ni «a por todas» ni «a apretar», y se dice por qué.
+  if (light?.color === 'verde' && energy?.state === 'cargado') {
+    const why = sentence(`Preparación ${prep ?? '—'} %, pero tu energía está baja.`, energy.reason, 'No subas la carga.');
+    return { lead: 'Entrena, pero sin pasarte.', reason: sentence(why, fitText), tone: 'mid', icon: 'down' };
+  }
   if (light?.color === 'verde') {
     const push = !comp && session.mesocycleWeek !== 4;
     const why = withStop(`Preparación ${prep ?? '—'} %${loadZone === 'optima' || loadZone === 'baja' ? ` y carga ${LOAD_WORD[loadZone]}` : ''}`);
@@ -137,10 +145,11 @@ export function dayAdvice(input: DayAdviceInput): DayAdvice {
   }
 
   // Sin semáforo (aún sin check-in): solo hay carga y una preparación estimada.
-  const careful = loadZone === 'alta' || (prep !== null && prep <= 40);
+  const careful = loadZone === 'alta' || (prep !== null && prep <= 40) || energy?.state === 'cargado';
   const cause = [
     prep !== null && `preparación ${prep} %`,
     loadZone === 'alta' && 'carga muy alta',
+    energy?.state === 'cargado' && 'energía baja',
   ].filter(Boolean) as string[];
   const provisional = !hasCheckIn && 'Aún sin check-in: esto sale solo de tu carga.';
   if (careful) {

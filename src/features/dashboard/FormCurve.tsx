@@ -570,9 +570,13 @@ export function FormView({ model, onOpenMorning, onOpenSleep }: { model: FormMod
           )}
           {(costToday !== 0 || hasSleep) && <CalcLine total label="Energía de hoy" value={`${today.value}%`} />}
         </div>
-        <p className="mt-3 flex items-start gap-2 border-t border-white/[0.08] pt-3 text-[13px] leading-snug text-neutral-300">
+        {today.reason && <p className="mt-3 border-t border-white/[0.08] pt-3 text-[13px] leading-snug text-neutral-200">{today.reason}</p>}
+        <p className={`${today.reason ? 'mt-2' : 'mt-3 border-t border-white/[0.08] pt-3'} flex items-start gap-2 text-[13px] leading-snug text-neutral-300`}>
           <Sparkles size={14} className="mt-0.5 shrink-0 text-brand-gold" aria-hidden="true" />
           <span>{formAdvice(today.state, comp, todayIso)}</span>
+        </p>
+        <p className="mt-2 text-[11.5px] leading-snug text-neutral-500">
+          Esto mide lo que has gastado (tu carga y tu sueño). Tu preparación mide cómo respondes hoy (agujetas, estrés, ánimo, pulso): pueden no coincidir.
         </p>
       </section>
 

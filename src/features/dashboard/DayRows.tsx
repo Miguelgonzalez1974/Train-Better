@@ -186,7 +186,7 @@ export function DayRows({
     <Row
       badge={formNow ? <EnergyBadge value={formNow.value} tone={FORM_TONE[formNow.state]} /> : <Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
       title={formNow ? `Tu forma · ${formNow.title.toLowerCase()}` : 'Tu forma'}
-      sub={formNow ? (formNote ?? formNow.sentence) : `Aún poco historial: ${form.sessions} sesiones registradas`}
+      sub={formNow ? (formNow.state === 'cargado' && formNow.reason ? formNow.reason : (formNote ?? formNow.sentence)) : `Aún poco historial: ${form.sessions} sesiones registradas`}
       right={chevron}
       onClick={onOpenForm}
     />

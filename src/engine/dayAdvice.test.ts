@@ -35,6 +35,35 @@ describe('con el programa de fuerza de hoy sumado', () => {
   });
 });
 
+describe('preparación buena pero energía baja (vienes cargado)', () => {
+  const green = session({ dayLight: { color: 'verde', reasons: ['Preparación 73 %'] } });
+  const tired = { state: 'cargado' as const, reason: 'Llevas la semana un 28 % por encima de tu carga normal.' };
+
+  it('con semáforo verde no dice «aprieta»: dice que no subas la carga y por qué', () => {
+    const a = advise({ session: green, prep: 73, energy: tired });
+    expect(a.lead).toBe('Entrena, pero sin pasarte.');
+    expect(a.tone).toBe('mid');
+    expect(a.reason).toContain('Preparación 73 %, pero tu energía está baja.');
+    expect(a.reason).toContain('un 28 % por encima de tu carga normal');
+    expect(a.reason).toContain('No subas la carga.');
+  });
+
+  it('con la energía normal o a tope, el consejo de siempre', () => {
+    expect(advise({ session: green, prep: 73, energy: { state: 'equilibrio', reason: null } }).lead).toBe('Buen día para apretar.');
+    expect(advise({ session: green, prep: 73, energy: null }).lead).toBe('Buen día para apretar.');
+  });
+
+  it('sin semáforo (sin check-in) la energía baja también pide cuidado', () => {
+    const a = advise({ session: session(), hasCheckIn: false, prep: 70, loadZone: 'optima', energy: tired });
+    expect(a.lead).toBe('Hoy, mejor con cuidado.');
+    expect(a.reason).toContain('energía baja');
+  });
+
+  it('el ámbar y el rojo del semáforo siguen mandando', () => {
+    expect(advise({ session: session({ dayLight: { color: 'ambar', reasons: ['Poco sueño'] } }), energy: tired }).lead).toBe('Baja el ritmo hoy.');
+  });
+});
+
 describe('descanso elegido', () => {
   it('si marcaste hoy como descanso, el consejo es descansar, aunque el semáforo diga otra cosa', () => {
     const a = advise({ restMarked: true, session: session({ dayLight: { color: 'verde', reasons: ['Preparación 80 %'] } }) });

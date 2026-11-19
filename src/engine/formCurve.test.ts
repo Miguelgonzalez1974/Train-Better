@@ -9,6 +9,8 @@ import {
   sleepAdjust,
   sleepSummary,
   energyOf,
+  energyReason,
+  ENERGY_SCALE_DOWN,
   formAdvice,
   pointEnergy,
   pointState,
@@ -98,7 +100,7 @@ describe('energyOf', () => {
   it('pasa la forma a 0-100: sin ventaja ni lastre es la mitad', () => {
     expect(energyOf(0, 40)).toBe(50);
     expect(energyOf(8, 40)).toBeGreaterThan(75);
-    expect(energyOf(-8, 40)).toBeLessThan(25);
+    expect(energyOf(-10, 40)).toBeLessThan(25);
   });
   it('se queda siempre entre 0 y 100', () => {
     expect(energyOf(500, 40)).toBe(100);
@@ -112,8 +114,8 @@ describe('energyOf', () => {
     // La forma relativa que da justo 75 y justo 25.
     expect(formStateOf(((75 - 50) / (500 / 3)) * 100, 100)).toBe('ventana');
     expect(formStateOf(((74 - 50) / (500 / 3)) * 100, 100)).toBe('equilibrio');
-    expect(formStateOf(((25 - 50) / (500 / 3)) * 100, 100)).toBe('cargado');
-    expect(formStateOf(((26 - 50) / (500 / 3)) * 100, 100)).toBe('equilibrio');
+    expect(formStateOf(((25 - 50) / ENERGY_SCALE_DOWN) * 100, 100)).toBe('cargado');
+    expect(formStateOf(((26 - 50) / ENERGY_SCALE_DOWN) * 100, 100)).toBe('equilibrio');
   });
   it('entrenando siempre igual nunca se está a tope ni cansado ni cerca del 100 %', () => {
     const s = buildFormSeries({ history: steadyHistory(12, 7), todayIso: TODAY });
@@ -330,6 +332,44 @@ describe('formWindows', () => {
       const best = inside.reduce((b, p) => (p.form > b.form ? p : b), inside[0]);
       expect(w.peak).toBe(energyOf(best.form, best.fitness));
     }
+  });
+});
+
+describe('una semana muy cargada: la energía baja pero no se hunde, y dice por qué', () => {
+  /** Cinco semanas a ritmo normal (4 de cada 7 días) y, al final, `heavy` días seguidos fuertes hasta ayer. */
+  function withHeavyStreak(heavy: number, rpe = 8): SessionHistoryEntry[] {
+    // Cinco de cada siete días a ritmo normal (esfuerzo ~65) y, al final, la racha fuerte (esfuerzo ~75).
+    const normal: SessionHistoryEntry[] = [];
+    for (let back = 35; back > heavy; back--) if (back % 7 !== 0 && back % 7 !== 3) normal.push(entry(addDays(TODAY, -back), 7, 90));
+    const streak = Array.from({ length: heavy }, (_, i) => entry(addDays(TODAY, -(i + 1)), rpe, 105));
+    return [...normal, ...streak];
+  }
+
+  it('seis días fuertes seguidos ya no dejan la energía en 0 (antes sí) pero sí en «cansado»', () => {
+    const s = buildFormSeries({ history: withHeavyStreak(6), todayIso: TODAY });
+    const p = s.points[s.todayIndex];
+    expect(pointEnergy(p)).toBeGreaterThan(0);
+    expect(pointState(p)).toBe('cargado');
+  });
+
+  it('la escala suave solo vale por debajo de la mitad: la de arriba no cambia', () => {
+    expect(energyOf(-10, 40)).toBe(Math.round(50 - 0.25 * ENERGY_SCALE_DOWN));
+    expect(energyOf(6, 40)).toBe(Math.round(50 + 0.15 * (500 / 3)));
+  });
+
+  it('el motivo cuenta cuánto se pasa la semana de tu carga normal', () => {
+    const s = buildFormSeries({ history: withHeavyStreak(6), todayIso: TODAY });
+    const reason = energyReason(s);
+    expect(reason).toMatch(/^Llevas la semana un \d+ % por encima de tu carga normal\.$/);
+    expect(formToday(s)?.reason).toBe(reason);
+  });
+
+  it('con un sueño corto se añade; con una semana normal y buen sueño no hay motivo', () => {
+    const checks: ReadinessCheck[] = [0, 1, 2].map((back) => ({ date: addDays(TODAY, -back), sleep: 'mal', soreness: 'ninguno', stress: 'bajo', motivation: 'normal', sleepHours: 5 }));
+    const s = buildFormSeries({ history: withHeavyStreak(6), todayIso: TODAY, checks });
+    expect(energyReason(s)).toMatch(/y has dormido poco \(5 h de media\)\.$/);
+    const calm = buildFormSeries({ history: steadyHistory(8), todayIso: TODAY });
+    expect(energyReason(calm)).toBeNull();
   });
 });
 

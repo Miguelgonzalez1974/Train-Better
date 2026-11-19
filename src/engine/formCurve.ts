@@ -32,6 +32,12 @@ export const MIN_SESSIONS = 6;
  */
 export const ENERGY_BASE = 50;
 export const ENERGY_SCALE = 500 / 3;
+/**
+ * Por debajo de la mitad la escala es más suave (110 en vez de 167 puntos por cada 100 % de forma relativa): una racha de seis días fuertes seguidos
+ * dejaba la energía en 0 (el suelo), y un 0 se lee como «estás roto» cuando solo quiere decir «llevas una semana cargada». Así el 0 exige una forma un
+ * 45 % por debajo de tu forma física (antes, un 30 %), algo raro; «cansado» (hasta 25) empieza en un −23 %.
+ */
+export const ENERGY_SCALE_DOWN = 110;
 /** Desde esta energía se está a tope (en ventana de supercompensación), y hasta esta, cansado. */
 export const ENERGY_TOP = 75;
 export const ENERGY_LOW = 25;
@@ -82,7 +88,7 @@ export const addDays = (iso: string, delta: number) => dayToIso(isoToDay(iso) + 
 /** La energía (0-100) de una forma. */
 export function energyOf(form: number, fitness: number): number {
   const rel = form / Math.max(10, fitness);
-  return Math.max(0, Math.min(100, Math.round(ENERGY_BASE + rel * ENERGY_SCALE)));
+  return Math.max(0, Math.min(100, Math.round(ENERGY_BASE + rel * (rel < 0 ? ENERGY_SCALE_DOWN : ENERGY_SCALE))));
 }
 
 const stateOfEnergy = (energy: number): FormState => (energy >= ENERGY_TOP ? 'ventana' : energy <= ENERGY_LOW ? 'cargado' : 'equilibrio');
@@ -338,6 +344,32 @@ export interface FormToday {
   title: string;
   /** Una frase de coach. */
   sentence: string;
+  /** Por qué la energía está donde está, con los datos («Llevas la semana un 28 % por encima de tu carga normal y has dormido poco»); null si no hay motivo claro. */
+  reason: string | null;
+}
+
+/** Cuánto por encima de tu carga normal tiene que ir la última semana para decirlo, y cuánto resta el sueño para mencionarlo (en puntos de energía). */
+export const HEAVY_WEEK_RATIO = 1.15;
+export const SHORT_SLEEP_POINTS = -5;
+
+/**
+ * El motivo de la energía de hoy, para que el número no sea un misterio: la carga de los últimos siete días frente a tu carga normal
+ * (la forma física es tu media de largo plazo) y, si resta, el sueño. null si ni una cosa ni la otra pesan.
+ */
+export function energyReason(series: FormSeries): string | null {
+  if (series.todayIndex < 0) return null;
+  const p = series.points[series.todayIndex];
+  const week = series.points.slice(Math.max(0, series.todayIndex - 7), series.todayIndex);
+  const parts: string[] = [];
+  if (week.length >= 5) {
+    const avg = week.reduce((s, x) => s + x.load, 0) / week.length;
+    const ratio = avg / Math.max(10, p.fitness);
+    if (ratio >= HEAVY_WEEK_RATIO) parts.push(`llevas la semana un ${Math.round((ratio - 1) * 100)} % por encima de tu carga normal`);
+  }
+  if ((p.sleep ?? 0) <= SHORT_SLEEP_POINTS && p.sleepAvg !== undefined) parts.push(`has dormido poco (${formatSleep(p.sleepAvg)} de media)`);
+  if (parts.length === 0) return null;
+  const text = parts.join(' y ');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
 const TITLE: Record<FormState, string> = { ventana: 'A tope', equilibrio: 'Normal', cargado: 'Cansado' };
@@ -353,7 +385,7 @@ export function formToday(series: FormSeries): FormToday | null {
   if (!series.ready || series.todayIndex < 0) return null;
   const p = series.points[series.todayIndex];
   const state = pointState(p);
-  return { state, value: pointEnergy(p), title: TITLE[state], sentence: SENTENCE[state] };
+  return { state, value: pointEnergy(p), title: TITLE[state], sentence: SENTENCE[state], reason: energyReason(series) };
 }
 
 /** Lo que falta para tener curva: sesiones y días de historial. */
