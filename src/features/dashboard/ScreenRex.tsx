@@ -20,7 +20,6 @@ export function ScreenRex({
   onAction,
   ask,
   lab,
-  examples,
   hints,
   screen,
   tileContext,
@@ -40,7 +39,6 @@ export function ScreenRex({
   /** La caja de RexLab de esta pantalla, sus atajos y sus opciones. */
   ask?: (text: string) => AskAnswer | 'close';
   lab?: LabSection[];
-  examples?: readonly string[];
   /** Frases que Rex entiende en esta pantalla y que no tienen botón: rotan en el hueco de la caja. */
   hints?: readonly string[];
 }) {
@@ -50,7 +48,6 @@ export function ScreenRex({
       speak={false}
       ask={ask}
       lab={lab}
-      examples={examples}
       hints={hints}
       screen={screen}
       tileContext={tileContext}

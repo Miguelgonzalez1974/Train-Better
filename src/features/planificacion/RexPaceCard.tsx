@@ -1,4 +1,4 @@
-import { RexMascot } from '../objetivos/RexMascot';
+import { RexNote } from '../shell/RexNote';
 import { secondsText } from '../../engine/wodGhost';
 import type { PaceTip } from '../../engine/wodPace';
 
@@ -31,13 +31,11 @@ export function RexPaceCard({ tip, active, onUse, onDismiss, onRemove }: { tip: 
   const slot = w / n;
   const y = (v: number) => h - 4 - ((v - min) / Math.max(1, max - min)) * (h - 12);
   return (
-    <section className="mb-2 flex flex-col gap-2 rounded-lg bg-white/5 px-3 py-2.5" aria-label="Pauta de ritmo de Rex">
-      <div className="flex items-center gap-2">
-        <RexMascot size={22} mood="think" />
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-white">Pauta de ritmo</p>
-          <p className="truncate text-[11px] text-neutral-500">Rex · por tus {tip.samples} últimos WODs de {tip.rounds} rondas</p>
-        </div>
+    <RexNote mood="think" label="Pauta de ritmo de Rex" className="mb-2">
+     <div className="flex flex-col gap-2">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-white">Pauta de ritmo</p>
+        <p className="truncate text-[11px] text-neutral-500">por tus {tip.samples} últimos WODs de {tip.rounds} rondas</p>
       </div>
       <p className="text-xs leading-relaxed text-neutral-300">
         Sueles <span className="font-semibold text-white">salir a {mmss(tip.opening)} y acabar a {mmss(tip.closing)}</span> por ronda: se te va hundiendo. Hoy sal a{' '}
@@ -63,6 +61,7 @@ export function RexPaceCard({ tip, active, onUse, onDismiss, onRemove }: { tip: 
           Mantener mi mejor marca
         </button>
       </div>
-    </section>
+     </div>
+    </RexNote>
   );
 }

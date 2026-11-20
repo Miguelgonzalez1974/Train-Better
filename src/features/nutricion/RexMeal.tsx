@@ -6,7 +6,8 @@ import { customFoodToCatalogFood } from '../../engine/customFoods';
 import { chooseFood, dropIssue, dropItem, mealTotals, parseMeal, setIssueGrams, setItemGrams, type MealIssue, type MealParse } from '../../engine/mealText';
 import { takeMealDraft } from '../../lib/mealDraft';
 import { rexBus } from '../../lib/rexBus';
-import { RexMascot, type RexMood } from '../objetivos/RexMascot';
+import type { RexMood } from '../objetivos/RexMascot';
+import { RexNote } from '../shell/RexNote';
 import { QuantityStepper } from './QuantityStepper';
 import { withExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
@@ -111,7 +112,7 @@ export function RexMeal({
   const mood: RexMood = done ? 'happy' : parse ? 'think' : 'idle';
   const left = done ? { protein: Math.max(0, missing.protein - done.protein), carbs: Math.max(0, missing.carbs - done.carbs) } : null;
 
-  let rexLine = 'Cuéntame lo que has comido y lo apunto: «dos huevos y 200 g de arroz».';
+  let rexLine = '';
   if (done && left) {
     rexLine = left.protein === 0 && left.carbs === 0 ? 'Apuntado. Con esto, objetivo del día cubierto.' : `Apuntado. Te quedan ${left.protein} g de proteína y ${left.carbs} g de hidratos.`;
   } else if (empty) {
@@ -122,15 +123,15 @@ export function RexMeal({
 
   return (
     <section className="rounded-2xl bg-white/[0.03] p-3.5" aria-label="Dile a Rex lo que has comido">
-      <div className="flex items-start gap-3">
-        <RexMascot size={34} mood={mood} />
-        <p className="min-w-0 flex-1 pt-1 text-[13px] leading-relaxed text-neutral-200" aria-live="polite">
-          {rexLine}
-        </p>
-      </div>
+      {/* En reposo Rex no dice nada aquí (ya habla el de la esquina): la nota solo sale cuando hay algo que contar de lo que has escrito. */}
+      {rexLine && (
+        <RexNote mood={mood} label="Rex">
+          <p className="text-[13px] leading-relaxed text-neutral-200">{rexLine}</p>
+        </RexNote>
+      )}
 
       <form
-        className="mt-3 flex gap-2"
+        className={`${rexLine ? 'mt-3 ' : ''}flex gap-2`}
         onSubmit={(e) => {
           e.preventDefault();
           submit();

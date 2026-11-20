@@ -543,7 +543,6 @@ export function helpAnswer(): AskAnswer {
 }
 
 /** Frases de ejemplo que se ofrecen como atajos bajo la caja. */
-export const ASK_EXAMPLES = ['¿Qué toca mañana?', '¿Cómo estoy?', 'Apunta mi peso', 'He comido…'] as const;
 
 /** Lo que falta del día en comida, con un botón a «He comido…». */
 export function missingAnswer(missing: { protein: number; carbs: number }): AskAnswer {

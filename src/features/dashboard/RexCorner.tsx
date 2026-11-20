@@ -3,8 +3,7 @@ import { ChevronDown, ChevronLeft, ChevronUp, FlaskConical, Keyboard, Mic, MicOf
 import { createRecognizer, getSpeechCtor, numberWordsToDigits, speechProblem, type Recognizer, type SpeechProblem } from '../../lib/speech';
 import { RexMascot } from '../objetivos/RexMascot';
 import { RexBar } from './RexBar';
-import { ASK_EXAMPLES, type AskAnswer } from './rexAsk';
-import { labReturn } from '../../lib/labReturn';
+import type { AskAnswer } from './rexAsk';
 import { appNav } from '../../lib/appNav';
 import { useClockActive } from '../../lib/clockState';
 import { handoff } from '../../lib/handoff';
@@ -125,7 +124,6 @@ export function RexCorner({
   raised = false,
   ask,
   lab,
-  examples,
   hints,
   dock = null,
   screen = 'dashboard',
@@ -152,8 +150,6 @@ export function RexCorner({
   ask?: (text: string) => AskAnswer | 'close';
   /** Las opciones propias de esta pantalla, bajo la frase de Rex (Planificación, Nutrición, Objetivos…). */
   lab?: LabSection[];
-  /** Los atajos de la caja de esta pantalla (por defecto, los del Dashboard). */
-  examples?: readonly string[];
   /** Frases que Rex entiende y que no tienen botón, para enseñarlas rotando en el hueco de la caja («Prueba: «tengo 30 minutos»»). */
   hints?: readonly string[];
   /**
@@ -203,17 +199,14 @@ export function RexCorner({
   const blocked = useBlockingOverlay();
   const clockActive = useClockActive();
   const typingInField = useTyping();
-  // Volver al lab: lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse; si te vas a otra pestaña, la app ofrece «Volver al lab».
-  // Solo en el Dashboard (`modules`): en Planificación el panel no vuelve solo.
+  // Lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse. Solo en el Dashboard (`modules`): en las demás pantallas el panel no vuelve solo.
   const returns = modules;
   const [waiting, setWaiting] = useState(false);
-  const fromLab = useRef(false);
   const sawOverlay = useRef(false);
   useEffect(() => {
     if (!waiting) return;
     if (blocked) sawOverlay.current = true;
     else if (sawOverlay.current) {
-      fromLab.current = false;
       setWaiting(false);
       setOpen(true);
     }
@@ -222,28 +215,14 @@ export function RexCorner({
     if (!waiting) return;
     // Si en un momento no se ha abierto ninguna ventana, no había nada a lo que volver (una pestaña interna, un cambio de día…).
     const timer = window.setTimeout(() => {
-      if (!sawOverlay.current) {
-        fromLab.current = false;
-        setWaiting(false);
-      }
+      if (!sawOverlay.current) setWaiting(false);
     }, 1500);
     return () => window.clearTimeout(timer);
   }, [waiting]);
-  // Al montar: si se pidió volver al lab desde otra pestaña, se abre. Al desmontar con algo abierto desde el lab, se avisa para ofrecer la vuelta.
-  useEffect(() => {
-    if (!returns) return;
-    const reopen = labReturn.takeReopen();
-    labReturn.clear(); // estoy en el Dashboard: ya no hay nada a lo que volver desde otra pestaña
-    if (reopen) setOpen(true);
-    return () => {
-      if (fromLab.current) labReturn.markPending();
-    };
-  }, [returns]);
   /** Lanza algo desde el panel: el panel se cierra y, si abre una ventana, vuelve al cerrarla. */
   const leave = () => {
     setOpen(false);
     if (returns) {
-      fromLab.current = true;
       sawOverlay.current = false;
       setWaiting(true);
     }
@@ -645,22 +624,6 @@ export function RexCorner({
                     <Send size={17} strokeWidth={2.25} />
                   </button>
                 </form>
-                <div className={`mb-2 flex flex-wrap gap-1.5 ${(examples ?? ASK_EXAMPLES).length === 0 || answer ? 'hidden' : ''}`}>
-                  {(examples ?? ASK_EXAMPLES).map((example) => (
-                    <button
-                      key={example}
-                      onClick={() => {
-                        if (example.endsWith('…')) {
-                          setQuestion(example.slice(0, -1) + ' ');
-                          inputRef.current?.focus();
-                        } else send(example);
-                      }}
-                      className="rounded-full border border-brand-border px-3 py-1 text-[11px] font-medium text-neutral-400 transition-colors hover:border-white/30 hover:text-white"
-                    >
-                      {example}
-                    </button>
-                  ))}
-                </div>
                 {answer && (
                   <button
                     type="button"

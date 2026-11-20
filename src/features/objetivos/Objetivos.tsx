@@ -471,7 +471,6 @@ export function Objetivos({ initialSection }: { initialSection?: ObjetivosSectio
           onAction={(target) => {
             if (target === 'objetivos-hablar') openAssistant();
           }}
-          examples={[]}
           hints={REX_HINTS.objetivos}
           ask={(text) =>
             routeAsk(text, 'objetivos', {

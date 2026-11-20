@@ -2,7 +2,7 @@ import { CoachAccuracyCard } from './CoachAccuracyCard';
 import { WodZonesCard } from './WodZonesCard';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Dumbbell, Fingerprint } from 'lucide-react';
-import { RexMascot } from '../objetivos/RexMascot';
+import { RexNote } from '../shell/RexNote';
 import { analysisRexLine, openGoalMovements, PROPOSAL_WEEKS } from './rexAnalysis';
 import { getImbalanceBias } from '../../engine/imbalances';
 import { buildProgressionLedger } from '../../engine/progression';
@@ -245,10 +245,7 @@ export function AnalysisView({
       </div>
 
       {/* Rex: la conclusión de la pestaña que miras. Los números están debajo, en las pestañas. */}
-      <section className="rounded-2xl bg-white/[0.03] p-4" aria-label="Lo que dice Rex">
-        <div className="flex items-start gap-3">
-          <RexMascot size={36} mood={createdLabel ? 'happy' : rex.tone === 'good' ? 'happy' : rex.tone === 'warn' ? 'think' : 'idle'} />
-          <div className="min-w-0 flex-1" aria-live="polite">
+      <RexNote tone={rex.tone === 'good' ? 'good' : rex.tone === 'warn' ? 'warn' : 'info'} mood={createdLabel ? 'happy' : rex.tone === 'good' ? 'happy' : rex.tone === 'warn' ? 'think' : 'idle'}>
             <p className="text-[13px] leading-relaxed text-neutral-200">
               <strong className={`font-bold ${rex.tone === 'good' ? 'text-good' : rex.tone === 'warn' ? 'text-warn' : 'text-white'}`}>{rex.lead}</strong> {rex.text}
             </p>
@@ -303,9 +300,7 @@ export function AnalysisView({
                 </div>
               ))
             )}
-          </div>
-        </div>
-      </section>
+      </RexNote>
 
       <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Análisis">
         <TabButton

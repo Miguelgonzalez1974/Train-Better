@@ -18,7 +18,8 @@ import {
   withMobilityRating,
   type RoutineItem,
 } from '../../engine/mobility';
-import { RexMascot, type RexMood } from '../objetivos/RexMascot';
+import type { RexMood } from '../objetivos/RexMascot';
+import { RexNote } from '../shell/RexNote';
 import { MobilityGuide } from './MobilityGuide';
 
 type Step = 'rate' | 'purpose' | 'zones' | 'time' | 'routine' | 'guide' | 'done';
@@ -140,12 +141,9 @@ export function Movilidad({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3.5">
-        <RexMascot size={38} mood={mood} />
-        <p className="min-w-0 flex-1 pt-1 text-[13px] leading-relaxed text-neutral-100" aria-live="polite">
-          {rexText}
-        </p>
-      </div>
+      <RexNote mood={mood} label="Rex, tu guía de movilidad">
+        <p className="text-[13px] leading-relaxed text-neutral-100">{rexText}</p>
+      </RexNote>
 
       {step === 'rate' && due && (
         <div className="flex flex-col gap-3">

@@ -7,7 +7,7 @@ import { buildLoadRows, type LoadRow } from '../../engine/loadLearning';
 import { computeResponseProfile, RESPONSE_MIN_WEEKS, type LiftResponse } from '../../engine/responseProfile';
 import { buildStrengthEvolution, RANGE_LABEL, type EvolutionRange } from '../../engine/strengthEvolution';
 import { Modal } from '../shell/Modal';
-import { RexMascot } from '../objetivos/RexMascot';
+import { RexNote } from '../shell/RexNote';
 import { Term } from '../shell/Term';
 import { EvolutionChart, fmtKg } from './EvolutionChart';
 import { MarksEditor } from './MarksEditor';
@@ -132,10 +132,7 @@ export function MarksScreen({
   return (
     <Modal open onClose={onClose} title="Mis marcas">
       <div className="flex flex-col gap-4">
-        <section className="rounded-2xl bg-white/[0.03] p-3.5" aria-label="Lo que dice Rex">
-          <div className="flex items-start gap-3">
-            <RexMascot size={34} mood={createdLabel || rex.tone === 'good' ? 'happy' : rex.tone === 'warn' ? 'think' : 'idle'} />
-            <div className="min-w-0 flex-1" aria-live="polite">
+        <RexNote tone={rex.tone === 'good' ? 'good' : rex.tone === 'warn' ? 'warn' : 'info'} mood={createdLabel || rex.tone === 'good' ? 'happy' : rex.tone === 'warn' ? 'think' : 'idle'}>
               <p className="text-[13px] leading-relaxed text-neutral-200">
                 <strong className={`font-bold ${rex.tone === 'good' ? 'text-good' : rex.tone === 'warn' ? 'text-warn' : 'text-white'}`}>{rex.lead}</strong> {rex.text}
               </p>
@@ -181,9 +178,7 @@ export function MarksScreen({
                   </div>
                 ))
               )}
-            </div>
-          </div>
-        </section>
+        </RexNote>
 
         <div className="grid grid-cols-[1fr_1px_1fr] gap-3.5 px-1">
           {[

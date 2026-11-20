@@ -1834,7 +1834,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             modules={false}
             ask={askRex}
             lab={rexLab}
-            examples={[]}
             hints={REX_HINTS.planificacion}
             onAction={runPlanTarget}
             onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}

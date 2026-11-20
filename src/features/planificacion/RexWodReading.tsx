@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RexMascot } from '../objetivos/RexMascot';
+import { RexNote } from '../shell/RexNote';
 import { secondsText } from '../../engine/wodGhost';
 import type { WodReading } from '../../engine/wodRead';
 import { workGoalFor } from '../../engine/wodMovements';
@@ -15,14 +15,9 @@ export function RexWodReading({ reading, onWork }: { reading: WodReading; onWork
   const work = reading.weak?.movementId ? workGoalFor(reading.weak.movementId) : null;
   const weak = reading.weak;
   return (
-    <section className="flex flex-col gap-2 rounded-xl bg-white/[0.03] p-3" aria-label="Lo que ve Rex del WOD">
-      <div className="flex items-center gap-2">
-        <RexMascot size={24} mood="think" />
-        <div>
-          <p className="text-sm font-semibold text-white">Lo que veo</p>
-          <p className="text-[11px] text-neutral-500">Rex</p>
-        </div>
-      </div>
+    <RexNote mood="think" label="Lo que ve Rex del WOD">
+     <div className="flex flex-col gap-2">
+      <p className="text-sm font-semibold text-white">Lo que veo</p>
       {reading.lead && <p className="text-xs leading-relaxed text-neutral-200">{reading.lead}</p>}
       {reading.rows.length > 0 && (
         <ul className="flex flex-col divide-y divide-white/[0.06] rounded-lg bg-white/[0.03] px-3 text-sm">
@@ -73,6 +68,7 @@ export function RexWodReading({ reading, onWork }: { reading: WodReading; onWork
           </button>
         </div>
       )}
-    </section>
+     </div>
+    </RexNote>
   );
 }

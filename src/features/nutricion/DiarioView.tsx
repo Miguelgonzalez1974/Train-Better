@@ -149,7 +149,6 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
             },
           })
         }
-        examples={[]}
         hints={REX_HINTS.nutricion}
         lab={[
           {
