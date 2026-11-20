@@ -96,7 +96,9 @@ export function parseOpenFoodFacts(barcode: string, json: unknown): ScannedProdu
   const carbs = num(n.carbohydrates_100g);
   if (protein === undefined && carbs === undefined) return null;
   const rawName = [p.product_name_es, p.product_name].find((x): x is string => typeof x === 'string' && x.trim() !== '');
-  const brand = typeof p.brands === 'string' ? p.brands.split(',')[0].trim() : '';
+  // La marca ayuda a distinguir productos parecidos, pero la razón social completa («COCA-COLA SERVICES SA/NV») es ruido: solo si es corta.
+  const rawBrand = typeof p.brands === 'string' ? p.brands.split(',')[0].trim() : '';
+  const brand = rawBrand.length <= 18 ? rawBrand : '';
   const baseName = (rawName ?? 'Producto sin nombre').trim();
   const name = brand && !baseName.toLowerCase().includes(brand.toLowerCase()) ? `${baseName} · ${brand}` : baseName;
   const categories = Array.isArray(p.categories_tags) ? p.categories_tags.filter((c): c is string => typeof c === 'string') : [];

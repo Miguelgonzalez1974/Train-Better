@@ -75,6 +75,11 @@ describe('Open Food Facts → producto', () => {
     expect(parseOpenFoodFacts('1', { status: 1, product: { nutriments: { proteins_100g: 1, carbohydrates_100g: 1 } } })!.name).toBe('Producto sin nombre');
   });
 
+  it('una marca larga (razón social completa) no se añade al nombre', () => {
+    const p = parseOpenFoodFacts('1', { status: 1, product: { product_name: 'Coca-Cola Original', brands: 'COCA-COLA SERVICES SA/NV', nutriments: { proteins_100g: 0, carbohydrates_100g: 10.9 } } })!;
+    expect(p.name).toBe('Coca-Cola Original');
+  });
+
   it('el grupo sale de la categoría y, si no, de lo que más aporta', () => {
     expect(groupForProduct(3, 5, ['en:beverages'])).toBe('Bebida');
     expect(groupForProduct(1, 14, ['en:fruits-and-vegetables-based-foods', 'en:fruits'])).toBe('Fruta');

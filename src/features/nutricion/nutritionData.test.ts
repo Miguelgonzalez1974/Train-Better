@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dayTarget, eatenFor, withExtra, withExtraItemGrams } from './nutritionData';
+import { customFoodByBarcode, dayTarget, eatenFor, withCustomFood, withEditedCustomFood, withExtra, withExtraItemGrams } from './nutritionData';
 import { nutritionForDay } from '../../engine/nutritionPlan';
 import type { NutritionPrefs } from '../../data/athlete/types';
 
@@ -46,5 +46,23 @@ describe('objetivo del día', () => {
       carbs: Math.round((n.carbsG.min + n.carbsG.max) / 2),
     });
     expect(dayTarget('alto', 82).carbs).toBeGreaterThan(dayTarget('descanso', 82).carbs);
+  });
+});
+
+
+describe('biblioteca de alimentos (productos escaneados)', () => {
+  const food = { id: 'c1', name: 'Tortitas', proteinPer100: 8, carbsPer100: 81, group: 'Hidrato' as const, barcode: '0000000000017' };
+
+  it('un producto guardado se encuentra por su codigo', () => {
+    const prefs = withCustomFood({}, food);
+    expect(customFoodByBarcode(prefs, '0000000000017')?.id).toBe('c1');
+    expect(customFoodByBarcode(prefs, '123')).toBeUndefined();
+  });
+
+  it('se corrige el nombre y los valores sin perder el codigo, y no se deja un nombre vacio ni valores negativos', () => {
+    const prefs = withEditedCustomFood(withCustomFood({}, food), 'c1', { name: '  Tortitas de arroz ', proteinPer100: 7.5, carbsPer100: -3 });
+    expect(prefs.customFoods?.[0]).toMatchObject({ name: 'Tortitas de arroz', proteinPer100: 7.5, carbsPer100: 0, barcode: '0000000000017' });
+    expect(withEditedCustomFood(prefs, 'c1', { name: '   ' }).customFoods?.[0].name).toBe('Tortitas de arroz');
+    expect(withEditedCustomFood(prefs, 'otro', { name: 'X' })).toEqual(prefs);
   });
 });

@@ -6,7 +6,7 @@ import { groupForProduct, hasValidCheckDigit, macrosForGrams, normalizeBarcode, 
 import { lookupBarcode } from '../../lib/openFoodFacts';
 import { toast } from '../../lib/toast';
 import { QuantityStepper } from './QuantityStepper';
-import { withCustomFood, withExtra } from './nutritionData';
+import { customFoodByBarcode, withCustomFood, withExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
 
 /**
@@ -107,7 +107,25 @@ const productFromCustom = (f: CustomFood): ScannedProduct => ({
   ...(f.servingGrams ? { servingGrams: f.servingGrams } : {}),
 });
 
-export function BarcodeScanner({ shared, iso, onClose }: { shared: NutritionShared; iso: string; onClose: () => void }) {
+/** El alimento propio que se guarda de un producto escaneado (con su código, para reconocerlo la próxima vez). */
+function toCustomFood(product: ScannedProduct, id: string): CustomFood {
+  return {
+    id,
+    name: product.name,
+    proteinPer100: product.proteinPer100,
+    carbsPer100: product.carbsPer100,
+    group: product.group,
+    barcode: product.barcode,
+    ...(product.packageGrams ? { packageGrams: product.packageGrams } : {}),
+    ...(product.servingGrams ? { servingGrams: product.servingGrams } : {}),
+  };
+}
+
+/**
+ * `diario`: se escanea para apuntar lo que comes (y de paso se guarda en Mis alimentos). `biblioteca`: se escanean los productos que tienes para
+ * guardarlos en Mis alimentos, uno tras otro, sin apuntar nada; después se eligen al añadir un alimento.
+ */
+export function BarcodeScanner({ shared, iso, onClose, mode = 'diario' }: { shared: NutritionShared; iso: string; onClose: () => void; mode?: 'diario' | 'biblioteca' }) {
   const { prefs, updatePrefs, todayIso } = shared;
   const [stage, setStage] = useState<Stage>({ kind: 'camera' });
   const [problem, setProblem] = useState<CameraProblem>(null);
@@ -151,7 +169,7 @@ export function BarcodeScanner({ shared, iso, onClose }: { shared: NutritionShar
         <button onClick={onClose} aria-label="Cerrar el escáner" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20">
           <X size={19} />
         </button>
-        <p className="text-sm font-semibold text-white/70">Escanear producto</p>
+        <p className="text-sm font-semibold text-white/70">{mode === 'biblioteca' ? 'Añadir a mi biblioteca' : 'Escanear producto'}</p>
         <span className="h-10 w-10" aria-hidden="true" />
       </div>
 
@@ -176,7 +194,9 @@ export function BarcodeScanner({ shared, iso, onClose }: { shared: NutritionShar
               </div>
             )}
           </div>
-          <p className="text-center text-sm text-white/60">{problem ? '' : 'Centra el código de barras dentro del marco'}</p>
+          <p className="text-center text-sm text-white/60">
+            {problem ? '' : mode === 'biblioteca' ? 'Escanea cada producto: se guarda en Mis alimentos y sigues con el siguiente' : 'Centra el código de barras dentro del marco'}
+          </p>
           <button onClick={() => setStage({ kind: 'manual' })} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-center text-base font-bold text-white active:bg-white/20" data-testid="barcode-manual">
             <Keyboard size={19} /> Escribir el código a mano
           </button>
@@ -207,28 +227,27 @@ export function BarcodeScanner({ shared, iso, onClose }: { shared: NutritionShar
 
       {stage.kind === 'result' && (
         <ProductResult
+          key={stage.product.barcode + stage.product.name}
           product={stage.product}
           known={stage.known}
           manual={stage.manual}
+          mode={mode}
           onBack={backToCamera}
+          // Solo a la biblioteca: se crea el alimento (con su código) y se vuelve a la cámara para escanear el siguiente, sin tocar el día.
+          onSaveOnly={() => {
+            const { product } = stage;
+            updatePrefs((p) => (customFoodByBarcode(p, product.barcode) ? p : withCustomFood(p, toCustomFood(product, `custom${Date.now()}`))));
+            toast.show(`Guardado en Mis alimentos: ${product.name}`);
+            backToCamera();
+          }}
           onAdd={(grams) => {
             const { product, known } = stage;
             const foodId = known?.id ?? `custom${Date.now()}`;
-            const cf: CustomFood = {
-              id: foodId,
-              name: product.name,
-              proteinPer100: product.proteinPer100,
-              carbsPer100: product.carbsPer100,
-              group: product.group,
-              barcode: product.barcode,
-              ...(product.packageGrams ? { packageGrams: product.packageGrams } : {}),
-              ...(product.servingGrams ? { servingGrams: product.servingGrams } : {}),
-            };
             const now = new Date();
             const entry: ExtraFoodEntry = { id: `extra${Date.now()}`, hour: iso === todayIso ? now.getHours() + now.getMinutes() / 60 : 12, items: [{ foodId, grams }] };
-            updatePrefs((p) => withExtra(known ? p : withCustomFood(p, cf), iso, entry));
+            updatePrefs((p) => withExtra(known || customFoodByBarcode(p, product.barcode) ? p : withCustomFood(p, toCustomFood(product, foodId)), iso, entry));
             const m = macrosForGrams(product, grams);
-            toast.show(`Apuntado: ${product.name} · +${String(m.protein).replace('.', ',')} g proteína · +${String(m.carbs).replace('.', ',')} g hidratos`);
+            toast.show(`Apuntado: ${product.name} · +${String(m.protein).replace('.', ',')} g proteína · +${String(m.carbs).replace('.', ',')} g hidratos${known ? '' : ' · guardado en Mis alimentos'}`);
             onClose();
           }}
         />
@@ -325,13 +344,36 @@ function MissingForm({ code, reason, onBack, onSave }: { code: string; reason: '
   );
 }
 
-/** El producto encontrado: lo que lleva por 100 g, cuánto has comido (cantidades rápidas y − / +) y lo que aporta. */
-function ProductResult({ product, known, manual, onBack, onAdd }: { product: ScannedProduct; known: CustomFood | null; manual?: boolean; onBack: () => void; onAdd: (grams: number) => void }) {
+/**
+ * El producto encontrado: lo que lleva por 100 g y dos caminos. Apuntar lo que has comido (cantidad rápida o con − / +, y se guarda también en Mis alimentos)
+ * o solo guardarlo en tu biblioteca para elegirlo después. En el modo biblioteca se empieza por guardar y la cantidad solo se pide si quieres apuntarlo.
+ */
+function ProductResult({
+  product,
+  known,
+  manual,
+  mode,
+  onBack,
+  onAdd,
+  onSaveOnly,
+}: {
+  product: ScannedProduct;
+  known: CustomFood | null;
+  manual?: boolean;
+  mode: 'diario' | 'biblioteca';
+  onBack: () => void;
+  onAdd: (grams: number) => void;
+  onSaveOnly: () => void;
+}) {
   const quick = useMemo(() => quickQuantities(product), [product]);
   const [grams, setGrams] = useState(product.packageGrams ?? product.servingGrams ?? 100);
+  /** Se está eligiendo cuánto se ha comido. En el modo biblioteca solo si se pide. */
+  const [asking, setAsking] = useState(mode === 'diario');
   const food = useMemo(() => customFoodToCatalogFood({ id: 'scan', name: product.name, proteinPer100: product.proteinPer100, carbsPer100: product.carbsPer100, group: product.group }), [product]);
   const m = macrosForGrams(product, grams);
   const fmt = (n: number) => String(n).replace('.', ',');
+  const big = 'flex min-h-16 w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-center text-[clamp(0.95rem,4.6vw,1.125rem)] font-bold leading-tight active:scale-[0.98]';
+  const ghost = 'flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-center text-sm font-bold leading-tight text-white active:bg-white/20';
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pb-5" data-testid="barcode-result">
       <button onClick={onBack} className="flex items-center gap-1.5 self-start text-sm font-semibold text-white/60">
@@ -354,48 +396,83 @@ function ProductResult({ product, known, manual, onBack, onAdd }: { product: Sca
             <p className="mt-1 text-xs font-semibold text-white/55">hidratos</p>
           </div>
         </div>
-        {product.incomplete && <p className="mt-2 text-xs font-semibold text-warn">A este producto le falta un valor en la base de datos: revisa la etiqueta.</p>}
+        {product.incomplete && <p className="mt-2 text-xs font-semibold text-warn">A este producto le falta un valor en la base de datos: revisa la etiqueta (puedes corregirlo después en Mis alimentos).</p>}
       </div>
 
-      <div className="rounded-3xl bg-white/[0.07] px-4 py-4">
-        <p className="text-center text-xs font-bold uppercase tracking-[0.14em] text-white/55">¿Cuánto has comido?</p>
-        <div className="mt-3 flex justify-center">
-          <QuantityStepper food={food} grams={grams} onChange={setGrams} />
-        </div>
-        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-          {quick.map((q) => (
-            <button
-              key={q.label}
-              onClick={() => setGrams(q.grams)}
-              aria-pressed={grams === q.grams}
-              className={`rounded-full border px-3.5 py-2 text-sm font-semibold transition-colors ${grams === q.grams ? 'border-white/60 bg-white/15 text-white' : 'border-white/15 text-white/65'}`}
-            >
-              {q.label}
-              {q.label.endsWith(' g') ? '' : <span className="text-white/45"> {q.grams} g</span>}
+      {asking && (
+        <>
+          <div className="rounded-3xl bg-white/[0.07] px-4 py-4">
+            <p className="text-center text-xs font-bold uppercase tracking-[0.14em] text-white/55">¿Cuánto has comido?</p>
+            <div className="mt-3 flex justify-center">
+              <QuantityStepper food={food} grams={grams} onChange={setGrams} />
+            </div>
+            <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+              {quick.map((q) => (
+                <button
+                  key={q.label}
+                  onClick={() => setGrams(q.grams)}
+                  aria-pressed={grams === q.grams}
+                  className={`rounded-full border px-3.5 py-2 text-sm font-semibold transition-colors ${grams === q.grams ? 'border-white/60 bg-white/15 text-white' : 'border-white/15 text-white/65'}`}
+                >
+                  {q.label}
+                  {q.label.endsWith(' g') ? '' : <span className="text-white/45"> {q.grams} g</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-center" data-testid="barcode-totals">
+            <div className="rounded-2xl bg-white/[0.07] px-2 py-3">
+              <p className="num text-[clamp(1.25rem,6.5vw,1.75rem)] font-black leading-none" style={{ color: '#7ee0a0' }}>{fmt(m.protein)} g</p>
+              <p className="mt-1 text-xs font-semibold text-white/55">de proteína</p>
+            </div>
+            <div className="rounded-2xl bg-white/[0.07] px-2 py-3">
+              <p className="num text-[clamp(1.25rem,6.5vw,1.75rem)] font-black leading-none" style={{ color: '#ffd166' }}>{fmt(m.carbs)} g</p>
+              <p className="mt-1 text-xs font-semibold text-white/55">de hidratos</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="mt-auto flex flex-col gap-2">
+        {asking ? (
+          <>
+            <button onClick={() => onAdd(grams)} className={`${big} bg-brand-orange text-black`} data-testid="barcode-add">
+              <Check size={22} strokeWidth={3.25} /> Apuntar
             </button>
-          ))}
-        </div>
+            {!known && (
+              <button onClick={onSaveOnly} className={ghost} data-testid="barcode-save-only">
+                Solo guardar en Mis alimentos
+              </button>
+            )}
+          </>
+        ) : known ? (
+          <>
+            <button onClick={onBack} className={`${big} bg-brand-orange text-black`} data-testid="barcode-next">
+              Escanear otro
+            </button>
+            <button onClick={() => setAsking(true)} className={ghost} data-testid="barcode-ask">
+              Apuntar lo que he comido
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={onSaveOnly} className={`${big} bg-brand-orange text-black`} data-testid="barcode-save-only">
+              <Check size={22} strokeWidth={3.25} /> Guardar en mi biblioteca
+            </button>
+            <button onClick={() => setAsking(true)} className={ghost} data-testid="barcode-ask">
+              Guardar y apuntar lo que he comido
+            </button>
+          </>
+        )}
       </div>
-
-      <div className="grid grid-cols-2 gap-2 text-center" data-testid="barcode-totals">
-        <div className="rounded-2xl bg-white/[0.07] px-2 py-3">
-          <p className="num text-[clamp(1.25rem,6.5vw,1.75rem)] font-black leading-none" style={{ color: '#7ee0a0' }}>{fmt(m.protein)} g</p>
-          <p className="mt-1 text-xs font-semibold text-white/55">de proteína</p>
-        </div>
-        <div className="rounded-2xl bg-white/[0.07] px-2 py-3">
-          <p className="num text-[clamp(1.25rem,6.5vw,1.75rem)] font-black leading-none" style={{ color: '#ffd166' }}>{fmt(m.carbs)} g</p>
-          <p className="mt-1 text-xs font-semibold text-white/55">de hidratos</p>
-        </div>
-      </div>
-
-      <button
-        onClick={() => onAdd(grams)}
-        className="mt-auto flex min-h-16 w-full items-center justify-center gap-2 rounded-full bg-brand-orange px-5 py-3 text-center text-[clamp(0.95rem,4.6vw,1.125rem)] font-bold leading-tight text-black active:scale-[0.98]"
-        data-testid="barcode-add"
-      >
-        <Check size={22} strokeWidth={3.25} /> Apuntar
-      </button>
-      {!known && <p className="text-center text-xs text-white/50">Se guarda también en Mis alimentos: la próxima vez se reconoce al escanearlo.</p>}
+      <p className="text-center text-xs text-white/50">
+        {known
+          ? 'Ya está en tu biblioteca: al añadir un alimento lo eliges de Mis alimentos.'
+          : asking
+            ? 'Al apuntarlo se guarda también en Mis alimentos, para elegirlo la próxima vez.'
+            : 'Se guarda en Mis alimentos y lo eliges cuando lo comas, en «Añadir alimento».'}
+      </p>
     </div>
   );
 }

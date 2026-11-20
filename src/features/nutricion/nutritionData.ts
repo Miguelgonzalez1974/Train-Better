@@ -95,6 +95,29 @@ export function withCustomFood(prefs: NutritionPrefs, food: CustomFood): Nutriti
   return { ...prefs, customFoods: [...(prefs.customFoods ?? []), food] };
 }
 
+/** Preferencias con un alimento propio corregido (nombre, proteína, hidratos o grupo): lo escaneado puede traer errores de la base de datos. Los días ya apuntados lo usan con los valores nuevos. */
+export function withEditedCustomFood(prefs: NutritionPrefs, foodId: string, patch: Partial<Pick<CustomFood, 'name' | 'proteinPer100' | 'carbsPer100' | 'group'>>): NutritionPrefs {
+  return {
+    ...prefs,
+    customFoods: (prefs.customFoods ?? []).map((f) =>
+      f.id === foodId
+        ? {
+            ...f,
+            ...(patch.name !== undefined && patch.name.trim() !== '' ? { name: patch.name.trim() } : {}),
+            ...(patch.proteinPer100 !== undefined ? { proteinPer100: Math.max(0, patch.proteinPer100) } : {}),
+            ...(patch.carbsPer100 !== undefined ? { carbsPer100: Math.max(0, patch.carbsPer100) } : {}),
+            ...(patch.group !== undefined ? { group: patch.group } : {}),
+          }
+        : f,
+    ),
+  };
+}
+
+/** El alimento propio que corresponde a un código de barras, si ya se guardó. */
+export function customFoodByBarcode(prefs: NutritionPrefs, barcode: string): CustomFood | undefined {
+  return (prefs.customFoods ?? []).find((f) => f.barcode === barcode);
+}
+
 /** Preferencias sin un alimento propio (por id) — también lo quita de cualquier extra que lo usara, para no dejar referencias colgando. */
 export function withoutCustomFood(prefs: NutritionPrefs, foodId: string): NutritionPrefs {
   const extraFoods = prefs.extraFoods

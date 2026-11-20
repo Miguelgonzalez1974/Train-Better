@@ -45,6 +45,8 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
   const [changingType, setChangingType] = useState(false);
   const [adding, setAdding] = useState(false);
   const [scanning, setScanning] = useState(false);
+  /** iblioteca: el escáner se abrió desde Mis alimentos (guarda productos sin apuntarlos); al cerrarlo se vuelve a Mis alimentos. */
+  const [scanMode, setScanMode] = useState<'diario' | 'biblioteca'>('diario');
   const [myFoods, setMyFoods] = useState(false);
   /** Nombre con el que se abre «Mis alimentos» cuando Rex no conoce lo que has dicho. */
   const [myFoodsName, setMyFoodsName] = useState('');
@@ -294,11 +296,31 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
         </Modal>
       )}
 
-      {scanning && <BarcodeScanner shared={shared} iso={iso} onClose={() => setScanning(false)} />}
+      {scanning && (
+        <BarcodeScanner
+          shared={shared}
+          iso={iso}
+          mode={scanMode}
+          onClose={() => {
+            setScanning(false);
+            if (scanMode === 'biblioteca') setMyFoods(true);
+            setScanMode('diario');
+          }}
+        />
+      )}
 
       {myFoods && (
         <Modal open onClose={() => setMyFoods(false)} title="Mis alimentos">
-          <MisAlimentosPanel shared={shared} initialName={myFoodsName} />
+          <MisAlimentosPanel
+            shared={shared}
+            initialName={myFoodsName}
+            onScan={() => {
+              // El escáner va a pantalla completa fuera del modal: se cierra Mis alimentos y se vuelve a él al terminar.
+              setMyFoods(false);
+              setScanMode('biblioteca');
+              setScanning(true);
+            }}
+          />
         </Modal>
       )}
 

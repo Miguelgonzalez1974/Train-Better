@@ -37,10 +37,11 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
   const diario = mode === 'diario';
   const [items, setItems] = useState<CustomMealItem[]>([]);
   const [hourText, setHourText] = useState(fmtHour(defaultHour));
-  const [group, setGroup] = useState<BuilderGroup>('Proteína');
+  const customFoods: CustomFood[] = prefs.customFoods ?? [];
+  /** mine: todo lo que hay en Mis alimentos (lo creado y lo escaneado), a un toque. Si hay biblioteca, es lo primero que se ve. */
+  const [group, setGroup] = useState<BuilderGroup | 'mine'>(customFoods.length > 0 ? 'mine' : 'Proteína');
   const [query, setQuery] = useState('');
 
-  const customFoods: CustomFood[] = prefs.customFoods ?? [];
   const allFoods = useMemo(() => (customFoods.length === 0 ? FOODS : [...FOODS, ...customFoods.map(customFoodToCatalogFood)]), [customFoods]);
   const foodMap = useMemo(() => new Map(allFoods.map((f) => [f.id, f])), [allFoods]);
   const resolve = (id: string) => foodMap.get(id);
@@ -68,7 +69,7 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
 
   const chosen = new Set(items.map((i) => i.foodId));
   const q = query.trim().toLowerCase();
-  const list = q ? BUILDER_GROUPS.flatMap((g) => foodsByGroup[g]).filter((f) => f.name.toLowerCase().includes(q)) : foodsByGroup[group];
+  const list = q ? BUILDER_GROUPS.flatMap((g) => foodsByGroup[g]).filter((f) => f.name.toLowerCase().includes(q)) : group === 'mine' ? customFoods.map(customFoodToCatalogFood) : foodsByGroup[group];
   const available = list.filter((f) => !chosen.has(f.id));
 
   return (
@@ -113,6 +114,19 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
         </div>
         {!q && (
           <div className="mb-2 flex flex-wrap gap-1.5" role="tablist" aria-label="Grupo de alimentos">
+            {customFoods.length > 0 && (
+              <button
+                role="tab"
+                aria-selected={group === 'mine'}
+                onClick={() => setGroup('mine')}
+                data-testid="extra-tab-mine"
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                  group === 'mine' ? 'border-white/40 bg-white/10 text-white' : 'border-brand-border text-neutral-400 hover:text-white'
+                }`}
+              >
+                Mis alimentos
+              </button>
+            )}
             {BUILDER_GROUPS.filter((g) => foodsByGroup[g].length > 0).map((g) => (
               <button
                 key={g}
@@ -129,7 +143,7 @@ export function ExtraFoodPanel({ prefs, updatePrefs, iso, defaultHour, onDone, m
           </div>
         )}
         {available.length === 0 ? (
-          <p className="text-xs text-neutral-500">{q ? 'Ningún alimento coincide.' : 'Ya has añadido todos los de este grupo.'}</p>
+          <p className="text-xs text-neutral-500">{q ? 'Ningún alimento coincide.' : group === 'mine' ? 'Ya has añadido todos los de tu biblioteca.' : 'Ya has añadido todos los de este grupo.'}</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {available.map((f) => (
