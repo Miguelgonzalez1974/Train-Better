@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Send, X } from 'lucide-react';
+import { ScanBarcode, Send, X } from 'lucide-react';
 import { FOODS } from '../../data/nutrition/foods';
 import type { ExtraFoodEntry } from '../../data/athlete/types';
 import { customFoodToCatalogFood } from '../../engine/customFoods';
@@ -21,7 +21,10 @@ export function RexMeal({
   iso,
   missing,
   onCreateFood,
+  onScan,
 }: {
+  /** Abrir el escáner de códigos de barras de un producto envasado. */
+  onScan?: () => void;
   shared: NutritionShared;
   iso: string;
   /** Lo que le faltaba al día antes de apuntar esto, para decir cuánto queda. */
@@ -142,6 +145,18 @@ export function RexMeal({
           autoComplete="off"
           className="h-10 min-w-0 flex-1 rounded-xl border border-brand-border bg-brand-bg px-3 text-sm text-white placeholder:text-neutral-600 focus:border-brand-gold focus:outline-none"
         />
+        {onScan && (
+          <button
+            type="button"
+            onClick={onScan}
+            aria-label="Escanear un producto"
+            title="Escanear el código de barras"
+            data-testid="nutri-scan"
+            className="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-border text-neutral-200 transition-colors hover:border-brand-gold hover:text-white"
+          >
+            <ScanBarcode size={18} strokeWidth={2.25} />
+          </button>
+        )}
         <button
           type="submit"
           disabled={text.trim() === ''}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Scale, Star, ToggleRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Scale, ScanBarcode, Star, ToggleRight, X } from 'lucide-react';
 import { makeFoodResolver } from '../../engine/customFoods';
 import { totalsOf } from '../../engine/mealBuilder';
 import { fixedPortion } from '../../engine/mealBuilder';
@@ -8,6 +8,7 @@ import type { ExtraFoodEntry } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
 import { SectionLabel } from '../shell/SectionLabel';
 import { DAY_TYPE_STYLE } from '../planificacion/NutritionGlance';
+import { BarcodeScanner } from './BarcodeScanner';
 import { ExtraFoodPanel } from './ExtraFoodPanel';
 import { MacroRing } from './MacroRing';
 import { MisAlimentosPanel } from './MisAlimentosPanel';
@@ -42,6 +43,7 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
   const [typeOverride, setTypeOverride] = useState<NutritionDayType | null>(null);
   const [changingType, setChangingType] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [myFoods, setMyFoods] = useState(false);
   /** Nombre con el que se abre «Mis alimentos» cuando Rex no conoce lo que has dicho. */
   const [myFoodsName, setMyFoodsName] = useState('');
@@ -131,6 +133,7 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
             title: 'Apuntar y ajustar',
             items: [
               { label: 'Añadir alimento', icon: Plus, onClick: () => setAdding(true) },
+              { label: 'Escanear un producto', hint: 'código de barras', icon: ScanBarcode, onClick: () => setScanning(true) },
               { label: 'Mis alimentos', icon: Star, onClick: () => setMyFoods(true) },
               { label: 'Registrar mi peso', hint: `${weightKg} kg`, icon: Scale, onClick: () => rexBus.emit('nutri-weight') },
               { label: 'Cambiar el tipo de día', hint: 'ligero · normal · fuerte', icon: ToggleRight, onClick: () => setChangingType(true) },
@@ -200,6 +203,7 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
         shared={shared}
         iso={iso}
         missing={missing}
+        onScan={() => setScanning(true)}
         onCreateFood={(name) => {
           setMyFoodsName(name);
           setMyFoods(true);
@@ -268,6 +272,8 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
           <ExtraFoodPanel prefs={prefs} updatePrefs={updatePrefs} iso={iso} defaultHour={iso === todayIso ? nowHour : 12} onDone={() => setAdding(false)} mode="diario" />
         </Modal>
       )}
+
+      {scanning && <BarcodeScanner shared={shared} iso={iso} onClose={() => setScanning(false)} />}
 
       {myFoods && (
         <Modal open onClose={() => setMyFoods(false)} title="Mis alimentos">

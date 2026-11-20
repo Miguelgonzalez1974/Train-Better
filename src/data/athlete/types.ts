@@ -333,6 +333,11 @@ export interface CustomFood {
   proteinPer100: number;
   carbsPer100: number;
   group: CustomFoodGroup;
+  /** Código de barras del producto si se creó escaneándolo: la próxima vez se reconoce sin consultar nada. */
+  barcode?: string;
+  /** Lo que pesa un envase y una ración (g o ml), si se conocían al escanear: para las cantidades rápidas. */
+  packageGrams?: number;
+  servingGrams?: number;
 }
 
 /** Un alimento (o varios) añadido fuera de las 5 comidas, a una hora concreta. */
