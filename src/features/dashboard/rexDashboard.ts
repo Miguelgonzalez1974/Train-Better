@@ -57,6 +57,9 @@ export type RexTarget =
   | 'movilidad'
   /** Nutrición: ir a la caja «He comido…». Objetivos: hablar con Rex (el asistente). */
   | 'nutri-comido'
+  /** Desde cualquier pantalla: Nutrición con la caja «He comido…» enfocada, o con el escáner de códigos de barras abierto. */
+  | 'nutri-comida'
+  | 'nutri-escanear'
   | 'objetivos-hablar'
   /** Cerrar la competición que acaba de pasar con Rex (en Objetivos) y montar el camino a la siguiente. */
   | 'competicion-cierre'
@@ -170,6 +173,8 @@ export interface RexContext {
   /** Una categoría de «Tu nivel» que conviene completar (ver `wodCategoryNeed`): Rex lo cuenta y lleva a verla. null = nada que decir. */
   levelNeed?: { category: string; reason: string } | null;
   nutritionPercent: number | null;
+  /** Lo que falta hoy de proteína y de hidratos (null si no se puede calcular: sin peso). Tras entrenar, Rex lo cuenta y ofrece apuntar comida. */
+  nutritionLeft?: { protein: number; carbs: number } | null;
   /** Días de entreno previstos cumplidos seguidos. */
   streak: number;
   /** Cuántos objetivos van por detrás o les falta un test. */
@@ -286,6 +291,58 @@ export function closingSuggestion(c: RexClosing | null): RexSuggestion {
   return { ...base, text: `Sesión hecha. ${body}${notDone}${highlight}`, mood, tone };
 }
 
+/** Cuánto falta de proteína o de hidratos para que Rex ofrezca apuntar comida tras entrenar: con menos que esto el día ya está prácticamente cubierto. */
+export const NUTRITION_LEFT_MIN = { protein: 20, carbs: 40 };
+
+/**
+ * Tras entrenar: lo que falta de comida hoy y dos botones para apuntarlo (la caja de Rex, o escanear un producto). Solo habla si falta algo
+ * que importe; con el día cubierto se calla.
+ */
+export function postTrainingNutritionSuggestion(left: { protein: number; carbs: number } | null | undefined, hour: number): RexSuggestion | null {
+  if (!left || hour >= 23) return null;
+  if (left.protein < NUTRITION_LEFT_MIN.protein && left.carbs < NUTRITION_LEFT_MIN.carbs) return null;
+  const parts = [
+    left.protein >= NUTRITION_LEFT_MIN.protein ? `${Math.round(left.protein)} g de proteína` : null,
+    left.carbs >= NUTRITION_LEFT_MIN.carbs ? `${Math.round(left.carbs)} g de hidratos` : null,
+  ].filter((p): p is string => p !== null);
+  const lead = 'Comida.';
+  return {
+    id: 'post-nutricion',
+    priority: 93,
+    lead,
+    tone: 'info',
+    text: `${lead} Te faltan ${parts.join(' y ')} para hoy. ¿Apunto algo?`,
+    mood: 'idle',
+    actions: [
+      { label: 'Apuntar comida', target: 'nutri-comida' },
+      { label: 'Escanear producto', target: 'nutri-escanear' },
+    ],
+  };
+}
+
+/**
+ * Por la noche, con el día entrenado: una línea con cómo ha ido (esfuerzo frente al objetivo y comida). Solo si hay algo que contar; sin entrenar
+ * o sin datos, Rex no dice nada.
+ */
+export function nightSuggestion(closing: RexClosing | null | undefined, nutritionPercent: number | null, hour: number): RexSuggestion | null {
+  if (hour < 21 || !closing || closing.status === 'sin-entrenar') return null;
+  const effort =
+    closing.status === 'dentro' ? 'esfuerzo dentro de tu objetivo' : closing.status === 'pasado' ? 'esfuerzo por encima de tu objetivo' : 'esfuerzo por debajo de tu objetivo';
+  const food = nutritionPercent === null ? '' : `, comida al ${nutritionPercent} %`;
+  const tone: RexSuggestion['tone'] = closing.status === 'pasado' ? 'mid' : 'good';
+  const lead = 'Día cerrado.';
+  return {
+    id: 'noche',
+    priority: 96,
+    lead,
+    tone,
+    text: `${lead} Entrenaste con ${effort}${food}. ${closing.status === 'pasado' ? 'Mañana, con cuidado; ahora, a descansar.' : 'A descansar.'}`,
+    mood: closing.status === 'pasado' ? 'think' : 'happy',
+    actions: closing.hasDetail ? [{ label: 'Ver detalle', target: 'detalle-dia' }] : [],
+    dismissible: true,
+  };
+}
+
 /** Todas las sugerencias que tocan ahora, de más a menos importante. Nunca incluye la tranquila (`QUIET_SUGGESTION`). */
 export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
   if (ctx.viewDay) return [daySuggestion(ctx.viewDay)];
@@ -350,6 +407,11 @@ export function buildRexSuggestions(ctx: RexContext): RexSuggestion[] {
   // La frase principal de hoy: tras entrenar, cómo salió; antes, el consejo del día. Va justo detrás del check-in y no se aparta.
   if (ctx.isToday && ctx.trainedToday) {
     out.push(closingSuggestion(ctx.closing ?? null));
+    // Tras entrenar, Rex toma la iniciativa: la comida que falta (con la caja y el escáner a un toque) y, de noche, el resumen del día.
+    const food = postTrainingNutritionSuggestion(ctx.nutritionLeft, ctx.hour);
+    if (food) out.push(food);
+    const night = nightSuggestion(ctx.closing, ctx.nutritionPercent, ctx.hour);
+    if (night) out.push(night);
   } else if (ctx.isToday && ctx.advice) {
     out.push(adviceSuggestion(ctx.advice, ctx));
   }

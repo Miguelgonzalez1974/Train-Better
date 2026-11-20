@@ -46,6 +46,8 @@ export interface GlobalTile {
 
 export const GLOBAL_TILES: GlobalTile[] = [
   { id: 'acortar', label: 'Acortar la sesión', hint: 'tengo poco tiempo', iconKey: 'timer', group: 'sesion', ask: 'acortar la sesion' },
+  { id: 'empezar-sesion', label: 'Empezar la sesión', hint: 'las tarjetas', iconKey: 'play', group: 'sesion', ask: 'empieza la sesion' },
+  { id: 'cerrar-sesion', label: 'Cerrar la sesión', hint: 'esfuerzo y minutos', iconKey: 'flag', group: 'sesion', ask: 'cierra la sesion' },
   { id: 'otro-wod', label: 'Otro WOD', iconKey: 'shuffle', group: 'sesion', ask: 'otro wod' },
   { id: 'cambiar-dia', label: 'Cambiar día', hint: 'mover o intercambiar', iconKey: 'calendar-clock', group: 'dia', ask: 'cambiar dia' },
   { id: 'que-toca-manana', label: 'Qué toca mañana', iconKey: 'calendar-days', group: 'dia', ask: 'que toca manana' },
@@ -60,6 +62,7 @@ export const GLOBAL_TILES: GlobalTile[] = [
   { id: 'mi-racha', label: 'Mi racha', iconKey: 'flame', group: 'datos', ask: 'mi racha' },
   { id: 'por-que-hoy', label: 'Por qué hoy así', iconKey: 'help-circle', group: 'datos', ask: 'por que hoy asi' },
   { id: 'apuntar-comida', label: 'Apuntar comida', iconKey: 'apple', group: 'nutricion', prefill: 'he comido ' },
+  { id: 'escanear', label: 'Escanear un producto', hint: 'código de barras', iconKey: 'scan-barcode', group: 'nutricion', ask: 'escanea un producto' },
   { id: 'apuntar-peso', label: 'Apuntar mi peso', iconKey: 'scale', group: 'nutricion', ask: 'apunta mi peso' },
   { id: 'que-falta', label: 'Qué me falta hoy', hint: 'proteína y carbohidrato', iconKey: 'utensils', group: 'nutricion', ask: 'que me falta' },
   { id: 'nuevo-objetivo', label: 'Crear un objetivo', iconKey: 'target', group: 'objetivos', ask: 'quiero crear un objetivo' },
@@ -79,6 +82,9 @@ const TILE_META: Record<string, { base: number; screens?: RexScreen[] }> = {
   faltar: { base: 8 },
   'apuntar-comida': { base: 12, screens: ['nutricion'] },
   'apuntar-peso': { base: 9, screens: ['nutricion'] },
+  escanear: { base: 9 },
+  'empezar-sesion': { base: 10 },
+  'cerrar-sesion': { base: 10 },
   'que-falta': { base: 11, screens: ['nutricion'] },
   'nuevo-objetivo': { base: 10, screens: ['objetivos'] },
   'mis-marcas': { base: 9, screens: ['dashboard'] },
@@ -129,6 +135,11 @@ export function scoreTile(id: string, ctx: TileContext): number {
   if (id === 'no-estoy' && ctx.tired && training) s += 14;
   if ((id === 'apuntar-comida' || id === 'que-falta') && isMealTime(ctx.hour)) s += 10;
   if (id === 'apuntar-peso' && inWindow(ctx.hour, 5, 11)) s += 5;
+  // Escanear un producto: a la hora de comer y, sobre todo, justo tras entrenar.
+  if (id === 'escanear') s += (isMealTime(ctx.hour) ? 8 : 0) + (ctx.session === 'done' ? 8 : 0);
+  // Empezar y cerrar la sesión: solo cuando tocan (sin empezar / en marcha).
+  if (id === 'empezar-sesion') s += ctx.session === 'pending' ? 16 : ctx.session === 'in-progress' ? 8 : -40;
+  if (id === 'cerrar-sesion') s += ctx.session === 'in-progress' ? 30 : -40;
   if ((id === 'corregir' || id === 'deshacer-registro') && ctx.session !== 'done') s -= 30;
   if (id === 'corregir' && ctx.session === 'done') s += 12;
   if (id === 'check-in' && inWindow(ctx.hour, 5, 12)) s += 4;

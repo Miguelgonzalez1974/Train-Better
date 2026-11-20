@@ -87,6 +87,7 @@ import type { MarkKey } from './rexMarks';
 import { competitionToClose, nextCompetitionGoal } from '../../engine/postCompetition';
 import { handoff } from '../../lib/handoff';
 import { toast } from '../../lib/toast';
+import { appNav } from '../../lib/appNav';
 import { buildSessionSummaryData, e1rmSuggestionKey, summaryHighlight, type E1rmSuggestion } from '../../engine/sessionSummary';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { addSubirPrGoal } from './rexAnalysis';
@@ -375,6 +376,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     emphasisReviewPending: emphasisReviewNew,
     levelNeed: wodNeed ? { category: wodNeed.category, reason: wodNeed.reason } : null,
     nutritionPercent: isToday ? nutritionPercent : null,
+    nutritionLeft: isToday && nutrition ? { protein: Math.max(0, nutrition.protein.target - nutrition.protein.done), carbs: Math.max(0, nutrition.carbs.target - nutrition.carbs.done) } : null,
     streak,
     goalsBehind,
     painLabels: getActivePainFlags(profile.painFlags, todayIso).map((f) => PAIN_AREA_LABEL[f.area]),
@@ -451,6 +453,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return onNavigateToObjetivos();
       case 'nutricion':
         return setShowNutrition(true);
+      case 'nutri-comida':
+      case 'nutri-escanear':
+        // Nutrición lo recoge al montarse: enfoca la caja «He comido…» o abre el escáner.
+        handoff.put('nutri-act', target === 'nutri-escanear' ? 'scan' : 'comida');
+        appNav.goTo('nutricion');
+        return;
       case 'peso':
         return setShowBodyweight(true);
       case 'forma':

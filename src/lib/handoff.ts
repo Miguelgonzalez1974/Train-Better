@@ -3,7 +3,9 @@
  * pantalla de destino lo recoge una sola vez al montarse. Caduca a los dos minutos, para que algo que no llegó a abrirse no salte días
  * después. Vive en memoria: una recarga lo borra, y está bien.
  */
-export type HandoffKey = 'support-start' | 'plan-act' | 'objetivos-asistente' | 'analisis-tab' | 'dash-act';
+export type HandoffKey = 'support-start' | 'plan-act' | 'objetivos-asistente' | 'analisis-tab' | 'dash-act' | 'nutri-act';
+// El valor de 'nutri-act': 'scan' (Nutrición abre el escáner de códigos de barras) o 'comida' (Nutrición enfoca la caja «He comido…»).
+// El valor de 'plan-act': 'continuar' (las tarjetas, entrenando), 'cerrar' (las tarjetas en el cierre) u 'otro-wod'.
 // El valor de 'dash-act': 'resumen' (el Dashboard abre «Lo que hiciste» de hoy, con el resumen de la sesión).
 // El valor de 'analisis-tab': 'perfil' (Análisis en su pestaña Perfil), 'marcas' (la pantalla Mis marcas) o 'marcas:backSquat' (con ese levantamiento desplegado).
 

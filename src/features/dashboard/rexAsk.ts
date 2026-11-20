@@ -14,11 +14,17 @@ import type { PainArea } from '../../data/athlete/types';
 import type { PainFollowUp } from '../../engine/painFlags';
 import type { NewRexNote, NoteSelector } from '../../engine/rexNotes';
 import { parseMemoryAsk } from './rexMemoryAsk';
+import { FOODS } from '../../data/nutrition/foods';
+import { parseMeal } from '../../engine/mealText';
 
 export type AskIntent =
   | { kind: 'peso'; kg: number }
   /** «He comido…»: la frase entera pasa a Nutrición para que Rex la lea allí. */
-  | { kind: 'comida'; text: string }
+  | { kind: 'comida'; text: string; /** `confirmar`: ya dijo que sí a lo que Rex entendió; `editar`: quiere cambiarlo en Nutrición. */ mode?: 'confirmar' | 'editar' }
+  /** Órdenes de entreno y de comida desde cualquier pantalla: empezar o seguir la sesión, cerrarla, escanear un producto. */
+  | { kind: 'empezar' }
+  | { kind: 'cerrar' }
+  | { kind: 'escanear' }
   /** ¿Qué toca ese día? `offset` en días desde hoy (0 = hoy). */
   | { kind: 'dia'; offset: number; label: string }
   | { kind: 'estado' }
@@ -362,6 +368,28 @@ export function splitAsk(text: string, todayWeekday: number): string[] | null {
   return ok ? parts : null;
 }
 
+/**
+ * Las órdenes que valen desde cualquier pantalla. Se piden con un verbo claro y el objeto (la sesión, el entreno, un producto): «el programa» o «la
+ * competición» tienen sus propias reglas y no se leen aquí.
+ */
+export function parseOrderAsk(norm: string): Extract<AskIntent, { kind: 'empezar' | 'cerrar' | 'escanear' }> | null {
+  if (/\b(programa|texas|competicion)\b/.test(norm)) return null;
+  if (/\b(escanea|escanear|escaneo|escaner|escanee)\b|\bcodigo de barras\b|\bleer (un |el )?codigo\b/.test(norm)) return { kind: 'escanear' };
+  if (
+    /\b(cierra|cerrar|cierro|finaliza|finalizar|termina|terminar)\b.*\b(sesion|entreno|entrenamiento)\b/.test(norm) ||
+    /\b(ya )?(he|hemos) (terminado|acabado)\b|\bya (termine|acabe|termino|acabo)\b|\b(termine|acabe) (la sesion|el entreno|de entrenar)\b|\bsesion terminada\b/.test(norm)
+  ) {
+    return { kind: 'cerrar' };
+  }
+  if (
+    /\b(empieza|empezar|empecemos|empiezo|arranca|arrancar|inicia|iniciar|comienza|comenzar|continua|continuar|sigue|seguir|retoma|retomar)\b.*\b(sesion|entreno|entrenamiento|entrenar)\b/.test(norm) ||
+    /\bvamos a (entrenar|empezar)\b|^(a )?entrenar$|^empezar$|^empieza$/.test(norm)
+  ) {
+    return { kind: 'empezar' };
+  }
+  return null;
+}
+
 /** Lee lo que se ha escrito. La primera regla que encaja gana: peso, comida, día, estado, módulo; si no, ayuda. */
 export function parseAsk(text: string, todayWeekday: number): AskIntent {
   const norm = fixTypos(normalizeAsk(text));
@@ -371,7 +399,23 @@ export function parseAsk(text: string, todayWeekday: number): AskIntent {
   const memory = parseMemoryAsk(text, norm);
   if (memory) return memory;
 
+  // Lo que responden los botones de Rex al enseñar lo que ha entendido de una comida (ver `rexMealAsk.ts`).
+  const mealMode = text.trim().match(/^(confirma|edita) comida:\s*([\s\S]+)$/i);
+  if (mealMode) return { kind: 'comida', text: mealMode[2].trim(), mode: mealMode[1].toLowerCase() === 'confirma' ? 'confirmar' : 'editar' };
+
   if (MEAL_START.test(norm)) return { kind: 'comida', text: text.trim() };
+
+  // «Apunta dos huevos y 200 g de arroz»: sin decir «he comido», pero con alimentos que Rex conoce (no es el peso, ni una marca, ni una orden).
+  const logged = text.trim().match(/^(?:apunta(?:me)?|anota(?:me)?|a[ñn]ade|a[ñn]ademe|registra(?:me)?)\s+(?:que\s+)?([\s\S]+)$/i);
+  if (logged && !/\b(peso|kg|kgs|kilos?)\s*$/.test(logged[1].trim())) {
+    // Vale si reconoce algún alimento, aunque haga falta elegir cuál o la cantidad (eso se resuelve en la caja de Nutrición); no si todo es desconocido.
+    const read = parseMeal(logged[1], FOODS);
+    if (read.items.length > 0 || read.issues.some((i) => i.kind !== 'desconocido')) return { kind: 'comida', text: logged[1].trim() };
+  }
+
+  // Órdenes de entreno y escáner: «empieza la sesión», «cierra la sesión», «he terminado», «escanea un producto».
+  const order = parseOrderAsk(norm);
+  if (order) return order;
 
   // Marcas: antes que el peso («mi back squat es 140 kg» no es tu peso corporal) y que los módulos («records» abre el Análisis).
   const mark = parseMarkAsk(norm);

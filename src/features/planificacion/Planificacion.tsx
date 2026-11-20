@@ -102,7 +102,7 @@ import { buildPlanRexSuggestions } from './rexPlan';
 import { CompanionCard, pickCompanionProgram } from './CompanionCard';
 import { CompanionRecover } from './CompanionRecover';
 import { ScreenRex } from '../dashboard/ScreenRex';
-import { routeAsk, undoWeekChange } from '../dashboard/rexAskRouter';
+import { orderRefusal, routeAsk, undoWeekChange } from '../dashboard/rexAskRouter';
 import { peekUndo } from '../../lib/weekUndo';
 import { REX_HINTS } from '../dashboard/rexHints';
 import { dayAnswer, type AskAnswer } from '../dashboard/rexAsk';
@@ -1347,6 +1347,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         'otro-wod': () => {
           if (!hasWodBlock || alreadyCompletedToday) return { lead: 'Hoy no hay WOD que cambiar.', tone: 'info', text: 'No hay un WOD en la sesión de hoy o ya está hecha.', actions: [] };
           handleRexAct('otro-wod');
+          return 'close';
+        },
+        // «Empieza la sesión» / «cierra la sesión»: las tarjetas, sin salir de aquí (en el cierre si se pidió cerrar).
+        empezar: () => {
+          const refused = orderRefusal('empezar', todayIso);
+          if (refused) return refused;
+          openCards('live', 'start');
+          return 'close';
+        },
+        cerrar: () => {
+          const refused = orderRefusal('cerrar', todayIso);
+          if (refused) return refused;
+          openCards('live', 'end');
           return 'close';
         },
         programa: (intent) => programAsk(intent.action, intent.days),

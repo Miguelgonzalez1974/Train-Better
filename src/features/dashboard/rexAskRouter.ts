@@ -9,7 +9,9 @@ import { applyPainFollowUps, getActivePainFlags, type PainFollowUp } from '../..
 import { forgotAnswer, noPainAnswer, painFollowAnswer, recallAnswer, rememberedAnswer } from './rexMemoryAsk';
 import { followUpText, forgetTopic, rememberTopic } from './rexContext';
 import { rexBus } from '../../lib/rexBus';
-import type { RexTarget } from './rexDashboard';
+import type { RexAction, RexTarget } from './rexDashboard';
+import { mealEntry, mealProposalAnswer, mealSavedAnswer, proposeMeal } from './rexMealAsk';
+import { withExtra } from '../nutricion/nutritionData';
 import { dataAnswer, whyAnswer } from './rexData';
 import { changeDayActionsAnswer, changeDayPickAnswer } from './rexChangeDay';
 import { confirmMoveText, confirmWeekText, moveChoiceAnswer, moveDoneAnswer, moveProposalAnswer, moveRefusalAnswer, shortSessionLabel, weekDoneAnswer, weekProposalAnswer, weekRowsText, weekUndoNoneAnswer, weekUndoneAnswer } from './rexMove';
@@ -58,6 +60,27 @@ export function sendMealToNutrition(text: string, onNutrition: boolean): void {
     /* sin almacenamiento: se abre Nutrición y se escribe allí */
   }
   appNav.goTo('nutricion');
+}
+
+/**
+ * Cuándo no se puede empezar o cerrar la sesión de hoy (ya está registrada, o no hay una sesión que hacer): la respuesta que lo explica; null si se puede.
+ * Lo comparten el reparto común y Planificación, que abre las tarjetas por su cuenta.
+ */
+export function orderRefusal(kind: 'empezar' | 'cerrar', todayIso: string): AskAnswer | null {
+  const toPlan: RexAction[] = [{ label: 'Ir a Planificación', target: 'ir-planificacion' }];
+  if (athleteRepository.getHistory().some((h) => h.date === todayIso)) {
+    return {
+      lead: 'Hoy ya está registrada.',
+      tone: 'info',
+      text: `La sesión de hoy ya está ${kind === 'cerrar' ? 'cerrada' : 'hecha'}. Si algo no cuadra, ábrela en Planificación con «Ver y corregir».`,
+      actions: toPlan,
+    };
+  }
+  const session = athleteRepository.getCachedSession(todayIso);
+  if (!session || session.isRestDay || session.blocks.length === 0 || session.source === 'custom') {
+    return { lead: 'Hoy no hay sesión.', tone: 'info', text: 'Hoy no tienes una sesión prevista para entrenar. Puedes elegir una en Planificación.', actions: toPlan };
+  }
+  return null;
 }
 
 /** Junta varias respuestas en una: la primera da el arranque y el tono, el resto va detrás (con su arranque), y los botones se suman sin repetir. */
@@ -163,8 +186,42 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
       api.onWeightLogged?.();
       return answer;
     }
-    case 'comida':
-      sendMealToNutrition(intent.text, screen === 'nutricion');
+    case 'comida': {
+      // En Nutrición, la caja de la pantalla lo lee y lo enseña ahí mismo; «Cambiar» también lleva allí.
+      if (screen === 'nutricion' || intent.mode === 'editar') {
+        sendMealToNutrition(intent.text, screen === 'nutricion');
+        return 'close';
+      }
+      const profile = athleteRepository.getProfile();
+      const proposal = proposeMeal(intent.text, profile.nutritionPrefs?.customFoods);
+      // Con algo que Rex no tiene claro (un alimento que no conoce, varios posibles, una cantidad sin decir) se elige en la caja de Nutrición.
+      if (proposal.kind === 'needs-nutrition') {
+        sendMealToNutrition(intent.text, false);
+        return 'close';
+      }
+      const missing = api.missing?.() ?? null;
+      if (intent.mode !== 'confirmar') return mealProposalAnswer(intent.text, proposal, missing);
+      const now = new Date();
+      const entry = mealEntry(proposal.items, now.getHours() + now.getMinutes() / 60);
+      athleteRepository.saveProfile({ ...profile, nutritionPrefs: withExtra(profile.nutritionPrefs ?? {}, api.todayIso, entry) });
+      api.onWeekChanged?.();
+      return mealSavedAnswer(proposal.totals, missing);
+    }
+    case 'empezar':
+    case 'cerrar': {
+      const refused = orderRefusal(intent.kind, api.todayIso);
+      if (refused) return refused;
+      // Planificación recoge esto al montarse y abre las tarjetas (en el cierre si se pidió cerrar).
+      handoff.put('plan-act', intent.kind === 'cerrar' ? 'cerrar' : 'continuar');
+      appNav.goTo('planificacion');
+      return 'close';
+    }
+    case 'escanear':
+      // Nutrición lo recoge al montarse y abre el escáner; si ya estás allí lo abre la propia pantalla.
+      if (screen !== 'nutricion') {
+        handoff.put('nutri-act', 'scan');
+        appNav.goTo('nutricion');
+      }
       return 'close';
     case 'marca-ver': {
       // «Mis marcas» (o «ver la gráfica de…»): una pantalla propia, no una frase apiñada. En el Dashboard se abre ahí mismo; desde otra pantalla se va al Dashboard y se abre.

@@ -17,6 +17,7 @@ import { ScreenRex } from '../dashboard/ScreenRex';
 import { routeAsk } from '../dashboard/rexAskRouter';
 import { REX_HINTS } from '../dashboard/rexHints';
 import { rexBus } from '../../lib/rexBus';
+import { handoff } from '../../lib/handoff';
 import { QuantityStepper } from './QuantityStepper';
 import { addDays, dayLabel, dayTarget, withExtra, withExtraItemGrams, withoutExtra } from './nutritionData';
 import type { NutritionShared } from './shared';
@@ -51,6 +52,19 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
     setTypeOverride(null);
     setChangingType(false);
   }, [iso]);
+  // Lo que Rex deja dicho desde otra pantalla («escanea un producto», «apunta comida»): se recoge una sola vez al llegar.
+  useEffect(() => {
+    const act = handoff.take('nutri-act');
+    if (act === 'scan') setScanning(true);
+    else if (act === 'comida') {
+      const t = window.setTimeout(() => {
+        const input = document.querySelector<HTMLInputElement>('input[aria-label="Qué has comido"]');
+        input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input?.focus();
+      }, 400);
+      return () => window.clearTimeout(t);
+    }
+  }, []);
 
   const dayType = typeOverride ?? day?.type ?? 'normal';
   const objective = useMemo(() => dayTarget(dayType, weightKg), [dayType, weightKg]);
@@ -124,6 +138,13 @@ export function DiarioView({ shared, iso, onChangeIso }: DiarioViewProps) {
             todayIso,
             missing: () => missing,
             onWeightLogged: () => rexBus.emit('nutri-weight', 'refresh'),
+            local: {
+              // «Escanea un producto»: se abre aquí mismo.
+              escanear: () => {
+                setScanning(true);
+                return 'close';
+              },
+            },
           })
         }
         examples={[]}
