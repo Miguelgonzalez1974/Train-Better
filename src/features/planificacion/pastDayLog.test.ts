@@ -97,6 +97,9 @@ describe('series y pesos de un día pasado', () => {
     const sets = workSetsFrom('2026-10-30', lifts, state).filter((s) => s.movementId === main.logId);
     expect(sets.find((s) => s.setNumber === 2)).toBeUndefined();
     expect(sets.find((s) => s.setNumber === 1)!.kg).toBe(97.5);
+    // Con el peso previsto sin tocar se da por buena «como estaba previsto» (no es evidencia); con otro peso es un dato medido.
+    expect(sets.find((s) => s.setNumber === 1)!.asPlanned).toBeUndefined();
+    expect(sets.find((s) => s.setNumber === 3)!.asPlanned).toBe(true);
   });
 
   it('una serie sin peso (cuerpo libre) no se guarda: no aporta al progreso ni al 1RM', () => {

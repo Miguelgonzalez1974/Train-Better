@@ -39,7 +39,8 @@ export interface FocusModeProps {
   todayWorkLog: WorkSetEntry[];
   /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de un levantamiento). */
   progress: MovementProgressData;
-  onLogWorkSet: (movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number, quality?: SetQuality) => void;
+  /** `asPlanned`: la serie se da por buena como estaba prevista (no medida); no cuenta como evidencia para el coach. */
+  onLogWorkSet: (movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number, quality?: SetQuality, asPlanned?: boolean) => void;
   /** Marca cómo salió una serie ya hecha (justa, fallada) o la deja como bien (undefined). */
   onSetQuality: (movementId: string, setNumber: number, quality: SetQuality | undefined) => void;
   onClearWorkSet: (movementId: string, setNumber: number) => void;

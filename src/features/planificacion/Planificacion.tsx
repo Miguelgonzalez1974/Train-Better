@@ -675,9 +675,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
   }
 
-  function handleLogWorkSet(movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number, quality?: SetQuality) {
+  function handleLogWorkSet(movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number, quality?: SetQuality, asPlanned?: boolean) {
     if (!session) return;
-    athleteRepository.saveWorkSet({ date: session.date, movementId, block, setNumber, kg, reps, ...(quality ? { quality } : {}) });
+    athleteRepository.saveWorkSet({ date: session.date, movementId, block, setNumber, kg, reps, ...(quality ? { quality } : {}), ...(asPlanned ? { asPlanned: true } : {}) });
     setWorkLog(athleteRepository.getWorkLog());
     // Aviso corto: una serie tras otra se sustituyen entre sí (mismo id) en vez de apilarse.
     const planned = session.blocks.find((b) => b.block === block && b.movementId === movementId)?.sets;
@@ -690,7 +690,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     if (!session) return;
     const entry = athleteRepository.getWorkLog().find((e) => e.date === session.date && e.movementId === movementId && e.setNumber === setNumber);
     if (!entry) return;
-    const { quality: _previous, ...rest } = entry;
+    // Tocar cómo salió la serie es medirla: deja de ser «como estaba previsto».
+    const { quality: _previous, asPlanned: _asPlanned, ...rest } = entry;
     athleteRepository.saveWorkSet(quality ? { ...rest, quality } : rest);
     setWorkLog(athleteRepository.getWorkLog());
   }

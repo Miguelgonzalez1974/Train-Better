@@ -369,6 +369,16 @@ describe('la calidad de cada serie manda sobre el resto', () => {
     expect(ev([undefined, undefined, undefined, undefined, undefined], fb({ actualRpe: 8 }), 'oly')!.block).toBe('oly');
   });
 
+  it('las series dadas por buenas «como estaba previsto» no son evidencia: no se juzga la sesión', () => {
+    const marks = [undefined, undefined, undefined, undefined, undefined];
+    const asPlanned = quality(marks).map((s) => ({ ...s, asPlanned: true }));
+    expect(evaluateLiftSession({ date: '2026-10-05', kind: 'strength', block, key: 'backSquat', sets: asPlanned, feedback: fb({ actualRpe: 6 }) })).toBeNull();
+    // Basta una medida y el resto dadas por buenas para no juzgar; con todas medidas sí se juzga.
+    const mixed = quality(marks).map((s, i) => (i === 0 ? s : { ...s, asPlanned: true }));
+    expect(evaluateLiftSession({ date: '2026-10-05', kind: 'strength', block, key: 'backSquat', sets: mixed, feedback: fb({ actualRpe: 6 }) })).toBeNull();
+    expect(evaluateLiftSession({ date: '2026-10-05', kind: 'strength', block, key: 'backSquat', sets: quality(marks), feedback: fb({ actualRpe: 6 }) })).not.toBeNull();
+  });
+
   it('las rampas y los complejos no se juzgan', () => {
     const marks = [undefined, undefined, undefined, undefined, undefined];
     expect(evaluateLiftSession({ date: '2026-10-05', block: { ...block, setPlan: [{ reps: 5, kg: 80 }, { reps: 3, kg: 90 }] }, key: 'backSquat', sets: quality(marks) })).toBeNull();

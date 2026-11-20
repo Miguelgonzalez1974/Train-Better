@@ -186,7 +186,7 @@ export function liftMarks(profile: AthleteProfile, history: SessionHistoryEntry[
   }
   const bestPerDay = new Map<string, LiftMark>();
   for (const s of profile.workLog ?? []) {
-    if (s.quality === 'fallada') continue;
+    if (s.quality === 'fallada' || s.asPlanned) continue;
     const m = getMovementById(s.movementId);
     const root = m && (STRENGTH_ROOT_PR_MAP[m.id] ?? OLY_ROOT_PR_MAP[m.id]);
     if (!root || !keys.has(root)) continue;
@@ -508,7 +508,7 @@ export function recentOfCategory(input: { profile: AthleteProfile; history: Sess
     for (const s of profile.workLog ?? []) {
       const m = getMovementById(s.movementId);
       const root = m && (STRENGTH_ROOT_PR_MAP[m.id] ?? OLY_ROOT_PR_MAP[m.id]);
-      if (!root || !keys.has(root) || s.quality === 'fallada') continue;
+      if (!root || !keys.has(root) || s.quality === 'fallada' || s.asPlanned) continue;
       const est = estimate1rm(s.kg, s.reps);
       if (est === null) continue;
       const cur = sets.find((x) => x.date === s.date && x.lift === root);

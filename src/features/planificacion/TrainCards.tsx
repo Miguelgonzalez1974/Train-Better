@@ -906,7 +906,7 @@ export function TrainCards({
                   // Todo como estaba previsto (con los pesos que hayas cambiado): para anotar de golpe al acabar.
                   Array.from({ length: rowCount }, (_, s) => s + 1)
                     .filter((n) => !setIsDone(mid, n))
-                    .forEach((n) => onLogWorkSet(mid, blk, n, kgFor(mid, n, plannedKg(n)), repsOf(n)));
+                    .forEach((n) => onLogWorkSet(mid, blk, n, kgFor(mid, n, plannedKg(n)), repsOf(n), undefined, true));
                   setSelected((p) => ({ ...p, [card.key]: rowCount }));
                 }}
                 className="text-xs font-semibold text-white/60 underline decoration-dotted"
@@ -1083,7 +1083,7 @@ export function TrainCards({
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                     <button
                       onClick={() => {
-                        p.missing.forEach((n) => onLogWorkSet(p.mid, p.blk, n, p.kgOf(n), p.repsOf(n)));
+                        p.missing.forEach((n) => onLogWorkSet(p.mid, p.blk, n, p.kgOf(n), p.repsOf(n), undefined, true));
                         setDismissed((d) => ({ ...d, [p.key]: true }));
                       }}
                       className="rounded-full px-3.5 py-2 text-sm font-bold text-black"
@@ -1149,7 +1149,7 @@ export function TrainCards({
     const dateLabel = new Date(`${session.date}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/[.,]/g, '');
     const last = cards.length - 1;
     const allAsPlanned = () => {
-      pendingLifts().forEach((p) => p.missing.forEach((n) => onLogWorkSet(p.mid, p.blk, n, p.kgOf(n), p.repsOf(n))));
+      pendingLifts().forEach((p) => p.missing.forEach((n) => onLogWorkSet(p.mid, p.blk, n, p.kgOf(n), p.repsOf(n), undefined, true)));
       setDoneItems((prev) => {
         const out = { ...prev };
         for (const c of cards) {

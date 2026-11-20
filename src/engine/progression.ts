@@ -123,6 +123,8 @@ export function evaluateLiftSession(input: EvaluateInput): ProgressionRecord | n
 
   const done = input.sets.filter((s) => s.kg > 0);
   if (done.length < prescribedSets || done.some((s) => s.reps < 1)) return null;
+  // Series dadas por buenas con «como estaba previsto» (no medidas): no son evidencia de cómo salió, no se juzga.
+  if (done.some((s) => s.asPlanned)) return null;
 
   const topKg = Math.max(...done.map((s) => s.kg));
   const falladas = done.filter((s) => s.quality === 'fallada').length;

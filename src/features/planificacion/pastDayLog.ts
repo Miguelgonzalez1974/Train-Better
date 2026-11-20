@@ -99,7 +99,8 @@ export function workSetsFrom(dateIso: string, lifts: PlannedLift[], state: LiftS
   for (const l of lifts) {
     for (const r of l.rows) {
       const s = state[liftKey(l.logId, r.set)];
-      if (s?.done && s.kg > 0) out.push({ date: dateIso, movementId: l.logId, block: l.block, setNumber: r.set, kg: s.kg, reps: r.reps });
+      // Con el peso previsto sin tocar, la serie se da por buena «como estaba previsto» (no es evidencia para el coach); con otro peso, es un dato medido.
+      if (s?.done && s.kg > 0) out.push({ date: dateIso, movementId: l.logId, block: l.block, setNumber: r.set, kg: s.kg, reps: r.reps, ...(s.kg === r.kg ? { asPlanned: true } : {}) });
     }
   }
   return out;

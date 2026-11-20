@@ -679,6 +679,11 @@ export interface WorkSetEntry {
   reps: number;
   /** Cómo salió la serie: ausente = bien; justa = salió pero con la técnica rota o por los pelos; allada = no se completó. */
   quality?: SetQuality;
+  /**
+   * La serie se dio por buena «como estaba previsto» (Todo como estaba previsto, Las hice…) en vez de anotarse como salió: cuenta para el volumen y
+   * lo hecho, pero no como evidencia para la progresión, el 1RM estimado ni «Tu nivel». Se quita en cuanto el atleta toca el peso o cómo salió.
+   */
+  asPlanned?: boolean;
 }
 
 export interface SessionBlockResult {
