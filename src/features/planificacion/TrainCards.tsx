@@ -95,7 +95,7 @@ function Cta({ onClick, children, testId, tone }: { onClick: () => void; childre
     <button
       onClick={onClick}
       data-testid={testId}
-      className={`flex h-16 w-full items-center justify-center gap-2 rounded-full text-lg font-bold transition-transform duration-150 active:scale-[0.98] ${
+      className={`flex min-h-16 w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-center text-[clamp(0.95rem,4.6vw,1.125rem)] font-bold leading-tight transition-transform duration-150 active:scale-[0.98] ${
         tone === 'ghost' ? 'bg-white/10 text-white' : 'bg-white text-black shadow-lg shadow-black/30'
       }`}
     >
@@ -121,6 +121,8 @@ export interface TrainCardsProps extends FocusModeProps {
   /** Abre «¿Algo ha pasado?» (me duele algo) encima de las tarjetas. */
   onPain?: () => void;
   wod?: TrainCardsWod;
+  /** «Hice otra cosa»: el registro rápido (solo esfuerzo y minutos), desde la tarjeta de cierre. */
+  onOtherThing?: () => void;
   /** `live` = entrenando; `review` = anotar después o corregir una sesión terminada: empieza por un resumen con todo lo previsto y sin descansos. */
   mode?: 'live' | 'review';
   /** Dónde abrir: en la primera tarjeta o directamente en el cierre. */
@@ -296,6 +298,7 @@ export function TrainCards({
   onExit,
   onFinish,
   onPain,
+  onOtherThing,
   wod,
   mode = 'live',
   startAt = 'start',
@@ -642,10 +645,10 @@ export function TrainCards({
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 {over ? (
-                  <span className="animate-pulse text-4xl font-black text-white">¡A la barra!</span>
+                  <span className="animate-pulse px-4 text-center text-[clamp(1.6rem,9vw,2.25rem)] font-black leading-tight text-white">¡A la barra!</span>
                 ) : (
                   <>
-                    <span className="text-[68px] font-black leading-none tabular-nums text-white">{clockText(remaining)}</span>
+                    <span className="text-[clamp(3rem,19vw,4.25rem)] font-black leading-none tabular-nums text-white">{clockText(remaining)}</span>
                     <span className="mt-1 text-xs font-semibold text-white/55">recomendado {restLabel(resting.total)}</span>
                   </>
                 )}
@@ -709,7 +712,7 @@ export function TrainCards({
         {header(theme, theme.label, sub)}
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-3 pt-4">
           <div className="flex items-start gap-2">
-            <h2 className="min-w-0 flex-1 text-[28px] font-extrabold leading-[1.1] text-white">{title}</h2>
+            <h2 className="min-w-0 flex-1 text-[clamp(1.4rem,8vw,1.75rem)] font-extrabold leading-[1.1] text-white [overflow-wrap:anywhere]">{title}</h2>
             {swapBtn}
           </div>
           {b.complex && (
@@ -792,35 +795,36 @@ export function TrainCards({
                   {wavePos}Serie {sel} de {rowCount}
                   {selDone ? ' · hecha' : ''}
                 </p>
-                <div className="mt-2 flex items-center justify-center gap-3">
-                  {prescribed > 0 || plan ? (
-                    <>
-                      <button onClick={() => bump(sel, -2.5)} aria-label="Menos peso" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/12 text-white active:bg-white/25" style={{ background: 'rgba(255,255,255,0.12)' }}>
-                        <Minus size={22} strokeWidth={3} />
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        {liftHasPr(mid) ? (
-                          <button onClick={() => setProgressTarget({ movementId: mid, targetKg: kg })} className="block w-full leading-none">
-                            <span className="block text-[60px] font-black leading-none tabular-nums" style={{ color: theme.accent }}>{kg > 0 ? fmtKgValue(kg) : '–'}</span>
-                            <span className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white/60">
-                              kg <ChartSpline size={11} className="text-white/40" />
-                            </span>
-                          </button>
-                        ) : (
-                          <span className="block w-full leading-none">
-                            <span className="block text-[60px] font-black leading-none tabular-nums" style={{ color: theme.accent }}>{kg > 0 ? fmtKgValue(kg) : '–'}</span>
-                            <span className="mt-1 block text-sm font-bold text-white/60">kg</span>
+                {prescribed > 0 || plan ? (
+                  <>
+                    {/* El peso solo y ancho (cabe 102,5 hasta en una pantalla de 320) y los botones − y + debajo, grandes. */}
+                    <div className="mt-2 min-w-0">
+                      {liftHasPr(mid) ? (
+                        <button onClick={() => setProgressTarget({ movementId: mid, targetKg: kg })} className="block w-full leading-none">
+                          <span className="block text-[clamp(2.75rem,17vw,4.25rem)] font-black leading-none tabular-nums" style={{ color: theme.accent }}>{kg > 0 ? fmtKgValue(kg) : '–'}</span>
+                          <span className="mt-1 flex items-center justify-center gap-1.5 text-sm font-bold text-white/60">
+                            kg <ChartSpline size={11} className="text-white/40" />
                           </span>
-                        )}
-                      </div>
-                      <button onClick={() => bump(sel, 2.5)} aria-label="Más peso" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white active:bg-white/25" style={{ background: 'rgba(255,255,255,0.12)' }}>
-                        <Plus size={22} strokeWidth={3} />
+                        </button>
+                      ) : (
+                        <span className="block w-full leading-none">
+                          <span className="block text-[clamp(2.75rem,17vw,4.25rem)] font-black leading-none tabular-nums" style={{ color: theme.accent }}>{kg > 0 ? fmtKgValue(kg) : '–'}</span>
+                          <span className="mt-1 block text-sm font-bold text-white/60">kg</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 flex gap-2.5">
+                      <button onClick={() => bump(sel, -2.5)} aria-label="Menos peso" className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1 rounded-full text-sm font-bold text-white active:bg-white/25" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                        <Minus size={20} strokeWidth={3} /> 2,5
                       </button>
-                    </>
-                  ) : (
-                    <span className="text-5xl font-black text-white">{b.reps}</span>
-                  )}
-                </div>
+                      <button onClick={() => bump(sel, 2.5)} aria-label="Más peso" className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1 rounded-full text-sm font-bold text-white active:bg-white/25" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                        <Plus size={20} strokeWidth={3} /> 2,5
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-2 text-[clamp(2rem,12vw,3rem)] font-black leading-none text-white">{b.reps}</p>
+                )}
                 {reps > 0 && !b.complex && <p className="mt-2 text-2xl font-extrabold text-white">× {reps} <span className="text-base font-semibold text-white/50">reps</span></p>}
                 {b.complex && <p className="mt-2 text-lg font-bold text-white">{b.reps} <span className="text-sm font-semibold text-white/50">el complejo entero</span></p>}
 
@@ -937,7 +941,7 @@ export function TrainCards({
             </p>
           )}
           <WodCategoryPill entries={entries.map((e) => e.entry)} part={card.part ?? undefined} />
-          <h2 className="text-[28px] font-extrabold leading-[1.1] text-white">{isBench ? benchWod?.name ?? 'Benchmark' : first.title ?? 'WOD'}</h2>
+          <h2 className="text-[clamp(1.4rem,8vw,1.75rem)] font-extrabold leading-[1.1] text-white [overflow-wrap:anywhere]">{isBench ? benchWod?.name ?? 'Benchmark' : first.title ?? 'WOD'}</h2>
           {format && <p className="mt-1 text-lg font-bold leading-snug" style={{ color: theme.accent }}>{localizeWodText(format)}</p>}
           <ul className="mt-3 flex flex-col divide-y divide-white/10">
             {isBench && benchWod
@@ -1002,7 +1006,7 @@ export function TrainCards({
           <button
             onClick={() => clockBus.open('workout')}
             data-testid="cards-wod-clock"
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-full text-base font-bold text-black active:scale-[0.98]"
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-center text-[clamp(0.9rem,4.2vw,1rem)] font-bold leading-tight text-black active:scale-[0.98]"
             style={{ background: theme.accent }}
           >
             <Timer size={20} strokeWidth={2.75} /> Abrir el cronómetro del WOD
@@ -1046,12 +1050,12 @@ export function TrainCards({
     return (
       <>
         {header(theme, 'Cierre')}
-        <div className={`flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto pb-3 pt-6 text-center ${integrated ? 'px-3' : 'px-6'}`}>
+        <div className={`flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto pb-3 pt-6 text-center ${integrated ? 'px-2' : 'px-6'}`}>
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full" style={{ background: `${theme.accent}22`, color: theme.accent }}>
             <Flag size={30} strokeWidth={2.25} />
           </span>
           <div>
-            <h2 className="text-[28px] font-extrabold leading-tight text-white">{open.length === 0 ? '¡Sesión completada!' : 'Antes de cerrar'}</h2>
+            <h2 className="text-[clamp(1.4rem,8vw,1.75rem)] font-extrabold leading-tight text-white">{open.length === 0 ? '¡Sesión completada!' : 'Antes de cerrar'}</h2>
             <p className="mt-1 text-sm text-white/60">
               {open.length === 0 ? 'Un último paso: apuntar cómo te has sentido.' : 'Hay series sin marcar. Dime qué pasó para que el coach no se confunda.'}
             </p>
@@ -1063,7 +1067,7 @@ export function TrainCards({
               { v: kgMoved > 0 ? `${Math.round(kgMoved).toLocaleString('es-ES')}` : '–', l: 'kg movidos' },
             ].map((s) => (
               <div key={s.l} className="rounded-2xl bg-white/[0.07] px-2 py-3">
-                <p className="text-2xl font-black tabular-nums text-white">{s.v}</p>
+                <p className="text-[clamp(1.05rem,5.6vw,1.5rem)] font-black leading-tight tabular-nums text-white">{s.v}</p>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-white/50">{s.l}</p>
               </div>
             ))}
@@ -1112,6 +1116,11 @@ export function TrainCards({
                 <Cta onClick={() => onReachClose?.()} testId="cards-open-close">
                   Cerrar la sesión <Check size={22} strokeWidth={3.25} />
                 </Cta>
+              )}
+              {onOtherThing && (
+                <button onClick={onOtherThing} className="mt-3 w-full text-center text-xs font-semibold text-white/55 underline decoration-dotted" data-testid="cards-other-thing">
+                  En realidad hice otra cosa
+                </button>
               )}
             </div>
           )}
@@ -1182,7 +1191,7 @@ export function TrainCards({
           <button
             onClick={allAsPlanned}
             data-testid="cards-all-as-planned"
-            className="flex h-16 w-full shrink-0 items-center justify-center gap-2 rounded-full text-lg font-bold text-black transition-transform duration-150 active:scale-[0.98]"
+            className="flex min-h-16 w-full shrink-0 items-center justify-center gap-2 rounded-full px-5 py-3 text-center text-[clamp(0.95rem,4.6vw,1.125rem)] font-bold leading-tight text-black transition-transform duration-150 active:scale-[0.98]"
             style={{ background: theme.accent }}
           >
             <Check size={22} strokeWidth={3.25} /> Todo como estaba previsto
@@ -1192,7 +1201,7 @@ export function TrainCards({
             {rows.map((r) => (
               <button key={r.ci} onClick={() => goTo(r.ci)} className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.07] px-3.5 py-3 text-left active:bg-white/10" data-testid="cards-overview-row">
                 <span className="min-w-0">
-                  <span className="block truncate text-base font-bold text-white">{r.title}</span>
+                  <span className="block text-base font-bold leading-snug text-white [overflow-wrap:anywhere]">{r.title}</span>
                   <span className="block text-xs text-white/55">{r.sub}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-1 text-xs font-bold" style={{ color: r.ok ? theme.accent : '#ffb27a' }}>
@@ -1224,7 +1233,7 @@ export function TrainCards({
   return (
     <div className="force-dark fixed inset-0 z-30 flex flex-col text-white" style={{ background: '#0b0b0e', ...(visible ?? {}) }} data-testid="train-cards">
       <div className="flex items-center gap-3 px-4 pb-1 pt-[calc(0.75rem+env(safe-area-inset-top))]">
-        <button onClick={onExit} aria-label="Salir del entreno" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20">
+        <button onClick={onExit} aria-label="Salir del entreno" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20">
           <X size={19} />
         </button>
         <div className="flex flex-1 gap-1" role="tablist" aria-label="Partes del entreno">
@@ -1242,7 +1251,7 @@ export function TrainCards({
           ))}
         </div>
         {onPain && (
-          <button onClick={onPain} aria-label="Me duele algo" title="Me duele algo" data-testid="cards-pain" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20">
+          <button onClick={onPain} aria-label="Me duele algo" title="Me duele algo" data-testid="cards-pain" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20">
             <HeartPulse size={19} strokeWidth={2.4} />
           </button>
         )}
@@ -1255,7 +1264,7 @@ export function TrainCards({
           aria-pressed={later}
           title="Lo anoto después: sin descansos ni avisos"
           data-testid="cards-later"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full active:bg-white/20"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full active:bg-white/20"
           style={later ? { background: '#fff', color: '#000' } : { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.8)' }}
         >
           <History size={19} strokeWidth={2.4} />
@@ -1263,9 +1272,19 @@ export function TrainCards({
         <button
           onClick={() => clockBus.open(cards[cur]?.kind === 'wod' ? 'workout' : 'rest')}
           aria-label="Abrir el crono"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20"
         >
           <Timer size={19} strokeWidth={2.4} />
+        </button>
+        {/* Atajo a la última tarjeta: es el mismo cierre, no otro. Rex ofrece lo mismo fuera de las tarjetas. */}
+        <button
+          onClick={() => goTo(cards.length - 1)}
+          aria-label="Ir al cierre"
+          title="Ir al cierre"
+          data-testid="cards-go-close"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20"
+        >
+          <Flag size={18} strokeWidth={2.4} />
         </button>
       </div>
       {later && (

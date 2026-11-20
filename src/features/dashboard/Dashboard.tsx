@@ -467,6 +467,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         // Planificación recoge esto al montarse y abre el modo enfocado.
         handoff.put('plan-act', 'continuar');
         return onNavigateToPlanificacion();
+      case 'planificacion-cerrar':
+        // Planificación recoge esto al montarse y abre las tarjetas en el cierre.
+        handoff.put('plan-act', 'cerrar');
+        return onNavigateToPlanificacion();
       case 'hoy':
         return setDayIso(todayIso);
       case 'descanso':

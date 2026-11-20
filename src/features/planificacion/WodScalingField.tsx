@@ -61,7 +61,7 @@ export function WodScalingField({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <p className="text-sm font-medium text-neutral-300">¿Rx o escalado?</p>
         <div className="flex overflow-hidden rounded-lg bg-white/5" role="radiogroup" aria-label="Rx o escalado">
           <button
@@ -145,7 +145,7 @@ export function WodScalingField({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <p className="text-sm font-medium text-neutral-300">¿Cómo de duro fue?</p>
         <div className="flex overflow-hidden rounded-lg bg-white/5" role="radiogroup" aria-label="Dureza del WOD">
           {FEEL_OPTIONS.map((o) => (

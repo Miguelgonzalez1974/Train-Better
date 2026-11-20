@@ -69,7 +69,7 @@ export function WodResultField({
             </p>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="number"
               min={0}
@@ -94,7 +94,7 @@ export function WodResultField({
   }
   if (scoreType === 'rounds+reps') {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="number"
           min={0}
@@ -116,7 +116,7 @@ export function WodResultField({
   }
   if (scoreType === 'reps') {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="number"
           min={0}
@@ -129,7 +129,7 @@ export function WodResultField({
     );
   }
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <input
         type="number"
         min={0}

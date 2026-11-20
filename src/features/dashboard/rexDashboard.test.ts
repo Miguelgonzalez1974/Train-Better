@@ -97,6 +97,8 @@ describe('Rex en el Dashboard: qué sugiere', () => {
     ]);
     // Con series ya anotadas hoy, el mismo botón que en Planificación: «Continuar sesión».
     expect(buildRexSuggestions({ ...calm, advice, canRest: true, sessionInProgress: true })[0].actions[0]).toEqual({ label: 'Continuar sesión', target: 'planificacion-continuar' });
+    // Y, a su lado, cerrar la sesión sin tener que buscarlo: Rex es la única puerta al cierre.
+    expect(buildRexSuggestions({ ...calm, advice, canRest: true, sessionInProgress: true })[0].actions[1]).toEqual({ label: 'Cerrar sesión', target: 'planificacion-cerrar' });
     // Si la sesión se pasa del objetivo, el atajo principal es ajustarla.
     expect(buildRexSuggestions({ ...calm, advice: { ...advice, overTarget: true }, canRest: true })[0].actions[0].label).toBe('Ajustar sesión');
     // Sin sesión prevista no ofrece verla; con el descanso marcado ofrece deshacerlo.

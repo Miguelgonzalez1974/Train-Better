@@ -105,6 +105,15 @@ describe('Rex en Planificación: la frase del estado del día', () => {
     expect(planStateSuggestion(mk({ canStart: false, inProgress: { sets: 3 } }))!.actions.map((a) => a.target)).toEqual(['plan-detalle']);
   });
 
+  it('con todas las series anotadas, Rex dice que parece que has terminado y ofrece cerrar primero', () => {
+    const s = planStateSuggestion(mk({ canStart: true, inProgress: { sets: 12 }, allSetsLogged: true }))!;
+    expect(s.actions.map((a) => a.label)).toEqual(['Cerrar sesión', 'Continuar sesión', 'Por qué']);
+    expect(s.text).toContain('Parece que has terminado');
+    expect(s.text).not.toContain('Sesión en marcha');
+    // Sin todas las series, sigue siendo «Continuar sesión» y detrás «Cerrar sesión».
+    expect(planStateSuggestion(mk({ canStart: true, inProgress: { sets: 3 }, allSetsLogged: false }))!.actions.map((a) => a.label)).toEqual(['Continuar sesión', 'Cerrar sesión', 'Por qué']);
+  });
+
   it('mientras se edita, Rex solo ofrece terminar la edición y manda sobre lo demás', () => {
     const s = planEditingSuggestion(true)!;
     expect(s).toMatchObject({ id: 'plan-editando', actions: [{ label: 'Terminar edición', target: 'plan-terminar' }], dismissible: false });

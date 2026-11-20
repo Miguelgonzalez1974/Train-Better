@@ -48,6 +48,8 @@ export type RexTarget =
   | 'plan-corregir'
   | 'resumen-sesion'
   | 'planificacion-continuar'
+  /** Planificación abre las tarjetas directamente en el cierre de la sesión. */
+  | 'planificacion-cerrar'
   | 'plan-terminar'
   /** Planificación: ir a la tarjeta del programa de fuerza que convive con el macro. */
   | 'plan-programa'
@@ -235,7 +237,7 @@ export function adviceSuggestion(advice: RexAdvice, ctx: Pick<RexContext, 'restM
     if (ctx.hasSessionToday) {
       if (advice.overTarget) actions.push({ label: 'Ajustar sesión', target: 'planificacion' });
       // «Continuar sesión» lleva directo al modo enfocado (con las series ya anotadas), no solo a la pantalla de Planificación.
-      else if (ctx.sessionInProgress) actions.push({ label: 'Continuar sesión', target: 'planificacion-continuar' });
+      else if (ctx.sessionInProgress) actions.push({ label: 'Continuar sesión', target: 'planificacion-continuar' }, { label: 'Cerrar sesión', target: 'planificacion-cerrar' });
       else actions.push({ label: 'Ver la sesión', target: 'planificacion' });
     }
     if (ctx.canRest) actions.push({ label: 'Hoy descanso', target: 'descanso' });

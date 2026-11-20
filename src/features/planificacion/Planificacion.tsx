@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, CheckCircle2, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -53,6 +53,7 @@ import {
 } from '../../engine/generateSession';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { ensureWeekLocked } from './weeklyLock';
+import { allBarSetsLogged } from '../../engine/sessionProgress';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import {
   buildWodResult,
@@ -255,6 +256,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const wodDetailFromCards = useRef(false);
   /** Cómo se abren las tarjetas: entrenando o revisando (anotar después / corregir), y por dónde. */
   const [cardsOpts, setCardsOpts] = useState<{ mode: 'live' | 'review'; startAt: 'start' | 'end' }>({ mode: 'live', startAt: 'start' });
+  /** «Hice otra cosa»: el registro rápido (solo esfuerzo y minutos) para un día en que no se hizo la sesión prevista. Lo ofrece Rex y está dentro del cierre. */
+  function openQuickLog() {
+    setQuickRpe(7);
+    setQuickDuration(60);
+    setShowQuickLog(true);
+  }
   function openCards(mode: 'live' | 'review', startAt: 'start' | 'end' = 'start') {
     setCardsOpts({ mode, startAt });
     setCardsMode(true);
@@ -1125,6 +1132,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setHistory(athleteRepository.getHistory());
     setProfile(athleteRepository.getProfile());
     setShowQuickLog(false);
+    // Si se llegó desde la tarjeta de cierre, las tarjetas se cierran: el día ya está registrado.
+    setCardsMode(false);
+    setShowCompletePanel(false);
   }
 
   /**
@@ -1382,6 +1392,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       title: 'Si algo ha pasado',
       items: [
         { id: 'me-duele', label: 'Me duele algo', icon: HeartPulse, onClick: () => openSupport('p_zone') },
+        ...(session && !session.isRestDay && !alreadyCompletedToday ? [{ id: 'otra-cosa', label: 'Hice otra cosa', hint: 'solo esfuerzo y minutos', icon: NotebookPen, onClick: () => openQuickLog() }] : []),
         ...(!alreadyCompletedToday ? [{ id: 'no-estoy', label: 'Hoy no estoy para el plan', icon: Frown, onClick: () => openSupport('t_what') }] : []),
         { id: 'faltar', label: 'Voy a faltar unos días', icon: Plane, onClick: () => openSupport('a_why') },
       ],
@@ -1412,13 +1423,16 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
 
   // Si RexLab de otra pantalla dejó dicho qué abrir (la molestia, «hoy no», faltar, otro WOD), se abre al llegar.
   // «Continuar sesión» del Dashboard: se mira al montar (sin gastarlo) para que el modo desarrollo, que repite los efectos, no lo pierda.
-  const continueFromDashboard = useRef(handoff.peek('plan-act') === 'continuar');
+  const dashboardAct = useRef<string | null>(handoff.peek('plan-act'));
   useEffect(() => {
     const node = handoff.take('support-start');
-    const act = handoff.take('plan-act') ?? (continueFromDashboard.current ? 'continuar' : null);
+    const pending = dashboardAct.current === 'continuar' || dashboardAct.current === 'cerrar' ? dashboardAct.current : null;
+    const act = handoff.take('plan-act') ?? pending;
+    const canOpen = Boolean(session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday);
     if (node) openSupport(node);
-    // «Continuar sesión» desde el Dashboard: se abre directamente el modo enfocado, donde estaban las series anotadas.
-    else if (act === 'continuar' && session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday) openCards('live', 'start');
+    // «Continuar sesión» y «Cerrar sesión» desde el Dashboard: se abren las tarjetas, donde estaban las series anotadas (la segunda, en el cierre).
+    else if (act === 'continuar' && canOpen) openCards('live', 'start');
+    else if (act === 'cerrar' && canOpen) openCards('live', 'end');
     else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
       const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
       return () => window.clearTimeout(t);
@@ -1432,6 +1446,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const rexList = buildPlanRexSuggestions({
     canStart: Boolean(session && !alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && !session.isRestDay),
     inProgress: !alreadyCompletedToday && todayWorkLog.length > 0 ? { sets: todayWorkLog.length } : null,
+    allSetsLogged: Boolean(session && !alreadyCompletedToday && allBarSetsLogged(session.blocks, todayWorkLog)),
     editing: editMode && Boolean(session && !session.isRestDay),
     restDay: Boolean(session?.isRestDay && !session.competition?.eventDay),
     completed: completedInfo,
@@ -1556,12 +1571,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           complexPool={complexPool}
           complexWeek={complexWeek}
           onExit={() => setFocusMode(false)}
+          // Al acabar el último bloque se cierra en el único sitio donde se cierra: la última tarjeta.
           onFinish={() => {
             setFocusMode(false);
-            setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-            setShowCompletePanel(true);
-            // Al acabar el último bloque, el cierre ya está a la vista: se baja a él en vez de dejarte en lo alto de la página.
-            window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+            openCards('live', 'end');
           }}
         />
       )}
@@ -1584,7 +1597,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           // Salir de una corrección sin guardar devuelve el registro tal como estaba; entrenando, las series ya están guardadas.
           onExit={() => {
             if (correctionRef.current) cancelCorrection();
-            else setCardsMode(false);
+            else {
+              setCardsMode(false);
+              // El cierre solo vive dentro de la última tarjeta: al salir se cierra, y se vuelve a abrir al llegar otra vez al final.
+              setShowCompletePanel(false);
+            }
           }}
           mode={cardsOpts.mode}
           startAt={cardsOpts.startAt}
@@ -1618,12 +1635,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 }
               : undefined
           }
-          onFinish={() => {
-            setCardsMode(false);
-            setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-            setShowCompletePanel(true);
-            window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
-          }}
+          onOtherThing={openQuickLog}
+          // Con el cierre integrado (`onReachClose`) la última tarjeta no termina por aquí: el cierre se guarda dentro de ella.
+          onFinish={() => openCards('live', 'end')}
         />
       )}
       {showComplexes && (
@@ -1896,43 +1910,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         />
       )}
 
-      {/* Cierre de la sesión: va tras los bloques, donde se usa. Una vez completada, el estado vive
-          en la cabecera ("Sesión completada") y deshacer en el menú "···". */}
-      {!session.isRestDay && !alreadyCompletedToday && showCompletePanel && !cardsMode && (
-        <div id="complete-panel" className="scroll-mt-4">
-          {renderCompletePanel()}
-        </div>
-      )}
-
-      {!session.isRestDay && !alreadyCompletedToday && !showCompletePanel && (
-        <div className="mb-14 flex flex-col gap-2 border-t border-white/5 pt-4">
-          <p className="text-center text-[11px] font-semibold uppercase tracking-wide text-neutral-500">¿Has terminado?</p>
-          <div className="flex items-stretch gap-2">
-            <button
-              onClick={() => {
-                setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-                setShowCompletePanel(true);
-              }}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-orange/40 bg-brand-orange/10 px-3 py-2.5 text-sm font-semibold text-brand-orange transition-colors duration-200 hover:bg-brand-orange/20"
-            >
-              <CheckCircle2 size={15} strokeWidth={2.5} />
-              Sí, completada
-            </button>
-            <button
-              onClick={() => {
-                setQuickRpe(7);
-                setQuickDuration(60);
-                setShowQuickLog(true);
-              }}
-              title="Hice otra cosa (solo RPE)"
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-border px-3 py-2.5 text-sm font-semibold text-neutral-300 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
-            >
-              <NotebookPen size={15} strokeWidth={2.25} />
-              Hice otra cosa
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Cerrar la sesión solo se hace en la última tarjeta del entreno, y a ella te lleva Rex («Cerrar sesión»): aquí no hay otro cierre. */}
 
       {session.strengthProgramLabel && !session.isRestDay && (
         hasWodBlock ? (

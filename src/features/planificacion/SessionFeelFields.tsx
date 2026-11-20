@@ -21,7 +21,7 @@ export function RpePicker({ value, onChange }: { value: number; onChange: (value
   const meta = RPE_META[value] ?? RPE_META[7];
   return (
     <div>
-      <div className="grid grid-cols-10 gap-1" role="radiogroup" aria-label="Esfuerzo percibido (RPE)">
+      <div className="grid grid-cols-5 gap-1 min-[360px]:grid-cols-10" role="radiogroup" aria-label="Esfuerzo percibido (RPE)">
         {RPE_SCALE.map((n) => {
           const selected = value === n;
           const color = RPE_META[n].color;
@@ -58,7 +58,7 @@ const DURATION_MAX = 240;
 /** Duración del entreno con − y + de 5 en 5 minutos; `hint` es la línea pequeña de debajo del título. */
 export function DurationStepper({ value, onChange, hint }: { value: number; onChange: (minutes: number) => void; hint?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] p-3">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl bg-white/[0.03] p-3">
       <div>
         <p className="text-sm font-medium text-neutral-300">Duración entreno</p>
         {hint && <p className="text-[11px] text-neutral-500">{hint}</p>}
@@ -71,7 +71,7 @@ export function DurationStepper({ value, onChange, hint }: { value: number; onCh
         >
           <Minus size={15} />
         </button>
-        <span className="num w-20 text-center text-lg font-bold text-white">
+        <span className="num min-w-16 text-center text-lg font-bold text-white">
           {value}
           <span className="ml-1 text-xs font-normal text-neutral-500">min</span>
         </span>

@@ -110,9 +110,9 @@ export function CompleteSessionPanel({
 
   return (
     <div ref={rootRef} className="card mb-14 flex flex-col gap-4 border-white/10 p-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         {hasResultStep ? (
-          <ol className="flex items-center gap-2 text-xs font-semibold" aria-label="Pasos">
+          <ol className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold" aria-label="Pasos">
             {(['Resultado', 'Sensaciones'] as const).map((label, i) => {
               const done = step > i;
               const current = step === i;
