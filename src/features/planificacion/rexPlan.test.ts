@@ -82,6 +82,7 @@ describe('Rex en Planificación: la frase del estado del día', () => {
   it('empezar es el botón principal, y detrás va el porqué; los cambios viven en RexLab', () => {
     expect(planStateSuggestion(mk({ canStart: true }))!.actions).toEqual([
       { label: 'Empezar sesión', target: 'plan-empezar' },
+      { label: 'Anotar lo que hice', target: 'plan-anotar' },
       { label: 'Por qué', target: 'plan-detalle' },
     ]);
     // Sin poder empezar (sesión propia, por ejemplo) no se ofrece.
@@ -100,7 +101,7 @@ describe('Rex en Planificación: la frase del estado del día', () => {
     expect(s.text).toBe('Día verde. Sesión en marcha: llevas 6 series anotadas. Esfuerzo previsto ~65, dentro de tu objetivo (55–75).');
     expect(planStateSuggestion(mk({ canStart: true, inProgress: { sets: 1 } }))!.text).toContain('llevas 1 serie anotada.');
     // Sin series anotadas (o sin poder empezar) sigue siendo «Empezar sesión» y no se ofrece cerrar.
-    expect(planStateSuggestion(mk({ canStart: true, inProgress: null }))!.actions.map((a) => a.label)).toEqual(['Empezar sesión', 'Por qué']);
+    expect(planStateSuggestion(mk({ canStart: true, inProgress: null }))!.actions.map((a) => a.label)).toEqual(['Empezar sesión', 'Anotar lo que hice', 'Por qué']);
     expect(planStateSuggestion(mk({ canStart: false, inProgress: { sets: 3 } }))!.actions.map((a) => a.target)).toEqual(['plan-detalle']);
   });
 
@@ -131,8 +132,11 @@ describe('Rex en Planificación: la sesión completada', () => {
     const s = planCompletedSuggestion({ ...done, changes: ['Press banca sube a 85 kg el próximo día.'] })!;
     expect(s).toMatchObject({ id: 'plan-completada', lead: 'Sesión completada.', tone: 'good', dismissible: false });
     expect(s.text).toBe('Sesión completada. Press banca sube a 85 kg el próximo día.');
-    // Un solo botón: lleva al resumen del Dashboard. Corregir datos y Deshacer el registro están en RexLab.
-    expect(s.actions).toEqual([{ label: 'Ver resumen', target: 'plan-resumen' }]);
+    // Dos botones: el resumen del Dashboard y «Ver y corregir» (las tarjetas con lo anotado). Deshacer el registro está en RexLab.
+    expect(s.actions).toEqual([
+      { label: 'Ver resumen', target: 'plan-resumen' },
+      { label: 'Ver y corregir', target: 'plan-corregir' },
+    ]);
   });
 
   it('sin cambios de carga: un PR nuevo, la racha o cómo va la semana', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { X, Check, Timer, Minus, Plus, ChartSpline, ArrowRight, Undo2, Flag, HeartPulse, History } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { RxOrScaled, SessionBlockResult, SetFeel, SetQuality, WodFeel, WodScalingEntry } from '../../data/athlete/types';
@@ -38,6 +38,7 @@ type Card =
   | { kind: 'checklist'; key: string; block: Block; entries: Indexed[] }
   | { kind: 'lift'; key: string; block: 'strength' | 'oly'; prep: Indexed[]; item: Indexed; ordinal: number; total: number }
   | { kind: 'wod'; key: string; part: 1 | 2 | null; entries: Indexed[] }
+  | { kind: 'overview'; key: string }
   | { kind: 'end'; key: string };
 
 interface Theme {
@@ -120,6 +121,14 @@ export interface TrainCardsProps extends FocusModeProps {
   /** Abre «¿Algo ha pasado?» (me duele algo) encima de las tarjetas. */
   onPain?: () => void;
   wod?: TrainCardsWod;
+  /** `live` = entrenando; `review` = anotar después o corregir una sesión terminada: empieza por un resumen con todo lo previsto y sin descansos. */
+  mode?: 'live' | 'review';
+  /** Dónde abrir: en la primera tarjeta o directamente en el cierre. */
+  startAt?: 'start' | 'end';
+  /** El cierre de la sesión (RPE, minutos, resultado del WOD…), que va dentro de la última tarjeta. Null mientras no está abierto. */
+  closePanel?: ReactNode;
+  /** Se llega a la última tarjeta (o se toca «Cerrar la sesión»): el padre abre el cierre. Sin esto, la última tarjeta termina con `onFinish`. */
+  onReachClose?: () => void;
 }
 
 type RowKind = 'rx' | 'peso' | 'movimiento';
@@ -288,14 +297,19 @@ export function TrainCards({
   onFinish,
   onPain,
   wod,
+  mode = 'live',
+  startAt = 'start',
+  closePanel,
+  onReachClose,
 }: TrainCardsProps) {
+  const review = mode === 'review';
   const swapCtx = useMemo(() => ({ prs: progress.prs, variantPrs: progress.variantPrs, painFlags, todayIso: session.date }), [progress.prs, progress.variantPrs, painFlags, session.date]);
   const visible = useVisibleViewport();
 
   // Las tarjetas: calentamiento/accesorio/skill/vuelta a la calma = una lista; fuerza y oly = una por ejercicio de trabajo;
   // el WOD = una por parte (doble WOD); al final, el cierre.
   const cards = useMemo<Card[]>(() => {
-    const out: Card[] = [];
+    const out: Card[] = review ? [{ kind: 'overview', key: 'overview' }] : [];
     for (const block of BLOCK_ORDER) {
       const entries = session.blocks.map((entry, index) => ({ entry, index })).filter((e) => e.entry.block === block);
       if (entries.length === 0) continue;
@@ -317,7 +331,7 @@ export function TrainCards({
     }
     out.push({ kind: 'end', key: 'end' });
     return out;
-  }, [session]);
+  }, [session, review]);
 
   const [cur, setCur] = useState(0);
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -329,7 +343,7 @@ export function TrainCards({
   /** Ejercicios cuyas series sin marcar ya se resolvieron en el cierre (las hice / no salieron / las salté). */
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
   /** «Lo anoto después»: se entrena sin pantalla y se rellena al acabar, con calma. Sin descansos ni avisos; todo se puede marcar o cambiar. */
-  const [later, setLater] = useState(false);
+  const [later, setLater] = useState(review);
   /** El descanso en curso (uno a la vez): hora de fin con reloj de pared, para que siga contando con la app en segundo plano. */
   const [rest, setRest] = useState<{ key: string; movementId: string; next: number; endsAt: number; total: number; notified: boolean } | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -391,7 +405,13 @@ export function TrainCards({
   };
   // Si ya había series anotadas (se vuelve a la sesión a medias), se abre en el primer ejercicio sin terminar.
   useEffect(() => {
-    if (todayWorkLog.length === 0) return;
+    // «Cerrar sesión»: se abre directamente en el cierre.
+    if (startAt === 'end') {
+      const t = window.setTimeout(() => (trackRef.current?.children[cards.length - 1] as HTMLElement | undefined)?.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' }), 60);
+      return () => window.clearTimeout(t);
+    }
+    // Revisando, se empieza siempre por el resumen.
+    if (review || todayWorkLog.length === 0) return;
     const idx = cards.findIndex((c) => {
       if (c.kind !== 'lift') return false;
       const b = c.item.entry;
@@ -408,6 +428,12 @@ export function TrainCards({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Al llegar a la última tarjeta, el padre abre el cierre (RPE, minutos, resultado del WOD) para que esté dentro de ella.
+  useEffect(() => {
+    if (cur === cards.length - 1) onReachClose?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cur, cards.length]);
 
   // ───────── Piezas de cada tarjeta ─────────
 
@@ -426,6 +452,7 @@ export function TrainCards({
     if (c.kind === 'lift') return c.item.entry.complex?.name ?? resolveName(c.item.entry.movementId);
     if (c.kind === 'wod') return 'WOD';
     if (c.kind === 'end') return 'Cierre';
+    if (c.kind === 'overview') return 'Resumen';
     return THEME[c.block].label;
   };
 
@@ -1011,14 +1038,15 @@ export function TrainCards({
     const theme = THEME.end;
     const sets = todayWorkLog.length;
     const kgMoved = todayWorkLog.reduce((s, w) => s + w.kg * (w.reps || 0), 0);
-    const parts = cards.filter((c) => c.kind !== 'end').length;
+    const parts = cards.filter((c) => c.kind !== 'end' && c.kind !== 'overview').length;
+    const integrated = Boolean(onReachClose);
     const pending = pendingLifts();
     const hidden = (k: string) => Boolean(dismissed[k]);
     const open = pending.filter((p) => !hidden(p.key));
     return (
       <>
         {header(theme, 'Cierre')}
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto px-6 pb-3 pt-6 text-center">
+        <div className={`flex min-h-0 flex-1 flex-col items-center gap-5 overflow-y-auto pb-3 pt-6 text-center ${integrated ? 'px-3' : 'px-6'}`}>
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full" style={{ background: `${theme.accent}22`, color: theme.accent }}>
             <Flag size={30} strokeWidth={2.25} />
           </span>
@@ -1077,10 +1105,106 @@ export function TrainCards({
               ))}
             </div>
           )}
+          {/* El cierre de siempre (resultado del WOD, esfuerzo, minutos, cómo te sentiste) va aquí dentro, en la misma tarjeta. */}
+          {integrated && (
+            <div className="w-full text-left" data-testid="cards-close-panel">
+              {closePanel ?? (
+                <Cta onClick={() => onReachClose?.()} testId="cards-open-close">
+                  Cerrar la sesión <Check size={22} strokeWidth={3.25} />
+                </Cta>
+              )}
+            </div>
+          )}
+        </div>
+        {!integrated && (
+          <div className="px-5 pb-5 pt-1">
+            <Cta onClick={onFinish} testId="cards-finish">
+              Terminar sesión <Check size={22} strokeWidth={3.25} />
+            </Cta>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  /** El número de series que se anotan de un ejercicio de barra (0 si no se anota serie a serie). */
+  const liftRowCount = (b: SessionBlockResult): number => {
+    const plan = b.setPlan && b.setPlan.length >= 2 ? b.setPlan : undefined;
+    const singleLog = Boolean(b.logAsSingle) && (b.sets ?? 0) <= 1;
+    return plan || (b.sets ?? 0) > 1 || singleLog ? (plan ? plan.length : singleLog ? 1 : b.sets ?? 0) : 0;
+  };
+
+  /** Revisión: la sesión entera en una tarjeta, con lo anotado, y un botón para darlo todo por bueno y tocar solo lo que fue distinto. */
+  const renderOverview = () => {
+    const theme = THEME.end;
+    const dateLabel = new Date(`${session.date}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/[.,]/g, '');
+    const last = cards.length - 1;
+    const allAsPlanned = () => {
+      pendingLifts().forEach((p) => p.missing.forEach((n) => onLogWorkSet(p.mid, p.blk, n, p.kgOf(n), p.repsOf(n))));
+      setDoneItems((prev) => {
+        const out = { ...prev };
+        for (const c of cards) {
+          if (c.kind === 'checklist') for (const e of c.entries) out[`${c.key}:${e.index}`] = true;
+          if (c.kind === 'lift' && liftRowCount(c.item.entry) === 0) out[c.key] = true;
+        }
+        return out;
+      });
+      goTo(last);
+    };
+    const rows = cards.flatMap((c, ci) => {
+      if (c.kind === 'overview' || c.kind === 'end') return [];
+      if (c.kind === 'checklist') {
+        const done = c.entries.filter((e) => doneItems[`${c.key}:${e.index}`]).length;
+        return [{ ci, title: THEME[c.block].label, sub: `${done} de ${c.entries.length}`, ok: done === c.entries.length, cta: done === c.entries.length ? 'Ver' : 'Marcar' }];
+      }
+      if (c.kind === 'wod') {
+        const first = c.entries[0].entry;
+        const name = first.movementId.startsWith('benchmark:') ? resolveName(first.movementId) : first.title ?? 'WOD';
+        const scaled = wod?.rxOrScaled === 'scaled';
+        return [{ ci, title: `WOD · ${name}`, sub: `${scaled ? 'Escalado' : 'Rx'}${wod?.feel ? ` · ${wod.feel === 'facil' ? 'fácil' : wod.feel}` : ''} · el resultado va en el cierre`, ok: true, cta: 'Ver' }];
+      }
+      const b = c.item.entry;
+      const n = liftRowCount(b);
+      const mid = b.complex ? complexLogId(b.complex.id) : b.movementId;
+      const title = b.complex?.name ?? resolveName(b.movementId);
+      if (n === 0) return [{ ci, title, sub: `${b.sets ? `${b.sets} × ` : ''}${b.reps ?? ''}${b.loadKg ? ` · ${fmtKgValue(b.loadKg)} kg` : ''}`, ok: Boolean(doneItems[c.key]), cta: doneItems[c.key] ? 'Ver' : 'Marcar' }];
+      const logged = Array.from({ length: n }, (_, s) => s + 1).filter((k) => setIsDone(mid, k));
+      const kgs = logged.map((k) => loggedKg(mid, k) ?? 0);
+      const kgText = kgs.length > 0 ? `${fmtKgValue(Math.max(...kgs))} kg` : b.loadKg ? `${fmtKgValue(b.loadKg)} kg previsto` : '';
+      const sub = logged.length === n ? `${n} ${n === 1 ? 'serie' : 'series'} · ${kgText}` : logged.length > 0 ? `${logged.length} de ${n} series · ${kgText}` : `${b.sets ? `${b.sets} × ` : ''}${b.reps ?? ''}${kgText ? ` · ${kgText}` : ''} · sin anotar`;
+      return [{ ci, title, sub, ok: logged.length === n, cta: logged.length === n ? 'Cambiar' : 'Anotar' }];
+    });
+    const pendingCount = rows.filter((r) => !r.ok).length;
+    return (
+      <>
+        {header(theme, `Tu sesión · ${dateLabel}`, `${rows.length} partes`)}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pb-3 pt-4" data-testid="cards-overview">
+          <button
+            onClick={allAsPlanned}
+            data-testid="cards-all-as-planned"
+            className="flex h-16 w-full shrink-0 items-center justify-center gap-2 rounded-full text-lg font-bold text-black transition-transform duration-150 active:scale-[0.98]"
+            style={{ background: theme.accent }}
+          >
+            <Check size={22} strokeWidth={3.25} /> Todo como estaba previsto
+          </button>
+          <p className="text-center text-xs text-white/55">o toca lo que fue distinto{pendingCount > 0 ? ` · ${pendingCount} sin anotar` : ''}</p>
+          <div className="flex flex-col gap-2">
+            {rows.map((r) => (
+              <button key={r.ci} onClick={() => goTo(r.ci)} className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.07] px-3.5 py-3 text-left active:bg-white/10" data-testid="cards-overview-row">
+                <span className="min-w-0">
+                  <span className="block truncate text-base font-bold text-white">{r.title}</span>
+                  <span className="block text-xs text-white/55">{r.sub}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1 text-xs font-bold" style={{ color: r.ok ? theme.accent : '#ffb27a' }}>
+                  {r.ok && <Check size={15} strokeWidth={3.25} />} {r.cta}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
         <div className="px-5 pb-5 pt-1">
-          <Cta onClick={onFinish} testId="cards-finish">
-            Terminar sesión <Check size={22} strokeWidth={3.25} />
+          <Cta onClick={() => goTo(last)} tone="ghost" testId="cards-to-close">
+            Ir al cierre <ArrowRight size={20} strokeWidth={2.75} />
           </Cta>
         </div>
       </>
@@ -1088,7 +1212,7 @@ export function TrainCards({
   };
 
   const cardTheme = (c: Card): Theme => {
-    if (c.kind === 'end') return THEME.end;
+    if (c.kind === 'end' || c.kind === 'overview') return THEME.end;
     if (c.kind === 'wod') return THEME.wod;
     if (c.kind === 'lift') {
       const r = rest && rest.key === c.key;
@@ -1098,7 +1222,7 @@ export function TrainCards({
   };
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col text-white" style={{ background: '#0b0b0e', ...(visible ?? {}) }} data-testid="train-cards">
+    <div className="force-dark fixed inset-0 z-30 flex flex-col text-white" style={{ background: '#0b0b0e', ...(visible ?? {}) }} data-testid="train-cards">
       <div className="flex items-center gap-3 px-4 pb-1 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button onClick={onExit} aria-label="Salir del entreno" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-white/20">
           <X size={19} />
@@ -1146,7 +1270,7 @@ export function TrainCards({
       </div>
       {later && (
         <p className="mx-4 mt-1 rounded-xl bg-white/10 px-3 py-1.5 text-center text-xs font-semibold text-white/80" data-testid="cards-later-banner">
-          Lo anotas después: sin descansos. Marca las series cuando acabes o toca «Todas como estaban previstas».
+          {review ? 'Revisando tu sesión: sin descansos. Toca solo lo que fue distinto.' : 'Lo anotas después: sin descansos. Marca las series cuando acabes o toca «Todas como estaban previstas».'}
         </p>
       )}
 
@@ -1169,6 +1293,7 @@ export function TrainCards({
               {c.kind === 'checklist' && renderChecklist(c, ci)}
               {c.kind === 'lift' && renderLift(c, ci)}
               {c.kind === 'wod' && renderWod(c, ci)}
+              {c.kind === 'overview' && renderOverview()}
               {c.kind === 'end' && renderEnd()}
             </section>
           );

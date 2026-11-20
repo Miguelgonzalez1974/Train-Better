@@ -57,6 +57,7 @@ import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import {
   buildWodResult,
   EMPTY_WOD_FORM,
+  formFromWodResult,
   getTestDayBlock,
   getWodParts,
   getWodScoreType,
@@ -252,6 +253,16 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [cardsMode, setCardsMode] = useState(false);
   /** El atleta tocó Rx/escalado o la dureza en la tarjeta del WOD: al abrir el cierre no se reinician. */
   const wodDetailFromCards = useRef(false);
+  /** Cómo se abren las tarjetas: entrenando o revisando (anotar después / corregir), y por dónde. */
+  const [cardsOpts, setCardsOpts] = useState<{ mode: 'live' | 'review'; startAt: 'start' | 'end' }>({ mode: 'live', startAt: 'start' });
+  function openCards(mode: 'live' | 'review', startAt: 'start' | 'end' = 'start') {
+    setCardsOpts({ mode, startAt });
+    setCardsMode(true);
+  }
+  /** Una corrección en curso («Ver y corregir»): cómo estaba el día antes de quitar el registro, para devolverlo si se cancela. */
+  const correctionRef = useRef<{ snapshot: DaySnapshot; sessionBefore: DailySession } | null>(null);
+  /** Los minutos que ya estaban anotados en la sesión que se corrige: el cierre los enseña en vez de la estimación. */
+  const correctionPrefill = useRef<{ durationMin: number } | null>(null);
   const [showDiary, setShowDiary] = useState(false);
   const [showSeasonMap, setShowSeasonMap] = useState(false);
   const [showComplexes, setShowComplexes] = useState(false);
@@ -493,9 +504,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // Al abrir el cierre de sesión la duración arranca en la estimada: si fue lo normal, no hay que tocarla.
   useEffect(() => {
     if (!showCompletePanel) return;
-    setDurationMin(estimatedMin);
-    // Lo que ya anotaste en la tarjeta del WOD (entreno en tarjetas) llega al cierre tal cual; si no, arranca en Rx.
+    // Corrigiendo una sesión terminada, el cierre sale con lo que ya estaba anotado.
+    const pre = correctionPrefill.current;
+    correctionPrefill.current = null;
+    setDurationMin(pre?.durationMin ?? estimatedMin);
     if (!wodDetailFromCards.current) {
+      // Lo que ya anotaste en la tarjeta del WOD (entreno en tarjetas) llega al cierre tal cual; si no, arranca en Rx.
       setWodScaling([]);
       setWodFeel(undefined);
       setRxOrScaled('rx');
@@ -1009,6 +1023,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // hasta el proximo guardado de perfil o recarga.
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
+    setCardsMode(false);
+    correctionRef.current = null;
     toast.show('Sesión registrada');
     // Un test que no actualizó el PR no deja rastro en el registro de PRs: se dice aquí, antes de pasar al Dashboard.
     if (nextMessage && !nextMessage.startsWith('Nuevo PR')) toast.show(nextMessage, { tone: 'warn', ttlMs: 12000 });
@@ -1016,18 +1032,42 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     appNav.goTo('dashboard');
   }
 
-  /** «Corregir datos»: quita el registro de hoy y abre el cierre de la sesión, para volver a apuntar el resultado, el RPE y lo que se escaló. */
-  function handleRecordAgain() {
+  /**
+   * «Ver y corregir»: abre las tarjetas con lo que ya estaba anotado (series, kilos, Rx/escalado, dureza, RPE, minutos y resultado del WOD) para tocar
+   * solo lo que cambió. El registro se quita mientras se corrige (así se puede volver a guardar) pero las series se conservan; salir sin guardar, o el
+   * aviso, lo devuelve tal como estaba.
+   */
+  function handleCorrectDay() {
     if (!session) return;
-    // Sin pregunta: se puede devolver todo como estaba con el aviso («Dejarlo como estaba»).
     const snapshot = athleteRepository.snapshotDay(session.date);
     const sessionBefore = session;
     athleteRepository.deleteHistoryEntry(session.date);
+    for (const e of snapshot.workLog) athleteRepository.saveWorkSet(e);
+    const entry = snapshot.entry;
+    if (entry) {
+      // Todo lo anotado vuelve a su sitio ya: lo que se toque en las tarjetas parte de ahí y el cierre no lo reinicia.
+      correctionPrefill.current = { durationMin: entry.durationMin };
+      setRpe(entry.rpe);
+      setRxOrScaled(entry.rxOrScaled);
+      setWodScaling(entry.wodScaling ?? []);
+      setWodFeel(entry.wodFeel);
+      wodDetailFromCards.current = true;
+      setWodForms({ 1: formFromWodResult(entry.wodResult), 2: formFromWodResult(entry.wodResult2) });
+    }
+    correctionRef.current = { snapshot, sessionBefore };
     setHistory(athleteRepository.getHistory());
     setWorkLog(athleteRepository.getWorkLog());
     setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-    setShowCompletePanel(true);
-    toast.show('Registro quitado: apúntalo otra vez', { action: { label: 'Dejarlo como estaba', run: () => restoreRegistration(snapshot, sessionBefore) } });
+    openCards('review', 'start');
+    toast.show('Corrigiendo tu sesión: al guardar se vuelve a registrar', { action: { label: 'Dejarlo como estaba', run: () => cancelCorrection() }, ttlMs: 8000 });
+  }
+
+  /** Sale de una corrección sin guardar: el registro vuelve tal como estaba. */
+  function cancelCorrection() {
+    const c = correctionRef.current;
+    correctionRef.current = null;
+    if (!c) return;
+    restoreRegistration(c.snapshot, c.sessionBefore);
   }
 
   /** Devuelve un registro que se acaba de quitar («Volver a registrar»): la entrada, las series, la progresión y la sesión tal como estaba. */
@@ -1042,6 +1082,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setWorkLog(athleteRepository.getWorkLog());
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
+    setCardsMode(false);
     toast.show('Registro devuelto');
   }
 
@@ -1325,7 +1366,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           {
             title: 'Cambiar la sesión de hoy',
             items: [
-              { id: 'entrenar-tarjetas', label: 'Entrenar en tarjetas', hint: 'a prueba', icon: GalleryHorizontalEnd, onClick: () => setCardsMode(true) },
+              { id: 'modo-enfocado', label: 'Entreno de siempre', hint: 'una parte por pantalla', icon: GalleryHorizontalEnd, onClick: () => setFocusMode(true) },
               ...(hasWodBlock ? [{ id: 'otro-wod', label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(hasWodBlock ? [{ id: 'wod-fantasma', label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
               ...(canHarder ? [{ id: 'mas-dura', label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
@@ -1363,7 +1404,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       items: [
         { id: 'complejos', label: 'Librería de complejos', icon: Library, onClick: () => handleRexAct('complejos') },
         ...(noticeSummary.count > 0 ? [{ id: 'avisos', label: 'Avisos del coach', hint: String(noticeSummary.count), icon: Bell, onClick: () => handleRexAct('avisos') }] : []),
-        ...(alreadyCompletedToday ? [{ id: 'corregir', label: 'Corregir datos', hint: 'apuntar otra vez', icon: Pencil, onClick: () => handleRecordAgain() }] : []),
+        ...(alreadyCompletedToday ? [{ id: 'corregir', label: 'Ver y corregir', hint: 'las tarjetas con lo anotado', icon: Pencil, onClick: () => handleCorrectDay() }] : []),
         ...(alreadyCompletedToday ? [{ id: 'deshacer-registro', label: 'Deshacer el registro', icon: Undo2, onClick: () => handleRexAct('deshacer') }] : []),
       ],
     },
@@ -1377,7 +1418,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     const act = handoff.take('plan-act') ?? (continueFromDashboard.current ? 'continuar' : null);
     if (node) openSupport(node);
     // «Continuar sesión» desde el Dashboard: se abre directamente el modo enfocado, donde estaban las series anotadas.
-    else if (act === 'continuar' && session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday) setFocusMode(true);
+    else if (act === 'continuar' && session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday) openCards('live', 'start');
     else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
       const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
       return () => window.clearTimeout(t);
@@ -1428,15 +1469,54 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       appNav.goTo('dashboard');
     }
     else if (target === 'plan-cambiar') setShowRex(true);
-    else if (target === 'plan-empezar') setFocusMode(true);
-    else if (target === 'plan-cerrar') {
-      // Lo mismo que «Sí, completada» abajo del todo, pero sin tener que buscarlo: abre el cierre y baja a él.
-      setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-      setShowCompletePanel(true);
-      window.setTimeout(() => document.getElementById('complete-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
-    }
+    else if (target === 'plan-empezar') openCards('live', 'start');
+    else if (target === 'plan-anotar') openCards('review', 'start');
+    else if (target === 'plan-corregir') handleCorrectDay();
+    else if (target === 'plan-cerrar') openCards('live', 'end');
     else if (target === 'plan-terminar') setEditMode(false);
     else if (target === 'plan-programa') document.getElementById('companion-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  /** El cierre de la sesión (resultado del WOD, Rx/escalado, esfuerzo, minutos): va tras los bloques o, con las tarjetas, dentro de la última. */
+  function renderCompletePanel() {
+    if (!session) return null;
+    return (
+      <CompleteSessionPanel
+        wodParts={wodParts}
+        scoreTypes={wodScoreTypes}
+        targets={Object.fromEntries(
+          wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]),
+        )}
+        forms={wodForms}
+        parts={doneParts}
+        skips={skips}
+        onSkipsChange={setSkips}
+        clockParts={clockParts}
+        ghostSummaries={ghostSummaries}
+        wodReadings={wodReadings}
+        onWorkMovement={createWorkGoal}
+        capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
+        onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
+        test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
+        wodMovements={wodMovements}
+        scaling={wodScaling}
+        onScaling={(next) => {
+          setWodScaling(next);
+          // Escalar un movimiento es escalar el WOD; quitarlos todos no vuelve a Rx solo (el interruptor lo decide).
+          if (next.length > 0) setRxOrScaled('scaled');
+        }}
+        feel={wodFeel}
+        onFeel={setWodFeel}
+        rxOrScaled={rxOrScaled}
+        onRxOrScaled={setRxOrScaled}
+        rpe={rpe}
+        onRpe={setRpe}
+        durationMin={durationMin}
+        onDuration={setDurationMin}
+        estimatedMin={estimatedMin}
+        onConfirm={handleConfirmComplete}
+        onCancel={() => setShowCompletePanel(false)}
+      />
+    );
   }
   /** Los cambios directos de la sesión que Rex ofrece en «¿Cambiar algo?»: otro WOD, el selector de tipo o la hoja de dureza. */
   function handleRexAct(action: SupportAction) {
@@ -1501,7 +1581,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           onSwap={handleUpdateEntry}
           complexPool={complexPool}
           complexWeek={complexWeek}
-          onExit={() => setCardsMode(false)}
+          // Salir de una corrección sin guardar devuelve el registro tal como estaba; entrenando, las series ya están guardadas.
+          onExit={() => {
+            if (correctionRef.current) cancelCorrection();
+            else setCardsMode(false);
+          }}
+          mode={cardsOpts.mode}
+          startAt={cardsOpts.startAt}
+          closePanel={showCompletePanel && !alreadyCompletedToday ? renderCompletePanel() : null}
+          onReachClose={() => {
+            if (alreadyCompletedToday || showCompletePanel) return;
+            setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+            setShowCompletePanel(true);
+          }}
           onPain={() => openSupport('p_zone')}
           wod={
             wodMovements.length > 0
@@ -1806,44 +1898,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
 
       {/* Cierre de la sesión: va tras los bloques, donde se usa. Una vez completada, el estado vive
           en la cabecera ("Sesión completada") y deshacer en el menú "···". */}
-      {!session.isRestDay && !alreadyCompletedToday && showCompletePanel && (
+      {!session.isRestDay && !alreadyCompletedToday && showCompletePanel && !cardsMode && (
         <div id="complete-panel" className="scroll-mt-4">
-        <CompleteSessionPanel
-          wodParts={wodParts}
-          scoreTypes={wodScoreTypes}
-          targets={Object.fromEntries(
-            wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]),
-          )}
-          forms={wodForms}
-          parts={doneParts}
-          skips={skips}
-          onSkipsChange={setSkips}
-          clockParts={clockParts}
-          ghostSummaries={ghostSummaries}
-          wodReadings={wodReadings}
-          onWorkMovement={createWorkGoal}
-          capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
-          onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
-          test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
-          wodMovements={wodMovements}
-          scaling={wodScaling}
-          onScaling={(next) => {
-            setWodScaling(next);
-            // Escalar un movimiento es escalar el WOD; quitarlos todos no vuelve a Rx solo (el interruptor lo decide).
-            if (next.length > 0) setRxOrScaled('scaled');
-          }}
-          feel={wodFeel}
-          onFeel={setWodFeel}
-          rxOrScaled={rxOrScaled}
-          onRxOrScaled={setRxOrScaled}
-          rpe={rpe}
-          onRpe={setRpe}
-          durationMin={durationMin}
-          onDuration={setDurationMin}
-          estimatedMin={estimatedMin}
-          onConfirm={handleConfirmComplete}
-          onCancel={() => setShowCompletePanel(false)}
-        />
+          {renderCompletePanel()}
         </div>
       )}
 

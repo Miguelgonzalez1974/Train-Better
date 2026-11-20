@@ -43,6 +43,9 @@ export type RexTarget =
   /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
   | 'plan-empezar'
   | 'plan-cerrar'
+  /** Planificación: las tarjetas en modo revisión: «Anotar lo que hice» (sin empezar) y «Ver y corregir» (sesión terminada). */
+  | 'plan-anotar'
+  | 'plan-corregir'
   | 'resumen-sesion'
   | 'planificacion-continuar'
   | 'plan-terminar'

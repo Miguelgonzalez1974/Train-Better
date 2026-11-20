@@ -128,6 +128,8 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
   // El mismo botón que en el Dashboard: empezar, o continuar si ya hay series anotadas (y entonces también cerrar, sin buscarlo abajo).
   if (ctx.canStart) actions.push({ label: ctx.inProgress ? 'Continuar sesión' : 'Empezar sesión', target: 'plan-empezar' });
   if (ctx.canStart && ctx.inProgress) actions.push({ label: 'Cerrar sesión', target: 'plan-cerrar' });
+  // Entrenaste sin el móvil: las mismas tarjetas, con todo lo previsto ya rellenado para tocar solo lo que fue distinto.
+  if (ctx.canStart && !ctx.inProgress) actions.push({ label: 'Anotar lo que hice', target: 'plan-anotar' });
   actions.push({ label: 'Por qué', target: 'plan-detalle' });
   return {
     id: 'plan-estado',
@@ -155,8 +157,11 @@ export function planCompletedSuggestion(c: PlanCompleted | null | undefined): Re
     tone: 'good',
     text: `${lead} ${body}${pending}`.trim(),
     mood: 'happy',
-    // El resumen vive en el Dashboard («Sesión completada»): este botón lleva allí. Corregir datos y Deshacer están en RexLab.
-    actions: [{ label: 'Ver resumen', target: 'plan-resumen' }],
+    // El resumen vive en el Dashboard («Sesión completada»): ese botón lleva allí. «Ver y corregir» abre las tarjetas con lo anotado.
+    actions: [
+      { label: 'Ver resumen', target: 'plan-resumen' },
+      { label: 'Ver y corregir', target: 'plan-corregir' },
+    ],
     dismissible: false,
   };
 }

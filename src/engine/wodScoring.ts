@@ -51,6 +51,36 @@ export function buildWodResult(scoreType: WodScoreType, form: WodResultForm): Wo
   return { scoreType: 'load', value: `${form.load} kg` };
 }
 
+/**
+ * Lo contrario de `buildWodResult`: el formulario de un resultado ya guardado («9:05», «6+4», «185 reps», «70 kg», «CAP · 3+7»), para volver a
+ * enseñarlo relleno al corregir una sesión. Si el valor no se entiende, el formulario sale vacío.
+ */
+export function formFromWodResult(result: WodResult | undefined): WodResultForm {
+  if (!result) return EMPTY_WOD_FORM;
+  const v = result.value.trim();
+  const num = (s: string | undefined) => (s ? Number(s) : 0);
+  if (result.capped || /^CAP/i.test(v)) {
+    const m = v.match(/(\d+)\+(\d+)/);
+    const reps = v.match(/(\d+)\s*reps/i);
+    const rounds = !m ? v.match(/CAP\s*·\s*(\d+)\s*$/i) : null;
+    return { ...EMPTY_WOD_FORM, capped: true, rounds: m ? num(m[1]) : rounds ? num(rounds[1]) : 0, extraReps: m ? num(m[2]) : reps ? num(reps[1]) : 0, ...(result.capSeconds ? { capSeconds: result.capSeconds } : {}) };
+  }
+  if (result.scoreType === 'time') {
+    const m = v.match(/^(\d+):(\d{1,2})$/);
+    return m ? { ...EMPTY_WOD_FORM, minutes: num(m[1]), seconds: num(m[2]) } : EMPTY_WOD_FORM;
+  }
+  if (result.scoreType === 'rounds+reps') {
+    const m = v.match(/^(\d+)(?:\+(\d+))?$/);
+    return m ? { ...EMPTY_WOD_FORM, rounds: num(m[1]), extraReps: num(m[2]) } : EMPTY_WOD_FORM;
+  }
+  if (result.scoreType === 'reps') {
+    const m = v.match(/^(\d+)/);
+    return m ? { ...EMPTY_WOD_FORM, reps: num(m[1]) } : EMPTY_WOD_FORM;
+  }
+  const m = v.match(/^(\d+(?:[.,]\d+)?)/);
+  return m ? { ...EMPTY_WOD_FORM, load: Number(m[1].replace(',', '.')) } : EMPTY_WOD_FORM;
+}
+
 /** Partes de WOD que tiene la sesion: [1] un WOD normal, [1, 2] un dia de doble WOD, [] sin WOD. */
 export function getWodParts(session: DailySession): (1 | 2)[] {
   const wod = session.blocks.filter((b) => b.block === 'wod');

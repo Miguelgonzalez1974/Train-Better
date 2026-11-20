@@ -82,6 +82,40 @@
   --c-ring-low: 220 38 38;
 }
 
+/* Un trozo de la app que es oscuro en cualquier tema (las tarjetas de entreno tienen su propio fondo oscuro): redefine aquí los colores del
+   tema oscuro, así el texto «blanco», los grises y los colores de estado de todo lo que haya dentro se leen igual con el tema claro. */
+.force-dark {
+  color-scheme: dark;
+  --c-white: 255 255 255;
+  --c-n-100: 245 245 245;
+  --c-n-200: 229 229 229;
+  --c-n-300: 212 212 212;
+  --c-n-400: 163 163 163;
+  --c-n-500: 146 146 146;
+  --c-n-600: 130 130 130;
+  --c-brand-bg: 10 9 8;
+  --c-brand-surface: 23 19 16;
+  --c-brand-surface-muted: 31 26 21;
+  --c-brand-border: 42 36 32;
+  --c-brand-orange: 249 115 22;
+  --c-brand-orange-dark: 194 65 12;
+  --c-brand-gold: 212 175 55;
+  --c-brand-gold-soft: 233 207 122;
+  --c-brand-neon: 74 222 128;
+  --c-brand-neon-soft: 134 239 172;
+  --c-state-good: 74 222 128;
+  --c-state-mid: 251 191 36;
+  --c-state-low: 248 113 113;
+  --c-state-cool: 56 189 248;
+  --c-sleep: 167 139 250;
+  --c-plan: 56 189 248;
+  --c-effort: 250 204 21;
+  --c-ring-good: 74 222 128;
+  --c-ring-mid: 251 191 36;
+  --c-ring-low: 248 113 113;
+  color: rgb(255 255 255);
+}
+
 /* La página nunca se ensancha en horizontal: un elemento que se sale hacía el documento (y las capas fixed, como el modo
    enfocado) más ancho que la pantalla del móvil. `clip` recorta sin crear un contenedor de scroll (no rompe el sticky). */
 html,
