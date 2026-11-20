@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { X, Check, Timer, Minus, Plus, ChartSpline, ArrowRight, Undo2, Flag, HeartPulse, History } from 'lucide-react';
+import { X, Check, Timer, Minus, Plus, ChartSpline, ArrowRight, Undo2, Flag, HeartPulse, History, Mic } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { RxOrScaled, SessionBlockResult, SetFeel, SetQuality, WodFeel, WodScalingEntry } from '../../data/athlete/types';
 import { scalingAlternatives } from '../../engine/wodMovements';
@@ -23,6 +23,8 @@ import { RpeCheckIn } from './RpeCheckIn';
 import { SwapButton } from './SwapMovement';
 import { ComplexSwapButton } from './ComplexSwap';
 import { WodCategoryPill } from './WodCategoryPill';
+import { createRecognizer, getSpeechCtor, numberWordsToDigits, speechProblem, type Recognizer } from '../../lib/speech';
+import { parseTrainCommand, TRAIN_COMMAND_EXAMPLES } from '../../engine/trainCommand';
 import type { FocusModeProps } from './FocusMode';
 
 /**
@@ -105,6 +107,15 @@ function Cta({ onClick, children, testId, tone }: { onClick: () => void; childre
 }
 
 const round4 = (v: number) => Math.max(0, Math.round(v * 4) / 4);
+
+/** Lo que la voz puede hacer sobre un ejercicio de barra: cada acción devuelve lo que ha hecho (para decírselo al atleta) o null si no procede. */
+interface LiftVoiceActions {
+  mark: (kg?: number, quality?: 'justa' | 'fallada') => string | null;
+  setKg: (kg: number) => string | null;
+  setQuality: (q: 'bien' | 'justa' | 'fallada') => string | null;
+  undo: () => string | null;
+  allPlanned: () => string | null;
+}
 
 /** Lo del WOD que se anota en el cierre (Rx/escalado por movimiento y dureza), para hacerlo desde la propia tarjeta: es el mismo estado del padre. */
 export interface TrainCardsWod {
@@ -347,6 +358,14 @@ export function TrainCards({
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
   /** «Lo anoto después»: se entrena sin pantalla y se rellena al acabar, con calma. Sin descansos ni avisos; todo se puede marcar o cambiar. */
   const [later, setLater] = useState(review);
+  /** La voz dentro del entreno: escuchando, lo que va entendiendo y lo que se hizo con la última orden. */
+  const [listening, setListening] = useState(false);
+  const [voiceNote, setVoiceNote] = useState<{ text: string; ok: boolean } | null>(null);
+  const recognizerRef = useRef<Recognizer | null>(null);
+  const speechCtor = useMemo(() => getSpeechCtor(), []);
+  /** Lo que se puede hacer por voz en cada ejercicio de barra (se rehace en cada pintado, con el estado de ese momento). */
+  const liftActions = useRef<Record<string, LiftVoiceActions>>({});
+  const commandRef = useRef<(text: string) => void>(() => undefined);
   /** El descanso en curso (uno a la vez): hora de fin con reloj de pared, para que siga contando con la app en segundo plano. */
   const [rest, setRest] = useState<{ key: string; movementId: string; next: number; endsAt: number; total: number; notified: boolean } | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -438,6 +457,87 @@ export function TrainCards({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur, cards.length]);
 
+  // ───────── La voz: Rex dentro del entreno ─────────
+
+  /** Ejecuta una orden hablada sobre lo que hay delante y dice lo que ha hecho. */
+  commandRef.current = (spoken: string) => {
+    const cmd = parseTrainCommand(numberWordsToDigits(spoken));
+    const card = cards[cur];
+    const acts = card?.kind === 'lift' ? liftActions.current[card.key] : undefined;
+    const say = (text: string | null, fallback: string) => setVoiceNote(text ? { text, ok: true } : { text: fallback, ok: false });
+    const needLift = 'Eso se dice en un ejercicio de barra.';
+    switch (cmd.kind) {
+      case 'done':
+        return say(acts?.mark(cmd.kg, cmd.quality) ?? null, needLift);
+      case 'kg':
+        return say(acts?.setKg(cmd.kg) ?? null, needLift);
+      case 'quality':
+        return say(acts?.setQuality(cmd.quality) ?? null, 'Aún no hay ninguna serie hecha.');
+      case 'undo':
+        return say(acts?.undo() ?? null, 'No hay ninguna serie que deshacer.');
+      case 'all-planned':
+        return say(acts?.allPlanned() ?? null, needLift);
+      case 'next':
+        if (cur >= cards.length - 1) return say(null, 'Ya estás en el cierre.');
+        goTo(cur + 1);
+        return say(`Siguiente: ${nextTitle(cur)}`, '');
+      case 'prev':
+        if (cur <= 0) return say(null, 'Estás en la primera tarjeta.');
+        goTo(cur - 1);
+        return say('Tarjeta anterior', '');
+      case 'rest-skip':
+        if (!rest) return say(null, 'No hay ningún descanso en marcha.');
+        setRest(null);
+        return say('Descanso saltado', '');
+      case 'rest-add':
+        if (!rest) return say(null, 'No hay ningún descanso en marcha.');
+        setRest((r) => (r ? { ...r, endsAt: Math.max(r.endsAt, Date.now()) + cmd.seconds * 1000, total: r.total + cmd.seconds, notified: false } : r));
+        return say(`Descanso: +${cmd.seconds} s`, '');
+      case 'pain':
+        if (!onPain) return say(null, 'Aquí no puedo abrir el aviso de molestia.');
+        onPain();
+        return say('Cuéntame dónde te duele', '');
+      case 'close':
+        goTo(cards.length - 1);
+        return say('Te llevo al cierre', '');
+      default:
+        return setVoiceNote({ text: `No te he entendido. Prueba: «${TRAIN_COMMAND_EXAMPLES.slice(0, 3).join('», «')}».`, ok: false });
+    }
+  };
+
+  function toggleListening() {
+    if (!speechCtor) return;
+    if (listening) {
+      recognizerRef.current?.stop();
+      return;
+    }
+    setVoiceNote(null);
+    const rec = createRecognizer(speechCtor, {
+      onStart: () => setListening(true),
+      onInterim: (t) => setVoiceNote({ text: `«${t}»`, ok: true }),
+      onFinal: (t) => commandRef.current(t),
+      onError: (code) => {
+        if (code === 'aborted') return;
+        const p = speechProblem(code);
+        setVoiceNote({ text: `${p.title}. ${p.detail}`, ok: false });
+      },
+      onEnd: () => setListening(false),
+    });
+    recognizerRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  }
+  useEffect(() => () => recognizerRef.current?.abort(), []);
+  // El mensaje de la última orden se va solo.
+  useEffect(() => {
+    if (!voiceNote || listening) return;
+    const t = window.setTimeout(() => setVoiceNote(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [voiceNote, listening]);
+
   // ───────── Piezas de cada tarjeta ─────────
 
   const header = (theme: Theme, title: string, sub?: string) => (
@@ -445,7 +545,22 @@ export function TrainCards({
       <span className="rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ background: `${theme.accent}22`, color: theme.accent }}>
         {title}
       </span>
-      {sub && <span className="text-xs font-semibold text-white/50">{sub}</span>}
+      <span className="flex min-w-0 items-center gap-2">
+        {sub && <span className="truncate text-xs font-semibold text-white/50">{sub}</span>}
+        {speechCtor && (
+          <button
+            onClick={toggleListening}
+            aria-label={listening ? 'Dejar de escuchar' : 'Hablar con Rex'}
+            aria-pressed={listening}
+            title="Hablar con Rex: «serie hecha», «hecha con 100 kilos», «siguiente»…"
+            data-testid="cards-mic"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${listening ? 'animate-pulse text-black' : 'text-white/85 active:bg-white/20'}`}
+            style={listening ? { background: '#f97316' } : { background: 'rgba(255,255,255,0.12)' }}
+          >
+            <Mic size={17} strokeWidth={2.5} />
+          </button>
+        )}
+      </span>
     </div>
   );
 
@@ -579,6 +694,80 @@ export function TrainCards({
       if (setIsDone(mid, n)) onLogWorkSet(mid, blk, n, next, repsOf(n), qualityOf(mid, n));
     };
 
+    /** Marca como hecha la serie que toca (la seleccionada, o la primera sin hacer), con otro peso si se pide, y arranca el descanso si el entreno lo prescribe. */
+    const markSet = (kgOverride?: number): number => {
+      const n = selDone ? firstUndone ?? sel : sel;
+      if (kgOverride !== undefined) {
+        const v = round4(kgOverride);
+        setPerSetKg((p) => {
+          const out = { ...p, [`${mid}:${n}`]: v };
+          if (!plan) for (let k = n + 1; k <= rowCount; k++) if (!setIsDone(mid, k)) out[`${mid}:${k}`] = v;
+          return out;
+        });
+      }
+      const kgNow = kgOverride !== undefined ? round4(kgOverride) : kgFor(mid, n, plannedKg(n));
+      onLogWorkSet(mid, blk, n, kgNow, repsOf(n));
+      const remainingAfter = Array.from({ length: rowCount }, (_, s) => s + 1).filter((k) => k !== n && !setIsDone(mid, k));
+      const nextN = remainingAfter.find((k) => k > n) ?? remainingAfter[0];
+      if (nextN !== undefined) {
+        setSelected((p) => ({ ...p, [card.key]: nextN }));
+        // Solo hay descanso si el entreno lo prescribe (y queda alguna serie).
+        if (restSecs && !later) {
+          const t0 = Date.now();
+          setNow(t0);
+          setRest({ key: card.key, movementId: mid, next: nextN, endsAt: t0 + restSecs * 1000, total: restSecs, notified: false });
+        }
+      } else {
+        setSelected((p) => ({ ...p, [card.key]: n }));
+      }
+      return n;
+    };
+
+    // Lo que se puede decir sobre este ejercicio (ver `parseTrainCommand`).
+    const fmtKg = (v: number) => String(v).replace('.', ',');
+    const lastDone = [...doneNums].pop();
+    liftActions.current[card.key] = {
+      mark: (kgOverride, q) => {
+        if (!loggable) return null;
+        if (allDone) return `${title}: ya están todas las series.`;
+        const n = markSet(kgOverride);
+        if (q) onSetQuality(mid, n, q === 'fallada' ? 'fallada' : 'justa');
+        const kgText = (kgOverride ?? kgFor(mid, n, plannedKg(n))) > 0 ? ` · ${fmtKg(kgOverride ?? kgFor(mid, n, plannedKg(n)))} kg` : '';
+        return `Serie ${n} hecha${kgText}${q ? ` · ${q === 'fallada' ? 'no salió' : 'justa'}` : ''}`;
+      },
+      setKg: (v) => {
+        if (!loggable || (!prescribed && !plan)) return null;
+        const n = selDone ? firstUndone ?? sel : sel;
+        const value = round4(v);
+        setPerSetKg((p) => {
+          const out = { ...p, [`${mid}:${n}`]: value };
+          if (!plan) for (let k = n + 1; k <= rowCount; k++) if (!setIsDone(mid, k)) out[`${mid}:${k}`] = value;
+          return out;
+        });
+        return `Serie ${n}: ${fmtKg(value)} kg`;
+      },
+      setQuality: (q) => {
+        if (lastDone === undefined) return null;
+        onSetQuality(mid, lastDone, q === 'bien' ? undefined : q === 'fallada' ? 'fallada' : 'justa');
+        return `Serie ${lastDone}: ${q === 'bien' ? 'bien' : q === 'fallada' ? 'no salió' : 'justa'}`;
+      },
+      undo: () => {
+        if (lastDone === undefined) return null;
+        onClearWorkSet(mid, lastDone);
+        setRest(null);
+        setSelected((p) => ({ ...p, [card.key]: lastDone }));
+        return `Serie ${lastDone} deshecha`;
+      },
+      allPlanned: () => {
+        if (!loggable || allDone) return null;
+        Array.from({ length: rowCount }, (_, s) => s + 1)
+          .filter((k) => !setIsDone(mid, k))
+          .forEach((k) => onLogWorkSet(mid, blk, k, kgFor(mid, k, plannedKg(k)), repsOf(k), undefined, true));
+        setSelected((p) => ({ ...p, [card.key]: rowCount }));
+        return 'Todas las series, como estaban previstas';
+      },
+    };
+
     // Cómo ha ido la primera serie: reajusta lo que queda (igual que el modo enfocado).
     const showFeel = !plan && !singleLog && rowCount >= 2 && prescribed > 0 && setIsDone(mid, 1);
     const picked = feelByMovement[mid];
@@ -685,23 +874,6 @@ export function TrainCards({
     }
 
     // ── Vista normal ──
-    const markSet = () => {
-      const kg = kgFor(mid, sel, plannedKg(sel));
-      onLogWorkSet(mid, blk, sel, kg, repsOf(sel));
-      const remainingAfter = Array.from({ length: rowCount }, (_, s) => s + 1).filter((n) => n !== sel && !setIsDone(mid, n));
-      const nextN = remainingAfter.find((n) => n > sel) ?? remainingAfter[0];
-      if (nextN !== undefined) {
-        setSelected((p) => ({ ...p, [card.key]: nextN }));
-        // Solo hay descanso si el entreno lo prescribe (y queda alguna serie).
-        if (restSecs && !later) {
-          const t0 = Date.now();
-          setNow(t0);
-          setRest({ key: card.key, movementId: mid, next: nextN, endsAt: t0 + restSecs * 1000, total: restSecs, notified: false });
-        }
-      } else {
-        setSelected((p) => ({ ...p, [card.key]: sel }));
-      }
-    };
     const kg = kgFor(mid, sel, plannedKg(sel));
     const reps = repsOf(sel);
     const wavePos = waveSize ? `Ola ${Math.floor((sel - 1) / waveSize) + 1} · ` : '';
@@ -885,7 +1057,7 @@ export function TrainCards({
         </div>
         <div className="flex flex-col gap-2 px-5 pb-5 pt-1">
           {loggable && !selDone && (
-            <Cta onClick={markSet} testId="cards-set-done">
+            <Cta onClick={() => markSet()} testId="cards-set-done">
               <Check size={24} strokeWidth={3.5} /> Serie {sel} hecha
             </Cta>
           )}
@@ -1287,6 +1459,17 @@ export function TrainCards({
           <Flag size={18} strokeWidth={2.4} />
         </button>
       </div>
+      {(listening || voiceNote) && (
+        <p
+          className="mx-4 mt-1 rounded-xl px-3 py-2 text-center text-sm font-semibold"
+          style={voiceNote && !voiceNote.ok ? { background: 'rgba(248,113,113,0.18)', color: '#fca5a5' } : { background: 'rgba(249,115,22,0.18)', color: '#fdba74' }}
+          role="status"
+          aria-live="polite"
+          data-testid="cards-voice-note"
+        >
+          {voiceNote?.text ?? 'Te escucho… di «serie hecha», «hecha con 100 kilos» o «siguiente»'}
+        </p>
+      )}
       {later && (
         <p className="mx-4 mt-1 rounded-xl bg-white/10 px-3 py-1.5 text-center text-xs font-semibold text-white/80" data-testid="cards-later-banner">
           {review ? 'Revisando tu sesión: sin descansos. Toca solo lo que fue distinto.' : 'Lo anotas después: sin descansos. Marca las series cuando acabes o toca «Todas como estaban previstas».'}
