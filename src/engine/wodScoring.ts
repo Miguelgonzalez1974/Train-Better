@@ -38,6 +38,19 @@ export interface WodResultForm {
 
 export const EMPTY_WOD_FORM: WodResultForm = { minutes: 0, seconds: 0, rounds: 0, extraReps: 0, reps: 0, load: 0 };
 
+export type WodNumberField = 'minutes' | 'seconds' | 'rounds' | 'extraReps' | 'reps' | 'load';
+
+/**
+ * Sube o baja un campo del resultado con los botones + y − (sin escribir): nunca baja de 0, los segundos se quedan entre 0 y 59 y la carga va de
+ * cuarto en cuarto de kilo. Devuelve lo que hay que cambiar en el formulario.
+ */
+export function bumpWodForm(form: WodResultForm, field: WodNumberField, delta: number): Partial<WodResultForm> {
+  const max = field === 'seconds' ? 59 : Infinity;
+  const raw = (form[field] || 0) + delta;
+  const next = field === 'load' ? Math.round(raw * 4) / 4 : Math.round(raw);
+  return { [field]: Math.max(0, Math.min(max, next)) };
+}
+
 /** Convierte el formulario en el `WodResult` que se guarda ("9:05", "6+4", "185 reps", "70 kg"). */
 export function buildWodResult(scoreType: WodScoreType, form: WodResultForm): WodResult {
   // Un WOD por tiempo que no se terminó: se guarda como CAP con lo que se hizo, no como un tiempo.

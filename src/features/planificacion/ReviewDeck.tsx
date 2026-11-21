@@ -32,7 +32,7 @@ import { fmtKgValue } from '../../lib/format';
 import { useVisibleViewport } from '../../lib/useVisibleViewport';
 import { BLOCK_ORDER } from './DaySessionBlocks';
 import { groupWodByPart } from './wodPartGroups';
-import { WodResultField } from './WodResultField';
+import { WodResultBig } from './WodResultBig';
 import { GhostSummaryCard } from './GhostSummaryCard';
 import { RexWodReading } from './RexWodReading';
 import { RPE_META } from './SessionFeelFields';
@@ -471,7 +471,12 @@ export function ReviewDeck(p: ReviewDeckProps) {
       <>
         {header(th.label, th.accent, Timer, p.scoreTypes[2] ? `parte ${c.part} de 2` : undefined)}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3">
-          <h2 className="text-[clamp(1.5rem,8vw,1.9rem)] font-extrabold leading-tight text-white [overflow-wrap:anywhere]">{isBench ? (benchWod?.name ?? 'Benchmark') : (first.title ?? 'WOD')}</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-[clamp(1.5rem,8vw,1.9rem)] font-extrabold leading-tight text-white [overflow-wrap:anywhere]">{isBench ? (benchWod?.name ?? 'Benchmark') : (first.title ?? 'WOD')}</h2>
+            <button onClick={() => clockBus.open('workout')} aria-label="Abrir el crono" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full active:scale-95" style={{ background: 'rgba(255,255,255,0.18)', color: white }} data-testid="review-clock">
+              <Timer size={22} strokeWidth={2.6} aria-hidden />
+            </button>
+          </div>
           {format && <p className="mt-0.5 text-base font-bold" style={{ color: th.accent }}>{localizeWodText(format)}</p>}
           {p.targets[c.part] && <p className="text-xs" style={{ color: soft }}>Objetivo del coach: {p.targets[c.part]}</p>}
 
@@ -481,7 +486,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
             <>
               {score && (
                 <div className="mt-4 rounded-2xl p-3.5" style={{ background: 'rgba(255,255,255,0.08)' }} data-testid="review-wod-result">
-                  <p className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
+                  <p className="mb-1 flex items-center gap-2 text-sm font-bold text-white">
                     Resultado
                     {p.clockParts.includes(c.part) && (
                       <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: 'rgba(155,231,178,0.2)', color: '#9be7b2' }}>
@@ -489,7 +494,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
                       </span>
                     )}
                   </p>
-                  <WodResultField scoreType={score} form={p.forms[c.part]} onChange={(patch) => p.onFormChange(c.part, patch)} capSeconds={p.capSeconds[c.part]} />
+                  <WodResultBig scoreType={score} form={p.forms[c.part]} onChange={(patch) => p.onFormChange(c.part, patch)} capSeconds={p.capSeconds[c.part]} accent={th.accent} />
                 </div>
               )}
               {p.ghostSummaries[c.part] && (
@@ -503,9 +508,6 @@ export function ReviewDeck(p: ReviewDeckProps) {
           )}
         </div>
         <div className="flex flex-col gap-2 px-5 pb-5 pt-1">
-          <button onClick={() => clockBus.open('workout')} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full text-sm font-bold" style={{ background: 'rgba(255,255,255,0.16)', color: white }} data-testid="review-clock">
-            <Timer size={17} strokeWidth={2.6} aria-hidden /> Abrir el crono
-          </button>
           <Primary onClick={() => goTo(i + 1)} testId="review-next">
             Siguiente <ArrowRight size={20} strokeWidth={2.75} />
           </Primary>
