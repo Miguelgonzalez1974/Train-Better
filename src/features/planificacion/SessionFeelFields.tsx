@@ -3,7 +3,7 @@ import { Minus, Plus } from 'lucide-react';
 const RPE_SCALE = Array.from({ length: 10 }, (_, i) => i + 1);
 
 /** Cómo se llama cada nivel de esfuerzo y cómo se pinta (de verde suave a rojo máximo). */
-const RPE_META: Record<number, { label: string; hint: string; color: string }> = {
+export const RPE_META: Record<number, { label: string; hint: string; color: string }> = {
   1: { label: 'Muy suave', hint: 'Apenas lo has notado.', color: '#4ade80' },
   2: { label: 'Muy suave', hint: 'Apenas lo has notado.', color: '#4ade80' },
   3: { label: 'Suave', hint: 'Podrías haber hecho bastante más.', color: '#4ade80' },

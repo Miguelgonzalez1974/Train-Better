@@ -170,7 +170,7 @@ function Seg<T extends string>({ options, value, onChange, label, accent, full }
 }
 
 /** ¿Rx o escalado? por movimiento y cómo de duro fue, dentro de la tarjeta del WOD (alimenta «Tu WOD por zonas», igual que el cierre). */
-function WodScaleBox({ wod, part, accent }: { wod: TrainCardsWod; part: 1 | 2; accent: string }) {
+export function WodScaleBox({ wod, part, accent }: { wod: TrainCardsWod; part: 1 | 2; accent: string }) {
   const movements = wod.movements.filter((m) => m.part === part);
   if (movements.length === 0) return null;
   const entryOf = (m: WodScalingMovement) => wod.scaling.find((e) => e.movementId === m.movementId && (e.part ?? 1) === m.part);

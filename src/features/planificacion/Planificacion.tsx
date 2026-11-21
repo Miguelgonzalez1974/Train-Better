@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Layers, GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { Check, GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -124,10 +124,8 @@ import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companion
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
-import { TrainCards } from './TrainCards';
-import { TrainList } from './TrainList';
-import { LogAll } from './LogAll';
-import { readTrainMode, writeTrainMode, type TrainMode } from '../../lib/trainMode';
+import { TrainCards, type TrainCardsWod } from './TrainCards';
+import { ReviewDeck } from './ReviewDeck';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
@@ -276,40 +274,25 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowWhatDid(false);
     setShowQuickLog(true);
   }
-  /** «Anotar de golpe»: todos los pesos y el cierre en una sola pantalla (lo que se hace al acabar, sin el móvil en la mano mientras se entrena). */
-  const [logAllMode, setLogAllMode] = useState(false);
-  /** Guarda las series que hay en pantalla en «Anotar de golpe»; se llama justo antes de cerrar la sesión. */
-  const logAllCommit = useRef<(() => void) | null>(null);
-  function openLogAll() {
-    setListMode(false);
+  /** «He acabado la sesión»: el mazo de tarjetas para anotar lo hecho al terminar (una por parte, con los pesos de cada serie y el cierre al final). */
+  const [reviewMode, setReviewMode] = useState(false);
+  /** Guarda las series que hay en pantalla en el mazo de anotar; se llama justo antes de registrar la sesión. */
+  const reviewCommit = useRef<(() => void) | null>(null);
+  function openReview() {
     setCardsMode(false);
-    setLogAllMode(true);
-    // El cierre va en la misma pantalla: se abre ya (con los minutos de la lista, si venían de ella).
+    setReviewMode(true);
+    // El cierre (minutos, resultado del WOD…) arranca ya: con los minutos de una corrección si venían de ahí.
     setTestedLoadKg(testDayBlock?.loadKg ?? 0);
     setShowCompletePanel(true);
   }
   function openCards(mode: 'live' | 'review', startAt: 'start' | 'end' = 'start') {
-    setListMode(false);
-    setLogAllMode(false);
+    setReviewMode(false);
     setCardsOpts({ mode, startAt });
     setCardsMode(true);
   }
-  /** «Entrenar» (lista con cronómetro) o «Ir apuntando» (tarjetas): se pregunta la primera vez y se recuerda en este dispositivo. */
-  const [trainMode, setTrainMode] = useState<TrainMode | null>(() => readTrainMode(typeof window !== 'undefined' ? window.localStorage : null));
-  const [listMode, setListMode] = useState(false);
-  const [showModeChoice, setShowModeChoice] = useState(false);
-  function chooseTrainMode(mode: TrainMode) {
-    writeTrainMode(typeof window !== 'undefined' ? window.localStorage : null, mode);
-    setTrainMode(mode);
-    setShowModeChoice(false);
-    if (mode === 'list') setListMode(true);
-    else openCards('live', 'start');
-  }
-  /** Empezar o continuar la sesión: va por donde el atleta dijo que entrena (y se lo pregunta si aún no lo ha dicho). */
+  /** Empezar o continuar la sesión: las tarjetas, entrenando. */
   function startTraining() {
-    if (!trainMode) setShowModeChoice(true);
-    else if (trainMode === 'list') setListMode(true);
-    else openCards('live', 'start');
+    openCards('live', 'start');
   }
   /** Una corrección en curso («Ver y corregir»): cómo estaba el día antes de quitar el registro, para devolverlo si se cancela. */
   const correctionRef = useRef<{ snapshot: DaySnapshot; sessionBefore: DailySession } | null>(null);
@@ -1080,7 +1063,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
     setCardsMode(false);
-    setLogAllMode(false);
+    setReviewMode(false);
     correctionRef.current = null;
     toast.show('Sesión registrada');
     // Un test que no actualizó el PR no deja rastro en el registro de PRs: se dice aquí, antes de pasar al Dashboard.
@@ -1183,8 +1166,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowQuickLog(false);
     // Si se llegó desde la tarjeta de cierre, las tarjetas se cierran: el día ya está registrado.
     setCardsMode(false);
-    setListMode(false);
-    setLogAllMode(false);
+    setReviewMode(false);
     setShowCompletePanel(false);
     toast.show(moved ? 'Anotado. La sesión prevista pasa a mañana' : 'Anotado como otra cosa');
   }
@@ -1473,7 +1455,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           {
             title: 'Cambiar la sesión de hoy',
             items: [
-              { id: 'modo-entreno', label: 'Cómo entreno', hint: trainMode === 'list' ? 'ahora: lista y cronómetro' : trainMode === 'cards' ? 'ahora: serie a serie' : 'lista o serie a serie', icon: Layers, onClick: () => setShowModeChoice(true) },
               { id: 'modo-enfocado', label: 'Entreno de siempre', hint: 'una parte por pantalla', icon: GalleryHorizontalEnd, onClick: () => setFocusMode(true) },
               ...(hasWodBlock ? [{ id: 'otro-wod', label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(hasWodBlock ? [{ id: 'wod-fantasma', label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
@@ -1634,18 +1615,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         durationMin={durationMin}
         onDuration={setDurationMin}
         estimatedMin={estimatedMin}
-        singleStep={logAllMode}
         // «Anotar de golpe»: las series de la pantalla se guardan justo antes de registrar la sesión (el registro y la progresión las leen del almacén).
         onConfirm={() => {
-          if (logAllMode) {
-            logAllCommit.current?.();
-            setWorkLog(athleteRepository.getWorkLog());
-          }
           handleConfirmComplete();
         }}
         onCancel={() => {
           setShowCompletePanel(false);
-          setLogAllMode(false);
         }}
       />
     );
@@ -1662,9 +1637,32 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     else setShowHardness(true);
   }
 
+  /** Lo del WOD que se anota en las tarjetas (Rx o escalado por movimiento y dureza): el mismo estado que el cierre. Lo usan las tarjetas y el mazo de anotar. */
+  const cardsWod: TrainCardsWod | undefined =
+    wodMovements.length > 0
+      ? {
+          movements: wodMovements,
+          rxOrScaled,
+          onRxOrScaled: (v) => {
+            wodDetailFromCards.current = true;
+            setRxOrScaled(v);
+          },
+          scaling: wodScaling,
+          onScaling: (next) => {
+            wodDetailFromCards.current = true;
+            setWodScaling(next);
+            if (next.length > 0) setRxOrScaled('scaled');
+          },
+          feel: wodFeel,
+          onFeel: (v) => {
+            wodDetailFromCards.current = true;
+            setWodFeel(v);
+          },
+        }
+      : undefined;
+
   return (
-    <div className="flex flex-col gap-4 pb-44">
-      <Modal open={showNotices} onClose={() => setShowNotices(false)} title="Avisos del coach">
+    <div className="flex flex-col gap-4 pb-44">      <Modal open={showNotices} onClose={() => setShowNotices(false)} title="Avisos del coach">
         <CoachNoticesBody {...noticeProps} />
       </Modal>
       <Modal open={showReasons} onClose={() => setShowReasons(false)} title="Por qué tu sesión es así hoy">
@@ -1695,40 +1693,48 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           }}
         />
       )}
-      {listMode && session && !session.isRestDay && !alreadyCompletedToday && (
-        <TrainList
-          session={session}
-          todayWorkLog={todayWorkLog}
-          onExit={() => setListMode(false)}
-          onPain={() => openSupport('p_zone')}
-          onSwitchToCards={() => {
-            writeTrainMode(typeof window !== 'undefined' ? window.localStorage : null, 'cards');
-            setTrainMode('cards');
-            openCards('live', 'start');
-          }}
-          // Los minutos de la lista llegan al cierre como los de una corrección: se enseñan en vez de la estimación.
-          onFinish={(minutes) => {
-            correctionPrefill.current = { durationMin: minutes };
-            openLogAll();
-          }}
-        />
-      )}
-      {logAllMode && session && !session.isRestDay && !alreadyCompletedToday && (
-        <LogAll
+      {reviewMode && session && !session.isRestDay && !alreadyCompletedToday && (
+        <ReviewDeck
           session={session}
           todayWorkLog={todayWorkLog}
           skips={skips}
-          commitRef={logAllCommit}
-          closePanel={showCompletePanel ? renderCompletePanel() : null}
+          onSkip={(key, skipped) =>
+            setSkips((prev) => {
+              const next = { ...prev };
+              if (skipped) next[key] = next[key] ?? {};
+              else delete next[key];
+              return next;
+            })
+          }
+          commitRef={reviewCommit}
+          scoreTypes={wodScoreTypes}
+          forms={wodForms}
+          onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
+          clockParts={clockParts}
+          capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
+          targets={Object.fromEntries(wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]))}
+          wod={cardsWod}
+          ghostSummaries={ghostSummaries}
+          wodReadings={wodReadings}
+          onWorkMovement={createWorkGoal}
+          rpe={rpe}
+          onRpe={setRpe}
+          durationMin={durationMin}
+          onDuration={setDurationMin}
+          test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
+          // Se guardan las series de la pantalla justo antes de registrar la sesión (el registro y la progresión las leen del almacén).
+          onSave={() => {
+            reviewCommit.current?.();
+            setWorkLog(athleteRepository.getWorkLog());
+            handleConfirmComplete();
+          }}
           onExit={() => {
-            setLogAllMode(false);
+            setReviewMode(false);
             setShowCompletePanel(false);
           }}
-          onSwitchToCards={() => openCards('review', 'start')}
           onOtherThing={openQuickLog}
         />
-      )}
-      {cardsMode && session && !session.isRestDay && (
+      )}      {cardsMode && session && !session.isRestDay && (
         <TrainCards
           session={session}
           setFeedbackByIndex={setFeedbackByIndex}
@@ -1762,29 +1768,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             setShowCompletePanel(true);
           }}
           onPain={() => openSupport('p_zone')}
-          wod={
-            wodMovements.length > 0
-              ? {
-                  movements: wodMovements,
-                  rxOrScaled,
-                  onRxOrScaled: (v) => {
-                    wodDetailFromCards.current = true;
-                    setRxOrScaled(v);
-                  },
-                  scaling: wodScaling,
-                  onScaling: (next) => {
-                    wodDetailFromCards.current = true;
-                    setWodScaling(next);
-                    if (next.length > 0) setRxOrScaled('scaled');
-                  },
-                  feel: wodFeel,
-                  onFeel: (v) => {
-                    wodDetailFromCards.current = true;
-                    setWodFeel(v);
-                  },
-                }
-              : undefined
-          }
+          wod={cardsWod}
           onOtherThing={openQuickLog}
           // Con el cierre integrado (`onReachClose`) la última tarjeta no termina por aquí: el cierre se guarda dentro de ella.
           onFinish={() => openCards('live', 'end')}
@@ -1951,7 +1935,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {/* Rex, en la esquina, cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y
             avisa de lo que el coach tiene para ti; sus botones (Empezar sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
             Las casillas con todo el detalle quedan detrás de «Por qué». */}
-        {showRexBar && !focusMode && !cardsMode && !listMode && !logAllMode && (
+        {showRexBar && !focusMode && !cardsMode && !reviewMode && (
           <RexCorner
             speak
             screen="planificacion"
@@ -2063,7 +2047,17 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         />
       )}
 
-      {/* Cerrar la sesión solo se hace en la última tarjeta del entreno, y a ella te lleva Rex («Cerrar sesión»): aquí no hay otro cierre. */}
+      {/* Al acabar de entrenar: el mazo de tarjetas para anotar lo hecho (una por parte y el cierre al final). Es la misma acción que «Anotar lo que hice» de Rex. */}
+      {!editMode && !alreadyCompletedToday && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && (
+        <button
+          onClick={() => openReview()}
+          data-testid="finish-session"
+          className="flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-brand-orange px-5 py-3 text-base font-bold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark active:scale-[0.98]"
+        >
+          <Check size={20} strokeWidth={3} />
+          He acabado la sesión
+        </button>
+      )}
 
       {session.strengthProgramLabel && !session.isRestDay && (
         hasWodBlock ? (
@@ -2136,25 +2130,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         </div>
       </Modal>
 
-      <Modal open={showModeChoice} onClose={() => setShowModeChoice(false)} title="¿Cómo vas a entrenar?">
-        <div className="flex flex-col gap-3" data-testid="train-mode-choice">
-          <p className="text-xs text-neutral-500">Lo recuerdo para la próxima vez. Lo cambias cuando quieras en el menú de Rex.</p>
-          {([
-            { mode: 'list' as const, title: 'Entrenar', text: 'Una lista simple con el cronómetro siempre a mano. Apuntas al acabar, con todo lo previsto ya rellenado.' },
-            { mode: 'cards' as const, title: 'Ir apuntando', text: 'Las tarjetas, serie a serie, con el descanso entre series.' },
-          ]).map((o) => (
-            <button
-              key={o.mode}
-              onClick={() => chooseTrainMode(o.mode)}
-              data-testid={`train-mode-${o.mode}`}
-              className={`rounded-xl border px-4 py-3 text-left transition-colors hover:bg-white/5 ${trainMode === o.mode ? 'border-brand-neon' : 'border-brand-border'}`}
-            >
-              <span className="block text-sm font-semibold text-white">{o.title}</span>
-              <span className="mt-0.5 block text-xs text-neutral-400">{o.text}</span>
-            </button>
-          ))}
-        </div>
-      </Modal>
 
       <WhatDidModal
         open={showWhatDid}
@@ -2162,7 +2137,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         plannedLabel={session ? buildPreviewLine(session) : ''}
         onPlanned={() => {
           setShowWhatDid(false);
-          openLogAll();
+          openReview();
         }}
         onOther={openQuickLog}
       />

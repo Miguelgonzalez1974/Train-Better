@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionBlockResult, WorkSetEntry } from '../data/athlete/types';
-import { adjustAll, adjustRange, adjustRow, commitOf, cycleQuality, initialEdit, isChanged, isStraight, liftPlanOf, resetEdit, setDone, setTop, topIndex, waveRange } from './liftSets';
+import { adjustAll, adjustOnly, adjustRange, adjustRow, commitOf, cycleQuality, initialEdit, isChanged, isStraight, liftPlanOf, markDoneThrough, resetEdit, setDone, setQuality, setTop, topIndex, waveRange } from './liftSets';
 
 const straight: SessionBlockResult = { block: 'strength', movementId: 'back-squat', sets: 5, reps: '5', loadKg: 100 };
 const ramp: SessionBlockResult = { block: 'strength', movementId: 'back-squat', sets: 4, reps: '5-3-1', loadKg: 80, setPlan: [{ reps: 5, kg: 60 }, { reps: 3, kg: 70 }, { reps: 1, kg: 80 }, { reps: 3, kg: 70 }] };
@@ -109,6 +109,29 @@ describe('edición de pesos', () => {
     e = cycleQuality(e, 0);
     expect(isChanged(e)).toBe(true);
     expect(resetEdit(plan)).toEqual(initialEdit(plan, []));
+  });
+});
+
+describe('serie elegida', () => {
+  it('cambiar solo una serie no mueve las demás', () => {
+    const e = adjustOnly(initialEdit(liftPlanOf(ramp)!, []), 1, 5);
+    expect(kgs(e)).toEqual([60, 75, 80, 70]);
+    expect(e.rows[1].manual).toBe(true);
+  });
+
+  it('poner cómo salió una serie y quitarlo', () => {
+    let e = setQuality(initialEdit(liftPlanOf(straight)!, []), 2, 'fallada');
+    expect(e.rows[2]).toMatchObject({ quality: 'fallada', manual: true });
+    e = setQuality(e, 2, undefined);
+    expect(e.rows[2].quality).toBeUndefined();
+  });
+
+  it('marcar como hecha una serie posterior marca también las anteriores', () => {
+    let e = setDone(initialEdit(liftPlanOf(straight)!, []), 1);
+    e = markDoneThrough(e, 3);
+    expect(e.done).toBe(4);
+    expect(markDoneThrough(e, 1).done).toBe(4);
+    expect(markDoneThrough(e, 99).done).toBe(5);
   });
 });
 

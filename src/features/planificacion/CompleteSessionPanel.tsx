@@ -54,8 +54,6 @@ interface CompleteSessionPanelProps {
   estimatedMin: number;
   onConfirm: () => void;
   onCancel: () => void;
-  /** Todo en una sola pantalla (resultado y sensaciones seguidos), para anotar la sesión al final: sin pasos ni botón «Siguiente». */
-  singleStep?: boolean;
 }
 
 /**
@@ -93,7 +91,6 @@ export function CompleteSessionPanel({
   estimatedMin,
   onConfirm,
   onCancel,
-  singleStep = false,
 }: CompleteSessionPanelProps) {
   // El paso del resultado existe si hoy había WOD puntuable o test, aunque luego se marque como no hecho (así el paso no desaparece al tocarlo).
   // Si hoy hay WOD con movimientos que preguntar (qué se escaló y cómo de duro fue), también va en este paso.
@@ -106,7 +103,6 @@ export function CompleteSessionPanel({
   // Al abrirse el panel (y al pasar de paso, que cambia su altura) se centra en pantalla: el botón que
   // lo abre está justo debajo y, si venimos del modo foco, la vista podía estar en cualquier otro punto.
   useEffect(() => {
-    if (singleStep) return;
     rootRef.current?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }, [step]);
 
@@ -115,9 +111,7 @@ export function CompleteSessionPanel({
   return (
     <div ref={rootRef} className="card mb-14 flex flex-col gap-4 border-white/10 p-4">
       <div className="flex items-start justify-between gap-3">
-        {singleStep ? (
-          <p className="text-sm font-semibold text-white">Cómo fue</p>
-        ) : hasResultStep ? (
+        {hasResultStep ? (
           <ol className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold" aria-label="Pasos">
             {(['Resultado', 'Sensaciones'] as const).map((label, i) => {
               const done = step > i;
@@ -150,7 +144,7 @@ export function CompleteSessionPanel({
         </button>
       </div>
 
-      {(singleStep ? hasResultStep : step === 0) && (
+      {step === 0 && (
         <div key="resultado" className="flex animate-section-in flex-col gap-4 motion-reduce:animate-none">
           <p className="text-lg font-semibold text-white">¿Cómo te fue?</p>
 
@@ -216,7 +210,6 @@ export function CompleteSessionPanel({
             </div>
           )}
 
-          {!singleStep && (
           <div className="flex items-center justify-between gap-2">
             <button onClick={() => setStep(1)} className="px-2 py-2 text-sm text-neutral-500 underline decoration-dotted transition-colors hover:text-neutral-200">
               Saltar
@@ -229,11 +222,10 @@ export function CompleteSessionPanel({
               <ArrowRight size={15} strokeWidth={2.5} />
             </button>
           </div>
-          )}
         </div>
       )}
 
-      {(singleStep || step === 1) && (
+      {step === 1 && (
         <div key="sensaciones" className="flex animate-section-in flex-col gap-5 motion-reduce:animate-none">
           {/* Sin paso de resultado hoy (p. ej. un día de fuerza sin WOD puntuable), "qué has hecho" va aquí, arriba. */}
           {!hasResultStep && <DoneParts parts={parts} skips={skips} onChange={onSkipsChange} />}
@@ -266,7 +258,7 @@ export function CompleteSessionPanel({
           )}
 
           <div className="flex items-center justify-between gap-2">
-            {hasResultStep && !singleStep ? (
+            {hasResultStep ? (
               <button onClick={() => setStep(0)} className="flex items-center gap-1.5 px-2 py-2 text-sm text-neutral-400 transition-colors hover:text-white">
                 <ArrowLeft size={15} />
                 Atrás

@@ -154,6 +154,28 @@ export function cycleQuality(edit: LiftEdit, index: number): LiftEdit {
   };
 }
 
+/** Pone cómo salió una serie (undefined = bien). */
+export function setQuality(edit: LiftEdit, index: number, quality: SetQuality | undefined): LiftEdit {
+  return {
+    ...edit,
+    rows: edit.rows.map((r, i) => {
+      if (i !== index) return r;
+      const { quality: _old, ...rest } = r;
+      return quality ? { ...rest, quality, manual: true } : rest;
+    }),
+  };
+}
+
+/** Cambia solo una serie `delta` kilos (las demás no se mueven): para una serie suelta de una rampa. */
+export function adjustOnly(edit: LiftEdit, index: number, delta: number): LiftEdit {
+  return { ...edit, rows: edit.rows.map((r, i) => (i === index ? { ...r, kg: round4(r.kg + delta), manual: true } : r)) };
+}
+
+/** Marca como hecha hasta la serie `index` (inclusive): las series se hacen en orden, así que las anteriores también. */
+export function markDoneThrough(edit: LiftEdit, index: number): LiftEdit {
+  return { ...edit, done: Math.max(edit.done, Math.min(edit.rows.length, index + 1)) };
+}
+
 /** Vuelve a lo previsto: pesos, series hechas y cómo salió. */
 export function resetEdit(plan: LiftPlan): LiftEdit {
   return { rows: plan.rows.map((r) => ({ n: r.n, reps: r.reps, plannedKg: r.plannedKg, kg: r.plannedKg, manual: false })), done: plan.rows.length };
