@@ -103,6 +103,13 @@ import { CompanionCard, pickCompanionProgram } from './CompanionCard';
 import { CompanionRecover } from './CompanionRecover';
 import { ScreenRex } from '../dashboard/ScreenRex';
 import { orderRefusal, routeAsk, undoWeekChange } from '../dashboard/rexAskRouter';
+import { shortSessionLabel } from '../dashboard/rexMove';
+import { buildPreviewLine } from '../dashboard/DayRows';
+import { planWeekChange, type WeekPlan } from '../../lib/weekShift';
+import { dayLabel } from '../../lib/sessionMove';
+import { withRestUnmarked } from '../../engine/restDays';
+import { WhatDidModal, OtherThingModal, type OtherFormState } from './OtherActivitySheets';
+import { otherDaySession, otherKindInfo } from './otherActivity';
 import { peekUndo } from '../../lib/weekUndo';
 import { REX_HINTS } from '../dashboard/rexHints';
 import { dayAnswer, type AskAnswer } from '../dashboard/rexAsk';
@@ -131,7 +138,6 @@ import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { CompleteSessionPanel } from './CompleteSessionPanel';
 import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
-import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { timeLimitFor, weekdayPlural } from '../../engine/rexNotes';
 import { classifyWod } from '../../engine/wodCategory';
@@ -260,8 +266,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [cardsOpts, setCardsOpts] = useState<{ mode: 'live' | 'review'; startAt: 'start' | 'end' }>({ mode: 'live', startAt: 'start' });
   /** «Hice otra cosa»: el registro rápido (solo esfuerzo y minutos) para un día en que no se hizo la sesión prevista. Lo ofrece Rex y está dentro del cierre. */
   function openQuickLog() {
-    setQuickRpe(7);
-    setQuickDuration(60);
+    setOtherForm({ kind: 'clase', name: '', result: '', rpe: 7, minutes: otherKindInfo('clase').minutes, moveTomorrow: true });
+    // ¿Se puede pasar la prevista a mañana? Solo si hoy es un día del plan (con estructura) y la semana lo admite.
+    if (session && !session.isRestDay && session.source !== 'custom') {
+      const wp = planWeekChange(athleteRepository.getProfile(), athleteRepository.getHistory(), { kind: 'desplazar', from: todayIso }, todayIso, shortSessionLabel);
+      setOtherMove(typeof wp === 'object' ? wp : null);
+    } else setOtherMove(null);
+    setShowWhatDid(false);
     setShowQuickLog(true);
   }
   function openCards(mode: 'live' | 'review', startAt: 'start' | 'end' = 'start') {
@@ -336,8 +347,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [painAreaDraft, setPainAreaDraft] = useState<PainArea>('hombro');
   const [painDurationDraft, setPainDurationDraft] = useState<PainDuration>('semanas');
   const [showQuickLog, setShowQuickLog] = useState(false);
-  const [quickRpe, setQuickRpe] = useState(7);
-  const [quickDuration, setQuickDuration] = useState(60);
+  /** «Anotar lo que hice»: la pregunta (¿la prevista o otra cosa?) y el registro corto de otra cosa. */
+  const [showWhatDid, setShowWhatDid] = useState(false);
+  const [otherForm, setOtherForm] = useState<OtherFormState>({ kind: 'clase', name: '', result: '', rpe: 7, minutes: 60, moveTomorrow: true });
+  /** Lo que cambiaría en la semana si la sesión prevista pasa a mañana (se calcula al abrir el registro, una vez). */
+  const [otherMove, setOtherMove] = useState<WeekPlan | null>(null);
 
   const activePainFlags = useMemo(() => getActivePainFlags(profile.painFlags, todayIso), [profile.painFlags, todayIso]);
   const rampStatus = useMemo(() => describeRampStatus(profile.intensityRamp, new Date()), [profile.intensityRamp, todayIso]);
@@ -1137,25 +1151,26 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
    */
   function handleConfirmQuickLog() {
     if (!session) return;
-    const next: DailySession = {
-      date: session.date,
-      mesocycleWeek: session.mesocycleWeek,
-      isRestDay: false,
-      blocks: [],
-      source: 'custom',
-      customTitle: 'Entreno de equipo',
-      customNote: 'Registrado solo con RPE, sin detalle de bloques.',
-      swapLabel: 'Otra cosa',
-    };
+    // «Pasar la prevista a mañana»: cada sesión del plan baja un día hasta que un descanso lo absorbe (lo mismo que «desplaza la semana» de Rex).
+    // Hoy se escribe después con lo que se hizo, y deja de ser un descanso elegido: se ha entrenado.
+    const moved = otherForm.moveTomorrow && otherMove !== null;
+    if (moved && otherMove) {
+      athleteRepository.saveProfile(otherMove.profile);
+      for (const c of otherMove.changes) if (c.date !== session.date) athleteRepository.saveCachedSession(c.after);
+      athleteRepository.saveProfile(withRestUnmarked(athleteRepository.getProfile(), session.date));
+    }
+    const next = otherDaySession(session.date, session.mesocycleWeek, { kind: otherForm.kind, name: otherForm.name, result: otherForm.result });
     athleteRepository.saveCachedSession(next);
     setSession(next);
-    athleteRepository.appendHistoryEntry(toHistoryEntry(next, 'rx', quickRpe, quickDuration));
+    athleteRepository.appendHistoryEntry(toHistoryEntry(next, 'rx', otherForm.rpe, otherForm.minutes));
     setHistory(athleteRepository.getHistory());
     setProfile(athleteRepository.getProfile());
     setShowQuickLog(false);
     // Si se llegó desde la tarjeta de cierre, las tarjetas se cierran: el día ya está registrado.
     setCardsMode(false);
+    setListMode(false);
     setShowCompletePanel(false);
+    toast.show(moved ? 'Anotado. La sesión prevista pasa a mañana' : 'Anotado como otra cosa');
   }
 
   /**
@@ -1427,7 +1442,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       title: 'Si algo ha pasado',
       items: [
         { id: 'me-duele', label: 'Me duele algo', icon: HeartPulse, onClick: () => openSupport('p_zone') },
-        ...(session && !session.isRestDay && !alreadyCompletedToday ? [{ id: 'otra-cosa', label: 'Hice otra cosa', hint: 'solo esfuerzo y minutos', icon: NotebookPen, onClick: () => openQuickLog() }] : []),
+        ...(session && !session.isRestDay && !alreadyCompletedToday ? [{ id: 'otra-cosa', label: 'Hice otra cosa', hint: 'clase, running, equipo…', icon: NotebookPen, onClick: () => openQuickLog() }] : []),
         ...(!alreadyCompletedToday ? [{ id: 'no-estoy', label: 'Hoy no estoy para el plan', icon: Frown, onClick: () => openSupport('t_what') }] : []),
         { id: 'faltar', label: 'Voy a faltar unos días', icon: Plane, onClick: () => openSupport('a_why') },
       ],
@@ -1520,7 +1535,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     }
     else if (target === 'plan-cambiar') setShowRex(true);
     else if (target === 'plan-empezar') startTraining();
-    else if (target === 'plan-anotar') openCards('review', 'start');
+    else if (target === 'plan-anotar') setShowWhatDid(true);
     else if (target === 'plan-corregir') handleCorrectDay();
     else if (target === 'plan-cerrar') openCards('live', 'end');
     else if (target === 'plan-terminar') setEditMode(false);
@@ -2055,33 +2070,25 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         </div>
       </Modal>
 
-      <Modal open={showQuickLog} onClose={() => setShowQuickLog(false)} title="Hice otra cosa hoy">
-        <div className="flex flex-col gap-4">
-          <p className="text-xs text-neutral-500">
-            Para los días fuera de plan (entreno de equipo, por ejemplo) — sin Rx/escalado ni detalle de bloques, solo el
-            esfuerzo, para que el coach tenga algo de información.
-          </p>
-          <div>
-            <p className="mb-3 text-sm font-medium text-neutral-300">¿Cómo lo has sentido?</p>
-            <RpePicker value={quickRpe} onChange={setQuickRpe} />
-          </div>
-          <DurationStepper value={quickDuration} onChange={setQuickDuration} />
-          <div className="flex gap-2">
-            <button
-              onClick={handleConfirmQuickLog}
-              className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
-            >
-              Registrar
-            </button>
-            <button
-              onClick={() => setShowQuickLog(false)}
-              className="rounded-lg border border-brand-border px-4 py-2 text-sm text-neutral-300 transition-colors duration-200 hover:bg-white/5"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <WhatDidModal
+        open={showWhatDid}
+        onClose={() => setShowWhatDid(false)}
+        plannedLabel={session ? buildPreviewLine(session) : ''}
+        onPlanned={() => {
+          setShowWhatDid(false);
+          openCards('review', 'start');
+        }}
+        onOther={openQuickLog}
+      />
+
+      <OtherThingModal
+        open={showQuickLog}
+        onClose={() => setShowQuickLog(false)}
+        form={otherForm}
+        onChange={(patch) => setOtherForm((prev) => ({ ...prev, ...patch }))}
+        onSave={handleConfirmQuickLog}
+        movePreview={otherMove ? otherMove.rows.map((r) => `${dayLabel(r.date, todayIso).replace(/^./, (c) => c.toUpperCase())}: ${r.before} → ${r.after}`) : null}
+      />
 
       <RepeatWodModal
         open={showRepeat}
