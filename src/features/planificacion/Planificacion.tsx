@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { Layers, GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
@@ -118,6 +118,8 @@ import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSess
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
 import { TrainCards } from './TrainCards';
+import { TrainList } from './TrainList';
+import { readTrainMode, writeTrainMode, type TrainMode } from '../../lib/trainMode';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
@@ -263,8 +265,26 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowQuickLog(true);
   }
   function openCards(mode: 'live' | 'review', startAt: 'start' | 'end' = 'start') {
+    setListMode(false);
     setCardsOpts({ mode, startAt });
     setCardsMode(true);
+  }
+  /** «Entrenar» (lista con cronómetro) o «Ir apuntando» (tarjetas): se pregunta la primera vez y se recuerda en este dispositivo. */
+  const [trainMode, setTrainMode] = useState<TrainMode | null>(() => readTrainMode(typeof window !== 'undefined' ? window.localStorage : null));
+  const [listMode, setListMode] = useState(false);
+  const [showModeChoice, setShowModeChoice] = useState(false);
+  function chooseTrainMode(mode: TrainMode) {
+    writeTrainMode(typeof window !== 'undefined' ? window.localStorage : null, mode);
+    setTrainMode(mode);
+    setShowModeChoice(false);
+    if (mode === 'list') setListMode(true);
+    else openCards('live', 'start');
+  }
+  /** Empezar o continuar la sesión: va por donde el atleta dijo que entrena (y se lo pregunta si aún no lo ha dicho). */
+  function startTraining() {
+    if (!trainMode) setShowModeChoice(true);
+    else if (trainMode === 'list') setListMode(true);
+    else openCards('live', 'start');
   }
   /** Una corrección en curso («Ver y corregir»): cómo estaba el día antes de quitar el registro, para devolverlo si se cancela. */
   const correctionRef = useRef<{ snapshot: DaySnapshot; sessionBefore: DailySession } | null>(null);
@@ -1353,7 +1373,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         empezar: () => {
           const refused = orderRefusal('empezar', todayIso);
           if (refused) return refused;
-          openCards('live', 'start');
+          startTraining();
           return 'close';
         },
         cerrar: () => {
@@ -1390,6 +1410,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           {
             title: 'Cambiar la sesión de hoy',
             items: [
+              { id: 'modo-entreno', label: 'Cómo entreno', hint: trainMode === 'list' ? 'ahora: lista y cronómetro' : trainMode === 'cards' ? 'ahora: serie a serie' : 'lista o serie a serie', icon: Layers, onClick: () => setShowModeChoice(true) },
               { id: 'modo-enfocado', label: 'Entreno de siempre', hint: 'una parte por pantalla', icon: GalleryHorizontalEnd, onClick: () => setFocusMode(true) },
               ...(hasWodBlock ? [{ id: 'otro-wod', label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(hasWodBlock ? [{ id: 'wod-fantasma', label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
@@ -1445,7 +1466,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     const canOpen = Boolean(session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday);
     if (node) openSupport(node);
     // «Continuar sesión» y «Cerrar sesión» desde el Dashboard: se abren las tarjetas, donde estaban las series anotadas (la segunda, en el cierre).
-    else if (act === 'continuar' && canOpen) openCards('live', 'start');
+    else if (act === 'continuar' && canOpen) startTraining();
     else if (act === 'cerrar' && canOpen) openCards('live', 'end');
     else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
       const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
@@ -1498,7 +1519,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       appNav.goTo('dashboard');
     }
     else if (target === 'plan-cambiar') setShowRex(true);
-    else if (target === 'plan-empezar') openCards('live', 'start');
+    else if (target === 'plan-empezar') startTraining();
     else if (target === 'plan-anotar') openCards('review', 'start');
     else if (target === 'plan-corregir') handleCorrectDay();
     else if (target === 'plan-cerrar') openCards('live', 'end');
@@ -1589,6 +1610,24 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           onFinish={() => {
             setFocusMode(false);
             openCards('live', 'end');
+          }}
+        />
+      )}
+      {listMode && session && !session.isRestDay && !alreadyCompletedToday && (
+        <TrainList
+          session={session}
+          todayWorkLog={todayWorkLog}
+          onExit={() => setListMode(false)}
+          onPain={() => openSupport('p_zone')}
+          onSwitchToCards={() => {
+            writeTrainMode(typeof window !== 'undefined' ? window.localStorage : null, 'cards');
+            setTrainMode('cards');
+            openCards('live', 'start');
+          }}
+          // Los minutos de la lista llegan al cierre como los de una corrección: se enseñan en vez de la estimación.
+          onFinish={(minutes) => {
+            correctionPrefill.current = { durationMin: minutes };
+            openCards('review', 'start');
           }}
         />
       )}
@@ -1815,7 +1854,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {/* Rex, en la esquina, cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y
             avisa de lo que el coach tiene para ti; sus botones (Empezar sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
             Las casillas con todo el detalle quedan detrás de «Por qué». */}
-        {showRexBar && !focusMode && !cardsMode && (
+        {showRexBar && !focusMode && !cardsMode && !listMode && (
           <RexCorner
             speak
             screen="planificacion"
@@ -1993,6 +2032,26 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
               Cancelar
             </button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal open={showModeChoice} onClose={() => setShowModeChoice(false)} title="¿Cómo vas a entrenar?">
+        <div className="flex flex-col gap-3" data-testid="train-mode-choice">
+          <p className="text-xs text-neutral-500">Lo recuerdo para la próxima vez. Lo cambias cuando quieras en el menú de Rex.</p>
+          {([
+            { mode: 'list' as const, title: 'Entrenar', text: 'Una lista simple con el cronómetro siempre a mano. Apuntas al acabar, con todo lo previsto ya rellenado.' },
+            { mode: 'cards' as const, title: 'Ir apuntando', text: 'Las tarjetas, serie a serie, con el descanso entre series.' },
+          ]).map((o) => (
+            <button
+              key={o.mode}
+              onClick={() => chooseTrainMode(o.mode)}
+              data-testid={`train-mode-${o.mode}`}
+              className={`rounded-xl border px-4 py-3 text-left transition-colors hover:bg-white/5 ${trainMode === o.mode ? 'border-brand-neon' : 'border-brand-border'}`}
+            >
+              <span className="block text-sm font-semibold text-white">{o.title}</span>
+              <span className="mt-0.5 block text-xs text-neutral-400">{o.text}</span>
+            </button>
+          ))}
         </div>
       </Modal>
 
