@@ -1206,6 +1206,22 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     }
   }
 
+  /**
+   * Para anotar lo que se hizo hace falta la sesión prevista de hoy. Si no está (se anuló el registro y quedó una sesión propia, o ninguna) y el plan
+   * tiene sesión hoy, se vuelve a generar. Con la sesión de hoy ya registrada, o sin plan, no se toca nada. Devuelve si hay una sesión que anotar.
+   */
+  function recoverPlannedSession(): boolean {
+    const loggable = (s: DailySession | null) => Boolean(s && !s.isRestDay && s.source !== 'custom' && s.blocks.length > 0);
+    if (alreadyCompletedToday || athleteRepository.getHistory().some((h) => h.date === todayIso)) return false;
+    if (loggable(session)) return true;
+    if (!hasActiveTrainingStructure(profile, todayIso)) return false;
+    athleteRepository.deleteCachedSession(todayIso);
+    const fresh = loadTodaySession(athleteRepository.getProfile(), athleteRepository.getHistory(), goals, todayIso);
+    setSession(fresh);
+    setProfile(athleteRepository.getProfile());
+    return loggable(fresh);
+  }
+
   async function handleDeleteTodaySession() {
     if (!session) return;
     const ok = await confirmSheet({ title: '¿Borrar la sesión de hoy?', body: 'Volverás a elegir qué hacer hoy.', confirmLabel: 'Borrar sesión', danger: true });
@@ -1417,6 +1433,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         anotar: () => {
           const refused = orderRefusal('anotar', todayIso);
           if (refused) return refused;
+          if (!recoverPlannedSession()) {
+            return { lead: 'Hoy no hay sesión prevista.', tone: 'info', text: 'Hoy toca descanso o no hay una sesión que anotar. Si entrenaste algo, dime «hice otra cosa».', actions: [] };
+          }
           setShowWhatDid(true);
           return 'close';
         },
@@ -1512,7 +1531,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // «Continuar sesión» y «Cerrar sesión» desde el Dashboard: se abren las tarjetas, donde estaban las series anotadas (la segunda, en el cierre).
     else if (act === 'continuar' && canOpen) startTraining();
     else if (act === 'cerrar' && canOpen) openCards('live', 'end');
-    else if (act === 'anotar' && canOpen) setShowWhatDid(true);
+    else if (act === 'anotar' && !alreadyCompletedToday) {
+      if (recoverPlannedSession()) setShowWhatDid(true);
+      else openQuickLog();
+    }
     else if (act === 'otra-cosa' && session && !alreadyCompletedToday) openQuickLog();
     else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
       const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
@@ -1566,7 +1588,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     }
     else if (target === 'plan-cambiar') setShowRex(true);
     else if (target === 'plan-empezar') startTraining();
-    else if (target === 'plan-anotar') setShowWhatDid(true);
+    else if (target === 'plan-anotar') {
+      if (recoverPlannedSession()) setShowWhatDid(true);
+      else openQuickLog();
+    }
     else if (target === 'plan-corregir') handleCorrectDay();
     else if (target === 'plan-cerrar') openCards('live', 'end');
     else if (target === 'plan-terminar') setEditMode(false);

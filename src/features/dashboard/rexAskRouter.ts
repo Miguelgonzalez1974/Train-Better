@@ -1,4 +1,5 @@
 import { athleteRepository } from '../../data/athlete/athleteRepository';
+import { hasActiveTrainingStructure } from '../../engine/generateSession';
 import { appNav } from '../../lib/appNav';
 import { handoff } from '../../lib/handoff';
 import { MEAL_DRAFT_KEY } from '../../lib/mealDraft';
@@ -80,6 +81,11 @@ export function orderRefusal(kind: 'empezar' | 'cerrar' | 'anotar' | 'otra-cosa'
   // «Hice otra cosa» vale también en un día de descanso o con una sesión propia: solo hace falta que haya un día en Planificación.
   if (kind === 'otra-cosa') {
     return session ? null : { lead: 'Hoy no hay día abierto.', tone: 'info', text: 'Abre Planificación y elige qué hacer hoy; después podrás anotar lo que hiciste.', actions: toPlan };
+  }
+  // «Anota lo que hice» con una sesión que no se puede anotar (se anuló el registro y quedó una sesión propia o ninguna): si el plan tiene sesión hoy,
+  // Planificación la recupera al abrirse; solo se rechaza si hoy no hay plan.
+  if (kind === 'anotar' && (!session || session.isRestDay || session.blocks.length === 0 || session.source === 'custom') && hasActiveTrainingStructure(athleteRepository.getProfile(), todayIso)) {
+    return null;
   }
   if (!session || session.isRestDay || session.blocks.length === 0 || session.source === 'custom') {
     return { lead: 'Hoy no hay sesión.', tone: 'info', text: 'Hoy no tienes una sesión prevista para entrenar. Puedes elegir una en Planificación.', actions: toPlan };
