@@ -2047,6 +2047,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           autoOpenMain={!alreadyCompletedToday}
           wodDone={wodDone}
           workDone={workDone}
+          logged={(() => {
+            const h = history.find((e) => e.date === session.date);
+            return h ? { rpe: h.rpe, durationMin: h.durationMin } : null;
+          })()}
           editable={editMode}
           onUpdateEntry={handleUpdateEntry}
           onAddEntry={handleAddEntry}

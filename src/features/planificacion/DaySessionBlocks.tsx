@@ -35,6 +35,8 @@ interface DaySessionBlocksProps {
   wodDone?: Partial<Record<1 | 2, WodDoneInfo>>;
   /** Lo hecho de verdad en fuerza y oly (series anotadas), bajo cada bloque: en una sesión en marcha o ya cerrada. */
   workDone?: Partial<Record<'strength' | 'oly', WorkDoneLine[]>>;
+  /** Lo anotado de un día propio («Clase de CrossFit», «Running»…): esfuerzo y minutos, para que se vea que quedaron guardados. */
+  logged?: { rpe: number; durationMin: number } | null;
 }
 
 /** Agrupa session.blocks por BLOCK_ORDER y renderiza una SessionBlockCard por bloque presente ese dia. */
@@ -51,6 +53,7 @@ export function DaySessionBlocks({
   clockScope,
   wodDone,
   workDone,
+  logged,
 }: DaySessionBlocksProps) {
   // "Sesión" (los bloques de siempre) vs "Task" (el porqué de cada parte del entreno, todo junto y en
   // orden) — se reinicia a "Sesión" al cambiar de día para no quedarse en Task de un día anterior.
@@ -72,6 +75,11 @@ export function DaySessionBlocks({
           Tu sesión
         </div>
         {session.customTitle && <p className="text-base font-semibold text-white">{session.customTitle}</p>}
+        {logged && (
+          <p className="text-sm font-semibold text-white" data-testid="custom-logged">
+            Esfuerzo {logged.rpe} de 10 · {logged.durationMin} min
+          </p>
+        )}
         <p className="whitespace-pre-wrap text-sm text-neutral-300">{session.customNote}</p>
       </div>
     );
