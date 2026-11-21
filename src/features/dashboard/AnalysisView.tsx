@@ -1,5 +1,6 @@
 import { CoachAccuracyCard } from './CoachAccuracyCard';
 import { WodZonesCard } from './WodZonesCard';
+import { WodPacingCard } from './WodPacingCard';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Dumbbell, Fingerprint } from 'lucide-react';
 import { RexNote } from '../shell/RexNote';
@@ -355,6 +356,7 @@ export function AnalysisView({
             hardness={hardness}
           />
           <WodZonesCard profile={profile} history={history} todayIso={todayIso} onCreateWorkGoal={onCreateWorkGoal} />
+          <WodPacingCard profile={profile} history={history} todayIso={todayIso} onCreateWorkGoal={onCreateWorkGoal} />
           <CoachAccuracyCard profile={profile} todayIso={todayIso} />
           <p className="flex items-center gap-2 px-1 text-[11px] leading-snug text-neutral-500">
             <Dumbbell size={13} className="shrink-0" aria-hidden="true" />
