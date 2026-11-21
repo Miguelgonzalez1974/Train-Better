@@ -66,7 +66,7 @@ export function sendMealToNutrition(text: string, onNutrition: boolean): void {
  * Cuándo no se puede empezar o cerrar la sesión de hoy (ya está registrada, o no hay una sesión que hacer): la respuesta que lo explica; null si se puede.
  * Lo comparten el reparto común y Planificación, que abre las tarjetas por su cuenta.
  */
-export function orderRefusal(kind: 'empezar' | 'cerrar', todayIso: string): AskAnswer | null {
+export function orderRefusal(kind: 'empezar' | 'cerrar' | 'anotar' | 'otra-cosa', todayIso: string): AskAnswer | null {
   const toPlan: RexAction[] = [{ label: 'Ir a Planificación', target: 'ir-planificacion' }];
   if (athleteRepository.getHistory().some((h) => h.date === todayIso)) {
     return {
@@ -77,6 +77,10 @@ export function orderRefusal(kind: 'empezar' | 'cerrar', todayIso: string): AskA
     };
   }
   const session = athleteRepository.getCachedSession(todayIso);
+  // «Hice otra cosa» vale también en un día de descanso o con una sesión propia: solo hace falta que haya un día en Planificación.
+  if (kind === 'otra-cosa') {
+    return session ? null : { lead: 'Hoy no hay día abierto.', tone: 'info', text: 'Abre Planificación y elige qué hacer hoy; después podrás anotar lo que hiciste.', actions: toPlan };
+  }
   if (!session || session.isRestDay || session.blocks.length === 0 || session.source === 'custom') {
     return { lead: 'Hoy no hay sesión.', tone: 'info', text: 'Hoy no tienes una sesión prevista para entrenar. Puedes elegir una en Planificación.', actions: toPlan };
   }
@@ -208,11 +212,13 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
       return mealSavedAnswer(proposal.totals, missing);
     }
     case 'empezar':
-    case 'cerrar': {
+    case 'cerrar':
+    case 'anotar':
+    case 'otra-cosa': {
       const refused = orderRefusal(intent.kind, api.todayIso);
       if (refused) return refused;
-      // Planificación recoge esto al montarse y abre las tarjetas (en el cierre si se pidió cerrar).
-      handoff.put('plan-act', intent.kind === 'cerrar' ? 'cerrar' : 'continuar');
+      // Planificación recoge esto al montarse: abre el entreno (en el cierre si se pidió cerrar), la pregunta de qué hiciste o el registro de otra cosa.
+      handoff.put('plan-act', intent.kind === 'cerrar' ? 'cerrar' : intent.kind === 'empezar' ? 'continuar' : intent.kind);
       appNav.goTo('planificacion');
       return 'close';
     }

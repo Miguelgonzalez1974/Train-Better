@@ -1397,6 +1397,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           openCards('live', 'end');
           return 'close';
         },
+        // «Anota lo que hice» y «hice otra cosa»: la pregunta de qué hiciste y el registro corto, sin salir de aquí.
+        anotar: () => {
+          const refused = orderRefusal('anotar', todayIso);
+          if (refused) return refused;
+          setShowWhatDid(true);
+          return 'close';
+        },
+        'otra-cosa': () => {
+          const refused = orderRefusal('otra-cosa', todayIso);
+          if (refused) return refused;
+          openQuickLog();
+          return 'close';
+        },
         programa: (intent) => programAsk(intent.action, intent.days),
         adaptar: (intent) => adaptAsk(intent.request, intent.confirmed),
         'adaptar-ayuda': () => (!session || alreadyCompletedToday ? adaptRefusalAnswer(session ? 'hecha' : 'sin-sesion') : adaptHowMuchAnswer()),
@@ -1476,13 +1489,15 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const dashboardAct = useRef<string | null>(handoff.peek('plan-act'));
   useEffect(() => {
     const node = handoff.take('support-start');
-    const pending = dashboardAct.current === 'continuar' || dashboardAct.current === 'cerrar' ? dashboardAct.current : null;
+    const pending = ['continuar', 'cerrar', 'anotar', 'otra-cosa'].includes(dashboardAct.current ?? '') ? dashboardAct.current : null;
     const act = handoff.take('plan-act') ?? pending;
     const canOpen = Boolean(session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday);
     if (node) openSupport(node);
     // «Continuar sesión» y «Cerrar sesión» desde el Dashboard: se abren las tarjetas, donde estaban las series anotadas (la segunda, en el cierre).
     else if (act === 'continuar' && canOpen) startTraining();
     else if (act === 'cerrar' && canOpen) openCards('live', 'end');
+    else if (act === 'anotar' && canOpen) setShowWhatDid(true);
+    else if (act === 'otra-cosa' && session && !alreadyCompletedToday) openQuickLog();
     else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
       const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
       return () => window.clearTimeout(t);

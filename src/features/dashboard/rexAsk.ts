@@ -24,6 +24,10 @@ export type AskIntent =
   /** Órdenes de entreno y de comida desde cualquier pantalla: empezar o seguir la sesión, cerrarla, escanear un producto. */
   | { kind: 'empezar' }
   | { kind: 'cerrar' }
+  /** «Anota lo que hice»: la pregunta de si fue la sesión prevista u otra cosa. */
+  | { kind: 'anotar' }
+  /** «Hice otra cosa»: el registro corto de un entreno distinto del previsto. */
+  | { kind: 'otra-cosa' }
   | { kind: 'escanear' }
   /** ¿Qué toca ese día? `offset` en días desde hoy (0 = hoy). */
   | { kind: 'dia'; offset: number; label: string }
@@ -372,9 +376,17 @@ export function splitAsk(text: string, todayWeekday: number): string[] | null {
  * Las órdenes que valen desde cualquier pantalla. Se piden con un verbo claro y el objeto (la sesión, el entreno, un producto): «el programa» o «la
  * competición» tienen sus propias reglas y no se leen aquí.
  */
-export function parseOrderAsk(norm: string): Extract<AskIntent, { kind: 'empezar' | 'cerrar' | 'escanear' }> | null {
+export function parseOrderAsk(norm: string): Extract<AskIntent, { kind: 'empezar' | 'cerrar' | 'anotar' | 'otra-cosa' | 'escanear' }> | null {
   if (/\b(programa|texas|competicion)\b/.test(norm)) return null;
   if (/\b(escanea|escanear|escaneo|escaner|escanee)\b|\bcodigo de barras\b|\bleer (un |el )?codigo\b/.test(norm)) return { kind: 'escanear' };
+  // «Hice otra cosa»: un entreno distinto del previsto (antes que «anotar»: «anota que hice otra cosa» es esto).
+  if (/\b(hice|he hecho|hemos hecho|hecho|entrene|he entrenado)\b.*\botra cosa\b|\botra cosa\b.*\b(hoy|entreno|entrenamiento)\b|\bno (hice|he hecho) (la sesion|el entreno|el entrenamiento)\b|^otra cosa$/.test(norm)) {
+    return { kind: 'otra-cosa' };
+  }
+  // «Anota lo que hice» / «apunta mi entreno»: anotar la sesión a posteriori (la comida y el peso se leen antes).
+  if (/\b(anota|anotar|anotame|apunta|apuntar|apuntame|registra|registrar|registrame)\b.*\b(lo que (he )?hecho|lo que hice|el entreno|mi entreno|el entrenamiento|mi entrenamiento|la sesion|mi sesion)\b/.test(norm)) {
+    return { kind: 'anotar' };
+  }
   if (
     /\b(cierra|cerrar|cierro|finaliza|finalizar|termina|terminar)\b.*\b(sesion|entreno|entrenamiento)\b/.test(norm) ||
     /\b(ya )?(he|hemos) (terminado|acabado)\b|\bya (termine|acabe|termino|acabo)\b|\b(termine|acabe) (la sesion|el entreno|de entrenar)\b|\bsesion terminada\b/.test(norm)
