@@ -126,6 +126,7 @@ import { LIGHT_LABEL } from '../../engine/dayLight';
 import { FocusMode } from './FocusMode';
 import { TrainCards } from './TrainCards';
 import { TrainList } from './TrainList';
+import { LogAll } from './LogAll';
 import { readTrainMode, writeTrainMode, type TrainMode } from '../../lib/trainMode';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
@@ -275,8 +276,21 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowWhatDid(false);
     setShowQuickLog(true);
   }
+  /** «Anotar de golpe»: todos los pesos y el cierre en una sola pantalla (lo que se hace al acabar, sin el móvil en la mano mientras se entrena). */
+  const [logAllMode, setLogAllMode] = useState(false);
+  /** Guarda las series que hay en pantalla en «Anotar de golpe»; se llama justo antes de cerrar la sesión. */
+  const logAllCommit = useRef<(() => void) | null>(null);
+  function openLogAll() {
+    setListMode(false);
+    setCardsMode(false);
+    setLogAllMode(true);
+    // El cierre va en la misma pantalla: se abre ya (con los minutos de la lista, si venían de ella).
+    setTestedLoadKg(testDayBlock?.loadKg ?? 0);
+    setShowCompletePanel(true);
+  }
   function openCards(mode: 'live' | 'review', startAt: 'start' | 'end' = 'start') {
     setListMode(false);
+    setLogAllMode(false);
     setCardsOpts({ mode, startAt });
     setCardsMode(true);
   }
@@ -1066,6 +1080,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
     setCardsMode(false);
+    setLogAllMode(false);
     correctionRef.current = null;
     toast.show('Sesión registrada');
     // Un test que no actualizó el PR no deja rastro en el registro de PRs: se dice aquí, antes de pasar al Dashboard.
@@ -1169,6 +1184,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // Si se llegó desde la tarjeta de cierre, las tarjetas se cierran: el día ya está registrado.
     setCardsMode(false);
     setListMode(false);
+    setLogAllMode(false);
     setShowCompletePanel(false);
     toast.show(moved ? 'Anotado. La sesión prevista pasa a mañana' : 'Anotado como otra cosa');
   }
@@ -1593,8 +1609,19 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         durationMin={durationMin}
         onDuration={setDurationMin}
         estimatedMin={estimatedMin}
-        onConfirm={handleConfirmComplete}
-        onCancel={() => setShowCompletePanel(false)}
+        singleStep={logAllMode}
+        // «Anotar de golpe»: las series de la pantalla se guardan justo antes de registrar la sesión (el registro y la progresión las leen del almacén).
+        onConfirm={() => {
+          if (logAllMode) {
+            logAllCommit.current?.();
+            setWorkLog(athleteRepository.getWorkLog());
+          }
+          handleConfirmComplete();
+        }}
+        onCancel={() => {
+          setShowCompletePanel(false);
+          setLogAllMode(false);
+        }}
       />
     );
   }
@@ -1657,8 +1684,23 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           // Los minutos de la lista llegan al cierre como los de una corrección: se enseñan en vez de la estimación.
           onFinish={(minutes) => {
             correctionPrefill.current = { durationMin: minutes };
-            openCards('review', 'start');
+            openLogAll();
           }}
+        />
+      )}
+      {logAllMode && session && !session.isRestDay && !alreadyCompletedToday && (
+        <LogAll
+          session={session}
+          todayWorkLog={todayWorkLog}
+          skips={skips}
+          commitRef={logAllCommit}
+          closePanel={showCompletePanel ? renderCompletePanel() : null}
+          onExit={() => {
+            setLogAllMode(false);
+            setShowCompletePanel(false);
+          }}
+          onSwitchToCards={() => openCards('review', 'start')}
+          onOtherThing={openQuickLog}
         />
       )}
       {cardsMode && session && !session.isRestDay && (
@@ -1884,7 +1926,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {/* Rex, en la esquina, cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y
             avisa de lo que el coach tiene para ti; sus botones (Empezar sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
             Las casillas con todo el detalle quedan detrás de «Por qué». */}
-        {showRexBar && !focusMode && !cardsMode && !listMode && (
+        {showRexBar && !focusMode && !cardsMode && !listMode && !logAllMode && (
           <RexCorner
             speak
             screen="planificacion"
@@ -2091,7 +2133,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         plannedLabel={session ? buildPreviewLine(session) : ''}
         onPlanned={() => {
           setShowWhatDid(false);
-          openCards('review', 'start');
+          openLogAll();
         }}
         onOther={openQuickLog}
       />
