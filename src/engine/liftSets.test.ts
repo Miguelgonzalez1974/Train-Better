@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionBlockResult, WorkSetEntry } from '../data/athlete/types';
-import { adjustAll, adjustOnly, adjustRange, adjustRow, commitOf, cycleQuality, initialEdit, isChanged, isStraight, liftPlanOf, markDoneThrough, resetEdit, setDone, setQuality, setTop, topIndex, waveRange } from './liftSets';
+import { adjustAll, adjustOnly, adjustRange, adjustRow, commitOf, cycleQuality, initialEdit, isChanged, isStraight, liftPlanOf, markDoneThrough, resetEdit, setDone, setQuality, setRpe, setTop, topDoneSet, topIndex, waveRange } from './liftSets';
 
 const straight: SessionBlockResult = { block: 'strength', movementId: 'back-squat', sets: 5, reps: '5', loadKg: 100 };
 const ramp: SessionBlockResult = { block: 'strength', movementId: 'back-squat', sets: 4, reps: '5-3-1', loadKg: 80, setPlan: [{ reps: 5, kg: 60 }, { reps: 3, kg: 70 }, { reps: 1, kg: 80 }, { reps: 3, kg: 70 }] };
@@ -132,6 +132,33 @@ describe('serie elegida', () => {
     expect(e.done).toBe(4);
     expect(markDoneThrough(e, 1).done).toBe(4);
     expect(markDoneThrough(e, 99).done).toBe(5);
+  });
+});
+
+describe('esfuerzo del ejercicio', () => {
+  it('se pone, se cambia y se quita; el esfuerzo previo viene del registro', () => {
+    const plan = liftPlanOf(straight)!;
+    expect(initialEdit(plan, []).rpe).toBeUndefined();
+    expect(initialEdit(plan, [], 8).rpe).toBe(8);
+    let e = setRpe(initialEdit(plan, []), 9);
+    expect(e.rpe).toBe(9);
+    e = setRpe(e, 99);
+    expect(e.rpe).toBe(10);
+    expect(setRpe(e, undefined).rpe).toBeUndefined();
+  });
+
+  it('volver a lo previsto quita el esfuerzo', () => {
+    const plan = liftPlanOf(straight)!;
+    expect(resetEdit(plan).rpe).toBeUndefined();
+  });
+
+  it('la serie hecha más pesada, y ninguna si no se hizo nada', () => {
+    let e = adjustRow(initialEdit(liftPlanOf(ramp)!, []), 2, 5);
+    expect(topDoneSet(e)).toEqual({ index: 2, kg: 85, reps: 1 });
+    expect(e.rows[3].kg).toBe(75);
+    e = setDone(e, 2);
+    expect(topDoneSet(e)).toEqual({ index: 1, kg: 70, reps: 3 });
+    expect(topDoneSet(setDone(e, 0))).toBeNull();
   });
 });
 

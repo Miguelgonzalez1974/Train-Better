@@ -648,6 +648,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     if (!block) return;
     const topSet = findTopWorkSet(todayWorkLog, block.movementId);
     if (!topSet) return;
+    saveLiftRpe(block, topSet, rpe);
+  }
+
+  /** Guarda el esfuerzo de la serie más pesada de un levantamiento (con esa serie ya conocida): calibra al coach y estima el 1RM. */
+  function saveLiftRpe(block: SessionBlockResult, topSet: { kg: number; reps: number }, rpe: number) {
+    if (!session) return;
     const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
     const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
     const prescribedSets = existing?.prescribedSets ?? block.sets ?? (block.logAsSingle ? 1 : 0);
@@ -1707,6 +1713,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             })
           }
           commitRef={reviewCommit}
+          rpeToday={Object.fromEntries(setFeedbackLog.filter((e) => e.date === session.date && e.actualRpe !== undefined).map((e) => [e.movementId, e.actualRpe as number]))}
+          onRateLift={saveLiftRpe}
           scoreTypes={wodScoreTypes}
           forms={wodForms}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}

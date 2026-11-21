@@ -59,19 +59,21 @@ export interface LiftEdit {
   rows: RowState[];
   /** Series hechas: las primeras `done`; el resto no se hizo. */
   done: number;
+  /** Esfuerzo (RPE 6-10) de la serie más pesada del ejercicio; sin valor mientras no se diga. */
+  rpe?: number;
 }
 
 const round4 = (v: number) => Math.max(0, Math.round(v * 4) / 4);
 const roundStep = (v: number) => Math.max(0, Math.round(v / KG_STEP) * KG_STEP);
 
 /** Todo como estaba previsto, salvo lo que ya estuviera anotado hoy (peso y cómo salió), que manda. */
-export function initialEdit(plan: LiftPlan, logged: WorkSetEntry[]): LiftEdit {
+export function initialEdit(plan: LiftPlan, logged: WorkSetEntry[], rpe?: number): LiftEdit {
   const rows = plan.rows.map<RowState>((r) => {
     const entry = logged.find((e) => e.movementId === plan.mid && e.setNumber === r.n);
     const kg = entry ? round4(entry.kg) : r.plannedKg;
     return { n: r.n, reps: r.reps, plannedKg: r.plannedKg, kg, manual: Boolean(entry && (kg !== r.plannedKg || entry.quality)), ...(entry?.quality ? { quality: entry.quality } : {}) };
   });
-  return { rows, done: rows.length };
+  return { rows, done: rows.length, ...(rpe !== undefined ? { rpe } : {}) };
 }
 
 /** La serie más pesada (la última si hay empate): la «top». */
@@ -176,7 +178,22 @@ export function markDoneThrough(edit: LiftEdit, index: number): LiftEdit {
   return { ...edit, done: Math.max(edit.done, Math.min(edit.rows.length, index + 1)) };
 }
 
-/** Vuelve a lo previsto: pesos, series hechas y cómo salió. */
+/** Esfuerzo del ejercicio (la serie más pesada): 6 a 10, o undefined para quitarlo. */
+export function setRpe(edit: LiftEdit, rpe: number | undefined): LiftEdit {
+  const { rpe: _old, ...rest } = edit;
+  return rpe === undefined ? rest : { ...rest, rpe: Math.max(1, Math.min(10, Math.round(rpe))) };
+}
+
+/** La serie hecha más pesada (la última si hay empate): de ella es el esfuerzo del ejercicio. null si no se hizo ninguna. */
+export function topDoneSet(edit: LiftEdit): { index: number; kg: number; reps: number } | null {
+  let best = -1;
+  edit.rows.forEach((r, i) => {
+    if (i < edit.done && (best < 0 || r.kg >= edit.rows[best].kg)) best = i;
+  });
+  return best < 0 ? null : { index: best, kg: edit.rows[best].kg, reps: edit.rows[best].reps };
+}
+
+/** Vuelve a lo previsto: pesos, series hechas y cómo salió (el esfuerzo se quita). */
 export function resetEdit(plan: LiftPlan): LiftEdit {
   return { rows: plan.rows.map((r) => ({ n: r.n, reps: r.reps, plannedKg: r.plannedKg, kg: r.plannedKg, manual: false })), done: plan.rows.length };
 }

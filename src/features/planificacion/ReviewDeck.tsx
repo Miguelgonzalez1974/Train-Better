@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { X, Minus, Plus, Flame, Dumbbell, Timer, Activity, CircleDot, ArrowRight, NotebookPen } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession, SessionBlockResult, SetQuality, WodScoreType, WorkSetEntry } from '../../data/athlete/types';
+import type { DailySession, SessionBlockResult, WodScoreType, WorkSetEntry } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import { localizeWodText } from '../../engine/wodUnits';
@@ -20,7 +20,9 @@ import {
   markDoneThrough,
   setDone,
   setQuality,
+  setRpe,
   setTop,
+  topDoneSet,
   topIndex,
   type LiftEdit,
   type LiftPlan,
@@ -55,11 +57,6 @@ const THEME: Record<Block | 'end', { bg: string; accent: string; label: string }
   end: { bg: '#1f2a12', accent: '#c8f27a', label: 'Cierre' },
 };
 
-const QUALITY: { value: SetQuality | undefined; label: string; color: string }[] = [
-  { value: undefined, label: 'Bien', color: '#7ee0a0' },
-  { value: 'justa', label: 'Justa', color: '#ffd166' },
-  { value: 'fallada', label: 'No salió', color: '#ff8a80' },
-];
 
 const BLOCK_ICON = { warmup: Flame, strength: Dumbbell, oly: Dumbbell, wod: Timer, accessory: Activity, skill: CircleDot, cooldown: Flame } as const;
 
@@ -119,6 +116,9 @@ export interface ReviewDeckProps {
   onSkip: (key: PartKey, skipped: boolean) => void;
   /** El padre llama a esto justo antes de registrar la sesión: guarda las series tal como están en pantalla. */
   commitRef: MutableRefObject<(() => void) | null>;
+  /** Esfuerzo (RPE) que ya se dio hoy de cada levantamiento (por movimiento), para no perderlo; y cómo se guarda el que se da aquí. */
+  rpeToday: Record<string, number>;
+  onRateLift: (entry: SessionBlockResult, topSet: { kg: number; reps: number }, rpe: number) => void;
   // WOD
   scoreTypes: Record<1 | 2, WodScoreType | null>;
   forms: Record<1 | 2, WodResultForm>;
@@ -167,7 +167,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
   }, [session]);
 
   const lifts = useMemo(() => cards.filter((c): c is Extract<Card, { kind: 'lift' }> => c.kind === 'lift'), [cards]);
-  const [edits, setEdits] = useState<Record<string, LiftEdit>>(() => Object.fromEntries(lifts.map((l) => [l.plan.mid, initialEdit(l.plan, todayWorkLog)])));
+  const [edits, setEdits] = useState<Record<string, LiftEdit>>(() => Object.fromEntries(lifts.map((l) => [l.plan.mid, initialEdit(l.plan, todayWorkLog, p.rpeToday[l.entry.movementId])])));
   const [selected, setSelected] = useState<Record<string, number>>({});
 
   // Una parte entera sin ninguna serie hecha cuenta como no hecha (y vuelve a contar si se hace alguna).
@@ -191,6 +191,9 @@ export function ReviewDeck(p: ReviewDeckProps) {
         athleteRepository.saveWorkSet({ date: session.date, movementId: l.plan.mid, block: l.plan.blk, setNumber: w.n, kg: w.kg, reps: w.reps, ...(w.quality ? { quality: w.quality } : {}), ...(w.asPlanned ? { asPlanned: true } : {}) });
       }
       for (const n of clear) athleteRepository.clearWorkSet(session.date, l.plan.mid, n);
+      // El esfuerzo del ejercicio (de la serie más pesada hecha) calibra al coach y estima el 1RM.
+      const top = topDoneSet(edit);
+      if (edit.rpe !== undefined && top && !l.entry.complex) p.onRateLift(l.entry, { kg: top.kg, reps: top.reps }, edit.rpe);
     }
   };
 
@@ -328,6 +331,14 @@ export function ReviewDeck(p: ReviewDeckProps) {
       setSelected((s) => ({ ...s, [c.plan.mid]: n }));
       if (n >= edit.done) patch(markDoneThrough(edit, n));
     };
+    const failed = row.quality === 'fallada';
+    // «No salió» en la serie más pesada hecha: el esfuerzo del ejercicio salta a 10 (se puede cambiar).
+    const toggleFail = () => {
+      let next = setQuality(edit, sel, failed ? undefined : 'fallada');
+      const t = topDoneSet(next);
+      if (!failed && hasLoad && !c.entry.complex && t && t.index === sel) next = setRpe(next, 10);
+      patch(next);
+    };
     const hint = !hasLoad ? 'peso corporal' : straight ? 'kg · las siguientes se ajustan igual' : isTopOfRamp ? 'kg · las demás se mueven en proporción' : 'kg · solo esta serie';
     const planned = straight ? `${rows.length} × ${rows[0].reps}${hasLoad ? ` · ${kgText(rows[0].plannedKg)} kg` : ''}` : `Previsto ${c.plan.rows.map((r) => kgText(r.plannedKg)).join(' · ')} kg`;
 
@@ -393,30 +404,50 @@ export function ReviewDeck(p: ReviewDeckProps) {
           </div>
 
           {isDone && (
-            <div className="mt-4 flex justify-center gap-2" role="radiogroup" aria-label="Cómo salió la serie">
-              {QUALITY.map((q) => {
-                const on = row.quality === q.value;
-                return (
-                  <button
-                    key={q.label}
-                    role="radio"
-                    aria-checked={on}
-                    onClick={() => patch(setQuality(edit, sel, q.value))}
-                    className="rounded-full px-4 py-2.5 text-sm font-bold"
-                    style={on ? { background: q.color, color: '#000' } : { background: 'rgba(255,255,255,0.16)', color: white }}
-                  >
-                    {q.label}
-                  </button>
-                );
-              })}
+            <div className="mt-4 flex justify-center">
+              <button
+                aria-pressed={failed}
+                onClick={toggleFail}
+                className="rounded-full px-5 py-2.5 text-sm font-bold"
+                style={failed ? { background: '#ff8a80', color: '#000' } : { background: 'rgba(255,255,255,0.16)', color: white }}
+                data-testid="review-fail"
+              >
+                No salió
+              </button>
             </div>
-          )}
-          {isDone && (
+          )}          {isDone && (
             <button onClick={() => patch(setDone(edit, sel))} className="mx-auto mt-3 block text-xs font-semibold underline decoration-dotted" style={{ color: soft }} data-testid="review-notdone">
               No la hice
             </button>
           )}
-        </div>
+          {hasLoad && !c.entry.complex && edit.done > 0 && (
+            <div className="mt-5 border-t pt-4" style={{ borderColor: 'rgba(255,255,255,0.18)' }} data-testid="review-lift-rpe">
+              <p className="text-center text-sm font-bold text-white">¿Cómo de dura fue la serie más pesada?</p>
+              <div className="mt-3 grid grid-cols-5 gap-1.5" role="radiogroup" aria-label="Esfuerzo de la serie más pesada">
+                {[6, 7, 8, 9, 10].map((n) => {
+                  const on = edit.rpe === n;
+                  return (
+                    <button
+                      key={n}
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => patch(setRpe(edit, on ? undefined : n))}
+                      className="flex h-12 items-center justify-center rounded-xl text-lg font-extrabold transition-transform active:scale-95"
+                      style={{ background: RPE_META[n].color, color: '#000', outline: on ? '3px solid #fff' : 'none', outlineOffset: 2, opacity: on || edit.rpe === undefined ? 1 : 0.55 }}
+                    >
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+              {edit.rpe !== undefined && (
+                <p className="mt-2 text-center text-sm font-bold" style={{ color: RPE_META[edit.rpe].color }}>
+                  {RPE_META[edit.rpe].label}
+                  <span className="font-medium" style={{ color: soft }}> · {RPE_META[edit.rpe].hint}</span>
+                </p>
+              )}
+            </div>
+          )}        </div>
         <div className="px-5 pb-5 pt-1">
           <Primary onClick={() => goTo(i + 1)} testId="review-next">
             Siguiente <ArrowRight size={20} strokeWidth={2.75} />
