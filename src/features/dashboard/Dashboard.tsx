@@ -81,6 +81,7 @@ import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { AnalysisView, type AnalysisTab } from './AnalysisView';
 import { hrvLogWith } from '../../engine/hrv';
+import { buildPrepCompare } from './prepCompare';
 import { MarksScreen } from './MarksScreen';
 import { REX_HINTS } from './rexHints';
 import type { AthleteProfile } from '../../data/athlete/types';
@@ -263,6 +264,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, loadHistory, dayIso, todayIso, days, plannedToday, offsetDays), [profile, loadHistory, dayIso, todayIso, plannedToday]);
   const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, loadHistory, dayIso, 14) : []), [tab, profile, loadHistory, dayIso]);
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
+  /** La prueba del reparto de pesos de la preparación, solo cuando se mira la pestaña (cuesta calcular dos notas por día). */
+  const prepCompare = useMemo(() => (tab === 'preparacion' ? buildPrepCompare(profile, history, todayIso) : []), [tab, profile, history, todayIso]);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
   const restMarked = isRestMarked(profile.restDates, todayIso);
   function toggleRest() {
@@ -738,6 +741,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           learning={readinessLearning}
           onSelect={setDayIso}
           onOpenMorning={onOpenMorning}
+          compare={prepCompare}
         />
       )}
       {tab === 'sueno' && (

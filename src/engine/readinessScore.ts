@@ -203,6 +203,8 @@ export function computeReadinessScore(input: {
   readinessLog: ReadinessCheck[] | undefined;
   /** HRV de días anteriores cargado a mano (ver `hrvLogWith`): solo entra en la parte de HRV y pulso. */
   hrvHistory?: HrvHistoryEntry[];
+  /** Prueba: da más peso a los check-ins recientes que a los de hace una semana (ver `RECENCY_WEIGHTS`). Por defecto, la media simple de siempre. */
+  recency?: boolean;
   history: SessionHistoryEntry[];
   setFeedbackLog: SetFeedbackEntry[] | undefined;
   painFlags: PainFlag[] | undefined;
@@ -210,7 +212,7 @@ export function computeReadinessScore(input: {
 }): ReadinessScore {
   const { today } = input;
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const checkins = computeRecoverySummary(input.readinessLog, todayIso);
+  const checkins = computeRecoverySummary(input.readinessLog, todayIso, { recency: input.recency });
   const feel = feelPart(checkins);
   const load = loadPart(input.history, today, todayIso);
   const performance = performancePart(input.history, input.setFeedbackLog ?? [], todayIso);
