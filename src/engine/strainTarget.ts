@@ -39,7 +39,7 @@ export function buildStrainTarget(profile: AthleteProfile, history: SessionHisto
   const hasCheckIn = (profile.readinessLog ?? []).some((c) => c.date === todayIso);
 
   const readiness = computeReadinessScore({
-    readinessLog: profile.readinessLog,
+    readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
     history: prior,
     setFeedbackLog: profile.setFeedbackLog,
     painFlags: profile.painFlags,

@@ -1,9 +1,9 @@
-import type { PainFlag, SessionHistoryEntry, SetFeedbackEntry, SetFeel, ReadinessCheck } from '../data/athlete/types';
+import type { HrvHistoryEntry, PainFlag, SessionHistoryEntry, SetFeedbackEntry, SetFeel, ReadinessCheck } from '../data/athlete/types';
 import { computeAcwr } from './loadMetrics';
 import { PAIN_AREA_LABEL, getActivePainFlags } from './painFlags';
 import { computeRecoverySummary, type RecoveryLevel, type RecoverySummary } from './recovery';
 import { getReadinessCheckForDate } from './readiness';
-import { computeHrvPart, type HrvPart } from './hrv';
+import { computeHrvPart, hrvLogWith, type HrvPart } from './hrv';
 
 /**
  * "Cómo estás de recuperado hoy", más allá del check-in: junto a lo que DICES que sientes (60 %) entra cómo te está saliendo
@@ -201,6 +201,8 @@ function performancePart(history: SessionHistoryEntry[], feedback: SetFeedbackEn
 
 export function computeReadinessScore(input: {
   readinessLog: ReadinessCheck[] | undefined;
+  /** HRV de días anteriores cargado a mano (ver `hrvLogWith`): solo entra en la parte de HRV y pulso. */
+  hrvHistory?: HrvHistoryEntry[];
   history: SessionHistoryEntry[];
   setFeedbackLog: SetFeedbackEntry[] | undefined;
   painFlags: PainFlag[] | undefined;
@@ -219,7 +221,7 @@ export function computeReadinessScore(input: {
 
   const pain = { count: areas.length, areas, penalty };
   const rest = restPart(input.history, todayIso, getReadinessCheckForDate(input.readinessLog, todayIso));
-  const hrv = computeHrvPart(input.readinessLog, todayIso);
+  const hrv = computeHrvPart(hrvLogWith(input.readinessLog, input.hrvHistory), todayIso);
   const available = (['feel', 'performance'] as const).filter((k) => ({ feel, performance })[k].score !== null);
   if (available.length === 0) {
     return { total: null, level: null, estimated: false, feel, load, loadPenalty: load.penalty, rest, hrv, performance, pain, checkins };

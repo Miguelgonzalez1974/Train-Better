@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ReadinessCheck } from '../data/athlete/types';
-import { computeHrvPart, computeHrvStatus, hrvScore, hrvVsNow, hrvVsOf, HRV_NEEDED, HRV_PROVISIONAL_MIN, restingHrBaseline } from './hrv';
+import { computeHrvPart, computeHrvStatus, hrvLogWith, hrvScore, hrvVsNow, hrvVsOf, HRV_NEEDED, HRV_PROVISIONAL_MIN, restingHrBaseline, rmssdFromScore } from './hrv';
 import { getReadinessFactor } from './readiness';
 import { computeReadinessScore } from './readinessScore';
 import { computeReadinessLearning } from './readinessLearning';
@@ -174,5 +174,46 @@ describe('HRV: lo que aprende el coach', () => {
     }
     const hrv = computeReadinessLearning(log, history).insights.find((i) => i.key === 'hrv');
     expect(hrv).toMatchObject({ label: 'HRV', condition: 'tu HRV cae por debajo de tu rango', nBad: 8, nOk: 8, delta: 1.5 });
+  });
+});
+
+describe('HRV: la nota, el historial cargado a mano y la media mensual', () => {
+  it('la nota de HRV4Training se convierte de vuelta a milisegundos', () => {
+    expect(rmssdFromScore(7.5)).toBeCloseTo(42.5, 0);
+    expect(hrvScore(rmssdFromScore(8.3))).toBe(8.3);
+    expect(hrvScore(rmssdFromScore(7.1))).toBe(7.1);
+  });
+
+  it('sin historial el registro no cambia', () => {
+    const log = [check(-1, 60)];
+    expect(hrvLogWith(log, undefined)).toBe(log);
+    expect(hrvLogWith(log, [])).toBe(log);
+  });
+
+  it('el historial da un rango desde el primer día, sin esperar mediciones', () => {
+    const history = Array.from({ length: 10 }, (_, i) => ({ date: iso(-(i + 1)), hrv: 60 + (i % 2 === 0 ? 5 : -5), restingHr: 55 }));
+    const status = computeHrvStatus(hrvLogWith([check(0, 62)], history), TODAY);
+    expect(status.state).toBe('listo');
+    expect(status.range).not.toBeNull();
+    expect(status.today?.vs).toBe('normal');
+    expect(computeHrvStatus([check(0, 62)], TODAY).state).toBe('reuniendo');
+  });
+
+  it('un check-in con HRV manda sobre el historial de su día; sin HRV, se le añade la medición', () => {
+    const merged = hrvLogWith([check(-1, 70), check(-2, undefined, 50)], [{ date: iso(-1), hrv: 40 }, { date: iso(-2), hrv: 61, restingHr: 99 }, { date: iso(-3), hrv: 58 }])!;
+    const byDate = Object.fromEntries(merged.map((c) => [c.date, c]));
+    expect(byDate[iso(-1)].hrv).toBe(70);
+    expect(byDate[iso(-2)].hrv).toBe(61);
+    expect(byDate[iso(-2)].restingHr).toBe(50);
+    expect(byDate[iso(-3)].hrv).toBe(58);
+    expect(merged.map((c) => c.date)).toEqual([iso(-3), iso(-2), iso(-1)]);
+  });
+
+  it('la media de 30 días sale con 5 mediciones o más', () => {
+    expect(computeHrvStatus(series(4), TODAY).month).toBeNull();
+    const status = computeHrvStatus(series(20, 64, 6), TODAY);
+    expect(status.month?.n).toBe(20);
+    expect(status.month!.avg).toBeGreaterThan(55);
+    expect(status.month!.avg).toBeLessThan(70);
   });
 });

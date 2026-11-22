@@ -423,6 +423,7 @@ export function mergeProfile(
     ),
     bodyweightLog: mergeByKey(remote.bodyweightLog, local.bodyweightLog, (e) => e.date, (e) => e.date, BODYWEIGHT_LOG_LIMIT),
     readinessLog: mergeByKey(remote.readinessLog, local.readinessLog, (e) => e.date, (e) => e.date, READINESS_LOG_LIMIT),
+    hrvHistory: mergeByKey(remote.hrvHistory, local.hrvHistory, (e) => e.date, (e) => e.date, READINESS_LOG_LIMIT),
     setFeedbackLog: dropDeleted(
       mergeByKey(
         remote.setFeedbackLog,

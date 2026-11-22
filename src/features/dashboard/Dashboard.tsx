@@ -80,6 +80,7 @@ import { BodyweightCard } from './BodyweightCard';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { AnalysisView, type AnalysisTab } from './AnalysisView';
+import { hrvLogWith } from '../../engine/hrv';
 import { MarksScreen } from './MarksScreen';
 import { REX_HINTS } from './rexHints';
 import type { AthleteProfile } from '../../data/athlete/types';
@@ -184,7 +185,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const strengthTotalKg = profile.prs.backSquat + profile.prs.benchPress + profile.prs.deadlift;
   const strengthRatio = latestBodyweightKg ? strengthTotalKg / latestBodyweightKg : null;
   // Nota de preparación: el check-in más tu carga y cómo te salen las sesiones (ver `computeReadinessScore`).
-  const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, history: loadHistory, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
+  const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history: loadHistory, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
   const readinessLearning = computeReadinessLearning(profile.readinessLog, history);
   const todayStrain = dayStrain(loadHistory.find((h) => h.date === todayIso));
   const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, loadHistory, todayIso);
@@ -732,7 +733,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           series={readinessSeries}
           dayIso={dayIso}
           isToday={isToday}
-          log={profile.readinessLog ?? []}
+          log={hrvLogWith(profile.readinessLog, profile.hrvHistory) ?? []}
           todayCheck={todayReadiness}
           learning={readinessLearning}
           onSelect={setDayIso}

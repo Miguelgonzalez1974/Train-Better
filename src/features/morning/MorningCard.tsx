@@ -12,6 +12,8 @@ import { recoveryColor } from '../dashboard/RecoveryCard';
 import { ACCENT as EFFORT } from '../dashboard/StrainRing';
 import { BodyMap, SORE_COLOR } from './BodyMap';
 import { HrvInputs } from './HrvInputs';
+import { hrvLogWith } from '../../engine/hrv';
+import type { HrvHistoryEntry } from '../../data/athlete/types';
 import { DayLightPill } from '../shell/DayLightPill';
 import { commitMorning, type MorningResult } from './morningCommit';
 
@@ -180,6 +182,9 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
   const [followUps, setFollowUps] = useState<Record<string, PainFollowUp>>({});
   const [result, setResult] = useState<MorningResult | null>(null);
   const [committed, setCommitted] = useState(false);
+  /** El HRV de días anteriores cargado a mano: se recalcula el rango en cuanto se guarda. */
+  const [hrvHistory, setHrvHistory] = useState<HrvHistoryEntry[] | undefined>(profile.hrvHistory);
+  const hrvLog = useMemo(() => hrvLogWith(profile.readinessLog, hrvHistory) ?? [], [profile.readinessLog, hrvHistory]);
 
   const patch = (p: Partial<CardAnswers>) => setAnswers((a) => ({ ...a, ...p }));
   const answered = hasAnyAnswer(answers) || Object.keys(followUps).length > 0;
@@ -350,6 +355,10 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
               </div>
             </Section>
 
+            <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-3" aria-label="HRV y pulso">
+              <HrvInputs hrv={answers.hrv} hr={answers.restingHr} log={hrvLog} todayIso={todayIso} onChange={patch} onHistoryChange={setHrvHistory} />
+            </section>
+
             <div className="flex gap-2">
               <Section icon={<Flame size={13} aria-hidden="true" />} label="Agujetas" color={MID} className="flex w-[148px] shrink-0 flex-col items-center !px-2">
                 <BodyMap zones={answers.soreZones ?? {}} onCycle={cycleZone} />
@@ -365,7 +374,6 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
               <Section icon={<Brain size={13} aria-hidden="true" />} label="Mente" className="flex min-w-0 flex-1 flex-col justify-between gap-2.5">
                 <Scale label="Estrés" words={['Muy bajo', 'Bajo', 'Medio', 'Alto', 'Muy alto']} value={answers.stress} onChange={(v) => patch({ stress: v })} />
                 <Scale label="Motivación" words={['Muy baja', 'Baja', 'Media', 'Alta', 'Muy alta']} value={answers.motivation} onChange={(v) => patch({ motivation: v })} />
-                <HrvInputs hrv={answers.hrv} hr={answers.restingHr} log={profile.readinessLog ?? []} todayIso={todayIso} onChange={patch} />
               </Section>
             </div>
 

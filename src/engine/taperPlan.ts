@@ -1,6 +1,6 @@
 import type { AthleteProfile, Goal, ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
 import { computeCompetitionDay, simulacroDateFor, type CompetitionDay, type TaperDecision } from './competition';
-import { computeHrvStatus, hrvVsNow, restingHrBaseline } from './hrv';
+import { computeHrvStatus, hrvLogWith, hrvVsNow, restingHrBaseline } from './hrv';
 import { computeReadinessScore } from './readinessScore';
 
 /**
@@ -77,7 +77,7 @@ function preparationAverage(profile: AthleteProfile, history: SessionHistoryEntr
   for (let back = 0; back < PREP_WINDOW; back++) {
     const dayIso = isoAdd(iso, -back);
     const total = computeReadinessScore({
-      readinessLog: profile.readinessLog,
+      readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
       history: history.filter((h) => h.date < dayIso),
       setFeedbackLog: profile.setFeedbackLog,
       painFlags: profile.painFlags,
@@ -96,7 +96,7 @@ export function decideTaper(profile: AthleteProfile, history: SessionHistoryEntr
 
   const simulacroIso = simulacroDateFor(eventStart, profile.trainingDaysPerWeek);
   const simulacro = simulacroIso ? assessSimulacro(log, simulacroIso) : null;
-  const hrvVs = hrvVsNow(computeHrvStatus(log, snapshot));
+  const hrvVs = hrvVsNow(computeHrvStatus(hrvLogWith(log, profile.hrvHistory), snapshot));
   const prep = preparationAverage({ ...profile, readinessLog: log }, prior, snapshot);
 
   if (simulacro?.cost) {

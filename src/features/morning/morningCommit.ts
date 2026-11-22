@@ -1,6 +1,6 @@
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DayLightInfo, PainFlag, ReadinessCheck, SessionHistoryEntry } from '../../data/athlete/types';
-import { computeHrvStatus, hrvVsOf } from '../../engine/hrv';
+import { computeHrvStatus, hrvLogWith, hrvVsOf } from '../../engine/hrv';
 import { checkFromCard, describeMorning, type CardAnswers, type MorningDescribeInput, type MorningLine } from '../../engine/morningCheckIn';
 import { simulacroDateFor } from '../../engine/competition';
 import { computeReadinessLearning, learnedScoreShift, type LearnedShift } from '../../engine/readinessLearning';
@@ -43,7 +43,7 @@ export function commitMorning(
 
   const check: ReadinessCheck = { ...checkFromCard(todayIso, answers), ...(previous?.habits ? { habits: previous.habits } : {}) };
   // Dónde cae tu HRV frente a tu rango: se guarda con el check-in para que el factor de carga y lo que aprende el coach la lean.
-  const hrvVs = hrvVsOf(computeHrvStatus([...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check], todayIso));
+  const hrvVs = hrvVsOf(computeHrvStatus(hrvLogWith([...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check], before.hrvHistory), todayIso));
   if (hrvVs) check.hrvVs = hrvVs;
   // Pesos aprendidos de ti (con datos suficientes): lo que hoy está en contra y a ti te cuesta mucho cuenta doble, y lo que apenas te afecta no cuenta.
   const learned = learnedScoreShift(check, computeReadinessLearning((before.readinessLog ?? []).filter((c) => c.date !== todayIso), history));
@@ -70,7 +70,7 @@ function buildResult(
   const trained = history.some((h) => h.date === todayIso);
   const session = trained ? null : resolveTodaySession(profile, history, todayIso);
   const day: MorningResult['day'] = trained ? 'trained' : session && !session.isRestDay ? 'training' : 'rest';
-  const score = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) });
+  const score = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) });
   const stored = profile.strainTargets?.[todayIso];
   // Simulacro de la competición: hoy es el día (hay que medir antes y mañana) o fue ayer (se enseña cómo respondiste).
   const comp = resolveCompetitionDay(profile, history, new Date(`${todayIso}T12:00:00`));

@@ -1,4 +1,4 @@
-import type { ReadinessCheck } from '../data/athlete/types';
+import type { HrvHistoryEntry, ReadinessCheck } from '../data/athlete/types';
 
 /**
  * HRV de la mañana (rMSSD en ms, p. ej. el de HRV4Training con la cámara del móvil) y pulso en reposo, leídos como se hace
@@ -24,6 +24,8 @@ const HRV_BAND_SD = 0.75;
 const HRV_MIN_SD = 0.03;
 /** Mediciones en los últimos 7 días que hacen falta para hablar de su media. */
 const HRV_WEEK_MIN = 3;
+/** Mediciones en los últimos 30 días que hacen falta para hablar de su media. */
+const HRV_MONTH_MIN = 5;
 
 const HR_BASELINE_DAYS = 14;
 const HR_BASELINE_MIN = 3;
@@ -34,6 +36,32 @@ const HR_VERY_HIGH_DELTA = 8;
 /** La nota de 0 a 10 que enseña HRV4Training: dos veces el logaritmo natural del rMSSD (64 ms → 8,3). */
 export function hrvScore(rmssd: number): number {
   return Math.round(Math.log(rmssd) * 20) / 10;
+}
+
+/** Lo contrario de `hrvScore`: el rMSSD en ms de una nota de HRV4Training (7,5 → 42,5 ms). Para quien copia la nota en vez de los milisegundos. */
+export function rmssdFromScore(score: number): number {
+  return Math.round(Math.exp(score / 2) * 10) / 10;
+}
+
+/**
+ * El registro de HRV y pulso listo para calcular: los check-ins de siempre más las mediciones de días anteriores cargadas a mano
+ * (`hrvHistory`). Si un día tiene check-in con HRV, manda el check-in; si lo tiene sin HRV, se le añade la medición cargada. Solo sirve para
+ * las cuentas de HRV y pulso: los días que salen de aquí no son check-ins (llevan valores neutros que nadie más debe leer).
+ */
+export function hrvLogWith(log: ReadinessCheck[] | undefined, history: HrvHistoryEntry[] | undefined): ReadinessCheck[] | undefined {
+  if (!history || history.length === 0) return log;
+  const byDate = new Map((log ?? []).map((c) => [c.date, c]));
+  const out: ReadinessCheck[] = [...(log ?? [])];
+  for (const h of history) {
+    const existing = byDate.get(h.date);
+    if (!existing) {
+      out.push({ date: h.date, sleep: 'regular', soreness: 'leve', stress: 'medio', motivation: 'normal', hrv: h.hrv, ...(h.restingHr !== undefined ? { restingHr: h.restingHr } : {}) });
+    } else if (existing.hrv === undefined || existing.restingHr === undefined) {
+      const i = out.indexOf(existing);
+      out[i] = { ...existing, ...(existing.hrv === undefined ? { hrv: h.hrv } : {}), ...(existing.restingHr === undefined && h.restingHr !== undefined ? { restingHr: h.restingHr } : {}) };
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export type HrvVs = 'bajo' | 'normal' | 'alto';
@@ -50,6 +78,8 @@ export interface HrvStatus {
   today: { rmssd: number; score: number; vs: HrvVs | null } | null;
   /** Media de los últimos 7 días (con hoy) y dónde cae frente a tu rango. */
   week: { avg: number; n: number; vs: HrvVs | null } | null;
+  /** Media de los últimos 30 días (con hoy); null con menos de 5 mediciones. */
+  month: { avg: number; n: number } | null;
   /** Tu rango normal en ms (null hasta tener `HRV_PROVISIONAL_MIN` mediciones). */
   range: { low: number; high: number } | null;
   /** Pulso de hoy, tu media de 14 días y la diferencia (null si falta alguno). */
@@ -100,13 +130,17 @@ export function computeHrvStatus(log: ReadinessCheck[] | undefined, todayIso: st
   const weekAvg = weekValues.length >= HRV_WEEK_MIN ? Math.round(Math.exp(mean(weekValues))) : null;
   const week = weekAvg !== null ? { avg: weekAvg, n: weekValues.length, vs: vsRange(weekAvg, range) } : null;
 
+  const monthFrom = isoMinus(todayIso, 29);
+  const monthValues = withHrv.filter((c) => c.date >= monthFrom).map((c) => Math.log(c.hrv as number));
+  const month = monthValues.length >= HRV_MONTH_MIN ? { avg: Math.round(Math.exp(mean(monthValues))), n: monthValues.length } : null;
+
   const hrToday = todayCheck?.restingHr ?? null;
   const hrBase = restingHrBaseline(log, todayIso);
   const hr = { today: hrToday, baseline: hrBase, delta: hrToday !== null && hrBase !== null ? hrToday - hrBase : null };
 
   const state: HrvStatus['state'] = range ? 'listo' : withHrv.length > 0 ? 'reuniendo' : 'sin-datos';
   const n = withHrv.filter((c) => c.date >= windowFrom).length;
-  return { state, provisional: range !== null && baseline.length < HRV_NEEDED, n, needed: HRV_NEEDED, today, week, range, hr };
+  return { state, provisional: range !== null && baseline.length < HRV_NEEDED, n, needed: HRV_NEEDED, today, week, month, range, hr };
 }
 
 /** Dónde cae tu HRV frente a tu rango: la media de 7 días si la hay y si no la medición de hoy (null sin rango). */

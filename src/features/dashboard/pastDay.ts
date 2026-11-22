@@ -18,7 +18,7 @@ export function buildReadinessSeries(profile: AthleteProfile, history: SessionHi
   return Array.from({ length: days }, (_, i) => {
     const iso = isoAddDays(endIso, i - (days - 1));
     const prior = history.filter((h) => h.date < iso);
-    const score = computeReadinessScore({ readinessLog: profile.readinessLog, history: prior, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${iso}T12:00:00`) });
+    const score = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history: prior, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${iso}T12:00:00`) });
     return { iso, total: score.total };
   });
 }
@@ -61,7 +61,7 @@ export function buildTrendPoints(profile: AthleteProfile, history: SessionHistor
       iso > todayIso || iso < firstIso
         ? null
         : computeReadinessScore({
-            readinessLog: profile.readinessLog,
+            readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
             history: history.filter((h) => h.date < iso),
             setFeedbackLog: profile.setFeedbackLog,
             painFlags: profile.painFlags,
@@ -91,7 +91,7 @@ export function buildPastDayView(profile: AthleteProfile, history: SessionHistor
   const target = profile.strainTargets?.[dayIso] ?? buildStrainTarget(profile, history, dayIso);
   const real = dayStrain(entry);
   return {
-    readiness: computeReadinessScore({ readinessLog: profile.readinessLog, history: prior, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: ref }),
+    readiness: computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history: prior, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: ref }),
     acwr: computeAcwr(prior, ref),
     trend: getAcwrTrend(prior, undefined, ref),
     strain: { target, planned: null, fit: null, real, status: strainStatus(real, target), learning },

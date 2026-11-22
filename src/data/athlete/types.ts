@@ -290,6 +290,13 @@ export interface ReadinessCheck {
   learnedShift?: number;
 }
 
+/** Una medición de HRV de un día anterior, cargada a mano (rMSSD en ms) con su pulso en reposo si se tiene. */
+export interface HrvHistoryEntry {
+  date: string;
+  hrv: number;
+  restingHr?: number;
+}
+
 /** Zonas de la silueta donde se marcan agujetas (izquierda y derecha por separado). */
 export type SoreZoneId =
   | 'cuello'
@@ -421,6 +428,8 @@ export interface AthleteProfile {
   variantPrs?: VariantPersonalRecords;
   /** Check-ins diarios de energia (ver [[ReadinessCheck]]) — el motor los lee por fecha para ajustar la carga de hoy. */
   readinessLog?: ReadinessCheck[];
+  /** HRV (y pulso) de días anteriores cargados a mano, de antes de usar la app o de días sin check-in: sirven para calcular tu rango normal desde el primer día. Un check-in con HRV de esa fecha manda sobre esto. Ver `engine/hrv.ts`. */
+  hrvHistory?: HrvHistoryEntry[];
   /** Rutinas de movilidad y estiramientos hechas con Rex (ver `engine/mobility.ts`). Cuentan como hábito, no como entreno. */
   mobilityLog?: MobilityLogEntry[];
   /** Sesiones hechas o saltadas de los programas de fuerza que conviven con el macro (ver `engine/strengthCompanion.ts`). */

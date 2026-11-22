@@ -27,7 +27,7 @@ export function readinessLastDays(profile: AthleteProfile, history: SessionHisto
   return Array.from({ length: days }, (_, back) => {
     const dayIso = isoMinus(todayIso, back);
     return computeReadinessScore({
-      readinessLog: profile.readinessLog,
+      readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
       history: history.filter((h) => h.date < dayIso),
       setFeedbackLog: profile.setFeedbackLog,
       painFlags: profile.painFlags,

@@ -88,7 +88,7 @@ export function resolveDayLight(
   comp: CompetitionDay | null,
 ): DayLightInfo | null {
   if (!check) return null;
-  const score = computeReadinessScore({ readinessLog: profile.readinessLog, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: date });
+  const score = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: date });
   const acwr = computeAcwr(history, date);
   return computeDayLight({
     readiness: score.total,
