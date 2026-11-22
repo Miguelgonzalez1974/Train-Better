@@ -344,3 +344,27 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     });
   });
 });
+
+describe('energía y hábitos de la tarjeta', () => {
+  it('la energía baja y la motivación alta: manda la peor, y lo guarda', () => {
+    const c = checkFromCard(D, { overall: null, motivation: 4, energy: 0 });
+    expect(c.motivation).toBe('baja');
+    expect(c.energyLevel).toBe(0);
+    expect(c.motivationLevel).toBe(4);
+  });
+
+  it('sin energía, la motivación decide como siempre; con las dos altas, es alta', () => {
+    expect(checkFromCard(D, { overall: null, motivation: 1 }).motivation).toBe('baja');
+    expect(checkFromCard(D, { overall: null, motivation: 4, energy: 4 }).motivation).toBe('alta');
+    expect(checkFromCard(D, { overall: null }).energyLevel).toBeUndefined();
+  });
+
+  it('los hábitos marcados se guardan y vuelven al corregir', () => {
+    const c = checkFromCard(D, { overall: null, habits: ['alcohol', 'cena-tarde'] });
+    expect(c.habits).toEqual(['alcohol', 'cena-tarde']);
+    expect(answersFromCheck(c)).toMatchObject({ habits: ['alcohol', 'cena-tarde'], energy: undefined });
+    expect(hasAnyAnswer({ overall: null, habits: ['viaje'] })).toBe(true);
+    expect(hasAnyAnswer({ overall: null, habits: [] })).toBe(false);
+    expect(hasAnyAnswer({ overall: null, energy: 2 })).toBe(true);
+  });
+});

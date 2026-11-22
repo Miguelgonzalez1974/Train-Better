@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, Bell, Brain, Check, Equal, Flame, Frown, HeartPulse, Meh, Minus, Moon, Plus, Shield, ShieldCheck, Smile, Sun, TrendingDown, TrendingUp } from 'lucide-react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import type { SoreLevelNum, SoreZoneId } from '../../data/athlete/types';
-import { formatSleep, SLEEP_OK_FROM } from '../../engine/habits';
+import type { HabitTag, SoreLevelNum, SoreZoneId } from '../../data/athlete/types';
+import { formatSleep, HABIT_LABEL, HABIT_ORDER, SLEEP_OK_FROM } from '../../engine/habits';
+import { suggestSoreAreas, zonesOfArea } from '../../engine/soreSuggestions';
 import { hasAnyAnswer, answersFromCheck, type CardAnswers, type MorningIcon, type MorningLine, type MorningTone } from '../../engine/morningCheckIn';
 import { getActivePainFlags, PAIN_AREA_LABEL, type PainFollowUp } from '../../engine/painFlags';
 import type { CheckInOverall } from '../../engine/readiness';
@@ -15,7 +16,7 @@ import { HrvInputs } from './HrvInputs';
 import { hrvLogWith } from '../../engine/hrv';
 import type { HrvHistoryEntry } from '../../data/athlete/types';
 import { DayLightPill } from '../shell/DayLightPill';
-import { commitMorning, type MorningResult } from './morningCommit';
+import { commitMorning, previewMorning, type MorningResult } from './morningCommit';
 
 const GOOD = 'rgb(var(--c-state-good))';
 const MID = 'rgb(var(--c-state-mid))';
@@ -188,6 +189,10 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
 
   const patch = (p: Partial<CardAnswers>) => setAnswers((a) => ({ ...a, ...p }));
   const answered = hasAnyAnswer(answers) || Object.keys(followUps).length > 0;
+  /** Cómo quedaría el día con lo contado hasta ahora (la barra de arriba); null mientras no haya nada contestado. */
+  const preview = useMemo(() => (hasAnyAnswer(answers) ? previewMorning(answers, history, todayIso) : null), [answers, history, todayIso]);
+  /** Las zonas que se esperan cargadas por el entreno de ayer, mientras no estén ya marcadas. */
+  const sorePicks = useMemo(() => suggestSoreAreas(history, todayIso).filter((s) => !zonesOfArea(s.area).some((z) => answers.soreZones?.[z])), [history, todayIso, answers.soreZones]);
   const close = () => onClose(committed);
 
   useEffect(() => {
@@ -205,6 +210,16 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
 
   function stepHours(delta: number) {
     setAnswers((a) => ({ ...a, hours: Math.min(12, Math.max(3, (a.hours ?? DEFAULT_HOURS) + delta)) }));
+  }
+  function toggleHabit(tag: HabitTag) {
+    setAnswers((a) => {
+      const current = a.habits ?? [];
+      return { ...a, habits: current.includes(tag) ? current.filter((h) => h !== tag) : [...current, tag] };
+    });
+  }
+  /** Una zona sugerida: se marca como agujetas leves (después se cambia a fuertes tocándola en el muñeco). */
+  function pickArea(area: Parameters<typeof zonesOfArea>[0]) {
+    setAnswers((a) => ({ ...a, soreZones: { ...(a.soreZones ?? {}), ...Object.fromEntries(zonesOfArea(area).map((z) => [z, 1 as SoreLevelNum])) } }));
   }
   /** Tocar una zona: sin agujetas → leves → fuertes → sin agujetas. */
   function cycleZone(id: SoreZoneId) {
@@ -266,6 +281,22 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
                   {mode === 'edit' ? 'Cancelar' : 'Más tarde'}
                 </button>
               </div>
+            </div>
+
+            <div className="sticky top-0 z-10 -mx-1 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-brand-bg/95 px-3 py-2 backdrop-blur" data-testid="morning-live" aria-live="polite">
+              {preview && preview.readiness !== null ? (
+                <>
+                  <p className="text-[13px] text-neutral-300">
+                    Preparación{' '}
+                    <b className="num text-base font-semibold" style={{ color: recoveryColor(preview.readiness) }}>
+                      {preview.readiness}%
+                    </b>
+                  </p>
+                  {preview.light && <DayLightPill light={preview.light} />}
+                </>
+              ) : (
+                <p className="text-[12.5px] text-neutral-400">{preview ? 'Con esto aún no hay nota. Sigue contando.' : 'Cuéntame cómo estás y te digo cómo queda tu día.'}</p>
+              )}
             </div>
 
             <Section icon={<Sun size={13} aria-hidden="true" />} label="Cómo amaneces" color="rgb(var(--c-brand-gold))">
@@ -353,11 +384,37 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
                   ))}
                 </div>
               </div>
+              <div className="mt-2.5 border-t border-white/[0.07] pt-2.5">
+                <p className="mb-1.5 text-[11px] text-neutral-500">Ayer y anoche</p>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Hábitos de ayer y de anoche">
+                  {HABIT_ORDER.map((tag) => {
+                    const on = answers.habits?.includes(tag) ?? false;
+                    return (
+                      <button key={tag} onClick={() => toggleHabit(tag)} aria-pressed={on} className={`rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors duration-200 ${on ? 'border-transparent text-black' : 'border-white/10 text-neutral-300 hover:bg-white/5'}`} style={on ? { backgroundColor: SLEEP } : undefined}>
+                        {HABIT_LABEL[tag]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </Section>
 
             <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-3" aria-label="HRV y pulso">
               <HrvInputs hrv={answers.hrv} hr={answers.restingHr} log={hrvLog} todayIso={todayIso} onChange={patch} onHistoryChange={setHrvHistory} />
             </section>
+
+            {sorePicks.length > 0 && (
+              <section className="rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5" aria-label="Agujetas sugeridas" data-testid="sore-picks">
+                <p className="mb-1.5 text-[11px] text-neutral-500">Por tu entreno, ¿te notas algo en…?</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sorePicks.map((s) => (
+                    <button key={s.area} onClick={() => pickArea(s.area)} className="rounded-full border px-3 py-1.5 text-[12.5px] font-medium text-neutral-100 transition-colors hover:bg-white/5" style={{ borderColor: 'rgb(var(--c-state-mid) / 0.5)' }}>
+                      {s.label} <span className="font-normal text-neutral-400">· {s.why}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <div className="flex gap-2">
               <Section icon={<Flame size={13} aria-hidden="true" />} label="Agujetas" color={MID} className="flex w-[148px] shrink-0 flex-col items-center !px-2">
@@ -371,7 +428,8 @@ export function MorningCard({ mode, onClose }: MorningCardProps) {
                   </span>
                 </p>
               </Section>
-              <Section icon={<Brain size={13} aria-hidden="true" />} label="Mente" className="flex min-w-0 flex-1 flex-col justify-between gap-2.5">
+              <Section icon={<Brain size={13} aria-hidden="true" />} label="Energía y mente" className="flex min-w-0 flex-1 flex-col justify-between gap-2.5">
+                <Scale label="Energía" words={['Muy baja', 'Baja', 'Media', 'Alta', 'Muy alta']} value={answers.energy} onChange={(v) => patch({ energy: v })} />
                 <Scale label="Estrés" words={['Muy bajo', 'Bajo', 'Medio', 'Alto', 'Muy alto']} value={answers.stress} onChange={(v) => patch({ stress: v })} />
                 <Scale label="Motivación" words={['Muy baja', 'Baja', 'Media', 'Alta', 'Muy alta']} value={answers.motivation} onChange={(v) => patch({ motivation: v })} />
               </Section>

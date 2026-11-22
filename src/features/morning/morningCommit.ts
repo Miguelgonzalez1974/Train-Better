@@ -8,6 +8,7 @@ import { assessSimulacro, resolveCompetitionDay } from '../../engine/taperPlan';
 import { applyPainFollowUps, getActivePainFlags, prunePainFlags, type PainFollowUp } from '../../engine/painFlags';
 import { getReadinessCheckForDate, getReadinessFactor } from '../../engine/readiness';
 import { computeReadinessScore } from '../../engine/readinessScore';
+import { resolveDayLight } from '../../engine/dayLight';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { refreshTodaySession, resolveTodaySession } from '../dashboard/todaySession';
 
@@ -35,19 +36,12 @@ export function commitMorning(
   todayIso: string,
 ): MorningResult {
   const before = athleteRepository.getProfile();
-  const previous = getReadinessCheckForDate(before.readinessLog, todayIso);
   const activeBefore = getActivePainFlags(before.painFlags, todayIso);
 
   const painFlags = applyPainFollowUps(prunePainFlags(before.painFlags, todayIso), followUps, todayIso);
   if (JSON.stringify(painFlags) !== JSON.stringify(before.painFlags ?? [])) athleteRepository.saveProfile({ ...before, painFlags });
 
-  const check: ReadinessCheck = { ...checkFromCard(todayIso, answers), ...(previous?.habits ? { habits: previous.habits } : {}) };
-  // Dónde cae tu HRV frente a tu rango: se guarda con el check-in para que el factor de carga y lo que aprende el coach la lean.
-  const hrvVs = hrvVsOf(computeHrvStatus(hrvLogWith([...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check], before.hrvHistory), todayIso));
-  if (hrvVs) check.hrvVs = hrvVs;
-  // Pesos aprendidos de ti (con datos suficientes): lo que hoy está en contra y a ti te cuesta mucho cuenta doble, y lo que apenas te afecta no cuenta.
-  const learned = learnedScoreShift(check, computeReadinessLearning((before.readinessLog ?? []).filter((c) => c.date !== todayIso), history));
-  if (learned.shift !== 0) check.learnedShift = learned.shift;
+  const { check, learned } = buildCheck(answers, before, history, todayIso);
   athleteRepository.saveReadinessCheck(check);
 
   // El objetivo provisional se rehace con el check-in y queda fijo; la sesión de hoy se recalcula con todo lo nuevo.
@@ -57,6 +51,41 @@ export function commitMorning(
   refreshTodaySession(next, history, todayIso);
 
   return buildResult(athleteRepository.getProfile(), history, todayIso, check, activeBefore.map((flag) => ({ flag, answer: followUps[flag.id] ?? null })), learned);
+}
+
+/**
+ * El check-in que sale de las respuestas, con lo que se calcula de ellas: dónde cae tu HRV frente a tu rango (se guarda para que el factor
+ * de carga y el coach la lean) y el ajuste personal de lo que has aprendido de ti. Si no tocaste los hábitos hoy, se conservan los que ya había.
+ */
+function buildCheck(answers: CardAnswers, before: AthleteProfile, history: SessionHistoryEntry[], todayIso: string): { check: ReadinessCheck; learned: LearnedShift } {
+  const previous = getReadinessCheckForDate(before.readinessLog, todayIso);
+  const check: ReadinessCheck = { ...checkFromCard(todayIso, answers), ...(answers.habits === undefined && previous?.habits ? { habits: previous.habits } : {}) };
+  const hrvVs = hrvVsOf(computeHrvStatus(hrvLogWith([...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check], before.hrvHistory), todayIso));
+  if (hrvVs) check.hrvVs = hrvVs;
+  // Pesos aprendidos de ti (con datos suficientes): lo que hoy está en contra y a ti te cuesta mucho cuenta doble, y lo que apenas te afecta no cuenta.
+  const learned = learnedScoreShift(check, computeReadinessLearning((before.readinessLog ?? []).filter((c) => c.date !== todayIso), history));
+  if (learned.shift !== 0) check.learnedShift = learned.shift;
+  return { check, learned };
+}
+
+export interface MorningPreview {
+  /** La preparación de hoy con lo que llevas contado (null si aún no hay con qué calcularla). */
+  readiness: number | null;
+  /** El semáforo con lo que llevas contado (null sin respuestas). */
+  light: DayLightInfo | null;
+}
+
+/**
+ * Cómo quedaría el día con lo que llevas contado en la tarjeta, sin guardar nada: es lo que enseña la barra de arriba mientras respondes.
+ * Usa los mismos cálculos que al guardar (salvo las respuestas a los avisos de molestia, que solo cuentan al guardar).
+ */
+export function previewMorning(answers: CardAnswers, history: SessionHistoryEntry[], todayIso: string): MorningPreview {
+  const before = athleteRepository.getProfile();
+  const { check } = buildCheck(answers, before, history, todayIso);
+  const draft: AthleteProfile = { ...before, readinessLog: [...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check] };
+  const date = new Date(`${todayIso}T12:00:00`);
+  const score = computeReadinessScore({ readinessLog: draft.readinessLog, hrvHistory: draft.hrvHistory, history, setFeedbackLog: draft.setFeedbackLog, painFlags: draft.painFlags, today: date });
+  return { readiness: score.total, light: resolveDayLight(draft, history, date, check, resolveCompetitionDay(draft, history, date)) };
 }
 
 function buildResult(

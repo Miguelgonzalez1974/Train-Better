@@ -274,6 +274,8 @@ export interface ReadinessCheck {
   /** Estrés y motivación en la escala de 5 tramos de la tarjeta (0 = muy bajo … 4 = muy alto). Los ejes `stress` y `motivation` salen de aquí. */
   stressLevel?: number;
   motivationLevel?: number;
+  /** Energía general al levantarte, en 5 tramos (0 = muy baja … 4 = muy alta). Entra en el eje `motivation` junto con la motivación: manda la peor de las dos. */
+  energyLevel?: number;
   /** Agujetas por zona (1 = leves, 2 = fuertes); una zona sin entrada no tiene. El eje `soreness` sale de aquí y el accesorio de hoy se ajusta (ver `engine/morningCheckIn.ts`). */
   soreZones?: Partial<Record<SoreZoneId, SoreLevelNum>>;
   /** Pulso en reposo de la mañana (ppm), si lo mide (con la medición de HRV, mejor). Se compara con tu media (ver `engine/hrv.ts`). */

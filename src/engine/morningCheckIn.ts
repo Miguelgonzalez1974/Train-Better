@@ -1,10 +1,11 @@
-import type { DayLightColor, PainFlag, ReadinessCheck, SoreLevelNum, SoreZoneId } from '../data/athlete/types';
+import type { DayLightColor, HabitTag, PainFlag, ReadinessCheck, SoreLevelNum, SoreZoneId } from '../data/athlete/types';
 import { checkFromQuickAnswer, type CheckInOverall } from './readiness';
 import { PAIN_AREA_AVOID_TEXT, PAIN_AREA_LABEL, type PainFollowUp } from './painFlags';
 import { HRV_PROVISIONAL_MIN, VS_WORD, type HrvPart } from './hrv';
 import type { SimulacroResult } from './taperPlan';
 import type { LearnedShift } from './readinessLearning';
 import type { MovementPattern } from '../data/movements/types';
+import { HABIT_LABEL } from './habits';
 
 /**
  * Lógica de la tarjeta de la mañana: cómo sus respuestas (Bien/Normal/Mal, sueño, agujetas por zona, estrés, motivación,
@@ -125,6 +126,10 @@ export interface CardAnswers {
   stress?: number;
   /** 0–4. */
   motivation?: number;
+  /** Energía general, 0–4. */
+  energy?: number;
+  /** Lo que marcaste de ayer y de anoche (alcohol, cena tarde, viaje…): solo se apunta, para que el coach aprenda qué te afecta. */
+  habits?: HabitTag[];
   soreZones?: Partial<Record<SoreZoneId, SoreLevelNum>>;
   restingHr?: number;
   /** rMSSD de la medición de la mañana, en ms. */
@@ -139,6 +144,8 @@ export function hasAnyAnswer(a: CardAnswers): boolean {
     a.quality !== undefined ||
     a.stress !== undefined ||
     a.motivation !== undefined ||
+    a.energy !== undefined ||
+    (a.habits?.length ?? 0) > 0 ||
     a.restingHr !== undefined ||
     a.hrv !== undefined ||
     Object.keys(a.soreZones ?? {}).length > 0
@@ -172,7 +179,11 @@ export function checkFromCard(dateIso: string, a: CardAnswers): ReadinessCheck {
         : 'leve'
       : (base?.soreness ?? 'ninguno');
   const stress: ReadinessCheck['stress'] = a.stress !== undefined ? (a.stress <= 1 ? 'bajo' : a.stress === 2 ? 'medio' : 'alto') : (base?.stress ?? 'medio');
-  const motivation: ReadinessCheck['motivation'] = a.motivation !== undefined ? (a.motivation <= 1 ? 'baja' : a.motivation === 2 ? 'normal' : 'alta') : (base?.motivation ?? 'normal');
+  const motivationFrom = (level: number): ReadinessCheck['motivation'] => (level <= 1 ? 'baja' : level === 2 ? 'normal' : 'alta');
+  const MOTIVATION_RANK = { baja: 0, normal: 1, alta: 2 } as const;
+  // La motivación y la energía miden lo mismo desde dos lados: si das las dos, manda la peor.
+  const motivationCandidates = [a.motivation, a.energy].filter((v): v is number => v !== undefined).map(motivationFrom);
+  const motivation: ReadinessCheck['motivation'] = motivationCandidates.length > 0 ? motivationCandidates.reduce((worst, m) => (MOTIVATION_RANK[m] < MOTIVATION_RANK[worst] ? m : worst)) : (base?.motivation ?? 'normal');
 
   const check: ReadinessCheck = { date: dateIso, sleep, soreness, stress, motivation };
   if (a.overall) check.overall = a.overall;
@@ -180,6 +191,8 @@ export function checkFromCard(dateIso: string, a: CardAnswers): ReadinessCheck {
   if (a.quality !== undefined) check.sleepQuality = a.quality;
   if (a.stress !== undefined) check.stressLevel = a.stress;
   if (a.motivation !== undefined) check.motivationLevel = a.motivation;
+  if (a.energy !== undefined) check.energyLevel = a.energy;
+  if (a.habits !== undefined) check.habits = a.habits;
   if (zones.length > 0) check.soreZones = Object.fromEntries(zones) as ReadinessCheck['soreZones'];
   if (a.restingHr !== undefined) check.restingHr = a.restingHr;
   if (a.hrv !== undefined) check.hrv = a.hrv;
@@ -195,6 +208,8 @@ export function answersFromCheck(check: ReadinessCheck | undefined): CardAnswers
     quality: check.sleepQuality,
     stress: check.stressLevel,
     motivation: check.motivationLevel,
+    energy: check.energyLevel,
+    habits: check.habits,
     soreZones: check.soreZones,
     restingHr: check.restingHr,
     hrv: check.hrv,
@@ -333,7 +348,10 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
   }
 
   if (check.stress === 'alto') add(changes, { icon: 'brain', tone: 'neutral', text: 'Estrés alto: resta a tu preparación de hoy' });
-  if (check.motivation === 'baja') add(changes, { icon: 'brain', tone: 'neutral', text: 'Motivación baja: resta a tu preparación de hoy' });
+  if (check.motivation === 'baja') {
+    const byEnergy = check.energyLevel !== undefined && check.energyLevel <= 1 && (check.motivationLevel === undefined || check.motivationLevel > 1);
+    add(changes, { icon: 'brain', tone: 'neutral', text: byEnergy ? 'Energía baja: resta a tu preparación de hoy' : 'Motivación baja: resta a tu preparación de hoy' });
+  }
 
   const shortSleep = (check.sleepHours !== undefined && check.sleepHours < 7) || (check.sleepQuality !== undefined && check.sleepQuality <= 2);
   if (shortSleep) {
@@ -369,6 +387,11 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
     const { today: hr, baseline, delta } = status.hr;
     if (hrv.hrPenalty > 0) add(changes, { icon: 'heart', tone: 'warn', text: `Pulso ${hr} ppm, ${delta} por encima de tu media (${baseline}): resta ${hrv.hrPenalty} ${hrv.hrPenalty === 1 ? 'punto' : 'puntos'} a tu preparación` });
     else add(notes, { icon: 'heart', tone: 'neutral', text: baseline !== null ? `Pulso ${hr} ppm, como tu media (${baseline})` : `Pulso ${hr} ppm: lo apunto para calcular tu media` });
+  }
+
+  if ((check.habits?.length ?? 0) > 0) {
+    const names = check.habits!.map((h) => HABIT_LABEL[h].toLowerCase());
+    add(notes, { icon: 'check', tone: 'neutral', text: `Apunto ${names.join(', ')} para aprender cuánto te afecta` });
   }
 
   const pending = flags.filter(({ answer }) => answer !== 'paso');
