@@ -9,6 +9,7 @@ import { applyPainFollowUps, getActivePainFlags, prunePainFlags, type PainFollow
 import { getReadinessCheckForDate, getReadinessFactor } from '../../engine/readiness';
 import { computeReadinessScore } from '../../engine/readinessScore';
 import { resolveDayLight } from '../../engine/dayLight';
+import { withCompanionLoad } from '../../engine/companionLoad';
 import { ensureStrainTarget } from '../../engine/strainTarget';
 import { refreshTodaySession, resolveTodaySession } from '../dashboard/todaySession';
 
@@ -46,7 +47,8 @@ export function commitMorning(
 
   // El objetivo provisional se rehace con el check-in y queda fijo; la sesión de hoy se recalcula con todo lo nuevo.
   const fresh = athleteRepository.getProfile();
-  const next = ensureStrainTarget(fresh, history, todayIso);
+  // La carga cuenta también el programa de fuerza que convive con el macro, igual que en el Dashboard y en Planificación.
+  const next = ensureStrainTarget(fresh, withCompanionLoad(history, fresh.companionLog), todayIso);
   if (next !== fresh) athleteRepository.saveProfile(next);
   refreshTodaySession(next, history, todayIso);
 
@@ -84,8 +86,10 @@ export function previewMorning(answers: CardAnswers, history: SessionHistoryEntr
   const { check } = buildCheck(answers, before, history, todayIso);
   const draft: AthleteProfile = { ...before, readinessLog: [...(before.readinessLog ?? []).filter((c) => c.date !== todayIso), check] };
   const date = new Date(`${todayIso}T12:00:00`);
-  const score = computeReadinessScore({ readinessLog: draft.readinessLog, hrvHistory: draft.hrvHistory, history, setFeedbackLog: draft.setFeedbackLog, painFlags: draft.painFlags, today: date });
-  return { readiness: score.total, light: resolveDayLight(draft, history, date, check, resolveCompetitionDay(draft, history, date)) };
+  // La misma carga que enseña el Dashboard: con la del programa de fuerza sumada (si no, la nota de aquí y la de allí no coinciden).
+  const loadHistory = withCompanionLoad(history, draft.companionLog);
+  const score = computeReadinessScore({ readinessLog: draft.readinessLog, hrvHistory: draft.hrvHistory, history: loadHistory, setFeedbackLog: draft.setFeedbackLog, painFlags: draft.painFlags, today: date });
+  return { readiness: score.total, light: resolveDayLight(draft, loadHistory, date, check, resolveCompetitionDay(draft, history, date)) };
 }
 
 function buildResult(
@@ -99,7 +103,7 @@ function buildResult(
   const trained = history.some((h) => h.date === todayIso);
   const session = trained ? null : resolveTodaySession(profile, history, todayIso);
   const day: MorningResult['day'] = trained ? 'trained' : session && !session.isRestDay ? 'training' : 'rest';
-  const score = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) });
+  const score = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history: withCompanionLoad(history, profile.companionLog), setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${todayIso}T12:00:00`) });
   const stored = profile.strainTargets?.[todayIso];
   // Simulacro de la competición: hoy es el día (hay que medir antes y mañana) o fue ayer (se enseña cómo respondiste).
   const comp = resolveCompetitionDay(profile, history, new Date(`${todayIso}T12:00:00`));
