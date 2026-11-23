@@ -51,6 +51,7 @@ export const GLOBAL_TILES: GlobalTile[] = [
   { id: 'otro-wod', label: 'Otro WOD', iconKey: 'shuffle', group: 'sesion', ask: 'otro wod' },
   { id: 'cambiar-dia', label: 'Cambiar día', hint: 'mover o intercambiar', iconKey: 'calendar-clock', group: 'dia', ask: 'cambiar dia' },
   { id: 'que-toca-manana', label: 'Qué toca mañana', iconKey: 'calendar-days', group: 'dia', ask: 'que toca manana' },
+  { id: 'mi-semana', label: 'Revisar mi semana', hint: 'cómo fue y qué sigue', iconKey: 'calendar-check', group: 'dia', ask: 'revision semanal' },
   { id: 'me-duele', label: 'Me duele algo', iconKey: 'heart-pulse', group: 'cuerpo', ask: 'me duele algo' },
   { id: 'no-estoy', label: 'Hoy no estoy para el plan', iconKey: 'frown', group: 'cuerpo', ask: 'hoy no estoy para el plan' },
   { id: 'faltar', label: 'Voy a faltar unos días', iconKey: 'plane', group: 'cuerpo', ask: 'voy a faltar unos dias' },
@@ -93,6 +94,7 @@ const TILE_META: Record<string, { base: number; screens?: RexScreen[] }> = {
   'check-in': { base: 9, screens: ['dashboard'] },
   'mi-racha': { base: 6, screens: ['dashboard'] },
   'que-toca-manana': { base: 8, screens: ['dashboard', 'planificacion'] },
+  'mi-semana': { base: 7 },
   'por-que-hoy': { base: 8, screens: ['dashboard', 'planificacion'] },
   recovery: { base: 7 },
   corregir: { base: 9, screens: ['planificacion'] },
@@ -110,6 +112,8 @@ export interface TileContext {
   session?: 'none' | 'pending' | 'in-progress' | 'done' | 'rest';
   /** Llegas cansado o con el día ámbar o rojo. */
   tired?: boolean;
+  /** Hay una revisión de la semana pendiente de repasar (lunes a miércoles): la tesela sube a la vista. */
+  weekReview?: boolean;
   /** Hay una molestia activa. */
   pain?: boolean;
 }
@@ -144,6 +148,8 @@ export function scoreTile(id: string, ctx: TileContext): number {
   if ((id === 'corregir' || id === 'deshacer-registro') && ctx.session !== 'done') s -= 30;
   if (id === 'corregir' && ctx.session === 'done') s += 12;
   if (id === 'check-in' && inWindow(ctx.hour, 5, 12)) s += 4;
+  // La revisión de la semana: solo sube con una pendiente (lunes a miércoles); el resto de la semana queda en la biblioteca, siempre a mano.
+  if (id === 'mi-semana' && ctx.weekReview) s += 40;
   if (id === 'que-toca-manana' && (ctx.session === 'done' || ctx.hour >= 19)) s += 12;
   if (id === 'recovery' && (ctx.session === 'done' || ctx.session === 'rest')) s += 10;
   if (id === 'cambiar-dia' && ctx.session === 'rest') s -= 6;

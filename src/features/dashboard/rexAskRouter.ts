@@ -378,6 +378,12 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
     case 'estado':
       return elsewhereAnswer('Eso te lo cuento en el Dashboard, donde está tu estado de hoy.', 'ir-dashboard');
     case 'modulo':
+      // La revisión de la semana se abre sola al llegar al Dashboard (desde Planificación, Nutrición u Objetivos).
+      if (intent.target === 'semana') {
+        handoff.put('dash-act', 'semana');
+        appNav.goTo('dashboard');
+        return 'close';
+      }
       return elsewhereAnswer('Ese módulo está en el Dashboard.', 'ir-dashboard');
     case 'ayuda':
       // Lo que no se entiende se recuerda (solo en este móvil) para ver dónde falla; se lee desde «Cuenta y datos».

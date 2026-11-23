@@ -136,3 +136,19 @@ describe('lo que el atleta pone en cada hueco', () => {
     expect(loadTilePrefs(storage)).toEqual({ slots: ['faltar', 'acortar', null, null, null, null] });
   });
 });
+
+describe('«Revisar mi semana»', () => {
+  it('es una tesela de la biblioteca y la caja de Rex la lleva al módulo de la semana', () => {
+    const t = GLOBAL_TILES.find((g) => g.id === 'mi-semana');
+    expect(t).toBeDefined();
+    expect(parseAsk(t!.ask!, 3)).toEqual({ kind: 'modulo', target: 'semana' });
+  });
+
+  it('sube a la vista solo con una revisión pendiente y, si no, queda en la biblioteca', () => {
+    const base = { screen: 'dashboard' as const, hour: 9, session: 'pending' as const };
+    expect(scoreTile('mi-semana', { ...base, weekReview: true })).toBeGreaterThan(scoreTile('mi-semana', base) + 30);
+    const ids = GLOBAL_TILES.map((g) => g.id);
+    expect(rankTiles(ids, { ...base, weekReview: true }, EMPTY_PREFS).shown).toContain('mi-semana');
+    expect(rankTiles(ids, base, EMPTY_PREFS).shown).not.toContain('mi-semana');
+  });
+});

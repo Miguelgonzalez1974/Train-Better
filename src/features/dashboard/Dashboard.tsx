@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
@@ -411,11 +411,18 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   }
   /** La semana que «Tu semana» abre: la pendiente (lunes a miércoles) o, si no, la última completa. */
   const reviewable = weeklyReview ?? anytimeReview;
+  // «Revisar mi semana» tocada desde otra pantalla: se llega aquí y se abre la revisión en cuanto está calculada.
+  const wantsWeek = useRef(handoff.peek('dash-act') === 'semana');
+  useEffect(() => {
+    if (wantsWeek.current && reviewable) {
+      wantsWeek.current = false;
+      setShowWeekly(reviewable);
+    }
+  }, [reviewable]);
   const rexBadges: Partial<Record<RexTarget, string>> = {
     ...(yearConsistency.pct !== null ? { constancia: `${yearConsistency.pct} %` } : {}),
     ...(goalRows.length > 0 ? { objetivos: String(goalRows.length) } : {}),
     ...(nutritionPercent !== null ? { nutricion: `${nutritionPercent} %` } : {}),
-    ...(reviewable ? { semana: `${reviewable.sessions.done} de ${reviewable.sessions.planned}` } : {}),
     ...(weeklyMobilityMinutes(profile, todayIso) > 0 ? { movilidad: `${weeklyMobilityMinutes(profile, todayIso)} min` } : {}),
   };
   // Un punto en «Más» (y en el módulo) cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
@@ -546,6 +553,10 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           return { lead: prep.lead, tone, text: `${shown.readiness.total !== null ? `Preparación ${shown.readiness.total} sobre 100. ` : ''}${effort.text}`, actions: [{ label: 'Ver la preparación', target: 'preparacion' }] };
         },
         modulo: (intent) => {
+          // «Revisar mi semana» sin ninguna semana con sesiones que repasar: se dice, en vez de no hacer nada.
+          if (intent.target === 'semana' && !reviewable) {
+            return { lead: 'Aún no hay una semana que repasar.', tone: 'info', text: 'En cuanto tengas una semana con sesiones hechas, te la cuento aquí: cifras, lo mejor, lo que vigilar y cómo sigue el plan.', actions: [] };
+          }
           runRexTarget(intent.target);
           return 'close';
         },
@@ -564,6 +575,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           session: todayStrain !== null ? 'done' : todaySession === null ? 'none' : todaySession.isRestDay ? 'rest' : athleteRepository.getWorkLog().some((e) => e.date === todayIso) ? 'in-progress' : 'pending',
           tired: advice.tone === 'mid' || advice.tone === 'bad',
           pain: (profile.painFlags ?? []).length > 0,
+          weekReview: Boolean(weeklyReview),
         }}
         ask={askRex}
         hints={REX_HINTS.dashboard}
@@ -573,7 +585,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
         badges={rexBadges}
         dots={rexDots}
-        hide={reviewable ? [] : ['semana']}
         extra={<ThemeToggle label className="!h-auto !w-full justify-start gap-2 px-3 py-2" />}
         onAction={runRexTarget}
         onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
