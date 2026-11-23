@@ -28,11 +28,10 @@ describe('Rex en Planificación: poco tiempo hoy (lo que dijiste de tu día de l
     expect(parseAsk(s!.actions[0].ask!, 4).kind).toBe('adaptar');
   });
 
-  it('no sale si cabe (con un margen), si no se puede empezar o si la sesión ya está en marcha', () => {
+  it('no sale si cabe (con un margen) o si no se puede anotar', () => {
     expect(planTimeSuggestion({ canStart: true, timeNote: { ...note, sessionMinutes: 50 } })).toBeNull();
     expect(planTimeSuggestion({ canStart: true, timeNote: { ...note, sessionMinutes: 51 } })).not.toBeNull(); // pasa del margen de 5 min
     expect(planTimeSuggestion({ canStart: false, timeNote: note })).toBeNull();
-    expect(planTimeSuggestion({ canStart: true, inProgress: { sets: 3 }, timeNote: note })).toBeNull();
     expect(planTimeSuggestion({ canStart: true, timeNote: null })).toBeNull();
   });
 
@@ -79,41 +78,21 @@ describe('Rex en Planificación: la frase del estado del día', () => {
     expect(planStateSuggestion(mk({ emphasis: 'x'.repeat(120) }))!.text).not.toContain('xxxx');
   });
 
-  it('empezar es el botón principal, y detrás va el porqué; los cambios viven en RexLab', () => {
+  it('«He acabado la sesión» es el botón principal (se entrena sin el móvil y se anota al acabar), y detrás va el porqué', () => {
     expect(planStateSuggestion(mk({ canStart: true }))!.actions).toEqual([
-      { label: 'Empezar sesión', target: 'plan-empezar' },
-      { label: 'Anotar lo que hice', target: 'plan-anotar' },
+      { label: 'He acabado la sesión', target: 'plan-anotar' },
       { label: 'Por qué', target: 'plan-detalle' },
     ]);
-    // Sin poder empezar (sesión propia, por ejemplo) no se ofrece.
+    // Sin poder anotar (sesión propia, por ejemplo) no se ofrece.
     expect(planStateSuggestion(mk({ canStart: false }))!.actions.map((a) => a.target)).toEqual(['plan-detalle']);
     // Más dura y Me duele algo no son botones sueltos: viven en RexLab.
     expect(planStateSuggestion(mk({ canStart: true, hardness: 2, painLabels: ['Rodilla'] }))!.actions.map((a) => a.target)).not.toContain('plan-dureza');
   });
 
-  it('con series ya anotadas el botón principal es «Continuar sesión», con «Cerrar sesión» al lado, y Rex dice cuántas llevas', () => {
-    const s = planStateSuggestion(mk({ canStart: true, inProgress: { sets: 6 } }))!;
-    expect(s.actions).toEqual([
-      { label: 'Continuar sesión', target: 'plan-empezar' },
-      { label: 'Cerrar sesión', target: 'plan-cerrar' },
-      { label: 'Por qué', target: 'plan-detalle' },
-    ]);
-    expect(s.text).toBe('Día verde. Sesión en marcha: llevas 6 series anotadas. Esfuerzo previsto ~65, dentro de tu objetivo (55–75).');
-    expect(planStateSuggestion(mk({ canStart: true, inProgress: { sets: 1 } }))!.text).toContain('llevas 1 serie anotada.');
-    // Sin series anotadas (o sin poder empezar) sigue siendo «Empezar sesión» y no se ofrece cerrar.
-    expect(planStateSuggestion(mk({ canStart: true, inProgress: null }))!.actions.map((a) => a.label)).toEqual(['Empezar sesión', 'Anotar lo que hice', 'Por qué']);
-    expect(planStateSuggestion(mk({ canStart: false, inProgress: { sets: 3 } }))!.actions.map((a) => a.target)).toEqual(['plan-detalle']);
+  it('ya no hay Empezar, Continuar ni Cerrar sesión: no hay nada que empezar en la app', () => {
+    const labels = buildPlanRexSuggestions(mk({ canStart: true })).flatMap((s) => s.actions.map((a) => a.label));
+    for (const gone of ['Empezar sesión', 'Continuar sesión', 'Cerrar sesión']) expect(labels).not.toContain(gone);
   });
-
-  it('con todas las series anotadas, Rex dice que parece que has terminado y ofrece cerrar primero', () => {
-    const s = planStateSuggestion(mk({ canStart: true, inProgress: { sets: 12 }, allSetsLogged: true }))!;
-    expect(s.actions.map((a) => a.label)).toEqual(['Cerrar sesión', 'Continuar sesión', 'Por qué']);
-    expect(s.text).toContain('Parece que has terminado');
-    expect(s.text).not.toContain('Sesión en marcha');
-    // Sin todas las series, sigue siendo «Continuar sesión» y detrás «Cerrar sesión».
-    expect(planStateSuggestion(mk({ canStart: true, inProgress: { sets: 3 }, allSetsLogged: false }))!.actions.map((a) => a.label)).toEqual(['Continuar sesión', 'Cerrar sesión', 'Por qué']);
-  });
-
   it('mientras se edita, Rex solo ofrece terminar la edición y manda sobre lo demás', () => {
     const s = planEditingSuggestion(true)!;
     expect(s).toMatchObject({ id: 'plan-editando', actions: [{ label: 'Terminar edición', target: 'plan-terminar' }], dismissible: false });

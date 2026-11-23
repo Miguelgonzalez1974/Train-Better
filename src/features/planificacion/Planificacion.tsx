@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, GalleryHorizontalEnd, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
+import { Check, CalendarClock, Timer, NotebookPen, Brain, Shuffle, Ghost as GhostIcon, HeartPulse, CalendarCheck2, Plus, Info, Trophy, Flame, SlidersHorizontal, Pencil, Frown, Plane, Dumbbell, PauseCircle, CalendarDays, Library, Bell, Undo2, FastForward } from 'lucide-react';
 import type { OlyComplex } from '../../data/complexes';
-import { buildComplexPool } from '../../engine/olyComplexes';
 import { ComplexLibrary } from './ComplexLibrary';
 import { HardnessSheet, hardnessContextOf, type HardnessApplyInfo } from './HardnessControl';
 import { DayStatusRow, PHASE_WORD } from './DayStatusRow';
@@ -16,8 +15,6 @@ import type {
   SessionBlockResult,
   SessionHistoryEntry,
   SetFeedbackEntry,
-  SetFeel,
-  SetQuality,
   StrainTarget,
   WorkSetEntry,
   WodFeel,
@@ -30,8 +27,6 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { DaySnapshot } from '../../data/athlete/localRepository';
 import { toast } from '../../lib/toast';
 import { confirmSheet } from '../../lib/confirmSheet';
-import { complexLogId } from '../../data/complexes';
-import { fmtKg } from '../../lib/format';
 import { buildWodDetail, buildWorkGoal } from '../../engine/wodMovements';
 import { getMovementById } from '../../data/movements';
 import {
@@ -53,7 +48,6 @@ import {
 } from '../../engine/generateSession';
 import { getActiveMacrocycle, toLocalIsoDate } from '../../engine/periodization';
 import { ensureWeekLocked } from './weeklyLock';
-import { allBarSetsLogged } from '../../engine/sessionProgress';
 import { MESOCYCLE_PHASE } from '../../engine/oneRepMaxTables';
 import {
   buildWodResult,
@@ -64,7 +58,7 @@ import {
   getWodScoreType,
   type WodResultForm,
 } from '../../engine/wodScoring';
-import { applySkips, sessionParts, skippedParts, type Skips } from '../../engine/sessionParts';
+import { applySkips, skippedParts, type Skips } from '../../engine/sessionParts';
 import { wodCapFor, type WodCap } from '../../engine/wodCap';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
@@ -104,11 +98,10 @@ import { CompanionRecover } from './CompanionRecover';
 import { ScreenRex } from '../dashboard/ScreenRex';
 import { orderRefusal, routeAsk, undoWeekChange } from '../dashboard/rexAskRouter';
 import { shortSessionLabel } from '../dashboard/rexMove';
-import { buildPreviewLine } from '../dashboard/DayRows';
 import { planWeekChange, type WeekPlan } from '../../lib/weekShift';
 import { dayLabel } from '../../lib/sessionMove';
 import { withRestUnmarked } from '../../engine/restDays';
-import { WhatDidModal, OtherThingModal, type OtherFormState } from './OtherActivitySheets';
+import { OtherThingModal, type OtherFormState } from './OtherActivitySheets';
 import { otherDaySession, otherKindInfo } from './otherActivity';
 import { peekUndo } from '../../lib/weekUndo';
 import { REX_HINTS } from '../dashboard/rexHints';
@@ -123,8 +116,7 @@ import { generateCompanionSession } from '../../engine/generateSession';
 import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companionLoad';
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
-import { FocusMode } from './FocusMode';
-import { TrainCards, type TrainCardsWod } from './TrainCards';
+import type { WodScaleState } from './WodScaleBox';
 import { ReviewDeck } from './ReviewDeck';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
@@ -134,7 +126,6 @@ import { applyRepeatedWod, listRepeatableWods } from '../../engine/wodRepeat';
 import { RepeatWodModal } from './RepeatWodModal';
 import { readWod, type WodReading } from '../../engine/wodRead';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
-import { CompleteSessionPanel } from './CompleteSessionPanel';
 import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -256,13 +247,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [session, setSession] = useState<DailySession | null>(() => loadTodaySession(profile, history, goals, todayIso));
 
   const [showCompletePanel, setShowCompletePanel] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
-  /** Entreno en tarjetas (a prueba): convive con el modo enfocado de siempre. */
-  const [cardsMode, setCardsMode] = useState(false);
   /** El atleta tocó Rx/escalado o la dureza en la tarjeta del WOD: al abrir el cierre no se reinician. */
   const wodDetailFromCards = useRef(false);
-  /** Cómo se abren las tarjetas: entrenando o revisando (anotar después / corregir), y por dónde. */
-  const [cardsOpts, setCardsOpts] = useState<{ mode: 'live' | 'review'; startAt: 'start' | 'end' }>({ mode: 'live', startAt: 'start' });
   /** «Hice otra cosa»: el registro rápido (solo esfuerzo y minutos) para un día en que no se hizo la sesión prevista. Lo ofrece Rex y está dentro del cierre. */
   function openQuickLog() {
     setOtherForm({ kind: 'clase', name: '', result: '', rpe: 7, minutes: otherKindInfo('clase').minutes, moveTomorrow: true });
@@ -271,7 +257,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       const wp = planWeekChange(athleteRepository.getProfile(), athleteRepository.getHistory(), { kind: 'desplazar', from: todayIso }, todayIso, shortSessionLabel);
       setOtherMove(typeof wp === 'object' ? wp : null);
     } else setOtherMove(null);
-    setShowWhatDid(false);
     setShowQuickLog(true);
   }
   /** «He acabado la sesión»: el mazo de tarjetas para anotar lo hecho al terminar (una por parte, con los pesos de cada serie y el cierre al final). */
@@ -279,20 +264,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   /** Guarda las series que hay en pantalla en el mazo de anotar; se llama justo antes de registrar la sesión. */
   const reviewCommit = useRef<(() => void) | null>(null);
   function openReview() {
-    setCardsMode(false);
     setReviewMode(true);
     // El cierre (minutos, resultado del WOD…) arranca ya: con los minutos de una corrección si venían de ahí.
     setTestedLoadKg(testDayBlock?.loadKg ?? 0);
     setShowCompletePanel(true);
-  }
-  function openCards(mode: 'live' | 'review', startAt: 'start' | 'end' = 'start') {
-    setReviewMode(false);
-    setCardsOpts({ mode, startAt });
-    setCardsMode(true);
-  }
-  /** Empezar o continuar la sesión: las tarjetas, entrenando. */
-  function startTraining() {
-    openCards('live', 'start');
   }
   /** Una corrección en curso («Ver y corregir»): cómo estaba el día antes de quitar el registro, para devolverlo si se cancela. */
   const correctionRef = useRef<{ snapshot: DaySnapshot; sessionBefore: DailySession } | null>(null);
@@ -345,7 +320,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [painDurationDraft, setPainDurationDraft] = useState<PainDuration>('semanas');
   const [showQuickLog, setShowQuickLog] = useState(false);
   /** «Anotar lo que hice»: la pregunta (¿la prevista o otra cosa?) y el registro corto de otra cosa. */
-  const [showWhatDid, setShowWhatDid] = useState(false);
   const [otherForm, setOtherForm] = useState<OtherFormState>({ kind: 'clase', name: '', result: '', rpe: 7, minutes: 60, moveTomorrow: true });
   /** Lo que cambiaría en la semana si la sesión prevista pasa a mañana (se calcula al abrir el registro, una vez). */
   const [otherMove, setOtherMove] = useState<WeekPlan | null>(null);
@@ -401,7 +375,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     [profile.prs, profile.variantPrs, profile.prLog, workLog],
   );
   // La librería de complejos (fábrica + propios, favoritos y ocultos) y la semana del bloque de hoy (la 2 si hoy no cae en un bloque).
-  const complexPool = useMemo(() => buildComplexPool(profile.customComplexes, profile.complexPrefs), [profile.customComplexes, profile.complexPrefs]);
   const complexWeek: 1 | 2 | 3 | 4 = session && session.mesocycleWeek >= 1 && session.mesocycleWeek <= 4 ? (session.mesocycleWeek as 1 | 2 | 3 | 4) : 2;
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
   // Los WODs que ya hiciste y se pueden repetir (para correr contra tu marca); solo se calcula con el selector abierto.
@@ -534,7 +507,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setProfile(athleteRepository.getProfile());
     return true;
   }
-  const doneParts = useMemo(() => (session ? sessionParts(session) : []), [session]);
   const testDayBlock = useMemo(() => (session ? getTestDayBlock(session) : undefined), [session]);
   const testDayMovement = testDayBlock ? getMovementById(testDayBlock.movementId) : undefined;
   // Referencia para el cierre de sesión: lo que el coach calculó, a múltiplos de 5 y sin salirse de lo razonable.
@@ -601,13 +573,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         ];
       });
   }, [session, setFeedbackLog, todayWorkLog]);
-
-  /** index de bloque -> props de su check-in de RPE, para el modo enfocado (`FocusMode` sí necesita
-   * `movementName`: ahí la ficha vive en una lista de varios levantamientos, no pegada a su nombre). */
-  const setFeedbackByIndex = useMemo(
-    () => new Map(adjustableSetBlocks.map((b) => [b.index, b])),
-    [adjustableSetBlocks],
-  );
 
   /** Misma percepción de esfuerzo, recortada para `SessionBlockCard`: ahí el check-in ya vive debajo
    * de su levantamiento, así que `index`/`movementName` no hacen falta. */
@@ -681,64 +646,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
   }
 
-  /**
-   * Cómo fue la primera serie ("me sobró"… "muy duro"): se guarda como feedback del levantamiento para calibrar al coach. Si ya hay
-   * un RPE de la serie más pesada del mismo día, ese dato (más preciso) manda y no se pisa.
-   */
-  function handleFeelSet(index: number, feel: SetFeel) {
-    if (!session) return;
-    const block = session.blocks[index];
-    if (!block) return;
-    const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
-    if (existing?.actualRpe !== undefined) return;
-    const first = todayWorkLog.find((e) => e.movementId === block.movementId && e.setNumber === 1);
-    const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
-    const prescribedSets = existing?.prescribedSets ?? block.sets ?? 0;
-    const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
-    if (prescribedKg <= 0 || prescribedSets < 2) return;
-    const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
-    athleteRepository.appendSetFeedbackEntry({
-      date: session.date,
-      movementId: block.movementId,
-      block: block.block as 'strength' | 'oly',
-      prescribedKg,
-      prescribedReps,
-      prescribedSets,
-      feel,
-      prKey,
-      pctOf1rm,
-      ...(first ? { actualKg: first.kg, actualReps: first.reps } : {}),
-    });
-    setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
-  }
-
-  function handleLogWorkSet(movementId: string, block: 'strength' | 'oly', setNumber: number, kg: number, reps: number, quality?: SetQuality, asPlanned?: boolean) {
-    if (!session) return;
-    athleteRepository.saveWorkSet({ date: session.date, movementId, block, setNumber, kg, reps, ...(quality ? { quality } : {}), ...(asPlanned ? { asPlanned: true } : {}) });
-    setWorkLog(athleteRepository.getWorkLog());
-    // Aviso corto: una serie tras otra se sustituyen entre sí (mismo id) en vez de apilarse.
-    const planned = session.blocks.find((b) => b.block === block && b.movementId === movementId)?.sets;
-    const name = getMovementById(movementId)?.name ?? session.blocks.find((b) => b.complex?.id && complexLogId(b.complex.id) === movementId)?.complex?.name ?? 'Serie';
-    toast.show(`Serie guardada · ${name} ${setNumber}${planned ? `/${planned}` : ''}${kg > 0 ? ` · ${fmtKg(kg)}` : ''}`, { id: 'serie', ttlMs: 2500 });
-  }
-
-  /** Cómo salió una serie ya hecha (justa, fallada) o de vuelta a bien: se guarda en la propia serie. */
-  function handleSetQuality(movementId: string, setNumber: number, quality: SetQuality | undefined) {
-    if (!session) return;
-    const entry = athleteRepository.getWorkLog().find((e) => e.date === session.date && e.movementId === movementId && e.setNumber === setNumber);
-    if (!entry) return;
-    // Tocar cómo salió la serie es medirla: deja de ser «como estaba previsto».
-    const { quality: _previous, asPlanned: _asPlanned, ...rest } = entry;
-    athleteRepository.saveWorkSet(quality ? { ...rest, quality } : rest);
-    setWorkLog(athleteRepository.getWorkLog());
-  }
-
-  function handleClearWorkSet(movementId: string, setNumber: number) {
-    if (!session) return;
-    athleteRepository.clearWorkSet(session.date, movementId, setNumber);
-    setWorkLog(athleteRepository.getWorkLog());
-  }
-
   function generateAndCache(nextProfile: AthleteProfile): DailySession {
     const next = generateSessionForDate(nextProfile, history, new Date(), nextProfile.goals);
     athleteRepository.saveCachedSession(next);
@@ -756,8 +663,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // `profile.weeklyLocks` desactualizado (un `handleSaveProfile` posterior partiria de este estado).
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
-    setFocusMode(false);
-    setCardsMode(false);
+    setReviewMode(false);
     setEditMode(false);
     setReturnRampDismissed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1068,7 +974,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // hasta el proximo guardado de perfil o recarga.
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
-    setCardsMode(false);
     setReviewMode(false);
     correctionRef.current = null;
     toast.show('Sesión registrada');
@@ -1104,7 +1009,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setHistory(athleteRepository.getHistory());
     setWorkLog(athleteRepository.getWorkLog());
     setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-    openCards('review', 'start');
+    openReview();
     toast.show('Corrigiendo tu sesión: al guardar se vuelve a registrar', { action: { label: 'Dejarlo como estaba', run: () => cancelCorrection() }, ttlMs: 8000 });
   }
 
@@ -1128,7 +1033,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setWorkLog(athleteRepository.getWorkLog());
     setProfile(athleteRepository.getProfile());
     setShowCompletePanel(false);
-    setCardsMode(false);
+    setReviewMode(false);
     toast.show('Registro devuelto');
   }
 
@@ -1170,8 +1075,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setHistory(athleteRepository.getHistory());
     setProfile(athleteRepository.getProfile());
     setShowQuickLog(false);
-    // Si se llegó desde la tarjeta de cierre, las tarjetas se cierran: el día ya está registrado.
-    setCardsMode(false);
+    // Si se llegó desde el mazo de anotar, se cierra: el día ya está registrado.
     setReviewMode(false);
     setShowCompletePanel(false);
     toast.show(moved ? 'Anotado. La sesión prevista pasa a mañana' : 'Anotado como otra cosa');
@@ -1404,27 +1308,24 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           handleRexAct('otro-wod');
           return 'close';
         },
-        // «Empieza la sesión» / «cierra la sesión»: las tarjetas, sin salir de aquí (en el cierre si se pidió cerrar).
-        empezar: () => {
-          const refused = orderRefusal('empezar', todayIso);
-          if (refused) return refused;
-          startTraining();
-          return 'close';
-        },
+        // «Empieza la sesión»: no hay nada que empezar en la app (se entrena y se anota al acabar); Rex lo dice y ofrece anotar.
+        empezar: () => orderRefusal('empezar', todayIso) ?? { lead: 'A entrenar.', tone: 'good', text: 'Entrena tranquilo, sin el móvil. Cuando acabes, dime «he terminado» o pulsa «He acabado la sesión» y lo anotamos con calma.', actions: [] },
+        // «He terminado» / «cierra la sesión»: el mazo para anotar lo hecho.
         cerrar: () => {
           const refused = orderRefusal('cerrar', todayIso);
           if (refused) return refused;
-          openCards('live', 'end');
+          if (!recoverPlannedSession()) return { lead: 'Hoy no hay sesión prevista.', tone: 'info', text: 'Hoy toca descanso o no hay una sesión que anotar. Si entrenaste algo, dime «hice otra cosa».', actions: [] };
+          openReview();
           return 'close';
         },
-        // «Anota lo que hice» y «hice otra cosa»: la pregunta de qué hiciste y el registro corto, sin salir de aquí.
+        // «Anota lo que hice» y «hice otra cosa»: el mazo para anotar y el registro corto, sin salir de aquí.
         anotar: () => {
           const refused = orderRefusal('anotar', todayIso);
           if (refused) return refused;
           if (!recoverPlannedSession()) {
             return { lead: 'Hoy no hay sesión prevista.', tone: 'info', text: 'Hoy toca descanso o no hay una sesión que anotar. Si entrenaste algo, dime «hice otra cosa».', actions: [] };
           }
-          setShowWhatDid(true);
+          openReview();
           return 'close';
         },
         'otra-cosa': () => {
@@ -1461,7 +1362,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           {
             title: 'Cambiar la sesión de hoy',
             items: [
-              { id: 'modo-enfocado', label: 'Entreno de siempre', hint: 'una parte por pantalla', icon: GalleryHorizontalEnd, onClick: () => setFocusMode(true) },
               ...(hasWodBlock ? [{ id: 'otro-wod', label: 'Otro WOD', icon: Shuffle, onClick: () => handleRexAct('otro-wod') }] : []),
               ...(hasWodBlock ? [{ id: 'wod-fantasma', label: 'Repetir WOD fantasma', hint: 'correr contra tu marca de entonces', icon: GhostIcon, onClick: () => setShowRepeat(true) }] : []),
               ...(canHarder ? [{ id: 'mas-dura', label: 'Más dura', hint: '+1 / +2', icon: Flame, onClick: () => handleRexAct('dureza') }] : []),
@@ -1500,7 +1400,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       items: [
         { id: 'complejos', label: 'Librería de complejos', icon: Library, onClick: () => handleRexAct('complejos') },
         ...(noticeSummary.count > 0 ? [{ id: 'avisos', label: 'Avisos del coach', hint: String(noticeSummary.count), icon: Bell, onClick: () => handleRexAct('avisos') }] : []),
-        ...(alreadyCompletedToday ? [{ id: 'corregir', label: 'Ver y corregir', hint: 'las tarjetas con lo anotado', icon: Pencil, onClick: () => handleCorrectDay() }] : []),
+        ...(alreadyCompletedToday ? [{ id: 'corregir', label: 'Ver y corregir', hint: 'con lo anotado', icon: Pencil, onClick: () => handleCorrectDay() }] : []),
         ...(alreadyCompletedToday ? [{ id: 'deshacer-registro', label: 'Deshacer el registro', icon: Undo2, onClick: () => handleRexAct('deshacer') }] : []),
       ],
     },
@@ -1511,15 +1411,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const dashboardAct = useRef<string | null>(handoff.peek('plan-act'));
   useEffect(() => {
     const node = handoff.take('support-start');
-    const pending = ['continuar', 'cerrar', 'anotar', 'otra-cosa'].includes(dashboardAct.current ?? '') ? dashboardAct.current : null;
+    const pending = ['cerrar', 'anotar', 'otra-cosa'].includes(dashboardAct.current ?? '') ? dashboardAct.current : null;
     const act = handoff.take('plan-act') ?? pending;
     const canOpen = Boolean(session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday);
     if (node) openSupport(node);
-    // «Continuar sesión» y «Cerrar sesión» desde el Dashboard: se abren las tarjetas, donde estaban las series anotadas (la segunda, en el cierre).
-    else if (act === 'continuar' && canOpen) startTraining();
-    else if (act === 'cerrar' && canOpen) openCards('live', 'end');
+    // «He acabado la sesión» (o «anotar») desde el Dashboard o Rex: el mazo para anotar lo hecho.
+    else if (act === 'cerrar' && canOpen) openReview();
     else if (act === 'anotar' && !alreadyCompletedToday) {
-      if (recoverPlannedSession()) setShowWhatDid(true);
+      if (recoverPlannedSession()) openReview();
       else openQuickLog();
     }
     else if (act === 'otra-cosa' && session && !alreadyCompletedToday) openQuickLog();
@@ -1535,8 +1434,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const todayTimeNote = timeLimitFor(profile.rexNotes, todayWeekday);
   const rexList = buildPlanRexSuggestions({
     canStart: Boolean(session && !alreadyCompletedToday && session.source !== 'custom' && session.blocks.length > 0 && !session.isRestDay),
-    inProgress: !alreadyCompletedToday && todayWorkLog.length > 0 ? { sets: todayWorkLog.length } : null,
-    allSetsLogged: Boolean(session && !alreadyCompletedToday && allBarSetsLogged(session.blocks, todayWorkLog)),
     editing: editMode && Boolean(session && !session.isRestDay),
     restDay: Boolean(session?.isRestDay && !session.competition?.eventDay),
     completed: completedInfo,
@@ -1574,62 +1471,13 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       appNav.goTo('dashboard');
     }
     else if (target === 'plan-cambiar') setShowRex(true);
-    else if (target === 'plan-empezar') startTraining();
     else if (target === 'plan-anotar') {
-      if (recoverPlannedSession()) setShowWhatDid(true);
+      if (recoverPlannedSession()) openReview();
       else openQuickLog();
     }
     else if (target === 'plan-corregir') handleCorrectDay();
-    else if (target === 'plan-cerrar') openCards('live', 'end');
     else if (target === 'plan-terminar') setEditMode(false);
     else if (target === 'plan-programa') document.getElementById('companion-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-  /** El cierre de la sesión (resultado del WOD, Rx/escalado, esfuerzo, minutos): va tras los bloques o, con las tarjetas, dentro de la última. */
-  function renderCompletePanel() {
-    if (!session) return null;
-    return (
-      <CompleteSessionPanel
-        wodParts={wodParts}
-        scoreTypes={wodScoreTypes}
-        targets={Object.fromEntries(
-          wodParts.map((part) => [part, session.blocks.find((b) => b.block === 'wod' && (b.wodPart ?? 1) === part && b.wodTarget)?.wodTarget?.display]),
-        )}
-        forms={wodForms}
-        parts={doneParts}
-        skips={skips}
-        onSkipsChange={setSkips}
-        clockParts={clockParts}
-        ghostSummaries={ghostSummaries}
-        wodReadings={wodReadings}
-        onWorkMovement={createWorkGoal}
-        capSeconds={{ 1: wodCaps[1]?.kind === 'cap' ? wodCaps[1].seconds : undefined, 2: wodCaps[2]?.kind === 'cap' ? wodCaps[2].seconds : undefined }}
-        onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}
-        test={testDayBlock && testDayMovement ? { movementName: testDayMovement.name, loadKg: testedLoadKg, onChange: setTestedLoadKg } : undefined}
-        wodMovements={wodMovements}
-        scaling={wodScaling}
-        onScaling={(next) => {
-          setWodScaling(next);
-          // Escalar un movimiento es escalar el WOD; quitarlos todos no vuelve a Rx solo (el interruptor lo decide).
-          if (next.length > 0) setRxOrScaled('scaled');
-        }}
-        feel={wodFeel}
-        onFeel={setWodFeel}
-        rxOrScaled={rxOrScaled}
-        onRxOrScaled={setRxOrScaled}
-        rpe={rpe}
-        onRpe={setRpe}
-        durationMin={durationMin}
-        onDuration={setDurationMin}
-        estimatedMin={estimatedMin}
-        // «Anotar de golpe»: las series de la pantalla se guardan justo antes de registrar la sesión (el registro y la progresión las leen del almacén).
-        onConfirm={() => {
-          handleConfirmComplete();
-        }}
-        onCancel={() => {
-          setShowCompletePanel(false);
-        }}
-      />
-    );
   }
   /** Los cambios directos de la sesión que Rex ofrece en «¿Cambiar algo?»: otro WOD, el selector de tipo o la hoja de dureza. */
   function handleRexAct(action: SupportAction) {
@@ -1644,7 +1492,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }
 
   /** Lo del WOD que se anota en las tarjetas (Rx o escalado por movimiento y dureza): el mismo estado que el cierre. Lo usan las tarjetas y el mazo de anotar. */
-  const cardsWod: TrainCardsWod | undefined =
+  const cardsWod: WodScaleState | undefined =
     wodMovements.length > 0
       ? {
           movements: wodMovements,
@@ -1675,30 +1523,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         <CoachReasonsList reasons={session?.coachReasons ?? []} />
       </Modal>
       {session && !session.isRestDay && <TrainingTimer caps={wodCaps} track={trackConfigs} />}
-      {focusMode && session && !session.isRestDay && (
-        <FocusMode
-          session={session}
-          setFeedbackByIndex={setFeedbackByIndex}
-          onRateSet={handleRateSet}
-          todayWorkLog={todayWorkLog}
-          progress={movementProgress}
-          onLogWorkSet={handleLogWorkSet}
-          onSetQuality={handleSetQuality}
-          onClearWorkSet={handleClearWorkSet}
-          canRaise={session.dayLight?.color !== 'ambar' && activePainFlags.length === 0}
-          onFeel={handleFeelSet}
-          painFlags={activePainFlags}
-          onSwap={handleUpdateEntry}
-          complexPool={complexPool}
-          complexWeek={complexWeek}
-          onExit={() => setFocusMode(false)}
-          // Al acabar el último bloque se cierra en el único sitio donde se cierra: la última tarjeta.
-          onFinish={() => {
-            setFocusMode(false);
-            openCards('live', 'end');
-          }}
-        />
-      )}
       {reviewMode && session && !session.isRestDay && !alreadyCompletedToday && (
         <ReviewDeck
           session={session}
@@ -1736,53 +1560,15 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             setWorkLog(athleteRepository.getWorkLog());
             handleConfirmComplete();
           }}
+          // Salir de una corrección sin guardar devuelve el registro tal como estaba.
           onExit={() => {
+            if (correctionRef.current) cancelCorrection();
             setReviewMode(false);
             setShowCompletePanel(false);
           }}
           onOtherThing={openQuickLog}
         />
-      )}      {cardsMode && session && !session.isRestDay && (
-        <TrainCards
-          session={session}
-          setFeedbackByIndex={setFeedbackByIndex}
-          onRateSet={handleRateSet}
-          todayWorkLog={todayWorkLog}
-          progress={movementProgress}
-          onLogWorkSet={handleLogWorkSet}
-          onSetQuality={handleSetQuality}
-          onClearWorkSet={handleClearWorkSet}
-          canRaise={session.dayLight?.color !== 'ambar' && activePainFlags.length === 0}
-          onFeel={handleFeelSet}
-          painFlags={activePainFlags}
-          onSwap={handleUpdateEntry}
-          complexPool={complexPool}
-          complexWeek={complexWeek}
-          // Salir de una corrección sin guardar devuelve el registro tal como estaba; entrenando, las series ya están guardadas.
-          onExit={() => {
-            if (correctionRef.current) cancelCorrection();
-            else {
-              setCardsMode(false);
-              // El cierre solo vive dentro de la última tarjeta: al salir se cierra, y se vuelve a abrir al llegar otra vez al final.
-              setShowCompletePanel(false);
-            }
-          }}
-          mode={cardsOpts.mode}
-          startAt={cardsOpts.startAt}
-          closePanel={showCompletePanel && !alreadyCompletedToday ? renderCompletePanel() : null}
-          onReachClose={() => {
-            if (alreadyCompletedToday || showCompletePanel) return;
-            setTestedLoadKg(testDayBlock?.loadKg ?? 0);
-            setShowCompletePanel(true);
-          }}
-          onPain={() => openSupport('p_zone')}
-          wod={cardsWod}
-          onOtherThing={openQuickLog}
-          // Con el cierre integrado (`onReachClose`) la última tarjeta no termina por aquí: el cierre se guarda dentro de ella.
-          onFinish={() => openCards('live', 'end')}
-        />
-      )}
-      {showComplexes && (
+      )}      {showComplexes && (
         <ComplexLibrary profile={profile} workLog={workLog} week={complexWeek} onSave={handleSaveComplexes} onClose={() => setShowComplexes(false)} />
       )}
 
@@ -1941,9 +1727,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           </div>
         </div>
         {/* Rex, en la esquina, cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y
-            avisa de lo que el coach tiene para ti; sus botones (Empezar sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
+            avisa de lo que el coach tiene para ti; sus botones (He acabado la sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
             Las casillas con todo el detalle quedan detrás de «Por qué». */}
-        {showRexBar && !focusMode && !cardsMode && !reviewMode && (
+        {showRexBar && !reviewMode && (
           <RexCorner
             speak
             screen="planificacion"
@@ -2139,16 +1925,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       </Modal>
 
 
-      <WhatDidModal
-        open={showWhatDid}
-        onClose={() => setShowWhatDid(false)}
-        plannedLabel={session ? buildPreviewLine(session) : ''}
-        onPlanned={() => {
-          setShowWhatDid(false);
-          openReview();
-        }}
-        onOther={openQuickLog}
-      />
 
       <OtherThingModal
         open={showQuickLog}

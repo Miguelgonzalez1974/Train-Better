@@ -353,7 +353,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     hasCheckIn: Boolean(todayReadiness),
     trainedToday: todayStrain !== null,
     hasSessionToday: todaySession !== null && !todaySession.isRestDay,
-    sessionInProgress: todaySession !== null && athleteRepository.getWorkLog().some((e) => e.date === todayIso),
     restMarked,
     canRest,
     advice: isToday && todayStrain === null ? { lead: advice.lead, reason: advice.reason, tone: advice.tone, overTarget: strainView.fit?.fit === 'se-pasa' } : null,
@@ -474,14 +473,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'carga':
         return setShowLoad(true);
       case 'planificacion':
-        return onNavigateToPlanificacion();
-      case 'planificacion-continuar':
-        // Planificación recoge esto al montarse y abre el modo enfocado.
-        handoff.put('plan-act', 'continuar');
-        return onNavigateToPlanificacion();
-      case 'planificacion-cerrar':
-        // Planificación recoge esto al montarse y abre las tarjetas en el cierre.
-        handoff.put('plan-act', 'cerrar');
         return onNavigateToPlanificacion();
       case 'hoy':
         return setDayIso(todayIso);

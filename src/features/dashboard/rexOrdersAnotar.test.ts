@@ -31,20 +31,20 @@ describe('órdenes: anotar lo que hice y otra cosa', () => {
 
 describe('teselas: anotar lo que hice y otra cosa', () => {
   it('existen, con frase que Rex entiende y icono', () => {
-    for (const id of ['anotar-sesion', 'otra-cosa']) {
+    for (const id of ['he-acabado', 'otra-cosa']) {
       const t = GLOBAL_TILES.find((g) => g.id === id);
       expect(t, id).toBeDefined();
       expect(TILE_ICONS[t!.iconKey], id).toBeDefined();
-      expect(['anotar', 'otra-cosa']).toContain(parseAsk(t!.ask!, 3).kind);
+      expect(['cerrar', 'otra-cosa']).toContain(parseAsk(t!.ask!, 3).kind);
     }
   });
 
   it('suben por la tarde con una sesión por hacer y no salen con la sesión hecha', () => {
     const base = { screen: 'planificacion' as const };
-    expect(scoreTile('anotar-sesion', { ...base, hour: 19, session: 'pending' })).toBeGreaterThan(scoreTile('anotar-sesion', { ...base, hour: 9, session: 'pending' }));
-    expect(scoreTile('anotar-sesion', { ...base, hour: 19, session: 'done' })).toBeLessThan(0);
+    expect(scoreTile('he-acabado', { ...base, hour: 19, session: 'pending' })).toBeGreaterThan(scoreTile('he-acabado', { ...base, hour: 9, session: 'pending' }));
+    expect(scoreTile('he-acabado', { ...base, hour: 19, session: 'done' })).toBeLessThan(0);
     expect(scoreTile('otra-cosa', { ...base, hour: 19, session: 'done' })).toBeLessThan(0);
     const ids = GLOBAL_TILES.map((g) => g.id);
-    expect(rankTiles(ids, { ...base, hour: 19, session: 'pending' }, { slots: [] as never }).shown).toContain('anotar-sesion');
+    expect(rankTiles(ids, { ...base, hour: 19, session: 'pending' }, { slots: [] as never }).shown).toContain('he-acabado');
   });
 });

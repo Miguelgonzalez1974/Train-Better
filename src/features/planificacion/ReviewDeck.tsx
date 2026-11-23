@@ -36,7 +36,7 @@ import { WodResultBig } from './WodResultBig';
 import { GhostSummaryCard } from './GhostSummaryCard';
 import { RexWodReading } from './RexWodReading';
 import { RPE_META } from './SessionFeelFields';
-import { WodScaleBox, type TrainCardsWod } from './TrainCards';
+import { WodScaleBox, type WodScaleState } from './WodScaleBox';
 
 /**
  * Anotar la sesión al acabar, tarjeta a tarjeta: una por cada parte del entreno, a pantalla completa y con un solo botón («Siguiente»). Cada ejercicio
@@ -126,7 +126,7 @@ export interface ReviewDeckProps {
   clockParts: (1 | 2)[];
   capSeconds: Partial<Record<1 | 2, number>>;
   targets: Partial<Record<1 | 2, string>>;
-  wod?: TrainCardsWod;
+  wod?: WodScaleState;
   ghostSummaries: Partial<Record<1 | 2, GhostSummary>>;
   wodReadings: Partial<Record<1 | 2, WodReading>>;
   onWorkMovement?: (movementId: string) => boolean;

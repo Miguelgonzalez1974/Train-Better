@@ -46,9 +46,7 @@ export interface GlobalTile {
 
 export const GLOBAL_TILES: GlobalTile[] = [
   { id: 'acortar', label: 'Acortar la sesión', hint: 'tengo poco tiempo', iconKey: 'timer', group: 'sesion', ask: 'acortar la sesion' },
-  { id: 'empezar-sesion', label: 'Empezar la sesión', hint: 'las tarjetas', iconKey: 'play', group: 'sesion', ask: 'empieza la sesion' },
-  { id: 'cerrar-sesion', label: 'Cerrar la sesión', hint: 'esfuerzo y minutos', iconKey: 'flag', group: 'sesion', ask: 'cierra la sesion' },
-  { id: 'anotar-sesion', label: 'Anotar lo que hice', hint: 'la prevista u otra cosa', iconKey: 'notebook-pen', group: 'sesion', ask: 'anota lo que hice' },
+  { id: 'he-acabado', label: 'He acabado la sesión', hint: 'anotar lo hecho', iconKey: 'flag', group: 'sesion', ask: 'he terminado' },
   { id: 'otra-cosa', label: 'Hice otra cosa', hint: 'clase, running, equipo…', iconKey: 'notebook-pen', group: 'sesion', ask: 'hice otra cosa' },
   { id: 'otro-wod', label: 'Otro WOD', iconKey: 'shuffle', group: 'sesion', ask: 'otro wod' },
   { id: 'cambiar-dia', label: 'Cambiar día', hint: 'mover o intercambiar', iconKey: 'calendar-clock', group: 'dia', ask: 'cambiar dia' },
@@ -85,9 +83,7 @@ const TILE_META: Record<string, { base: number; screens?: RexScreen[] }> = {
   'apuntar-comida': { base: 12, screens: ['nutricion'] },
   'apuntar-peso': { base: 9, screens: ['nutricion'] },
   escanear: { base: 9 },
-  'empezar-sesion': { base: 10 },
-  'cerrar-sesion': { base: 10 },
-  'anotar-sesion': { base: 10 },
+  'he-acabado': { base: 12 },
   'otra-cosa': { base: 9 },
   'que-falta': { base: 11, screens: ['nutricion'] },
   'nuevo-objetivo': { base: 10, screens: ['objetivos'] },
@@ -141,11 +137,9 @@ export function scoreTile(id: string, ctx: TileContext): number {
   if (id === 'apuntar-peso' && inWindow(ctx.hour, 5, 11)) s += 5;
   // Escanear un producto: a la hora de comer y, sobre todo, justo tras entrenar.
   if (id === 'escanear') s += (isMealTime(ctx.hour) ? 8 : 0) + (ctx.session === 'done' ? 8 : 0);
-  // Empezar y cerrar la sesión: solo cuando tocan (sin empezar / en marcha).
-  if (id === 'empezar-sesion') s += ctx.session === 'pending' ? 16 : ctx.session === 'in-progress' ? 8 : -40;
-  if (id === 'cerrar-sesion') s += ctx.session === 'in-progress' ? 30 : -40;
-  // Anotar lo que hiciste y «hice otra cosa»: con una sesión por hacer o en marcha, y más a partir de la tarde (cuando ya has entrenado sin el móvil).
-  if (id === 'anotar-sesion') s += training ? (ctx.hour >= 17 ? 16 : 4) : -40;
+  // He acabado la sesión: con una sesión por hacer, y más a partir de la tarde (cuando ya has entrenado sin el móvil).
+  if (id === 'he-acabado') s += training ? (ctx.hour >= 17 ? 20 : 6) : -40;
+  // «Hice otra cosa»: con una sesión por hacer, y más a partir de la tarde.
   if (id === 'otra-cosa') s += training ? (ctx.hour >= 17 ? 12 : 3) : ctx.session === 'rest' ? 2 : -40;
   if ((id === 'corregir' || id === 'deshacer-registro') && ctx.session !== 'done') s -= 30;
   if (id === 'corregir' && ctx.session === 'done') s += 12;

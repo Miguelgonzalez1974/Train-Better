@@ -217,14 +217,16 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
       api.onWeekChanged?.();
       return mealSavedAnswer(proposal.totals, missing);
     }
+    // «Empieza la sesión»: no hay nada que empezar en la app (se entrena y se anota al acabar).
     case 'empezar':
+      return orderRefusal('empezar', api.todayIso) ?? { lead: 'A entrenar.', tone: 'good', text: 'Entrena tranquilo, sin el móvil. Cuando acabes, dime «he terminado» y lo anotamos con calma.', actions: [] };
     case 'cerrar':
     case 'anotar':
     case 'otra-cosa': {
       const refused = orderRefusal(intent.kind, api.todayIso);
       if (refused) return refused;
       // Planificación recoge esto al montarse: abre el entreno (en el cierre si se pidió cerrar), la pregunta de qué hiciste o el registro de otra cosa.
-      handoff.put('plan-act', intent.kind === 'cerrar' ? 'cerrar' : intent.kind === 'empezar' ? 'continuar' : intent.kind);
+      handoff.put('plan-act', intent.kind);
       appNav.goTo('planificacion');
       return 'close';
     }
