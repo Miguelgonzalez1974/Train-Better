@@ -3,7 +3,8 @@ import { confirmSheet } from '../../lib/confirmSheet';
 import { Check, ChevronDown, RotateCcw, X } from 'lucide-react';
 import type { AthleteProfile } from '../../data/athlete/types';
 import { toLocalIsoDate } from '../../engine/periodization';
-import { RexMascot, type RexMood } from './RexMascot';
+import { RexMascot } from './RexMascot';
+import { RexBubble, RexChatLog, RexChoices, RexTyping, useRexChat } from '../shell/rexChat';
 import { shortDate } from './openItems';
 import { applyPlan, commitItems, getNode, reviewNotes, type CommitKind, type FlowState, type PlanItem, type RexNode, type RexOption } from './rexFlow';
 
@@ -12,8 +13,6 @@ interface Msg {
   from: 'rex' | 'me';
   text: string;
 }
-
-const TYPING_MS = 650;
 
 /**
  * Rex, el asistente guiado: pregunta con botones y va montando "tu plan" (objetivos, macrociclos, programas de fuerza, rampas o una
@@ -36,13 +35,10 @@ export function RexAssistant({
 }) {
   const todayIso = useMemo(() => toLocalIsoDate(new Date()), []);
   const ctx = useMemo(() => ({ profile, todayIso }), [profile, todayIso]);
-  const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
-
-  const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [typing, setTyping] = useState(false);
-  const [mood, setMood] = useState<RexMood>('idle');
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [phase, setPhase] = useState<'chat' | 'review' | 'done'>('chat');
+  const chat = useRexChat<Msg>({ typingMs: 650, makeText: (from, text) => ({ from, text }), scrollWhen: [nodeId, phase] });
+  const { items: msgs, typing, mood, setMood, setTyping, setItems: setMsgs, tokenRef, reduced, endRef } = chat;
   const [plan, setPlan] = useState<PlanItem[]>([]);
   const [depth, setDepth] = useState(0);
   const [dateValue, setDateValue] = useState('');
@@ -53,33 +49,14 @@ export function RexAssistant({
 
   const stateRef = useRef<FlowState>({});
   const planRef = useRef<PlanItem[]>([]);
-  const tokenRef = useRef(0);
-  const idRef = useRef(0);
-  const endRef = useRef<HTMLDivElement>(null);
-
   const setPlanBoth = (next: PlanItem[]) => {
     planRef.current = next;
     setPlan(next);
   };
-  const push = (from: Msg['from'], text: string) => setMsgs((prev) => [...prev, { id: ++idRef.current, from, text }]);
+  const push = chat.tell;
 
-  /** Rex "escribe" un mensaje y, al terminar, hace lo siguiente. Un reinicio cancela lo que estuviera en marcha. */
-  function say(text: string, then: () => void, after: RexMood = 'idle') {
-    const my = tokenRef.current;
-    setNodeId(null);
-    setTyping(true);
-    setMood('think');
-    window.setTimeout(
-      () => {
-        if (my !== tokenRef.current) return;
-        setTyping(false);
-        push('rex', text);
-        setMood(after);
-        then();
-      },
-      reduced ? 0 : TYPING_MS,
-    );
-  }
+  /** Rex "escribe" un mensaje y, al terminar, hace lo siguiente; al empezar se quitan los botones de la pregunta anterior. Un reinicio cancela lo que estuviera en marcha. */
+  const say = (text: string, then: () => void, after?: Parameters<typeof chat.say>[2]) => chat.say(text, then, after, () => setNodeId(null));
 
   function ask(id: string) {
     const node = getNode(id, stateRef.current, ctx, planRef.current);
@@ -188,9 +165,6 @@ export function RexAssistant({
 
   useEffect(() => {
     ask(startAt ?? 'start');
-    return () => {
-      tokenRef.current += 1;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -200,10 +174,6 @@ export function RexAssistant({
   }, [plan.length, phase]);
 
   useEffect(() => () => onDirtyChange?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
-  }, [msgs.length, typing, nodeId, phase, reduced]);
 
   const node = nodeId ? getNode(nodeId, stateRef.current, ctx, plan) : null;
   const notes = phase === 'review' ? reviewNotes(plan, profile, todayIso) : [];
@@ -244,39 +214,14 @@ export function RexAssistant({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2.5" role="log" aria-live="polite" aria-label="Conversación con Rex">
+      <RexChatLog label="Conversación con Rex" endRef={endRef}>
         {msgs.map((m) => (
-          <div
-            key={m.id}
-            className={`max-w-[88%] animate-section-in rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed motion-reduce:animate-none ${
-              m.from === 'rex' ? 'self-start rounded-bl-md bg-white/[0.06] text-neutral-100' : 'self-end rounded-br-md bg-brand-gold/15 text-brand-gold'
-            }`}
-          >
-            {m.text}
-          </div>
+          <RexBubble key={m.id} from={m.from} text={m.text} />
         ))}
 
-        {typing && (
-          <div className="flex w-14 items-center justify-center gap-1 self-start rounded-2xl rounded-bl-md bg-white/[0.06] py-3" aria-label="Rex está escribiendo">
-            {[0, 150, 300].map((d) => (
-              <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 motion-reduce:animate-none" style={{ animationDelay: `${d}ms` }} />
-            ))}
-          </div>
-        )}
+        {typing && <RexTyping />}
 
-        {node?.options && !typing && (
-          <div className="flex animate-section-in flex-wrap gap-2 motion-reduce:animate-none">
-            {node.options.map((o) => (
-              <button
-                key={o.label}
-                onClick={() => pick(o)}
-                className="rounded-full border border-brand-border px-3.5 py-2 text-left text-sm font-semibold text-neutral-200 transition-colors duration-200 hover:border-white/30 hover:bg-white/5"
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {node?.options && !typing && <RexChoices options={node.options} onPick={pick} />}
 
         {node?.input && !typing && (
           <form
@@ -415,8 +360,7 @@ export function RexAssistant({
             Ver mis objetivos
           </button>
         )}
-        <div ref={endRef} />
-      </div>
+      </RexChatLog>
     </div>
   );
 }

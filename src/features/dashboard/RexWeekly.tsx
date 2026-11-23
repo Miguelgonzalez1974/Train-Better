@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, Trophy } from 'lucide-react';
-import { RexMascot, type RexMood } from '../objetivos/RexMascot';
+import type { RexMood } from '../objetivos/RexMascot';
+import { RexBubble, RexChatHeader, RexChatLog, RexChoices, RexTyping, useRexChat, type NewItem } from '../shell/rexChat';
 import type { ReviewMetric, ReviewTone, WeeklyReview } from './weeklyReview';
 
 type Item =
@@ -9,14 +10,11 @@ type Item =
   | { id: number; kind: 'list'; title: string; icon: 'best' | 'watch'; lines: string[] }
   | { id: number; kind: 'ok'; text: string };
 
-type NewItem = Item extends infer T ? (T extends unknown ? Omit<T, 'id'> : never) : never;
-
 interface Choice {
   label: string;
   run: () => void;
 }
 
-const TYPING_MS = 600;
 const CARD_MS = 450;
 
 const TONE_CLASS: Record<ReviewTone, string> = { good: 'text-good', warn: 'text-warn', muted: 'text-white' };
@@ -46,36 +44,15 @@ export function RexWeekly({
   onGoPlanificacion: () => void;
   onClose: () => void;
 }) {
-  const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
-  const [items, setItems] = useState<Item[]>([]);
-  const [typing, setTyping] = useState(false);
-  const [mood, setMood] = useState<RexMood>('idle');
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [finished, setFinished] = useState(false);
-  const tokenRef = useRef(0);
-  const idRef = useRef(0);
-  const endRef = useRef<HTMLDivElement>(null);
+  const chat = useRexChat<Item>({ makeText: (from, text) => ({ kind: from, text }), scrollWhen: [choices, finished] });
+  const { items, typing, mood, setMood, tokenRef, reduced, endRef, push } = chat;
 
-  const push = (item: NewItem) => setItems((prev) => [...prev, { ...item, id: ++idRef.current } as Item]);
+  /** Rex «escribe» y, al terminar, hace lo siguiente; al empezar se quitan las respuestas de la pregunta anterior. */
+  const say = (text: string, then: () => void, after: RexMood = 'idle') => chat.say(text, then, after, () => setChoices(null));
 
-  function say(text: string, then: () => void, after: RexMood = 'idle') {
-    const my = tokenRef.current;
-    setChoices(null);
-    setTyping(true);
-    setMood('think');
-    window.setTimeout(
-      () => {
-        if (my !== tokenRef.current) return;
-        setTyping(false);
-        push({ kind: 'rex', text });
-        setMood(after);
-        then();
-      },
-      reduced ? 0 : TYPING_MS,
-    );
-  }
-
-  function card(item: NewItem, then: () => void) {
+  function card(item: NewItem<Item>, then: () => void) {
     const my = tokenRef.current;
     setChoices(null);
     push(item);
@@ -216,39 +193,17 @@ export function RexWeekly({
 
   useEffect(() => {
     start();
-    return () => {
-      tokenRef.current += 1;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
-  }, [items.length, typing, choices, finished, reduced]);
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <RexMascot size={52} mood={mood} />
-        <div>
-          <p className="text-sm font-semibold text-white">Rex · revisión semanal</p>
-          <p className="text-xs text-neutral-400">Un minuto: cifras, lo mejor, lo que vigilar y, si hace falta, una propuesta.</p>
-        </div>
-      </div>
+      <RexChatHeader mood={mood} title="Rex · revisión semanal" subtitle="Un minuto: cifras, lo mejor, lo que vigilar y, si hace falta, una propuesta." />
 
-      <div className="flex flex-col gap-2.5" role="log" aria-live="polite" aria-label="Revisión semanal con Rex">
+      <RexChatLog label="Revisión semanal con Rex" endRef={endRef}>
         {items.map((it) => {
           if (it.kind === 'rex' || it.kind === 'me') {
-            return (
-              <div
-                key={it.id}
-                className={`max-w-[88%] animate-section-in rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed motion-reduce:animate-none ${
-                  it.kind === 'rex' ? 'self-start rounded-bl-md bg-white/[0.06] text-neutral-100' : 'self-end rounded-br-md bg-brand-gold/15 text-brand-gold'
-                }`}
-              >
-                {it.text}
-              </div>
-            );
+            return <RexBubble key={it.id} from={it.kind} text={it.text} />;
           }
           if (it.kind === 'metrics') {
             return (
@@ -288,35 +243,16 @@ export function RexWeekly({
           );
         })}
 
-        {typing && (
-          <div className="flex w-14 items-center justify-center gap-1 self-start rounded-2xl rounded-bl-md bg-white/[0.06] py-3" aria-label="Rex está escribiendo">
-            {[0, 150, 300].map((d) => (
-              <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-400 motion-reduce:animate-none" style={{ animationDelay: `${d}ms` }} />
-            ))}
-          </div>
-        )}
+        {typing && <RexTyping />}
 
-        {choices && !typing && (
-          <div className="flex animate-section-in flex-wrap gap-2 motion-reduce:animate-none">
-            {choices.map((c) => (
-              <button
-                key={c.label}
-                onClick={c.run}
-                className="rounded-full border border-brand-border px-3.5 py-2 text-left text-sm font-semibold text-neutral-200 transition-colors duration-200 hover:border-white/30 hover:bg-white/5"
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {choices && !typing && <RexChoices options={choices} onPick={(c) => c.run()} />}
 
         {finished && (
           <button onClick={onClose} className="self-start rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark">
             Cerrar
           </button>
         )}
-        <div ref={endRef} />
-      </div>
+      </RexChatLog>
     </div>
   );
 }
