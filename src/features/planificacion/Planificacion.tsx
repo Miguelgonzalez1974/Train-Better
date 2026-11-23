@@ -117,6 +117,7 @@ import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companion
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import type { WodScaleState } from './WodScaleBox';
+import { buildComplexPool } from '../../engine/olyComplexes';
 import { ReviewDeck } from './ReviewDeck';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
@@ -375,6 +376,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     [profile.prs, profile.variantPrs, profile.prLog, workLog],
   );
   // La librería de complejos (fábrica + propios, favoritos y ocultos) y la semana del bloque de hoy (la 2 si hoy no cae en un bloque).
+  const complexPool = useMemo(() => buildComplexPool(profile.customComplexes, profile.complexPrefs), [profile.customComplexes, profile.complexPrefs]);
   const complexWeek: 1 | 2 | 3 | 4 = session && session.mesocycleWeek >= 1 && session.mesocycleWeek <= 4 ? (session.mesocycleWeek as 1 | 2 | 3 | 4) : 2;
   const hasWodBlock = useMemo(() => Boolean(session?.blocks.some((b) => b.block === 'wod')), [session]);
   // Los WODs que ya hiciste y se pueden repetir (para correr contra tu marca); solo se calcula con el selector abierto.
@@ -1537,6 +1539,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             })
           }
           commitRef={reviewCommit}
+          swap={{ ctx: { prs: profile.prs, variantPrs: profile.variantPrs, painFlags: activePainFlags, todayIso: session.date }, complexPool, complexWeek, prs: profile.prs, variantPrs: profile.variantPrs, onSwap: handleUpdateEntry }}
           rpeToday={Object.fromEntries(setFeedbackLog.filter((e) => e.date === session.date && e.actualRpe !== undefined).map((e) => [e.movementId, e.actualRpe as number]))}
           onRateLift={saveLiftRpe}
           scoreTypes={wodScoreTypes}

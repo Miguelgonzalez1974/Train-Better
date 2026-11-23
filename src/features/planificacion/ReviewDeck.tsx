@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { X, Minus, Plus, Flame, Dumbbell, Timer, Activity, CircleDot, ArrowRight, NotebookPen } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession, SessionBlockResult, WodScoreType, WorkSetEntry } from '../../data/athlete/types';
+import type { DailySession, PersonalRecords, SessionBlockResult, VariantPersonalRecords, WodScoreType, WorkSetEntry } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import { localizeWodText } from '../../engine/wodUnits';
@@ -37,6 +37,10 @@ import { GhostSummaryCard } from './GhostSummaryCard';
 import { RexWodReading } from './RexWodReading';
 import { RPE_META } from './SessionFeelFields';
 import { WodScaleBox, type WodScaleState } from './WodScaleBox';
+import { SwapButton } from './SwapMovement';
+import { ComplexSwapButton } from './ComplexSwap';
+import type { SwapContext } from '../../engine/movementSwap';
+import type { ComplexPool } from '../../engine/olyComplexes';
 
 /**
  * Anotar la sesión al acabar, tarjeta a tarjeta: una por cada parte del entreno, a pantalla completa y con un solo botón («Siguiente»). Cada ejercicio
@@ -73,7 +77,7 @@ type Indexed = { entry: SessionBlockResult; index: number };
 type Card =
   | { kind: 'start'; key: string }
   | { kind: 'list'; key: string; block: Block; entries: Indexed[] }
-  | { kind: 'lift'; key: string; block: 'strength' | 'oly'; entry: SessionBlockResult; plan: LiftPlan; ordinal: number; total: number }
+  | { kind: 'lift'; key: string; block: 'strength' | 'oly'; entry: SessionBlockResult; index: number; plan: LiftPlan; ordinal: number; total: number }
   | { kind: 'wod'; key: string; part: 1 | 2; entries: Indexed[] }
   | { kind: 'end'; key: string };
 
@@ -109,6 +113,16 @@ function Round({ onClick, label, children, size = 52 }: { onClick: () => void; l
   );
 }
 
+/** Lo que hace falta para cambiar un ejercicio ya hecho («hice otro distinto del previsto»): el mismo cambio de movimiento que en la edición de la sesión. */
+export interface ReviewSwap {
+  ctx: SwapContext;
+  complexPool: ComplexPool;
+  complexWeek: 1 | 2 | 3 | 4;
+  prs: PersonalRecords;
+  variantPrs?: VariantPersonalRecords;
+  onSwap: (index: number, patch: Partial<SessionBlockResult>) => void;
+}
+
 export interface ReviewDeckProps {
   session: DailySession;
   todayWorkLog: WorkSetEntry[];
@@ -130,6 +144,8 @@ export interface ReviewDeckProps {
   ghostSummaries: Partial<Record<1 | 2, GhostSummary>>;
   wodReadings: Partial<Record<1 | 2, WodReading>>;
   onWorkMovement?: (movementId: string) => boolean;
+  /** Cambiar un ejercicio por otro (si se hizo distinto de lo previsto). */
+  swap?: ReviewSwap;
   // Cierre
   rpe: number;
   onRpe: (v: number) => void;
@@ -155,8 +171,8 @@ export function ReviewDeck(p: ReviewDeckProps) {
           out.push({ kind: 'wod', key: `wod-${g.part ?? 1}`, part: g.part ?? 1, entries: g.entries.map((entry, k) => ({ entry, index: g.indices![k] })) });
         }
       } else if (block === 'strength' || block === 'oly') {
-        const lifts = entries.map((e) => ({ entry: e.entry, plan: liftPlanOf(e.entry) })).filter((l): l is { entry: SessionBlockResult; plan: LiftPlan } => l.plan !== null);
-        lifts.forEach((l, i) => out.push({ kind: 'lift', key: `${block}-${l.plan.mid}`, block, entry: l.entry, plan: l.plan, ordinal: i + 1, total: lifts.length }));
+        const lifts = entries.map((e) => ({ entry: e.entry, index: e.index, plan: liftPlanOf(e.entry) })).filter((l): l is { entry: SessionBlockResult; index: number; plan: LiftPlan } => l.plan !== null);
+        lifts.forEach((l, i) => out.push({ kind: 'lift', key: `${block}-${l.plan.mid}`, block, entry: l.entry, index: l.index, plan: l.plan, ordinal: i + 1, total: lifts.length }));
         if (lifts.length === 0) out.push({ kind: 'list', key: `${block}-list`, block, entries: entries.filter((e) => !e.entry.subgroup) });
       } else {
         out.push({ kind: 'list', key: `${block}-list`, block, entries });
@@ -184,8 +200,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
   commitRef.current = () => {
     for (const l of lifts) {
       if (skips[l.block]) continue;
-      const edit = edits[l.plan.mid];
-      if (!edit) continue;
+      const edit = edits[l.plan.mid] ?? initialEdit(l.plan, todayWorkLog, p.rpeToday[l.entry.movementId]);
       const { write, clear } = commitOf(edit);
       for (const w of write) {
         athleteRepository.saveWorkSet({ date: session.date, movementId: l.plan.mid, block: l.plan.blk, setNumber: w.n, kg: w.kg, reps: w.reps, ...(w.quality ? { quality: w.quality } : {}), ...(w.asPlanned ? { asPlanned: true } : {}) });
@@ -312,7 +327,8 @@ export function ReviewDeck(p: ReviewDeckProps) {
   // ───────── Ejercicio de barra ─────────
   const renderLift = (c: Extract<Card, { kind: 'lift' }>, i: number) => {
     const th = THEME[c.block];
-    const edit = edits[c.plan.mid];
+    // Si se cambió el ejercicio, el nuevo parte de lo previsto para él (su peso ya viene recalculado).
+    const edit = edits[c.plan.mid] ?? initialEdit(c.plan, todayWorkLog, p.rpeToday[c.entry.movementId]);
     const rows = edit.rows;
     const straight = isStraight(c.plan);
     const hasLoad = c.plan.rows.some((r) => r.plannedKg > 0);
@@ -322,6 +338,8 @@ export function ReviewDeck(p: ReviewDeckProps) {
     const top = topIndex(rows);
     const isTopOfRamp = !straight && sel === top;
     const title = c.entry.complex?.name ?? resolveName(c.entry.movementId);
+    // Con series ya anotadas de este movimiento (una corrección) no se cambia: el registro quedaría con otro nombre.
+    const swapLocked = todayWorkLog.some((w) => w.movementId === c.plan.mid);
     const patch = (next: LiftEdit) => setEdits((prev) => ({ ...prev, [c.plan.mid]: next }));
     const bump = (delta: number) => {
       const base = markDoneThrough(edit, sel);
@@ -366,8 +384,19 @@ export function ReviewDeck(p: ReviewDeckProps) {
       <>
         {header(th.label, th.accent, Dumbbell, c.total > 1 ? `${c.ordinal} de ${c.total}` : undefined)}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3">
-          <h2 className="text-[clamp(1.5rem,8vw,1.9rem)] font-extrabold leading-tight text-white [overflow-wrap:anywhere]">{title}</h2>
-          <p className="mt-0.5 text-sm" style={{ color: soft }}>{planned}</p>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-[clamp(1.5rem,8vw,1.9rem)] font-extrabold leading-tight text-white [overflow-wrap:anywhere]">{title}</h2>
+            {p.swap &&
+              (c.entry.complex ? (
+                <ComplexSwapButton entry={c.entry} index={c.index} pool={p.swap.complexPool} week={p.swap.complexWeek} prs={p.swap.prs} variantPrs={p.swap.variantPrs} disabled={swapLocked} onSwap={p.swap.onSwap} />
+              ) : (
+                <SwapButton entry={c.entry} index={c.index} ctx={p.swap.ctx} disabled={swapLocked} onSwap={p.swap.onSwap} />
+              ))}
+          </div>
+          <p className="mt-0.5 text-sm" style={{ color: soft }}>
+            {planned}
+            {p.swap && !swapLocked && <span> · ¿Hiciste otro ejercicio? Cámbialo con la flecha</span>}
+          </p>
 
           <div className="mt-4 flex flex-col items-center gap-3" data-testid="review-sets">
             {waves ? (
