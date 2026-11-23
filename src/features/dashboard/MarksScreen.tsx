@@ -11,7 +11,7 @@ import { RexNote } from '../shell/RexNote';
 import { Term } from '../shell/Term';
 import { EvolutionChart, fmtKg } from './EvolutionChart';
 import { MarksEditor } from './MarksEditor';
-import { PR_ROWS } from './PersonalRecordsCard';
+import { PR_ROWS } from './prRows';
 import { analysisRexLine, openGoalMovements, PROPOSAL_WEEKS } from './rexAnalysis';
 import { applyMark, currentMark, MARK_LIFTS, markLiftByKey, markProposalAnswer, markSavedAnswer, type MarkKey } from './rexMarks';
 

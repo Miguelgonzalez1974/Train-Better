@@ -350,7 +350,7 @@ export function PerfilAtleta({
         <EmphasisCard profile={profile} diagnosis={diagnosis} history={history} onChange={onChange} />
         {onOpenOther && (
           <button onClick={onOpenOther} className="self-start rounded-full border border-brand-border px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-white/5">
-            Ver mi perfil (la rueda)
+            Ver mi nivel
           </button>
         )}
       </section>
@@ -465,7 +465,7 @@ export function PerfilAtleta({
       </div>
 
       <details className="rounded-2xl bg-white/[0.03] px-4 py-3" data-testid="coach-reading">
-        <summary className="cursor-pointer list-none text-[13px] font-semibold text-neutral-200">Cómo lo lee el coach para programar</summary>
+        <summary className="cursor-pointer list-none text-[13px] font-semibold text-neutral-200">Cómo lo lee el coach</summary>
         <p className="mt-2 text-xs leading-relaxed text-neutral-500">
           El coach usa estas cinco áreas (fuerza, halterofilia, motor, gimnásticos y constancia) para inclinar tus semanas. Son las proporciones entre tus levantamientos y lo que rindes frente a lo que estimó; aquí puedes decir si «cuadra» o «no cuadra».
         </p>
@@ -534,9 +534,9 @@ export function PerfilAtleta({
           );
         })}
       </div>
+      {/* La energía y los desequilibrios (los pone el Dashboard) van dentro de la misma sección: una sola lectura del coach, no tres desplegables sueltos. */}
+      {extra && <div className="mt-4">{extra}</div>}
       </details>
-
-      {extra}
 
       {onOpenOther && (
         <button onClick={onOpenOther} className="self-start rounded-full border border-brand-border px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-white/5">

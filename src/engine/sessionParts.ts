@@ -18,16 +18,6 @@ export interface SessionPart {
 /** Las partes que no se hicieron, por clave; `reason` es opcional. */
 export type Skips = Partial<Record<PartKey, { reason?: SkipReason }>>;
 
-export const SKIP_REASONS: SkipReason[] = ['molestia', 'cansancio', 'competicion', 'tiempo', 'otro'];
-
-export const SKIP_REASON_LABEL: Record<SkipReason, string> = {
-  molestia: 'Molestia',
-  cansancio: 'Cansancio',
-  competicion: 'Competición',
-  tiempo: 'Sin tiempo',
-  otro: 'Otro',
-};
-
 const BLOCK_ORDER: PartKey[] = ['strength', 'oly', 'wod1', 'wod2', 'accessory', 'skill'];
 
 function keyOf(block: DailySession['blocks'][number]): PartKey | null {

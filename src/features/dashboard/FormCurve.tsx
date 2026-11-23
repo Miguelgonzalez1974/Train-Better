@@ -45,22 +45,6 @@ const BAR_TONE: Record<FormState, string> = { ventana: GOOD, equilibrio: 'rgb(va
 const PAST_DAYS = 3;
 const FUTURE_DAYS = 10;
 
-/**
- * La insignia de la fila "Tu forma": una pequeña batería (el recuadro se llena de abajo arriba según tu energía de hoy) con el número
- * dentro, en el color de su estado. Es la misma idea que la insignia de esfuerzo de la sesión.
- */
-export function EnergyBadge({ value, tone }: { value: number; tone: string }) {
-  return (
-    <span className="relative flex h-12 w-14 shrink-0 items-end overflow-hidden rounded-xl" style={{ background: `color-mix(in srgb, ${tone} 10%, transparent)` }} aria-hidden="true">
-      <span className="absolute inset-x-0 bottom-0" style={{ height: `${Math.max(6, value)}%`, background: `color-mix(in srgb, ${tone} 36%, transparent)` }} />
-      <span className="num relative flex h-full w-full items-center justify-center text-lg font-semibold" style={{ color: tone }}>
-        {value}
-        <span className="text-[0.55em] font-medium">%</span>
-      </span>
-    </span>
-  );
-}
-
 /** La batería grande de la cabecera: se llena según la energía y cambia de color con el estado. */
 function Battery({ value, tone }: { value: number; tone: string }) {
   const fill = Math.round((92 * Math.max(4, value)) / 100);

@@ -17,7 +17,7 @@ import { buildLoadRows } from '../../engine/loadLearning';
 import { computeResponseProfile, RESPONSE_MIN_WEEKS } from '../../engine/responseProfile';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { ImbalancesCard } from './ImbalancesCard';
-import { PR_ROWS } from './PersonalRecordsCard';
+import { PR_ROWS } from './prRows';
 import { Term } from '../shell/Term';
 import { ResponseProfileCard } from './ResponseProfileCard';
 import { PerfilAtleta } from '../objetivos/PerfilAtleta';
@@ -307,7 +307,7 @@ export function AnalysisView({
         <TabButton
           active={tab === 'perfil'}
           onClick={() => setTab('perfil')}
-          label="Perfil"
+          label="Tu nivel"
           value={diagnosis.focus.length > 0 ? String(priorities) : '—'}
           hint={priorities > 0 ? (priorities === 1 ? 'prioridad' : 'prioridades') : desbalances > 0 ? `⚠ ${desbalances} ${desbalances === 1 ? 'desbalance' : 'desbalances'}` : 'sin datos'}
           hintClass={priorities > 0 ? 'text-brand-orange' : desbalances > 0 ? 'text-warn' : 'text-neutral-500'}

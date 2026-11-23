@@ -3,7 +3,7 @@ import { ChevronLeft, Dumbbell, CalendarRange, Sparkles, ClipboardList } from 'l
 import type { PersonalRecords } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { toLocalIsoDate } from '../../engine/periodization';
-import { PR_ROWS } from '../dashboard/PersonalRecordsCard';
+import { PR_ROWS } from '../dashboard/prRows';
 
 interface OnboardingWizardProps {
   /** Se llama al terminar o saltar — el padre deja de renderizar el asistente. */
