@@ -1,7 +1,6 @@
 import type { AthleteProfile, SessionHistoryEntry } from '../../data/athlete/types';
-import { withCompanionLoad } from '../../engine/companionLoad';
 import { checkPct } from '../../engine/recovery';
-import { computeReadinessScore } from '../../engine/readinessScore';
+import { readinessAt } from '../../engine/readinessAt';
 
 /**
  * Para probar el reparto de pesos de la preparación con tus propios días: cada día con check-in, tu nota ahora (media simple de la semana), la que
@@ -26,21 +25,13 @@ const isoMinus = (iso: string, days: number): string => {
 
 /** Los días con check-in de las dos últimas semanas (más reciente primero), con las dos preparaciones lado a lado. */
 export function buildPrepCompare(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string, days = 14): PrepCompareRow[] {
-  const loadHistory = withCompanionLoad(history, profile.companionLog);
   const rows: PrepCompareRow[] = [];
   for (let back = 0; back < days; back++) {
     const iso = isoMinus(todayIso, back);
     const check = (profile.readinessLog ?? []).find((c) => c.date === iso);
     if (!check) continue;
-    const input = {
-      readinessLog: profile.readinessLog,
-      hrvHistory: profile.hrvHistory,
-      history: loadHistory.filter((h) => h.date < iso),
-      setFeedbackLog: profile.setFeedbackLog,
-      painFlags: profile.painFlags,
-      today: new Date(`${iso}T12:00:00`),
-    };
-    rows.push({ iso, check: checkPct(check), now: computeReadinessScore(input).total, recency: computeReadinessScore({ ...input, recency: true }).total });
+    const date = new Date(`${iso}T12:00:00`);
+    rows.push({ iso, check: checkPct(check), now: readinessAt(profile, history, date, { before: true }).total, recency: readinessAt(profile, history, date, { before: true, recency: true }).total });
   }
   return rows;
 }

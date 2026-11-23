@@ -1,7 +1,7 @@
 import type { AthleteProfile, SessionHistoryEntry, StrainTarget } from '../data/athlete/types';
 import { computeAcwr } from './loadMetrics';
 import { resolveCompetitionDay } from './taperPlan';
-import { computeReadinessScore } from './readinessScore';
+import { loadHistoryFor, readinessAt } from './readinessAt';
 import { learnStrain } from './strainLearning';
 import { dayStrain, recommendedStrain } from './strain';
 
@@ -35,16 +35,11 @@ function isoAddDays(iso: string, delta: number): string {
 /** El objetivo de `todayIso` calculado con los datos de antes de entrenar. */
 export function buildStrainTarget(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string): StrainTarget {
   const reference = new Date(`${todayIso}T12:00:00`);
-  const prior = history.filter((h) => h.date < todayIso);
+  // Con la carga de todos los días de entreno (también los de solo programa de fuerza), igual que la preparación del resto de la app.
+  const prior = loadHistoryFor(profile, history, { before: todayIso });
   const hasCheckIn = (profile.readinessLog ?? []).some((c) => c.date === todayIso);
 
-  const readiness = computeReadinessScore({
-    readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
-    history: prior,
-    setFeedbackLog: profile.setFeedbackLog,
-    painFlags: profile.painFlags,
-    today: reference,
-  });
+  const readiness = readinessAt(profile, history, reference, { before: true });
   const acwr = computeAcwr(prior, reference);
   const zone = acwr.acwr !== null && !acwr.coldStart ? acwr.zone : null;
   const yesterday = dayStrain(prior.find((h) => h.date === isoAddDays(todayIso, -1)));

@@ -1,6 +1,7 @@
 import type { AthleteProfile, SessionHistoryEntry, StrainTarget } from '../../data/athlete/types';
 import { computeAcwr, getAcwrTrend, type AcwrResult } from '../../engine/loadMetrics';
-import { computeReadinessScore, type ReadinessScore } from '../../engine/readinessScore';
+import { loadHistoryFor, readinessAt } from '../../engine/readinessAt';
+import type { ReadinessScore } from '../../engine/readinessScore';
 import { dayStrain, strainStatus } from '../../engine/strain';
 import type { StrainLearning } from '../../engine/strainLearning';
 import { buildStrainTarget } from '../../engine/strainTarget';
@@ -17,9 +18,7 @@ function isoAddDays(iso: string, delta: number): string {
 export function buildReadinessSeries(profile: AthleteProfile, history: SessionHistoryEntry[], endIso: string, days: number): { iso: string; total: number | null }[] {
   return Array.from({ length: days }, (_, i) => {
     const iso = isoAddDays(endIso, i - (days - 1));
-    const prior = history.filter((h) => h.date < iso);
-    const score = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history: prior, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${iso}T12:00:00`) });
-    return { iso, total: score.total };
+    return { iso, total: readinessAt(profile, history, new Date(`${iso}T12:00:00`), { before: true }).total };
   });
 }
 
@@ -52,7 +51,8 @@ export function buildTrendPoints(profile: AthleteProfile, history: SessionHistor
     .sort()[0];
   return Array.from({ length: days }, (_, i) => {
     const iso = isoAddDays(endIso, i - (days - 1));
-    const entry = history.find((h) => h.date === iso);
+    // Un día pasado en el que solo hiciste el programa de fuerza también tiene su esfuerzo (su RPE y su duración).
+    const entry = history.find((h) => h.date === iso) ?? (iso < todayIso ? loadHistoryFor(profile, history).find((h) => h.date === iso) : undefined);
     const real = dayStrain(entry);
     const strain = real ?? (iso < todayIso && iso >= firstIso ? 0 : null);
     const stored = profile.strainTargets?.[iso];
@@ -60,13 +60,7 @@ export function buildTrendPoints(profile: AthleteProfile, history: SessionHistor
     const readiness =
       iso > todayIso || iso < firstIso
         ? null
-        : computeReadinessScore({
-            readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
-            history: history.filter((h) => h.date < iso),
-            setFeedbackLog: profile.setFeedbackLog,
-            painFlags: profile.painFlags,
-            today: new Date(`${iso}T12:00:00`),
-          }).total;
+        : readinessAt(profile, history, new Date(`${iso}T12:00:00`), { before: true }).total;
     return { iso, strain, target: target ? { low: target.low, high: target.high } : null, readiness, planned: iso === todayIso && strain === null ? plannedToday : null, plan: plannedFor(profile.strainTargets?.[iso], iso, todayIso, strain, plannedToday, firstPlannedIso) };
   });
 }
@@ -86,12 +80,13 @@ export interface PastDayView {
  */
 export function buildPastDayView(profile: AthleteProfile, history: SessionHistoryEntry[], dayIso: string, learning: StrainLearning): PastDayView {
   const ref = new Date(`${dayIso}T12:00:00`);
-  const prior = history.filter((h) => h.date < dayIso);
-  const entry = history.find((h) => h.date === dayIso);
+  const prior = loadHistoryFor(profile, history, { before: dayIso });
+  // Un día en el que solo hiciste el programa de fuerza también cuenta: su esfuerzo es el de su RPE y su duración.
+  const entry = history.find((h) => h.date === dayIso) ?? loadHistoryFor(profile, history).find((h) => h.date === dayIso);
   const target = profile.strainTargets?.[dayIso] ?? buildStrainTarget(profile, history, dayIso);
   const real = dayStrain(entry);
   return {
-    readiness: computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history: prior, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: ref }),
+    readiness: readinessAt(profile, history, ref, { before: true }),
     acwr: computeAcwr(prior, ref),
     trend: getAcwrTrend(prior, undefined, ref),
     strain: { target, planned: null, fit: null, real, status: strainStatus(real, target), learning },

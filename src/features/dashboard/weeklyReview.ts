@@ -11,7 +11,7 @@ import { PAIN_AREA_LABEL, getActivePainFlags } from '../../engine/painFlags';
 import { sessionProgressionView } from '../../engine/progression';
 import { PR_KEY_LABEL } from '../../engine/responseProfile';
 import { getActiveStrengthProgram } from '../../engine/strengthPrograms';
-import { withCompanionLoad } from '../../engine/companionLoad';
+import { loadHistoryFor } from '../../engine/readinessAt';
 import { isCompanionProgram, weekdayOf } from '../../engine/strengthCompanion';
 
 /**
@@ -149,7 +149,7 @@ export function buildWeeklyReview(
   const short = week.length < minSessions;
 
   // El esfuerzo, el tiempo y la carga cuentan también el programa de fuerza que convive con el macro (Texas); las sesiones se cuentan aparte.
-  const loadHistory = withCompanionLoad(history, profile.companionLog, { orphans: true });
+  const loadHistory = loadHistoryFor(profile, history);
   const loadWeek = loadHistory.filter((h) => h.date >= from && h.date <= to);
   // Sin programa esa semana, el RPE medio es el de siempre (media simple); con él, se pondera por minutos para que la sesión del programa pese lo que dura.
   const withProgramLoad = loadWeek.some((h) => h.companionLoadMin !== undefined);

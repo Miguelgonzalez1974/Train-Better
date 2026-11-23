@@ -1,6 +1,6 @@
 import type { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { getReadinessCheckForDate } from './readiness';
-import { computeReadinessScore } from './readinessScore';
+import { readinessAt } from './readinessAt';
 
 /**
  * La tendencia de tu preparación: cuando llevas varios días seguidos mal, un entrenador no espera al calendario para descargar.
@@ -26,13 +26,7 @@ function isoMinus(iso: string, days: number): string {
 export function readinessLastDays(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string, days: number): (number | null)[] {
   return Array.from({ length: days }, (_, back) => {
     const dayIso = isoMinus(todayIso, back);
-    return computeReadinessScore({
-      readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
-      history: history.filter((h) => h.date < dayIso),
-      setFeedbackLog: profile.setFeedbackLog,
-      painFlags: profile.painFlags,
-      today: new Date(`${dayIso}T12:00:00`),
-    }).total;
+    return readinessAt(profile, history, new Date(`${dayIso}T12:00:00`), { before: true }).total;
   });
 }
 

@@ -1,7 +1,7 @@
 import type { AthleteProfile, DayLightColor, DayLightInfo, ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
 import type { CompetitionDay } from './competition';
 import { computeAcwr } from './loadMetrics';
-import { computeReadinessScore } from './readinessScore';
+import { loadHistoryFor, readinessAt } from './readinessAt';
 
 /**
  * El semáforo del día: con lo que cuentas por la mañana y lo que miden tus datos, el día sale verde, ámbar o rojo y eso
@@ -88,8 +88,8 @@ export function resolveDayLight(
   comp: CompetitionDay | null,
 ): DayLightInfo | null {
   if (!check) return null;
-  const score = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: date });
-  const acwr = computeAcwr(history, date);
+  const score = readinessAt(profile, history, date);
+  const acwr = computeAcwr(loadHistoryFor(profile, history), date);
   return computeDayLight({
     readiness: score.total,
     hrvLow: check.hrvVs === 'bajo',

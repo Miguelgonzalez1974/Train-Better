@@ -3,7 +3,7 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { computeAcwr, getAcwrTrend } from '../../engine/loadMetrics';
 import { computeAdherenceStreak, computeWeekCount } from '../../engine/adherence';
 import { getMonthlyStats } from './stats';
-import { computeReadinessScore } from '../../engine/readinessScore';
+import { loadHistoryFor, readinessAt } from '../../engine/readinessAt';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { dayStrain, strainStatus } from '../../engine/strain';
 import { buildStrainTarget, ensureStrainTarget, withPlannedStrain } from '../../engine/strainTarget';
@@ -112,7 +112,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
   const [profile, setProfile] = useState(() => {
     const current = athleteRepository.getProfile();
-    const next = ensureStrainTarget(current, withCompanionLoad(history, current.companionLog), toLocalIsoDate(new Date()));
+    const next = ensureStrainTarget(current, history, toLocalIsoDate(new Date()));
     if (next !== current) athleteRepository.saveProfile(next);
     return next;
   });
@@ -167,10 +167,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const stats = useMemo(() => getMonthlyStats(history, trainedDates), [history, trainedDates]);
   // La carga y el esfuerzo cuentan también el programa de fuerza que convive con el macro (Texas): ver `engine/companionLoad.ts`. Lo que aprende el coach de tus aciertos sigue con el historial del macro solo.
   const loadHistory = useMemo(() => withCompanionLoad(history, profile.companionLog), [history, profile.companionLog]);
-  const acwr = useMemo(() => computeAcwr(loadHistory), [loadHistory]);
-  const acwrTrend = useMemo(() => getAcwrTrend(loadHistory), [loadHistory]);
+  // La carga acumulada cuenta todos los días de entreno (también los de solo programa de fuerza), igual que la preparación.
+  const engineLoad = useMemo(() => loadHistoryFor(profile, history), [history, profile.companionLog]);
+  const acwr = useMemo(() => computeAcwr(engineLoad), [engineLoad]);
+  const acwrTrend = useMemo(() => getAcwrTrend(engineLoad), [engineLoad]);
   const todayIso = toLocalIsoDate(new Date());
-  const formModel = useMemo(() => buildFormModel(profile, loadHistory, todayIso), [profile, loadHistory, todayIso]);
+  const formModel = useMemo(() => buildFormModel(profile, engineLoad, todayIso), [profile, engineLoad, todayIso]);
   const goalRows = useMemo(() => buildGoalRows(profile.goals, history, profile.prs), [profile.goals, history, profile.prs]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
@@ -186,7 +188,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const strengthTotalKg = profile.prs.backSquat + profile.prs.benchPress + profile.prs.deadlift;
   const strengthRatio = latestBodyweightKg ? strengthTotalKg / latestBodyweightKg : null;
   // Nota de preparación: el check-in más tu carga y cómo te salen las sesiones (ver `computeReadinessScore`).
-  const readiness = computeReadinessScore({ readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory, history: loadHistory, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date() });
+  const readiness = readinessAt(profile, history, new Date());
   const readinessLearning = computeReadinessLearning(profile.readinessLog, history);
   const todayStrain = dayStrain(loadHistory.find((h) => h.date === todayIso));
   const strainTarget = profile.strainTargets?.[todayIso] ?? buildStrainTarget(profile, loadHistory, todayIso);

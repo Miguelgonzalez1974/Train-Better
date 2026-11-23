@@ -386,7 +386,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [strainTarget, setStrainTarget] = useState<StrainTarget | null>(() => profile.strainTargets?.[todayIso] ?? null);
   useEffect(() => {
     const fresh = athleteRepository.getProfile();
-    const next = ensureStrainTarget(fresh, withCompanionLoad(athleteRepository.getHistory(), fresh.companionLog), todayIso);
+    const next = ensureStrainTarget(fresh, athleteRepository.getHistory(), todayIso);
     if (next !== fresh) {
       athleteRepository.saveProfile(next);
       setProfile((prev) => ({ ...prev, strainTargets: next.strainTargets }));

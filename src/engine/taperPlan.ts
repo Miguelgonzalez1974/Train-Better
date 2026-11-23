@@ -1,7 +1,7 @@
 import type { AthleteProfile, Goal, ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
 import { computeCompetitionDay, simulacroDateFor, type CompetitionDay, type TaperDecision } from './competition';
 import { computeHrvStatus, hrvLogWith, hrvVsNow, restingHrBaseline } from './hrv';
-import { computeReadinessScore } from './readinessScore';
+import { readinessAt } from './readinessAt';
 
 /**
  * El taper según cómo llegas. En la competición, un entrenador no recorta igual a todos: si llegas con fatiga baja más el
@@ -76,13 +76,7 @@ function preparationAverage(profile: AthleteProfile, history: SessionHistoryEntr
   const totals: number[] = [];
   for (let back = 0; back < PREP_WINDOW; back++) {
     const dayIso = isoAdd(iso, -back);
-    const total = computeReadinessScore({
-      readinessLog: profile.readinessLog, hrvHistory: profile.hrvHistory,
-      history: history.filter((h) => h.date < dayIso),
-      setFeedbackLog: profile.setFeedbackLog,
-      painFlags: profile.painFlags,
-      today: new Date(`${dayIso}T12:00:00`),
-    }).total;
+    const total = readinessAt(profile, history, new Date(`${dayIso}T12:00:00`), { before: true }).total;
     if (total !== null) totals.push(total);
   }
   return totals.length >= PREP_MIN_DAYS ? Math.round(totals.reduce((s, v) => s + v, 0) / totals.length) : null;
