@@ -155,7 +155,13 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [openWeekMove, setOpenWeekMove] = useState<WeekMoveProposal | null>(null);
   const [weekMoveMemory, setWeekMoveMemory] = useState<WeekMoveMemory>(() => loadWeekMoveMemory(typeof window !== 'undefined' ? window.localStorage : null));
   // Día que se está mirando (hoy por defecto) y pestaña de arriba.
-  const [dayIso, setDayIso] = useState(() => toLocalIsoDate(new Date()));
+  // Se abre en ese día si Planificación manda aquí a mirar uno ya hecho (la tira de la semana): `dia:yyyy-mm-dd`. Un día futuro o mal escrito no vale.
+  const [dayIso, setDayIso] = useState(() => {
+    const today = toLocalIsoDate(new Date());
+    const act = handoff.peek('dash-act');
+    const wanted = act?.startsWith('dia:') ? act.slice(4) : null;
+    return wanted && /^\d{4}-\d{2}-\d{2}$/.test(wanted) && wanted <= today ? wanted : today;
+  });
   const [tab, setTab] = useState<DashTab>('resumen');
   // Rex avisa de que los aros se tocan (globo de la esquina + latido de los aros) hasta el primer toque; no vuelve.
   const [ringHintPending, setRingHintPending] = useState(() => !ringHintSeen(typeof window !== 'undefined' ? window.localStorage : null));

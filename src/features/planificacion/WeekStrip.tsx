@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { toast } from '../../lib/toast';
-import { confirmSheet } from '../../lib/confirmSheet';
-import { Check, ChevronLeft, ChevronRight, Dumbbell, Ghost, Moon, Shuffle, Trash2, Zap } from 'lucide-react';
+import { appNav } from '../../lib/appNav';
+import { handoff } from '../../lib/handoff';
+import { Check, ChevronLeft, ChevronRight, Dumbbell, Ghost, Moon, Shuffle, Zap } from 'lucide-react';
 import { addDaysIso, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { buildFormModel } from '../dashboard/formModel';
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
-import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import type { AthleteProfile, DailySession, DayLightInfo, Goal, SessionHistoryEntry } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
@@ -17,22 +16,12 @@ import { ensureWeekLocked } from './weeklyLock';
 import { PastDayDeck } from './PastDayDeck';
 import { RepeatWodModal } from './RepeatWodModal';
 import { applyRepeatedWod, listRepeatableWods } from '../../engine/wodRepeat';
-import { wodResultsOf } from '../../engine/wodScoring';
-import { describeSkipped } from '../../engine/sessionParts';
 import { estimatePlannedStrain, strainFit } from '../../engine/plannedStrain';
 import { buildStrainTarget } from '../../engine/strainTarget';
 import { dayStrain } from '../../engine/strain';
 import { isRestMarked, withRestMarked, withRestUnmarked } from '../../engine/restDays';
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
-function resolveMovementName(id: string): string {
-  if (id.startsWith('benchmark:')) {
-    const benchmarkId = id.replace('benchmark:', '');
-    return benchmarkWorkouts.find((w) => w.id === benchmarkId)?.name ?? benchmarkId;
-  }
-  return getMovementById(id)?.name ?? id;
-}
 
 function startOfWeek(date: Date): Date {
   const start = new Date(date);
@@ -77,8 +66,6 @@ interface WeekStripProps {
   history: SessionHistoryEntry[];
   goals: Goal[];
   today?: Date;
-  /** Borra el registro de un dia pasado (por si se anoto por error) — el padre es quien posee `history`, asi que refresca su propio estado. */
-  onDeleteHistoryEntry?: (date: string) => void;
   /** Se registró un día pasado que se había quedado sin apuntar: el padre vuelve a leer el historial. */
   onLoggedDay?: () => void;
   /** Se avisa de que las tarjetas de anotar un día pasado están abiertas (el padre esconde a Rex mientras tanto). */
@@ -87,7 +74,7 @@ interface WeekStripProps {
   onRestChange?: () => void;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, onLoggingChange, onRestChange }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onLoggedDay, onLoggingChange, onRestChange }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -316,7 +303,15 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
           return (
             <button
               key={label}
-              onClick={() => setExpanded((prev) => (prev === index ? null : index))}
+              onClick={() => {
+                // Un día ya hecho se mira en el Dashboard (el mismo día, con sus aros y su resumen); aquí solo se abren los días sobre los que se actúa.
+                if (day.kind === 'done') {
+                  handoff.put('dash-act', `dia:${dateIso}`);
+                  appNav.goTo('dashboard');
+                  return;
+                }
+                setExpanded((prev) => (prev === index ? null : index));
+              }}
               title={text}
               aria-label={`${label} ${date.getDate()}: ${text}`}
               className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-xs transition-all duration-200 ${
@@ -406,42 +401,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
               />
             )}
             <Modal open={loggingFor !== expanded} onClose={() => { setExpanded(null); setLoggingFor(null); }} title={`${DAY_LABELS[expanded]} · ${dateIso}`}>
-              {entry ? (
-                <div className="flex flex-col gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-                        entry.rxOrScaled === 'rx' ? 'bg-brand-gold/20 text-brand-gold' : 'bg-white/10 text-neutral-300'
-                      }`}
-                    >
-                      {entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado'}
-                    </span>
-                    <span className="text-neutral-500">RPE {entry.rpe}</span>
-                    {wodResultsOf(entry).map(({ part, result }) => (
-                      <span key={part} className="rounded-md bg-brand-orange/15 px-2 py-0.5 text-xs font-semibold text-brand-orange">
-                        {entry.wodResult2 ? `WOD parte ${part}` : 'WOD'}: {result.value}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-neutral-300">{entry.movementIds.map(resolveMovementName).join(' · ')}</p>
-                  {describeSkipped(entry.skipped) && <p className="text-xs font-semibold text-warn">{describeSkipped(entry.skipped)}</p>}
-                  {onDeleteHistoryEntry && (
-                    <button
-                      onClick={async () => {
-                        const ok = await confirmSheet({ title: `¿Borrar la sesión del ${dateIso}?`, body: 'Se borra del historial y de tus días entrenados. No se puede deshacer.', confirmLabel: 'Borrar sesión', danger: true });
-                        if (!ok) return;
-                        onDeleteHistoryEntry(dateIso);
-                        setExpanded(null);
-                        toast.show('Sesión borrada');
-                      }}
-                      className="mt-2 flex items-center gap-1.5 self-start rounded-lg border border-bad/30 bg-bad/10 px-3 py-1.5 text-xs font-semibold text-bad transition-colors duration-200 hover:border-bad/60 hover:bg-bad/20"
-                    >
-                      <Trash2 size={14} />
-                      Borrar esta sesión
-                    </button>
-                  )}
-                </div>
-              ) : isPast ? (
+              {isPast ? (
                 <div className="flex flex-col items-start gap-3">
                   {isRestMarked(profile.restDates, dateIso) ? (
                     <>

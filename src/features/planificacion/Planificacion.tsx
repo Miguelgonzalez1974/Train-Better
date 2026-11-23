@@ -1503,10 +1503,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 profile={profile}
                 history={loadHistory}
                 goals={goals}
-                onDeleteHistoryEntry={(date) => {
-                  athleteRepository.deleteHistoryEntry(date);
-                  setHistory(athleteRepository.getHistory());
-                }}
                 onLoggedDay={handleLoggedPastDay}
                 onLoggingChange={setPastLogging}
                 onRestChange={() => setProfile(athleteRepository.getProfile())}
