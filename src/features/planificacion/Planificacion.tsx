@@ -41,7 +41,6 @@ import {
   peekRetestHeadsUp,
   resolveOlyPRKey,
   resolveStrengthPRKey,
-  resolveVariantPRKey,
   toHistoryEntry,
   wodMovementsOfSession,
   type SessionOverrideType,
@@ -58,15 +57,14 @@ import {
   getWodScoreType,
   type WodResultForm,
 } from '../../engine/wodScoring';
-import { applySkips, skippedParts, type Skips } from '../../engine/sessionParts';
+import type { Skips } from '../../engine/sessionParts';
 import { wodCapFor, type WodCap } from '../../engine/wodCap';
 import { getActivePainFlags, PAIN_AREA_LABEL, prunePainFlags, resolvePainFlagUntil, type PainDuration } from '../../engine/painFlags';
 import { describeRampStatus, suggestReturnRamp } from '../../engine/intensityRamp';
 import { applyMacroReview, buildWeeklyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { buildNextMacroSuggestion } from '../../engine/nextMacroSuggestion';
-import { estimateE1RMFromRpe, qualifiesForE1RMEstimate } from '../../engine/e1rm';
-import { feelFromRpe, findTopWorkSet, parseWorkingReps } from '../../engine/setFeedback';
-import { countsForProgression, evaluateLiftSession, mainLiftBlock, type ProgressionKind } from '../../engine/progression';
+import { qualifiesForE1RMEstimate } from '../../engine/e1rm';
+import { findTopWorkSet } from '../../engine/setFeedback';
 import { WeekStrip } from './WeekStrip';
 import { SeasonMapCompact, SeasonMapFull } from '../objetivos/SeasonMap';
 import { TrainingDiary } from './TrainingDiary';
@@ -119,6 +117,7 @@ import { LIGHT_LABEL } from '../../engine/dayLight';
 import type { WodScaleState } from './WodScaleBox';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ReviewDeck } from './ReviewDeck';
+import { buildClosedEntry, liftRpeEntry, patchBlock, recordProgressionFor } from './sessionClose';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
@@ -131,8 +130,6 @@ import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { timeLimitFor, weekdayPlural } from '../../engine/rexNotes';
-import { classifyWod } from '../../engine/wodCategory';
-import { levelResultsOfEntry } from '../../engine/levelCategories';
 import { Modal } from '../shell/Modal';
 
 
@@ -262,6 +259,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }
   /** «He acabado la sesión»: el mazo de tarjetas para anotar lo hecho al terminar (una por parte, con los pesos de cada serie y el cierre al final). */
   const [reviewMode, setReviewMode] = useState(false);
+  /** Las tarjetas de anotar un día pasado (desde la tira de la semana) están abiertas: Rex se aparta, como con las de hoy. */
+  const [pastLogging, setPastLogging] = useState(false);
   /** Guarda las series que hay en pantalla en el mazo de anotar; se llama justo antes de registrar la sesión. */
   const reviewCommit = useRef<(() => void) | null>(null);
   function openReview() {
@@ -587,23 +586,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   );
 
   /**
-   * Clave de PR y % del 1RM del levantamiento valorado. La clave se resuelve igual que en el motor
-   * (`resolveStrengthPRKey/resolveOlyPRKey ?? resolveVariantPRKey`) para que `computeResponseProfile`
-   * agregue la sensación bajo la misma clave con la que el motor prescribe ese lift.
-   */
-  function resolveSetFeedbackTarget(block: SessionBlockResult, prescribedKg: number): { prKey?: string; pctOf1rm?: number } {
-    const movement = getMovementById(block.movementId);
-    if (!movement) return {};
-    const rootKey = (block.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
-    const variantKey = resolveVariantPRKey(movement);
-    const prKey = rootKey ?? variantKey ?? undefined;
-    if (!prKey) return {};
-    const pr = rootKey ? profile.prs[rootKey] : profile.variantPrs?.[variantKey!];
-    const pctOf1rm = pr && pr > 0 ? Math.round((prescribedKg / pr) * 100) / 100 : undefined;
-    return { prKey, pctOf1rm };
-  }
-
-  /**
    * Calibra el coach con el RPE de la serie más pesada que el atleta ya registró en `workLog` — el
    * peso y las reps de esa serie no se vuelven a pedir. Ya no reajusta las series que quedan hoy:
    * para eso el atleta ya tiene los +/- del mazo de anotar, más directos que una sugerencia derivada
@@ -622,29 +604,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   function saveLiftRpe(block: SessionBlockResult, topSet: { kg: number; reps: number }, rpe: number) {
     if (!session) return;
     const existing = setFeedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId);
-    const prescribedKg = existing?.prescribedKg ?? block.loadKg ?? 0;
-    const prescribedSets = existing?.prescribedSets ?? block.sets ?? (block.logAsSingle ? 1 : 0);
-    const prescribedReps = existing?.prescribedReps ?? parseWorkingReps(block.reps ?? '') ?? 0;
-    if (prescribedKg <= 0 || (prescribedSets < 2 && !block.logAsSingle)) return;
-
-    const { prKey, pctOf1rm } = resolveSetFeedbackTarget(block, prescribedKg);
-    const estimated1rm = estimateE1RMFromRpe(topSet.kg, topSet.reps, rpe) ?? undefined;
-
-    athleteRepository.appendSetFeedbackEntry({
-      date: session.date,
-      movementId: block.movementId,
-      block: block.block as 'strength' | 'oly',
-      prescribedKg,
-      prescribedReps,
-      prescribedSets,
-      feel: feelFromRpe(rpe),
-      prKey,
-      pctOf1rm,
-      actualKg: topSet.kg,
-      actualReps: topSet.reps,
-      actualRpe: rpe,
-      estimated1rm,
-    });
+    const entry = liftRpeEntry(session.date, block, topSet, rpe, existing, profile.prs, profile.variantPrs);
+    if (!entry) return;
+    athleteRepository.appendSetFeedbackEntry(entry);
     setSetFeedbackLog(athleteRepository.getSetFeedbackLog());
   }
 
@@ -674,14 +636,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   function handleUpdateEntry(index: number, patch: Partial<SessionBlockResult>) {
     setSession((prev) => {
       if (!prev) return prev;
-      const next: DailySession = {
-        ...prev,
-        // Si se tocan series, reps o carga a mano, el plan serie a serie de la rampa ya no vale: se quita y vuelve el esquema simple.
-        blocks: prev.blocks.map((b, i) =>
-          i === index ? { ...b, ...patch, ...(!('setPlan' in patch) && ('sets' in patch || 'reps' in patch || 'loadKg' in patch) ? { setPlan: undefined, waveSize: undefined } : {}), ...('movementId' in patch && !('complex' in patch) ? { complex: undefined } : {}) } : b,
-        ),
-        editedByAthlete: true,
-      };
+      const next = patchBlock(prev, index, patch);
       athleteRepository.saveCachedSession(next);
       return next;
     });
@@ -878,34 +833,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     return scoreType ? buildWodResult(scoreType, wodForms[part]) : undefined;
   }
 
-  /**
-   * Anota cómo salió el levantamiento principal de fuerza y el de oly de hoy (limpia, hecha, dura, fallo) para la progresión por
-   * resultados. No anota nada de una parte que se marcó como no hecha, si no se registraron todas sus series o si el formato no es
-   * de reps limpias (rampas, olas, complejos, series únicas).
-   */
-  function recordProgression() {
-    if (!session || !countsForProgression(session)) return;
-    const log = athleteRepository.getWorkLog();
-    const feedbackLog = athleteRepository.getSetFeedbackLog();
-    const records = (['strength', 'oly'] as const).flatMap((kind: ProgressionKind) => {
-      if (skips[kind]) return [];
-      const block = mainLiftBlock(session.blocks, kind);
-      const movement = block ? getMovementById(block.movementId) : undefined;
-      if (!block || !movement) return [];
-      const rootKey = (kind === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey)(movement);
-      const record = evaluateLiftSession({
-        date: session.date,
-        kind,
-        block,
-        key: rootKey ?? resolveVariantPRKey(movement),
-        sets: log.filter((e) => e.date === session.date && e.movementId === block.movementId && e.block === kind),
-        feedback: feedbackLog.find((e) => e.date === session.date && e.movementId === block.movementId),
-      });
-      return record ? [record] : [];
-    });
-    if (records.length > 0) athleteRepository.appendProgressionRecords(records);
-  }
-
   /** Lo anotado del WOD al cerrar: Rx (sin escalados) o lo que se escaló, y la dureza. Sin movimientos que preguntar o con el WOD sin hacer, nada. */
   function wodDetailFor(): ReturnType<typeof buildWodDetail> {
     const asked = wodMovements.filter((m) => !skips[m.part === 1 ? 'wod1' : 'wod2']);
@@ -934,35 +861,23 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       }
     }
 
-    // El historial solo recoge lo que se hizo: las partes marcadas como no hechas se quitan (y se anotan en `skipped`).
-    const notDone = skippedParts(skips);
-    const wodSplits = splitRecordsToday();
-    // A qué categoría de «Tu nivel» contó cada parte del WOD que se hizo (con tus marcas de hoy).
-    const wodCategories: NonNullable<SessionHistoryEntry['wodCategories']> = {};
-    for (const part of wodParts) {
-      if (skips[part === 1 ? 'wod1' : 'wod2']) continue;
-      const verdict = classifyWod(session, part, { prs: profile.prs });
-      if (verdict.category) wodCategories[part] = verdict.category;
-    }
-    const builtEntry: SessionHistoryEntry = {
-      ...toHistoryEntry(
-        applySkips(session, skips),
+    // El historial solo recoge lo que se hizo (lo mismo que cerrar un día pasado: ver `sessionClose.ts`).
+    athleteRepository.appendHistoryEntry(
+      buildClosedEntry({
+        session,
+        prs: profile.prs,
+        skips,
         rxOrScaled,
         rpe,
         durationMin,
-        buildPartResult(1),
-        testDayBlock && testedLoadKg > 0 && !skips[testDayBlock.block as 'strength' | 'oly'] ? testedLoadKg : undefined,
-        wodParts.includes(2) ? buildPartResult(2) : undefined,
-        wodDetailFor(),
-      ),
-      ...(notDone.length > 0 ? { skipped: notDone } : {}),
-      ...(wodSplits.length > 0 ? { wodSplits } : {}),
-      ...(Object.keys(wodCategories).length > 0 ? { wodCategories } : {}),
-    };
-    // Los resultados de WOD en Rx que cuentan para «Tu nivel» (van también al registro largo del perfil).
-    const levelResults = levelResultsOfEntry(builtEntry, profile.prs);
-    athleteRepository.appendHistoryEntry({ ...builtEntry, ...(levelResults.length > 0 ? { levelResults } : {}) });
-    recordProgression();
+        wodResults: { 1: buildPartResult(1), 2: buildPartResult(2) },
+        wodParts,
+        testedLoadKg: testDayBlock && testedLoadKg > 0 && !skips[testDayBlock.block as 'strength' | 'oly'] ? testedLoadKg : undefined,
+        wodDetail: wodDetailFor(),
+        wodSplits: splitRecordsToday(),
+      }),
+    );
+    recordProgressionFor(session, skips);
     // Marca la sesion como "esto paso de verdad" en el mismo instante de completarla — no basta con
     // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes
     // de enterarse del entreno de hoy podia seguir ganando el empate y pisar la tarjeta del plan
@@ -1611,6 +1526,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                   setHistory(athleteRepository.getHistory());
                 }}
                 onLoggedDay={handleLoggedPastDay}
+                onLoggingChange={setPastLogging}
                 onRestChange={() => setProfile(athleteRepository.getProfile())}
               />
               {(history.length > 0 || (profile.companionLog ?? []).length > 0) && (
@@ -1732,7 +1648,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         {/* Rex, en la esquina, cuenta el estado del día en una frase (semáforo, esfuerzo previsto, dureza, competición, molestias, perfil) y
             avisa de lo que el coach tiene para ti; sus botones (He acabado la sesión, Por qué, ¿Cambiar algo?) salen en el globo y en su panel.
             Las casillas con todo el detalle quedan detrás de «Por qué». */}
-        {showRexBar && !reviewMode && (
+        {showRexBar && !reviewMode && !pastLogging && (
           <RexCorner
             speak
             screen="planificacion"

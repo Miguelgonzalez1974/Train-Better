@@ -14,7 +14,7 @@ import { DaySessionBlocks } from './DaySessionBlocks';
 import { TrainingTimer } from './TrainingTimer';
 import { clockPropsFor } from './clockProps';
 import { ensureWeekLocked } from './weeklyLock';
-import { LogPastDay } from './LogPastDay';
+import { PastDayDeck } from './PastDayDeck';
 import { RepeatWodModal } from './RepeatWodModal';
 import { applyRepeatedWod, listRepeatableWods } from '../../engine/wodRepeat';
 import { wodResultsOf } from '../../engine/wodScoring';
@@ -81,16 +81,23 @@ interface WeekStripProps {
   onDeleteHistoryEntry?: (date: string) => void;
   /** Se registró un día pasado que se había quedado sin apuntar: el padre vuelve a leer el historial. */
   onLoggedDay?: () => void;
+  /** Se avisa de que las tarjetas de anotar un día pasado están abiertas (el padre esconde a Rex mientras tanto). */
+  onLoggingChange?: (open: boolean) => void;
   /** Se marcó o se quitó un descanso elegido: el padre vuelve a leer el perfil. */
   onRestChange?: () => void;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, onRestChange }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onDeleteHistoryEntry, onLoggedDay, onLoggingChange, onRestChange }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
   /** Día (índice de la semana) cuyo formulario de registro está abierto. */
   const [loggingFor, setLoggingFor] = useState<number | null>(null);
+  useEffect(() => {
+    onLoggingChange?.(loggingFor !== null);
+    return () => onLoggingChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggingFor]);
   /** Aviso de «Otro WOD» en la ventana de un día (por ejemplo, que ese WOD está fijado). */
   const [wodNote, setWodNote] = useState<string | null>(null);
   /** El selector «Repetir un WOD que ya hice» abierto desde la ventana de un día. */
@@ -386,7 +393,19 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
 
           return (
             <>
-            <Modal open onClose={() => { setExpanded(null); setLoggingFor(null); }} title={`${DAY_LABELS[expanded]} · ${dateIso}`}>
+            {loggingFor === expanded && onLoggedDay && (
+              <PastDayDeck
+                dateIso={dateIso}
+                planned={plannedForPast(date)}
+                onClose={() => setLoggingFor(null)}
+                onSaved={() => {
+                  setLoggingFor(null);
+                  setExpanded(null);
+                  onLoggedDay();
+                }}
+              />
+            )}
+            <Modal open={loggingFor !== expanded} onClose={() => { setExpanded(null); setLoggingFor(null); }} title={`${DAY_LABELS[expanded]} · ${dateIso}`}>
               {entry ? (
                 <div className="flex flex-col gap-2 text-sm">
                   <div className="flex items-center gap-2">
@@ -423,39 +442,28 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onDelet
                   )}
                 </div>
               ) : isPast ? (
-                loggingFor === expanded && onLoggedDay ? (
-                  <LogPastDay
-                    dateIso={dateIso}
-                    planned={plannedForPast(date)}
-                    onSaved={() => {
-                      setLoggingFor(null);
-                      setExpanded(null);
-                      onLoggedDay();
-                    }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-start gap-3">
-                    {isRestMarked(profile.restDates, dateIso) ? (
-                      <>
-                        <p className="text-sm text-neutral-400">Descanso elegido</p>
-                        <RestButton onClick={() => setRest(dateIso, false)}>Quitar la marca</RestButton>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm text-neutral-500">No registrado</p>
-                        {onLoggedDay && (
-                          <button
-                            onClick={() => setLoggingFor(expanded)}
-                            className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
-                          >
-                            Registrar este día
-                          </button>
-                        )}
-                        <RestButton onClick={() => setRest(dateIso, true)}>Descansé este día</RestButton>
-                      </>
-                    )}
-                  </div>
-                )
+                <div className="flex flex-col items-start gap-3">
+                  {isRestMarked(profile.restDates, dateIso) ? (
+                    <>
+                      <p className="text-sm text-neutral-400">Descanso elegido</p>
+                      <RestButton onClick={() => setRest(dateIso, false)}>Quitar la marca</RestButton>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-neutral-500">No registrado</p>
+                      {onLoggedDay && (
+                        // Abre las mismas tarjetas que «He acabado la sesión», a pantalla completa y con la fecha de ese día.
+                        <button
+                          onClick={() => setLoggingFor(expanded)}
+                          className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-black shadow-md shadow-brand-orange/20 transition-all duration-200 hover:bg-brand-orange-dark"
+                        >
+                          Registrar este día
+                        </button>
+                      )}
+                      <RestButton onClick={() => setRest(dateIso, true)}>Descansé este día</RestButton>
+                    </>
+                  )}
+                </div>
               ) : isToday ? (
                 <div className="flex flex-col items-start gap-3">
                   <p className="text-sm text-neutral-400">{isRestMarked(profile.restDates, dateIso) ? 'Hoy es un descanso elegido.' : 'Consulta el detalle completo en «Sesión de hoy».'}</p>

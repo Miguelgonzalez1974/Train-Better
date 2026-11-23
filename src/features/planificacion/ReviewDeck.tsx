@@ -155,6 +155,8 @@ export interface ReviewDeckProps {
   onSave: () => void;
   onExit: () => void;
   onOtherThing: () => void;
+  /** Un día pasado que se quedó sin apuntar: se dice cuál al empezar y no hay crono (no se cronometra lo que ya pasó). */
+  pastDay?: { label: string };
 }
 
 export function ReviewDeck(p: ReviewDeckProps) {
@@ -258,6 +260,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
         {header('Tu sesión', THEME.end.accent, NotebookPen)}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3">
           <h2 className="text-[clamp(1.5rem,8vw,1.9rem)] font-extrabold leading-tight text-white">Anota lo que hiciste</h2>
+          {p.pastDay && <p className="mt-1 text-base font-bold" style={{ color: THEME.end.accent }} data-testid="review-day">{p.pastDay.label}</p>}
           <p className="mt-1 text-sm" style={{ color: soft }}>Una tarjeta por parte. Toca una para ir directo a ella.</p>
           <div className="mt-4 grid grid-cols-2 gap-2.5" data-testid="review-tiles">
             {tiles.map(({ c, i }) => {
@@ -502,9 +505,11 @@ export function ReviewDeck(p: ReviewDeckProps) {
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3">
           <div className="flex items-start justify-between gap-3">
             <h2 className="text-[clamp(1.5rem,8vw,1.9rem)] font-extrabold leading-tight text-white [overflow-wrap:anywhere]">{isBench ? (benchWod?.name ?? 'Benchmark') : (first.title ?? 'WOD')}</h2>
-            <button onClick={() => clockBus.open('workout')} aria-label="Abrir el crono" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full active:scale-95" style={{ background: 'rgba(255,255,255,0.18)', color: white }} data-testid="review-clock">
-              <Timer size={22} strokeWidth={2.6} aria-hidden />
-            </button>
+            {!p.pastDay && (
+              <button onClick={() => clockBus.open('workout')} aria-label="Abrir el crono" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full active:scale-95" style={{ background: 'rgba(255,255,255,0.18)', color: white }} data-testid="review-clock">
+                <Timer size={22} strokeWidth={2.6} aria-hidden />
+              </button>
+            )}
           </div>
           {format && <p className="mt-0.5 text-base font-bold" style={{ color: th.accent }}>{localizeWodText(format)}</p>}
           {p.targets[c.part] && <p className="text-xs" style={{ color: soft }}>Objetivo del coach: {p.targets[c.part]}</p>}
