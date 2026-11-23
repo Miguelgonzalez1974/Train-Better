@@ -12,6 +12,8 @@ export type RexTarget =
   /** La ficha donde el coach propone mover un día de la semana (según tu curva de forma). */
   | 'semana-mover'
   | 'revision-enfasis'
+  /** La ventana Historial: abre en el Diario; «constancia» y «volumen» abren la misma ventana en su pestaña. */
+  | 'historial'
   | 'constancia'
   | 'volumen'
   | 'analisis'
@@ -544,8 +546,7 @@ export function saveRexMemory(storage: Pick<Storage, 'setItem'> | null, memory: 
 /** Los módulos que se abren desde «Más» (los botones que antes vivían sueltos arriba). «Tu semana» ya no está: es la tesela «Revisar mi semana» (y la frase «mi semana» en la caja). */
 export const REX_MODULES: { target: RexTarget; label: string }[] = [
   { target: 'nutricion', label: 'Nutrición' },
-  // «Constancia y volumen» es una sola ventana con dos pestañas; «volumen» sigue siendo un destino (para la caja de Rex) pero no tiene botón propio.
-  { target: 'constancia', label: 'Constancia y volumen' },
+  // «Constancia y volumen» y el diario viven en la ventana Historial, que es la tesela «Historial» (y «mi historial» en la caja): no hay botón en «Más».
   { target: 'movilidad', label: 'Recovery' },
   { target: 'analisis', label: 'Análisis' },
   { target: 'marcas', label: 'Mis marcas' },

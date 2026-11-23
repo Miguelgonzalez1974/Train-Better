@@ -68,6 +68,7 @@ import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { dayTarget, eatenFor } from '../nutricion/nutritionData';
 import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
 import { WeekTrendCard } from './WeekTrendCard';
+import { TrainingDiary } from './TrainingDiary';
 import { SleepTab } from './SleepHabits';
 import { StrainDetail } from './StrainRing';
 import { PreparationTab } from './PreparationTab';
@@ -108,7 +109,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, onNavigateToNutricion, onOpenMorning }: DashboardProps) {
-  const [history] = useState(() => athleteRepository.getHistory());
+  const [history, setHistory] = useState(() => athleteRepository.getHistory());
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
   const [profile, setProfile] = useState(() => {
     const current = athleteRepository.getProfile();
@@ -117,8 +118,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     return next;
   });
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
-  // «Constancia y volumen»: una sola ventana con dos pestañas (antes eran dos botones de «Más» que miraban el historial).
-  const [trainingView, setTrainingView] = useState<'constancia' | 'volumen' | null>(null);
+  // «Historial»: una sola ventana con tres pestañas (Diario, Constancia y Volumen). Se abre con la tesela «Historial», con «mi historial» en la caja de Rex o desde otra pantalla.
+  const [trainingView, setTrainingView] = useState<'diario' | 'constancia' | 'volumen' | null>(() => {
+    const act = handoff.peek('dash-act');
+    return act === 'historial' ? 'diario' : act === 'constancia' || act === 'volumen' ? act : null;
+  });
   const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
   // Lo que otra pantalla deja dicho al llegar: «Mi perfil» abre el Análisis en su pestaña Perfil; «Mis marcas» abre esa pantalla (con un levantamiento desplegado si viene).
@@ -420,7 +424,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     }
   }, [reviewable]);
   const rexBadges: Partial<Record<RexTarget, string>> = {
-    ...(yearConsistency.pct !== null ? { constancia: `${yearConsistency.pct} %` } : {}),
     ...(goalRows.length > 0 ? { objetivos: String(goalRows.length) } : {}),
     ...(nutritionPercent !== null ? { nutricion: `${nutritionPercent} %` } : {}),
     ...(weeklyMobilityMinutes(profile, todayIso) > 0 ? { movilidad: `${weeklyMobilityMinutes(profile, todayIso)} min` } : {}),
@@ -442,6 +445,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         return weekMoveProposal && setOpenWeekMove(weekMoveProposal);
       case 'revision-enfasis':
         return openEmphasisReview();
+      case 'historial':
+        return setTrainingView('diario');
       case 'constancia':
         return setTrainingView('constancia');
       case 'volumen':
@@ -816,9 +821,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       )}
 
       {trainingView && (
-        <Modal open onClose={() => setTrainingView(null)} title="Constancia y volumen">
-          <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-white/[0.05] p-1" role="tablist" aria-label="Constancia y volumen">
-            {(['constancia', 'volumen'] as const).map((v) => (
+        <Modal open onClose={() => setTrainingView(null)} title="Historial">
+          <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-white/[0.05] p-1" role="tablist" aria-label="Historial">
+            {(['diario', 'constancia', 'volumen'] as const).map((v) => (
               <button
                 key={v}
                 role="tab"
@@ -826,11 +831,23 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
                 onClick={() => setTrainingView(v)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${trainingView === v ? 'bg-white/10 text-white' : 'text-neutral-400 hover:text-neutral-200'}`}
               >
-                {v === 'constancia' ? 'Constancia' : 'Volumen por día'}
+                {v === 'diario' ? 'Diario' : v === 'constancia' ? 'Constancia' : 'Volumen'}
               </button>
             ))}
           </div>
-          {trainingView === 'constancia' ? (
+          {trainingView === 'diario' ? (
+            <TrainingDiary
+              history={history}
+              workLog={athleteRepository.getWorkLog()}
+              trainingDatesLog={profile.trainingDatesLog ?? []}
+              companionLog={profile.companionLog ?? []}
+              onDeleteEntry={(date) => {
+                athleteRepository.deleteHistoryEntry(date);
+                setHistory(athleteRepository.getHistory());
+                setProfile(athleteRepository.getProfile());
+              }}
+            />
+          ) : trainingView === 'constancia' ? (
             <ConsistencyDetail
               week={weekCount}
               monthDays={stats.diasEntrenados}

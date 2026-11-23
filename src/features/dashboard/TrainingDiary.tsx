@@ -8,8 +8,7 @@ import { summarizeCompanionEntry, type CompanionSummary } from '../../engine/com
 import { getWeekdayIndex } from '../../engine/periodization';
 import { wodResultsOf } from '../../engine/wodScoring';
 import { describeSkipped } from '../../engine/sessionParts';
-import { getMonthlyStats } from '../dashboard/stats';
-import { Modal } from '../shell/Modal';
+import { getMonthlyStats } from './stats';
 import { EmptyState } from '../shell/EmptyState';
 
 interface TrainingDiaryProps {
@@ -19,7 +18,6 @@ interface TrainingDiaryProps {
   /** Sesiones del programa de fuerza que convive con el macro (hechas o saltadas). */
   companionLog?: CompanionLogEntry[];
   onDeleteEntry: (date: string) => void;
-  onClose: () => void;
 }
 
 const ENERGY_LABEL: Record<NonNullable<SessionHistoryEntry['energySystem']>, string> = {
@@ -189,9 +187,9 @@ function DiaryRow({ day, sets, onDelete }: { day: DiaryDay; sets: WorkSetEntry[]
  * Diario de entrenamiento — el historial completo (hasta el tope de `HISTORY_LIMIT` que se
  * sincroniza) como lista navegable en vez de una semana cada vez. Agrupado por semana de
  * calendario, cada sesión se despliega para ver movimientos, dominio energético y duración.
- * Modal, mismo patrón que `NextWeekPreview` / `MacroPlanModal`.
+ * Es el contenido de la pestaña «Diario» de la ventana Historial del Dashboard (la ventana la pone quien lo usa).
  */
-export function TrainingDiary({ history, workLog, trainingDatesLog, companionLog = [], onDeleteEntry, onClose }: TrainingDiaryProps) {
+export function TrainingDiary({ history, workLog, trainingDatesLog, companionLog = [], onDeleteEntry }: TrainingDiaryProps) {
   const stats = useMemo(() => getMonthlyStats(history, trainingDatesLog), [history, trainingDatesLog]);
   const setsByDate = useMemo(() => {
     const map = new Map<string, WorkSetEntry[]>();
@@ -226,7 +224,7 @@ export function TrainingDiary({ history, workLog, trainingDatesLog, companionLog
   const rxPct = stats.diasEntrenados > 0 ? Math.round((stats.diasRx / stats.diasEntrenados) * 100) : null;
 
   return (
-    <Modal open onClose={onClose} title="Diario de entrenamiento">
+    <>
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           { label: 'Registradas', value: String(stats.totalSesiones) },
@@ -270,6 +268,6 @@ export function TrainingDiary({ history, workLog, trainingDatesLog, companionLog
           ))}
         </div>
       )}
-    </Modal>
+    </>
   );
 }

@@ -378,9 +378,9 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
     case 'estado':
       return elsewhereAnswer('Eso te lo cuento en el Dashboard, donde está tu estado de hoy.', 'ir-dashboard');
     case 'modulo':
-      // La revisión de la semana se abre sola al llegar al Dashboard (desde Planificación, Nutrición u Objetivos).
-      if (intent.target === 'semana') {
-        handoff.put('dash-act', 'semana');
+      // La revisión de la semana y el Historial (diario, constancia y volumen) se abren solos al llegar al Dashboard (desde Planificación, Nutrición u Objetivos).
+      if (intent.target === 'semana' || intent.target === 'historial' || intent.target === 'constancia' || intent.target === 'volumen') {
+        handoff.put('dash-act', intent.target);
         appNav.goTo('dashboard');
         return 'close';
       }

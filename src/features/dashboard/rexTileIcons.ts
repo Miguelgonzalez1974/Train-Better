@@ -1,4 +1,4 @@
-import { Activity, Apple, CalendarCheck, CalendarClock, CalendarDays, ClipboardCheck, Flag, Flame, Frown, Gauge, HeartPulse, HelpCircle, NotebookPen, Plane, Play, Radar, Scale, ScanBarcode, Shuffle, Target, Timer, Trophy, Utensils, type LucideIcon } from 'lucide-react';
+import { Activity, Apple, CalendarCheck, CalendarClock, CalendarDays, ClipboardCheck, Flag, Flame, Frown, Gauge, HeartPulse, History, HelpCircle, NotebookPen, Plane, Play, Radar, Scale, ScanBarcode, Shuffle, Target, Timer, Trophy, Utensils, type LucideIcon } from 'lucide-react';
 
 /** Los iconos de las teselas globales de la biblioteca (ver `rexTiles.ts`), por su clave. */
 export const TILE_ICONS: Record<string, LucideIcon> = {
@@ -6,6 +6,7 @@ export const TILE_ICONS: Record<string, LucideIcon> = {
   shuffle: Shuffle,
   'calendar-clock': CalendarClock,
   'calendar-check': CalendarCheck,
+  history: History,
   'calendar-days': CalendarDays,
   'heart-pulse': HeartPulse,
   frown: Frown,

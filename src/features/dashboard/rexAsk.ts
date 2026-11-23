@@ -110,6 +110,7 @@ function findWeight(norm: string): number | null {
 }
 
 const MODULE_WORDS: { target: RexTarget; words: RegExp }[] = [
+  { target: 'historial', words: /\b(historial|diario de entrenamiento|diario completo|mis sesiones)\b/ },
   { target: 'checkin', words: /\b(check ?-?in|como he amanecido|como amanezco)\b/ },
   { target: 'movilidad', words: /\b(recovery|movilidad|estiramientos?|estirar|rodillo|foam)\b/ },
   { target: 'nutricion', words: /\b(nutricion|dieta|macros|proteina)\b/ },

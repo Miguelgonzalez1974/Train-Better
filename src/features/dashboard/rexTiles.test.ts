@@ -152,3 +152,20 @@ describe('«Revisar mi semana»', () => {
     expect(rankTiles(ids, base, EMPTY_PREFS).shown).not.toContain('mi-semana');
   });
 });
+
+describe('«Historial»', () => {
+  it('es una tesela de la biblioteca y la caja de Rex la lleva a la ventana Historial', () => {
+    const t = GLOBAL_TILES.find((g) => g.id === 'historial');
+    expect(t).toBeDefined();
+    expect(parseAsk(t!.ask!, 3)).toEqual({ kind: 'modulo', target: 'historial' });
+    for (const frase of ['historial', 'mi historial', 'ver el diario completo', 'diario de entrenamiento']) {
+      expect(parseAsk(frase, 3), frase).toEqual({ kind: 'modulo', target: 'historial' });
+    }
+  });
+
+  it('no se confunde con el diario de comida ni con la constancia o el volumen', () => {
+    expect(parseAsk('que cenar segun mi diario', 3)).not.toEqual({ kind: 'modulo', target: 'historial' });
+    expect(parseAsk('constancia', 3)).toEqual({ kind: 'modulo', target: 'constancia' });
+    expect(parseAsk('volumen', 3)).toEqual({ kind: 'modulo', target: 'volumen' });
+  });
+});

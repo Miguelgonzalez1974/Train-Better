@@ -67,7 +67,6 @@ import { qualifiesForE1RMEstimate } from '../../engine/e1rm';
 import { findTopWorkSet } from '../../engine/setFeedback';
 import { WeekStrip } from './WeekStrip';
 import { SeasonMapCompact, SeasonMapFull } from '../objetivos/SeasonMap';
-import { TrainingDiary } from './TrainingDiary';
 import { DaySessionBlocks } from './DaySessionBlocks';
 import { wodDoneInfos } from '../../engine/wodDone';
 import { workDoneLines } from './workDoneLines';
@@ -273,7 +272,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const correctionRef = useRef<{ snapshot: DaySnapshot; sessionBefore: DailySession } | null>(null);
   /** Los minutos que ya estaban anotados en la sesión que se corrige: el cierre los enseña en vez de la estimación. */
   const correctionPrefill = useRef<{ durationMin: number } | null>(null);
-  const [showDiary, setShowDiary] = useState(false);
   const [showSeasonMap, setShowSeasonMap] = useState(false);
   const [showComplexes, setShowComplexes] = useState(false);
   /** «Repetir un WOD que ya hice»: el selector abierto. */
@@ -1494,22 +1492,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         <SeasonMapFull profile={profile} todayIso={todayIso} embedded />
       </Modal>
 
-      {showDiary && (
-        <TrainingDiary
-          history={history}
-          workLog={workLog}
-          trainingDatesLog={profile.trainingDatesLog ?? []}
-          companionLog={profile.companionLog ?? []}
-          onDeleteEntry={(date) => {
-            athleteRepository.deleteHistoryEntry(date);
-            setHistory(athleteRepository.getHistory());
-            setWorkLog(athleteRepository.getWorkLog());
-            setProfile(athleteRepository.getProfile());
-          }}
-          onClose={() => setShowDiary(false)}
-        />
-      )}
-
       {/* En escritorio (lg+) la sesión ocupa la columna ancha y la banda de semana + los avisos del
           coach van a un raíl fijo a la derecha. En móvil todo se apila en el orden de siempre. */}
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
@@ -1529,14 +1511,6 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 onLoggingChange={setPastLogging}
                 onRestChange={() => setProfile(athleteRepository.getProfile())}
               />
-              {(history.length > 0 || (profile.companionLog ?? []).length > 0) && (
-                <button
-                  onClick={() => setShowDiary(true)}
-                  className="self-end text-xs font-semibold text-neutral-500 transition-colors duration-200 hover:text-brand-gold"
-                >
-                  Ver diario completo →
-                </button>
-              )}
             </div>
           </div>
         </div>
