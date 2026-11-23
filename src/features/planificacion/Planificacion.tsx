@@ -1377,6 +1377,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   }
   function runPlanTarget(target: RexTarget) {
     if (target === 'plan-detalle') setShowPlanDetail((v) => !v);
+    else if (target === 'plan-motivos') setShowReasons(true);
     else if (target === 'plan-dureza') setShowHardness(true);
     else if (target === 'plan-molestia') setShowPainPicker(true);
     else if (target === 'plan-avisos') setShowNotices(true);

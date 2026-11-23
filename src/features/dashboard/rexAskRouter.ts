@@ -332,6 +332,7 @@ function routeSingle(text: string, screen: RexScreen, api: RouterApi): AskAnswer
         todayIso,
         marksTarget: analysis,
         planTarget: (screen === 'dashboard' ? 'planificacion' : 'ir-planificacion') as RexTarget,
+        reasonsTarget: screen === 'planificacion' ? ('plan-motivos' as RexTarget) : undefined,
       };
       return intent.kind === 'dato' ? dataAnswer(intent.question, ctx) : whyAnswer(intent.about, ctx);
     }

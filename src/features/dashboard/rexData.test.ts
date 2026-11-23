@@ -95,6 +95,12 @@ describe('Rex explica la sesión', () => {
     expect(a.text).toBe('Semana de intensificación: sube la carga un poco. Dormiste poco: bajo el volumen del accesorio.');
   });
 
+  it('desde Planificación ofrece ver todos los motivos enteros; desde otra pantalla, no', () => {
+    const aqui = whyAnswer('sesion', ctx({ reasonsTarget: 'plan-motivos' }));
+    expect(aqui.actions[0]).toEqual({ label: 'Ver todos los motivos', target: 'plan-motivos' });
+    expect(whyAnswer('sesion', ctx()).actions.map((a) => a.label)).not.toContain('Ver todos los motivos');
+  });
+
   it('por qué ese peso: el % de tu marca y lo que anotó el coach', () => {
     const a = whyAnswer('peso', ctx());
     expect(a.text).toBe('Back Squat: 112,5 kg es el 80 % de tu marca de Back Squat (140 kg). Peso de trabajo al 80 % de tu 1RM.');

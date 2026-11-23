@@ -81,7 +81,7 @@ describe('Rex en Planificación: la frase del estado del día', () => {
   it('«He acabado la sesión» es el botón principal (se entrena sin el móvil y se anota al acabar), y detrás va el porqué', () => {
     expect(planStateSuggestion(mk({ canStart: true }))!.actions).toEqual([
       { label: 'He acabado la sesión', target: 'plan-anotar' },
-      { label: 'Por qué', target: 'plan-detalle' },
+      { label: 'Detalle del día', target: 'plan-detalle' },
     ]);
     // Sin poder anotar (sesión propia, por ejemplo) no se ofrece.
     expect(planStateSuggestion(mk({ canStart: false }))!.actions.map((a) => a.target)).toEqual(['plan-detalle']);

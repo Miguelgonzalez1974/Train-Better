@@ -33,6 +33,8 @@ export interface DataCtx {
   /** A dónde lleva «Ver la gráfica» (la pantalla Mis marcas) y «Ver Planificación». */
   marksTarget: RexTarget;
   planTarget: RexTarget;
+  /** Solo en Planificación: abre la ventana con todos los motivos de la sesión. Sin él, «¿por qué hoy así?» no ofrece el botón. */
+  reasonsTarget?: RexTarget;
 }
 
 /** El movimiento exacto de cada marca (el id con el que se apuntan las series). */
@@ -221,5 +223,7 @@ export function whyAnswer(about: WhyAbout, ctx: DataCtx): AskAnswer {
 
   const reasons = (s.coachReasons ?? []).map((r) => firstSentence(r)).filter((r): r is string => Boolean(r)).slice(0, 3);
   if (reasons.length === 0) return { lead: 'Es lo que toca.', tone: 'info', text: `Es la sesión de tu macro para hoy (semana ${s.mesocycleWeek}). No hay nada fuera de lo normal que apuntar.`, actions: plan };
-  return { lead: 'Por qué hoy así:', tone: 'info', text: reasons.join(' '), actions: plan };
+  // La respuesta es el resumen (hasta 3 motivos, una frase cada uno); desde Planificación se pueden ver todos enteros.
+  const all = ctx.reasonsTarget ? [{ label: 'Ver todos los motivos', target: ctx.reasonsTarget }] : [];
+  return { lead: 'Por qué hoy así:', tone: 'info', text: reasons.join(' '), actions: [...all, ...plan] };
 }

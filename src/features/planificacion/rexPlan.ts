@@ -122,7 +122,7 @@ export function planStateSuggestion(ctx: PlanRexContext): RexSuggestion | null {
   const tone = ctx.light ? LIGHT_TONE[ctx.light.color] : 'info';
   // Se entrena sin el móvil y se anota al acabar: el botón principal es «He acabado la sesión» (el mazo de tarjetas para anotar lo hecho).
   const actions: RexAction[] = [];
-  if (ctx.canStart) actions.push({ label: 'He acabado la sesión', target: 'plan-anotar' });  actions.push({ label: 'Por qué', target: 'plan-detalle' });
+  if (ctx.canStart) actions.push({ label: 'He acabado la sesión', target: 'plan-anotar' });  actions.push({ label: 'Detalle del día', target: 'plan-detalle' });
   return {
     id: 'plan-estado',
     priority: 95,

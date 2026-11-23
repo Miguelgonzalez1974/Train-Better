@@ -35,6 +35,8 @@ export type RexTarget =
   | 'detalle-dia'
   /** Planificación: el detalle del estado del día, la hoja de dureza, el aviso de molestia y los avisos del coach. */
   | 'plan-detalle'
+  /** Planificación: la ventana con todos los motivos de la sesión de hoy (el «por qué» completo). */
+  | 'plan-motivos'
   | 'plan-dureza'
   | 'plan-molestia'
   | 'plan-avisos'
