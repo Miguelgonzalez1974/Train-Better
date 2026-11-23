@@ -74,7 +74,7 @@ function DiaryRow({ day, sets, onDelete }: { day: DiaryDay; sets: WorkSetEntry[]
   const previewNames = names.length > 0 ? names : programDone.map((p) => p.title);
   const preview = previewNames.slice(0, 4).join(' · ') + (previewNames.length > 4 ? ` +${previewNames.length - 4}` : '') + (entry && programDone.length > 0 ? ' · + programa de fuerza' : '');
 
-  // Series registradas agrupadas por movimiento (registro serie a serie del modo enfocado).
+  // Series registradas agrupadas por movimiento (registro serie a serie del mazo de anotar).
   const setsByMovement = new Map<string, WorkSetEntry[]>();
   for (const s of [...sets].sort((a, b) => a.setNumber - b.setNumber)) {
     const arr = setsByMovement.get(s.movementId) ?? [];

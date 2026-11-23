@@ -1158,7 +1158,7 @@ export function TrainingTimer({
     },
     [preview],
   );
-  // Cualquier botón «Reloj» de la app (el del WOD, el del modo enfocado) lo abre en el modo que toque.
+  // Cualquier botón «Reloj» de la app (el del WOD, el de las tarjetas) lo abre en el modo que toque.
   useEffect(
     () =>
       clockBus.on((m) => {

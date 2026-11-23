@@ -84,7 +84,7 @@ export function CoachAccuracyCard({ profile, todayIso }: { profile: AthleteProfi
       {ledger.rows.length === 0 ? (
         <p className="text-xs leading-relaxed text-neutral-400">
           {records.length === 0
-            ? 'Todavía no hay decisiones de carga. Salen al cerrar sesiones de fuerza con todas las series apuntadas en el modo entreno.'
+            ? 'Todavía no hay decisiones de carga. Salen al cerrar sesiones de fuerza con todas las series apuntadas al anotar la sesión.'
             : `Hay ${records.length} ${records.length === 1 ? 'resultado' : 'resultados'} de fuerza anotados, pero aún ninguna decisión: el coach sube con ${settings?.cleanNeeded ?? 2} sesiones limpias seguidas y baja con dos con fallos.`}
         </p>
       ) : (

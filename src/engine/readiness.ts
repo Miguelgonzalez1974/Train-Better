@@ -98,21 +98,6 @@ export function checkFromQuickAnswer(dateIso: string, overall: CheckInOverall, m
   return check;
 }
 
-/** Días seguidos con check-in hasta hoy (si hoy aún no hay, cuenta desde ayer para no romper la racha antes de tiempo). */
-export function checkInStreak(log: ReadinessCheck[] | undefined, todayIso: string): number {
-  const dates = new Set((log ?? []).map((c) => c.date));
-  const d = new Date(`${todayIso}T12:00:00`);
-  if (!dates.has(todayIso)) d.setDate(d.getDate() - 1);
-  let n = 0;
-  for (;;) {
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (!dates.has(iso)) break;
-    n += 1;
-    d.setDate(d.getDate() - 1);
-  }
-  return n;
-}
-
 export function getReadinessCheckForDate(log: ReadinessCheck[] | undefined, dateIso: string): ReadinessCheck | undefined {
   return (log ?? []).find((entry) => entry.date === dateIso);
 }

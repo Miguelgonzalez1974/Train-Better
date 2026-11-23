@@ -22,7 +22,7 @@ interface Props {
 }
 
 /**
- * Cambiar el complejo del día por otro de la librería, en el modo enfocado: el rack está ocupado, no te apetece o hoy no sale. Salen
+ * Cambiar el complejo del día por otro de la librería, en el mazo de anotar: el rack está ocupado, no te apetece o hoy no sale. Salen
  * los de la misma familia (snatch con snatch, clean con clean), con su peso ya recalculado para hoy; se conservan las series y el ajuste del día.
  */
 export function ComplexSwapButton({ entry, index, pool, week, prs, variantPrs, disabled, onSwap }: Props) {

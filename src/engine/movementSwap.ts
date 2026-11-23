@@ -6,7 +6,7 @@ import { avoidsMovement, getAvoidedPatterns } from './painFlags';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPR } from './prResolution';
 
 /**
- * Sustituir un movimiento sobre la marcha (modo enfocado): el rack está ocupado, falta una barra, algo molesta o hoy no sale.
+ * Sustituir un movimiento sobre la marcha (mazo de anotar): el rack está ocupado, falta una barra, algo molesta o hoy no sale.
  * Ofrece alternativas del mismo bloque y del mismo patrón de movimiento (o las de escalado curadas del WOD), sin lo que evita
  * un aviso de molestia activo, y recalcula la carga cuando se puede: con barra en los dos movimientos se mantiene el mismo %
  * del PR; si cambia el material (mancuernas, peso corporal…) no se inventa un peso y la carga queda a elección del atleta.

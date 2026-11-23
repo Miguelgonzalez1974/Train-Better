@@ -470,7 +470,7 @@ export interface AthleteProfile {
    */
   setFeedbackLog?: SetFeedbackEntry[];
   /**
-   * Registro serie a serie de fuerza/oly, marcado en el modo entreno enfocado (ver [[WorkSetEntry]]).
+   * Registro serie a serie de fuerza/oly, marcado en el mazo de anotar (ver [[WorkSetEntry]]).
    * Persiste qué series se completaron y con qué carga real — de momento solo para mostrarlo en el
    * resumen y el diario; mas adelante puede alimentar la calibracion de carga (`analyzeSetLoads`).
    */
@@ -724,7 +724,7 @@ export interface SessionBlockResult {
   /**
    * Formatos de serie unica (single pesado del dia, EMOM de 1 rep/min, test de 1RM): no llevan `sets`,
    * pero el atleta necesita registrar el peso realmente movido y valorar el esfuerzo. Con este flag,
-   * FocusMode pinta una unica fila de registro ("Top @ X kg") que escribe en `workLog` igual que el
+   * El mazo de anotar pinta una unica fila de registro ("Top @ X kg") que escribe en `workLog` igual que el
    * stepper multiserie, y el bloque entra en la tarjeta de RPE. Bloques strength y oly.
    */
   logAsSingle?: boolean;
@@ -747,7 +747,7 @@ export interface SessionBlockResult {
    */
   complex?: { id: string; name: string; steps: { movementId: string; reps: number }[] };
   /**
-   * Cómo era el bloque ANTES de cambiar su movimiento a mano en el modo enfocado: permite "Deshacer" aunque se recargue la app.
+   * Cómo era el bloque ANTES de cambiar su movimiento a mano en el mazo de anotar: permite "Deshacer" aunque se recargue la app.
    * Solo guarda lo que el cambio toca (movimiento, reps, carga, plan serie a serie y el escalado previo).
    */
   swapOrigin?: { movementId: string; reps?: string; loadKg?: number; setPlan?: { reps: number; kg: number }[]; scaledFrom?: string };

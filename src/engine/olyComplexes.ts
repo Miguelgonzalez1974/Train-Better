@@ -164,7 +164,7 @@ export function complexNote(complex: Pick<OlyComplex, 'steps'>, nameOf: (id: str
 }
 
 /**
- * Lo que cambia en un bloque de complejo al cambiarlo por otro (en el modo enfocado): el complejo, su peso y sus series. Conserva el
+ * Lo que cambia en un bloque de complejo al cambiarlo por otro (en el mazo de anotar): el complejo, su peso y sus series. Conserva el
  * ajuste del día (preparación, carga aguda…) que llevaba el complejo anterior, deshaciendo lo que ponía la semana y el propio
  * complejo, y las series que ya tenía.
  */

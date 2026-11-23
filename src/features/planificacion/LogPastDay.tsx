@@ -52,7 +52,7 @@ export function LogPastDay({ dateIso, planned, onSaved }: { dateIso: string; pla
 /**
  * Las series de fuerza y halterofilia de ese día, ya rellenadas con lo previsto (peso y repeticiones de cada serie): se desmarca la que
  * no se hizo y se corrige el peso de la que fue distinta. "Todo como estaba" las deja todas hechas. Se guardan con la fecha de ese día,
- * con el mismo registro que el modo enfocado, así que el progreso, el 1RM estimado y las cargas aprendidas las ven igual.
+ * con el mismo registro que el mazo de anotar, así que el progreso, el 1RM estimado y las cargas aprendidas las ven igual.
  */
 function LiftsStep({ lifts, state, onChange, onNext, onSkip, onBack }: { lifts: PlannedLift[]; state: LiftState; onChange: (next: LiftState) => void; onNext: () => void; onSkip: () => void; onBack: () => void }) {
   const set = (key: string, patch: Partial<LiftState[string]>) => onChange({ ...state, [key]: { ...state[key], ...patch } });
@@ -160,7 +160,7 @@ function PlannedForm({ dateIso, session, onBack, onSaved }: { dateIso: string; s
       ),
       ...(notDone.length > 0 ? { skipped: notDone } : {}),
     });
-    // Las series y los pesos, con la fecha de ese día y el mismo registro que el modo enfocado.
+    // Las series y los pesos, con la fecha de ese día y el mismo registro que el mazo de anotar.
     if (logLifts) for (const entry of workSetsFrom(dateIso, lifts, liftState)) athleteRepository.saveWorkSet(entry);
     // Se marca como "esto pasó de verdad", igual que al cerrar la sesión de hoy: otro dispositivo no la pisa al sincronizar.
     athleteRepository.saveCachedSession({ ...session, editedByAthlete: true });

@@ -551,7 +551,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const resolveTestDayPRKey = testDayBlock?.block === 'oly' ? resolveOlyPRKey : resolveStrengthPRKey;
 
   /**
-   * Bloques de fuerza/oly de hoy con una serie ya registrada en `workLog` (modo enfocado) — solo esos
+   * Bloques de fuerza/oly de hoy con una serie ya registrada en `workLog` (mazo de anotar) — solo esos
    * admiten el check-in de RPE: el peso y las reps salen de ahí, no se vuelven a pedir. Sin serie
    * registrada todavía no hay nada que calibrar.
    */
@@ -606,7 +606,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   /**
    * Calibra el coach con el RPE de la serie más pesada que el atleta ya registró en `workLog` — el
    * peso y las reps de esa serie no se vuelven a pedir. Ya no reajusta las series que quedan hoy:
-   * para eso el atleta ya tiene los +/- del modo enfocado, más directos que una sugerencia derivada
+   * para eso el atleta ya tiene los +/- del mazo de anotar, más directos que una sugerencia derivada
    * de una sensación cualitativa.
    */
   function handleRateSet(index: number, rpe: number) {

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkFromQuickAnswer, checkInStreak, getReadinessFactor, scoreCheck } from './readiness';
-import type { ReadinessCheck } from '../data/athlete/types';
+import { checkFromQuickAnswer, getReadinessFactor, scoreCheck } from './readiness';
 
 const D = '2026-10-13';
 
@@ -40,26 +39,5 @@ describe('check-in rápido', () => {
     expect(checkFromQuickAnswer(D, 'normal', ['sleep'], 5.5).sleepHours).toBe(5.5);
     expect(checkFromQuickAnswer(D, 'normal', ['stress'], 5.5).sleepHours).toBeUndefined();
     expect(checkFromQuickAnswer(D, 'bien', [], 8).sleepHours).toBeUndefined();
-  });
-});
-
-describe('racha de check-ins', () => {
-  const log = (dates: string[]): ReadinessCheck[] => dates.map((date) => ({ date, sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' }));
-
-  it('cuenta los días seguidos hasta hoy', () => {
-    expect(checkInStreak(log(['2026-10-11', '2026-10-12', '2026-10-13']), D)).toBe(3);
-  });
-
-  it('un hueco corta la racha', () => {
-    expect(checkInStreak(log(['2026-10-10', '2026-10-12', '2026-10-13']), D)).toBe(2);
-  });
-
-  it('si hoy aún no hay, la racha de ayer sigue viva', () => {
-    expect(checkInStreak(log(['2026-10-11', '2026-10-12']), D)).toBe(2);
-  });
-
-  it('sin registros es 0', () => {
-    expect(checkInStreak(undefined, D)).toBe(0);
-    expect(checkInStreak(log(['2026-10-01']), D)).toBe(0);
   });
 });

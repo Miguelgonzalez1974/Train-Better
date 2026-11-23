@@ -38,7 +38,7 @@ export function isHistorySorted(history: SessionHistoryEntry[]): boolean {
 // ---------------------------------------------------------------------------------------------
 
 export interface PlannedLiftRow {
-  /** Número de serie (1-indexado), como en el modo enfocado. */
+  /** Número de serie (1-indexado), como en el mazo de anotar. */
   set: number;
   kg: number;
   reps: number;
@@ -54,7 +54,7 @@ export interface PlannedLift {
 
 /**
  * Las series de fuerza y halterofilia que el coach tenía previstas para ese día, con su peso y repeticiones: las mismas filas que
- * enseña el modo enfocado (una por serie; en una rampa u ola, cada serie con su peso y reps; en un single u EMOM de oly, una sola fila).
+ * enseña el mazo de anotar (una por serie; en una rampa u ola, cada serie con su peso y reps; en un single u EMOM de oly, una sola fila).
  * No incluye el calentamiento de barra ni los bloques sin series que contar.
  */
 export function plannedLifts(session: DailySession): PlannedLift[] {

@@ -5,7 +5,7 @@ import { PAIN_AREA_AVOID_TEXT } from '../../engine/painFlags';
 import { isRestMarked } from '../../engine/restDays';
 import { makeProfile } from '../../engine/__fixtures';
 import { addDaysIso } from '../objetivos/rexFlow';
-import { applySupport, awayDates, getSupportNode, isComplete, summarize, type SupportCtx, type SupportState } from './rexSupportFlow';
+import { applySupport, awayDates, getSupportNode, summarize, type SupportCtx, type SupportState } from './rexSupportFlow';
 
 const TODAY = '2026-11-04';
 const mkCtx = (profile: AthleteProfile, todayDone = false): SupportCtx => ({ profile, todayIso: TODAY, todayDone, newId: () => 'flag-1' });
@@ -92,7 +92,6 @@ describe('Rex para imprevistos: una molestia', () => {
     const ctx = mkCtx(base());
     const { s, id } = walk(flow, ctx);
     expect(id).toBe('summary');
-    expect(isComplete(s)).toBe(true);
     const flag = applySupport(s, ctx).profile.painFlags![0];
     expect(flag).toEqual({ id: 'flag-1', area: 'rodilla', createdDate: TODAY, until: addDaysIso(TODAY, 5) });
   });
@@ -210,12 +209,5 @@ describe('Rex para imprevistos: seguridad', () => {
     applySupport(walk(['Me duele algo', 'Rodilla', 'Unos días'], ctx).s, ctx);
     applySupport(walk(['Voy a faltar unos días', 'Viajo', '3 días'], ctx).s, ctx);
     expect(JSON.stringify(profile)).toBe(before);
-  });
-
-  it('un estado a medias no está completo', () => {
-    expect(isComplete({})).toBe(false);
-    expect(isComplete({ kind: 'pain', area: 'rodilla' })).toBe(false);
-    expect(isComplete({ kind: 'away', why: 'viaje' })).toBe(false);
-    expect(isComplete({ kind: 'today', what: 'rest' })).toBe(true);
   });
 });

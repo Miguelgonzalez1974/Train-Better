@@ -29,7 +29,7 @@ import { WodCategoryPill } from './WodCategoryPill';
 
 export { ACCENT_CLASSES, BLOCK_META } from '../shell/blockMeta';
 
-/** Percepción de esfuerzo de una serie de fuerza/oly ya registrada hoy en modo entreno — lo justo
+/** Percepción de esfuerzo de una serie de fuerza/oly ya registrada hoy al anotar la sesión — lo justo
  * para pintar `RpeCheckIn` debajo de su movimiento, sin repetir el nombre (ya está justo encima). */
 export interface RpeFeedback {
   topSet: { kg: number; reps: number };
@@ -1326,7 +1326,7 @@ interface SessionBlockCardProps {
   onRemoveEntry?: (index: number) => void;
   /** Datos del atleta para el popup de progresión del movimiento (solo lectura fuera del modo edición). */
   progress?: MovementProgressData;
-  /** Percepción de esfuerzo de fuerza/oly ya registrada hoy en modo entreno, por índice global de
+  /** Percepción de esfuerzo de fuerza/oly ya registrada hoy al anotar la sesión, por índice global de
    * `session.blocks` — se pinta debajo de su levantamiento (no en modo edición). */
   setFeedbackByIndex?: Map<number, RpeFeedback>;
   onRateSet?: (index: number, rpe: number) => void;

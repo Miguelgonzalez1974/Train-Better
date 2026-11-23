@@ -5,7 +5,7 @@ import { parseWorkingReps } from './setFeedback';
 /**
  * Anotar los pesos de un ejercicio de barra a posteriori, serie a serie, sin tocar cada serie: la sesión prevista como lista de filas ya
  * rellenas y unas pocas operaciones que cubren los casos reales. Subí la serie top (las demás se mueven en proporción), subí o bajé todas,
- * cambié una serie (las siguientes se mueven igual salvo las que toqué a mano), hice menos series, una no salió. Puro: lo pinta `LogAll`.
+ * cambié una serie (las siguientes se mueven igual salvo las que toqué a mano), hice menos series, una no salió. Puro: lo pinta `ReviewDeck`.
  */
 
 /** Paso de los botones − y +, en kilos. */
@@ -100,11 +100,6 @@ export function adjustRow(edit: LiftEdit, index: number, delta: number): LiftEdi
   return { ...edit, rows };
 }
 
-/** Sube o baja todas las series `delta` kilos: la forma de la rampa se mantiene. */
-export function adjustAll(edit: LiftEdit, delta: number): LiftEdit {
-  return { ...edit, rows: edit.rows.map((r) => ({ ...r, kg: round4(r.kg + delta) })) };
-}
-
 /**
  * Pone la serie top en `kg` y mueve las demás en proporción (redondeadas a 2,5 kg). En series rectas es «el peso de todas». Las que se tocaron a mano no se
  * mueven. Con una serie top sin peso (peso corporal) no hace nada.
@@ -125,35 +120,9 @@ export function setTop(edit: LiftEdit, kg: number): LiftEdit {
   };
 }
 
-/** Las series de una ola (índices de fila), para ajustarla por separado. */
-export function waveRange(plan: LiftPlan, wave: number): number[] {
-  if (!plan.waveSize) return plan.rows.map((_, i) => i);
-  return plan.rows.map((_, i) => i).filter((i) => Math.floor(i / plan.waveSize!) === wave);
-}
-
-/** Sube o baja un conjunto de series (una ola) `delta` kilos. */
-export function adjustRange(edit: LiftEdit, indices: number[], delta: number): LiftEdit {
-  const set = new Set(indices);
-  return { ...edit, rows: edit.rows.map((r, i) => (set.has(i) ? { ...r, kg: round4(r.kg + delta) } : r)) };
-}
-
 /** Cuántas series se hicieron (de 0 a las previstas). */
 export function setDone(edit: LiftEdit, done: number): LiftEdit {
   return { ...edit, done: Math.max(0, Math.min(edit.rows.length, Math.round(done))) };
-}
-
-/** Cómo salió una serie: bien → justa → no salió → bien. */
-export function cycleQuality(edit: LiftEdit, index: number): LiftEdit {
-  const order: (SetQuality | undefined)[] = [undefined, 'justa', 'fallada'];
-  return {
-    ...edit,
-    rows: edit.rows.map((r, i) => {
-      if (i !== index) return r;
-      const next = order[(order.indexOf(r.quality) + 1) % order.length];
-      const { quality: _old, ...rest } = r;
-      return next ? { ...rest, quality: next, manual: true } : rest;
-    }),
-  };
 }
 
 /** Pone cómo salió una serie (undefined = bien). */
@@ -191,16 +160,6 @@ export function topDoneSet(edit: LiftEdit): { index: number; kg: number; reps: n
     if (i < edit.done && (best < 0 || r.kg >= edit.rows[best].kg)) best = i;
   });
   return best < 0 ? null : { index: best, kg: edit.rows[best].kg, reps: edit.rows[best].reps };
-}
-
-/** Vuelve a lo previsto: pesos, series hechas y cómo salió (el esfuerzo se quita). */
-export function resetEdit(plan: LiftPlan): LiftEdit {
-  return { rows: plan.rows.map((r) => ({ n: r.n, reps: r.reps, plannedKg: r.plannedKg, kg: r.plannedKg, manual: false })), done: plan.rows.length };
-}
-
-/** ¿Algo es distinto de lo previsto? (pesos, series hechas o cómo salió). */
-export function isChanged(edit: LiftEdit): boolean {
-  return edit.done !== edit.rows.length || edit.rows.some((r) => r.kg !== r.plannedKg || r.quality);
 }
 
 export interface SetWrite {

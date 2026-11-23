@@ -29,7 +29,7 @@ interface SwapButtonProps {
 }
 
 /**
- * Cambiar un movimiento sobre la marcha, en el modo enfocado: el rack está ocupado, falta material, algo molesta o hoy no sale.
+ * Cambiar un movimiento sobre la marcha, en el mazo de anotar: el rack está ocupado, falta material, algo molesta o hoy no sale.
  * Abre la lista de alternativas (ver `engine/movementSwap.ts`) con el material de cada una y, en las de barra, el peso
  * recalculado con el mismo % de tu marca.
  */

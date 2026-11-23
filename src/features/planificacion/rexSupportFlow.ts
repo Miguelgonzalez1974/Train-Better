@@ -235,11 +235,3 @@ export function applySupport(s: SupportState, ctx: SupportCtx): SupportEffect {
   const marked = awayDates(s, ctx).reduce((p, iso) => withRestMarked(p, iso), profile);
   return { profile: marked, regenerate: false };
 }
-
-/** ¿Hay algo que aplicar? (para no ofrecer "Hacerlo" en un estado incompleto). */
-export function isComplete(s: SupportState): boolean {
-  if (s.kind === 'pain') return Boolean(s.area && s.duration);
-  if (s.kind === 'today') return Boolean(s.what);
-  if (s.kind === 'away') return Boolean(s.why && s.days);
-  return false;
-}

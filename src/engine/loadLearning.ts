@@ -4,7 +4,7 @@ import { SETFEEL_MIN_OBS, SETLOAD_MIN_OBS, type ResponseProfile } from './respon
 /**
  * "Tus cargas": lo que el coach ya ha aprendido de cómo te van los pesos, levantamiento a levantamiento, para enseñarlo.
  * No calcula nada nuevo — lee la calibración que `responseProfile` ya aplica al prescribir (`perLiftLoad` por series reales
- * con RPE o del modo entreno, y `setFeel` por la valoración de la 1ª serie) y la traduce a: tu referencia, tu 1RM
+ * con RPE o de anotar la sesión, y `setFeel` por la valoración de la 1ª serie) y la traduce a: tu referencia, tu 1RM
  * estimado hoy, cuánto mueve el coach las cargas y por qué.
  */
 

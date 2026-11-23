@@ -23,7 +23,7 @@ interface DaySessionBlocksProps {
   onRemoveEntry?: (index: number) => void;
   /** Datos del atleta para el popup de progresión del movimiento (tocar la carga de una serie de fuerza/oly). */
   progress?: MovementProgressData;
-  /** Percepción de esfuerzo de fuerza/oly ya registrada hoy en modo entreno, por índice global de
+  /** Percepción de esfuerzo de fuerza/oly ya registrada hoy al anotar la sesión, por índice global de
    * `session.blocks` — `SessionBlockCard` la pinta debajo del levantamiento al que pertenece. */
   setFeedbackByIndex?: Map<number, RpeFeedback>;
   onRateSet?: (index: number, rpe: number) => void;

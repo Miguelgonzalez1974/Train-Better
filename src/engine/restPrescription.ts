@@ -55,9 +55,3 @@ export function restLabel(seconds: number): string {
   const s = seconds % 60;
   return s === 0 ? `${m} min` : `${m}:${String(s).padStart(2, '0')}`;
 }
-
-/** Los segundos de descanso como cuenta atrás («1:42»). */
-export function clockText(seconds: number): string {
-  const v = Math.max(0, Math.round(seconds));
-  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
-}

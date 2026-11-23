@@ -3,16 +3,16 @@ import { Brain, Pencil, TrendingUp } from 'lucide-react';
 import { SET_FEEL_LABEL, RPE_CHECKIN_OPTIONS, feelFromRpe } from '../../engine/setFeedback';
 
 interface RpeCheckInProps {
-  /** Solo hace falta cuando la tarjeta no vive ya pegada al nombre del movimiento (ej. modo enfocado,
+  /** Solo hace falta cuando la tarjeta no vive ya pegada al nombre del movimiento (ej. el mazo de anotar,
    * donde esta ficha aparece dentro de una lista de varios levantamientos). En la tarjeta de sesión
    * normal se omite: la caja ya está debajo del movimiento al que pertenece, repetir el nombre sobra. */
   movementName?: string;
-  /** Serie más pesada ya registrada hoy (workLog del modo enfocado) — de aquí sale el peso, no se teclea. */
+  /** Serie más pesada ya registrada hoy (workLog del mazo de anotar) — de aquí sale el peso, no se teclea. */
   topSet: { kg: number; reps: number };
   loggedRpe: number | null;
   estimated1rm?: number;
   onRate: (rpe: number) => void;
-  /** Versión grande para el modo enfocado (se mira de lejos y se toca con la mano mojada). */
+  /** Versión grande para el mazo de anotar (se mira de lejos y se toca con la mano mojada). */
   large?: boolean;
 }
 
@@ -27,10 +27,10 @@ const shellDone = 'rounded-xl border-l-2 border-brand-neon/40 bg-gradient-to-br 
 
 /**
  * Calibra el coach para este levantamiento con un solo dato: el RPE de la serie más pesada que el
- * atleta ya registró en el modo enfocado. Sustituye a la antigua ficha de "¿qué hiciste en tu serie
+ * atleta ya registró en el mazo de anotar. Sustituye a la antigua ficha de "¿qué hiciste en tu serie
  * más pesada?" (kg/reps/RPE a mano + pastillas de sensación + reajuste en caliente de las series
  * que quedan) — esos dos primeros ya no aportan nada: el peso y las reps ya están en `workLog`, y el
- * atleta ajusta las series que quedan a mano con los +/- del modo enfocado, no con una sugerencia
+ * atleta ajusta las series que quedan a mano con los +/- del mazo de anotar, no con una sugerencia
  * derivada de una sensación cualitativa. El RPE sigue alimentando `estimateE1RMFromRpe` y
  * `responseProfile` igual que antes.
  */

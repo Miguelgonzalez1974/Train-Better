@@ -40,7 +40,6 @@ export type RexTarget =
   | 'plan-resumen'
   /** Planificación: volver a apuntar los datos de una sesión ya completada (borra el registro de hoy y abre el cierre). */
   | 'plan-cambiar'
-  /** Planificación: empezar la sesión (modo enfocado) y terminar la edición de la sesión. */
   /** Planificación: las tarjetas en modo revisión: «Anotar lo que hice» (sin empezar) y «Ver y corregir» (sesión terminada). */
   | 'plan-anotar'
   | 'plan-corregir'

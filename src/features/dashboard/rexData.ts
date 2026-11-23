@@ -103,7 +103,7 @@ export function dataAnswer(q: DataQuestion, ctx: DataCtx): AskAnswer {
         const last = [...history].filter((h) => h.movementIds.includes(id)).sort((a, b) => b.date.localeCompare(a.date))[0];
         return last
           ? { lead: `${q.lift.label}.`, tone: 'info', text: `Lo hiciste el ${shortDate(last.date)} (${ago(last.date, todayIso)}), pero no hay pesos apuntados serie a serie.`, actions }
-          : { lead: `${q.lift.label}.`, tone: 'mid', text: 'Aún no tengo ninguna sesión con ese levantamiento. Si lo has hecho, apúntalo en el modo enfocado y lo recordaré.', actions: [] };
+          : { lead: `${q.lift.label}.`, tone: 'mid', text: 'Aún no tengo ninguna sesión con ese levantamiento. Si lo has hecho, anótalo al acabar la sesión y lo recordaré.', actions: [] };
       }
       const date = sets.reduce((d, s) => (s.date > d ? s.date : d), '');
       const day = sets.filter((s) => s.date === date);

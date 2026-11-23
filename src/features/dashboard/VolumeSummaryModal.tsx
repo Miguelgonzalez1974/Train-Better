@@ -51,7 +51,7 @@ export function VolumeContent() {
         <EmptyState
           Icon={BarChart3}
           title="Sin volumen todavía"
-          description="En cuanto marques una serie con peso en el modo entreno, el tonelaje de cada uno de los últimos 14 días aparecerá aquí."
+          description="En cuanto anotes una serie con peso al acabar la sesión, el tonelaje de cada uno de los últimos 14 días aparecerá aquí."
           accent="gold"
         />
       ) : (

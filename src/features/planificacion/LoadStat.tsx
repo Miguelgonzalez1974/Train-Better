@@ -34,7 +34,7 @@ interface LoadStatProps {
  * columna normal, sin interacción.
  *
  * El número que se muestra prioriza lo REAL sobre lo prescrito: si ya hay una serie de hoy
- * registrada en el modo enfocado para este movimiento, se enseña esa carga (con la etiqueta "kg
+ * registrada en el mazo de anotar para este movimiento, se enseña esa carga (con la etiqueta "kg
  * real"), no la que mandó el coach — antes, una vez entrenado, la cifra se quedaba fija en la
  * prescripción original aunque el atleta hubiera levantado otra cosa, lo cual confundía sobre si lo
  * que se veía era el plan o lo que de verdad se hizo.

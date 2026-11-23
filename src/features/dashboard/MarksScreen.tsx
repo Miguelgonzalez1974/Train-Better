@@ -249,7 +249,7 @@ export function MarksScreen({
                         <EvolutionChart evo={evo} />
                       ) : (
                         <p className="border-y border-white/10 px-3 py-4 text-center text-xs leading-relaxed text-neutral-400">
-                          Todavía no hay datos de {label} en este periodo. El gráfico se llena con tus tests de PR y con las series que registras en el modo enfocado.
+                          Todavía no hay datos de {label} en este periodo. El gráfico se llena con tus tests de PR y con las series que anotas al acabar cada sesión.
                         </p>
                       )}
                     </div>

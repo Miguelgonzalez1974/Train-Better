@@ -10,12 +10,9 @@ export const REX_NOTES_LIMIT = 30;
 export const REX_NOTE_MAX_CHARS = 140;
 
 const WEEKDAY_PLURAL = ['los domingos', 'los lunes', 'los martes', 'los miércoles', 'los jueves', 'los viernes', 'los sábados'];
-const WEEKDAY_SINGULAR = ['el domingo', 'el lunes', 'el martes', 'el miércoles', 'el jueves', 'el viernes', 'el sábado'];
 
 /** «los jueves» */
 export const weekdayPlural = (weekday: number): string => WEEKDAY_PLURAL[weekday] ?? 'ese día';
-/** «el jueves» */
-export const weekdaySingular = (weekday: number): string => WEEKDAY_SINGULAR[weekday] ?? 'ese día';
 
 export type NewRexNote = { kind: 'tiempo'; weekday: number; minutes: number } | { kind: 'nota'; text: string };
 

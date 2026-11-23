@@ -13,7 +13,7 @@ export type EvolutionRange = '8s' | '6m' | 'todo';
 export const RANGE_DAYS: Record<EvolutionRange, number | null> = { '8s': 56, '6m': 182, todo: null };
 export const RANGE_LABEL: Record<EvolutionRange, string> = { '8s': '8 sem', '6m': '6 meses', todo: 'Todo' };
 
-/** Series del modo entreno que valen para estimar: hasta 10 reps (Epley deja de ser fiable) y al menos el 55 % del PR (no calentamiento). */
+/** Series de anotar la sesión que valen para estimar: hasta 10 reps (Epley deja de ser fiable) y al menos el 55 % del PR (no calentamiento). */
 const WORK_MAX_REPS = 10;
 const WORK_MIN_INTENSITY = 0.55;
 const DAY_MS = 86_400_000;

@@ -231,9 +231,3 @@ export function recoverCompanion(profile: AthleteProfile, programId: string, tod
   }));
   return { ...next, companionLog: [...(next.companionLog ?? []).filter((e) => !moved.has(e.id)), ...adopted] };
 }
-
-/** Cuántas sesiones se han hecho y se han saltado hasta ahora. */
-export function companionCounts(profile: AthleteProfile, programId: string): { done: number; skipped: number } {
-  const log = (profile.companionLog ?? []).filter((e) => e.programId === programId);
-  return { done: log.filter((e) => e.outcome === 'hecha').length, skipped: log.filter((e) => e.outcome === 'saltada').length };
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockText, COMPLEX_REST_SECONDS, olyRestForReps, prescribedRestSeconds, restLabel, strengthRestForReps, TEST_REST_SECONDS, WAVE_REST_SECONDS } from './restPrescription';
+import { COMPLEX_REST_SECONDS, olyRestForReps, prescribedRestSeconds, restLabel, strengthRestForReps, TEST_REST_SECONDS, WAVE_REST_SECONDS } from './restPrescription';
 
 describe('el descanso que prescribe el entreno', () => {
   it('en fuerza, cuantas más repeticiones menos descanso', () => {
@@ -36,7 +36,5 @@ describe('el descanso que prescribe el entreno', () => {
 
   it('cómo se dice', () => {
     expect([150, 180, 90, 60, 120, 240, 75].map(restLabel)).toEqual(['2:30', '3 min', '90 s', '1 min', '2 min', '4 min', '75 s']);
-    expect(clockText(102)).toBe('1:42');
-    expect(clockText(-3)).toBe('0:00');
   });
 });

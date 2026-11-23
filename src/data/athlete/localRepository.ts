@@ -31,12 +31,12 @@ const PR_LOG_LIMIT = 150;
 const SET_FEEDBACK_LOG_LIMIT = 120;
 /** Resultados de fuerza por sesion y levantamiento: ~2 por sesion, mas de 2 meses a 5 dias/semana. */
 const PROGRESSION_LOG_LIMIT = 150;
-/** ~6 levantamientos x 5 series x ~10 sesiones recientes — series a series completo del modo enfocado. */
+/** ~6 levantamientos x 5 series x ~10 sesiones recientes — series a series completo del mazo de anotar. */
 const WORK_LOG_LIMIT = 300;
 /** Cubre mas de un año a la maxima frecuencia (6 dias/semana ~ 313/año), con margen. */
 const TRAINING_DATES_LOG_LIMIT = 400;
 
-/** Lo registrado de un día: la entrada del historial más lo que se borra con ella (series del modo enfocado y progresión). */
+/** Lo registrado de un día: la entrada del historial más lo que se borra con ella (series del mazo de anotar y progresión). */
 export interface DaySnapshot {
   date: string;
   entry: SessionHistoryEntry | null;
@@ -87,7 +87,7 @@ export interface AthleteRepository {
   /** Guarda los ajustes de la progresion por resultados que el atleta acepta o rechaza. */
   saveProgressionSettings(settings: ProgressionSettings): void;
   getWorkLog(): WorkSetEntry[];
-  /** Registra (o sustituye, por date+movementId+setNumber) una serie de trabajo marcada en el modo enfocado. */
+  /** Registra (o sustituye, por date+movementId+setNumber) una serie de trabajo marcada en el mazo de anotar. */
   saveWorkSet(entry: WorkSetEntry): void;
   /** Quita una serie registrada (el atleta la desmarca). */
   clearWorkSet(date: string, movementId: string, setNumber: number): void;

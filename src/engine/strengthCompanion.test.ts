@@ -4,7 +4,6 @@ import { makeProfile } from './__fixtures';
 import { generateCompanionSession, generateSessionForDate, hasActiveTrainingStructure } from './generateSession';
 import {
   acceptCompanion,
-  companionCounts,
   companionDueDate,
   companionPosition,
   companionStatus,
@@ -116,14 +115,12 @@ describe('cuándo toca y qué hacer con cada respuesta', () => {
     expect(profile.companionLog).toEqual([{ id: 'p1|0', programId: 'p1', index: 0, date: TUE, outcome: 'hecha', label: 'Press banca · test', loadKg: 110, rpe: 8, durationMin: 40 }]);
     expect(companionStatus(only(profile), TUE)).toEqual({ kind: 'hecha-hoy' });
     expect(companionStatus(only(profile), WED)).toMatchObject({ kind: 'oferta', index: 1, late: false });
-    expect(companionCounts(profile, 'p1')).toEqual({ done: 1, skipped: 0 });
   });
 
   it('saltar avanza sin hacerla y queda apuntado como saltada', () => {
     const profile = skipCompanion(profileWith(program()), 'p1', MON, 'Press banca');
     expect(only(profile).companion.cursor).toBe(1);
     expect(profile.companionLog?.[0]).toMatchObject({ outcome: 'saltada', index: 0 });
-    expect(companionCounts(profile, 'p1')).toEqual({ done: 0, skipped: 1 });
   });
 
   it('pausar N días: nada hasta pasada la pausa', () => {

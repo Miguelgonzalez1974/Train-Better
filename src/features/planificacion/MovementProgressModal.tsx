@@ -183,7 +183,7 @@ export function MovementProgressModal({ movementId, targetKg, open, onClose, prs
           <div className="rounded-xl bg-white/[0.03] px-3 py-6 text-center">
             <p className="text-sm font-semibold text-neutral-300">A la espera de sesiones</p>
             <p className="mx-auto mt-1 max-w-[15rem] text-xs leading-relaxed text-neutral-500">
-              Cuando registres series de {movement?.name ?? 'este movimiento'} en el modo entreno, aquí verás cómo de cerca de tu
+              Cuando anotes series de {movement?.name ?? 'este movimiento'} al acabar la sesión, aquí verás cómo de cerca de tu
               1RM trabajas cada día.
             </p>
           </div>

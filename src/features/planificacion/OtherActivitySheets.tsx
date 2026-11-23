@@ -3,41 +3,9 @@ import { DurationStepper, RpePicker } from './SessionFeelFields';
 import { OTHER_KINDS, otherKindInfo, type OtherKind } from './otherActivity';
 
 /**
- * Las dos hojas de «Anotar lo que hice»: primero la pregunta (¿la sesión prevista o otra cosa?) y, si fue otra cosa, el registro corto
- * (qué fue, cuánto duró, cómo de duro, resultado opcional y, si quieres, pasar la sesión prevista a mañana). Solo pintan: el
- * guardado y el cambio de día los hace `Planificacion`.
+ * La hoja de «Hice otra cosa»: el registro corto (qué fue, cuánto duró, cómo de duro, resultado opcional y, si quieres, pasar la sesión
+ * prevista a mañana). Solo pinta: el guardado y el cambio de día los hace `Planificacion`.
  */
-
-export function WhatDidModal({
-  open,
-  onClose,
-  plannedLabel,
-  onPlanned,
-  onOther,
-}: {
-  open: boolean;
-  onClose: () => void;
-  plannedLabel: string;
-  onPlanned: () => void;
-  onOther: () => void;
-}) {
-  const option = 'rounded-xl border border-brand-border px-4 py-3 text-left transition-colors hover:bg-white/5';
-  return (
-    <Modal open={open} onClose={onClose} title="¿Qué hiciste hoy?">
-      <div className="flex flex-col gap-3" data-testid="what-did">
-        <button onClick={onPlanned} data-testid="what-did-planned" className={`${option} border-brand-neon`}>
-          <span className="block text-sm font-semibold text-white">La sesión prevista</span>
-          <span className="mt-0.5 block text-xs text-neutral-400">{plannedLabel}</span>
-        </button>
-        <button onClick={onOther} data-testid="what-did-other" className={option}>
-          <span className="block text-sm font-semibold text-white">Otra cosa</span>
-          <span className="mt-0.5 block text-xs text-neutral-400">Una clase, salir a correr, el entreno de equipo…</span>
-        </button>
-        <p className="text-xs text-neutral-500">Si fue otra cosa, la sesión prevista queda sin hacer; si el plan lo permite, podrás pasarla a mañana.</p>
-      </div>
-    </Modal>
-  );
-}
 
 export interface OtherFormState {
   kind: OtherKind;

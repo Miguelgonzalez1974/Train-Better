@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionBlockResult, WorkSetEntry } from '../data/athlete/types';
-import { adjustAll, adjustOnly, adjustRange, adjustRow, commitOf, cycleQuality, initialEdit, isChanged, isStraight, liftPlanOf, markDoneThrough, resetEdit, setDone, setQuality, setRpe, setTop, topDoneSet, topIndex, waveRange } from './liftSets';
+import { adjustOnly, adjustRow, commitOf, initialEdit, isStraight, liftPlanOf, markDoneThrough, setDone, setQuality, setRpe, setTop, topDoneSet, topIndex } from './liftSets';
 
 const straight: SessionBlockResult = { block: 'strength', movementId: 'back-squat', sets: 5, reps: '5', loadKg: 100 };
 const ramp: SessionBlockResult = { block: 'strength', movementId: 'back-squat', sets: 4, reps: '5-3-1', loadKg: 80, setPlan: [{ reps: 5, kg: 60 }, { reps: 3, kg: 70 }, { reps: 1, kg: 80 }, { reps: 3, kg: 70 }] };
@@ -23,7 +23,6 @@ describe('liftPlanOf', () => {
     expect(isStraight(r)).toBe(false);
     const w = liftPlanOf(waves)!;
     expect(w.waveSize).toBe(3);
-    expect(waveRange(w, 1)).toEqual([3, 4, 5]);
     expect(w.blk).toBe('oly');
   });
 
@@ -40,7 +39,7 @@ describe('edición de pesos', () => {
     const e = initialEdit(liftPlanOf(ramp)!, []);
     expect(kgs(e)).toEqual([60, 70, 80, 70]);
     expect(e.done).toBe(4);
-    expect(isChanged(e)).toBe(false);
+    expect(e.rows.every((r) => !r.manual && !r.quality && r.kg === r.plannedKg)).toBe(true);
   });
 
   it('lo ya anotado hoy manda (peso y cómo salió)', () => {
@@ -78,37 +77,12 @@ describe('edición de pesos', () => {
     expect(e.rows[3].kg).toBe(102.5);
   });
 
-  it('todas ±: mantiene la forma de la rampa', () => {
-    expect(kgs(adjustAll(initialEdit(liftPlanOf(ramp)!, []), 5))).toEqual([65, 75, 85, 75]);
-    expect(kgs(adjustAll(initialEdit(liftPlanOf(ramp)!, []), -100))).toEqual([0, 0, 0, 0]);
-  });
-
-  it('una ola se ajusta por separado', () => {
-    const plan = liftPlanOf(waves)!;
-    const e = adjustRange(initialEdit(plan, []), waveRange(plan, 1), 2.5);
-    expect(kgs(e)).toEqual([60, 65, 70, 62.5, 67.5, 72.5]);
-  });
-
-  it('series hechas y cómo salió', () => {
+  it('series hechas', () => {
     let e = initialEdit(liftPlanOf(straight)!, []);
     e = setDone(e, 4);
     expect(e.done).toBe(4);
     expect(setDone(e, 99).done).toBe(5);
     expect(setDone(e, -3).done).toBe(0);
-    e = cycleQuality(e, 3);
-    expect(e.rows[3].quality).toBe('justa');
-    e = cycleQuality(e, 3);
-    expect(e.rows[3].quality).toBe('fallada');
-    e = cycleQuality(e, 3);
-    expect(e.rows[3].quality).toBeUndefined();
-  });
-
-  it('volver a lo previsto deshace todo', () => {
-    const plan = liftPlanOf(ramp)!;
-    let e = setDone(setTop(initialEdit(plan, []), 90), 2);
-    e = cycleQuality(e, 0);
-    expect(isChanged(e)).toBe(true);
-    expect(resetEdit(plan)).toEqual(initialEdit(plan, []));
   });
 });
 
@@ -147,11 +121,6 @@ describe('esfuerzo del ejercicio', () => {
     expect(setRpe(e, undefined).rpe).toBeUndefined();
   });
 
-  it('volver a lo previsto quita el esfuerzo', () => {
-    const plan = liftPlanOf(straight)!;
-    expect(resetEdit(plan).rpe).toBeUndefined();
-  });
-
   it('la serie hecha más pesada, y ninguna si no se hizo nada', () => {
     let e = adjustRow(initialEdit(liftPlanOf(ramp)!, []), 2, 5);
     expect(topDoneSet(e)).toEqual({ index: 2, kg: 85, reps: 1 });
@@ -178,7 +147,7 @@ describe('commitOf', () => {
   });
 
   it('una serie con calidad nunca va como prevista', () => {
-    const e = cycleQuality(initialEdit(liftPlanOf(straight)!, []), 0);
+    const e = setQuality(initialEdit(liftPlanOf(straight)!, []), 0, 'justa');
     expect(commitOf(e).write[0]).toMatchObject({ quality: 'justa', asPlanned: false });
   });
 });

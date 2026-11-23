@@ -9,7 +9,7 @@ import {
   countsForProgression,
   dismissProposal,
   evaluateLiftSession,
-  evaluateStrengthSession,
+  PROGRESSION_RULES,
   liftProgression,
   mainLiftBlock,
   OLY_PRIMER_REPS,
@@ -17,8 +17,6 @@ import {
   progressionNote,
   progressionProposal,
   progressionReason,
-  PROGRESSION_MAX,
-  PROGRESSION_MIN,
   ruleVerdict,
   sessionProgressionView,
 } from './progression';
@@ -56,8 +54,8 @@ const fb = (extra: Partial<SetFeedbackEntry>): SetFeedbackEntry => ({
 });
 
 describe('evaluar una sesión de fuerza', () => {
-  const evaluate = (s: WorkSetEntry[], feedback?: SetFeedbackEntry, b: Parameters<typeof evaluateStrengthSession>[0]['block'] = block) =>
-    evaluateStrengthSession({ date: '2026-10-05', block: b, key: 'backSquat', sets: s, feedback });
+  const evaluate = (s: WorkSetEntry[], feedback?: SetFeedbackEntry, b: Parameters<typeof evaluateLiftSession>[0]['block'] = block) =>
+    evaluateLiftSession({ date: '2026-10-05', block: b, key: 'backSquat', sets: s, feedback });
 
   it('series completas con RPE hasta 8,5 = limpia; más duro = dura', () => {
     expect(evaluate(sets(5, 100, 3), fb({ actualRpe: 8 }))?.verdict).toBe('limpia');
@@ -84,7 +82,7 @@ describe('evaluar una sesión de fuerza', () => {
     expect(evaluate(sets(3, 100, 3), fb({ actualRpe: 8 }))).toBeNull();
     expect(evaluate(sets(5, 100, 3), fb({ actualRpe: 8 }), { ...block, reps: '5-3-1' })).toBeNull();
     expect(evaluate(sets(1, 100, 1), undefined, { ...block, sets: 1, logAsSingle: true })).toBeNull();
-    expect(evaluateStrengthSession({ date: '2026-10-05', block, key: null, sets: sets(5, 100, 3) })).toBeNull();
+    expect(evaluateLiftSession({ date: '2026-10-05', block, key: null, sets: sets(5, 100, 3) })).toBeNull();
   });
 
   it('lo anotado guarda lo prescrito y lo movido', () => {
@@ -127,9 +125,9 @@ describe('el estado de un levantamiento sale del registro', () => {
     const many = run(Array.from({ length: 12 }, () => 'limpia' as const).concat(Array.from({ length: 12 }, () => 'limpia' as const)));
     // fechas distintas: octubre solo tiene 31 días, usamos dos meses
     const spread = many.map((r, i) => ({ ...r, date: new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10) }));
-    expect(liftProgression(spread, 'backSquat').factor).toBe(PROGRESSION_MAX);
+    expect(liftProgression(spread, 'backSquat').factor).toBe(PROGRESSION_RULES.strength.max);
     const fails = Array.from({ length: 20 }, (_, i) => rec(new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10), 'fallo'));
-    expect(liftProgression(fails, 'backSquat').factor).toBe(PROGRESSION_MIN);
+    expect(liftProgression(fails, 'backSquat').factor).toBe(PROGRESSION_RULES.strength.min);
   });
 
   it('cada levantamiento va por su cuenta', () => {

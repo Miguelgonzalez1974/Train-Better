@@ -114,7 +114,7 @@ async function flushPush(): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
-// Serializa y agrupa: N escrituras rapidas (p.ej. 5 `saveWorkSet` seguidos en el modo entreno) no
+// Serializa y agrupa: N escrituras rapidas (p.ej. 5 `saveWorkSet` seguidos al anotar la sesión) no
 // disparan 5 flushes que compiten entre si — se colapsan en 1-2, cada uno leyendo el estado local mas
 // reciente al ejecutarse.
 let chain: Promise<{ ok: boolean }> = Promise.resolve({ ok: true });

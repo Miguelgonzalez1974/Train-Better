@@ -18,7 +18,7 @@ import { parseWorkingReps } from './setFeedback';
  * sincronizar dos dispositivos nunca lo deja a medias. Cada decisión se revisa con la sesión siguiente (¿acertó?), y ese
  * libro de aciertos es lo que enseña la pantalla "¿Acierta el coach?".
  *
- * La calidad de cada serie la marca el atleta en el modo entreno (bien por defecto, justa, fallada): sin esa marca el motor
+ * La calidad de cada serie la marca el atleta al anotar la sesión (bien por defecto, justa, fallada): sin esa marca el motor
  * solo vería el peso, y un intento fallado no deja rastro en un registro de kilos y repeticiones.
  *
  * Fuerza y oly tienen reglas distintas: en oly el mismo porcentaje pesa mucho más y un fallo es técnico, así que sube con
@@ -49,8 +49,6 @@ export const PROGRESSION_RULES: Record<ProgressionKind, ProgressionRule> = {
   oly: { up: 0.02, down: 0.04, max: 1.04, min: 0.92, cleanNeeded: 3, failNeeded: 2 },
 };
 
-export const PROGRESSION_MAX = PROGRESSION_RULES.strength.max;
-export const PROGRESSION_MIN = PROGRESSION_RULES.strength.min;
 /** Sesiones limpias seguidas para subir en fuerza (2 por defecto; el atleta puede aceptar 3). */
 export const DEFAULT_CLEAN_NEEDED = PROGRESSION_RULES.strength.cleanNeeded;
 /** RPE de la serie más pesada hasta el que una sesión cuenta como limpia. */
@@ -155,9 +153,6 @@ export function evaluateLiftSession(input: EvaluateInput): ProgressionRecord | n
     ...(falladas > 0 ? { falladas } : {}),
   };
 }
-
-/** Compatibilidad: la evaluación de fuerza de siempre. */
-export const evaluateStrengthSession = evaluateLiftSession;
 
 // ---------- El estado, calculado desde el registro ----------
 

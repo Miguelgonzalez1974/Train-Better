@@ -41,7 +41,7 @@ const SETLOAD_RECENT = 6;
 const SETLOAD_CLAMP_PRE = 0.05;
 const SETLOAD_CLAMP_POST = 0.08;
 
-/** Calibracion desde el `workLog` (series marcadas en el modo entreno, kg x reps SIN rpe). */
+/** Calibracion desde el `workLog` (series marcadas al anotar la sesión, kg x reps SIN rpe). */
 const WORKLOG_MIN_SESSIONS = 3;
 const WORKLOG_RECENT_SESSIONS = 8;
 /** La serie mas pesada de la sesion debe ir a >= este % del PR para contar — descarta calentamiento y dias de tecnica. */
@@ -144,7 +144,7 @@ export interface ResponseProfile {
   /**
    * Calibracion de carga por levantamiento a partir de las series REALES: el feedback de la 1ª serie
    * con RPE ("hice X kg x Y @ RPE Z" -> e1RM, `analyzeSetLoads`) y, para los lifts sin ese feedback,
-   * las series marcadas en el modo entreno sin RPE (mejor esfuerzo reciente vs PR, `analyzeWorkLoads`).
+   * las series marcadas al anotar la sesión sin RPE (mejor esfuerzo reciente vs PR, `analyzeWorkLoads`).
    * Mas precisa que `setFeel`; cuando un lift tiene esta senal, el motor la usa en su lugar. Como
    * `setFeel`, sigue viva aunque `confident` sea false (gate propio por lift).
    */
@@ -387,7 +387,7 @@ function prKeyForMovement(movementId: string): string | null {
 }
 
 /**
- * Calibracion de carga a partir del `workLog` — las series REALES marcadas en el modo entreno (kg x
+ * Calibracion de carga a partir del `workLog` — las series REALES marcadas al anotar la sesión (kg x
  * reps, sin RPE). Por levantamiento coge la serie mas pesada de cada sesion reciente (solo si va a
  * >= 55% del PR, para descartar calentamiento y dias de tecnica), estima su 1RM por Epley y compara
  * el MEJOR esfuerzo reciente con el PR registrado: si mueves consistentemente por encima de tu PR
@@ -495,7 +495,7 @@ export function computeResponseProfile(
       setFeedbackLog.length >= RESPONSE_FAST_SETFEEL);
 
   // Calibracion de carga por lift desde dos fuentes: el feedback de la 1ª serie con RPE
-  // (`analyzeSetLoads`, mas preciso) y las series reales del modo entreno sin RPE (`analyzeWorkLoads`,
+  // (`analyzeSetLoads`, mas preciso) y las series reales de anotar la sesión sin RPE (`analyzeWorkLoads`,
   // cobertura mas amplia). Para un lift con ambas, gana la del feedback con RPE.
   const perLiftLoadMap = new Map<string, LiftLoadCalibration>();
   for (const c of analyzeWorkLoads(workLog, prs, confident)) perLiftLoadMap.set(c.key, c);
