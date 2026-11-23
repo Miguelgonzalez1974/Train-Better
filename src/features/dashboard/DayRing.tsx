@@ -27,6 +27,8 @@ export const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
   moderada: `rgb(var(${ZONE_TOKEN.moderada}))`,
   alta: `rgb(var(${ZONE_TOKEN.alta}))`,
 };
+/** La frase corta bajo la cifra de Preparación (las mismas palabras que la pestaña Preparación: «Llegas con ganas / normal / cansado»). */
+const PREP_WORD: Record<NonNullable<ReadinessScore['level']>, string> = { alta: 'con ganas', normal: 'normal', baja: 'cansado' };
 export const ZONE_WORD: Record<AcwrResult['zone'], string> = { baja: 'Baja', optima: 'Óptima', moderada: 'Alta', alta: 'Muy alta' };
 
 // Dos anillos completos que arrancan a las 12: el exterior es el esfuerzo (amarillo, con lo previsto como línea azul) y el interior la preparación (con el color
@@ -329,6 +331,12 @@ export function DayRing({
               {total !== null ? total : '—'}
               {total !== null && <span className="text-[0.5em] font-medium">%</span>}
             </span>
+            {/* Qué significa la cifra, en una frase: «cómo estás hoy» se lee de un vistazo sin abrir nada (la misma que da la pestaña Preparación). */}
+            {total !== null && readiness.level && (
+              <span className="mt-1 text-[11px] font-semibold leading-tight" style={{ color: prepTint }} data-testid="prep-word">
+                {isToday ? 'Llegas' : 'Llegabas'} {PREP_WORD[readiness.level]}
+              </span>
+            )}
             {balance?.prep && <span className="mt-1.5 text-[11px] leading-tight text-neutral-500">{balance.prep.morning} por la mañana</span>}
           </button>
           {hasLoad ? (

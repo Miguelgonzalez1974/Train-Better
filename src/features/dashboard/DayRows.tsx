@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { CalendarPlus, Check, ChevronRight, Dumbbell, Moon, TrendingUp, Trophy } from 'lucide-react';
 import { formToday, type FormSeries } from '../../engine/formCurve';
-import { EnergyBadge, FORM_TONE } from './FormCurve';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import type { CompanionLogEntry, DailySession, SessionHistoryEntry } from '../../data/athlete/types';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -184,8 +183,9 @@ export function DayRows({
   const formNow = form ? formToday(form) : null;
   const formRow = form ? (
     <Row
-      badge={formNow ? <EnergyBadge value={formNow.value} tone={FORM_TONE[formNow.state]} /> : <Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
-      title={formNow ? `Tu forma · ${formNow.title.toLowerCase()}` : 'Tu forma'}
+      // Sin porcentaje ni estado: «cómo estás hoy» lo dice la Preparación del aro. Esta fila mira hacia delante (cuándo se abre tu próxima ventana); la energía de hoy está dentro de la ventana.
+      badge={<Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
+      title="Tu forma"
       sub={formNow ? (formNow.state === 'cargado' && formNow.reason ? formNow.reason : (formNote ?? formNow.sentence)) : `Aún poco historial: ${form.sessions} sesiones registradas`}
       right={chevron}
       onClick={onOpenForm}
