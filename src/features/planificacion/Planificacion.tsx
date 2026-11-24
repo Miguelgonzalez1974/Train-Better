@@ -116,7 +116,7 @@ import { LIGHT_LABEL } from '../../engine/dayLight';
 import type { WodScaleState } from './WodScaleBox';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ReviewDeck } from './ReviewDeck';
-import { buildClosedEntry, liftRpeEntry, patchBlock, recordProgressionFor } from './sessionClose';
+import { buildClosedEntry, liftRpeEntry, patchBlock, recordProgressionFor, withLoggedBlocks } from './sessionClose';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
@@ -262,6 +262,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [pastLogging, setPastLogging] = useState(false);
   /** Guarda las series que hay en pantalla en el mazo de anotar; se llama justo antes de registrar la sesión. */
   const reviewCommit = useRef<(() => void) | null>(null);
+  /** Lo anotado de los accesorios en las tarjetas (por posición del bloque): se escribe en la sesión del día al guardar. */
+  const accessoryLogs = useRef<Record<number, { sets: number; kg?: number }>>({});
   function openReview() {
     setReviewMode(true);
     // El cierre (minutos, resultado del WOD…) arranca ya: con los minutos de una corrección si venían de ahí.
@@ -880,7 +882,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes
     // de enterarse del entreno de hoy podia seguir ganando el empate y pisar la tarjeta del plan
     // (ver bug real: WOD, accesorios de oly y hasta un ejercicio de fuerza distintos tras completar).
-    const completed: DailySession = { ...session, editedByAthlete: true };
+    const completed: DailySession = { ...session, blocks: withLoggedBlocks(session.blocks, accessoryLogs.current), editedByAthlete: true };
+    accessoryLogs.current = {};
     athleteRepository.saveCachedSession(completed);
     setSession(completed);
     setHistory(athleteRepository.getHistory());
@@ -1456,6 +1459,10 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           swap={{ ctx: { prs: profile.prs, variantPrs: profile.variantPrs, painFlags: activePainFlags, todayIso: session.date }, complexPool, complexWeek, prs: profile.prs, variantPrs: profile.variantPrs, onSwap: handleUpdateEntry }}
           rpeToday={Object.fromEntries(setFeedbackLog.filter((e) => e.date === session.date && e.actualRpe !== undefined).map((e) => [e.movementId, e.actualRpe as number]))}
           onRateLift={saveLiftRpe}
+          marks={{ prs: profile.prs, variantPrs: profile.variantPrs }}
+          onLogBlock={(index, logged) => {
+            accessoryLogs.current[index] = logged;
+          }}
           scoreTypes={wodScoreTypes}
           forms={wodForms}
           onFormChange={(part, patch) => setWodForms((prev) => ({ ...prev, [part]: { ...prev[part], ...patch } }))}

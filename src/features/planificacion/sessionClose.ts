@@ -137,3 +137,11 @@ export function patchBlock(session: DailySession, index: number, patch: Partial<
     editedByAthlete: true,
   };
 }
+
+/**
+ * Los bloques con lo que se anotó de cada ejercicio sin series en el registro (hoy, los accesorios): las series hechas y el peso usado. `logs` va por posición
+ * del bloque; lo que no se tocó no se escribe. Se guarda en la sesión del día al cerrarla.
+ */
+export function withLoggedBlocks(blocks: SessionBlockResult[], logs: Record<number, { sets: number; kg?: number }>): SessionBlockResult[] {
+  return blocks.map((b, i) => (logs[i] ? { ...b, loggedSets: logs[i].sets, ...(logs[i].kg !== undefined ? { loggedKg: logs[i].kg } : {}) } : b));
+}

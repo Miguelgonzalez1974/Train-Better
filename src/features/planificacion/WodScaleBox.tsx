@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { getMovementById } from '../../data/movements';
 import type { RxOrScaled, WodFeel, WodScalingEntry } from '../../data/athlete/types';
 import { scalingAlternatives } from '../../engine/wodMovements';
@@ -45,6 +46,8 @@ function Seg<T extends string>({ options, value, onChange, label, accent, full }
 
 /** ¿Rx o escalado? por movimiento y cómo de duro fue, dentro de la tarjeta del WOD (alimenta «Tu WOD por zonas», igual que el cierre). */
 export function WodScaleBox({ wod, part, accent }: { wod: WodScaleState; part: 1 | 2; accent: string }) {
+  /** El detalle por movimiento (qué escalaste) está plegado: lo normal es solo decir Rx o escalado, y el detalle es opcional. */
+  const [detail, setDetail] = useState(false);
   const movements = wod.movements.filter((m) => m.part === part);
   if (movements.length === 0) return null;
   const entryOf = (m: WodScalingMovement) => wod.scaling.find((e) => e.movementId === m.movementId && (e.part ?? 1) === m.part);
@@ -69,7 +72,7 @@ export function WodScaleBox({ wod, part, accent }: { wod: WodScaleState; part: 1
           value={scaled ? 'scaled' : 'rx'}
           options={[
             { value: 'rx', label: 'Rx' },
-            { value: 'scaled', label: 'Escalo algo' },
+            { value: 'scaled', label: 'Escalado' },
           ]}
           onChange={(v) => {
             wod.onRxOrScaled(v);
@@ -77,7 +80,12 @@ export function WodScaleBox({ wod, part, accent }: { wod: WodScaleState; part: 1
           }}
         />
       </div>
-      {scaled && (
+      {scaled && !detail && (
+        <button onClick={() => setDetail(true)} className="self-start text-xs font-semibold underline decoration-dotted" style={{ color: 'rgba(255,255,255,0.7)' }} data-testid="wod-detail">
+          Detallar qué escalaste
+        </button>
+      )}
+      {scaled && detail && (
         <div className="flex flex-col divide-y divide-white/10">
           {movements.map((m) => {
             const mv = getMovementById(m.movementId);

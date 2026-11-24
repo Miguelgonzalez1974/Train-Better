@@ -3,7 +3,7 @@ import { generateSessionForDate } from '../../engine/generateSession';
 import { consecutiveDates, makeMacro, makeProfile } from '../../engine/__fixtures';
 import { getWodParts } from '../../engine/wodScoring';
 import type { SessionBlockResult } from '../../data/athlete/types';
-import { buildClosedEntry, liftRpeEntry } from './sessionClose';
+import { buildClosedEntry, liftRpeEntry, withLoggedBlocks } from './sessionClose';
 
 const profile = makeProfile({ trainingDaysPerWeek: 5, macrocycles: [makeMacro({ id: 'a' })], bodyweightLog: [{ date: '2026-01-01', kg: 82 }] });
 const sessions = consecutiveDates('2026-01-12', 28)
@@ -45,5 +45,25 @@ describe('el esfuerzo de un ejercicio', () => {
   it('sin peso prescrito o con una sola serie no se valora', () => {
     expect(liftRpeEntry('2026-11-20', { ...block, loadKg: 0 }, { kg: 50, reps: 5 }, 8, undefined, profile.prs, undefined)).toBeNull();
     expect(liftRpeEntry('2026-11-20', { ...block, sets: 1 }, { kg: 100, reps: 5 }, 8, undefined, profile.prs, undefined)).toBeNull();
+  });
+});
+
+describe('lo anotado de los accesorios', () => {
+  const blocks: SessionBlockResult[] = [
+    { block: 'strength', movementId: 'back-squat', sets: 5, reps: '5', loadKg: 100 },
+    { block: 'accessory', movementId: 'plank', sets: 3, reps: '30 s' },
+    { block: 'accessory', movementId: 'dumbbell-row', sets: 3, reps: '12', loadKg: 20 },
+  ];
+
+  it('se escribe por posición solo en lo que se tocó, con el peso si lo hay', () => {
+    const out = withLoggedBlocks(blocks, { 1: { sets: 2 }, 2: { sets: 3, kg: 22.5 } });
+    expect(out[0]).toEqual(blocks[0]);
+    expect(out[1]).toMatchObject({ movementId: 'plank', loggedSets: 2 });
+    expect(out[1].loggedKg).toBeUndefined();
+    expect(out[2]).toMatchObject({ movementId: 'dumbbell-row', loggedSets: 3, loggedKg: 22.5 });
+  });
+
+  it('sin nada tocado la sesión queda igual', () => {
+    expect(withLoggedBlocks(blocks, {})).toEqual(blocks);
   });
 });

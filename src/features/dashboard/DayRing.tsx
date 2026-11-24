@@ -370,14 +370,14 @@ export function DayRing({
               />
               {/* Esfuerzo (exterior) */}
               <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
-              {/* Lo hecho: el aro azul (y en ámbar lo que pasa del máximo del objetivo). Antes de entrenar, vacío. */}
+              {/* Lo hecho: el aro azul fluorescente (y en rojo lo que pasa del máximo del objetivo). Antes de entrenar, vacío. */}
               {real !== null && real > 0 && (
-                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: EFFORT }} {...dash(R_EFF, 0, within)} className={slide} />
+                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: EFFORT, filter: 'drop-shadow(0 0 2.5px rgb(var(--c-effort) / var(--effort-glow, 0)))' }} {...dash(R_EFF, 0, within)} className={slide} />
               )}
               {beyond > 0 && (
                 <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: OVER }} {...dash(R_EFF, target.high - 0.6, real ?? target.high)} className={slide} />
               )}
-              {/* Lo previsto: una línea fina fucsia que solo se ve donde el azul aún no llega (lo que falta); donde el azul la cubre, el aro es
+              {/* Lo previsto: una línea fina gris que solo se ve donde el azul aún no llega (lo que falta); donde el azul la cubre, el aro es
                   macizo. La marca del final se queda siempre, también cuando lo hecho la pasa. */}
               {plannedLine !== null && plannedLine > 0 && (
                 <>

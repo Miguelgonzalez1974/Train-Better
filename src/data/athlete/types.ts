@@ -708,6 +708,9 @@ export interface SessionBlockResult {
   sets?: number;
   reps?: string;
   loadKg?: number;
+  /** Lo que se anotó de este ejercicio al acabar la sesión (hoy, solo los accesorios): las series que se hicieron y el peso que se usó, si lleva. Se guarda en la sesión del día, no en el registro de series. */
+  loggedSets?: number;
+  loggedKg?: number;
   notes?: string;
   /** Formato del WOD (ej. "For Time (3 rondas)"), usado solo por el bloque wod */
   format?: string;

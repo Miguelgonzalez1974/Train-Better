@@ -33,10 +33,11 @@
   --c-state-cool: 56 189 248;
   /* Sueño: un violeta suave, para que no se confunda con el azul del esfuerzo. */
   --c-sleep: 167 139 250;
-  /* Esfuerzo previsto: azul (el esfuerzo hecho es amarillo, el objetivo blanco y el sueño violeta). */
-  --c-plan: 56 189 248;
-  /* Esfuerzo hecho: amarillo (lo previsto es azul y lo que se pasa del objetivo, rojo). */
-  --c-effort: 250 204 21;
+  /* Esfuerzo previsto: gris claro con borde (el esfuerzo hecho es azul fluorescente, el objetivo blanco, el sueño violeta y el semáforo de la preparación verde, ámbar y rojo). */
+  --c-plan: 203 213 225;
+  /* Esfuerzo hecho: azul fluorescente, fuera de la familia verde-ámbar-rojo de la preparación (lo que se pasa del objetivo es rojo). En oscuro lleva un halo (--effort-glow). */
+  --c-effort: 0 209 255;
+  --effort-glow: 0.75;
   /* Aro de preparación: en oscuro, los mismos colores de estado. */
   --c-ring-good: 74 222 128;
   --c-ring-mid: 251 191 36;
@@ -74,9 +75,10 @@
   --c-state-low: 200 30 30;
   --c-state-cool: 3 105 161;
   --c-sleep: 109 40 217;
-  /* Tema claro: lo más cercano al tono del oscuro que aún se ve sobre blanco (mínimo ~3:1 en aros y números grandes). */
-  --c-plan: 2 132 199;
-  --c-effort: 202 138 4;
+  /* Tema claro: el mismo azul eléctrico pero sin halo, y el previsto en gris oscuro, para que se lean sobre blanco (mínimo ~3:1 en aros y números grandes). */
+  --c-plan: 55 65 81;
+  --c-effort: 0 119 255;
+  --effort-glow: 0;
   --c-ring-good: 22 163 74;
   --c-ring-mid: 217 119 6;
   --c-ring-low: 220 38 38;
@@ -108,8 +110,9 @@
   --c-state-low: 248 113 113;
   --c-state-cool: 56 189 248;
   --c-sleep: 167 139 250;
-  --c-plan: 56 189 248;
-  --c-effort: 250 204 21;
+  --c-plan: 203 213 225;
+  --c-effort: 0 209 255;
+  --effort-glow: 0.75;
   --c-ring-good: 74 222 128;
   --c-ring-mid: 251 191 36;
   --c-ring-low: 248 113 113;

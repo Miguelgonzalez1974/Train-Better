@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { X, Minus, Plus, Flame, Dumbbell, Timer, Activity, CircleDot, ArrowRight, NotebookPen } from 'lucide-react';
+import { X, Check, Minus, Plus, Flame, Dumbbell, Timer, Activity, CircleDot, ArrowRight, NotebookPen } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, PersonalRecords, SessionBlockResult, VariantPersonalRecords, WodScoreType, WorkSetEntry } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { benchmarkWorkouts, getMovementById } from '../../data/movements';
 import { localizeWodText } from '../../engine/wodUnits';
+import { pctOfMark } from '../../engine/movementProgress';
 import type { GhostSummary } from '../../engine/wodGhost';
 import type { WodReading } from '../../engine/wodRead';
 import type { WodResultForm } from '../../engine/wodScoring';
@@ -155,6 +156,10 @@ export interface ReviewDeckProps {
   onSave: () => void;
   onExit: () => void;
   onOtherThing: () => void;
+  /** Tus marcas (1RM): con ellas, junto a los kilos de cada serie sale el % de tu 1RM. Sin ellas no sale. */
+  marks?: { prs: PersonalRecords; variantPrs?: VariantPersonalRecords };
+  /** Se anotó lo de un ejercicio sin series en el registro (hoy, los accesorios): el padre lo guarda en la sesión del día. Solo se llama con lo que se tocó. */
+  onLogBlock?: (index: number, logged: { sets: number; kg?: number }) => void;
   /** Un día pasado que se quedó sin apuntar: se dice cuál al empezar y no hay crono (no se cronometra lo que ya pasó). */
   pastDay?: { label: string };
 }
@@ -187,6 +192,18 @@ export function ReviewDeck(p: ReviewDeckProps) {
   const lifts = useMemo(() => cards.filter((c): c is Extract<Card, { kind: 'lift' }> => c.kind === 'lift'), [cards]);
   const [edits, setEdits] = useState<Record<string, LiftEdit>>(() => Object.fromEntries(lifts.map((l) => [l.plan.mid, initialEdit(l.plan, todayWorkLog, p.rpeToday[l.entry.movementId])])));
   const [selected, setSelected] = useState<Record<string, number>>({});
+  /** Lo anotado de cada accesorio (por posición en la sesión): series hechas y peso. Lo que no se toca queda como previsto y no se guarda. */
+  const [acc, setAccState] = useState<Record<number, { sets: number; kg?: number }>>({});
+  const [accOpen, setAccOpen] = useState<number | null>(null);
+  const accOf = (e: SessionBlockResult, index: number) => {
+    const total = e.sets && e.sets >= 1 ? Math.min(8, e.sets) : 1;
+    const t = acc[index];
+    return { total, sets: t?.sets ?? total, kg: t?.kg ?? e.loadKg };
+  };
+  const setAcc = (index: number, patch: { sets?: number; kg?: number }) => {
+    const base = accOf(session.blocks[index], index);
+    setAccState((prev) => ({ ...prev, [index]: { sets: patch.sets ?? base.sets, kg: patch.kg ?? base.kg } }));
+  };
 
   // Una parte entera sin ninguna serie hecha cuenta como no hecha (y vuelve a contar si se hace alguna).
   useEffect(() => {
@@ -200,6 +217,12 @@ export function ReviewDeck(p: ReviewDeckProps) {
   }, [edits]);
 
   commitRef.current = () => {
+    if (!skips.accessory) {
+      session.blocks.forEach((entry, index) => {
+        const t = acc[index];
+        if (entry.block === 'accessory' && t) p.onLogBlock?.(index, { sets: t.sets, ...(t.kg !== undefined && (entry.loadKg ?? 0) > 0 ? { kg: t.kg } : {}) });
+      });
+    }
     for (const l of lifts) {
       if (skips[l.block]) continue;
       const edit = edits[l.plan.mid] ?? initialEdit(l.plan, todayWorkLog, p.rpeToday[l.entry.movementId]);
@@ -335,50 +358,118 @@ export function ReviewDeck(p: ReviewDeckProps) {
     const rows = edit.rows;
     const straight = isStraight(c.plan);
     const hasLoad = c.plan.rows.some((r) => r.plannedKg > 0);
-    const sel = Math.min(selected[c.plan.mid] ?? 0, rows.length - 1);
-    const row = rows[sel];
-    const isDone = sel < edit.done;
+    /** La fila abierta (con sus kilos, su porcentaje y «No salió»); -1 = ninguna. */
+    const open = selected[c.plan.mid] ?? -1;
     const top = topIndex(rows);
-    const isTopOfRamp = !straight && sel === top;
     const title = c.entry.complex?.name ?? resolveName(c.entry.movementId);
+    const movement = c.entry.complex ? undefined : getMovementById(c.entry.movementId);
+    const pctOf = (kg: number): number | null => (p.marks && hasLoad ? pctOfMark(movement, kg, p.marks.prs, p.marks.variantPrs) : null);
     // Con series ya anotadas de este movimiento (una corrección) no se cambia: el registro quedaría con otro nombre.
     const swapLocked = todayWorkLog.some((w) => w.movementId === c.plan.mid);
     const patch = (next: LiftEdit) => setEdits((prev) => ({ ...prev, [c.plan.mid]: next }));
-    const bump = (delta: number) => {
-      const base = markDoneThrough(edit, sel);
-      patch(straight ? adjustRow(base, sel, delta) : isTopOfRamp ? setTop(base, row.kg + delta) : adjustOnly(base, sel, delta));
+    const setOpen = (idx: number) => setSelected((s) => ({ ...s, [c.plan.mid]: idx }));
+    const bump = (idx: number, delta: number) => {
+      const base = markDoneThrough(edit, idx);
+      patch(straight ? adjustRow(base, idx, delta) : !straight && idx === top ? setTop(base, rows[idx].kg + delta) : adjustOnly(base, idx, delta));
     };
-    const pick = (n: number) => {
-      setSelected((s) => ({ ...s, [c.plan.mid]: n }));
-      if (n >= edit.done) patch(markDoneThrough(edit, n));
+    // El círculo: marca la serie como hecha (y las anteriores, porque se hacen en orden); si es la última hecha, la desmarca; en otra ya hecha, la abre.
+    const toggleDone = (idx: number) => {
+      if (idx >= edit.done) patch(markDoneThrough(edit, idx));
+      else if (idx === edit.done - 1) patch(setDone(edit, idx));
+      else setOpen(idx);
     };
-    const failed = row.quality === 'fallada';
+    // Tocar la fila o sus kilos: la abre (y la da por hecha si no lo estaba) para ajustar el peso.
+    const toggleOpen = (idx: number) => {
+      if (idx >= edit.done) patch(markDoneThrough(edit, idx));
+      setOpen(open === idx ? -1 : idx);
+    };
     // «No salió» en la serie más pesada hecha: el esfuerzo del ejercicio salta a 10 (se puede cambiar).
-    const toggleFail = () => {
-      let next = setQuality(edit, sel, failed ? undefined : 'fallada');
+    const toggleFail = (idx: number) => {
+      const failed = rows[idx].quality === 'fallada';
+      let next = setQuality(edit, idx, failed ? undefined : 'fallada');
       const t = topDoneSet(next);
-      if (!failed && hasLoad && !c.entry.complex && t && t.index === sel) next = setRpe(next, 10);
+      if (!failed && hasLoad && !c.entry.complex && t && t.index === idx) next = setRpe(next, 10);
       patch(next);
     };
-    const hint = !hasLoad ? 'peso corporal' : straight ? 'kg · las siguientes se ajustan igual' : isTopOfRamp ? 'kg · las demás se mueven en proporción' : 'kg · solo esta serie';
-    const planned = straight ? `${rows.length} × ${rows[0].reps}${hasLoad ? ` · ${kgText(rows[0].plannedKg)} kg` : ''}` : `Previsto ${c.plan.rows.map((r) => kgText(r.plannedKg)).join(' · ')} kg`;
+    const hintOf = (idx: number) => (!hasLoad ? 'peso corporal' : straight ? 'las siguientes se ajustan igual' : idx === top ? 'las demás se mueven en proporción' : 'solo esta serie');
+    const plannedPct = pctOf(c.plan.rows[0].plannedKg);
+    const planned = straight
+      ? `${rows.length} × ${rows[0].reps}${hasLoad ? ` · ${kgText(rows[0].plannedKg)} kg` : ''}${plannedPct !== null ? ` · ${plannedPct} % de tu 1RM` : ''}`
+      : `Previsto ${c.plan.rows.map((r) => kgText(r.plannedKg)).join(' · ')} kg`;
 
-    const dot = (idx: number) => {
+    const rowView = (idx: number) => {
       const r = rows[idx];
       const done = idx < edit.done;
-      const colour = r.quality === 'fallada' ? '#ff8a80' : r.quality === 'justa' ? '#ffd166' : th.accent;
-      const isSel = idx === sel;
+      const isOpen = open === idx;
+      const failed = r.quality === 'fallada';
+      const colour = failed ? '#ff8a80' : r.quality === 'justa' ? '#ffd166' : th.accent;
+      const pct = pctOf(r.kg);
+      const prevPct = pctOf(r.plannedKg);
       return (
-        <button key={r.n} onClick={() => pick(idx)} aria-label={`Serie ${r.n}${done ? `, ${kgText(r.kg)} kilos` : ', no hecha'}`} aria-pressed={isSel} className="flex flex-col items-center gap-1" style={{ width: rows.length >= 5 ? 46 : 54 }} data-testid="review-dot">
-          <span
-            className={`flex items-center justify-center rounded-full text-base font-extrabold ${rows.length >= 5 ? 'h-10 w-10' : 'h-11 w-11'}`}
-            style={done ? { background: colour, color: '#000', outline: isSel ? '3px solid #fff' : 'none', outlineOffset: 2 } : { border: '2px solid rgba(255,255,255,0.4)', color: white, outline: isSel ? '3px solid #fff' : 'none', outlineOffset: 2 }}
-          >
-            {r.n}
-          </span>
-          <span className="text-xs font-bold" style={{ color: done && r.kg !== r.plannedKg ? '#ffd166' : white }}>{done ? (hasLoad ? kgText(r.kg) : `${r.reps}×`) : '—'}</span>
-          {!straight && <span className="text-[11px]" style={{ color: soft }}>× {r.reps}</span>}
-        </button>
+        <div key={r.n} className="rounded-2xl" style={{ background: isOpen ? 'rgba(255,255,255,0.13)' : 'rgba(255,255,255,0.07)', outline: isOpen ? '1.5px solid rgba(255,255,255,0.55)' : 'none' }} data-testid="review-row">
+          <div className="flex items-center gap-3 px-3 py-2">
+            <button
+              onClick={() => toggleDone(idx)}
+              aria-label={`Serie ${r.n}${done ? (failed ? ', no salió' : `, hecha, ${kgText(r.kg)} kilos`) : ', sin hacer'}`}
+              aria-pressed={done}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-extrabold"
+              style={done ? { background: colour, color: '#000' } : { border: '2px solid rgba(255,255,255,0.4)', color: white }}
+              data-testid="review-dot"
+            >
+              {done ? failed ? <X size={18} strokeWidth={3} aria-hidden /> : <Check size={18} strokeWidth={3} aria-hidden /> : r.n}
+            </button>
+            <button onClick={() => toggleOpen(idx)} aria-expanded={isOpen} className="min-w-0 flex-1 text-left">
+              <span className="block text-sm font-bold text-white">
+                Serie {r.n}
+                {!straight && idx === top && <span style={{ color: th.accent }}> · top</span>}
+              </span>
+              <span className="block text-xs" style={{ color: soft }}>
+                {failed ? 'No salió' : done ? `${r.reps} ${r.reps === 1 ? 'rep' : 'reps'}` : 'sin hacer'}
+              </span>
+            </button>
+            <button
+              onClick={() => toggleOpen(idx)}
+              className="shrink-0 rounded-xl px-3 py-1.5 text-base font-extrabold tabular-nums"
+              style={{ background: 'rgba(255,255,255,0.1)', color: done && hasLoad && r.kg !== r.plannedKg ? '#ffd166' : white, opacity: done ? 1 : 0.6 }}
+            >
+              {hasLoad ? `${kgText(r.kg)} kg` : '× ' + r.reps}
+            </button>
+          </div>
+          {isOpen && (
+            <div className="flex flex-col items-center gap-2 px-3 pb-3 pt-1" data-testid="review-row-open">
+              {hasLoad && (
+                <>
+                  <div className="flex items-center gap-4">
+                    <Round onClick={() => bump(idx, -KG_STEP)} label={`Quitar ${KG_STEP} kilos`} size={46}>
+                      <Minus size={24} strokeWidth={3} />
+                    </Round>
+                    <p className="min-w-[6.5rem] text-center text-[clamp(2.4rem,13vw,3.2rem)] font-black leading-none tabular-nums" style={{ color: th.accent }} data-testid="review-kg">
+                      {kgText(r.kg)}
+                    </p>
+                    <Round onClick={() => bump(idx, KG_STEP)} label={`Añadir ${KG_STEP} kilos`} size={46}>
+                      <Plus size={24} strokeWidth={3} />
+                    </Round>
+                  </div>
+                  {pct !== null && (
+                    <p className="text-sm font-bold" style={{ color: th.accent }} data-testid="review-pct">
+                      {pct} % de tu 1RM
+                      {prevPct !== null && prevPct !== pct && <span className="font-medium" style={{ color: soft }}> · previsto {prevPct} %</span>}
+                    </p>
+                  )}
+                </>
+              )}
+              <p className="text-xs" style={{ color: soft }}>{hintOf(idx)}</p>
+              <div className="flex items-center gap-2">
+                <button aria-pressed={failed} onClick={() => toggleFail(idx)} className="rounded-full px-5 py-2 text-sm font-bold" style={failed ? { background: '#ff8a80', color: '#000' } : { background: 'rgba(255,255,255,0.16)', color: white }} data-testid="review-fail">
+                  No salió
+                </button>
+                <button onClick={() => patch(setDone(edit, idx))} className="rounded-full px-4 py-2 text-xs font-semibold underline decoration-dotted" style={{ color: soft }} data-testid="review-notdone">
+                  No la hice
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       );
     };
     const waves = c.plan.waveSize ? Array.from({ length: rows.length / c.plan.waveSize }, (_, w) => w) : null;
@@ -401,57 +492,17 @@ export function ReviewDeck(p: ReviewDeckProps) {
             {p.swap && !swapLocked && <span> · ¿Hiciste otro ejercicio? Cámbialo con la flecha</span>}
           </p>
 
-          <div className="mt-4 flex flex-col items-center gap-3" data-testid="review-sets">
-            {waves ? (
-              waves.map((w) => (
-                <div key={w} className="flex flex-col items-center gap-1.5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: soft }}>Ola {w + 1}</p>
-                  <div className="flex flex-wrap justify-center gap-1.5">{rows.map((_, idx) => idx).filter((idx) => Math.floor(idx / c.plan.waveSize!) === w).map(dot)}</div>
-                </div>
-              ))
-            ) : (
-              <div className="flex flex-wrap justify-center gap-1.5">{rows.map((_, idx) => dot(idx))}</div>
-            )}
+          <div className="mt-4 flex flex-col gap-2" data-testid="review-sets">
+            {waves
+              ? waves.map((w) => (
+                  <div key={w} className="flex flex-col gap-2">
+                    <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: soft }}>Ola {w + 1}</p>
+                    {rows.map((_, idx) => idx).filter((idx) => Math.floor(idx / c.plan.waveSize!) === w).map(rowView)}
+                  </div>
+                ))
+              : rows.map((_, idx) => rowView(idx))}
           </div>
 
-          <div className="mt-5 flex flex-col items-center gap-1">
-            <p className="text-xs font-bold uppercase tracking-[0.14em]" style={{ color: soft }}>
-              Serie {row.n} de {rows.length} · × {row.reps} {row.reps === 1 ? 'rep' : 'reps'}
-              {isTopOfRamp && <span style={{ color: th.accent }}> · serie top</span>}
-            </p>
-            {hasLoad ? (
-              <div className="flex items-center gap-4">
-                <Round onClick={() => bump(-KG_STEP)} label={`Quitar ${KG_STEP} kilos`}>
-                  <Minus size={26} strokeWidth={3} />
-                </Round>
-                <p className="min-w-[7rem] text-center text-[clamp(3rem,16vw,4rem)] font-black leading-none tabular-nums" style={{ color: isDone ? th.accent : 'rgba(255,255,255,0.5)' }} data-testid="review-kg">
-                  {kgText(row.kg)}
-                </p>
-                <Round onClick={() => bump(KG_STEP)} label={`Añadir ${KG_STEP} kilos`}>
-                  <Plus size={26} strokeWidth={3} />
-                </Round>
-              </div>
-            ) : null}
-            <p className="text-xs" style={{ color: soft }}>{isDone ? hint : 'Serie no hecha · toca el punto para marcarla'}</p>
-          </div>
-
-          {isDone && (
-            <div className="mt-4 flex justify-center">
-              <button
-                aria-pressed={failed}
-                onClick={toggleFail}
-                className="rounded-full px-5 py-2.5 text-sm font-bold"
-                style={failed ? { background: '#ff8a80', color: '#000' } : { background: 'rgba(255,255,255,0.16)', color: white }}
-                data-testid="review-fail"
-              >
-                No salió
-              </button>
-            </div>
-          )}          {isDone && (
-            <button onClick={() => patch(setDone(edit, sel))} className="mx-auto mt-3 block text-xs font-semibold underline decoration-dotted" style={{ color: soft }} data-testid="review-notdone">
-              No la hice
-            </button>
-          )}
           {hasLoad && !c.entry.complex && edit.done > 0 && (
             <div className="mt-5 border-t pt-4" style={{ borderColor: 'rgba(255,255,255,0.18)' }} data-testid="review-lift-rpe">
               <p className="text-center text-sm font-bold text-white">¿Cómo de dura fue la serie más pesada?</p>
@@ -479,11 +530,94 @@ export function ReviewDeck(p: ReviewDeckProps) {
                 </p>
               )}
             </div>
-          )}        </div>
+          )}
+        </div>
         <div className="px-5 pb-5 pt-1">
           <Primary onClick={() => goTo(i + 1)} testId="review-next">
             Siguiente <ArrowRight size={20} strokeWidth={2.75} />
           </Primary>
+        </div>
+      </>
+    );
+  };
+
+  // ───────── Accesorios: una fila por ejercicio, con sus series y el peso ─────────
+  const renderAccessory = (c: Extract<Card, { kind: 'list' }>, i: number) => {
+    const th = THEME.accessory;
+    const key = partKeyOf(c)!;
+    const skipped = Boolean(skips[key]);
+    const rowsAcc = c.entries.map((e) => ({ ...e, a: accOf(e.entry, e.index) }));
+    return (
+      <>
+        {header(th.label, th.accent, Activity)}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3" data-testid="review-accessory">
+          <h2 className="text-[clamp(1.5rem,8vw,1.9rem)] font-extrabold leading-tight text-white">{c.entries.length === 1 ? '1 ejercicio' : `${c.entries.length} ejercicios`}</h2>
+          <p className="mt-0.5 text-sm" style={{ color: soft }}>Toca cada serie que hiciste. El peso, si lleva, se toca.</p>
+          {skipped ? (
+            <p className="mt-6 rounded-full px-3 py-2 text-center text-xs font-bold" style={{ background: 'rgba(255,255,255,0.16)', color: white }}>Marcado como no hecho</p>
+          ) : (
+            <div className="mt-4 flex flex-col gap-2">
+              {rowsAcc.map(({ entry, index, a }) => {
+                const total = a.total;
+                const withLoad = (entry.loadKg ?? 0) > 0;
+                const isOpen = accOpen === index;
+                return (
+                  <div key={index} className="rounded-2xl" style={{ background: isOpen ? 'rgba(255,255,255,0.13)' : 'rgba(255,255,255,0.07)', outline: isOpen ? '1.5px solid rgba(255,255,255,0.55)' : 'none' }} data-testid="review-acc-row">
+                    <div className="flex items-center gap-3 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold leading-snug text-white [overflow-wrap:anywhere]">{resolveName(entry.movementId)}</p>
+                        <p className="text-xs" style={{ color: soft }}>{entry.sets ? `${entry.sets} × ${entry.reps ?? ''}`.trim() : (entry.reps ?? '')}</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {Array.from({ length: total }, (_, k) => {
+                            const doneK = k < a.sets;
+                            return (
+                              <button
+                                key={k}
+                                onClick={() => setAcc(index, { sets: a.sets === k + 1 ? k : k + 1 })}
+                                aria-label={total === 1 ? (doneK ? 'Hecho' : 'Sin hacer') : `Serie ${k + 1}${doneK ? ' hecha' : ' sin hacer'}`}
+                                aria-pressed={doneK}
+                                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-extrabold"
+                                style={doneK ? { background: th.accent, color: '#000' } : { border: '1.5px solid rgba(255,255,255,0.4)', color: white }}
+                                data-testid="review-acc-set"
+                              >
+                                {doneK ? <Check size={14} strokeWidth={3} aria-hidden /> : total === 1 ? '' : k + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {withLoad ? (
+                        <button onClick={() => setAccOpen(isOpen ? null : index)} aria-expanded={isOpen} className="shrink-0 rounded-xl px-3 py-1.5 text-base font-extrabold tabular-nums" style={{ background: 'rgba(255,255,255,0.1)', color: a.kg !== entry.loadKg ? '#ffd166' : white }}>
+                          {kgText(a.kg ?? 0)} kg
+                        </button>
+                      ) : (
+                        <span className="shrink-0 text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>sin peso</span>
+                      )}
+                    </div>
+                    {isOpen && withLoad && (
+                      <div className="flex items-center justify-center gap-4 px-3 pb-3">
+                        <Round onClick={() => setAcc(index, { kg: Math.max(0, (a.kg ?? 0) - KG_STEP) })} label={`Quitar ${KG_STEP} kilos`} size={46}>
+                          <Minus size={24} strokeWidth={3} />
+                        </Round>
+                        <p className="min-w-[6.5rem] text-center text-[clamp(2.2rem,12vw,3rem)] font-black leading-none tabular-nums" style={{ color: th.accent }}>{kgText(a.kg ?? 0)}</p>
+                        <Round onClick={() => setAcc(index, { kg: (a.kg ?? 0) + KG_STEP })} label={`Añadir ${KG_STEP} kilos`} size={46}>
+                          <Plus size={24} strokeWidth={3} />
+                        </Round>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 px-5 pb-5 pt-1">
+          <Primary onClick={() => goTo(i + 1)} testId="review-next">
+            Siguiente <ArrowRight size={20} strokeWidth={2.75} />
+          </Primary>
+          <button onClick={() => onSkip(key, !skipped)} className="self-center text-xs font-semibold underline decoration-dotted" style={{ color: soft }}>
+            {skipped ? 'Sí lo hice' : 'No he hecho ninguno'}
+          </button>
         </div>
       </>
     );
@@ -641,7 +775,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
           return (
             <section key={c.key} data-testid="review-card" data-kind={c.kind} aria-label={`Tarjeta ${ci + 1} de ${cards.length}`} className="flex h-full min-h-0 w-[calc(100%-28px)] shrink-0 snap-center flex-col overflow-hidden rounded-[30px] border" style={{ background: `linear-gradient(165deg, ${th.bg} 0%, #101014 100%)`, borderColor: `${th.accent}55` }}>
               {c.kind === 'start' && renderStart()}
-              {c.kind === 'list' && renderList(c, ci)}
+              {c.kind === 'list' && (c.block === 'accessory' ? renderAccessory(c, ci) : renderList(c, ci))}
               {c.kind === 'lift' && renderLift(c, ci)}
               {c.kind === 'wod' && renderWod(c, ci)}
               {c.kind === 'end' && renderEnd()}

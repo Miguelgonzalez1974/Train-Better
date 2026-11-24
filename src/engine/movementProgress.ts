@@ -124,3 +124,15 @@ export function summariseMovementWork(series: MovementSessionPoint[]): MovementW
     nearMax,
   };
 }
+
+/**
+ * El % de tu 1RM al que va `kg` en ese movimiento (redondeado), o null si no tiene marca (>0) o no es un levantamiento con 1RM propio. Usa la misma marca que el
+ * resto de la app (la de variante si la tienes puesta, si no la del levantamiento raíz). Es lo que se enseña junto a los kilos al anotar una serie.
+ */
+export function pctOfMark(movement: Movement | undefined, kg: number, prs: PersonalRecords, variantPrs: VariantPersonalRecords | undefined): number | null {
+  if (!movement || kg <= 0) return null;
+  const target = resolveLiftPrTarget(movement, variantPrs);
+  if (!target) return null;
+  const mark = target.kind === 'variant' ? variantPrs?.[target.key as keyof VariantPersonalRecords] : prs[target.key as keyof PersonalRecords];
+  return mark && mark > 0 ? Math.round((kg / mark) * 100) : null;
+}
