@@ -16,6 +16,77 @@
         }
       } catch (e) {}
     </script>
+    <script>
+      // Red de seguridad del arranque: si la app no llega a pintar (el JavaScript no se descarga o falla antes de empezar), en vez de
+      // una pantalla en blanco se explica y se ofrece salida. Va aquí, sin depender de nada de la app. Si la app arranca después, React
+      // borra este aviso solo. No toca tus datos: solo la copia guardada de la app.
+      (function () {
+        var detail = '';
+        var timer = setTimeout(show, 10000);
+
+        function show() {
+          var root = document.getElementById('root');
+          if (!root || root.firstChild) return;
+          clearTimeout(timer);
+          var light = document.documentElement.getAttribute('data-theme') === 'light';
+          var ink = light ? '#1f1b16' : '#f5f5f4';
+          var button = 'font:600 15px system-ui,sans-serif;padding:11px 18px;border-radius:10px;cursor:pointer;';
+          var box = document.createElement('div');
+          box.setAttribute('data-testid', 'boot-fallback');
+          box.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;font:15px/1.5 system-ui,sans-serif;background:' + (light ? '#f7f4ee' : '#12100d') + ';color:' + ink;
+          box.innerHTML =
+            '<strong style="font-size:17px">La app no ha podido arrancar</strong>' +
+            '<span style="max-width:320px">Tus datos están a salvo. Prueba a recargar y, si sigue igual, a limpiar la copia guardada de la app.</span>' +
+            '<span style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">' +
+            '<button type="button" id="boot-reload" style="' + button + 'border:0;background:#f97316;color:#000">Recargar</button>' +
+            '<button type="button" id="boot-reset" style="' + button + 'border:1px solid ' + ink + ';background:transparent;color:' + ink + '">Limpiar y recargar</button>' +
+            '</span>' +
+            '<small id="boot-detail" style="max-width:320px;opacity:.65;word-break:break-word"></small>';
+          root.appendChild(box);
+          document.getElementById('boot-detail').textContent = detail || 'Sin detalle: ha tardado demasiado en abrir.';
+          document.getElementById('boot-reload').onclick = function () {
+            location.reload();
+          };
+          document.getElementById('boot-reset').onclick = reset;
+        }
+
+        function reset() {
+          var jobs = [];
+          if (navigator.serviceWorker) {
+            jobs.push(
+              navigator.serviceWorker.getRegistrations().then(function (list) {
+                return Promise.all(list.map(function (r) { return r.unregister(); }));
+              }),
+            );
+          }
+          if (window.caches) {
+            jobs.push(
+              caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+              }),
+            );
+          }
+          var reload = function () { location.reload(); };
+          Promise.all(jobs).then(reload, reload);
+        }
+
+        // En fase de captura, para enterarse también de un archivo que no se descarga.
+        window.addEventListener(
+          'error',
+          function (event) {
+            var target = event.target;
+            if (target && target.tagName === 'SCRIPT') {
+              detail = 'No se pudo descargar una parte de la app.';
+              show();
+            } else if (event.message) {
+              detail = String(event.message);
+              setTimeout(show, 1500);
+            }
+          },
+          true,
+        );
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

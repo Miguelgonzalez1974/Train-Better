@@ -107,3 +107,17 @@ describe('ayudas', () => {
     expect(topsBefore(log, 'back-squat', TODAY)).toEqual([{ date: '2026-11-11', kg: 90 }, { date: '2026-11-18', kg: 97.5 }]);
   });
 });
+
+describe('datos incompletos', () => {
+  it('un registro antiguo sin movimientos o una serie sin ejercicio no rompen la tarjeta', () => {
+    const rotos = [{ date: '2026-01-01' }] as unknown as SessionHistoryEntry[];
+    expect(buildSessionCard(input({ history: rotos, session: { ...session, blocks: [{ block: 'wod', movementId: 'benchmark:fran', format: 'forTime' }] } })).kind).toBe('pending');
+    const sinNombre = [{ date: TODAY, kg: 80, block: 'strength' }] as unknown as WorkSetEntry[];
+    expect(buildSessionCard(input({ session: null, entry: entry(), strain: strain({ real: 50 }), workLog: sinNombre })).kind).toBe('done');
+  });
+
+  it('si algo falla al calcularla, sale una tarjeta mínima en vez de romper el Resumen', () => {
+    const imposible = { ...session, blocks: null } as unknown as DailySession;
+    expect(buildSessionCard(input({ session: imposible }))).toMatchObject({ title: 'Tu sesión de hoy', action: 'plan', figures: [] });
+  });
+});

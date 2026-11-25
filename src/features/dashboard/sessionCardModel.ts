@@ -110,7 +110,7 @@ function liftFigure(b: SessionBlockResult, profile: AthleteProfile, named = fals
 
 /** El resultado que ya tienes en un benchmark que se repite («tu marca 4:58»), el más reciente. */
 function previousBenchmarkMark(history: SessionHistoryEntry[], benchmarkId: string, beforeIso: string): string | null {
-  const past = history.filter((h) => h.date < beforeIso && h.movementIds.includes(benchmarkId) && h.wodResult?.value && !h.wodResult.capped).sort((a, b) => a.date.localeCompare(b.date));
+  const past = history.filter((h) => h.date < beforeIso && h.movementIds?.includes(benchmarkId) && h.wodResult?.value && !h.wodResult.capped).sort((a, b) => a.date.localeCompare(b.date));
   return past.length > 0 ? past[past.length - 1].wodResult!.value : null;
 }
 
@@ -164,7 +164,8 @@ function pendingModel(input: SessionCardInput, session: DailySession): SessionCa
 
 function doneModel(input: SessionCardInput, entry: SessionHistoryEntry): SessionCardModel {
   const { profile, workLog, strain, dayIso, companionDone } = input;
-  const sets = workLog.filter((s) => s.date === dayIso && s.kg > 0 && s.quality !== 'fallada');
+  // Sin nombre de ejercicio (un registro antiguo incompleto) la serie no puede enseñarse: se ignora.
+  const sets = workLog.filter((s) => s.date === dayIso && s.kg > 0 && s.quality !== 'fallada' && Boolean(s.movementId));
   const topOf = (list: WorkSetEntry[]) => list.reduce<WorkSetEntry | null>((best, s) => (!best || s.kg > best.kg ? s : best), null);
   const main = topOf(sets.filter((s) => s.block === 'strength')) ?? topOf(sets.filter((s) => s.block === 'oly'));
   const other = main ? topOf(sets.filter((s) => s.movementId !== main.movementId)) : null;
@@ -219,7 +220,20 @@ function doneModel(input: SessionCardInput, entry: SessionHistoryEntry): Session
 
 const plain = (kind: SessionCardModel['kind'], title: string, meta: string, action: SessionCardModel['action']): SessionCardModel => ({ kind, title, meta, figures: [], action });
 
+/**
+ * La tarjeta del día. Si algo de los datos guardados la rompe, sale una tarjeta mínima que lleva a la sesión (o a lo hecho): un fallo aquí nunca debe dejar
+ * el Resumen —ni la app— sin pintar.
+ */
 export function buildSessionCard(input: SessionCardInput): SessionCardModel {
+  try {
+    return modelFor(input);
+  } catch (error) {
+    console.error('La tarjeta de sesión no se pudo calcular:', error);
+    return input.entry ? plain('done', 'Sesión completada', 'toca para ver lo que hiciste', 'done') : plain('empty', 'Tu sesión de hoy', 'toca para verla', input.isToday ? 'plan' : 'none');
+  }
+}
+
+function modelFor(input: SessionCardInput): SessionCardModel {
   const { entry, session, isToday, companionDone } = input;
   if (entry) return doneModel(input, entry);
   const program = companionDone.find((c) => c.outcome === 'hecha');
