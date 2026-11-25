@@ -3,7 +3,6 @@ import {
   EMPTY_REX_MEMORY,
   GREETING,
   QUIET_SUGGESTION,
-  REX_MODULES,
   buildRexSuggestions,
   dismissSuggestion,
   dockStats,
@@ -253,23 +252,6 @@ describe('Rex en el Dashboard: dejar para luego y recordar', () => {
     expect(loadRexMemory({ getItem: () => { throw new Error('bloqueado'); } })).toBe(EMPTY_REX_MEMORY);
     expect(() => saveRexMemory({ setItem: () => { throw new Error('lleno'); } }, mem)).not.toThrow();
     expect(loadRexMemory({ getItem: () => JSON.stringify({ dismissed: { a: 3, b: 'x' }, typed: ['t', 4] }) })).toEqual({ dismissed: { b: 'x' }, typed: ['t'] });
-  });
-});
-
-describe('Rex en el Dashboard: los módulos de «Más»', () => {
-  it('cubre los botones que salen de la cabecera, sin repetir', () => {
-    const targets = REX_MODULES.map((m) => m.target);
-    expect(new Set(targets).size).toBe(targets.length);
-    for (const t of ['nutricion', 'analisis', 'marcas', 'movilidad']) expect(targets).toContain(t);
-    // «Tu semana» es una tesela, no un botón de «Más».
-    expect(targets).not.toContain('semana');
-    // «Constancia y volumen» y el diario son la tesela «Historial».
-    expect(targets).not.toContain('constancia');
-    // Volumen vive dentro de «Constancia y volumen», y Objetivos es una pestaña de la barra: ninguno tiene botón propio.
-    expect(targets).not.toContain('volumen');
-    expect(targets).not.toContain('objetivos');
-    // El peso se apunta desde Nutrición y con el aviso de Rex, no desde «Más».
-    expect(targets).not.toContain('peso');
   });
 });
 

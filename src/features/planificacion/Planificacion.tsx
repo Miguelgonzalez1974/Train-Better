@@ -1639,10 +1639,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
             suggestion={rexPick.current}
             waiting={rexPick.waiting}
             typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
-            badges={{}}
-            dots={[]}
             showDate={false}
-            modules={false}
+            returnsToPanel={false}
             ask={askRex}
             lab={rexLab}
             hints={REX_HINTS.planificacion}

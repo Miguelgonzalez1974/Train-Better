@@ -240,16 +240,27 @@ export const hasChosenSlots = (prefs: TilePrefs): boolean => prefs.slots.some((s
 export interface RankedTiles {
   /** Las que salen a la vista, en su orden: cada fijada en su hueco y los demás huecos con las que más puntúan. */
   shown: string[];
-  /** Cuáles de las que salen están fijadas a mano. */
+  /** Cuáles de las que salen están fijas: puestas a mano o de las que salen siempre. */
   fixed: string[];
   /** El resto, de más a menos puntuación. */
   rest: string[];
 }
 
+/**
+ * Las teselas que salen siempre en el Dashboard. Recovery no tiene otro botón: si no la has puesto tú en un hueco, ocupa el último automático
+ * (o el último de todos, si los has elegido los seis).
+ */
+export const ALWAYS_SHOWN: Partial<Record<RexScreen, string[]>> = { dashboard: ['recovery'] };
+
 /** De entre las teselas disponibles (`ids`), cuáles salen a la vista según el momento y lo que el atleta ha puesto en cada hueco. */
 export function rankTiles(ids: string[], ctx: TileContext, prefs: TilePrefs, max = MAX_SHOWN): RankedTiles {
   const available = new Set(ids);
   const slots = normalizeSlots(prefs.slots).slice(0, max).map((id) => (id && available.has(id) ? id : null));
+  for (const id of ALWAYS_SHOWN[ctx.screen] ?? []) {
+    if (!available.has(id) || slots.includes(id)) continue;
+    const free = slots.lastIndexOf(null);
+    slots[free >= 0 ? free : slots.length - 1] = id;
+  }
   const fixedSet = new Set(slots.filter((s): s is string => !!s));
   const pool = ids
     .filter((id) => !fixedSet.has(id))

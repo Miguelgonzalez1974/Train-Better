@@ -76,7 +76,7 @@ const NAV_TARGET: Partial<Record<RexTarget, TabId>> = { 'ir-dashboard': 'dashboa
 /** Lo que Rex ya ha dicho en un globo durante esta visita a la app: cambiar de pestaña no lo repite. */
 const spoken = new Set<string>();
 
-/** ¿Hay algo que merezca un punto en el botón? Lo urgente (check-in, revisión, cierre…) o un módulo con aviso. */
+/** ¿Hay algo que merezca un punto en el botón? Lo urgente (check-in, revisión, cierre…) o un aviso sin ver. */
 export function cornerNeedsAttention(suggestion: RexSuggestion, dots: RexTarget[]): boolean {
   return dots.length > 0 || (suggestion.id !== 'quiet' && suggestion.priority >= 80);
 }
@@ -113,13 +113,14 @@ function useTyping(): boolean {
 /**
  * Rex en la esquina, siempre a mano: un botón flotante abajo a la derecha que, al abrir la pantalla, dice en un globo lo más
  * importante (el consejo del día, el check-in pendiente…) con su botón de acción, y se recoge solo. Al tocarlo se abre un panel desde
- * abajo con su frase y atajos, las otras cosas que tiene que contar y, donde hay, los módulos de «Más».
+ * abajo con su frase y atajos y las otras cosas que tiene que contar.
  * Qué decir y qué recordar viene de `rexDashboard.ts`; esto solo lo dibuja.
  */
 export function RexCorner({
   speak,
   hint,
-  modules = true,
+  returnsToPanel = true,
+  dots = [],
   showDate = true,
   raised = false,
   ask,
@@ -130,7 +131,7 @@ export function RexCorner({
   tileContext,
   openWith = null,
   ...bar
-}: Omit<ComponentProps<typeof RexBar>, 'defaultMore' | 'showDate' | 'modules'> & {
+}: Omit<ComponentProps<typeof RexBar>, 'showDate'> & {
   /** Abrir el panel con una pregunta ya hecha y su respuesta (tocar un aro del Dashboard): cada `id` nuevo vuelve a abrirlo. */
   openWith?: { id: number; question: string; answer: AskAnswer } | null;
   /** En qué pantalla está Rex: decide qué atajos suben. */
@@ -141,8 +142,10 @@ export function RexCorner({
   speak: boolean;
   /** Una pista que va antes que cualquier otra cosa (p. ej. «Toca un aro…») y se queda hasta que ya no hace falta; null si no hay. */
   hint?: { lead: string; text: string } | null;
-  /** Enseñar los módulos de «Más» en el panel (solo el Dashboard los abre). */
-  modules?: boolean;
+  /** Lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse: solo en el Dashboard. */
+  returnsToPanel?: boolean;
+  /** Avisos sin ver: ponen un punto en el botón de Rex. */
+  dots?: RexTarget[];
   showDate?: boolean;
   /** Más arriba de lo normal, para no tapar el reloj de entreno flotante (Planificación). */
   raised?: boolean;
@@ -199,8 +202,8 @@ export function RexCorner({
   const blocked = useBlockingOverlay();
   const clockActive = useClockActive();
   const typingInField = useTyping();
-  // Lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse. Solo en el Dashboard (`modules`): en las demás pantallas el panel no vuelve solo.
-  const returns = modules;
+  // Lo que se abre desde el panel (una ventana) devuelve al panel al cerrarse. Solo en el Dashboard: en las demás pantallas el panel no vuelve solo.
+  const returns = returnsToPanel;
   const [waiting, setWaiting] = useState(false);
   const sawOverlay = useRef(false);
   useEffect(() => {
@@ -231,7 +234,7 @@ export function RexCorner({
     leave();
     run();
   };
-  const { suggestion, dots } = bar;
+  const { suggestion } = bar;
   const quiet = suggestion.id === 'quiet';
   // Si el globo ya dijo la pista, la sugerencia que había entonces no vuelve a salir en esta visita (sería ruido tras tocar un aro).
   const hintedOver = useRef<string | null>(null);
@@ -698,9 +701,6 @@ export function RexCorner({
             <RexBar
               {...bar}
               showDate={showDate}
-              modules={modules}
-              // Los módulos de «Más» van recogidos: los atajos de debajo son lo primero a mano; «Más» sigue a un toque.
-              defaultMore={false}
               // El globo ya la había dicho (o el panel se abre a pedido): sale entera, sin volver a escribirse.
               typedAlready
               onAction={(target, askText) => {

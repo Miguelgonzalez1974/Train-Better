@@ -169,3 +169,33 @@ describe('«Historial»', () => {
     expect(parseAsk('volumen', 3)).toEqual({ kind: 'modulo', target: 'volumen' });
   });
 });
+
+describe('Recovery sale siempre en el Dashboard', () => {
+  const ids = GLOBAL_TILES.map((g) => g.id);
+  const dash = { screen: 'dashboard' as const, hour: 9, session: 'pending' as const };
+
+  it('ocupa el último hueco automático aunque el momento no la suba', () => {
+    const { shown, fixed } = rankTiles(ids, dash, EMPTY_PREFS);
+    expect(shown).toHaveLength(MAX_SHOWN);
+    expect(shown[MAX_SHOWN - 1]).toBe('recovery');
+    expect(fixed).toContain('recovery');
+  });
+
+  it('si la pones en otro hueco, se queda ahí y no se repite', () => {
+    const { shown } = rankTiles(ids, dash, setSlot(EMPTY_PREFS, 0, 'recovery'));
+    expect(shown[0]).toBe('recovery');
+    expect(shown.filter((s) => s === 'recovery')).toHaveLength(1);
+  });
+
+  it('con los seis huecos elegidos a mano sustituye al último, y el resto no se pierde', () => {
+    const slots = ['acortar', 'faltar', 'me-duele', 'no-estoy', 'historial', 'mi-racha'];
+    const { shown, rest } = rankTiles(ids, dash, { slots });
+    expect(shown).toEqual([...slots.slice(0, 5), 'recovery']);
+    expect(rest).toContain('mi-racha');
+  });
+
+  it('en las demás pantallas no se fuerza', () => {
+    expect(rankTiles(ids, { ...dash, screen: 'nutricion' }, EMPTY_PREFS).fixed).toEqual([]);
+  });
+});
+

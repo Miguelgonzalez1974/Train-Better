@@ -1,21 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Apple, BarChart3, CalendarCheck, ChevronDown, ChevronRight, PersonStanding, Flame, Gauge, Radar, Scale, Target, Trophy, type LucideIcon } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
-import { REX_MODULES, type RexSuggestion, type RexTarget } from './rexDashboard';
-
-const MODULE_ICON: Partial<Record<RexTarget, LucideIcon>> = {
-  nutricion: Apple,
-  movilidad: PersonStanding,
-  semana: CalendarCheck,
-  constancia: Flame,
-  volumen: BarChart3,
-  analisis: Activity,
-  marcas: Trophy,
-  forma: Gauge,
-  perfil: Radar,
-  objetivos: Target,
-  peso: Scale,
-};
+import { type RexSuggestion, type RexTarget } from './rexDashboard';
 
 const TYPE_MS = 18;
 
@@ -29,20 +15,14 @@ const LEAD_COLOR: Record<NonNullable<RexSuggestion['tone']>, string> = {
 };
 
 /**
- * Rex arriba del Dashboard: una frase con atajos a lo que toca ahora (check-in, revisión, nutrición…) y un «Más» con los módulos
- * que antes eran botones sueltos. La frase solo se escribe con animación la primera vez que sale cada día. Todo lo que decide
- * (qué sugerir, qué recordar) viene de `rexDashboard.ts`; aquí solo se dibuja y se avisa de lo que pulsas.
+ * La frase de Rex con sus atajos a lo que toca ahora (check-in, revisión, nutrición…), dentro de su panel. La frase solo se escribe con animación la
+ * primera vez que sale cada día. Todo lo que decide (qué sugerir, qué recordar) viene de `rexDashboard.ts`; aquí solo se dibuja y se avisa de lo que pulsas.
  */
 export function RexBar({
   suggestion,
   waiting,
   typedAlready,
-  badges,
-  dots,
   showDate = true,
-  modules = true,
-  defaultMore = false,
-  hide = [],
   onAction,
   onDismiss,
   onNext,
@@ -52,21 +32,11 @@ export function RexBar({
   onNext: () => void;
   /** Enseñar la fecha de hoy bajo el muñeco (en el Dashboard sí; donde el título ya dice el día, no). */
   showDate?: boolean;
-  /** Enseñar el botón «Más» con los módulos del Dashboard. */
-  modules?: boolean;
-  /** «Más» sale abierto (en el panel de la esquina). */
-  defaultMore?: boolean;
-  /** Módulos de «Más» que hoy no se pueden abrir (por ejemplo «Tu semana» sin ninguna semana que repasar). */
-  hide?: RexTarget[];
   suggestion: RexSuggestion;
   /** Cuántas sugerencias más esperan detrás de la que se ve. */
   waiting: number;
   /** La frase ya se escribió con animación hoy: sale entera. */
   typedAlready: boolean;
-  /** Texto pequeño junto a un módulo de «Más» (por ejemplo el % de constancia o cuántos objetivos hay). */
-  badges: Partial<Record<RexTarget, string>>;
-  /** Módulos con un aviso sin ver (un punto naranja). */
-  dots: RexTarget[];
   /** `ask`: el botón no lleva a ningún sitio, le dice esa frase a Rex (si quien lo pinta sabe hacerlo; si no, vale el destino). */
   onAction: (target: RexTarget, ask?: string) => void;
   onDismiss: () => void;
@@ -75,7 +45,6 @@ export function RexBar({
   const reduced = useMemo(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches), []);
   const animate = !typedAlready && !reduced;
   const [shown, setShown] = useState(animate ? 0 : suggestion.text.length);
-  const [more, setMore] = useState(defaultMore);
   // Sin memoizar: si la app queda abierta pasada la medianoche, la fecha se corrige sola en el siguiente repintado.
   const now = new Date();
   const today = {
@@ -148,17 +117,8 @@ export function RexBar({
                 Ahora no
               </button>
             )}
-            {modules && <button
-              onClick={() => setMore((v) => !v)}
-              aria-expanded={more}
-              className="relative ml-auto flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-white"
-            >
-              Más
-              <ChevronDown size={13} aria-hidden="true" className={`transition-transform duration-200 ${more ? 'rotate-180' : ''}`} />
-              {!more && dots.length > 0 && <span className="absolute right-0 top-0.5 h-2 w-2 rounded-full bg-brand-orange" aria-label="Hay algo sin ver" />}
-            </button>}
           </div>
-          {waiting > 0 && !more && (
+          {waiting > 0 && (
             <button onClick={onNext} className="mt-1.5 flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 transition-colors hover:text-neutral-300">
               {waiting === 1 ? 'Tengo otra cosa que contarte' : `Tengo ${waiting} cosas más que contarte`}
               <ChevronRight size={12} aria-hidden="true" />
@@ -166,29 +126,6 @@ export function RexBar({
           )}
         </div>
       </div>
-
-      {modules && more && (
-        <div className="mt-3 grid animate-section-in grid-cols-2 gap-2 motion-reduce:animate-none sm:grid-cols-3">
-          {REX_MODULES.filter((m) => !hide.includes(m.target)).map((m) => {
-            const Icon = MODULE_ICON[m.target] ?? Target;
-            return (
-              <button
-                key={m.target}
-                onClick={() => {
-                  setMore(false);
-                  onAction(m.target);
-                }}
-                className="relative flex items-center gap-2 rounded-lg border border-brand-border px-3 py-2 text-left text-xs font-semibold text-neutral-200 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold"
-              >
-                <Icon size={15} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{m.label}</span>
-                {badges[m.target] && <span className="num text-[11px] font-medium text-neutral-500">{badges[m.target]}</span>}
-                {dots.includes(m.target) && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-brand-orange ring-2 ring-brand-bg" aria-label="Hay algo sin ver" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </section>
   );
 }

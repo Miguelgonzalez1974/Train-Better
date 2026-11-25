@@ -545,18 +545,6 @@ export function saveRexMemory(storage: Pick<Storage, 'setItem'> | null, memory: 
   }
 }
 
-/** Los módulos que se abren desde «Más» (los botones que antes vivían sueltos arriba). «Tu semana» ya no está: es la tesela «Revisar mi semana» (y la frase «mi semana» en la caja). */
-export const REX_MODULES: { target: RexTarget; label: string }[] = [
-  { target: 'nutricion', label: 'Nutrición' },
-  // «Constancia y volumen» y el diario viven en la ventana Historial, que es la tesela «Historial» (y «mi historial» en la caja): no hay botón en «Más».
-  { target: 'movilidad', label: 'Recovery' },
-  { target: 'analisis', label: 'Análisis' },
-  { target: 'marcas', label: 'Mis marcas' },
-  { target: 'forma', label: 'Tu forma' },
-  // «Objetivos» ya no está aquí: es una pestaña de la barra de abajo (el punto de la revisión del perfil va en esa pestaña).
-  // El peso corporal ya no está aquí: se apunta desde Nutrición (que es donde se usa) y con el aviso de Rex cuando lleva días sin apuntarse.
-];
-
 /**
  * La línea de cifras del globo fijo de Rex: el objetivo de esfuerzo del día y, según el momento, lo realizado o lo previsto
  * («Objetivo 45–65 · Previsto ~54», «Objetivo 45–65 · Realizado 50»). null si no hay nada que contar.

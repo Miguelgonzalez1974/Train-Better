@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Pin, Pencil, RotateCcw, Sparkles, type LucideIcon } from 'lucide-react';
-import { hasChosenSlots, MAX_SHOWN, rankTiles, resetPrefs, setSlot, TILE_GROUP_LABEL, type TileContext, type TileGroup, type TilePrefs } from './rexTiles';
+import { ALWAYS_SHOWN, hasChosenSlots, MAX_SHOWN, rankTiles, resetPrefs, setSlot, TILE_GROUP_LABEL, type TileContext, type TileGroup, type TilePrefs } from './rexTiles';
 
 /** Una tesela lista para dibujar y tocar: lo que la pantalla (o la biblioteca) pone y lo que hace al tocarla. */
 export interface PanelTile {
@@ -41,16 +41,15 @@ export function RexTileGrid({ tiles, ctx, prefs, onPrefs }: { tiles: PanelTile[]
   /** El hueco que se está eligiendo (0-5), o null. */
   const [picking, setPicking] = useState<number | null>(null);
   const byId = useMemo(() => new Map(tiles.map((t) => [t.id, t])), [tiles]);
-  const { shown, rest } = useMemo(() => rankTiles(tiles.map((t) => t.id), ctx, prefs), [tiles, ctx, prefs]);
+  const { shown, fixed: fixedIds, rest } = useMemo(() => rankTiles(tiles.map((t) => t.id), ctx, prefs), [tiles, ctx, prefs]);
   if (tiles.length === 0) return null;
 
   const grouped = (ids: string[]) =>
     GROUP_ORDER.map((g) => ({ group: g, items: ids.map((id) => byId.get(id)!).filter((t) => t && t.group === g) })).filter((x) => x.items.length > 0);
 
-  const isFixed = (i: number) => {
-    const id = prefs.slots[i];
-    return !!id && byId.has(id);
-  };
+  const isFixed = (i: number) => !!shown[i] && fixedIds.includes(shown[i]);
+  /** Una tesela que sale siempre en esta pantalla (se puede cambiar de hueco, pero no quitar). */
+  const isAlways = (id: string | undefined) => !!id && (ALWAYS_SHOWN[ctx.screen] ?? []).includes(id);
 
   if (editing) {
     const done = () => {
@@ -82,7 +81,10 @@ export function RexTileGrid({ tiles, ctx, prefs, onPrefs }: { tiles: PanelTile[]
             </button>
           </div>
         </div>
-        <p className="mb-3 text-xs leading-relaxed text-neutral-400">Toca un hueco y elige qué atajo quieres en él. Los huecos «Automático» los rellena Rex según el momento.</p>
+        <p className="mb-3 text-xs leading-relaxed text-neutral-400">
+          Toca un hueco y elige qué atajo quieres en él. Los huecos «Automático» los rellena Rex según el momento
+          {tiles.some((t) => isAlways(t.id)) ? '; el marcado «Siempre» puedes cambiarlo de sitio, pero no quitarlo' : ''}.
+        </p>
 
         <div className="grid grid-cols-3 gap-2" data-testid="rex-slots">
           {Array.from({ length: MAX_SHOWN }, (_, i) => {
@@ -95,7 +97,7 @@ export function RexTileGrid({ tiles, ctx, prefs, onPrefs }: { tiles: PanelTile[]
                 key={i}
                 onClick={() => setPicking(active ? null : i)}
                 aria-pressed={active}
-                aria-label={`Hueco ${i + 1}: ${t ? t.label : 'vacío'}${fixed ? ', fijado' : ', automático'}`}
+                aria-label={`Hueco ${i + 1}: ${t ? t.label : 'vacío'}${isAlways(t?.id) ? ', sale siempre' : fixed ? ', fijado' : ', automático'}`}
                 data-slot={i}
                 className={`relative flex min-h-[84px] flex-col items-center justify-center gap-1 rounded-2xl border px-1.5 py-2 text-center transition-colors ${
                   active ? 'border-brand-orange bg-brand-orange/10' : fixed ? 'border-brand-gold/60 bg-brand-surface' : 'border-dashed border-white/20 bg-brand-surface/60'
@@ -105,7 +107,7 @@ export function RexTileGrid({ tiles, ctx, prefs, onPrefs }: { tiles: PanelTile[]
                 {fixed ? <Pin size={11} aria-hidden="true" className="absolute right-2 top-2 text-brand-gold" /> : <Sparkles size={11} aria-hidden="true" className="absolute right-2 top-2 text-neutral-500" />}
                 {Icon && <Icon size={24} strokeWidth={2} aria-hidden="true" className={fixed ? 'text-brand-orange' : 'text-neutral-400'} />}
                 <span className={`block text-[12px] font-semibold leading-tight ${fixed ? 'text-neutral-100' : 'text-neutral-400'}`}>{t ? t.label : 'Vacío'}</span>
-                <span className="block text-[10px] leading-tight text-neutral-500">{fixed ? 'Fijado' : 'Automático'}</span>
+                <span className="block text-[10px] leading-tight text-neutral-500">{isAlways(t?.id) ? 'Siempre' : fixed ? 'Fijado' : 'Automático'}</span>
               </button>
             );
           })}

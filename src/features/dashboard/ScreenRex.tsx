@@ -51,14 +51,12 @@ export function ScreenRex({
       hints={hints}
       screen={screen}
       tileContext={tileContext}
-      modules={false}
+      returnsToPanel={false}
       showDate={false}
       dock={{ stats }}
       suggestion={suggestion}
       waiting={0}
       typedAlready
-      badges={{}}
-      dots={[]}
       onAction={onAction ?? (() => undefined)}
       onDismiss={() => undefined}
       onNext={() => undefined}

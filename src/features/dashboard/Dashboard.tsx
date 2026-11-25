@@ -44,7 +44,6 @@ import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroRevie
 import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { isoDiffDays, toLocalIsoDate } from '../../engine/periodization';
-import { buildGoalRows } from './progressOverview';
 import { BalanceBox, DayRing } from './DayRing';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainId } from '../../engine/explainNumbers';
 import { explanationToAnswer, ringQuestion } from './rexRing';
@@ -98,7 +97,6 @@ import { buildSessionSummaryData, e1rmSuggestionKey, summaryHighlight, type E1rm
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
 import { addSubirPrGoal } from './rexAnalysis';
 import { Movilidad } from '../movilidad/Movilidad';
-import { weeklyMobilityMinutes } from '../../engine/mobility';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
 
@@ -186,7 +184,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const acwrTrend = useMemo(() => getAcwrTrend(engineLoad), [engineLoad]);
   const todayIso = toLocalIsoDate(new Date());
   const formModel = useMemo(() => buildFormModel(profile, engineLoad, todayIso), [profile, engineLoad, todayIso]);
-  const goalRows = useMemo(() => buildGoalRows(profile.goals, history, profile.prs), [profile.goals, history, profile.prs]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
   const yearConsistency = useMemo(() => computeYearConsistency(profile, history, new Date()), [profile, history]);
@@ -443,12 +440,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       setShowWeekly(reviewable);
     }
   }, [reviewable]);
-  const rexBadges: Partial<Record<RexTarget, string>> = {
-    ...(goalRows.length > 0 ? { objetivos: String(goalRows.length) } : {}),
-    ...(nutritionPercent !== null ? { nutricion: `${nutritionPercent} %` } : {}),
-    ...(weeklyMobilityMinutes(profile, todayIso) > 0 ? { movilidad: `${weeklyMobilityMinutes(profile, todayIso)} min` } : {}),
-  };
-  // Un punto en «Más» (y en el módulo) cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
+  // Un punto en el botón de Rex cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
   const nutritionLow = isToday && nutritionPercent !== null && nutritionPercent < NUTRITION_LOW && new Date().getHours() >= NUTRITION_HOUR;
   const rexDots: RexTarget[] = [
     ...(nutritionLow ? (['nutricion'] as RexTarget[]) : []),
@@ -606,7 +598,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         suggestion={rexPick.current}
         waiting={rexPick.waiting}
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
-        badges={rexBadges}
         dots={rexDots}
         onAction={runRexTarget}
         onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
