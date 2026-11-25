@@ -72,12 +72,19 @@ interface WeekStripProps {
   onLoggingChange?: (open: boolean) => void;
   /** Se marcó o se quitó un descanso elegido: el padre vuelve a leer el perfil. */
   onRestChange?: () => void;
+  /** Un día de esta semana que se abre al llegar (desde «Mi semana» del Dashboard). */
+  initialDate?: string | null;
 }
 
-export function WeekStrip({ profile, history, goals, today = new Date(), onLoggedDay, onLoggingChange, onRestChange }: WeekStripProps) {
+export function WeekStrip({ profile, history, goals, today = new Date(), onLoggedDay, onLoggingChange, onRestChange, initialDate }: WeekStripProps) {
   const { trainingDaysPerWeek } = profile;
   const [weekOffset, setWeekOffset] = useState(0);
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(() => {
+    if (!initialDate || initialDate <= toLocalIsoDate(today)) return null;
+    const first = startOfWeek(today);
+    const index = Array.from({ length: 7 }, (_, i) => addDaysIso(toLocalIsoDate(first), i)).indexOf(initialDate);
+    return index >= 0 ? index : null;
+  });
   /** Día (índice de la semana) cuyo formulario de registro está abierto. */
   const [loggingFor, setLoggingFor] = useState<number | null>(null);
   useEffect(() => {

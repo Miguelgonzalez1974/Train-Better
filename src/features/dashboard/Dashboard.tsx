@@ -33,7 +33,7 @@ import {
   type RexTarget,
 } from './rexDashboard';
 import { buildOpenItems } from '../objetivos/openItems';
-import { RexWeekly } from './RexWeekly';
+import { MyWeek, type WeekView } from './MyWeek';
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
 import { LevelSummaryCard } from './LevelSummaryCard';
 import { LevelScreen, type LevelChip } from './LevelScreen';
@@ -150,8 +150,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [ringAsk, setRingAsk] = useState<{ id: number; question: string; answer: AskAnswer } | null>(null);
   /** Sugerencias de 1RM de hoy que se dijo «Ahora no»: no vuelven a salir en esta visita. */
   const [dismissedE1rm, setDismissedE1rm] = useState<string[]>([]);
-  /** La revisión abierta: se guarda aquí porque al darla por vista deja de existir como pendiente y la conversación no debe cerrarse sola. */
-  const [showWeekly, setShowWeekly] = useState<WeeklyReview | null>(null);
+  /** «Mi semana» abierta: el botón elegido y la revisión de la pasada, guardada aquí porque al darla por vista deja de existir como pendiente. */
+  const [weekWindow, setWeekWindow] = useState<{ view: WeekView; review: WeeklyReview | null } | null>(null);
   // El coach propone mover un día de la semana según tu curva de forma (ver `lib/weekCoach.ts`): la ficha y lo que se hizo ya esta semana.
   // La propuesta abierta se guarda aparte: al aplicarla (o dejarla) deja de salir en Rex, pero la ficha sigue abierta para enseñar «Hecho» y «Deshacer».
   const [openWeekMove, setOpenWeekMove] = useState<WeekMoveProposal | null>(null);
@@ -430,16 +430,19 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       return next;
     });
   }
-  /** La semana que «Tu semana» abre: la pendiente (lunes a miércoles) o, si no, la última completa. */
+  /** La semana pasada que se repasa: la pendiente (lunes a miércoles) o, si no, la última completa. */
   const reviewable = weeklyReview ?? anytimeReview;
-  // «Revisar mi semana» tocada desde otra pantalla: se llega aquí y se abre la revisión en cuanto está calculada.
+  /** Abre «Mi semana»: de lunes a miércoles, la pasada si no la has visto; el resto, la actual. */
+  const openWeek = () => setWeekWindow({ view: weeklyReview ? 'pasada' : 'actual', review: reviewable });
+  // «Mi semana» tocada desde otra pantalla: se llega aquí y se abre.
   const wantsWeek = useRef(handoff.peek('dash-act') === 'semana');
   useEffect(() => {
-    if (wantsWeek.current && reviewable) {
+    if (wantsWeek.current) {
       wantsWeek.current = false;
-      setShowWeekly(reviewable);
+      openWeek();
     }
-  }, [reviewable]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Un punto en el botón de Rex cuando algo pide mirar: revisión sin ver o nutrición floja por la tarde.
   const nutritionLow = isToday && nutritionPercent !== null && nutritionPercent < NUTRITION_LOW && new Date().getHours() >= NUTRITION_HOUR;
   const rexDots: RexTarget[] = [
@@ -451,8 +454,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'checkin':
         return onOpenMorning();
       case 'semana':
-        // Si hay una revisión pendiente (lunes a miércoles) se abre esa; si no, la última semana completa.
-        return reviewable && setShowWeekly(reviewable);
+        return openWeek();
       case 'semana-mover':
         return weekMoveProposal && setOpenWeekMove(weekMoveProposal);
       case 'revision-enfasis':
@@ -568,10 +570,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           return { lead: prep.lead, tone, text: `${shown.readiness.total !== null ? `Preparación ${shown.readiness.total} sobre 100. ` : ''}${effort.text}`, actions: [{ label: 'Ver la preparación', target: 'preparacion' }] };
         },
         modulo: (intent) => {
-          // «Revisar mi semana» sin ninguna semana con sesiones que repasar: se dice, en vez de no hacer nada.
-          if (intent.target === 'semana' && !reviewable) {
-            return { lead: 'Aún no hay una semana que repasar.', tone: 'info', text: 'En cuanto tengas una semana con sesiones hechas, te la cuento aquí: cifras, lo mejor, lo que vigilar y cómo sigue el plan.', actions: [] };
-          }
           runRexTarget(intent.target);
           return 'close';
         },
@@ -639,47 +637,66 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           />
         </Modal>
       )}
-      {showWeekly && (
-        <Modal open onClose={() => setShowWeekly(null)} title="Revisión semanal">
-          <RexWeekly
-            review={showWeekly}
-            onAccept={() => {
-              if (!showWeekly.suggestion) return;
-              const next = applyMacroReview(athleteRepository.getProfile(), showWeekly.suggestion, todayIso);
-              athleteRepository.saveProfile(next);
-              setProfile(next);
-            }}
-            onDismiss={() => {
-              if (!showWeekly.suggestion) return;
-              const next = withMacroWeekReviewed(athleteRepository.getProfile(), showWeekly.suggestion.reviewKey);
-              athleteRepository.saveProfile(next);
-              setProfile(next);
-            }}
-            onAdjustGoal={(goalId, patch) => {
-              const next = applyGoalAdjustment(athleteRepository.getProfile(), goalId, patch);
-              athleteRepository.saveProfile(next);
-              // La meta cambia la prioridad del levantamiento: las sesiones ya preparadas se vuelven a generar.
-              resetUpcomingSessions(todayIso);
-              setProfile(athleteRepository.getProfile());
-            }}
-            onDone={() => {
-              const next = withWeekReviewed(athleteRepository.getProfile(), showWeekly.weekKey);
-              athleteRepository.saveProfile(next);
-              setProfile(next);
-            }}
-            onOpenEmphasis={() => {
-              setShowWeekly(null);
-              openEmphasisReview();
-            }}
-            onGoPlanificacion={() => {
-              setShowWeekly(null);
+      {weekWindow && (
+        <Modal open onClose={() => setWeekWindow(null)} title="Mi semana">
+          <MyWeek
+            view={weekWindow.view}
+            onView={(view) => setWeekWindow((cur) => (cur ? { ...cur, view } : cur))}
+            profile={profile}
+            history={history}
+            todayIso={todayIso}
+            todaySession={todaySession}
+            onOpenDay={(iso) => {
+              setWeekWindow(null);
+              if (iso !== todayIso) handoff.put('plan-act', `dia:${iso}`);
               onNavigateToPlanificacion();
             }}
-            onClose={() => setShowWeekly(null)}
+            review={
+              weekWindow.review
+                ? {
+                    review: weekWindow.review,
+                    onAccept: () => {
+                      const suggestion = weekWindow.review?.suggestion;
+                      if (!suggestion) return;
+                      const next = applyMacroReview(athleteRepository.getProfile(), suggestion, todayIso);
+                      athleteRepository.saveProfile(next);
+                      setProfile(next);
+                    },
+                    onDismiss: () => {
+                      const suggestion = weekWindow.review?.suggestion;
+                      if (!suggestion) return;
+                      const next = withMacroWeekReviewed(athleteRepository.getProfile(), suggestion.reviewKey);
+                      athleteRepository.saveProfile(next);
+                      setProfile(next);
+                    },
+                    onAdjustGoal: (goalId, patch) => {
+                      const next = applyGoalAdjustment(athleteRepository.getProfile(), goalId, patch);
+                      athleteRepository.saveProfile(next);
+                      // La meta cambia la prioridad del levantamiento: las sesiones ya preparadas se vuelven a generar.
+                      resetUpcomingSessions(todayIso);
+                      setProfile(athleteRepository.getProfile());
+                    },
+                    onDone: () => {
+                      if (!weekWindow.review) return;
+                      const next = withWeekReviewed(athleteRepository.getProfile(), weekWindow.review.weekKey);
+                      athleteRepository.saveProfile(next);
+                      setProfile(next);
+                    },
+                    onOpenEmphasis: () => {
+                      setWeekWindow(null);
+                      openEmphasisReview();
+                    },
+                    onGoPlanificacion: () => {
+                      setWeekWindow(null);
+                      onNavigateToPlanificacion();
+                    },
+                    onClose: () => setWeekWindow(null),
+                  }
+                : null
+            }
           />
         </Modal>
       )}
-
 
       {/* Selector de día y pestañas, al estilo Whoop: el día elegido manda sobre todo lo de debajo. */}
       <DayHeader dayIso={dayIso} macro={macroChip(profile.macrocycles, todayIso, todaySession?.competition?.daysToEvent ?? null)} onOpenMacro={() => onNavigateToObjetivos()} />

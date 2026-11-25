@@ -51,7 +51,7 @@ export const GLOBAL_TILES: GlobalTile[] = [
   { id: 'otro-wod', label: 'Otro WOD', iconKey: 'shuffle', group: 'sesion', ask: 'otro wod' },
   { id: 'cambiar-dia', label: 'Cambiar día', hint: 'mover o intercambiar', iconKey: 'calendar-clock', group: 'dia', ask: 'cambiar dia' },
   { id: 'que-toca-manana', label: 'Qué toca mañana', iconKey: 'calendar-days', group: 'dia', ask: 'que toca manana' },
-  { id: 'mi-semana', label: 'Revisar mi semana', hint: 'cómo fue y qué sigue', iconKey: 'calendar-check', group: 'dia', ask: 'revision semanal' },
+  { id: 'mi-semana', label: 'Mi semana', hint: 'esta y la pasada', iconKey: 'calendar-check', group: 'dia', ask: 'revision semanal' },
   { id: 'me-duele', label: 'Me duele algo', iconKey: 'heart-pulse', group: 'cuerpo', ask: 'me duele algo' },
   { id: 'no-estoy', label: 'Hoy no estoy para el plan', iconKey: 'frown', group: 'cuerpo', ask: 'hoy no estoy para el plan' },
   { id: 'faltar', label: 'Voy a faltar unos días', iconKey: 'plane', group: 'cuerpo', ask: 'voy a faltar unos dias' },

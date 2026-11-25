@@ -127,6 +127,25 @@ export function previousWeek(today: Date): { monday: Date; from: string; to: str
   return { monday, from: toLocalIsoDate(monday), to: toLocalIsoDate(shiftDays(monday, 6)) };
 }
 
+/** Lo que ha subido entre dos fechas: las cargas que suben por sesiones limpias y los PR nuevos. */
+export function weekRecords(profile: AthleteProfile, from: string, to: string): string[] {
+  const best: string[] = [];
+  for (const record of (profile.progressionLog ?? []).filter((r) => r.date >= from && r.date <= to)) {
+    const view = sessionProgressionView(profile.progressionLog, profile.prLog, profile.progressionSettings, record.date, record.movementId);
+    if (view?.change === 'subio' && view.nextKg) {
+      const name = getMovementById(record.movementId)?.name ?? record.movementId;
+      best.push(`${name} sube a ${kg(view.nextKg)}: ${view.needed} sesiones limpias seguidas.`);
+    }
+  }
+  // PRs nuevos: un punto del registro que supera al mejor anterior de ese levantamiento (el primero no cuenta: es la siembra).
+  const log = profile.prLog ?? [];
+  for (const e of log.filter((x) => x.date >= from && x.date <= to)) {
+    const before = log.filter((x) => x.key === e.key && x.date < from);
+    if (before.length > 0 && e.kg > Math.max(...before.map((x) => x.kg))) best.push(`Nuevo PR en ${PR_KEY_LABEL[e.key] ?? e.key}: ${kg(e.kg)}.`);
+  }
+  return best;
+}
+
 export function buildWeeklyReview(
   profile: AthleteProfile,
   history: SessionHistoryEntry[],
@@ -174,19 +193,7 @@ export function buildWeeklyReview(
   let goalAdjust: GoalAdjustProposal | null = null;
 
   if (!short) {
-    for (const record of (profile.progressionLog ?? []).filter((r) => r.date >= from && r.date <= to)) {
-      const view = sessionProgressionView(profile.progressionLog, profile.prLog, profile.progressionSettings, record.date, record.movementId);
-      if (view?.change === 'subio' && view.nextKg) {
-        const name = getMovementById(record.movementId)?.name ?? record.movementId;
-        best.push(`${name} sube a ${kg(view.nextKg)}: ${view.needed} sesiones limpias seguidas.`);
-      }
-    }
-    // PRs nuevos: un punto del registro que supera al mejor anterior de ese levantamiento (el primero no cuenta: es la siembra).
-    const log = profile.prLog ?? [];
-    for (const e of log.filter((x) => x.date >= from && x.date <= to)) {
-      const before = log.filter((x) => x.key === e.key && x.date < from);
-      if (before.length > 0 && e.kg > Math.max(...before.map((x) => x.kg))) best.push(`Nuevo PR en ${PR_KEY_LABEL[e.key] ?? e.key}: ${kg(e.kg)}.`);
-    }
+    best.push(...weekRecords(profile, from, to));
     if (program) {
       for (const a of program.attempts) {
         const name = getMovementById(a.movementId)?.name ?? a.movementId;

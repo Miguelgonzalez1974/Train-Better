@@ -1327,6 +1327,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // Si RexLab de otra pantalla dejó dicho qué abrir (la molestia, «hoy no», faltar, otro WOD), se abre al llegar.
   // «Continuar sesión» del Dashboard: se mira al montar (sin gastarlo) para que el modo desarrollo, que repite los efectos, no lo pierda.
   const dashboardAct = useRef<string | null>(handoff.peek('plan-act'));
+  // «Mi semana» del Dashboard manda a un día concreto (`dia:yyyy-mm-dd`): la tira de la semana lo abre.
+  const [openDay] = useState(() => (dashboardAct.current?.startsWith('dia:') ? dashboardAct.current.slice(4) : null));
   useEffect(() => {
     const node = handoff.take('support-start');
     const pending = ['cerrar', 'anotar', 'otra-cosa'].includes(dashboardAct.current ?? '') ? dashboardAct.current : null;
@@ -1514,6 +1516,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
                 onLoggedDay={handleLoggedPastDay}
                 onLoggingChange={setPastLogging}
                 onRestChange={() => setProfile(athleteRepository.getProfile())}
+                initialDate={openDay}
               />
             </div>
           </div>
