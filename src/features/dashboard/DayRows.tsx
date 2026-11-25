@@ -10,7 +10,7 @@ import type { SessionCardModel } from './sessionCardModel';
 /** La insignia de la izquierda de las demás filas: un cuadrado gris con un icono. */
 function Badge({ children }: { children: ReactNode }) {
   return (
-    <span className="flex h-12 w-14 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgb(var(--c-white) / 0.08)', color: 'rgb(var(--c-white) / 0.8)' }}>
+    <span className="flex h-11 w-12 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgb(var(--c-white) / 0.08)', color: 'rgb(var(--c-white) / 0.8)' }}>
       {children}
     </span>
   );
@@ -18,11 +18,11 @@ function Badge({ children }: { children: ReactNode }) {
 
 function Row({ badge, title, sub, right, onClick }: { badge: ReactNode; title: string; sub: ReactNode; right?: ReactNode; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.04] p-2.5 transition-colors duration-200 hover:bg-white/[0.07]">
+    <button onClick={onClick} className="day-card flex w-full items-center gap-3 px-[13px] py-3 transition-colors duration-200">
       {badge}
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm font-semibold text-white">{title}</span>
-        <span className="mt-0.5 block truncate text-xs text-neutral-500">{sub}</span>
+        <span className="block truncate text-[13.5px] font-semibold text-white">{title}</span>
+        <span className="mt-0.5 block truncate text-[11.5px] text-neutral-500">{sub}</span>
       </span>
       {right}
     </button>
@@ -76,7 +76,7 @@ export function DayRows({
   ) : null;
 
   return (
-    <section className="flex flex-col gap-2">
+    <section className="mt-1 flex flex-col gap-3">
       <SectionLabel className="px-1">Tu día</SectionLabel>
       {isToday && session?.competition && !session.competition.eventDay && (
         <p className="flex items-center gap-1.5 px-1 text-xs font-semibold text-brand-gold">

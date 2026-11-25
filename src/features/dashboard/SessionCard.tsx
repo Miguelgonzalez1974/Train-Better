@@ -35,11 +35,11 @@ export function SessionCard({ model, onOpenPlan, onOpenDone }: { model: SessionC
       <span className="flex w-full items-center gap-2">
         {done && <Check size={16} strokeWidth={3} className="shrink-0" style={{ color: EFFORT }} aria-hidden="true" />}
         <span className="min-w-0 flex-1">
-          <span className={`block truncate text-[15px] font-semibold ${model.kind === 'missing' ? 'text-neutral-400' : 'text-white'}`}>{model.title}</span>
+          <span className={`block truncate text-sm font-semibold ${model.kind === 'missing' ? 'text-neutral-400' : 'text-white'}`}>{model.title}</span>
           {/* Sin cifras (descanso, sin sesión…) la explicación va debajo del titular, no a su lado: así el titular no se corta. */}
           {model.meta && figures.length === 0 && <span className="mt-0.5 block truncate text-xs text-neutral-500">{model.meta}</span>}
         </span>
-        {model.meta && figures.length > 0 && <span className="shrink-0 text-xs text-neutral-500">{model.meta}</span>}
+        {model.meta && figures.length > 0 && <span className="shrink-0 text-[11px] text-neutral-500">{model.meta}</span>}
         {open && <ChevronRight size={16} className="shrink-0 text-neutral-600" aria-hidden="true" />}
       </span>
       {figures.length > 0 && (
@@ -47,7 +47,7 @@ export function SessionCard({ model, onOpenPlan, onOpenDone }: { model: SessionC
           {figures.map((f, i) => (
             <span key={`${i}-${f.value}`} className={`min-w-0 px-2.5 ${i === 0 ? 'pl-0' : 'border-l border-white/[0.12]'}`} data-testid="session-figure">
               <span
-                className={`num block truncate text-[19px] font-semibold leading-tight ${f.tone === 'effort' || f.tone === 'muted' ? '' : 'text-white'}`}
+                className={`num block truncate text-[17px] font-semibold leading-tight ${f.tone === 'effort' || f.tone === 'muted' ? '' : 'text-white'}`}
                 style={f.tone === 'effort' ? { color: EFFORT } : f.tone === 'muted' ? { color: PLAN } : undefined}
               >
                 {f.value}
@@ -60,7 +60,7 @@ export function SessionCard({ model, onOpenPlan, onOpenDone }: { model: SessionC
         </span>
       )}
       {line && LineIcon && (
-        <span className={`flex w-full items-center gap-2 border-t border-white/[0.08] pt-2 text-xs ${line.warn ? 'text-warn' : 'text-neutral-400'}`} data-testid="session-line">
+        <span className={`flex w-full items-center gap-2 border-t border-white/[0.08] pt-2.5 text-[11.5px] ${line.warn ? 'text-warn' : 'text-neutral-400'}`} data-testid="session-line">
           <LineIcon size={14} strokeWidth={2.25} className="shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">{line.text}</span>
           {line.spark && <Spark values={line.spark} done={done} />}
@@ -69,9 +69,9 @@ export function SessionCard({ model, onOpenPlan, onOpenDone }: { model: SessionC
     </>
   );
 
-  const cls = 'flex w-full flex-col gap-2 rounded-2xl bg-white/[0.04] px-3.5 py-2.5 text-left';
+  const cls = 'day-card flex w-full flex-col gap-[11px] px-[15px] py-3.5 text-left';
   return open ? (
-    <button onClick={open} className={`${cls} animate-section-in transition-colors duration-200 hover:bg-white/[0.07] motion-reduce:animate-none`} data-testid="session-card" data-kind={model.kind}>
+    <button onClick={open} className={`${cls} animate-section-in transition-colors duration-200 motion-reduce:animate-none`} data-testid="session-card" data-kind={model.kind}>
       {body}
     </button>
   ) : (
