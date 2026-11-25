@@ -1,6 +1,5 @@
 import { Flame, Dumbbell, Zap, Trophy, Layers, Star, Wind, type LucideIcon } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
-import type { DailySession } from '../../data/athlete/types';
 
 /**
  * Icono y color de cada bloque de sesión — fuente única para la tarjeta de un bloque (Planificación)
@@ -43,54 +42,5 @@ export function BlockTile({ block, size = 36, active = false }: { block: Block; 
     >
       <Icon size={Math.round(size * 0.5)} strokeWidth={2.25} />
     </span>
-  );
-}
-
-/** Orden de bloques, igual que `BLOCK_ORDER` en `DaySessionBlocks.tsx` (duplicado a propósito: ese
- * archivo sí tira de toda la tarjeta de sesión, esto es solo el orden, nada más). */
-const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
-
-/** Bloques que no dan información (casi siempre presentes, no cambian la forma del día). */
-const DAY_SHAPE_SKIP = new Set<Block>(['warmup', 'cooldown']);
-
-/**
- * Forma del día de un vistazo: un chip por bloque presente, con su icono/color de siempre — antes de
- * bajar a leer cada parte. Se usa en Planificación (bajo los botones de acción) y en el titular de
- * "hoy" del Dashboard.
- */
-export function DayShapeChips({
-  session,
-  className = '',
-  variant = 'chips',
-}: {
-  session: DailySession;
-  className?: string;
-  /** `text`: una sola línea gris ("Fuerza · WOD · Oly") sin cajas ni iconos — la versión minimalista. */
-  variant?: 'chips' | 'text';
-}) {
-  const present = BLOCK_ORDER.filter((block) => !DAY_SHAPE_SKIP.has(block) && session.blocks.some((b) => b.block === block));
-  if (present.length === 0) return null;
-  if (variant === 'text') {
-    return (
-      <p className={`text-[13px] text-neutral-400 ${className}`}>
-        {present.map((block) => `${BLOCK_META[block].label}${block === 'wod' && session.doubleWod ? ' ×2' : ''}`).join(' · ')}
-      </p>
-    );
-  }
-  return (
-    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
-      {present.map((block) => {
-        const { label, Icon, accent } = BLOCK_META[block];
-        const accentClasses = ACCENT_CLASSES[accent];
-        const suffix = block === 'wod' && session.doubleWod ? ' ×2' : '';
-        return (
-          <span key={block} className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1 text-[11px] font-medium text-neutral-300">
-            <Icon size={11} strokeWidth={2.5} className={accentClasses.icon} aria-hidden="true" />
-            {label}
-            {suffix}
-          </span>
-        );
-      })}
-    </div>
   );
 }
