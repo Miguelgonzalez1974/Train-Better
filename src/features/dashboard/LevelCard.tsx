@@ -61,14 +61,14 @@ export function LevelCard({ profile, history, onOpen }: { profile: AthleteProfil
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="day-card flex w-full items-center gap-3 px-[13px] py-3 text-left transition-colors duration-200"
+        className="day-card flex w-full items-center gap-3 px-[13px] py-2.5 text-left transition-colors duration-200"
       >
-        <span className="flex h-11 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.07]">
+        <span className="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.07]">
           <MiniCategoryRadar categories={level.categories} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13.5px] font-semibold text-white">{title}</span>
-          <span className={`mt-0.5 block truncate text-[11.5px] ${level.delta !== null && level.delta > 0 ? 'text-good' : 'text-neutral-500'}`}>{sub}</span>
+          <span className="block truncate text-[13px] font-semibold text-white">{title}</span>
+          <span className={`mt-0.5 block truncate text-[11px] ${level.delta !== null && level.delta > 0 ? 'text-good' : 'text-neutral-500'}`}>{sub}</span>
         </span>
         <ChevronDown size={16} className={`mr-1 shrink-0 text-neutral-600 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>

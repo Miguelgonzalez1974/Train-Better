@@ -32,14 +32,15 @@ const input = (over: Partial<SessionCardInput> = {}): SessionCardInput => ({ isT
 const entry = (over: Partial<SessionHistoryEntry> = {}): SessionHistoryEntry => ({ date: TODAY, mesocycleWeek: 1, movementIds: ['back-squat'], rxOrScaled: 'rx', rpe: 8, durationMin: 45, ...over });
 
 describe('la tarjeta de sesión, antes de entrenar', () => {
-  it('peso principal con su % , el WOD con su límite y el esfuerzo previsto', () => {
+  it('peso principal con su %, el WOD con lo que es y cómo se hace, y el esfuerzo previsto junto al título', () => {
     const card = buildSessionCard(input());
     expect(card.kind).toBe('pending');
     expect(card.action).toBe('plan');
-    expect(card.title).toMatch(/^Hoy: .*Squat.* y WOD$/);
-    expect(card.figures.map((f) => f.value)).toEqual(['100 kg', 'AMRAP 12', '~62']);
+    expect(card.title).toMatch(/^Hoy: .*Squat.* \+ WOD$/);
+    expect(card.figures.map((f) => f.value)).toEqual(['100 kg', 'Burpee']);
     expect(card.figures[0].label).toMatch(/5×5 · 80 %$/);
-    expect(card.figures[1].label).toBe('WOD · 12 min');
+    expect(card.figures[1]).toMatchObject({ kind: 'wod', label: 'WOD · AMRAP 12 min' });
+    expect(card.effort).toEqual({ value: 62, planned: true, label: 'previsto', over: false, high: 65 });
     expect(card.line).toBeUndefined();
   });
 
@@ -55,7 +56,7 @@ describe('la tarjeta de sesión, antes de entrenar', () => {
 
   it('avisa cuando lo previsto se pasa del objetivo', () => {
     const card = buildSessionCard(input({ strain: strain({ planned: { strain: 80, minutes: 55, rpe: 8 } as StrainView['planned'] }) }));
-    expect(card.figures[card.figures.length - 1]).toMatchObject({ value: '~80', labelTone: 'over' });
+    expect(card.effort).toMatchObject({ value: 80, label: 'se pasa', over: true });
   });
 
   it('descanso, competición sin sesión y día pasado sin registrar', () => {
@@ -74,11 +75,12 @@ describe('la tarjeta de sesión, ya hecha', () => {
     expect(card.kind).toBe('done');
     expect(card.action).toBe('done');
     expect(card.meta).toBe('45 min · RPE 8');
-    expect(card.figures.map((f) => f.value)).toEqual(['102,5 kg', '7+12', '86']);
+    expect(card.figures.map((f) => f.value)).toEqual(['102,5 kg', '7+12 Rx']);
     expect(card.figures[0].label).toMatch(/récord · 82 %$/);
-    expect(card.figures[1].label).toBe('WOD Rx');
-    expect(card.figures[2]).toMatchObject({ tone: 'effort', label: 'te pasas +21', labelTone: 'over' });
-    expect(card.line).toMatchObject({ icon: 'up', text: '+5 kg frente a la última vez', spark: [97.5, 102.5] });
+    expect(card.figures[1]).toMatchObject({ kind: 'wod', label: 'WOD' });
+    expect(card.effort).toMatchObject({ value: 86, planned: false, label: 'te pasas +21', over: true });
+    // Ya hecha, la última línea no lleva mini gráfico: ahí van los minutos y el RPE.
+    expect(card.line).toEqual({ icon: 'up', text: '+5 kg frente a la última vez' });
   });
 
   it('igual o menos que la última vez', () => {
@@ -108,6 +110,37 @@ describe('ayudas', () => {
   });
 });
 
+describe('lo que es el WOD', () => {
+  const conWod = (blocks: DailySession['blocks']) => buildSessionCard(input({ session: { ...session, blocks: [session.blocks[0], ...blocks] } })).figures[1];
+
+  it('de una programación salen sus movimientos y sus intervalos', () => {
+    const real = [{ block: 'wod' as const, movementId: 'benchmark:pj-row-dumbbell-snatch', format: 'Every 90 sec for 15 min: 200 m Row, Dumbbell Snatch (50/35 lb).' }];
+    expect(conWod(real)).toEqual({ kind: 'wod', value: 'Row · Dumbbell Snatch', label: 'WOD · intervalos 15 min' });
+  });
+
+  it('un clásico sale por su nombre, con tu marca si ya lo hiciste', () => {
+    const fran = [{ block: 'wod' as const, movementId: 'benchmark:fran', format: '21-15-9 for time' }];
+    const figure = buildSessionCard(input({ history: [entry({ date: '2026-10-01', movementIds: ['benchmark:fran'], wodResult: { scoreType: 'time', value: '4:58' } })], session: { ...session, blocks: fran } })).figures[0];
+    expect(figure.value).toBe('Fran');
+    expect(figure.label).toMatch(/^WOD · .*tu marca 4:58$/);
+  });
+
+  it('con muchos movimientos nombra tres y resume el resto', () => {
+    const muchos = ['burpee', 'thruster', 'box-jump', 'double-under', 'wall-ball'].map((movementId) => ({ block: 'wod' as const, movementId, format: 'For Time (3 rondas)' }));
+    expect(conWod(muchos)).toEqual({ kind: 'wod', value: 'Burpee · Thruster · Box Jump +2', label: 'WOD · por tiempo' });
+  });
+
+  it('ya hecho, el resultado arriba y debajo lo que era', () => {
+    const card = buildSessionCard(input({ session: null, entry: entry({ rxOrScaled: 'scaled', wodResult: { scoreType: 'rounds+reps', value: '6+12' }, wodBlocks: [{ block: 'wod', movementId: 'thruster' }, { block: 'wod', movementId: 'burpee' }] }) }));
+    expect(card.figures[card.figures.length - 1]).toEqual({ kind: 'wod', value: '6+12 escalado', label: 'WOD · Thruster · Burpee' });
+  });
+
+  it('un título largo pierde el «Hoy:»', () => {
+    const largo = { ...session, source: 'custom' as const, customTitle: 'Sesión de competición larga' };
+    expect(buildSessionCard(input({ session: largo })).title).toBe('Sesión de competición larga');
+  });
+});
+
 describe('datos incompletos', () => {
   it('un registro antiguo sin movimientos o una serie sin ejercicio no rompen la tarjeta', () => {
     const rotos = [{ date: '2026-01-01' }] as unknown as SessionHistoryEntry[];
@@ -117,14 +150,14 @@ describe('datos incompletos', () => {
     expect(buildSessionCard(input({ session: null, entry: { date: TODAY } as unknown as SessionHistoryEntry })).meta).toBeUndefined();
   });
 
-  it('un WOD sin límite no corta su nombre en la cifra grande', () => {
+  it('un WOD sin límite enseña sus movimientos y su formato', () => {
     const libre = { ...session, blocks: [{ block: 'wod', movementId: 'burpee', title: 'Un nombre larguísimo de WOD', format: 'Por calidad' }] } as unknown as DailySession;
-    expect(buildSessionCard(input({ session: libre })).figures[0]).toEqual({ value: 'WOD', label: 'Por calidad' });
+    expect(buildSessionCard(input({ session: libre })).figures[0]).toEqual({ kind: 'wod', value: 'Burpee', label: 'WOD · Por calidad' });
   });
 
   it('un resultado sin rellenar («0 reps») no sale como marca', () => {
     const card = buildSessionCard(input({ session: null, entry: entry({ wodResult: { scoreType: 'reps', value: '0 reps' } }), strain: strain({ real: 50 }) }));
-    expect(card.figures.map((f) => f.value)).not.toContain('0 reps');
+    expect(card.figures.some((f) => f.value.startsWith('0 reps'))).toBe(false);
   });
 
   it('si algo falla al calcularla, sale una tarjeta mínima en vez de romper el Resumen', () => {

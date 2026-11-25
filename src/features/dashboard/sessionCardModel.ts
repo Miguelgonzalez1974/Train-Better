@@ -1,28 +1,40 @@
 import type { AthleteProfile, CompanionLogEntry, DailySession, SessionBlockResult, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
-import { benchmarkWorkouts, getMovementById, resolveMovementDisplayName } from '../../data/movements';
+import { getMovementById, resolveMovementDisplayName } from '../../data/movements';
 import { complexLogId } from '../../data/complexes';
 import { pctOfMark } from '../../engine/movementProgress';
 import { describeSkipped } from '../../engine/sessionParts';
 import { companionStatus, isCompanionProgram } from '../../engine/strengthCompanion';
-import { wodCapFor } from '../../engine/wodCap';
 import { wodResultsOf } from '../../engine/wodScoring';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { competitionHeadline } from '../shell/competitionMeta';
 import { buildPreviewLine } from './previewLine';
+import { wodHow, wodWhat } from './sessionCardWod';
 import type { StrainView } from './StrainRing';
 
 /**
- * La tarjeta de sesión del Resumen: tres cifras que importan (el peso principal, el WOD y el esfuerzo) y una sola línea más. Antes de entrenar dice de
- * dónde partes («La última vez: 97,5 kg»); después, qué has conseguido («+5 kg frente a la última vez»). Puro: lo pinta `SessionCard`.
+ * La tarjeta de sesión del Resumen: arriba el título y el esfuerzo; en medio dos columnas (el peso principal y el WOD) y abajo una sola línea más con
+ * los minutos. Antes de entrenar dice de dónde partes («La última vez: 97,5 kg»); después, qué has conseguido («+5 kg frente a la última vez»).
+ * Puro: lo pinta `SessionCard`.
  */
 
 export interface CardFigure {
   value: string;
   label: string;
-  /** Color de la cifra: `effort` el azul de lo hecho; `muted` lo previsto, en gris. */
-  tone?: 'effort' | 'muted';
-  /** Color de la línea de debajo (solo cuando dice algo: te pasas). */
-  labelTone?: 'over';
+  /** La columna del WOD: letra algo menor, hasta dos líneas y más ancha. */
+  kind?: 'wod';
+  /** Cifra en gris: algo que no se hizo. */
+  tone?: 'muted';
+}
+
+/** El esfuerzo junto al título: lo previsto antes de entrenar o lo hecho después, con el máximo de tu objetivo para dibujar su anillo. */
+export interface CardEffort {
+  value: number;
+  planned: boolean;
+  label: string;
+  /** Se pasa del objetivo. */
+  over: boolean;
+  /** El máximo del objetivo de hoy (0–100). */
+  high: number;
 }
 
 export interface CardLine {
@@ -37,8 +49,9 @@ export interface CardLine {
 export interface SessionCardModel {
   kind: 'pending' | 'done' | 'rest' | 'compete' | 'program' | 'empty' | 'missing';
   title: string;
-  /** A la derecha del título: minutos, o minutos y RPE. */
+  /** Minutos (o minutos y RPE): al final de la última línea; sin cifras, bajo el título. */
   meta?: string;
+  effort?: CardEffort;
   figures: CardFigure[];
   line?: CardLine;
   /** Qué abre al tocarla: la sesión en Planificación, «Lo que hiciste», o nada. */
@@ -62,6 +75,8 @@ export interface SessionCardInput {
 }
 
 const SPARK_POINTS = 5;
+/** A partir de aquí el título no cabe junto al esfuerzo y se quita «Hoy:» (ya estás en el día de hoy). */
+const TITLE_ROOM = 24;
 /** Con coma decimal, como el resto de textos: «102,5». */
 const num = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',');
 const kg = (v: number) => `${num(v)} kg`;
@@ -115,20 +130,18 @@ function previousBenchmarkMark(history: SessionHistoryEntry[], benchmarkId: stri
 }
 
 function wodFigure(session: DailySession, history: SessionHistoryEntry[]): CardFigure | null {
-  const wod = session.blocks.find((b) => b.block === 'wod');
-  if (!wod) return null;
-  const cap = wodCapFor(session, 1);
-  const minutes = cap ? Math.round(cap.seconds / 60) : null;
-  const limit = cap && minutes ? (cap.kind === 'amrap' ? `WOD · ${minutes} min` : `cap ${minutes} min`) : 'WOD';
-  if (wod.movementId.startsWith('benchmark:')) {
-    const bench = benchmarkWorkouts.find((w) => w.id === wod.movementId.replace('benchmark:', ''));
-    const mark = previousBenchmarkMark(history, wod.movementId, session.date);
-    return { value: bench?.name ?? 'Benchmark', label: mark ? `tu marca ${mark}` : limit };
-  }
-  if (cap?.kind === 'amrap' && minutes) return { value: `AMRAP ${minutes}`, label: limit };
-  if (cap?.kind === 'cap') return { value: 'Por tiempo', label: limit };
-  // Sin límite que enseñar (EMOM, por calidad, doble WOD…): la cifra se queda corta y el formato o el nombre van debajo, donde caben dos líneas.
-  return { value: 'WOD', label: session.doubleWod ? 'doble WOD' : wod.format || wod.title || 'del día' };
+  const blocks = session.blocks.filter((b) => b.block === 'wod');
+  if (blocks.length === 0) return null;
+  const how = wodHow(session);
+  const bench = blocks[0].movementId.startsWith('benchmark:') ? blocks[0].movementId : null;
+  const mark = bench && !session.doubleWod ? previousBenchmarkMark(history, bench, session.date) : null;
+  return { kind: 'wod', value: wodWhat(blocks) || blocks[0].title || 'WOD', label: ['WOD', how, mark ? `tu marca ${mark}` : null].filter(Boolean).join(' · ') };
+}
+
+/** «Hoy: Push Press + WOD», sin «Hoy:» cuando no cabe. */
+function pendingTitle(name: string): string {
+  const full = `Hoy: ${name}`;
+  return full.length > TITLE_ROOM ? name : full;
 }
 
 function pendingModel(input: SessionCardInput, session: DailySession): SessionCardModel {
@@ -137,14 +150,12 @@ function pendingModel(input: SessionCardInput, session: DailySession): SessionCa
   const main = lifts[0];
   const wod = wodFigure(session, history);
   const second = !wod && lifts[1] ? liftFigure(lifts[1], profile, true) : null;
+  const figures: CardFigure[] = [...(main ? [liftFigure(main, profile)] : []), ...(wod ? [wod] : second ? [second] : [])];
   const planned = strain.planned ? Math.round(strain.planned.strain) : null;
-  const figures: CardFigure[] = [
-    ...(main ? [liftFigure(main, profile)] : []),
-    ...(wod ? [wod] : second ? [second] : []),
-    ...(planned !== null ? [{ value: `~${planned}`, label: planned > strain.target.high ? 'previsto, se pasa' : 'previsto', tone: 'muted' as const, ...(planned > strain.target.high ? { labelTone: 'over' as const } : {}) }] : []),
-  ];
+  const over = planned !== null && planned > strain.target.high;
+  const effort: CardEffort | undefined = planned === null ? undefined : { value: planned, planned: true, label: over ? 'se pasa' : 'previsto', over, high: strain.target.high };
 
-  const name = session.source === 'custom' ? session.customTitle || 'Sesión propia' : session.doubleWod ? 'Doble WOD' : main ? `${blockName(main)}${wod ? ' y WOD' : ''}` : buildPreviewLine(session);
+  const name = session.source === 'custom' ? session.customTitle || 'Sesión propia' : session.doubleWod ? 'Doble WOD' : main ? `${blockName(main)}${wod ? ' + WOD' : ''}` : buildPreviewLine(session);
   const minutes = estimateSessionMinutes(session);
 
   // Una sola línea más, por este orden: el coach ha cambiado la sesión, toca el programa de fuerza, o de dónde partes.
@@ -152,7 +163,7 @@ function pendingModel(input: SessionCardInput, session: DailySession): SessionCa
   const light = session.dayLight?.color;
   const program = (profile.strengthPrograms ?? []).filter(isCompanionProgram).find((p) => dayIso >= p.startDate && dayIso <= p.endDate);
   const programKind = program ? companionStatus(program, dayIso).kind : null;
-  if (light === 'ambar' || light === 'rojo') line = { icon: 'alert', warn: true, text: `Sesión ajustada hoy: día ${light === 'ambar' ? 'ámbar' : 'rojo'}` };
+  if (light === 'ambar' || light === 'rojo') line = { icon: 'alert', warn: true, text: `Sesión ajustada: día ${light === 'ambar' ? 'ámbar' : 'rojo'}` };
   else if (programKind === 'oferta' || programKind === 'aceptada') line = { icon: 'plus', text: 'Hoy también toca el programa de fuerza' };
   else if (main) {
     const tops = topsBefore(workLog, logIdOf(main), dayIso);
@@ -160,7 +171,20 @@ function pendingModel(input: SessionCardInput, session: DailySession): SessionCa
     if (last) line = { icon: 'history', text: `Última vez: ${kg(last.kg)} · ${agoText(last.date, dayIso)}`, spark: tops.slice(-SPARK_POINTS).map((t) => t.kg) };
   }
 
-  return { kind: 'pending', title: `Hoy: ${name}`, meta: minutes > 0 ? `${minutes} min` : undefined, figures, ...(line ? { line } : {}), action: 'plan' };
+  return { kind: 'pending', title: pendingTitle(name), meta: minutes > 0 ? `${minutes} min` : undefined, ...(effort ? { effort } : {}), figures, ...(line ? { line } : {}), action: 'plan' };
+}
+
+/** La columna del WOD ya hecho: el resultado en grande y debajo lo que era. */
+function doneWodFigure(entry: SessionHistoryEntry): CardFigure | null {
+  const blocks = entry.wodBlocks ?? [];
+  const what = blocks.length > 0 ? wodWhat(blocks) : '';
+  const results = wodResultsOf(entry);
+  if (results.length > 0) {
+    const value = `${results.map((r) => r.result.value).join(' · ')} ${entry.rxOrScaled === 'rx' ? 'Rx' : 'escalado'}`;
+    return { kind: 'wod', value, label: what ? `WOD · ${what}` : 'WOD' };
+  }
+  if ((entry.skipped ?? []).some((p) => p.block === 'wod')) return { kind: 'wod', value: '—', label: 'WOD sin hacer', tone: 'muted' };
+  return what ? { kind: 'wod', value: what, label: 'WOD · sin resultado' } : null;
 }
 
 function doneModel(input: SessionCardInput, entry: SessionHistoryEntry): SessionCardModel {
@@ -180,20 +204,13 @@ function doneModel(input: SessionCardInput, entry: SessionHistoryEntry): Session
   };
   const mainLift = main ? lift(main) : null;
 
-  const results = wodResultsOf(entry);
-  const wodSkipped = (entry.skipped ?? []).some((p) => p.block === 'wod');
-  const wod: CardFigure | null =
-    results.length > 0
-      ? { value: results.map((r) => r.result.value).join(' · '), label: `WOD ${entry.rxOrScaled === 'rx' ? 'Rx' : 'escalado'}` }
-      : wodSkipped
-        ? { value: '—', label: 'WOD sin hacer', tone: 'muted' }
-        : null;
+  const wod = doneWodFigure(entry);
   const second = !wod && other ? lift(other).figure : null;
 
-  const real = strain.real;
+  const real = strain.real === null ? null : Math.round(strain.real);
   const diff = real === null ? 0 : real > strain.target.high ? real - strain.target.high : real < strain.target.low ? real - strain.target.low : 0;
-  const effort: CardFigure[] =
-    real === null ? [] : [{ value: String(Math.round(real)), tone: 'effort', label: diff > 0 ? `te pasas +${Math.round(diff)}` : diff < 0 ? 'por debajo' : 'en objetivo', ...(diff > 0 ? { labelTone: 'over' as const } : {}) }];
+  const effort: CardEffort | undefined =
+    real === null ? undefined : { value: real, planned: false, label: diff > 0 ? `te pasas +${Math.round(diff)}` : diff < 0 ? 'por debajo' : 'en objetivo', over: diff > 0, high: strain.target.high };
 
   const programHecho = companionDone.some((c) => c.outcome === 'hecha');
   const skipped = describeSkipped(entry.skipped);
@@ -201,20 +218,17 @@ function doneModel(input: SessionCardInput, entry: SessionHistoryEntry): Session
   const last = mainLift?.previous[mainLift.previous.length - 1];
   if (main && last) {
     const delta = Math.round((main.kg - last.kg) * 100) / 100;
-    const spark = [...mainLift!.previous.slice(-(SPARK_POINTS - 1)).map((t) => t.kg), main.kg];
-    line =
-      delta === 0
-        ? { icon: 'same', text: 'Igual que la última vez', spark }
-        : { icon: delta > 0 ? 'up' : 'down', text: `${delta > 0 ? '+' : '−'}${num(Math.abs(delta))} kg frente a la última vez`, spark };
+    line = delta === 0 ? { icon: 'same', text: 'Igual que la última vez' } : { icon: delta > 0 ? 'up' : 'down', text: `${delta > 0 ? '+' : '−'}${num(Math.abs(delta))} kg frente a la última vez` };
   } else if (skipped) line = { icon: 'alert', text: skipped };
   else if (programHecho) line = { icon: 'check', text: 'Programa de fuerza hecho' };
 
   return {
     kind: 'done',
-    title: 'Sesión completada',
+    title: 'Sesión hecha',
     // Un registro antiguo puede no tener duración o RPE: se dice solo lo que hay.
     meta: [entry.durationMin ? `${entry.durationMin} min` : null, entry.rpe ? `RPE ${entry.rpe}` : null].filter(Boolean).join(' · ') || undefined,
-    figures: [...(mainLift ? [mainLift.figure] : []), ...(wod ? [wod] : second ? [second] : []), ...effort],
+    ...(effort ? { effort } : {}),
+    figures: [...(mainLift ? [mainLift.figure] : []), ...(wod ? [wod] : second ? [second] : [])],
     ...(line ? { line } : {}),
     action: 'done',
   };

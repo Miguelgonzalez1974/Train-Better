@@ -10,7 +10,7 @@ import type { SessionCardModel } from './sessionCardModel';
 /** La insignia de la izquierda de las demás filas: un cuadrado gris con un icono. */
 function Badge({ children }: { children: ReactNode }) {
   return (
-    <span className="flex h-11 w-12 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgb(var(--c-white) / 0.08)', color: 'rgb(var(--c-white) / 0.8)' }}>
+    <span className="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgb(var(--c-white) / 0.08)', color: 'rgb(var(--c-white) / 0.8)' }}>
       {children}
     </span>
   );
@@ -18,11 +18,11 @@ function Badge({ children }: { children: ReactNode }) {
 
 function Row({ badge, title, sub, right, onClick }: { badge: ReactNode; title: string; sub: ReactNode; right?: ReactNode; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="day-card flex w-full items-center gap-3 px-[13px] py-3 transition-colors duration-200">
+    <button onClick={onClick} className="day-card flex w-full items-center gap-3 px-[13px] py-2.5 transition-colors duration-200">
       {badge}
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-[13.5px] font-semibold text-white">{title}</span>
-        <span className="mt-0.5 block truncate text-[11.5px] text-neutral-500">{sub}</span>
+        <span className="block truncate text-[13px] font-semibold text-white">{title}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-neutral-500">{sub}</span>
       </span>
       {right}
     </button>
