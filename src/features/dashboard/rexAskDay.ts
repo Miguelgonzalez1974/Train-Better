@@ -4,7 +4,7 @@ import { addDaysIso } from '../../engine/periodization';
 import { estimatePlannedStrain } from '../../engine/plannedStrain';
 import { isRestMarked } from '../../engine/restDays';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
-import { buildPreviewLine } from './DayRows';
+import { buildPreviewLine } from './previewLine';
 import type { DayInfo } from './rexAsk';
 
 /**

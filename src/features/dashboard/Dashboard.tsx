@@ -58,6 +58,7 @@ import { describeDayForAsk } from './rexAskDay';
 import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
 import { DashTabs, DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
+import { buildSessionCard } from './sessionCardModel';
 import { DaySummaryModal } from './DaySummaryModal';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
@@ -710,16 +711,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           />
           </div>
 
-          {/* Tu día: la sesión (con su esfuerzo en la insignia) y la nutrición, una fila cada una. */}
+          {/* Tu día: la tarjeta de la sesión (las cifras que importan) y las demás filas. */}
           <DayRows
             isToday={isToday}
             session={isToday ? todaySession : null}
-            entry={shown.entry}
-            strain={shown.strain}
+            card={buildSessionCard({ isToday, session: isToday ? todaySession : null, entry: shown.entry, strain: shown.strain, profile, history, workLog: athleteRepository.getWorkLog(), dayIso, companionDone: dayCompanion })}
             form={isToday && formModel.plan.sessions > 0 ? formModel.plan : null}
             formNote={formRowNote(formModel)}
             onOpenForm={() => setFormOpen(true)}
-            companionDone={dayCompanion}
             onOpenDone={() => setShowDone(true)}
             onNavigateToPlanificacion={onNavigateToPlanificacion}
             // Tu nivel: una fila más de «Tu día» que se abre con el radar del perfil; solo hoy y con datos de tres áreas.

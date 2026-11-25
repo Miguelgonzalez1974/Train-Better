@@ -101,9 +101,9 @@ export function getWodParts(session: DailySession): (1 | 2)[] {
   return wod.some((b) => b.wodPart === 2) ? [1, 2] : [1];
 }
 
-/** Un resultado de WOD "0:00" / "0+0" / "0" es un formulario sin rellenar, no una marca. */
+/** Un resultado de WOD "0:00" / "0+0" / "0" / "0 reps" / "0 kg" es un formulario sin rellenar, no una marca. */
 export function isMeaningfulWodResult(result: WodResult | undefined): result is WodResult {
-  return Boolean(result) && !/^0([:+]0+)?$/.test(result!.value.trim());
+  return Boolean(result) && !/^0([:+]0+)?( (reps|kg))?$/.test(result!.value.trim());
 }
 
 /** Resultados de WOD anotados en una entrada del historial, por parte y solo los rellenados (0, 1 o 2). */

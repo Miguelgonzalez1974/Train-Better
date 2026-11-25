@@ -1,123 +1,60 @@
 import type { ReactNode } from 'react';
-import { CalendarPlus, Check, ChevronRight, Dumbbell, Moon, TrendingUp, Trophy } from 'lucide-react';
+import { ChevronRight, TrendingUp, Trophy } from 'lucide-react';
 import { formToday, type FormSeries } from '../../engine/formCurve';
-import { benchmarkWorkouts, getMovementById } from '../../data/movements';
-import type { CompanionLogEntry, DailySession, SessionHistoryEntry } from '../../data/athlete/types';
-import { estimateSessionMinutes } from '../../lib/sessionDuration';
-import { DayShapeChips } from '../shell/blockMeta';
+import type { DailySession } from '../../data/athlete/types';
 import { competitionHeadline } from '../shell/competitionMeta';
 import { SectionLabel } from '../shell/SectionLabel';
-import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
+import { SessionCard } from './SessionCard';
+import type { SessionCardModel } from './sessionCardModel';
 
-/** "Back Squat · WOD 12 min AMRAP" — el titular de la sesión de hoy en una línea, no el detalle entero (para eso está Planificación). */
-export function buildPreviewLine(session: DailySession): string {
-  if (session.source === 'custom') return session.customTitle || 'Sesión propia';
-  // Día de doble WOD: sin fuerza ni oly, el titular son las dos piezas.
-  if (session.doubleWod) {
-    const titles = session.blocks
-      .filter((b) => b.block === 'wod' && b.wodPart !== undefined)
-      .reduce<string[]>((acc, b) => (b.title && !acc.includes(b.title) ? [...acc, b.title] : acc), []);
-    return `Doble WOD${titles.length > 0 ? ` · ${titles.map((t) => `"${t}"`).join(' + ')}` : ''}`;
-  }
-  const strength = session.blocks.find((b) => b.block === 'strength' && !b.subgroup);
-  const oly = [...session.blocks].reverse().find((b) => b.block === 'oly' && !b.subgroup);
-  const main = strength ?? oly;
-  const parts: string[] = [];
-  if (main) {
-    const name = getMovementById(main.movementId)?.name;
-    if (name) parts.push(name);
-  }
-  const wod = session.blocks.find((b) => b.block === 'wod');
-  if (wod) {
-    if (wod.movementId.startsWith('benchmark:')) {
-      const name = benchmarkWorkouts.find((w) => w.id === wod.movementId.replace('benchmark:', ''))?.name;
-      if (name) parts.push(name);
-    } else if (wod.title) {
-      parts.push(`"${wod.title}"`);
-    } else if (wod.format) {
-      parts.push(wod.format);
-    }
-  }
-  return parts.length > 0 ? parts.join(' · ') : 'Sesión lista para entrenar';
-}
-
-type BadgeTone = 'effort' | 'planned' | 'plannedOver' | 'over' | 'gold' | 'neutral';
-
-/** La insignia de la izquierda, como en Whoop: un cuadrado de color con el número (o un icono) y el nombre al lado. */
-function Badge({ tone, children }: { tone: BadgeTone; children: ReactNode }) {
-  const style =
-    tone === 'effort'
-      ? { backgroundColor: EFFORT, color: 'rgb(var(--c-brand-bg))' }
-      : tone === 'over'
-        ? { backgroundColor: OVER, color: 'rgb(var(--c-brand-bg))' }
-        : tone === 'planned'
-          ? { border: `1.5px dashed ${PLAN}`, color: PLAN, backgroundColor: 'rgb(var(--c-plan) / 0.1)' }
-          : tone === 'plannedOver'
-            ? { border: `1.5px dashed ${OVER}`, color: OVER, backgroundColor: 'rgb(var(--c-state-low) / 0.1)' }
-            : tone === 'gold'
-            ? { backgroundColor: 'rgb(var(--c-brand-gold) / 0.18)', color: 'rgb(var(--c-brand-gold))' }
-            : { backgroundColor: 'rgb(var(--c-white) / 0.08)', color: 'rgb(var(--c-white) / 0.8)' };
+/** La insignia de la izquierda de las demás filas: un cuadrado gris con un icono. */
+function Badge({ children }: { children: ReactNode }) {
   return (
-    <span className="num flex h-12 w-14 shrink-0 items-center justify-center rounded-xl text-lg font-semibold" style={style}>
+    <span className="flex h-11 w-12 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgb(var(--c-white) / 0.08)', color: 'rgb(var(--c-white) / 0.8)' }}>
       {children}
     </span>
   );
 }
 
-function Row({ badge, title, sub, right, onClick, muted = false }: { badge: ReactNode; title: string; sub: ReactNode; right?: ReactNode; onClick?: () => void; muted?: boolean }) {
-  const body = (
-    <>
+function Row({ badge, title, sub, right, onClick }: { badge: ReactNode; title: string; sub: ReactNode; right?: ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="day-card flex w-full items-center gap-3 px-[13px] py-3 transition-colors duration-200">
       {badge}
       <span className="min-w-0 flex-1 text-left">
-        <span className={`block truncate text-sm font-semibold ${muted ? 'text-neutral-400' : 'text-white'}`}>{title}</span>
-        <span className="mt-0.5 block truncate text-xs text-neutral-500">{sub}</span>
+        <span className="block truncate text-[13.5px] font-semibold text-white">{title}</span>
+        <span className="mt-0.5 block truncate text-[11.5px] text-neutral-500">{sub}</span>
       </span>
       {right}
-    </>
-  );
-  const cls = 'flex w-full items-center gap-3 rounded-2xl bg-white/[0.04] p-2.5 transition-colors duration-200';
-  return onClick ? (
-    <button onClick={onClick} className={`${cls} hover:bg-white/[0.07]`}>
-      {body}
     </button>
-  ) : (
-    <div className={cls}>{body}</div>
   );
 }
 
 const chevron = <ChevronRight size={16} className="mr-1 shrink-0 text-neutral-600" aria-hidden="true" />;
 
 /**
- * "Tu día" bajo el anillo, al estilo de las actividades de Whoop: una fila por cosa que cuenta, con una insignia de color a
- * la izquierda. La sesión lleva su esfuerzo (previsto con borde discontinuo; real, relleno y en coral si rebasa el
- * objetivo) y la curva de forma se abre en su ventana. La nutrición y el análisis viven en los botones de arriba (la nutrición
- * con su %). Sustituye a la tarjeta grande de "Hoy".
+ * "Tu día" bajo el anillo: la tarjeta de la sesión (ver `SessionCard`) y las demás filas, una por cosa que cuenta. La curva de forma se abre en su
+ * ventana. La nutrición y el análisis viven en Rex y en las pestañas.
  */
 export function DayRows({
   isToday,
   session,
-  entry,
-  strain,
+  card,
   form,
   formNote,
-  companionDone = [],
   onOpenDone,
   onNavigateToPlanificacion,
   onOpenForm,
   extra,
 }: {
   isToday: boolean;
-  /** La sesión de hoy (null si ya entrenaste, no hay estructura activa o es otro día). */
+  /** La sesión de hoy (solo para el rótulo de la competición cercana). */
   session: DailySession | null;
-  /** Lo registrado el día elegido, si entrenaste. */
-  entry: SessionHistoryEntry | undefined;
-  strain: StrainView;
+  /** Lo que enseña la tarjeta de la sesión (ver `buildSessionCard`). */
+  card: SessionCardModel;
   /** La serie de la curva de forma (solo hoy; null en un día pasado o sin historial). */
   form: FormSeries | null;
   /** Lo que dice la fila sobre tus ventanas ("Próxima ventana en 5 días · jue 12 nov"); sin él, la frase de hoy. */
   formNote?: string | null;
-  /** Sesiones del programa de fuerza hechas ese día (para decir que hubo programa y poder abrirlo). */
-  companionDone?: CompanionLogEntry[];
   /** Abre «Lo que hiciste»: la sesión del macro y la del programa de ese día. */
   onOpenDone: () => void;
   onNavigateToPlanificacion: () => void;
@@ -126,65 +63,11 @@ export function DayRows({
   /** Una fila más al final de «Tu día» (el nivel), con el mismo diseño. */
   extra?: ReactNode;
 }) {
-  const real = strain.real;
-  const programDone = companionDone.some((c) => c.outcome === 'hecha');
-  const over = real !== null && real > strain.target.high;
-
-  let sessionRow: ReactNode;
-  if (entry) {
-    sessionRow = (
-      <Row
-        badge={<Badge tone={over ? 'over' : 'effort'}>{real ?? '—'}</Badge>}
-        title="Sesión completada"
-        sub={`RPE ${entry.rpe} · ${entry.durationMin} min${programDone ? ' · + programa de fuerza' : ''}`}
-        right={isToday ? <Check size={17} strokeWidth={2.5} className="mr-1 shrink-0" style={{ color: 'rgb(var(--c-state-good))' }} aria-hidden="true" /> : chevron}
-        onClick={onOpenDone}
-      />
-    );
-  } else if (programDone && (!isToday || !session)) {
-    // Solo se hizo la sesión del programa de fuerza (sin sesión del macro que enseñar): también se puede abrir.
-    sessionRow = (
-      <Row
-        badge={<Badge tone="effort"><Dumbbell size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
-        title="Programa de fuerza hecho"
-        sub={companionDone.find((c) => c.outcome === 'hecha')?.label ?? 'Sesión del programa'}
-        right={chevron}
-        onClick={onOpenDone}
-      />
-    );
-  } else if (!isToday) {
-    sessionRow = <Row badge={<Badge tone="neutral">—</Badge>} title="Sin sesión registrada" sub="Ese día no entrenaste" muted />;
-  } else if (session?.competition?.eventDay) {
-    sessionRow = (
-      <Row badge={<Badge tone="gold"><Trophy size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>} title="Hoy compites" sub="Calienta como un WOD y dosifica desde la primera prueba" right={chevron} onClick={onNavigateToPlanificacion} />
-    );
-  } else if (session?.isRestDay) {
-    sessionRow = <Row badge={<Badge tone="neutral"><Moon size={19} strokeWidth={2.25} aria-hidden="true" /></Badge>} title="Día de descanso" sub="Toca recuperar — nada programado hoy" right={chevron} onClick={onNavigateToPlanificacion} />;
-  } else if (session) {
-    const minutes = estimateSessionMinutes(session);
-    sessionRow = (
-      <Row
-        badge={<Badge tone={strain.planned && strain.planned.strain > strain.target.high ? 'plannedOver' : 'planned'}>{strain.planned ? `~${strain.planned.strain}` : '—'}</Badge>}
-        title={buildPreviewLine(session)}
-        sub={
-          <>
-            <DayShapeChips session={session} variant="text" className="inline !text-xs !text-neutral-500" />
-            {minutes > 0 && ` · ~${minutes} min`}
-          </>
-        }
-        right={chevron}
-        onClick={onNavigateToPlanificacion}
-      />
-    );
-  } else {
-    sessionRow = <Row badge={<Badge tone="neutral"><CalendarPlus size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>} title="Elige qué entrenar hoy" sub="Sin macrociclo ni programa activo" right={chevron} onClick={onNavigateToPlanificacion} />;
-  }
-
   const formNow = form ? formToday(form) : null;
   const formRow = form ? (
     <Row
       // Sin porcentaje ni estado: «cómo estás hoy» lo dice la Preparación del aro. Esta fila mira hacia delante (cuándo se abre tu próxima ventana); la energía de hoy está dentro de la ventana.
-      badge={<Badge tone="neutral"><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
+      badge={<Badge><TrendingUp size={20} strokeWidth={2.25} aria-hidden="true" /></Badge>}
       title="Tu forma"
       sub={formNow ? (formNow.state === 'cargado' && formNow.reason ? formNow.reason : (formNote ?? formNow.sentence)) : `Aún poco historial: ${form.sessions} sesiones registradas`}
       right={chevron}
@@ -193,7 +76,7 @@ export function DayRows({
   ) : null;
 
   return (
-    <section className="flex flex-col gap-2">
+    <section className="mt-1 flex flex-col gap-3">
       <SectionLabel className="px-1">Tu día</SectionLabel>
       {isToday && session?.competition && !session.competition.eventDay && (
         <p className="flex items-center gap-1.5 px-1 text-xs font-semibold text-brand-gold">
@@ -201,9 +84,9 @@ export function DayRows({
           {competitionHeadline(session.competition)}
         </p>
       )}
-      {sessionRow}
+      <SessionCard model={card} onOpenPlan={onNavigateToPlanificacion} onOpenDone={onOpenDone} />
       {/* Tu forma: la curva de supercompensación; con poco historial dice cuánto falta para tenerla. */}
-      {form && formRow}
+      {formRow}
       {extra}
     </section>
   );
