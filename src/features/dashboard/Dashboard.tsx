@@ -35,7 +35,10 @@ import {
 import { buildOpenItems } from '../objetivos/openItems';
 import { RexWeekly } from './RexWeekly';
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
-import { LevelCard } from './LevelCard';
+import { LevelSummaryCard } from './LevelSummaryCard';
+import { LevelScreen, type LevelChip } from './LevelScreen';
+import { buildLevelCard } from './myLevelModel';
+import { computeLevel } from '../../engine/levelCategories';
 import { applyGoalAdjustment, buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
 import { resolveTodaySession } from './todaySession';
@@ -80,13 +83,10 @@ import { ConsistencyDetail } from './ConsistencyDetail';
 import { computeYearConsistency } from '../../engine/yearConsistency';
 import { TrainingHeatmap } from './TrainingHeatmap';
 import { VolumeContent } from './VolumeSummaryModal';
-import { BodyweightCard } from './BodyweightCard';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
-import { AnalysisView, type AnalysisTab } from './AnalysisView';
 import { hrvLogWith } from '../../engine/hrv';
 import { buildPrepCompare } from './prepCompare';
-import { MarksScreen } from './MarksScreen';
 import { REX_HINTS } from './rexHints';
 import type { AthleteProfile } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
@@ -126,14 +126,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     const act = handoff.peek('dash-act');
     return act === 'historial' ? 'diario' : act === 'constancia' || act === 'volumen' ? act : null;
   });
-  const [showBodyweight, setShowBodyweight] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
   // Lo que otra pantalla deja dicho al llegar: «Mi perfil» abre el Análisis en su pestaña Perfil; «Mis marcas» abre esa pantalla (con un levantamiento desplegado si viene).
   const [handed] = useState<string | null>(() => handoff.peek('analisis-tab'));
   const handedMarks = handed === 'marcas' || handed?.startsWith('marcas:') ? { key: (handed.split(':')[1] as MarkKey | undefined) ?? null } : null;
-  const [analysisStart, setAnalysisStart] = useState<AnalysisTab>('perfil');
-  const [analysisOpen, setAnalysisOpen] = useState(handed === 'perfil');
-  const [marks, setMarks] = useState<{ key: MarkKey | null } | null>(handedMarks);
+  /** La pantalla «Tu nivel» abierta por uno de sus apartados (null: cerrada), con el levantamiento que «Marcas» enseña desplegado. */
+  const [levelScreen, setLevelScreen] = useState<{ chip: LevelChip; mark: MarkKey | null } | null>(
+    handedMarks ? { chip: 'marcas', mark: handedMarks.key } : handed === 'perfil' ? { chip: 'nivel', mark: null } : null,
+  );
+  const openLevel = (chip: LevelChip, mark: MarkKey | null = null) => setLevelScreen({ chip, mark });
   useEffect(() => {
     handoff.take('analisis-tab');
   }, []);
@@ -317,6 +318,17 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     energy: isToday && formNowForAdvice ? { state: formNowForAdvice.state, reason: formNowForAdvice.reason } : null,
   });
 
+  // La tarjeta «Tu nivel» (solo cuenta hoy). Si algo de los datos la rompiera al calcularla, no sale en vez de romper el Resumen.
+  const levelCard = useMemo(() => {
+    try {
+      const level = computeLevel({ profile, history });
+      return { level, model: buildLevelCard({ profile, level, todayIso }) };
+    } catch (error) {
+      console.error('La tarjeta Tu nivel no se pudo calcular:', error);
+      return null;
+    }
+  }, [profile, history, todayIso]);
+
   // Rex, arriba del todo: qué toca ahora y atajos a los módulos. Lee lo mismo que el resto del Dashboard.
   const goalsBehind = useMemo(() => buildOpenItems(profile, history, todayIso).objetivos.filter((i) => i.chip.tone === 'warn').length, [profile, history, todayIso]);
   const lastWeightDate = bodyweightLog.reduce<string | null>((best, e) => (best === null || e.date > best ? e.date : best), null);
@@ -462,10 +474,9 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       // El Análisis abre en el Perfil (la rueda y las áreas); «Mi perfil» ya no es un botón aparte, pero «perfil» en la caja lleva al mismo sitio.
       case 'analisis':
       case 'perfil':
-        setAnalysisStart('perfil');
-        return setAnalysisOpen(true);
+        return openLevel('nivel');
       case 'marcas':
-        return setMarks({ key: null });
+        return openLevel('marcas');
       case 'objetivos':
         return onNavigateToObjetivos();
       case 'competicion-fecha':
@@ -485,7 +496,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         appNav.goTo('nutricion');
         return;
       case 'peso':
-        return setShowBodyweight(true);
+        return openLevel('cuerpo');
       case 'forma':
         return setFormChip('energia');
       case 'preparacion':
@@ -554,7 +565,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       onWeightLogged: () => setBodyweightLog(athleteRepository.getBodyweightLog()),
       onMarkSaved: () => setProfile(athleteRepository.getProfile()),
       onWeekChanged: () => setProfile(athleteRepository.getProfile()),
-      openMarks: (key) => setMarks({ key }),
+      openMarks: (key) => openLevel('marcas', key),
       missing: () => (nutrition ? { protein: Math.max(0, nutrition.protein.target - nutrition.protein.done), carbs: Math.max(0, nutrition.carbs.target - nutrition.carbs.done) } : null),
       local: {
         dia: (intent) => dayAnswer(intent.label, describeDayForAsk({ offset: intent.offset, todayIso, profile, history, todaySession, todayStrain, bias: strainLearned.bias })),
@@ -617,7 +628,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           onClose={() => setShowNutrition(false)}
           onOpenBodyweight={() => {
             setShowNutrition(false);
-            setShowBodyweight(true);
+            openLevel('cuerpo');
           }}
         />
       )}
@@ -679,11 +690,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </Modal>
       )}
 
-      {showBodyweight && (
-        <Modal open onClose={() => setShowBodyweight(false)} title="Peso corporal">
-          <BodyweightCard log={bodyweightLog} onChange={setBodyweightLog} embedded />
-        </Modal>
-      )}
 
       {/* Selector de día y pestañas, al estilo Whoop: el día elegido manda sobre todo lo de debajo. */}
       <DayHeader dayIso={dayIso} macro={macroChip(profile.macrocycles, todayIso, todaySession?.competition?.daysToEvent ?? null)} onOpenMacro={() => onNavigateToObjetivos()} />
@@ -716,19 +722,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         onOpenForm={() => setFormChip(isToday ? 'energia' : 'preparacion')}
         onOpenDone={() => setShowDone(true)}
         onNavigateToPlanificacion={onNavigateToPlanificacion}
-        // Tu nivel: una fila más de «Tu día» que se abre con el radar del perfil; solo hoy y con datos de tres áreas.
-        extra={
-          isToday ? (
-            <LevelCard
-              profile={profile}
-              history={history}
-              onOpen={() => {
-                setAnalysisStart('perfil');
-                setAnalysisOpen(true);
-              }}
-            />
-          ) : null
-        }
+        // Tu nivel: tus mediciones, solo hoy.
+        extra={isToday && levelCard ? <LevelSummaryCard model={levelCard.model} level={levelCard.level} onOpen={() => openLevel('nivel')} /> : null}
       />
 
       {formChip !== null && (
@@ -883,48 +878,28 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         </Modal>
       )}
 
-      {/*
-        Análisis: lo que no hace falta mirar cada día. Vive en una ventana que se abre desde la fila "Análisis" de "Tu día", así el
-        Resumen no se alarga. Dentro, los medidores (dominios energéticos, desequilibrios, fuerza) son la puerta a su detalle: solo
-        sale la tarjeta del medidor tocado.
-      */}
-      {marks && (
-        <MarksScreen
-          profile={profile}
-          history={history}
-          imbalanceGroups={imbalanceGroups}
-          strengthRatio={strengthRatio}
-          bodyweightKg={latestBodyweightKg}
-          todayIso={todayIso}
-          initialKey={marks.key}
-          onSaveProfile={saveMarks}
-          onCreateGoal={(movementId) => {
-            const next = addSubirPrGoal(athleteRepository.getProfile(), movementId, todayIso);
-            athleteRepository.saveProfile(next);
-            setProfile(next);
-          }}
-          onOpenObjetivos={() => {
-            setMarks(null);
-            onNavigateToObjetivos();
-          }}
-          onClose={() => setMarks(null)}
-        />
-      )}
-
-      {analysisOpen && (
-        <Modal open onClose={() => setAnalysisOpen(false)} title="Análisis">
-          <AnalysisView
+      {levelScreen && (
+        <Modal open onClose={() => setLevelScreen(null)} title="Tu nivel">
+          <LevelScreen
+            chip={levelScreen.chip}
+            onChip={(chip) => setLevelScreen((cur) => ({ chip, mark: cur?.mark ?? null }))}
             profile={profile}
             history={history}
             imbalanceGroups={imbalanceGroups}
             strengthRatio={strengthRatio}
             stats={stats}
+            bodyweightLog={bodyweightLog}
+            onBodyweightChange={(log) => {
+              setBodyweightLog(log);
+              setProfile(athleteRepository.getProfile());
+            }}
             todayIso={todayIso}
-            initialTab={analysisStart}
+            marksKey={levelScreen.mark}
             onSaveProfile={(patch) => {
               athleteRepository.saveProfile({ ...athleteRepository.getProfile(), ...patch });
               setProfile(athleteRepository.getProfile());
             }}
+            onSaveMarks={saveMarks}
             onCreateWorkGoal={(goal) => {
               athleteRepository.saveProfile({ ...athleteRepository.getProfile(), goals: [...athleteRepository.getProfile().goals, goal] });
               // Un objetivo nuevo cambia lo que sale en las sesiones: las ya preparadas se vuelven a generar.
@@ -932,7 +907,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               setProfile(athleteRepository.getProfile());
             }}
             onOpenProgramming={() => {
-              setAnalysisOpen(false);
+              setLevelScreen(null);
               onNavigateToObjetivos('perfil');
             }}
             onCreateGoal={(movementId) => {
@@ -941,11 +916,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               setProfile(next);
             }}
             onOpenObjetivos={() => {
-              setAnalysisOpen(false);
+              setLevelScreen(null);
               onNavigateToObjetivos();
             }}
           />
         </Modal>
-      )}    </div>
+      )}
+    </div>
   );
 }

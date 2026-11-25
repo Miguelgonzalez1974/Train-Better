@@ -9,8 +9,8 @@ import { SessionCard } from './SessionCard';
 import type { SessionCardModel } from './sessionCardModel';
 
 /**
- * "Tu día" bajo el anillo: la tarjeta de la sesión (ver `SessionCard`), la de «Tu forma» (ver `FormCard`) y las filas que se añadan. La nutrición
- * y el análisis viven en Rex y en sus pestañas.
+ * "Tu día" bajo el anillo: las tarjetas de la sesión (ver `SessionCard`), de «Tu forma» (ver `FormCard`) y de «Tu nivel» (ver `LevelSummaryCard`).
+ * La nutrición y los objetivos viven en Rex y en sus pestañas.
  */
 export function DayRows({
   isToday,
@@ -34,7 +34,7 @@ export function DayRows({
   onNavigateToPlanificacion: () => void;
   /** Abre la pantalla «Tu forma», con sus chips. */
   onOpenForm: () => void;
-  /** Una fila más al final de «Tu día» (el nivel), con el mismo diseño. */
+  /** La tarjeta «Tu nivel» (solo hoy), al final de «Tu día». */
   extra?: ReactNode;
 }) {
   return (

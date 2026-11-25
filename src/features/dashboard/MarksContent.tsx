@@ -6,11 +6,11 @@ import type { ImbalanceGroup } from '../../engine/imbalances';
 import { buildLoadRows, type LoadRow } from '../../engine/loadLearning';
 import { computeResponseProfile, RESPONSE_MIN_WEEKS, type LiftResponse } from '../../engine/responseProfile';
 import { buildStrengthEvolution, RANGE_LABEL, type EvolutionRange } from '../../engine/strengthEvolution';
-import { Modal } from '../shell/Modal';
 import { RexNote } from '../shell/RexNote';
 import { Term } from '../shell/Term';
 import { EvolutionChart, fmtKg } from './EvolutionChart';
 import { MarksEditor } from './MarksEditor';
+import { kgGoalFor } from './myLevelModel';
 import { PR_ROWS } from './prRows';
 import { analysisRexLine, openGoalMovements, PROPOSAL_WEEKS } from './rexAnalysis';
 import { applyMark, currentMark, MARK_LIFTS, markLiftByKey, markProposalAnswer, markSavedAnswer, type MarkKey } from './rexMarks';
@@ -39,11 +39,11 @@ function paceMeta(lift: LiftResponse | undefined): { text: string; className: st
 }
 
 /**
- * «Mis marcas»: una pantalla con todas tus marcas, una fila por levantamiento (kilos, veces tu peso, cuánto ha subido y el ritmo) y, al tocar
- * una, su evolución con el ajuste del coach. Sustituye a la pestaña Fuerza del Análisis. Rex arriba da la conclusión y, si un levantamiento
- * está estancado, propone un objetivo «Subir PR». Las marcas se corrigen con «Editar mis marcas» o diciéndoselo a Rex.
+ * Tus marcas, el apartado «Marcas» de «Tu nivel»: una fila por levantamiento (kilos, veces tu peso, cuánto ha subido, tu meta si la tienes y el ritmo)
+ * y, al tocar una, su evolución con el ajuste del coach. Rex arriba da la conclusión y, si un levantamiento está estancado, propone un objetivo
+ * «Subir PR». Las marcas se corrigen con «Editar mis marcas» o diciéndoselo a Rex.
  */
-export function MarksScreen({
+export function MarksContent({
   profile,
   history,
   imbalanceGroups,
@@ -54,7 +54,6 @@ export function MarksScreen({
   onSaveProfile,
   onCreateGoal,
   onOpenObjetivos,
-  onClose,
 }: {
   profile: AthleteProfile;
   history: Parameters<typeof computeResponseProfile>[0];
@@ -67,7 +66,6 @@ export function MarksScreen({
   onSaveProfile: (patch: Pick<AthleteProfile, 'prs' | 'variantPrs'>) => void;
   onCreateGoal: (movementId: string) => void;
   onOpenObjetivos: () => void;
-  onClose: () => void;
 }) {
   const baseKeys = PR_ROWS.map((r) => r.key as string);
   const [openKey, setOpenKey] = useState<keyof PersonalRecords | null>(initialKey && baseKeys.includes(initialKey) ? (initialKey as keyof PersonalRecords) : null);
@@ -130,7 +128,7 @@ export function MarksScreen({
   const ratioOf = (kg: number) => (bodyweightKg && kg > 0 ? comma((kg / bodyweightKg).toFixed(1)) : null);
 
   return (
-    <Modal open onClose={onClose} title="Mis marcas">
+    <>
       <div className="flex flex-col gap-4">
         <RexNote tone={rex.tone === 'good' ? 'good' : rex.tone === 'warn' ? 'warn' : 'info'} mood={createdLabel || rex.tone === 'good' ? 'happy' : rex.tone === 'warn' ? 'think' : 'idle'}>
               <p className="text-[13px] leading-relaxed text-neutral-200">
@@ -209,13 +207,14 @@ export function MarksScreen({
             const ratio = ratioOf(prs[key]);
             const adjust = adjustMeta(loadRows.find((r) => r.key === key));
             const adjustRow = loadRows.find((r) => r.key === key);
+            const goalKg = kgGoalFor(profile.goals, key, todayIso);
             return (
               <li key={key}>
                 <button onClick={() => setOpenKey(open ? null : key)} aria-expanded={open} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-white">{label}</span>
                     <span className="block text-[11px] text-neutral-500">
-                      {[ratio ? `×${ratio} tu peso` : null, delta !== 0 ? `${signed(delta)} kg en 8 sem` : null].filter(Boolean).join(' · ') || 'sin cambios en 8 sem'}
+                      {[ratio ? `×${ratio} tu peso` : null, delta !== 0 ? `${signed(delta)} kg en 8 sem` : 'sin cambios en 8 sem', goalKg !== null ? `meta ${fmtKg(goalKg)}` : null].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                   <span className="text-right">
@@ -432,6 +431,6 @@ export function MarksScreen({
       </div>
 
       {editing && <MarksEditor profile={profile} onSave={onSaveProfile} onClose={() => setEditing(false)} />}
-    </Modal>
+    </>
   );
 }

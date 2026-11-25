@@ -42,7 +42,7 @@ export function BodyweightCard({ log, onChange, embedded = false }: BodyweightCa
         {embedded ? (
           latest ? (
             <p className="text-sm text-neutral-300">
-              {latest.kg} kg <span className="text-neutral-500">· {latest.date}</span>
+              {String(latest.kg).replace('.', ',')} kg <span className="text-neutral-500">· {latest.date}</span>
             </p>
           ) : (
             <p className="text-sm text-neutral-500">Sin registros todavía</p>
@@ -68,7 +68,7 @@ export function BodyweightCard({ log, onChange, embedded = false }: BodyweightCa
           <span className={`flex items-center gap-1 text-xs font-semibold ${trendClass}`}>
             <TrendIcon size={14} strokeWidth={2.5} />
             {delta > 0 ? '+' : ''}
-            {delta.toFixed(1)} kg
+            {delta.toFixed(1).replace('.', ',')} kg
           </span>
         )}
       </div>

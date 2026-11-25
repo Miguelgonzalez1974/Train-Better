@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import type { AthleteProfile, DiagnosisAreaKey, DiagnosisCheck, DiagnosisReason, EmphasisDecision, EmphasisPlan, EmphasisReview, SessionHistoryEntry } from '../../data/athlete/types';
 import {
   checkState,
@@ -14,8 +14,8 @@ import {
 } from '../../engine/athleteDiagnosis';
 import { toLocalIsoDate } from '../../engine/periodization';
 import { describeLever, ensureEmphasisPlan, formatRatio, leverFor, nextReviewOn } from '../../engine/programmingEmphasis';
+import { Fold } from '../shell/Fold';
 import { Modal } from '../shell/Modal';
-import { SectionLabel } from '../shell/SectionLabel';
 import { computeLevel, LEVEL_ORDER, levelSeries, recentOfCategory, type LevelKey, type RecentItem } from '../../engine/levelCategories';
 import { CategoryRadar } from '../dashboard/CategoryRadar';
 import { CategoryRecent } from '../dashboard/CategoryRecent';
@@ -308,6 +308,7 @@ export function PerfilAtleta({
 }) {
   const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
   // Tu nivel con las 8 categorías: la foto de hoy, su evolución mes a mes y los 3 últimos entrenos de cada una (solo se calcula en la pantalla del perfil).
+  const [openCategory, setOpenCategory] = useState<LevelKey | null>(null);
   const level = useMemo(() => (mode === 'analisis' ? computeLevel({ profile, history }) : null), [mode, profile, history]);
   const series = useMemo(() => (mode === 'analisis' ? levelSeries({ profile, history }) : null), [mode, profile, history]);
   const recents = useMemo(
@@ -359,22 +360,6 @@ export function PerfilAtleta({
 
   return (
     <section className="flex animate-section-in flex-col gap-4 motion-reduce:animate-none">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-neutral-400">Lo que el coach ve en ti</p>
-          <p className="text-lg font-semibold text-white">Tu nivel</p>
-          <p className="mt-0.5 text-xs text-neutral-500">Contra tus propias marcas: 100 es tu mejor marca de cada categoría en el último año.</p>
-        </div>
-        {level && (
-          <span
-            className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em]"
-            style={{ color: TONE_COLOR[level.filled >= 6 ? 'good' : level.filled >= 3 ? 'mid' : 'none'], backgroundColor: 'rgb(var(--c-white) / 0.07)' }}
-          >
-            {level.filled} de {level.categories.length}
-          </span>
-        )}
-      </div>
-
       {level && series && recents && (
         <>
           <div className="rounded-2xl bg-white/[0.03] px-3 py-4" data-testid="level-profile">
@@ -392,6 +377,9 @@ export function PerfilAtleta({
                 {level.filled} de {level.categories.length} categorías con datos. Hacen falta al menos 3 para dar un número.
               </p>
             )}
+            <p className="mt-1 px-1 text-[11px] text-neutral-500">
+              {level.filled} de {level.categories.length} categorías · 100 es tu mejor marca de cada una en el último año
+            </p>
             <CategoryRadar categories={level.categories} />
             <div className="flex items-center justify-center gap-4 text-[11px] text-neutral-500">
               <span className="flex items-center gap-1.5">
@@ -405,48 +393,53 @@ export function PerfilAtleta({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3">
-            {level.categories.map((c) => (
-              <article key={c.key} className="rounded-2xl bg-white/[0.03] p-4" data-testid="profile-category" data-key={c.key}>
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-[15px] font-semibold text-white">{c.label}</h3>
-                  <span className="flex items-baseline gap-2">
-                    {c.confidence === 'provisional' && <span className="rounded-md bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold text-warn">provisional</span>}
-                    {c.score !== null && <span className="num text-lg font-bold text-white">{c.score}</span>}
-                    {c.delta !== null && (
-                      <span className="num text-xs font-semibold" style={{ color: c.delta > 0 ? TONE_COLOR.good : c.delta < 0 ? TONE_COLOR.mid : TONE_COLOR.none }}>
-                        {c.delta > 0 ? '▲' : c.delta < 0 ? '▼' : '='} {Math.abs(c.delta)}
+          <div className="flex flex-col gap-px overflow-hidden rounded-2xl bg-white/[0.06]">
+            {level.categories.map((c) => {
+              const open = openCategory === c.key;
+              const empty = c.score === null;
+              return (
+                <article key={c.key} className="bg-brand-surface" data-testid="profile-category" data-key={c.key}>
+                  <button type="button" onClick={() => setOpenCategory(open ? null : c.key)} aria-expanded={open} className="block w-full px-3.5 py-2.5 text-left transition-colors hover:bg-white/[0.04]">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className={`text-[13px] font-semibold ${empty ? 'text-neutral-500' : 'text-white'}`}>{c.label}</span>
+                      <span className="flex shrink-0 items-baseline gap-2">
+                        {c.confidence === 'provisional' && <span className="rounded-md bg-warn/15 px-1.5 py-0.5 text-[11px] font-semibold text-warn">provisional</span>}
+                        {!empty && <span className="num text-[15px] font-bold text-white">{c.score}</span>}
+                        {c.delta !== null && (
+                          <span className="num text-[11px] font-semibold" style={{ color: c.delta > 0 ? TONE_COLOR.good : c.delta < 0 ? TONE_COLOR.mid : TONE_COLOR.none }}>
+                            {c.delta > 0 ? '▲' : c.delta < 0 ? '▼' : '='} {Math.abs(c.delta)}
+                          </span>
+                        )}
+                        <ChevronDown size={13} className={`self-center text-neutral-600 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
                       </span>
-                    )}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-neutral-400">{c.detail}</p>
-                <div className="mt-3">
-                  <CategoryRecent items={recents[c.key]} series={series[c.key]} need={c.need} />
-                </div>
-              </article>
-            ))}
+                    </span>
+                    <span className="mt-1.5 block h-1 rounded-full bg-white/10" aria-hidden="true">
+                      <span className={`block h-1 rounded-full bg-brand-orange ${c.confidence === 'provisional' ? 'opacity-55' : ''}`} style={{ width: `${c.score ?? 0}%` }} />
+                    </span>
+                    {empty && c.need && <span className="mt-1.5 block text-[11px] leading-snug text-neutral-500">{c.need}</span>}
+                  </button>
+                  {open && (
+                    <div className="px-3.5 pb-3.5">
+                      <p className="mb-3 text-xs leading-relaxed text-neutral-400">{c.detail}</p>
+                      <CategoryRecent items={recents[c.key]} series={series[c.key]} need={c.need} />
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
-
-          {level.consistencyPct !== null && (
-            <p className="flex items-center gap-3 rounded-2xl border border-dashed border-white/15 px-4 py-3 text-xs leading-relaxed text-neutral-400">
-              <span className="num text-xl font-semibold text-neutral-300">{level.consistencyPct} %</span>
-              Constancia: tus días de entreno de las últimas 8 semanas. Es un hábito, no cuenta en tu nivel.
-            </p>
-          )}
         </>
       )}
 
-      <div>
-        <SectionLabel className="mb-2">Qué priorizaría estas semanas</SectionLabel>
+      <Fold title="Qué priorizaría estas semanas" summary={diagnosis.focus.length > 0 ? String(diagnosis.focus.length) : undefined}>
         {diagnosis.focus.length === 0 ? (
-          <p className="rounded-2xl bg-white/[0.03] px-4 py-3 text-xs leading-relaxed text-neutral-500">
+          <p className="text-xs leading-relaxed text-neutral-500">
             Aún no hay nada claro que priorizar: con más marcas reales y WODs puntuados en Rx, aquí saldrá lo que más margen tiene.
           </p>
         ) : (
-          <ul className="divide-y divide-white/[0.06] rounded-2xl bg-white/[0.03] px-4">
+          <ul className="divide-y divide-white/[0.06]">
             {diagnosis.focus.map((f, i) => (
-              <li key={`${f.key}-${i}`} className="flex items-start gap-3 py-3">
+              <li key={`${f.key}-${i}`} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
                 <span
                   className="mt-px flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-extrabold"
                   style={f.kind === 'prioridad' ? { color: 'rgb(var(--c-brand-orange))', backgroundColor: 'rgb(var(--c-brand-orange) / 0.16)' } : { color: TONE_COLOR.good, backgroundColor: 'rgb(var(--c-state-good) / 0.14)' }}
@@ -462,7 +455,13 @@ export function PerfilAtleta({
             ))}
           </ul>
         )}
-      </div>
+      </Fold>
+
+      {level && level.consistencyPct !== null && (
+        <Fold title="Constancia" summary={`${level.consistencyPct} %`}>
+          <p className="text-xs leading-relaxed text-neutral-400">Tus días de entreno de las últimas 8 semanas: {level.consistencyPct} %. Es un hábito, no cuenta en tu nivel.</p>
+        </Fold>
+      )}
 
       <details className="rounded-2xl bg-white/[0.03] px-4 py-3" data-testid="coach-reading">
         <summary className="cursor-pointer list-none text-[13px] font-semibold text-neutral-200">Cómo lo lee el coach</summary>

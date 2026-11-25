@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ChipTabs } from '../shell/ChipTabs';
 import { PartGuard } from '../shell/PartGuard';
 
 export type FormChip = 'energia' | 'preparacion' | 'sueno' | 'carga';
@@ -18,23 +19,7 @@ export function FormScreen({ chip, onChip, isToday, children }: { chip: FormChip
   const shown = shownChip(chip, isToday);
   return (
     <div className="flex flex-col gap-3">
-      {/* En una sola línea también en un móvil: cada uno según su texto y se reparten lo que sobra. */}
-      <div className="flex gap-1" role="tablist" aria-label="Tu forma">
-        {CHIPS.filter((c) => isToday || c.id !== 'energia').map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            role="tab"
-            aria-selected={shown === c.id}
-            onClick={() => onChip(c.id)}
-            className={`min-h-9 flex-auto whitespace-nowrap rounded-full border px-1.5 py-1.5 text-[11px] font-semibold transition-colors duration-200 ${
-              shown === c.id ? 'border-white bg-white text-brand-bg' : 'border-white/15 text-neutral-400 hover:text-neutral-100'
-            }`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
+      <ChipTabs items={CHIPS.filter((c) => isToday || c.id !== 'energia')} active={shown} onChange={onChip} label="Tu forma" />
       <PartGuard key={shown} name={`el apartado ${shown} de Tu forma`} fallback={<p className="rounded-2xl bg-white/[0.03] p-4 text-sm text-neutral-400">Esta parte no se ha podido mostrar. Prueba con otra.</p>}>
         {children(shown)}
       </PartGuard>
