@@ -4,7 +4,7 @@
  */
 import { dayLabel, type MovePlan, type MoveRefusal } from '../../lib/sessionMove';
 import type { WeekPlan, WeekRow } from '../../lib/weekShift';
-import { buildPreviewLine } from './previewLine';
+import { buildPreviewLine } from './DayRows';
 import type { AskAnswer } from './rexAsk';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

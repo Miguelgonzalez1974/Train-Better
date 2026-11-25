@@ -38,10 +38,6 @@
   /* Esfuerzo hecho: azul fluorescente, fuera de la familia verde-ámbar-rojo de la preparación (lo que se pasa del objetivo es rojo). En oscuro lleva un halo (--effort-glow). */
   --c-effort: 0 209 255;
   --effort-glow: 0.75;
-  /* Tarjetas del Resumen: superficie y borde propios, para que no se fundan con el fondo. */
-  --c-day-card: 28 24 21;
-  --c-day-border: 58 50 43;
-  --day-shadow: none;
   /* Aro de preparación: en oscuro, los mismos colores de estado. */
   --c-ring-good: 74 222 128;
   --c-ring-mid: 251 191 36;
@@ -83,9 +79,6 @@
   --c-plan: 55 65 81;
   --c-effort: 0 119 255;
   --effort-glow: 0;
-  --c-day-card: 255 255 255;
-  --c-day-border: 226 220 209;
-  --day-shadow: 0 1px 3px rgb(31 27 22 / 0.09);
   --c-ring-good: 22 163 74;
   --c-ring-mid: 217 119 6;
   --c-ring-low: 220 38 38;
@@ -120,10 +113,6 @@
   --c-plan: 203 213 225;
   --c-effort: 0 209 255;
   --effort-glow: 0.75;
-  /* Tarjetas del Resumen: superficie y borde propios, para que no se fundan con el fondo. */
-  --c-day-card: 28 24 21;
-  --c-day-border: 58 50 43;
-  --day-shadow: none;
   --c-ring-good: 74 222 128;
   --c-ring-mid: 251 191 36;
   --c-ring-low: 248 113 113;
@@ -153,16 +142,6 @@ body {
 @layer components {
   .card {
     @apply rounded-2xl border border-brand-border bg-brand-surface shadow-md shadow-black/20;
-  }
-  /* Las filas del Resumen (sesión, Tu forma, Tu nivel): una superficie clara sobre el fondo, con su borde y, en claro, una sombra suave. */
-  .day-card {
-    @apply rounded-[18px] border;
-    background: rgb(var(--c-day-card));
-    border-color: rgb(var(--c-day-border));
-    box-shadow: var(--day-shadow);
-  }
-  button.day-card:hover {
-    border-color: rgb(var(--c-white) / 0.28);
   }
   /* Cifras de rendimiento: grotesca + figuras tabulares para que columnas de kg/tiempo cuadren. */
   .num {
