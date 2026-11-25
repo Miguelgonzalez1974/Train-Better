@@ -360,7 +360,7 @@ describe('una semana muy cargada: la energía baja pero no se hunde, y dice por 
   it('el motivo cuenta cuánto se pasa la semana de tu carga normal', () => {
     const s = buildFormSeries({ history: withHeavyStreak(6), todayIso: TODAY });
     const reason = energyReason(s);
-    expect(reason).toMatch(/^Llevas la semana un \d+ % por encima de tu carga normal\.$/);
+    expect(reason).toBe('Llevas la semana por encima de tu carga normal.');
     expect(formToday(s)?.reason).toBe(reason);
   });
 

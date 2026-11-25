@@ -1,6 +1,5 @@
 import { useRef, type TouchEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { DashTab } from './DayRing';
 import { headerDate, type MacroChip } from './dayHeader';
 
 /** Encima del selector: la fecha del día que se mira y, a la derecha, el programa activo (nombre, semana y días para competir). Tocarlo lleva a Objetivos. */
@@ -19,35 +18,6 @@ export function DayHeader({ dayIso, macro, onOpenMacro }: { dayIso: string; macr
           {macro.countdown && <span className="num shrink-0 font-semibold text-brand-gold">· {macro.countdown}</span>}
         </button>
       )}
-    </div>
-  );
-}
-
-const TABS: { id: DashTab; label: string }[] = [
-  { id: 'resumen', label: 'Resumen' },
-  { id: 'esfuerzo', label: 'Esfuerzo' },
-  { id: 'preparacion', label: 'Preparación' },
-  { id: 'sueno', label: 'Sueño' },
-];
-
-/** Pestañas de arriba, al estilo Whoop: texto pequeño en mayúsculas y una raya bajo la activa. */
-export function DashTabs({ tab, onChange }: { tab: DashTab; onChange: (t: DashTab) => void }) {
-  return (
-    <div className="flex items-center justify-between border-b border-white/[0.07]" role="tablist" aria-label="Secciones del Dashboard">
-      {TABS.map((t) => (
-        <button
-          key={t.id}
-          role="tab"
-          aria-selected={tab === t.id}
-          onClick={() => onChange(t.id)}
-          className={`relative -mb-px px-1 pb-2.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors duration-200 ${
-            tab === t.id ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
-          }`}
-        >
-          {t.label}
-          {tab === t.id && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-white" aria-hidden="true" />}
-        </button>
-      ))}
     </div>
   );
 }

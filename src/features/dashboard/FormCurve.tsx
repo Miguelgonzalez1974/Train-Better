@@ -294,7 +294,7 @@ function CalcLine({ label, sub, value, tone, icon, total = false, onClick }: { l
   );
   const cls = `grid items-center gap-2.5 ${icon !== undefined ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[1fr_auto]'} ${total ? 'border-t border-dashed border-white/[0.18] pt-2' : ''}`;
   return onClick ? (
-    <button type="button" onClick={onClick} className={`${cls} w-full rounded-lg text-left transition-colors duration-200 hover:bg-white/[0.04]`} aria-label={`${label}: ${value}. Ver la pestaña Sueño`}>
+    <button type="button" onClick={onClick} className={`${cls} w-full rounded-lg text-left transition-colors duration-200 hover:bg-white/[0.04]`} aria-label={`${label}: ${value}. Ver el sueño`}>
       {body}
     </button>
   ) : (
@@ -464,9 +464,9 @@ function FormRibbon({ model }: { model: FormModel }) {
 }
 
 /**
- * La ventana "Tu forma", en forma de batería: arriba cuánta energía tienes hoy (con de dónde sale y qué hacer), después cuándo se abre tu
- * próxima ventana con su consejo, el gráfico de dos semanas (curvas y barras de energía) y la cinta de cinco semanas con las
- * ventanas que vienen. Todo sale de tus sesiones, tu check-in y tu plan: es una estimación y, pasadas dos semanas, orientativa.
+ * El apartado «Energía» de «Tu forma», en forma de batería: arriba cuánta energía tienes hoy (con de dónde sale y qué hacer), después cuándo se abre
+ * tu próxima ventana con su consejo y el gráfico de dos semanas; la cinta de cinco semanas, el coste de las sesiones y cómo se calcula (con ayer
+ * frente a hoy) quedan plegados. Todo sale de tus sesiones, tu check-in y tu plan: es una estimación y, pasadas dos semanas, orientativa.
  */
 export function FormView({ model, onOpenMorning, onOpenSleep }: { model: FormModel; onOpenMorning?: () => void; onOpenSleep?: () => void }) {
   const { plan, comp, todayIso } = model;
@@ -564,44 +564,7 @@ export function FormView({ model, onOpenMorning, onOpenSleep }: { model: FormMod
         </p>
       </section>
 
-      {/* Ayer y hoy: así se entiende por qué un día de descanso puede amanecer con menos energía que el de ayer. */}
-      {prevPoint && (
-        <section className="flex items-center justify-around rounded-2xl bg-white/[0.045] px-4 py-3" aria-label="Ayer y hoy">
-          <div className="text-center">
-            <p className="text-[11px] text-neutral-400">Ayer · {shortDay(prevPoint.iso).split(' ').slice(0, 2).join(' ')}</p>
-            <p className="num text-2xl font-extrabold leading-tight" style={{ color: FORM_TONE[pointState(prevPoint)] }}>
-              {pointEnergy(prevPoint)}%
-            </p>
-          </div>
-          <span className="text-lg text-neutral-500" aria-hidden="true">
-            {today.value >= pointEnergy(prevPoint) ? '↗' : '↘'}
-          </span>
-          <div className="text-center">
-            <p className="text-[11px] text-neutral-400">Hoy · {shortDay(todayIso).split(' ').slice(0, 2).join(' ')}</p>
-            <p className="num text-2xl font-extrabold leading-tight" style={{ color: tone }}>
-              {today.value}%
-            </p>
-            {sleepToday !== 0 && <p className="text-[11px] text-neutral-500">sin el sueño: {withCost}%</p>}
-          </div>
-        </section>
-      )}
-
       <NextWindowCard model={model} />
-
-      {/* El detalle del coste real, a un toque: la línea de la cabecera dice cuánto resta, aquí se ve de qué sesiones sale. */}
-      {hasCostInfo && (
-        <Fold
-          title="Coste de tus sesiones"
-          summary={
-            <span style={{ color: costRows[0].pct > 0 ? COST : costRows[0].pct < 0 ? GOOD : undefined }}>
-              última {costRows[0].pct > 0 ? '+' : costRows[0].pct < 0 ? '−' : '±'}
-              {Math.abs(costRows[0].pct)}%
-            </span>
-          }
-        >
-          <CostRows rows={costRows} />
-        </Fold>
-      )}
 
       <section aria-label="Gráfico de energía">
         <div role="group" aria-label="Qué ver" className="mb-3 flex rounded-full bg-white/[0.06] p-0.5 text-xs font-semibold">
@@ -638,8 +601,7 @@ export function FormView({ model, onOpenMorning, onOpenSleep }: { model: FormMod
         </div>
       </section>
 
-      <section aria-label="Las próximas semanas" className="rounded-2xl bg-white/[0.035] px-4 pb-4 pt-3.5">
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">Cinta de ventanas · 5 semanas</p>
+      <Fold title="Las próximas 5 semanas">
         <FormRibbon model={model} />
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-400">
           <Key color={GOOD} label="ventana" shape="bar" />
@@ -647,9 +609,46 @@ export function FormView({ model, onOpenMorning, onOpenSleep }: { model: FormMod
           <span>● entreno de tu plan (en color si cae en ventana)</span>
         </div>
         <p className="mt-2 text-[11px] leading-snug text-neutral-500">Pasadas dos semanas es orientativo: cambia según cómo entrenes.</p>
-      </section>
+      </Fold>
+
+      {/* El detalle del coste real, a un toque: la línea de la cabecera dice cuánto resta, aquí se ve de qué sesiones sale. */}
+      {hasCostInfo && (
+        <Fold
+          title="Coste de tus sesiones"
+          summary={
+            <span style={{ color: costRows[0].pct > 0 ? COST : costRows[0].pct < 0 ? GOOD : undefined }}>
+              última {costRows[0].pct > 0 ? '+' : costRows[0].pct < 0 ? '−' : '±'}
+              {Math.abs(costRows[0].pct)}%
+            </span>
+          }
+        >
+          <CostRows rows={costRows} />
+        </Fold>
+      )}
 
       <Fold title="Cómo se calcula">
+      {/* Ayer y hoy: así se entiende por qué un día de descanso puede amanecer con menos energía que el de ayer. */}
+      {prevPoint && (
+        <section className="mb-3 flex items-center justify-around rounded-2xl bg-white/[0.045] px-4 py-3" aria-label="Ayer y hoy">
+          <div className="text-center">
+            <p className="text-[11px] text-neutral-400">Ayer · {shortDay(prevPoint.iso).split(' ').slice(0, 2).join(' ')}</p>
+            <p className="num text-2xl font-extrabold leading-tight" style={{ color: FORM_TONE[pointState(prevPoint)] }}>
+              {pointEnergy(prevPoint)}%
+            </p>
+          </div>
+          <span className="text-lg text-neutral-500" aria-hidden="true">
+            {today.value >= pointEnergy(prevPoint) ? '↗' : '↘'}
+          </span>
+          <div className="text-center">
+            <p className="text-[11px] text-neutral-400">Hoy · {shortDay(todayIso).split(' ').slice(0, 2).join(' ')}</p>
+            <p className="num text-2xl font-extrabold leading-tight" style={{ color: tone }}>
+              {today.value}%
+            </p>
+            {sleepToday !== 0 && <p className="text-[11px] text-neutral-500">sin el sueño: {withCost}%</p>}
+          </div>
+        </section>
+      )}
+
         <p className="text-xs leading-relaxed text-neutral-400">
           Cada sesión suma a tu <Term k="fitness">forma física</Term>, que sube y baja despacio, y a tu fatiga, que lo hace deprisa (míralas en la vista «Forma física y fatiga»). Tu forma es la diferencia, y la energía es esa forma pasada a una escala de 0 a 100: a tope desde el {ENERGY_TOP} %, cansado hasta el {ENERGY_LOW} %. Entrenando siempre igual oscilas entre el 30 y el 70 % según el día de la semana; solo llegas a tope cuando bajas la carga unos días. Cuando la fatiga cae antes que la forma física queda un hueco a tu favor, la ventana de{' '}
           <Term k="supercompensacion">supercompensación</Term>. La previsión usa tu calendario: los días que entrenas, las semanas de descarga de tu macrociclo y, si hay competición, su cuenta atrás. Se recalcula con cada sesión que registras. Solo cuenta lo que apuntas: si haces bici, entrenos de equipo u otro deporte y no lo registras (vale «Registrar este día» con su RPE y duración), el cálculo te verá más descansado de lo que estás. La energía suma tres cosas: la carga acumulada de tus entrenos, el coste real de cada sesión (una sesión de barra, agarre y hombro desgasta más de lo que dice su RPE × duración, y una ligera menos) y tu sueño: la media ponderada de las horas de hoy y de las dos noches anteriores frente a 7 h 30 (a 8 puntos por hora, de −15 a +8; en morado en el gráfico). Cómo te sientes (agujetas, estrés, ánimo, HRV, molestias) no cambia la energía: eso es tu Preparación. La previsión de los días que vienen no incluye el sueño, porque aún no sabes cómo dormirás. Es una estimación.

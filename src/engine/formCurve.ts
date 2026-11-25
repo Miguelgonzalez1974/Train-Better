@@ -344,7 +344,7 @@ export interface FormToday {
   title: string;
   /** Una frase de coach. */
   sentence: string;
-  /** Por qué la energía está donde está, con los datos («Llevas la semana un 28 % por encima de tu carga normal y has dormido poco»); null si no hay motivo claro. */
+  /** Por qué la energía está donde está («Llevas la semana por encima de tu carga normal y has dormido poco»); null si no hay motivo claro. */
   reason: string | null;
 }
 
@@ -364,7 +364,8 @@ export function energyReason(series: FormSeries): string | null {
   if (week.length >= 5) {
     const avg = week.reduce((s, x) => s + x.load, 0) / week.length;
     const ratio = avg / Math.max(10, p.fitness);
-    if (ratio >= HEAVY_WEEK_RATIO) parts.push(`llevas la semana un ${Math.round((ratio - 1) * 100)} % por encima de tu carga normal`);
+    // Sin porcentaje: la cifra de la carga es una sola, la de la relación de carga (la del aro y la tarjeta «Tu forma»).
+    if (ratio >= HEAVY_WEEK_RATIO) parts.push('llevas la semana por encima de tu carga normal');
   }
   if ((p.sleep ?? 0) <= SHORT_SLEEP_POINTS && p.sleepAvg !== undefined) parts.push(`has dormido poco (${formatSleep(p.sleepAvg)} de media)`);
   if (parts.length === 0) return null;
@@ -378,6 +379,8 @@ const SENTENCE: Record<FormState, string> = {
   equilibrio: 'Ni a tope ni cansado: sigue el plan del día.',
   cargado: 'Estás cansado: un día suave y recuperas energía.',
 };
+/** El nombre de cada estado de energía («A tope», «Normal», «Cansado»). */
+export const formTitle = (state: FormState): string => TITLE[state];
 export const signed = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(Math.round(n))}`;
 
 /** La energía de hoy; null si no hay datos suficientes (la fila dice cuánto falta). */

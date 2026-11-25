@@ -42,7 +42,7 @@ import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { isoDiffDays, toLocalIsoDate } from '../../engine/periodization';
 import { buildGoalRows } from './progressOverview';
-import { BalanceBox, DayRing, type DashTab } from './DayRing';
+import { BalanceBox, DayRing } from './DayRing';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainId } from '../../engine/explainNumbers';
 import { explanationToAnswer, ringQuestion } from './rexRing';
 import { dayBalance } from '../../engine/dayBalance';
@@ -56,13 +56,16 @@ import { proposeWeekMove, type WeekMoveProposal } from '../../lib/weekCoach';
 import { loadWeekMoveMemory, saveWeekMoveMemory, withWeekMoveStatus, type WeekMoveMemory, type WeekMoveStatus } from '../../lib/weekMoveMemory';
 import { describeDayForAsk } from './rexAskDay';
 import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
-import { DashTabs, DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
+import { DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
 import { buildSessionCard } from './sessionCardModel';
 import { DaySummaryModal } from './DaySummaryModal';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormView } from './FormCurve';
-import { buildFormModel, formRowNote } from './formModel';
+import { buildFormModel } from './formModel';
+import { buildFormCard } from './formCardModel';
+import { FormScreen, type FormChip } from './FormScreen';
+import { LoadPanel } from './LoadPanel';
 import { formToday } from '../../engine/formCurve';
 import { wodCategoryNeed } from '../../engine/levelCategories';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
@@ -73,7 +76,6 @@ import { TrainingDiary } from './TrainingDiary';
 import { SleepTab } from './SleepHabits';
 import { StrainDetail } from './StrainRing';
 import { PreparationTab } from './PreparationTab';
-import { AcwrGauge } from './AcwrGauge';
 import { ConsistencyDetail } from './ConsistencyDetail';
 import { computeYearConsistency } from '../../engine/yearConsistency';
 import { TrainingHeatmap } from './TrainingHeatmap';
@@ -135,8 +137,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   useEffect(() => {
     handoff.take('analisis-tab');
   }, []);
-  const [formOpen, setFormOpen] = useState(false);
-  const [showLoad, setShowLoad] = useState(false);
+  /** La pantalla «Tu forma» abierta por uno de sus apartados (null: cerrada). */
+  const [formChip, setFormChip] = useState<FormChip | null>(null);
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [showMobility, setShowMobility] = useState(false);
   /** «Lo que hiciste»: la sesión del macro y la del programa de fuerza del día elegido. */
@@ -155,7 +157,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   // La propuesta abierta se guarda aparte: al aplicarla (o dejarla) deja de salir en Rex, pero la ficha sigue abierta para enseñar «Hecho» y «Deshacer».
   const [openWeekMove, setOpenWeekMove] = useState<WeekMoveProposal | null>(null);
   const [weekMoveMemory, setWeekMoveMemory] = useState<WeekMoveMemory>(() => loadWeekMoveMemory(typeof window !== 'undefined' ? window.localStorage : null));
-  // Día que se está mirando (hoy por defecto) y pestaña de arriba.
+  // Día que se está mirando (hoy por defecto).
   // Se abre en ese día si Planificación manda aquí a mirar uno ya hecho (la tira de la semana): `dia:yyyy-mm-dd`. Un día futuro o mal escrito no vale.
   const [dayIso, setDayIso] = useState(() => {
     const today = toLocalIsoDate(new Date());
@@ -163,7 +165,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     const wanted = act?.startsWith('dia:') ? act.slice(4) : null;
     return wanted && /^\d{4}-\d{2}-\d{2}$/.test(wanted) && wanted <= today ? wanted : today;
   });
-  const [tab, setTab] = useState<DashTab>('resumen');
   // Rex avisa de que los aros se tocan (globo de la esquina + latido de los aros) hasta el primer toque; no vuelve.
   const [ringHintPending, setRingHintPending] = useState(() => !ringHintSeen(typeof window !== 'undefined' ? window.localStorage : null));
   const markRingHint = () => {
@@ -271,14 +272,14 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     return { protein: { done: eaten.protein, target: target.protein }, carbs: { done: eaten.carbs, target: target.carbs } };
   }, [latestBodyweightKg, profile.nutritionPrefs, profile.sessionCache, history, dayIso, isToday, todaySession]);
   const nutritionPercent = nutrition ? nutritionPct(nutrition) : null;
-  // Datos de las gráficas de las pestañas (solo se calculan al abrirlas).
-  // Los datos de la tendencia (pestaña Esfuerzo): se calculan al dibujarla, para el rango que se pida. Hoy lleva el esfuerzo previsto.
+  // Datos de las gráficas de «Tu forma» (solo se calculan al abrirla).
+  // Los datos de la tendencia (apartado Carga): se calculan al dibujarla, para el rango que se pida. Hoy lleva el esfuerzo previsto.
   const plannedToday = strainView.planned?.strain ?? null;
   const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, loadHistory, dayIso, todayIso, days, plannedToday, offsetDays), [profile, loadHistory, dayIso, todayIso, plannedToday]);
-  const readinessSeries = useMemo(() => (tab === 'preparacion' ? buildReadinessSeries(profile, loadHistory, dayIso, 14) : []), [tab, profile, loadHistory, dayIso]);
+  const readinessSeries = useMemo(() => (formChip !== null ? buildReadinessSeries(profile, loadHistory, dayIso, 14) : []), [formChip, profile, loadHistory, dayIso]);
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
-  /** La prueba del reparto de pesos de la preparación, solo cuando se mira la pestaña (cuesta calcular dos notas por día). */
-  const prepCompare = useMemo(() => (tab === 'preparacion' ? buildPrepCompare(profile, history, todayIso) : []), [tab, profile, history, todayIso]);
+  /** La prueba del reparto de pesos de la preparación, solo en su apartado (cuesta calcular dos notas por día). */
+  const prepCompare = useMemo(() => (formChip === 'preparacion' ? buildPrepCompare(profile, history, todayIso) : []), [formChip, profile, history, todayIso]);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
   const restMarked = isRestMarked(profile.restDates, todayIso);
   function toggleRest() {
@@ -486,13 +487,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'peso':
         return setShowBodyweight(true);
       case 'forma':
-        return setFormOpen(true);
+        return setFormChip('energia');
       case 'preparacion':
-        return setTab('preparacion');
+        return setFormChip('preparacion');
       case 'esfuerzo':
-        return setTab('esfuerzo');
       case 'carga':
-        return setShowLoad(true);
+        return setFormChip('carga');
       case 'planificacion':
         return onNavigateToPlanificacion();
       case 'hoy':
@@ -591,7 +591,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         }}
         ask={askRex}
         hints={REX_HINTS.dashboard}
-        dock={{ stats: rexDockStats, tip: ringHintPending && tab === 'resumen' ? 'Toca un aro o un número para ver de dónde sale.' : null }}
+        dock={{ stats: rexDockStats, tip: ringHintPending ? 'Toca un aro o un número para ver de dónde sale.' : null }}
         suggestion={rexPick.current}
         waiting={rexPick.waiting}
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
@@ -688,94 +688,118 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       {/* Selector de día y pestañas, al estilo Whoop: el día elegido manda sobre todo lo de debajo. */}
       <DayHeader dayIso={dayIso} macro={macroChip(profile.macrocycles, todayIso, todaySession?.competition?.daysToEvent ?? null)} onOpenMacro={() => onNavigateToObjetivos()} />
       <DaySelector dayIso={dayIso} todayIso={todayIso} onChange={setDayIso} />
-      <DashTabs tab={tab} onChange={setTab} />
+      {/*
+        El estado del día: el check-in (el primer gesto de la mañana: al contestar se fija el objetivo de esfuerzo y se
+        rehace la sesión) y los dos anillos, esfuerzo y preparación. Tocar un número le pregunta a Rex de dónde sale.
+      */}
+      <div {...swipe} className="touch-pan-y">
+      <DayRing
+        strain={shown.strain}
+        start={dayStart}
+        notDone={describeSkipped(shown.entry?.skipped)}
+        readiness={shown.readiness}
+        acwr={shown.acwr}
+        centerLabel={ringDayLabel(dayIso, todayIso)}
+        isToday={isToday}
+        onAsk={askRing}
+        hintPending={ringHintPending}
+        onHintSeen={markRingHint}
+      />
+      </div>
 
-      {tab === 'resumen' && (
-        <>
-          {/*
-            El estado del día: el check-in (el primer gesto de la mañana: al contestar se fija el objetivo de esfuerzo y se
-            rehace la sesión) y los dos anillos, esfuerzo y preparación. Tocar un número le pregunta a Rex de dónde sale.
-          */}
-          <div {...swipe} className="touch-pan-y">
-          <DayRing
-            strain={shown.strain}
-            start={dayStart}
-            notDone={describeSkipped(shown.entry?.skipped)}
-            readiness={shown.readiness}
-            acwr={shown.acwr}
-            centerLabel={ringDayLabel(dayIso, todayIso)}
-            isToday={isToday}
-            onAsk={askRing}
-            hintPending={ringHintPending}
-            onHintSeen={markRingHint}
-          />
-          </div>
+      {/* Tu día: la tarjeta de la sesión (las cifras que importan) y las demás filas. */}
+      <DayRows
+        isToday={isToday}
+        session={isToday ? todaySession : null}
+        card={buildSessionCard({ isToday, session: isToday ? todaySession : null, entry: shown.entry, strain: shown.strain, profile, history, workLog: athleteRepository.getWorkLog(), dayIso, companionDone: dayCompanion })}
+        formCard={buildFormCard({ model: formModel, acwr: shown.acwr, painFlags: profile.painFlags, dayIso })}
+        onOpenForm={() => setFormChip(isToday ? 'energia' : 'preparacion')}
+        onOpenDone={() => setShowDone(true)}
+        onNavigateToPlanificacion={onNavigateToPlanificacion}
+        // Tu nivel: una fila más de «Tu día» que se abre con el radar del perfil; solo hoy y con datos de tres áreas.
+        extra={
+          isToday ? (
+            <LevelCard
+              profile={profile}
+              history={history}
+              onOpen={() => {
+                setAnalysisStart('perfil');
+                setAnalysisOpen(true);
+              }}
+            />
+          ) : null
+        }
+      />
 
-          {/* Tu día: la tarjeta de la sesión (las cifras que importan) y las demás filas. */}
-          <DayRows
-            isToday={isToday}
-            session={isToday ? todaySession : null}
-            card={buildSessionCard({ isToday, session: isToday ? todaySession : null, entry: shown.entry, strain: shown.strain, profile, history, workLog: athleteRepository.getWorkLog(), dayIso, companionDone: dayCompanion })}
-            form={isToday && formModel.plan.sessions > 0 ? formModel.plan : null}
-            formNote={formRowNote(formModel)}
-            onOpenForm={() => setFormOpen(true)}
-            onOpenDone={() => setShowDone(true)}
-            onNavigateToPlanificacion={onNavigateToPlanificacion}
-            // Tu nivel: una fila más de «Tu día» que se abre con el radar del perfil; solo hoy y con datos de tres áreas.
-            extra={
-              isToday ? (
-                <LevelCard
-                  profile={profile}
-                  history={history}
-                  onOpen={() => {
-                    setAnalysisStart('perfil');
-                    setAnalysisOpen(true);
+      {formChip !== null && (
+        <Modal open onClose={() => setFormChip(null)} title={isToday ? 'Tu forma' : `Tu forma · ${dayLabel(dayIso, todayIso)}`}>
+          <FormScreen chip={formChip} onChip={setFormChip} isToday={isToday}>
+            {(chip) =>
+              chip === 'energia' ? (
+                <FormView
+                  model={formModel}
+                  onOpenMorning={() => {
+                    setFormChip(null);
+                    onOpenMorning();
+                  }}
+                  onOpenSleep={() => setFormChip('sueno')}
+                />
+              ) : chip === 'preparacion' ? (
+                <PreparationTab
+                  readiness={shown.readiness}
+                  series={readinessSeries}
+                  dayIso={dayIso}
+                  isToday={isToday}
+                  log={hrvLogWith(profile.readinessLog, profile.hrvHistory) ?? []}
+                  todayCheck={todayReadiness}
+                  learning={readinessLearning}
+                  onSelect={setDayIso}
+                  onOpenMorning={() => {
+                    setFormChip(null);
+                    onOpenMorning();
+                  }}
+                  compare={prepCompare}
+                  pain={getActivePainFlags(profile.painFlags, dayIso).map((f) => PAIN_AREA_LABEL[f.area])}
+                />
+              ) : chip === 'sueno' ? (
+                <SleepTab
+                  log={profile.readinessLog ?? []}
+                  dayIso={dayIso}
+                  todayIso={todayIso}
+                  learning={readinessLearning}
+                  onSelect={setDayIso}
+                  onOpenMorning={() => {
+                    setFormChip(null);
+                    onOpenMorning();
                   }}
                 />
-              ) : null
+              ) : (
+                <LoadPanel
+                  acwr={shown.acwr}
+                  trend={shown.trend}
+                  onHistory={() => {
+                    setFormChip(null);
+                    setTrainingView('diario');
+                  }}
+                  onConsistency={() => {
+                    setFormChip(null);
+                    setTrainingView('constancia');
+                  }}
+                >
+                  <StrainDetail
+                    view={shown.strain}
+                    onAdjust={() => {
+                      setFormChip(null);
+                      onNavigateToPlanificacion();
+                    }}
+                    dayLabel={dayLabel(dayIso, todayIso)}
+                    isToday={isToday}
+                  />
+                  <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} competitionDays={isToday ? (todaySession?.competition?.daysToEvent ?? null) : null} onSelect={setDayIso} />
+                </LoadPanel>
+              )
             }
-          />
-        </>
-      )}
-
-      {tab === 'esfuerzo' && (
-        <div className="animate-section-in flex flex-col gap-3 motion-reduce:animate-none">
-          <WeekTrendCard build={buildTrend} selectedIso={dayIso} todayIso={todayIso} competitionDays={isToday ? (todaySession?.competition?.daysToEvent ?? null) : null} onSelect={setDayIso} />
-          <StrainDetail view={shown.strain} onAdjust={onNavigateToPlanificacion} dayLabel={dayLabel(dayIso, todayIso)} isToday={isToday} />
-        </div>
-      )}
-      {tab === 'preparacion' && (
-        <PreparationTab
-          readiness={shown.readiness}
-          series={readinessSeries}
-          dayIso={dayIso}
-          isToday={isToday}
-          log={hrvLogWith(profile.readinessLog, profile.hrvHistory) ?? []}
-          todayCheck={todayReadiness}
-          learning={readinessLearning}
-          onSelect={setDayIso}
-          onOpenMorning={onOpenMorning}
-          compare={prepCompare}
-        />
-      )}
-      {tab === 'sueno' && (
-        <div className="animate-section-in motion-reduce:animate-none">
-          <SleepTab log={profile.readinessLog ?? []} dayIso={dayIso} todayIso={todayIso} learning={readinessLearning} onSelect={setDayIso} onOpenMorning={onOpenMorning} />
-        </div>
-      )}
-      {formOpen && (
-        <Modal open onClose={() => setFormOpen(false)} title="Tu forma">
-          <FormView
-            model={formModel}
-            onOpenMorning={() => {
-              setFormOpen(false);
-              onOpenMorning();
-            }}
-            onOpenSleep={() => {
-              setFormOpen(false);
-              setTab('sueno');
-            }}
-          />
+          </FormScreen>
         </Modal>
       )}
       {showMobility && (
@@ -819,12 +843,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           summary={isToday && summaryData ? { data: summaryData, e1rmSuggestions, onConfirmE1rm: confirmE1rm, onDismissE1rm: dismissE1rm } : undefined}
         />
       )}
-      {showLoad && (
-        <Modal open onClose={() => setShowLoad(false)} title="Carga">
-          <AcwrGauge result={shown.acwr} trend={shown.trend} />
-        </Modal>
-      )}
-
       {trainingView && (
         <Modal open onClose={() => setTrainingView(null)} title="Historial">
           <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-white/[0.05] p-1" role="tablist" aria-label="Historial">
