@@ -1,4 +1,4 @@
-import { useRef, type TouchEvent } from 'react';
+import { useRef, type ReactNode, type TouchEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { headerDate, type MacroChip } from './dayHeader';
 
@@ -76,13 +76,17 @@ export function useDaySwipe(onShift: (delta: -1 | 1) => void) {
   };
 }
 
-/** Selector de día en una cápsula: ‹ Hoy › — hacia atrás hasta `MAX_DAYS_BACK` días, nunca hacia el futuro. */
-export function DaySelector({ dayIso, todayIso, onChange }: { dayIso: string; todayIso: string; onChange: (iso: string) => void }) {
+/**
+ * Selector de día en una cápsula: ‹ Hoy › — hacia atrás hasta `MAX_DAYS_BACK` días, nunca hacia el futuro. En `left` va un botón pequeño a la
+ * izquierda de la misma línea, bajo la fecha (el del tema), solo en pantallas sin menú lateral.
+ */
+export function DaySelector({ dayIso, todayIso, onChange, left }: { dayIso: string; todayIso: string; onChange: (iso: string) => void; left?: ReactNode }) {
   const atToday = dayIso >= todayIso;
   const atStart = dayIso <= addDays(todayIso, -MAX_DAYS_BACK);
   const btn = 'flex h-9 w-9 items-center justify-center rounded-full text-neutral-300 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent';
   return (
-    <div className="flex items-center justify-center gap-2">
+    <div className="relative flex items-center justify-center gap-2">
+      {left && <div className="absolute -left-1 top-1/2 -translate-y-1/2 md:hidden">{left}</div>}
       <button onClick={() => onChange(addDays(dayIso, -1))} disabled={atStart} aria-label="Día anterior" className={btn}>
         <ChevronLeft size={18} />
       </button>
@@ -90,7 +94,7 @@ export function DaySelector({ dayIso, todayIso, onChange }: { dayIso: string; to
         onClick={() => onChange(todayIso)}
         disabled={atToday}
         aria-label="Volver a hoy"
-        className="min-w-[9rem] rounded-full bg-white/[0.07] px-5 py-2 text-center text-[13px] font-semibold uppercase tracking-[0.12em] text-white transition-colors enabled:hover:bg-white/10"
+        className="min-w-[7.5rem] rounded-full bg-white/[0.07] px-5 min-[360px]:min-w-[9rem] py-2 text-center text-[13px] font-semibold uppercase tracking-[0.12em] text-white transition-colors enabled:hover:bg-white/10"
       >
         {dayLabel(dayIso, todayIso)}
       </button>

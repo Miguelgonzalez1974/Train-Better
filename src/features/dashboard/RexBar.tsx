@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Activity, Apple, BarChart3, CalendarCheck, ChevronDown, ChevronRight, PersonStanding, Flame, Gauge, Radar, Scale, Target, Trophy, type LucideIcon } from 'lucide-react';
 import { RexMascot } from '../objetivos/RexMascot';
 import { REX_MODULES, type RexSuggestion, type RexTarget } from './rexDashboard';
@@ -39,7 +39,6 @@ export function RexBar({
   typedAlready,
   badges,
   dots,
-  extra,
   showDate = true,
   modules = true,
   defaultMore = false,
@@ -51,8 +50,6 @@ export function RexBar({
 }: {
   /** Pasa a la siguiente cosa que Rex tiene que contar, sin apartar la actual. */
   onNext: () => void;
-  /** Una celda más al final de «Más» (el cambio de tema). */
-  extra?: ReactNode;
   /** Enseñar la fecha de hoy bajo el muñeco (en el Dashboard sí; donde el título ya dice el día, no). */
   showDate?: boolean;
   /** Enseñar el botón «Más» con los módulos del Dashboard. */
@@ -190,7 +187,6 @@ export function RexBar({
               </button>
             );
           })}
-          {extra}
         </div>
       )}
     </section>

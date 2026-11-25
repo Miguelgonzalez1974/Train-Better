@@ -22,23 +22,36 @@ function applyTheme(theme: 'dark' | 'light') {
   }
 }
 
-/** Botón sol/luna — alterna tema claro/oscuro y lo recuerda por navegador. Oscuro es el defecto. */
-export function ThemeToggle({ className = '', label = false }: { className?: string; /** Enseña también el texto («Tema claro» / «Tema oscuro»), para usarlo como una opción más de una lista. */ label?: boolean }) {
+/**
+ * Botón sol/luna — alterna tema claro/oscuro y lo recuerda por navegador. Oscuro es el defecto. El icono enseña a lo que vas a cambiar:
+ * la luna en el tema claro y el sol en el oscuro.
+ */
+export function ThemeToggle({ className = '', round = false }: { className?: string; /** El círculo pequeño del Dashboard: discreto a la vista y con una zona de toque más grande. */ round?: boolean }) {
   const [theme, setTheme] = useState<'dark' | 'light'>(readTheme);
   const toggle = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
     applyTheme(next);
   };
+  const title = theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro';
+  const Icon = theme === 'dark' ? Sun : Moon;
+  if (round) {
+    return (
+      <button onClick={toggle} title={title} aria-label={title} data-testid="theme-quick" className={`group flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${className}`}>
+        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-neutral-400 transition-colors duration-200 group-hover:border-white/35 group-hover:text-white">
+          <Icon size={15} strokeWidth={2.25} aria-hidden="true" />
+        </span>
+      </button>
+    );
+  }
   return (
     <button
       onClick={toggle}
-      title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+      title={title}
       aria-label="Cambiar tema"
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand-border text-neutral-400 transition-colors duration-200 hover:border-brand-gold hover:text-brand-gold ${className}`}
     >
-      {theme === 'dark' ? <Sun size={label ? 15 : 16} strokeWidth={2.25} /> : <Moon size={label ? 15 : 16} strokeWidth={2.25} />}
-      {label && <span className="min-w-0 truncate text-xs font-semibold text-neutral-200">{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>}
+      <Icon size={16} strokeWidth={2.25} />
     </button>
   );
 }

@@ -608,7 +608,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         typedAlready={wasTyped(rexMemory, rexPick.current.id, todayIso)}
         badges={rexBadges}
         dots={rexDots}
-        extra={<ThemeToggle label className="!h-auto !w-full justify-start gap-2 px-3 py-2" />}
         onAction={runRexTarget}
         onDismiss={() => updateRexMemory((m) => dismissSuggestion(m, rexPick.current.id, todayIso))}
         onNext={() => setRexCursor((c) => c + 1)}
@@ -693,7 +692,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
 
       {/* Selector de día y pestañas, al estilo Whoop: el día elegido manda sobre todo lo de debajo. */}
       <DayHeader dayIso={dayIso} macro={macroChip(profile.macrocycles, todayIso, todaySession?.competition?.daysToEvent ?? null)} onOpenMacro={() => onNavigateToObjetivos()} />
-      <DaySelector dayIso={dayIso} todayIso={todayIso} onChange={setDayIso} />
+      <DaySelector dayIso={dayIso} todayIso={todayIso} onChange={setDayIso} left={<ThemeToggle round />} />
       {/*
         El estado del día: el check-in (el primer gesto de la mañana: al contestar se fija el objetivo de esfuerzo y se
         rehace la sesión) y los dos anillos, esfuerzo y preparación. Tocar un número le pregunta a Rex de dónde sale.
