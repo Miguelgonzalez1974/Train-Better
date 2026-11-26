@@ -62,6 +62,8 @@ describe('el día en energía', () => {
     expect(workoutName({ kind: 'otro', name: ' Pádel ' })).toBe('Pádel');
     const custom = { ...session, source: 'custom', customTitle: 'Running' } as DailySession;
     expect(buildDayEnergy({ ...input(makeProfile()), session: custom }).items[0].name).toBe('Running');
+    const clase = { ...session, source: 'custom', customTitle: 'Clase de CrossFit' } as DailySession;
+    expect(buildDayEnergy({ ...input(makeProfile()), session: clase }).items[0]).toMatchObject({ name: 'CrossFit', detail: 'Clase' });
   });
 
   it('antes de entrenar enseña lo previsto y con cuánto se acabaría', () => {

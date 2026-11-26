@@ -97,12 +97,14 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
   const entry = history.find((h) => h.date === dateIso);
   if (entry) {
     const end = hourOf(entry.closedAt);
-    const detail = sessionLabel({ entry, session, workLog: input.workLog ?? [] });
+    // Una clase apuntada con «Hice otra cosa» también es CrossFit: se lee igual que los demás días, con «Clase» debajo.
+    const asClass = session?.source === 'custom' && session.customTitle === otherKindInfo('clase').title;
+    const detail = asClass ? 'Clase' : sessionLabel({ entry, session, workLog: input.workLog ?? [] });
     done.push({
       id: 'sesion',
       kind: 'sesion',
       activity: 'sesion',
-      name: session?.source === 'custom' ? session.customTitle || 'Sesión propia' : 'CrossFit',
+      name: session?.source === 'custom' && !asClass ? session.customTitle || 'Sesión propia' : 'CrossFit',
       ...(detail ? { detail } : {}),
       start: end === null ? null : Math.max(0, end - entry.durationMin / 60),
       minutes: entry.durationMin,
