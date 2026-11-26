@@ -287,6 +287,42 @@ describe('la vuelta a la calma', () => {
   });
 });
 
+describe('el calentamiento', () => {
+  it('los ejercicios que más se programan tienen muñeco; el escorpión, todavía no', () => {
+    for (const id of ['crossover-symmetry', 'hip-halo', 'jumping-jacks', 'butt-kicks', 'arm-hugs', 'inchworm-push-up', 'backward-sprint', 'pvc-around-the-world', 'arm-circles', 'side-shuffle', 'sit-up-to-pike', 'high-knees', 'mountain-climbers', 'band-shoulder-dislocate', 'pvc-pass-through'])
+      expect(animationFor(id), id).not.toBeNull();
+    expect(animationFor('scorpions')).toBeNull();
+  });
+
+  it('jumping jacks: se abren los pies y las manos suben por encima de la cabeza', () => {
+    const a = ANIMATIONS['jumping-jacks'];
+    const closed = a.pose(0);
+    const open = a.pose(a.duration / 2);
+    const feet = (p: typeof closed) => p.legs[4][0] - p.legs[0][0];
+    expect(feet(open)).toBeGreaterThan(feet(closed) + 40);
+    expect(open.hand[1]).toBeLessThan(open.head[1] - 10);
+    expect(closed.hand[1]).toBeGreaterThan(closed.torso[0][1] - 10);
+  });
+
+  it('gusano: se pasa de estar de pie a la plancha con las manos en el suelo y se vuelve', () => {
+    const a = ANIMATIONS['inchworm-push-up'];
+    expect(a.pose(0).head[1]).toBeLessThan(80);
+    const plank = a.pose(2.1);
+    expect(plank.hand[1]).toBeCloseTo(238, 0);
+    expect(plank.head[1]).toBeGreaterThan(150);
+    expect(a.pose(2.7).torso[1][1]).toBeGreaterThan(plank.torso[1][1] + 35);
+    expect(a.pose(a.duration).head[1]).toBeCloseTo(a.pose(0).head[1], 3);
+  });
+
+  it('high knees sube la rodilla hasta la cadera; talones al glúteo sube el pie hacia atrás', () => {
+    const knees = ANIMATIONS['high-knees'].pose(0.2);
+    expect(knees.legs[1][1]).toBeLessThan(knees.legs[2][1] + 10);
+    const heels = ANIMATIONS['butt-kicks'].pose(0.2);
+    expect(heels.legs[0][0]).toBeLessThan(heels.legs[1][0] - 25);
+    expect(heels.legs[0][1]).toBeLessThan(heels.legs[1][1]);
+  });
+});
+
 describe('alias de animaciones', () => {
   it('cada alias apunta a una animación que existe y es un movimiento del catálogo', () => {
     for (const [id, target] of Object.entries(ANIMATION_ALIASES)) {

@@ -3,6 +3,7 @@ import { MORE_ANIMATIONS } from './movementAnimationMore';
 import { ACCESSORY_ANIMATIONS } from './movementAnimationAccessory';
 import { LIFT_ANIMATIONS } from './movementAnimationLifts';
 import { COOLDOWN_ANIMATIONS } from './movementAnimationCooldown';
+import { WARMUP_ANIMATIONS } from './movementAnimationWarmup';
 
 /**
  * El registro de las animaciones de movimientos: cada movimiento del catálogo con su dibujo propio, más los alias (variantes que se ven
@@ -15,6 +16,7 @@ export const ANIMATIONS: Record<string, MovementAnimation> = {
   ...ACCESSORY_ANIMATIONS,
   ...LIFT_ANIMATIONS,
   ...COOLDOWN_ANIMATIONS,
+  ...WARMUP_ANIMATIONS,
 };
 
 /** Movimiento → animación que comparte (variantes que de perfil se ven igual o casi). */
@@ -36,6 +38,7 @@ export const ANIMATION_ALIASES: Record<string, string> = {
   'floor-press': 'bench-press',
   'man-maker': 'devils-press',
   'single-under': 'double-under',
+  'pvc-pass-through': 'band-shoulder-dislocate',
   // Accesorios que de perfil se ven como otro
   'hammer-curl': 'bicep-curl',
   'dumbbell-floor-press': 'dumbbell-bench-press',

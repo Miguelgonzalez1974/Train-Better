@@ -614,10 +614,12 @@ function WarmupRoutineCard({ entries }: { entries: SessionBlockResult[] }) {
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold text-neutral-300">
                   {idx + 1}
                 </span>
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className={NAME_STEP}>{movement.name}</p>
                   <StandardHint standard={movement.standard} />
                 </div>
+                {/* Como en la vuelta a la calma: el muñeco al final de la fila, para que los nombres queden alineados. */}
+                <MovementFigureButton movementId={entry.movementId} name={movement.name} />
               </div>
             );
           })}
