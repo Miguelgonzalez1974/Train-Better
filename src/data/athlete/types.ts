@@ -711,6 +711,8 @@ export interface SessionBlockResult {
   /** Lo que se anotó de este ejercicio al acabar la sesión (hoy, solo los accesorios): las series que se hicieron y el peso que se usó, si lleva. Se guarda en la sesión del día, no en el registro de series. */
   loggedSets?: number;
   loggedKg?: number;
+  /** Calentamiento y vuelta a la calma: el atleta desmarcó este ejercicio al anotar (no lo hizo). Ausente = hecho. No entra en el historial. */
+  notDone?: boolean;
   notes?: string;
   /** Formato del WOD (ej. "For Time (3 rondas)"), usado solo por el bloque wod */
   format?: string;

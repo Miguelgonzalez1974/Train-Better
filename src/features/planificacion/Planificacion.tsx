@@ -116,7 +116,7 @@ import { LIGHT_LABEL } from '../../engine/dayLight';
 import type { WodScaleState } from './WodScaleBox';
 import { buildComplexPool } from '../../engine/olyComplexes';
 import { ReviewDeck } from './ReviewDeck';
-import { buildClosedEntry, liftRpeEntry, patchBlock, recordProgressionFor, withLoggedBlocks } from './sessionClose';
+import { buildClosedEntry, liftRpeEntry, patchBlock, recordProgressionFor, withLoggedBlocks, type BlockLog } from './sessionClose';
 import { TrainingTimer, type TrackConfig } from './TrainingTimer';
 import { isSoftDay } from './clockProps';
 import { buildSplitsRecord, pickGhost, summarizeGhost, wodTrackInfo, type Ghost, type GhostSummary } from '../../engine/wodGhost';
@@ -262,8 +262,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [pastLogging, setPastLogging] = useState(false);
   /** Guarda las series que hay en pantalla en el mazo de anotar; se llama justo antes de registrar la sesión. */
   const reviewCommit = useRef<(() => void) | null>(null);
-  /** Lo anotado de los accesorios en las tarjetas (por posición del bloque): se escribe en la sesión del día al guardar. */
-  const accessoryLogs = useRef<Record<number, { sets: number; kg?: number }>>({});
+  /** Lo anotado en las tarjetas de los accesorios, el calentamiento y la vuelta a la calma (por posición del bloque): se escribe en la sesión del día al guardar. */
+  const accessoryLogs = useRef<Record<number, BlockLog>>({});
   function openReview() {
     setReviewMode(true);
     // El cierre (minutos, resultado del WOD…) arranca ya: con los minutos de una corrección si venían de ahí.
@@ -861,10 +861,11 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       }
     }
 
-    // El historial solo recoge lo que se hizo (lo mismo que cerrar un día pasado: ver `sessionClose.ts`).
+    // La sesión con lo anotado en las tarjetas. El historial solo recoge lo que se hizo (lo mismo que cerrar un día pasado: ver `sessionClose.ts`).
+    const logged: DailySession = { ...session, blocks: withLoggedBlocks(session.blocks, accessoryLogs.current) };
     athleteRepository.appendHistoryEntry(
       buildClosedEntry({
-        session,
+        session: logged,
         prs: profile.prs,
         skips,
         rxOrScaled,
@@ -882,7 +883,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     // que el historial/workLog ya esten protegidos: sin esto, otro dispositivo que sincronice antes
     // de enterarse del entreno de hoy podia seguir ganando el empate y pisar la tarjeta del plan
     // (ver bug real: WOD, accesorios de oly y hasta un ejercicio de fuerza distintos tras completar).
-    const completed: DailySession = { ...session, blocks: withLoggedBlocks(session.blocks, accessoryLogs.current), editedByAthlete: true };
+    const completed: DailySession = { ...logged, editedByAthlete: true };
     accessoryLogs.current = {};
     athleteRepository.saveCachedSession(completed);
     setSession(completed);

@@ -31,9 +31,13 @@ export interface CloseInput {
   wodSplits?: WodSplitsRecord[];
 }
 
-/** La entrada del historial de una sesión cerrada: solo lo que se hizo (las partes no hechas se quitan y quedan en `skipped`), con la categoría de cada WOD y lo que cuenta para Tu nivel. */
+/**
+ * La entrada del historial de una sesión cerrada: solo lo que se hizo (las partes no hechas se quitan y quedan en `skipped`, y tampoco cuentan los
+ * ejercicios desmarcados del calentamiento o la vuelta a la calma), con la categoría de cada WOD y lo que cuenta para Tu nivel.
+ */
 export function buildClosedEntry(i: CloseInput): SessionHistoryEntry {
-  const { session, skips } = i;
+  const { skips } = i;
+  const session = i.session.blocks.some((b) => b.notDone) ? { ...i.session, blocks: i.session.blocks.filter((b) => !b.notDone) } : i.session;
   const notDone = skippedParts(skips);
   const wodCategories: NonNullable<SessionHistoryEntry['wodCategories']> = {};
   for (const part of i.wodParts) {
@@ -138,10 +142,24 @@ export function patchBlock(session: DailySession, index: number, patch: Partial<
   };
 }
 
+/** Lo que se anotó de un ejercicio sin series en el registro: en un accesorio las series hechas y el peso; en calentamiento y vuelta a la calma, si no se hizo. */
+export interface BlockLog {
+  sets?: number;
+  kg?: number;
+  notDone?: boolean;
+}
+
 /**
- * Los bloques con lo que se anotó de cada ejercicio sin series en el registro (hoy, los accesorios): las series hechas y el peso usado. `logs` va por posición
- * del bloque; lo que no se tocó no se escribe. Se guarda en la sesión del día al cerrarla.
+ * Los bloques con lo que se anotó de cada uno (ver `BlockLog`). `logs` va por posición del bloque; lo que no se tocó no se escribe. Se guarda en la
+ * sesión del día al cerrarla.
  */
-export function withLoggedBlocks(blocks: SessionBlockResult[], logs: Record<number, { sets: number; kg?: number }>): SessionBlockResult[] {
-  return blocks.map((b, i) => (logs[i] ? { ...b, loggedSets: logs[i].sets, ...(logs[i].kg !== undefined ? { loggedKg: logs[i].kg } : {}) } : b));
+export function withLoggedBlocks(blocks: SessionBlockResult[], logs: Record<number, BlockLog>): SessionBlockResult[] {
+  return blocks.map((b, i) => {
+    const log = logs[i];
+    if (!log) return b;
+    const next: SessionBlockResult = { ...b, ...(log.sets !== undefined ? { loggedSets: log.sets } : {}), ...(log.kg !== undefined ? { loggedKg: log.kg } : {}) };
+    if (log.notDone === true) next.notDone = true;
+    else if (log.notDone === false) delete next.notDone;
+    return next;
+  });
 }

@@ -39,6 +39,13 @@ export function buildRecapLines(
     return session.customTitle ? [{ label: 'Sesión propia', detail: session.customTitle }] : [];
   }
   const lines: { label: string; detail: string }[] = [];
+  // Calentamiento y vuelta a la calma solo salen si te dejaste algo: «4 de 5», o «no hecho».
+  const partial = (block: 'warmup' | 'cooldown', label: string) => {
+    const items = session.blocks.filter((b) => b.block === block);
+    const missed = items.filter((b) => b.notDone).length;
+    if (missed > 0) lines.push({ label, detail: missed === items.length ? 'No hecho' : `${items.length - missed} de ${items.length} ejercicios` });
+  };
+  partial('warmup', 'Calent.');
 
   const strengthMain = session.blocks.find((b) => b.block === 'strength');
   if (strengthMain) {
@@ -75,6 +82,7 @@ export function buildRecapLines(
 
   // WOD(s) del dia: nombre, resultado y objetivo (una linea por parte en un dia de doble WOD).
   lines.push(...buildWodRecapLines(session, entry));
+  partial('cooldown', 'Calma');
 
   return lines;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { X, Check, Minus, Plus, Flame, Dumbbell, Timer, Activity, CircleDot, ArrowRight, NotebookPen } from 'lucide-react';
 import type { Block } from '../../data/movements/types';
 import type { DailySession, PersonalRecords, SessionBlockResult, VariantPersonalRecords, WodScoreType, WorkSetEntry } from '../../data/athlete/types';
@@ -39,6 +39,8 @@ import { RexWodReading } from './RexWodReading';
 import { RPE_META } from './SessionFeelFields';
 import { WodScaleBox, type WodScaleState } from './WodScaleBox';
 import { SwapButton } from './SwapMovement';
+import { MovementFigureButton } from './MovementFigure';
+import type { BlockLog } from './sessionClose';
 import { ComplexSwapButton } from './ComplexSwap';
 import type { SwapContext } from '../../engine/movementSwap';
 import type { ComplexPool } from '../../engine/olyComplexes';
@@ -158,8 +160,8 @@ export interface ReviewDeckProps {
   onOtherThing: () => void;
   /** Tus marcas (1RM): con ellas, junto a los kilos de cada serie sale el % de tu 1RM. Sin ellas no sale. */
   marks?: { prs: PersonalRecords; variantPrs?: VariantPersonalRecords };
-  /** Se anotó lo de un ejercicio sin series en el registro (hoy, los accesorios): el padre lo guarda en la sesión del día. Solo se llama con lo que se tocó. */
-  onLogBlock?: (index: number, logged: { sets: number; kg?: number }) => void;
+  /** Se anotó lo de un ejercicio sin series en el registro (accesorios, calentamiento y vuelta a la calma): el padre lo guarda en la sesión del día. Solo se llama con lo que se tocó. */
+  onLogBlock?: (index: number, logged: BlockLog) => void;
   /** Un día pasado que se quedó sin apuntar: se dice cuál al empezar y no hay crono (no se cronometra lo que ya pasó). */
   pastDay?: { label: string };
 }
@@ -195,6 +197,15 @@ export function ReviewDeck(p: ReviewDeckProps) {
   /** Lo anotado de cada accesorio (por posición en la sesión): series hechas y peso. Lo que no se toca queda como previsto y no se guarda. */
   const [acc, setAccState] = useState<Record<number, { sets: number; kg?: number }>>({});
   const [accOpen, setAccOpen] = useState<number | null>(null);
+  /** Los ejercicios del calentamiento y de la vuelta a la calma desmarcados (por posición en la sesión). Todos vienen hechos. */
+  const [undone, setUndone] = useState<Set<number>>(() => new Set(session.blocks.flatMap((b, i) => (b.notDone ? [i] : []))));
+  const markList = (indices: number[], done: boolean) =>
+    setUndone((prev) => {
+      const next = new Set(prev);
+      for (const i of indices) if (done) next.delete(i);
+      else next.add(i);
+      return next;
+    });
   const accOf = (e: SessionBlockResult, index: number) => {
     const total = e.sets && e.sets >= 1 ? Math.min(8, e.sets) : 1;
     const t = acc[index];
@@ -217,6 +228,9 @@ export function ReviewDeck(p: ReviewDeckProps) {
   }, [edits]);
 
   commitRef.current = () => {
+    session.blocks.forEach((entry, index) => {
+      if ((entry.block === 'warmup' || entry.block === 'cooldown') && undone.has(index) !== Boolean(entry.notDone)) p.onLogBlock?.(index, { notDone: undone.has(index) });
+    });
     if (!skips.accessory) {
       session.blocks.forEach((entry, index) => {
         const t = acc[index];
@@ -345,6 +359,62 @@ export function ReviewDeck(p: ReviewDeckProps) {
               {skipped ? 'Sí lo hice' : 'No lo hice'}
             </button>
           )}
+        </div>
+      </>
+    );
+  };
+
+  // ───────── Calentamiento y vuelta a la calma: un check por ejercicio ─────────
+  const renderChecklist = (c: Extract<Card, { kind: 'list' }>, i: number) => {
+    const th = THEME[c.block];
+    const indices = c.entries.map((e) => e.index);
+    const done = indices.filter((index) => !undone.has(index)).length;
+    return (
+      <>
+        {header(th.label, th.accent, BLOCK_ICON[c.block], `${done} de ${indices.length}`)}
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-5 pb-3 pt-3" data-testid="review-checklist">
+          {c.entries.map((e, k) => {
+            const on = !undone.has(e.index);
+            const name = resolveName(e.entry.movementId);
+            const group = e.entry.subgroup && e.entry.subgroup !== c.entries[k - 1]?.entry.subgroup ? e.entry.subgroup : null;
+            const dose = [e.entry.sets && e.entry.reps ? `${e.entry.sets} × ${e.entry.reps}` : e.entry.reps, e.entry.loadKg ? `${fmtKgValue(e.entry.loadKg)} kg` : null].filter(Boolean).join(' · ');
+            return (
+              <Fragment key={e.index}>
+                {group && (
+                  <p className="mt-2 px-1 text-[11px] font-bold uppercase tracking-[0.12em] first:mt-0" style={{ color: soft }}>
+                    {group}
+                  </p>
+                )}
+                <div className="flex shrink-0 items-center gap-2 rounded-2xl px-2.5" style={on ? { background: 'rgba(255,255,255,0.08)' } : { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.18)' }}>
+                  {/* El muñeco (si ya está dibujado) va aparte de la fila: tocarlo lo abre grande, no marca ni desmarca. */}
+                  <MovementFigureButton movementId={e.entry.movementId} name={name} />
+                  <button type="button" role="checkbox" aria-checked={on} onClick={() => markList([e.index], !on)} className="flex min-h-[3.5rem] min-w-0 flex-1 items-center gap-3 py-2 text-left">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-bold leading-snug" style={{ color: on ? white : 'rgba(255,255,255,0.55)' }}>
+                        {name}
+                      </span>
+                      {dose && (
+                        <span className="block text-xs font-semibold" style={{ color: on ? th.accent : 'rgba(255,255,255,0.5)' }}>
+                          {dose}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={on ? { background: th.accent, color: '#14100c' } : { border: '2px solid rgba(255,255,255,0.4)' }}>
+                      {on && <Check size={18} strokeWidth={3.2} aria-hidden />}
+                    </span>
+                  </button>
+                </div>
+              </Fragment>
+            );
+          })}
+        </div>
+        <div className="flex flex-col gap-2 px-5 pb-5 pt-1">
+          <Primary onClick={() => goTo(i + 1)} testId="review-next">
+            Siguiente <ArrowRight size={20} strokeWidth={2.75} />
+          </Primary>
+          <button onClick={() => markList(indices, done === 0)} className="self-center text-xs font-semibold underline decoration-dotted" style={{ color: soft }} data-testid="review-none">
+            {done === 0 ? 'Sí lo hice' : 'No lo hice'}
+          </button>
         </div>
       </>
     );
@@ -775,7 +845,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
           return (
             <section key={c.key} data-testid="review-card" data-kind={c.kind} aria-label={`Tarjeta ${ci + 1} de ${cards.length}`} className="flex h-full min-h-0 w-[calc(100%-28px)] shrink-0 snap-center flex-col overflow-hidden rounded-[30px] border" style={{ background: `linear-gradient(165deg, ${th.bg} 0%, #101014 100%)`, borderColor: `${th.accent}55` }}>
               {c.kind === 'start' && renderStart()}
-              {c.kind === 'list' && (c.block === 'accessory' ? renderAccessory(c, ci) : renderList(c, ci))}
+              {c.kind === 'list' && (c.block === 'accessory' ? renderAccessory(c, ci) : c.block === 'warmup' || c.block === 'cooldown' ? renderChecklist(c, ci) : renderList(c, ci))}
               {c.kind === 'lift' && renderLift(c, ci)}
               {c.kind === 'wod' && renderWod(c, ci)}
               {c.kind === 'end' && renderEnd()}

@@ -13,7 +13,7 @@ import { OtherThingModal, type OtherFormState } from './OtherActivitySheets';
 import { otherDaySession, otherKindInfo } from './otherActivity';
 import { isHistorySorted, sortHistoryByDate } from './pastDayLog';
 import { ReviewDeck } from './ReviewDeck';
-import { buildClosedEntry, liftRpeEntry, patchBlock, recordProgressionFor, withLoggedBlocks } from './sessionClose';
+import { buildClosedEntry, liftRpeEntry, patchBlock, recordProgressionFor, withLoggedBlocks, type BlockLog } from './sessionClose';
 import type { WodScaleState } from './WodScaleBox';
 
 const longDay = (iso: string) => new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${iso}T12:00:00`));
@@ -77,7 +77,7 @@ function PlannedDeck({ dateIso, session: planned, onSaved, onClose, onOtherThing
   const [rpe, setRpe] = useState(7);
   const [durationMin, setDurationMin] = useState(estimatedMin);
   const commitRef = useRef<(() => void) | null>(null);
-  const accessoryLogs = useRef<Record<number, { sets: number; kg?: number }>>({});
+  const accessoryLogs = useRef<Record<number, BlockLog>>({});
 
   const wod: WodScaleState | undefined =
     wodMovements.length > 0
@@ -101,9 +101,10 @@ function PlannedDeck({ dateIso, session: planned, onSaved, onClose, onOtherThing
     // Las series de las tarjetas, con la fecha de ese día (la progresión y el 1RM estimado las leen del registro).
     commitRef.current?.();
     const asked = wodMovements.filter((m) => !skips[m.part === 1 ? 'wod1' : 'wod2']);
+    const logged = { ...session, blocks: withLoggedBlocks(session.blocks, accessoryLogs.current) };
     saveEntry(
       buildClosedEntry({
-        session,
+        session: logged,
         prs: athleteRepository.getProfile().prs,
         skips,
         rxOrScaled,
@@ -116,7 +117,7 @@ function PlannedDeck({ dateIso, session: planned, onSaved, onClose, onOtherThing
     );
     recordProgressionFor(session, skips);
     // Se marca como «esto pasó de verdad», igual que al cerrar la sesión de hoy: otro dispositivo no la pisa al sincronizar.
-    athleteRepository.saveCachedSession({ ...session, blocks: withLoggedBlocks(session.blocks, accessoryLogs.current), editedByAthlete: true });
+    athleteRepository.saveCachedSession({ ...logged, editedByAthlete: true });
     onSaved();
   };
 

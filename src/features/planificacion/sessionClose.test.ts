@@ -67,3 +67,29 @@ describe('lo anotado de los accesorios', () => {
     expect(withLoggedBlocks(blocks, {})).toEqual(blocks);
   });
 });
+
+describe('calentamiento y vuelta a la calma desmarcados', () => {
+  const blocks = [
+    { block: 'warmup' as const, movementId: 'jumping-jacks' },
+    { block: 'warmup' as const, movementId: 'arm-circles' },
+    { block: 'strength' as const, movementId: 'back-squat', sets: 5, reps: '5', loadKg: 100 },
+  ];
+
+  it('se marca solo lo desmarcado y volver a marcarlo lo quita', () => {
+    const off = withLoggedBlocks(blocks, { 1: { notDone: true } });
+    expect(off[0].notDone).toBeUndefined();
+    expect(off[1].notDone).toBe(true);
+    expect(off[1].loggedSets).toBeUndefined();
+    expect('notDone' in withLoggedBlocks(off, { 1: { notDone: false } })[1]).toBe(false);
+  });
+
+  it('lo no hecho no entra en el historial, y la duración es la que pones tú', () => {
+    const session = { date: '2026-11-26', mesocycleWeek: 1, isRestDay: false, source: 'generated' as const, blocks: withLoggedBlocks(blocks, { 1: { notDone: true } }) };
+    const entry = buildClosedEntry({ session, prs: makeProfile().prs, skips: {}, rxOrScaled: 'rx', rpe: 7, durationMin: 62, wodResults: {}, wodParts: [] });
+    expect(entry.movementIds).toContain('jumping-jacks');
+    expect(entry.movementIds).not.toContain('arm-circles');
+    expect(entry.movementIds).toContain('back-squat');
+    expect(entry.durationMin).toBe(62);
+  });
+});
+
