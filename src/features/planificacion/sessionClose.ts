@@ -29,6 +29,8 @@ export interface CloseInput {
   testedLoadKg?: number;
   wodDetail?: ReturnType<typeof buildWodDetail>;
   wodSplits?: WodSplitsRecord[];
+  /** La hora a la que se cierra («19:40»), solo al cerrar la sesión del mismo día. */
+  closedAt?: string;
 }
 
 /**
@@ -48,6 +50,7 @@ export function buildClosedEntry(i: CloseInput): SessionHistoryEntry {
   const built: SessionHistoryEntry = {
     ...toHistoryEntry(applySkips(session, skips), i.rxOrScaled, i.rpe, i.durationMin, i.wodResults[1], i.testedLoadKg && i.testedLoadKg > 0 ? i.testedLoadKg : undefined, i.wodParts.includes(2) ? i.wodResults[2] : undefined, i.wodDetail),
     ...(notDone.length > 0 ? { skipped: notDone } : {}),
+    ...(i.closedAt ? { closedAt: i.closedAt } : {}),
     ...(i.wodSplits && i.wodSplits.length > 0 ? { wodSplits: i.wodSplits } : {}),
     ...(Object.keys(wodCategories).length > 0 ? { wodCategories } : {}),
   };

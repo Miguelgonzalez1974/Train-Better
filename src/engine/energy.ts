@@ -191,6 +191,9 @@ export interface MorningRow {
   detail?: string;
 }
 
+/** La hora del reloj como se guarda con un entreno: «09:05». */
+export const clockTime = (d: Date): string => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
 /** «6 h 24». */
 export const hoursText = (h: number): string => {
   const minutes = Math.round(h * 60);

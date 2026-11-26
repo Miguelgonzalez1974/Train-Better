@@ -45,6 +45,10 @@ import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { isoDiffDays, toLocalIsoDate } from '../../engine/periodization';
 import { BalanceBox, DayRing } from './DayRing';
+import { buildDayEnergy, tomorrowEstimate } from './dayEnergy';
+import { EnergyChart, MorningCard, NightCard } from './EnergyCards';
+import { WorkoutSheet } from './WorkoutSheet';
+import { explainEnergy } from '../../engine/explainNumbers';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainId } from '../../engine/explainNumbers';
 import { explanationToAnswer, ringQuestion } from './rexRing';
 import { dayBalance } from '../../engine/dayBalance';
@@ -63,12 +67,8 @@ import { DayRows } from './DayRows';
 import { buildSessionCard } from './sessionCardModel';
 import { DaySummaryModal } from './DaySummaryModal';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
-import { FormView } from './FormCurve';
-import { buildFormModel } from './formModel';
-import { buildFormCard } from './formCardModel';
 import { FormScreen, type FormChip } from './FormScreen';
 import { LoadPanel } from './LoadPanel';
-import { formToday } from '../../engine/formCurve';
 import { wodCategoryNeed } from '../../engine/levelCategories';
 import { classifyNutritionDay } from '../../engine/nutritionPlan';
 import { dayTarget, eatenFor } from '../nutricion/nutritionData';
@@ -86,7 +86,7 @@ import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { hrvLogWith } from '../../engine/hrv';
 import { REX_HINTS } from './rexHints';
-import type { AthleteProfile } from '../../data/athlete/types';
+import type { AthleteProfile, DayWorkout, NightFeel } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
 import { competitionToClose, nextCompetitionGoal } from '../../engine/postCompetition';
 import { handoff } from '../../lib/handoff';
@@ -99,6 +99,9 @@ import { Movilidad } from '../movilidad/Movilidad';
 import { Modal } from '../shell/Modal';
 import { NutritionModal } from './NutritionModal';
 
+
+/** Desde esta hora sale la pregunta de cómo acabas el día. */
+const NIGHT_FROM_HOUR = 20;
 
 interface DashboardProps {
   onNavigateToPlanificacion: () => void;
@@ -184,7 +187,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const acwr = useMemo(() => computeAcwr(engineLoad), [engineLoad]);
   const acwrTrend = useMemo(() => getAcwrTrend(engineLoad), [engineLoad]);
   const todayIso = toLocalIsoDate(new Date());
-  const formModel = useMemo(() => buildFormModel(profile, engineLoad, todayIso), [profile, engineLoad, todayIso]);
   const imbalanceGroups = useMemo(() => computeImbalances(profile.prs, profile.variantPrs, history), [profile.prs, profile.variantPrs, history]);
   const weekCount = useMemo(() => computeWeekCount(profile, history, new Date()), [profile, history]);
   const yearConsistency = useMemo(() => computeYearConsistency(profile, history, new Date()), [profile, history]);
@@ -254,9 +256,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const dayCompanion = (profile.companionLog ?? []).filter((e) => e.date === dayIso);
   const pastView = useMemo(() => (isToday ? null : buildPastDayView(profile, loadHistory, dayIso, strainLearned)), [isToday, profile, loadHistory, dayIso, strainLearned]);
   const shown = pastView ?? { readiness, acwr, trend: acwrTrend, strain: strainView, entry: loadHistory.find((h) => h.date === todayIso) };
-  // Con qué se partió el día elegido (previsto anotado y la preparación de esa mañana), para el balance al cerrarlo. Un día pasado ya se
-  // enseña con la preparación de esa mañana, así que solo hoy se compara.
-  const dayStart = { planned: profile.strainTargets?.[dayIso]?.planned ?? null, prep: isToday ? profile.strainTargets?.[dayIso]?.readiness ?? null : null };
+  // Con qué se partió el día elegido (el previsto anotado), para el balance al cerrarlo.
+  const dayStart = { planned: profile.strainTargets?.[dayIso]?.planned ?? null };
   // Nutrición del día elegido: lo apuntado en el diario frente a lo que toca (proteína e hidratos), si hay peso para calcularlo.
   const nutrition = useMemo<NutritionSummary | null>(() => {
     if (!latestBodyweightKg) return null;
@@ -296,7 +297,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     onNavigateToObjetivos('perfil');
   }
   // El consejo de hoy: lee lo mismo que los anillos y el semáforo del coach, así que nunca los contradice.
-  const formNowForAdvice = useMemo(() => formToday(formModel.plan), [formModel]);
   // La categoría de «Tu nivel» que conviene completar (el coach también la tiene en cuenta al elegir el WOD).
   const wodNeed = useMemo(() => wodCategoryNeed(profile, history, todayIso), [profile, history, todayIso]);
   const advice = dayAdvice({
@@ -311,8 +311,60 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     fit: strainView.planned && strainView.fit ? { kind: strainView.fit.fit, planned: strainView.planned.strain, diff: strainView.fit.diff } : null,
     target: strainTarget,
     withProgram: companionExtra !== null,
-    energy: isToday && formNowForAdvice ? { state: formNowForAdvice.state, reason: formNowForAdvice.reason } : null,
   });
+
+  // El día elegido contado en energía: con cuánta saliste, lo que resta cada cosa y lo que queda (ver `dayEnergy.ts`).
+  const dayMacroSession = isToday ? (todayEntry ? todayCached : todaySession) : (profile.sessionCache?.[dayIso] ?? null);
+  const dayEnergyInput = {
+    profile,
+    history,
+    dateIso: dayIso,
+    morning: (pastView?.readiness ?? readiness).total,
+    session: dayMacroSession ?? null,
+    plannedSession: isToday && !todayEntry && todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias, null) : null,
+    plannedProgram: isToday ? companionExtra : null,
+    workLog: athleteRepository.getWorkLog(),
+  };
+  const dayEnergy = buildDayEnergy(dayEnergyInput);
+  /** Lo que restaría un entreno aún sin guardar y la energía que quedaría: la misma cuenta que luego pinta el anillo. */
+  function previewWorkout(draft: DayWorkout) {
+    const workouts = [...(profile.workouts ?? []).filter((w) => w.id !== draft.id), draft];
+    const day = buildDayEnergy({ ...dayEnergyInput, profile: { ...profile, workouts } });
+    return { cost: day.items.find((i) => i.workoutId === draft.id)?.cost ?? 0, energy: day.energy, withNight: day.nightFeel !== undefined };
+  }
+  /** «+ Entreno»: null cerrada; `editing` es el que se corrige. */
+  const [workoutSheet, setWorkoutSheet] = useState<{ editing: DayWorkout | null } | null>(null);
+  function applyWorkouts(change: (list: DayWorkout[]) => DayWorkout[]) {
+    const current = athleteRepository.getProfile();
+    athleteRepository.saveProfile({ ...current, workouts: change(current.workouts ?? []) });
+    // Un entreno de más o de menos cambia la carga: lo que queda por generar se rehace.
+    resetUpcomingSessions(todayIso);
+    setProfile(athleteRepository.getProfile());
+  }
+  function saveWorkout(workout: DayWorkout, message: string) {
+    applyWorkouts((list) => [...list.filter((x) => x.id !== workout.id), workout]);
+    setWorkoutSheet(null);
+    toast.show(message);
+  }
+  function deleteWorkout(id: string) {
+    const removed = athleteRepository.getProfile().workouts?.find((w) => w.id === id);
+    applyWorkouts((list) => list.filter((x) => x.id !== id));
+    setWorkoutSheet(null);
+    toast.show(
+      'Entreno borrado',
+      removed ? { action: { label: 'Deshacer', run: () => applyWorkouts((list) => [...list.filter((x) => x.id !== id), removed]) } } : {},
+    );
+  }
+  function saveNight(feel: NightFeel) {
+    const current = athleteRepository.getProfile();
+    const nightLog = [...(current.nightLog ?? []).filter((n) => n.date !== todayIso), { date: todayIso, feel }];
+    athleteRepository.saveProfile({ ...current, nightLog });
+    resetUpcomingSessions(todayIso);
+    setProfile(athleteRepository.getProfile());
+  }
+  // La pregunta de la noche sale a partir de las 20:00 (o si ya la contestaste); de dónde sales, antes de entrenar.
+  const askNight = isToday && dayEnergy.computed !== null && (new Date().getHours() >= NIGHT_FROM_HOUR || dayEnergy.nightFeel !== undefined);
+  const showMorning = isToday && !askNight && todayReadiness !== undefined && !dayEnergy.items.some((i) => i.done);
 
   // La tarjeta «Tu nivel» (solo cuenta hoy). Si algo de los datos la rompiera al calcularla, no sale en vez de romper el Resumen.
   const levelCard = useMemo(() => {
@@ -337,7 +389,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const canRest = isToday && todayStrain === null && (restMarked || (todaySession !== null && !todaySession.isRestDay));
   // El balance del día cerrado (previsto frente a hecho): Rex lo resume en una frase y el detalle se abre aparte.
   const dayBalanceNow = isToday
-    ? dayBalance({ planned: dayStart.planned, real: shown.strain.real, target: shown.strain.target, status: shown.strain.status, isToday, prepMorning: dayStart.prep, prepNow: shown.readiness.total })
+    ? dayBalance({ planned: dayStart.planned, real: shown.strain.real, target: shown.strain.target, status: shown.strain.status, isToday, prepMorning: null, prepNow: null })
     : null;
   const provisionalNext = nextCompetitionGoal(profile.goals, todayIso);
   // La propuesta del coach de mover un día fuerte a donde llegas mejor: una por semana (si se aplicó o se dejó para luego, no vuelve a salir).
@@ -491,7 +543,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       case 'peso':
         return openLevel('cuerpo');
       case 'forma':
-        return setFormChip('energia');
+        return setFormChip('preparacion');
       case 'preparacion':
         return setFormChip('preparacion');
       case 'esfuerzo':
@@ -515,6 +567,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   /** «Pregúntale a Rex»: lo que cuenta de cada número del anillo (con el desglose real), y a dónde lleva cada botón de su globo. */
   const explanations = {
     preparacion: explainReadiness(shown.readiness),
+    energia: explainEnergy({
+      morning: dayEnergy.morning,
+      done: dayEnergy.items.filter((i) => i.done).map((i) => ({ name: i.name, cost: i.cost })),
+      energy: dayEnergy.energy,
+      computed: dayEnergy.computed,
+      pending: dayEnergy.pending,
+      projected: dayEnergy.projected,
+      isToday,
+    }),
     carga: explainLoad(shown.acwr, shown.readiness.loadPenalty),
     realizado: explainDone({
       real: shown.strain.real,
@@ -707,6 +768,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       <div {...swipe} className="touch-pan-y">
       <DayRing
         strain={shown.strain}
+        energy={dayEnergy}
         start={dayStart}
         notDone={describeSkipped(shown.entry?.skipped)}
         readiness={shown.readiness}
@@ -724,28 +786,32 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         isToday={isToday}
         session={isToday ? todaySession : null}
         card={buildSessionCard({ isToday, session: isToday ? todaySession : null, entry: shown.entry, strain: shown.strain, profile, history, workLog: athleteRepository.getWorkLog(), dayIso, companionDone: dayCompanion })}
-        formCard={buildFormCard({ model: formModel, acwr: shown.acwr, painFlags: profile.painFlags, dayIso })}
-        onOpenForm={() => setFormChip(isToday ? 'energia' : 'preparacion')}
+        sessionEnergy={dayEnergy.items.find((i) => i.kind === 'sesion')}
+        others={dayEnergy.items.filter((i) => i.kind !== 'sesion')}
+        top={
+          askNight ? (
+            <NightCard
+              energy={dayEnergy}
+              onPick={saveNight}
+              estimates={dayEnergy.energy === null ? [] : [6, 8].map((hours) => ({ hours, energy: tomorrowEstimate(profile, history, todayIso, dayEnergy.energy!, hours) }))}
+            />
+          ) : null
+        }
+        // Antes de entrenar, de dónde sales; después, cómo ha ido bajando. Las dos van debajo de la sesión, que es lo primero.
+        chart={showMorning ? <MorningCard readiness={readiness} /> : <EnergyChart energy={dayEnergy} />}
         onOpenDone={() => setShowDone(true)}
         onNavigateToPlanificacion={onNavigateToPlanificacion}
+        onAddWorkout={() => setWorkoutSheet({ editing: null })}
+        onEditWorkout={(id) => setWorkoutSheet({ editing: (profile.workouts ?? []).find((w) => w.id === id) ?? null })}
         // Tu nivel: tus mediciones, solo hoy.
         extra={isToday && levelCard ? <LevelSummaryCard model={levelCard.model} level={levelCard.level} onOpen={() => openLevel('nivel')} /> : null}
       />
 
       {formChip !== null && (
-        <Modal open onClose={() => setFormChip(null)} title={isToday ? 'Tu forma' : `Tu forma · ${dayLabel(dayIso, todayIso)}`}>
-          <FormScreen chip={formChip} onChip={setFormChip} isToday={isToday}>
+        <Modal open onClose={() => setFormChip(null)} title={isToday ? 'Cómo estás' : `Cómo estabas · ${dayLabel(dayIso, todayIso)}`}>
+          <FormScreen chip={formChip} onChip={setFormChip}>
             {(chip) =>
-              chip === 'energia' ? (
-                <FormView
-                  model={formModel}
-                  onOpenMorning={() => {
-                    setFormChip(null);
-                    onOpenMorning();
-                  }}
-                  onOpenSleep={() => setFormChip('sueno')}
-                />
-              ) : chip === 'preparacion' ? (
+              chip === 'preparacion' ? (
                 <PreparationTab
                   readiness={shown.readiness}
                   series={readinessSeries}
@@ -800,6 +866,17 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               )
             }
           </FormScreen>
+        </Modal>
+      )}
+      {workoutSheet && (
+        <Modal open onClose={() => setWorkoutSheet(null)} title={workoutSheet.editing ? 'Corregir entreno' : isToday ? 'Añadir entreno' : `Añadir entreno · ${dayLabel(dayIso, todayIso)}`}>
+          <WorkoutSheet
+            dateIso={dayIso}
+            editing={workoutSheet.editing}
+            preview={previewWorkout}
+            onSave={(w) => saveWorkout(w, workoutSheet.editing ? 'Entreno corregido' : 'Entreno añadido')}
+            onDelete={deleteWorkout}
+          />
         </Modal>
       )}
       {showMobility && (

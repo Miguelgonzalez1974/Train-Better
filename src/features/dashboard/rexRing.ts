@@ -21,6 +21,8 @@ export function ringQuestion(id: ExplainId, n: RingNumbers): string {
   switch (id) {
     case 'preparacion':
       return n.readiness !== null ? `¿Por qué mi preparación es ${r(n.readiness)}?` : '¿Cómo se calcula mi preparación?';
+    case 'energia':
+      return '¿Cuánta energía me queda?';
     case 'carga':
       return '¿Cómo voy de carga?';
     case 'realizado':

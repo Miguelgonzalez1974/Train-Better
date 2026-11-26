@@ -83,7 +83,7 @@ export function buildStrainTarget(profile: AthleteProfile, history: SessionHisto
 
   const low = Math.max(0, Math.round(center - RANGE_HALF_WIDTH));
   const high = Math.min(100, Math.round(center + RANGE_HALF_WIDTH));
-  return { low, high, readiness: readiness.total, yesterday, reasons, provisional: !hasCheckIn, setOn: todayIso };
+  return { low, high, readiness: readiness.total, yesterday, reasons, provisional: !hasCheckIn, setOn: todayIso, modelo: 2 };
 }
 
 /**
@@ -103,6 +103,9 @@ export function withPlannedStrain(profile: AthleteProfile, iso: string, planned:
 export function ensureStrainTarget(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string): AthleteProfile {
   const stored = profile.strainTargets?.[todayIso];
   const hasCheckIn = (profile.readinessLog ?? []).some((c) => c.date === todayIso);
-  if (stored && (!stored.provisional || !hasCheckIn)) return profile;
-  return { ...profile, strainTargets: { ...(profile.strainTargets ?? {}), [todayIso]: buildStrainTarget(profile, history, todayIso) } };
+  // El de hoy fijado con el cálculo anterior se rehace una vez, para que no contradiga la preparación que se enseña.
+  const outdated = stored !== undefined && stored.modelo !== 2;
+  if (stored && !outdated && (!stored.provisional || !hasCheckIn)) return profile;
+  const next = buildStrainTarget(profile, history, todayIso);
+  return { ...profile, strainTargets: { ...(profile.strainTargets ?? {}), [todayIso]: stored?.planned !== undefined ? { ...next, planned: stored.planned } : next } };
 }

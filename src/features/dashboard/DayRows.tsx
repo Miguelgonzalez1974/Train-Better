@@ -3,23 +3,27 @@ import { Trophy } from 'lucide-react';
 import type { DailySession } from '../../data/athlete/types';
 import { competitionHeadline } from '../shell/competitionMeta';
 import { SectionLabel } from '../shell/SectionLabel';
-import { FormCard } from './FormCard';
-import type { FormCardModel } from './formCardModel';
+import type { EnergyItem } from './dayEnergy';
+import { ActivityCard, AddWorkoutButton } from './EnergyCards';
 import { SessionCard } from './SessionCard';
 import type { SessionCardModel } from './sessionCardModel';
 
 /**
- * "Tu día" bajo el anillo: las tarjetas de la sesión (ver `SessionCard`), de «Tu forma» (ver `FormCard`) y de «Tu nivel» (ver `LevelSummaryCard`).
- * La nutrición y los objetivos viven en Rex y en sus pestañas.
+ * Las filas de «Tu día»: la mañana o la noche cuando tocan, la sesión con lo que resta cada bloque, el resto de entrenos, «+ Entreno», cómo ha
+ * bajado la energía y Tu nivel.
  */
 export function DayRows({
   isToday,
   session,
   card,
-  formCard,
+  sessionEnergy,
+  others,
+  top,
+  chart,
   onOpenDone,
   onNavigateToPlanificacion,
-  onOpenForm,
+  onAddWorkout,
+  onEditWorkout,
   extra,
 }: {
   isToday: boolean;
@@ -27,18 +31,25 @@ export function DayRows({
   session: DailySession | null;
   /** Lo que enseña la tarjeta de la sesión (ver `buildSessionCard`). */
   card: SessionCardModel;
-  /** Lo que enseña la tarjeta «Tu forma» (ver `buildFormCard`). */
-  formCard: FormCardModel;
+  /** Lo que la sesión resta de energía, hecha o prevista. */
+  sessionEnergy: EnergyItem | undefined;
+  /** El programa de fuerza y los entrenos añadidos. */
+  others: EnergyItem[];
+  /** Lo que va antes de la sesión: la pregunta de la noche o de dónde sales. */
+  top?: ReactNode;
+  /** Cómo ha bajado la energía. */
+  chart?: ReactNode;
   /** Abre «Lo que hiciste»: la sesión del macro y la del programa de ese día. */
   onOpenDone: () => void;
   onNavigateToPlanificacion: () => void;
-  /** Abre la pantalla «Tu forma», con sus chips. */
-  onOpenForm: () => void;
+  onAddWorkout: () => void;
+  onEditWorkout: (id: string) => void;
   /** La tarjeta «Tu nivel» (solo hoy), al final de «Tu día». */
   extra?: ReactNode;
 }) {
   return (
     <section className="mt-1 flex flex-col gap-3">
+      {top}
       <SectionLabel className="px-1">Tu día</SectionLabel>
       {isToday && session?.competition && !session.competition.eventDay && (
         <p className="flex items-center gap-1.5 px-1 text-xs font-semibold text-brand-gold">
@@ -46,9 +57,12 @@ export function DayRows({
           {competitionHeadline(session.competition)}
         </p>
       )}
-      <SessionCard model={card} onOpenPlan={onNavigateToPlanificacion} onOpenDone={onOpenDone} />
-      {/* Tu forma: energía, sueño, carga y molestias; se abre con el detalle por apartados. */}
-      <FormCard model={formCard} onOpen={onOpenForm} />
+      <SessionCard model={card} energy={sessionEnergy} onOpenPlan={onNavigateToPlanificacion} onOpenDone={onOpenDone} />
+      {others.map((item) => (
+        <ActivityCard key={item.id} item={item} onClick={item.workoutId ? () => onEditWorkout(item.workoutId!) : item.done ? onOpenDone : onNavigateToPlanificacion} />
+      ))}
+      <AddWorkoutButton onClick={onAddWorkout} />
+      {chart}
       {extra}
     </section>
   );

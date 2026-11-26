@@ -1,16 +1,15 @@
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Check, CircleAlert } from 'lucide-react';
 import type { AcwrResult } from '../../engine/loadMetrics';
 import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
+import type { DayEnergy } from './dayEnergy';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 import type { ExplainId } from '../../engine/explainNumbers';
 import { ZONE_WORD } from './loadWords';
 
-const NEUTRAL = '#525252';
-
-/** El color del aro de preparación: los mismos tramos que recoveryColor, con tonos propios del aro (en el tema claro, más cercanos a los del oscuro). */
+/** El color de la preparación: los mismos tramos que recoveryColor, con tonos propios del aro (en el tema claro, más cercanos a los del oscuro). */
 function ringPrepColor(score: number): string {
   return score >= 65 ? 'rgb(var(--c-ring-good))' : score <= 40 ? 'rgb(var(--c-ring-low))' : 'rgb(var(--c-ring-mid))';
 }
@@ -27,16 +26,13 @@ export const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
   moderada: `rgb(var(${ZONE_TOKEN.moderada}))`,
   alta: `rgb(var(${ZONE_TOKEN.alta}))`,
 };
-/** La frase corta bajo la cifra de Preparación (las mismas palabras que el apartado Preparación de «Tu forma»: «Llegas con ganas / normal / cansado»). */
+/** La frase corta bajo la cifra de Preparación (las mismas palabras que el apartado Preparación: «Llegas con ganas / normal / cansado»). */
 const PREP_WORD: Record<NonNullable<ReadinessScore['level']>, string> = { alta: 'con ganas', normal: 'normal', baja: 'cansado' };
 
-// Dos anillos completos que arrancan a las 12: el exterior es el esfuerzo (amarillo, con lo previsto como línea azul) y el interior la preparación (con el color
-// de su nivel). El objetivo es un corchete fino por fuera del anillo del esfuerzo, entre tu mínimo y tu máximo.
-const R_EFF = 40;
-const R_PREP = 27;
-const R_ZONE = 47.5;
+/** El aro de la energía: el círculo entero son 100 puntos. */
+const R = 42;
 const STROKE = 9;
-const circ = (r: number) => 2 * Math.PI * r;
+const AROUND = 2 * Math.PI * R;
 
 const STRONG = 'font-semibold text-neutral-100';
 
@@ -100,89 +96,14 @@ const ADVICE_COLOR: Record<DayAdvice['tone'], string> = {
   gold: 'rgb(var(--c-brand-gold))',
 };
 
-/** Grosor de la línea del previsto y de su borde oscuro (para que se lea sobre el azul de lo hecho). */
-const PLAN_LINE = 1.8;
-const PLAN_HALO = 3.6;
-const RING_BG = 'rgb(var(--c-brand-bg))';
-
-/** El final de la línea del previsto: una marca que cruza el aro, con borde oscuro (dentro del grupo girado, como los arcos). */
-function PlannedEnd({ planned }: { planned: number }) {
-  const a = (Math.min(100, Math.max(0, planned)) / 100) * 2 * Math.PI;
-  const point = (r: number) => ({ x: 50 + r * Math.cos(a), y: 50 + r * Math.sin(a) });
-  const from = point(R_EFF - STROKE / 2 - 0.7);
-  const to = point(R_EFF + STROKE / 2 + 0.7);
-  return (
-    <>
-      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={RING_BG} strokeWidth={PLAN_HALO} strokeLinecap="round" />
-      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={PLAN} strokeWidth={PLAN_LINE + 0.2} strokeLinecap="round" />
-    </>
-  );
-}
-
-/** Ancho aproximado de un carácter del texto del arco, en unidades del aro (para saber si «Obj.» cabe). */
-const CHAR_WIDTH = 7.2 * 0.56;
-
-/**
- * El rango del objetivo escrito sobre su corchete, siguiendo la curva del aro. En la mitad de arriba se lee por fuera del aro; en la de
- * abajo, por dentro de la curva (si no, saldría del revés). Va fuera del grupo girado: los ángulos se miden desde las 12 en sentido horario.
- */
-function ObjectiveLabel({ id, low, high, onTap }: { id: string; low: number; high: number; onTap: () => void }) {
-  const lower = Math.cos(((low + high) / 2 / 100) * 2 * Math.PI) < 0;
-  const r = lower ? 56.5 : 51.6;
-  const at = (pct: number) => {
-    const a = (pct / 100) * 2 * Math.PI;
-    return { x: 50 + r * Math.sin(a), y: 50 - r * Math.cos(a) };
-  };
-  const start = at(lower ? high : low);
-  const end = at(lower ? low : high);
-  const large = high - low > 50 ? 1 : 0;
-  const d = `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} ${lower ? 0 : 1} ${end.x} ${end.y}`;
-  // «Obj. 10–30» si cabe en el arco (con un poco de holgura); con un rango muy estrecho, solo los números.
-  const numbers = `${low}–${high}`;
-  const arcLength = r * ((high - low) / 100) * 2 * Math.PI;
-  const text = arcLength >= (numbers.length + 5) * CHAR_WIDTH * 1.15 ? `Obj. ${numbers}` : numbers;
-  return (
-    <>
-      <defs>
-        <path id={id} d={d} />
-      </defs>
-      {/* Zona táctil del texto del objetivo: Rex lo explica */}
-      <path
-        d={d}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={12}
-        strokeLinecap="round"
-        pointerEvents="stroke"
-        role="button"
-        tabIndex={0}
-        aria-label="Rex explica el objetivo"
-        onClick={onTap}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onTap();
-          }
-        }}
-        className="cursor-pointer outline-none"
-      />
-      <text fontSize={7.2} fontWeight={500} fill="rgb(var(--c-white) / 0.85)" className="num">
-        <textPath href={`#${id}`} startOffset="50%" textAnchor="middle">
-          {text}
-        </textPath>
-      </text>
-    </>
-  );
-}
-
 /**
  * El cierre del día: con qué esfuerzo previsto se partía y cuál fue el real, en una barra de 0 a 100 con el objetivo como banda y
- * la marca de lo previsto; y, si cambió, la preparación de la mañana frente a la de ahora.
+ * la marca de lo previsto.
  */
 export function BalanceBox({ balance, target, isToday, notDone }: { balance: DayBalance; target: { low: number; high: number }; isToday: boolean; notDone?: string | null }) {
   const over = balance.tone === 'mid';
   const color = over ? OVER : ADVICE_COLOR[balance.tone];
-  const { planned, real, diff, prep } = balance;
+  const { planned, real, diff } = balance;
   const sign = diff > 0 ? '+' : '−';
   return (
     <div className="mx-auto mt-5 max-w-[26rem] rounded-[14px] border border-white/10 bg-white/[0.06] px-3.5 py-3 text-[13px] leading-relaxed text-neutral-300">
@@ -217,26 +138,68 @@ export function BalanceBox({ balance, target, isToday, notDone }: { balance: Day
         <span>100</span>
       </div>
       {notDone && <p className="mt-3 border-t border-white/[0.08] pt-3 text-[12.5px] font-semibold text-neutral-300">{notDone}</p>}
-      {prep && (
-        <p className="mt-3 border-t border-white/[0.08] pt-3 text-[12.5px] text-neutral-400">
-          Preparación <strong className={STRONG}>{prep.morning}</strong> por la mañana → <strong className={STRONG}>{prep.now}</strong> ahora.{' '}
-          {prep.now < prep.morning ? 'La sesión suma carga, por eso baja.' : 'Se recalcula con la sesión de hoy.'}
-        </p>
-      )}
     </div>
   );
 }
 
+/** Un tramo del aro, de `from` a `to` puntos (0 a 100), empezando arriba. */
+function Arc({ from, to, color, opacity = 1, show }: { from: number; to: number; color: string; opacity?: number; show: boolean }) {
+  const length = show ? (Math.max(0, to - from) / 100) * AROUND : 0;
+  return (
+    <circle
+      cx="50"
+      cy="50"
+      r={R}
+      fill="none"
+      strokeWidth={STROKE}
+      stroke={color}
+      style={{ stroke: color }}
+      opacity={opacity}
+      strokeDasharray={`${length} ${AROUND}`}
+      strokeDashoffset={-((from / 100) * AROUND)}
+      className="transition-[stroke-dasharray] duration-[900ms] ease-out motion-reduce:transition-none"
+    />
+  );
+}
+
+/** Una marca que cruza el aro en un valor (con cuánto saliste, o lo calculado antes de tu respuesta de la noche). */
+function Tick({ at, color }: { at: number; color: string }) {
+  const a = (at / 100) * 2 * Math.PI;
+  const point = (r: number) => ({ x: 50 + r * Math.cos(a), y: 50 + r * Math.sin(a) });
+  const from = point(R - STROKE / 2 - 1.5);
+  const to = point(R + STROKE / 2 + 1.5);
+  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} strokeWidth="1.8" strokeLinecap="round" style={{ stroke: color }} />;
+}
+
+/** Los trozos gastados del aro, desde la energía de salida hacia abajo: uno por bloque de la sesión o por entreno, cada uno con su color. */
+function spentSegments(day: DayEnergy): { from: number; to: number; color: string }[] {
+  if (day.morning === null) return [];
+  let top = day.morning;
+  const out: { from: number; to: number; color: string }[] = [];
+  for (const item of day.items.filter((i) => i.done)) {
+    const parts = item.blocks && item.blocks.length > 0 ? item.blocks : [item];
+    for (const part of parts) {
+      if (part.cost <= 0 || top <= 0) continue;
+      const bottom = Math.max(0, top - part.cost);
+      // Lo que tu respuesta de la noche devuelve a «lo que queda» ya no se pinta como gastado.
+      const from = Math.max(bottom, day.energy ?? 0);
+      if (top > from) out.push({ from, to: top, color: part.color });
+      top = bottom;
+    }
+  }
+  return out;
+}
+
 /**
- * El estado del día al estilo Whoop: dos anillos completos (esfuerzo por fuera en amarillo, preparación por dentro con el color
- * de su nivel), el número de cada uno a su lado, y debajo una frase que lo cuenta. El objetivo es un corchete fino por
- * fuera del anillo del esfuerzo: si el amarillo pasa de su final, te pasas (y ese tramo se pinta rojo). Tocar un número abre su
- * pestaña con el detalle.
+ * El estado del día: un solo aro de energía. Lo brillante es lo que te queda; cada trozo apagado, lo que ha gastado un bloque o un entreno (con el
+ * color de su tarjeta), y la marca, con cuánto saliste. A la izquierda la preparación de la mañana (que no cambia) y la carga; a la derecha el
+ * esfuerzo del día frente a tu objetivo. Tocar un número le pregunta a Rex de dónde sale.
  */
 export function DayRing({
   readiness,
   acwr,
   strain,
+  energy,
   start,
   notDone,
   centerLabel,
@@ -245,21 +208,23 @@ export function DayRing({
   hintPending,
   onHintSeen,
 }: {
-  /** Rex aún no ha avisado de que los aros se tocan (lo dice el globo de la esquina): los aros laten un par de veces. */
+  /** Rex aún no ha avisado de que los aros se tocan (lo dice el globo de la esquina): el aro late un par de veces. */
   hintPending: boolean;
   /** Se tocó algo por primera vez: la pista ya no hace falta. */
   onHintSeen: () => void;
   readiness: ReadinessScore;
   acwr: AcwrResult;
   strain: StrainView;
-  /** Con qué se partió el día (esfuerzo previsto anotado y preparación de la mañana): al cerrar el día se cuenta "partías con X y has hecho Y". */
-  start?: { planned: number | null; prep: number | null } | null;
+  /** El día contado en energía (ver `dayEnergy.ts`). */
+  energy: DayEnergy;
+  /** Con qué se partió un día pasado (esfuerzo previsto anotado): «partías con X y hiciste Y». */
+  start?: { planned: number | null } | null;
   /** Lo que no se hizo de la sesión ya cerrada, en una frase ("Sin el WOD, por la molestia."); null si se hizo todo. */
   notDone?: string | null;
-  /** Lo que va en el centro del anillo: "Hoy", "Ayer" o el día. */
+  /** Lo que va sobre la cifra del centro: "Hoy", "Ayer" o el día. */
   centerLabel: string;
   isToday: boolean;
-  /** Tocar un aro o un número es preguntar a Rex de dónde sale: el Dashboard abre el panel de Rex con esa pregunta y su respuesta. */
+  /** Tocar el aro o un número es preguntar a Rex de dónde sale: el Dashboard abre el panel de Rex con esa pregunta y su respuesta. */
   onAsk: (id: ExplainId) => void;
 }) {
   const [filled, setFilled] = useState(false);
@@ -272,74 +237,40 @@ export function DayRing({
     onAsk(id);
     if (hintPending) onHintSeen();
   };
-  /** Un aro tocable: la zona táctil es un círculo transparente más ancho que el aro, y se maneja también con el teclado. */
-  const ringHit = (r: number, id: ExplainId, label: string) => (
-    <circle
-      cx="50"
-      cy="50"
-      r={r}
-      fill="none"
-      stroke="transparent"
-      strokeWidth={13}
-      pointerEvents="stroke"
-      role="button"
-      tabIndex={0}
-      aria-label={label}
-      onClick={() => ask(id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          ask(id);
-        }
-      }}
-      className="cursor-pointer outline-none focus-visible:stroke-white/20"
-    />
-  );
 
   const { total } = readiness;
-  const prepTint = total !== null ? ringPrepColor(total) : NEUTRAL;
+  const prepTint = total !== null ? ringPrepColor(total) : undefined;
   const hasLoad = acwr.acwr !== null && !acwr.coldStart;
-  const { target, planned, real } = strain;
-  const labelId = `obj${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
-  // Lo hecho (aro amarillo, y rojo lo que pasa del objetivo) y lo previsto (línea fina azul por el centro del aro, del 0 a su valor).
-  const within = real !== null ? Math.min(real, target.high) : 0;
-  const beyond = real !== null && real > target.high ? real - target.high : 0;
-  const balance = start ? dayBalance({ planned: start.planned, real, target, status: strain.status, isToday, prepMorning: start.prep, prepNow: total }) : null;
-  const plannedLine = real !== null ? (balance ? balance.planned : null) : planned?.strain ?? null;
-  /** El color de lo realizado: amarillo, y rojo si ya pasa del máximo del objetivo. */
-  const doneColor = beyond > 0 ? OVER : EFFORT;
-  /** Hasta dónde llega lo hecho sobre el aro (0 antes de entrenar): la línea del previsto solo se ve a partir de ahí. */
-  const doneTo = real ?? 0;
-
-  const dash = (r: number, from: number, to: number) => {
-    const len = filled ? (Math.max(0, to - from) / 100) * circ(r) : 0;
-    return { strokeDasharray: `${len} ${circ(r)}`, strokeDashoffset: -((from / 100) * circ(r)) };
-  };
-  const slide = 'transition-[stroke-dasharray] duration-[900ms] ease-out motion-reduce:transition-none';
+  const { target, planned } = strain;
+  const trained = energy.items.some((i) => i.done);
+  const effort = trained ? energy.effort : strain.real;
+  const over = effort !== null && effort > target.high;
+  const plannedValue = planned?.strain ?? null;
+  const estimated = isToday && readiness.estimated && !trained;
+  const now = energy.energy;
+  const word = now === null ? 'sin datos' : estimated ? 'estimada' : energy.nightFeel && energy.computed !== now ? `calculada ${energy.computed}` : isToday ? 'de 100' : 'al acabar';
+  const balance = !isToday && start ? dayBalance({ planned: start.planned, real: strain.real, target, status: strain.status, isToday, prepMorning: null, prepNow: total }) : null;
 
   return (
     <section>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-5 gap-y-2.5">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 sm:gap-x-5">
         {/* Preparación */}
         <div className="flex flex-col items-end text-right">
-          <button onClick={() => ask('preparacion')} className="flex flex-col items-end -mx-1 px-1 py-0.5">
+          <button onClick={() => ask('preparacion')} className="-mx-1 flex flex-col items-end px-1 py-0.5">
             <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: prepTint }}>
               Preparación
             </span>
-            <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: prepTint }}>
+            <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: prepTint }} data-testid="prep-number">
               {total !== null ? total : '—'}
-              {total !== null && <span className="text-[0.5em] font-medium">%</span>}
             </span>
-            {/* Qué significa la cifra, en una frase: «cómo estás hoy» se lee de un vistazo sin abrir nada (la misma que da el apartado Preparación de «Tu forma»). */}
             {total !== null && readiness.level && (
               <span className="mt-1 text-[11px] font-semibold leading-tight" style={{ color: prepTint }} data-testid="prep-word">
                 {isToday ? 'Llegas' : 'Llegabas'} {PREP_WORD[readiness.level]}
               </span>
             )}
-            {balance?.prep && <span className="mt-1.5 text-[11px] leading-tight text-neutral-500">{balance.prep.morning} por la mañana</span>}
           </button>
           {hasLoad ? (
-            <button onClick={() => ask('carga')} className="mt-3 flex flex-col items-end -mx-1 px-1 py-0.5">
+            <button onClick={() => ask('carga')} className="-mx-1 mt-3 flex flex-col items-end px-1 py-0.5">
               <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-neutral-500 underline decoration-dotted decoration-1 underline-offset-[3px]">Carga</span>
               <span className="flex items-center gap-1 text-sm font-semibold text-neutral-200">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ZONE_COLOR[acwr.zone] }} />
@@ -351,93 +282,79 @@ export function DayRing({
           )}
         </div>
 
-        {/* Los dos anillos */}
-        <div className={`relative aspect-square w-[min(44vw,9.5rem)] ${hintPending ? 'animate-ring-hint motion-reduce:animate-none' : ''}`}>
-          <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" role="group" aria-label={`Preparación ${total ?? 'sin datos'}, esfuerzo ${real ?? 'sin entrenar'}${plannedLine !== null ? `, previsto ${plannedLine}` : ''}, objetivo ${target.low} a ${target.high}`}>
+        {/* El aro de la energía */}
+        <button
+          type="button"
+          onClick={() => ask('energia')}
+          aria-label={now === null ? 'Energía sin datos' : `Energía ${now} de 100. Rex lo explica`}
+          className={`relative aspect-square w-[min(46vw,11rem)] rounded-full ${hintPending ? 'animate-ring-hint motion-reduce:animate-none' : ''}`}
+          data-testid="energy-ring"
+        >
+          <svg viewBox="0 0 100 100" className="h-full w-full overflow-visible" aria-hidden="true">
             <g transform="rotate(-90 50 50)">
-              {/* Objetivo: corchete fino por fuera, de tu mínimo a tu máximo */}
-              <circle
-                cx="50"
-                cy="50"
-                r={R_ZONE}
-                fill="none"
-                strokeWidth={2}
-                strokeLinecap="round"
-                stroke="rgb(var(--c-white) / 0.85)"
-                strokeDasharray={`${((target.high - target.low) / 100) * circ(R_ZONE)} ${circ(R_ZONE)}`}
-                strokeDashoffset={-((target.low / 100) * circ(R_ZONE))}
-              />
-              {/* Esfuerzo (exterior) */}
-              <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
-              {/* Lo hecho: el aro azul fluorescente (y en rojo lo que pasa del máximo del objetivo). Antes de entrenar, vacío. */}
-              {real !== null && real > 0 && (
-                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: EFFORT, filter: 'drop-shadow(0 0 2.5px rgb(var(--c-effort) / var(--effort-glow, 0)))' }} {...dash(R_EFF, 0, within)} className={slide} />
-              )}
-              {beyond > 0 && (
-                <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: OVER }} {...dash(R_EFF, target.high - 0.6, real ?? target.high)} className={slide} />
-              )}
-              {/* Lo previsto: una línea fina gris que solo se ve donde el azul aún no llega (lo que falta); donde el azul la cubre, el aro es
-                  macizo. La marca del final se queda siempre, también cuando lo hecho la pasa. */}
-              {plannedLine !== null && plannedLine > 0 && (
+              <circle cx="50" cy="50" r={R} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
+              {now !== null && estimated && <circle cx="50" cy="50" r={R} fill="none" strokeWidth={STROKE} strokeDasharray="1.6 3" pathLength={100 * 4.6} style={{ stroke: 'rgb(var(--c-white) / 0.28)' }} />}
+              {now !== null && !estimated && (
                 <>
-                  {plannedLine > doneTo && (
-                    <>
-                      <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_HALO} strokeLinecap={doneTo > 0 ? 'butt' : 'round'} style={{ stroke: RING_BG }} {...dash(R_EFF, doneTo, plannedLine)} className={slide} />
-                      <circle cx="50" cy="50" r={R_EFF} fill="none" strokeWidth={PLAN_LINE} strokeLinecap={doneTo > 0 ? 'butt' : 'round'} style={{ stroke: PLAN }} {...dash(R_EFF, doneTo, plannedLine)} className={slide} />
-                    </>
-                  )}
-                  <PlannedEnd planned={plannedLine} />
+                  <Arc from={0} to={now} color="rgb(var(--c-white))" show={filled} />
+                  {spentSegments(energy).map((seg, i) => (
+                    <Arc key={i} from={seg.from} to={seg.to} color={seg.color} opacity={0.6} show={filled} />
+                  ))}
+                  {trained && energy.morning !== null && <Tick at={energy.morning} color="rgb(var(--c-white) / 0.55)" />}
+                  {energy.nightFeel && energy.computed !== null && energy.computed !== now && <Tick at={energy.computed} color="rgb(var(--c-brand-orange))" />}
                 </>
               )}
-              {/* Preparación (interior) */}
-              <circle cx="50" cy="50" r={R_PREP} fill="none" strokeWidth={STROKE} className="stroke-white/[0.07]" />
-              {total !== null && (
-                <circle cx="50" cy="50" r={R_PREP} fill="none" strokeWidth={STROKE} strokeLinecap="round" style={{ stroke: prepTint }} {...dash(R_PREP, 0, total)} className={slide} />
-              )}
             </g>
-            {/* Objetivo: el rango escrito sobre su corchete, girando con él */}
-            <ObjectiveLabel id={labelId} low={target.low} high={target.high} onTap={() => ask('objetivo')} />
-            {/* Zonas táctiles de los aros: el de dentro explica la preparación y el de fuera, el esfuerzo entero (realizado, previsto y objetivo) */}
-            {ringHit(R_PREP, 'preparacion', 'Rex explica la preparación')}
-            {ringHit(R_EFF, 'esfuerzo', 'Rex explica el esfuerzo')}
           </svg>
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500">{centerLabel}</span>
-          </div>
-        </div>
+          <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{centerLabel}</span>
+            <span className="num mt-0.5 text-[2.6rem] font-bold leading-none tracking-tight text-white" data-testid="energy-number">
+              {now === null ? '—' : `${estimated ? '~' : ''}${now}`}
+            </span>
+            <span className="mt-0.5 text-[11px] text-neutral-500">{word}</span>
+          </span>
+        </button>
 
-        {/* Esfuerzo: lo realizado y lo previsto, siempre a la vista, cada uno con el color que tiene en el aro. El objetivo va escrito sobre el arco. */}
+        {/* Esfuerzo del día frente al objetivo */}
         <div className="flex flex-col items-start text-left">
-          <button onClick={() => ask('realizado')} className="flex flex-col items-start text-left -mx-1 px-1 py-0.5">
-            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: doneColor }}>
-              Realizado
+          <button onClick={() => ask(effort === null ? 'esfuerzo' : 'realizado')} className="-mx-1 flex flex-col items-start px-1 py-0.5 text-left">
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: over ? OVER : EFFORT }}>
+              Esfuerzo
             </span>
-            <span className="num text-[2rem] font-semibold leading-none tracking-tight" style={{ color: doneColor }}>
-              {real !== null ? real : '—'}
-            </span>
-          </button>
-          <button onClick={() => ask('previsto')} className="mt-2.5 flex flex-col items-start text-left -mx-1 px-1 py-0.5">
-            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: PLAN }}>
-              Previsto
-            </span>
-            <span className="num text-xl font-semibold leading-none tracking-tight" style={{ color: PLAN }}>
-              {plannedLine !== null ? `~${plannedLine}` : '—'}
+            <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: over ? OVER : EFFORT }} data-testid="effort-number">
+              {effort ?? 0}
             </span>
           </button>
+          <button onClick={() => ask('objetivo')} className="-mx-1 flex w-full flex-col items-start px-1 py-0.5 text-left">
+            <span className="relative mt-0.5 block h-[5px] w-full max-w-[4.5rem] rounded-full bg-white/[0.09]" aria-hidden="true">
+              <span className="absolute inset-y-0 rounded-full bg-white/25" style={{ left: `${target.low}%`, width: `${target.high - target.low}%` }} />
+              <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.min(100, effort ?? 0)}%`, background: over ? OVER : EFFORT }} />
+            </span>
+            <span className="mt-1 whitespace-nowrap text-[11px] text-neutral-500">
+              obj. {target.low}–{target.high}
+            </span>
+          </button>
+          {strain.real === null && plannedValue !== null && (
+            <button onClick={() => ask('previsto')} className="-mx-1 mt-2 flex flex-col items-start px-1 py-0.5 text-left">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: PLAN }}>
+                Previsto
+              </span>
+              <span className="num text-lg font-semibold leading-none" style={{ color: PLAN }}>
+                ~{plannedValue}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Pregúntale a Rex: el globo con la explicación del número tocado */}
-      {/* La pista de que los aros se tocan y de que Rex tiene su lab la dice el globo de la esquina (RexCorner), no una línea aquí. */}
-
-      {/* Hoy, Rex dice el consejo y el cierre del día (RexBar): aquí solo quedan los anillos. Un día pasado conserva el balance y la frase. */}
+      {/* Hoy, Rex dice el consejo y el cierre del día. Un día pasado conserva el balance y la frase. */}
       {!isToday &&
         (balance ? (
           <BalanceBox balance={balance} target={target} isToday={isToday} notDone={notDone} />
         ) : (
           <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">
             {sentence(strain, isToday)}
-            {real !== null && notDone ? <> {notDone}</> : null}
+            {strain.real !== null && notDone ? <> {notDone}</> : null}
           </p>
         ))}
     </section>

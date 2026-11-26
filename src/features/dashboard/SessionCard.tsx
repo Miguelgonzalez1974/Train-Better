@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import { AlertCircle, Check, ChevronRight, Clock, History, Minus, Plus, Timer, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import type { CardEffort, CardFigure, CardLine, SessionCardModel } from './sessionCardModel';
+import type { EnergyItem } from './dayEnergy';
 import { ACCENT as EFFORT, OVER, PLAN } from './StrainRing';
 
 const LINE_ICON: Record<CardLine['icon'], LucideIcon> = { history: History, up: TrendingUp, down: TrendingDown, same: Minus, alert: AlertCircle, plus: Plus, check: Check };
@@ -82,8 +83,33 @@ class CardGuard extends Component<{ fallback: ReactNode; children: ReactNode }, 
 
 interface SessionCardProps {
   model: SessionCardModel;
+  /** Lo que la sesión resta de energía (o restará), con su reparto por bloques. */
+  energy?: EnergyItem;
   onOpenPlan: () => void;
   onOpenDone: () => void;
+}
+
+/** Lo que resta cada bloque de la sesión, en fichas con el mismo color que su trozo del aro. */
+function Blocks({ energy }: { energy: EnergyItem }) {
+  const blocks = (energy.blocks ?? []).filter((b) => b.cost > 0);
+  return (
+    <span className="flex w-full flex-col gap-1.5 border-t border-white/[0.08] pt-2" data-testid="session-energy">
+      <span className="flex items-baseline justify-between text-[11px] text-neutral-500">
+        <span>{energy.done ? 'Energía que te ha restado' : 'Energía que te restará (previsto)'}</span>
+        <span className={`num text-[17px] font-semibold ${energy.done ? 'text-white' : 'text-neutral-400'}`}>−{energy.cost}</span>
+      </span>
+      {blocks.length > 0 && (
+        <span className="grid w-full grid-cols-2 gap-1.5">
+          {blocks.map((b) => (
+            <span key={b.key} className="flex items-baseline justify-between gap-2 rounded-r-lg border-l-[3px] bg-white/[0.05] px-2 py-1.5" style={{ borderLeftColor: b.color }} data-testid="session-block">
+              <span className="truncate text-xs font-semibold text-neutral-200">{b.label}</span>
+              <span className={`num text-xs font-semibold ${energy.done ? 'text-white' : 'text-neutral-400'}`}>−{b.cost}</span>
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
 }
 
 /**
@@ -106,7 +132,7 @@ export function SessionCard(props: SessionCardProps) {
   );
 }
 
-function CardBody({ model, onOpenPlan, onOpenDone }: SessionCardProps) {
+function CardBody({ model, energy, onOpenPlan, onOpenDone }: SessionCardProps) {
   const done = model.kind === 'done';
   const open = model.action === 'plan' ? onOpenPlan : model.action === 'done' ? onOpenDone : null;
   const { figures, line, meta, effort } = model;
@@ -142,6 +168,7 @@ function CardBody({ model, onOpenPlan, onOpenDone }: SessionCardProps) {
           {line && meta && hasFigures && <span className="shrink-0 whitespace-nowrap text-neutral-500">{meta}</span>}
         </span>
       )}
+      {energy && energy.cost > 0 && <Blocks energy={energy} />}
     </>
   );
 

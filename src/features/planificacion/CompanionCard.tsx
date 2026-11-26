@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { clockTime } from '../../engine/energy';
 import { toast } from '../../lib/toast';
 import { confirmSheet } from '../../lib/confirmSheet';
 import { Check, ChevronDown, Dumbbell } from 'lucide-react';
@@ -196,6 +197,7 @@ export function CompanionCard({
         loadKg: tested ?? plan.loadKg,
         rpe,
         durationMin: minutes ?? mins,
+        time: clockTime(new Date()),
         achieved: plan.intensity ? achieved : undefined,
         // Lo que se hizo, levantamiento a levantamiento: el Dashboard lo enseña después («Lo que hiciste»).
         lifts: plan.lifts.map((l) => ({

@@ -599,6 +599,8 @@ export interface StrainTarget {
    * cuenta al cerrar el día "partías con X y has hecho Y". No se toca una vez entrenado. Ausente en días anteriores a esta función.
    */
   planned?: number;
+  /** Con qué cálculo de preparación se fijó: 2 = la energía de la mañana. Uno anterior se rehace el mismo día. */
+  modelo?: 2;
 }
 
 /** Las áreas del diagnóstico del atleta (ver `engine/athleteDiagnosis.ts`). */
@@ -834,7 +836,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 82;
+export const SESSION_GEN_VERSION = 83;
 
 /** Un día en que el atleta subió la dureza: lo que se sabía en ese momento, para compararlo después con lo que pasó. */
 export interface HardnessLogEntry {

@@ -111,6 +111,7 @@ import { rexBus } from '../../lib/rexBus';
 import type { LabSection } from '../dashboard/RexCorner';
 import { generateCompanionSession } from '../../engine/generateSession';
 import { acceptedCompanionLoad, withExtraLoad } from '../../engine/companionLoad';
+import { clockTime } from '../../engine/energy';
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import type { WodScaleState } from './WodScaleBox';
@@ -876,6 +877,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
         testedLoadKg: testDayBlock && testedLoadKg > 0 && !skips[testDayBlock.block as 'strength' | 'oly'] ? testedLoadKg : undefined,
         wodDetail: wodDetailFor(),
         wodSplits: splitRecordsToday(),
+        // La hora de cierre sitúa la sesión en «Tu energía»; al corregirla se conserva la original.
+        closedAt: correctionRef.current ? correctionRef.current.snapshot.entry?.closedAt : clockTime(new Date()),
       }),
     );
     recordProgressionFor(session, skips);

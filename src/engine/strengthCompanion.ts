@@ -149,6 +149,8 @@ export interface CompanionResult {
   loadKg?: number;
   rpe?: number;
   durationMin?: number;
+  /** La hora a la que se apunta («09:30»). */
+  time?: string;
   /** Texas Method clásico: los levantamientos del viernes cuyas 5 repeticiones salieron, con el peso. Sube su 5RM de trabajo. */
   achieved?: Partial<Record<TexasLiftKey, number>>;
   /** Lo que se hizo, levantamiento a levantamiento, para poder enseñarlo después. */

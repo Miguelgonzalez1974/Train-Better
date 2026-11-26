@@ -11,7 +11,7 @@ import type { StrainStatus } from './strain';
  * Rex (ver `features/dashboard/rexRing.ts`), y los botones de cada explicación llevan a una pantalla con un `ExplainAction`.
  */
 
-export type ExplainId = 'preparacion' | 'carga' | 'esfuerzo' | 'realizado' | 'previsto' | 'objetivo';
+export type ExplainId = 'preparacion' | 'energia' | 'carga' | 'esfuerzo' | 'realizado' | 'previsto' | 'objetivo';
 
 /** Color del verbo de la explicación (los colores de estado de la app, el del esfuerzo, el del previsto o el neutro). */
 export type ExplainTone = 'good' | 'mid' | 'bad' | 'info' | 'plan' | 'effort' | 'neutral';
@@ -73,6 +73,49 @@ export function explainReadiness(r: ReadinessScore): Explanation {
   const actions: Explanation['actions'] = [{ label: 'Ver la evolución', action: 'ver-preparacion' }];
   if (level !== 'alta') actions.push({ label: 'Hacer recovery', action: 'recovery' });
   return { id: 'preparacion', lead, tone, text, rows, foot, actions };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Energía
+
+export interface EnergyExplainInput {
+  morning: number | null;
+  /** Lo hecho, en orden, con lo que ha restado cada cosa. */
+  done: { name: string; cost: number }[];
+  /** La energía que queda (con la respuesta de la noche si la hay) y la calculada sin ella. */
+  energy: number | null;
+  computed: number | null;
+  pending: number;
+  projected: number | null;
+  isToday: boolean;
+}
+
+/** La energía que queda: con cuánta se salió, lo que ha restado cada entreno y cómo corrige la respuesta de la noche. */
+export function explainEnergy(i: EnergyExplainInput): Explanation {
+  if (i.morning === null || i.energy === null || i.computed === null) {
+    return {
+      id: 'energia',
+      lead: 'Aún sin datos.',
+      tone: 'neutral',
+      text: 'Con el check-in de unos días y algún entreno podré decirte con cuánta energía sales y cuánta te queda.',
+      rows: [],
+      foot: '',
+      actions: [{ label: 'Ver la preparación', action: 'ver-preparacion' }],
+    };
+  }
+  const rows: ExplainRow[] = [{ kind: 'plain', label: i.isToday ? 'Has salido con' : 'Saliste con', value: String(i.morning) }];
+  for (const d of i.done) rows.push({ kind: 'delta', label: d.name, value: -d.cost });
+  if (i.energy !== i.computed) rows.push({ kind: 'delta', label: 'Tu respuesta de la noche', value: i.energy - i.computed });
+  if (i.pending > 0 && i.projected !== null) rows.push({ kind: 'plain', label: 'Si haces lo que falta', value: String(i.projected) });
+  return {
+    id: 'energia',
+    lead: i.isToday ? `Te quedan ${i.energy}.` : `Acabaste en ${i.energy}.`,
+    tone: 'neutral',
+    text: i.done.length === 0 ? 'Aún no has gastado nada: es la energía con la que sales.' : 'Cada entreno resta 1 punto por cada 20 de RPE por minutos.',
+    rows,
+    foot: 'Es una estimación con tu RPE, la duración y tu sueño. Si dices cómo acabas el día, se corrige.',
+    actions: [{ label: 'Ir a la sesión', action: 'planificacion' }],
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

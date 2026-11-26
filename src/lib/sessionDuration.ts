@@ -38,44 +38,50 @@ function wodPartMinutes(entry: SessionBlockResult): number {
   return 12;
 }
 
-export function estimateSessionMinutes(session: DailySession): number {
-  if (session.isRestDay || session.source === 'custom') return 0;
-  let total = 0;
+export type SessionBlockKind = DailySession['blocks'][number]['block'];
+
+/** Los minutos orientativos de cada tipo de bloque de una sesión (el WOD, con una estimación por parte). */
+export function blockMinutes(session: DailySession): Record<SessionBlockKind, number> {
+  const out = { warmup: 0, strength: 0, oly: 0, wod: 0, accessory: 0, skill: 0, cooldown: 0 } as Record<SessionBlockKind, number>;
+  if (session.isRestDay || session.source === 'custom') return out;
 
   for (const block of session.blocks) {
     switch (block.block) {
       case 'warmup':
       case 'cooldown':
-        total += 1.5;
+        out[block.block] += 1.5;
         break;
       case 'strength':
       case 'oly':
         // Un paso de preparación (primer técnico, calentamiento de barra) es rápido; el levantamiento
         // de trabajo se mide por series (trabajo + descanso entre series).
-        total += block.subgroup ? 1 : (block.sets ?? 3) * 2.2;
+        out[block.block] += block.subgroup ? 1 : (block.sets ?? 3) * 2.2;
         break;
       case 'accessory':
-        total += (block.sets ?? 3) * 1.6;
+        out.accessory += (block.sets ?? 3) * 1.6;
         break;
       case 'skill': {
         const explicitMin = (block.reps ?? '').match(/(\d+)\s*min/);
-        total += explicitMin ? Number(explicitMin[1]) : 8;
+        out.skill += explicitMin ? Number(explicitMin[1]) : 8;
         break;
       }
       default:
         break;
     }
   }
-
   // WOD: una estimación por cada parte distinta (día de doble WOD) en vez de por entrada — todas las
   // entradas de la misma parte comparten formato/objetivo.
   const wodEntries = session.blocks.filter((b) => b.block === 'wod');
   const parts = new Set(wodEntries.map((e) => e.wodPart ?? 1));
   for (const part of parts) {
     const first = wodEntries.find((e) => (e.wodPart ?? 1) === part);
-    if (first) total += wodPartMinutes(first);
+    if (first) out.wod += wodPartMinutes(first);
   }
-  if (session.doubleWod) total += 7; // descanso entre las dos partes (5-10 min)
+  return out;
+}
 
+export function estimateSessionMinutes(session: DailySession): number {
+  if (session.isRestDay || session.source === 'custom') return 0;
+  const total = Object.values(blockMinutes(session)).reduce((s, v) => s + v, 0) + (session.doubleWod ? 7 : 0); // descanso entre las dos partes (5-10 min)
   return Math.round(total);
 }
