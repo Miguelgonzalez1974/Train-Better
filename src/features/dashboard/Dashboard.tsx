@@ -112,12 +112,14 @@ interface DashboardProps {
 export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, onNavigateToNutricion, onOpenMorning }: DashboardProps) {
   const [history, setHistory] = useState(() => athleteRepository.getHistory());
   // Al abrir el Dashboard se fija el objetivo de esfuerzo de hoy (si aún no lo estaba): idempotente.
-  const [profile, setProfile] = useState(() => {
+  const [profile, setProfile] = useState(() => ensureStrainTarget(athleteRepository.getProfile(), history, toLocalIsoDate(new Date())));
+  // Se guarda en un efecto, no al pintar: `saveProfile` avisa al indicador de sincronización, que cambia su estado en el acto.
+  // Tiene que ir antes del efecto que anota el esfuerzo previsto, porque ese parte del objetivo ya guardado.
+  useEffect(() => {
     const current = athleteRepository.getProfile();
-    const next = ensureStrainTarget(current, history, toLocalIsoDate(new Date()));
+    const next = ensureStrainTarget(current, athleteRepository.getHistory(), toLocalIsoDate(new Date()));
     if (next !== current) athleteRepository.saveProfile(next);
-    return next;
-  });
+  }, []);
   const [bodyweightLog, setBodyweightLog] = useState(() => athleteRepository.getBodyweightLog());
   // «Historial»: una sola ventana con tres pestañas (Diario, Constancia y Volumen). Se abre con la tesela «Historial», con «mi historial» en la caja de Rex o desde otra pantalla.
   const [trainingView, setTrainingView] = useState<'diario' | 'constancia' | 'volumen' | null>(() => {
