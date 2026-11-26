@@ -6,7 +6,7 @@ import { explainEnergy } from '../../engine/explainNumbers';
 import { companionTrainedDates } from '../../engine/companionLoad';
 import { loadHistoryFor } from '../../engine/readinessAt';
 import { ensureStrainTarget } from '../../engine/strainTarget';
-import { blockShares, buildDayEnergy, hourOf, shareOut, tomorrowEstimate } from './dayEnergy';
+import { buildDayEnergy, hourOf, shareOut, tomorrowEstimate, workoutName } from './dayEnergy';
 
 const DAY = '2026-11-26';
 const session = {
@@ -39,18 +39,6 @@ describe('repartir el gasto', () => {
     expect(hourOf(undefined)).toBeNull();
     expect(hourOf('25:00')).toBeNull();
   });
-
-  it('por bloques: sin calentamiento ni vuelta a la calma, el WOD pesa más y lo que falló o salió duro cuesta más', () => {
-    const shares = blockShares(session, 28, { date: DAY });
-    expect(shares.map((s) => s.key)).toEqual(['fuerza', 'oly', 'wod', 'accesorio']);
-    expect(shares.reduce((s, b) => s + b.cost, 0)).toBe(28);
-    expect(shares.find((s) => s.key === 'wod')!.cost).toBeGreaterThan(shares.find((s) => s.key === 'accesorio')!.cost);
-    const failed = blockShares(session, 60, { date: DAY, workLog: [{ date: DAY, movementId: 'back-squat', block: 'strength', setNumber: 1, kg: 100, reps: 5, quality: 'fallada' }] });
-    expect(failed[0].cost).toBeGreaterThan(blockShares(session, 60, { date: DAY })[0].cost);
-    const hard = blockShares(session, 60, { date: DAY, wodFeel: 'duro' }).find((s) => s.key === 'wod')!.cost;
-    expect(hard).toBeGreaterThan(blockShares(session, 60, { date: DAY, wodFeel: 'facil' }).find((s) => s.key === 'wod')!.cost);
-    expect(blockShares({ ...session, isRestDay: true }, 20, { date: DAY })).toEqual([]);
-  });
 });
 
 describe('el día en energía', () => {
@@ -63,8 +51,16 @@ describe('el día en energía', () => {
     expect(day.items.reduce((s, i) => s + i.cost, 0)).toBe(36);
     expect(day).toMatchObject({ morning: 70, computed: 34, energy: 34, pending: 0, projected: 34 });
     expect(day.items[1].start).toBeCloseTo(19.667 - 70 / 60, 2);
-    expect(day.items[1].blocks!.reduce((s, b) => s + b.cost, 0)).toBe(day.items[1].cost);
+    expect(day.items.map((i) => [i.name, i.activity])).toEqual([['Running', 'running'], ['CrossFit', 'sesion']]);
     expect(day.effort).toBeGreaterThan(60);
+  });
+
+  it('cada fila se llama por su tipo, y por su nombre si le pusiste uno', () => {
+    expect(workoutName({ kind: 'clase' })).toBe('CrossFit');
+    expect(workoutName({ kind: 'equipo' })).toBe('Equipo');
+    expect(workoutName({ kind: 'otro', name: ' Pádel ' })).toBe('Pádel');
+    const custom = { ...session, source: 'custom', customTitle: 'Running' } as DailySession;
+    expect(buildDayEnergy({ ...input(makeProfile()), session: custom }).items[0].name).toBe('Running');
   });
 
   it('antes de entrenar enseña lo previsto y con cuánto se acabaría', () => {

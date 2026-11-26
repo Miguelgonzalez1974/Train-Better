@@ -41,7 +41,7 @@ function wodPartMinutes(entry: SessionBlockResult): number {
 export type SessionBlockKind = DailySession['blocks'][number]['block'];
 
 /** Los minutos orientativos de cada tipo de bloque de una sesión (el WOD, con una estimación por parte). */
-export function blockMinutes(session: DailySession): Record<SessionBlockKind, number> {
+function blockMinutes(session: DailySession): Record<SessionBlockKind, number> {
   const out = { warmup: 0, strength: 0, oly: 0, wod: 0, accessory: 0, skill: 0, cooldown: 0 } as Record<SessionBlockKind, number>;
   if (session.isRestDay || session.source === 'custom') return out;
 

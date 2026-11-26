@@ -202,7 +202,7 @@ export interface CompanionLogEntry {
 export type WorkoutKind = 'clase' | 'running' | 'bici' | 'fuerza' | 'equipo' | 'otro';
 
 /**
- * Un entreno que se suma al día además de la sesión prevista («+ Entreno»): salir a correr, una clase, un partido. Cuenta como carga igual que
+ * Un entreno que se suma al día además de la sesión prevista («Añadir entreno»): salir a correr, una clase, un partido. Cuenta como carga igual que
  * lo demás (RPE por minutos) y gasta energía ese día. Se puede corregir y borrar.
  */
 export interface DayWorkout {
@@ -466,7 +466,7 @@ export interface AthleteProfile {
   mobilityLog?: MobilityLogEntry[];
   /** Sesiones hechas o saltadas de los programas de fuerza que conviven con el macro (ver `engine/strengthCompanion.ts`). */
   companionLog?: CompanionLogEntry[];
-  /** Entrenos añadidos a mano además de la sesión («+ Entreno»). Ver `engine/energy.ts`. */
+  /** Entrenos añadidos a mano además de la sesión («Añadir entreno»). Ver `engine/energy.ts`. */
   workouts?: DayWorkout[];
   /** Las respuestas de la noche («¿Cómo acabas el día?»), una por fecha. */
   nightLog?: NightEntry[];

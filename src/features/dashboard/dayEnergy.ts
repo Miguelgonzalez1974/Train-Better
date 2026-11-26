@@ -1,52 +1,36 @@
-import type { AthleteProfile, DailySession, NightFeel, SessionBlockResult, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
+import type { AthleteProfile, DailySession, DayWorkout, NightFeel, SessionHistoryEntry, WorkoutKind } from '../../data/athlete/types';
 import { clampEnergy, costOfSrpe, nightAdjust, shiftIso, sleepGain, CARRY_SHARE, spendOfEntry } from '../../engine/energy';
 import { loadHistoryFor } from '../../engine/readinessAt';
 import { strainFromSrpe } from '../../engine/strain';
-import { blockMinutes } from '../../lib/sessionDuration';
 import { otherKindInfo } from '../planificacion/otherActivity';
 
 /**
- * El día contado en energía: cada cosa entrenada (la sesión por bloques, el programa de fuerza y los entrenos añadidos), lo que ha restado, lo que
- * queda por hacer y con cuánta energía se acaba. La mañana es la preparación (ver `engine/energy.ts`). Puro: lo pintan el anillo, las tarjetas y el
- * gráfico del Dashboard.
+ * El día contado en energía: cada cosa entrenada (la sesión, el programa de fuerza y los entrenos añadidos), lo que ha restado, lo que queda por
+ * hacer y con cuánta energía se acaba. La mañana es la preparación (ver `engine/energy.ts`). Puro: lo pintan el aro y las filas del Dashboard.
  */
 
-export type BlockKey = 'fuerza' | 'oly' | 'wod' | 'accesorio' | 'tecnica';
-
-export const BLOCK_COLOR: Record<BlockKey, string> = { fuerza: '#8b5cf6', oly: '#0ea5e9', wod: 'rgb(var(--c-brand-orange))', accesorio: 'rgb(var(--c-brand-gold))', tecnica: '#ec4899' };
-export const PROGRAM_COLOR = '#a78bfa';
-export const WORKOUT_COLOR = '#14b8a6';
-export const SESSION_COLOR = '#8b5cf6';
-
-const BLOCK_LABEL: Record<BlockKey, string> = { fuerza: 'Fuerza', oly: 'Oly', wod: 'WOD', accesorio: 'Accesorio', tecnica: 'Técnica' };
-/** Lo intenso que es cada bloque por minuto, para repartir el gasto de la sesión (una estimación: el total sale de tu RPE). */
-const BLOCK_WEIGHT: Record<BlockKey, number> = { wod: 1.3, fuerza: 1, oly: 0.8, accesorio: 0.7, tecnica: 0.4 };
-/** Una fuerza u oly con series falladas cuesta más. */
-const FAILED_WEIGHT = 1.2;
-const WOD_FEEL_WEIGHT = { facil: 0.85, justo: 1, duro: 1.2 } as const;
-const BLOCK_OF: Partial<Record<SessionBlockResult['block'], BlockKey>> = { strength: 'fuerza', oly: 'oly', wod: 'wod', accessory: 'accesorio', skill: 'tecnica' };
-
-export interface EnergyBlock {
-  key: BlockKey;
-  label: string;
-  cost: number;
-  color: string;
-}
+/** Qué fue cada cosa entrenada: decide su icono. */
+export type ActivityKind = WorkoutKind | 'sesion' | 'programa';
 
 export interface EnergyItem {
   id: string;
   kind: 'sesion' | 'programa' | 'libre';
+  activity: ActivityKind;
+  /** El tipo de entreno tal como se lee en su fila: «CrossFit», «Running»… */
   name: string;
-  /** Hora de inicio en horas («13,5»); null si no se sabe. */
+  /** Hora de inicio en horas («13,5»), solo para ordenar; null si no se sabe. */
   start: number | null;
   minutes: number;
   rpe: number;
   cost: number;
   done: boolean;
-  color: string;
-  blocks?: EnergyBlock[];
   /** El id en `profile.workouts` (solo los entrenos libres, que se pueden corregir). */
   workoutId?: string;
+}
+
+/** Cómo se llama un entreno añadido en su fila: el tipo, o el nombre que le pusiste. */
+export function workoutName(w: Pick<DayWorkout, 'kind' | 'name'>): string {
+  return w.name?.trim() || (w.kind === 'clase' ? 'CrossFit' : otherKindInfo(w.kind).label);
 }
 
 export interface DayEnergy {
@@ -79,34 +63,6 @@ export function shareOut(total: number, weights: number[]): number[] {
   return out;
 }
 
-interface SplitOptions {
-  date: string;
-  workLog?: WorkSetEntry[];
-  wodFeel?: keyof typeof WOD_FEEL_WEIGHT;
-}
-
-/** El gasto de una sesión repartido entre sus bloques: por minutos estimados, lo intenso que es cada uno y cómo salió. */
-export function blockShares(session: DailySession, total: number, opts: SplitOptions): EnergyBlock[] {
-  if (session.isRestDay || session.source === 'custom') return [];
-  const minutes = blockMinutes(session);
-  const present: BlockKey[] = [];
-  for (const b of session.blocks) {
-    const key = BLOCK_OF[b.block];
-    if (key && !present.includes(key)) present.push(key);
-  }
-  if (present.length === 0) return [];
-  const failed = new Set<BlockKey>((opts.workLog ?? []).filter((s) => s.date === opts.date && s.quality === 'fallada').map((s) => (s.block === 'strength' ? 'fuerza' : 'oly')));
-  const weights = present.map((key) => {
-    const block = key === 'fuerza' ? 'strength' : key === 'oly' ? 'oly' : key === 'wod' ? 'wod' : key === 'accesorio' ? 'accessory' : 'skill';
-    let weight = (minutes[block] || 1) * BLOCK_WEIGHT[key];
-    if (failed.has(key)) weight *= FAILED_WEIGHT;
-    if (key === 'wod' && opts.wodFeel) weight *= WOD_FEEL_WEIGHT[opts.wodFeel];
-    return weight;
-  });
-  const costs = shareOut(total, weights);
-  return present.map((key, i) => ({ key, label: BLOCK_LABEL[key], cost: costs[i], color: BLOCK_COLOR[key] }));
-}
-
 /** «19:40» → 19,67; null si no es una hora. */
 export function hourOf(time: string | undefined): number | null {
   const m = time?.match(/^(\d{1,2}):(\d{2})$/);
@@ -127,7 +83,6 @@ export interface DayEnergyInput {
   /** Lo que se espera de la sesión de hoy y del programa de fuerza aceptado, si aún no se han hecho. */
   plannedSession?: { rpe: number; minutes: number } | null;
   plannedProgram?: { rpe: number; minutes: number } | null;
-  workLog?: WorkSetEntry[];
 }
 
 export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
@@ -140,22 +95,22 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
     done.push({
       id: 'sesion',
       kind: 'sesion',
-      name: session?.source === 'custom' ? session.customTitle || 'Sesión propia' : 'Sesión hecha',
+      activity: 'sesion',
+      name: session?.source === 'custom' ? session.customTitle || 'Sesión propia' : 'CrossFit',
       start: end === null ? null : Math.max(0, end - entry.durationMin / 60),
       minutes: entry.durationMin,
       rpe: entry.rpe,
       cost: costOfSrpe(entry.rpe * entry.durationMin),
       done: true,
-      color: SESSION_COLOR,
     });
   }
   for (const c of profile.companionLog ?? []) {
     if (c.date !== dateIso || c.outcome !== 'hecha' || !c.rpe || !c.durationMin) continue;
-    done.push({ id: `programa:${c.id}`, kind: 'programa', name: c.label ?? 'Programa de fuerza', start: hourOf(c.time) === null ? null : Math.max(0, hourOf(c.time)! - c.durationMin / 60), minutes: c.durationMin, rpe: c.rpe, cost: costOfSrpe(c.rpe * c.durationMin), done: true, color: PROGRAM_COLOR });
+    done.push({ id: `programa:${c.id}`, kind: 'programa', activity: 'programa', name: c.label ?? 'Programa de fuerza', start: hourOf(c.time) === null ? null : Math.max(0, hourOf(c.time)! - c.durationMin / 60), minutes: c.durationMin, rpe: c.rpe, cost: costOfSrpe(c.rpe * c.durationMin), done: true });
   }
   for (const w of profile.workouts ?? []) {
     if (w.date !== dateIso) continue;
-    done.push({ id: `libre:${w.id}`, kind: 'libre', name: w.name?.trim() || otherKindInfo(w.kind).label, start: hourOf(w.time), minutes: w.minutes, rpe: w.rpe, cost: costOfSrpe(w.rpe * w.minutes), done: true, color: WORKOUT_COLOR, workoutId: w.id });
+    done.push({ id: `libre:${w.id}`, kind: 'libre', activity: w.kind, name: workoutName(w), start: hourOf(w.time), minutes: w.minutes, rpe: w.rpe, cost: costOfSrpe(w.rpe * w.minutes), done: true, workoutId: w.id });
   }
 
   // El total manda (es el mismo que usa la preparación de mañana): los redondeos de cada parte se ajustan a él.
@@ -163,17 +118,14 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
   if (done.length > 0) shareOut(total, done.map((i) => i.rpe * i.minutes)).forEach((cost, i) => (done[i].cost = cost));
   done.sort((a, b) => (a.start ?? 24) - (b.start ?? 24));
 
-  const sessionDone = done.find((i) => i.kind === 'sesion');
-  if (sessionDone && session) sessionDone.blocks = blockShares(session, sessionDone.cost, { date: dateIso, workLog: input.workLog, wodFeel: entry?.wodFeel });
-
   const pendingItems: EnergyItem[] = [];
   if (!entry && input.plannedSession && session && !session.isRestDay) {
     const cost = costOfSrpe(input.plannedSession.rpe * input.plannedSession.minutes);
-    pendingItems.push({ id: 'sesion-prevista', kind: 'sesion', name: 'Sesión del día', start: null, minutes: input.plannedSession.minutes, rpe: input.plannedSession.rpe, cost, done: false, color: SESSION_COLOR, blocks: blockShares(session, cost, { date: dateIso }) });
+    pendingItems.push({ id: 'sesion-prevista', kind: 'sesion', activity: 'sesion', name: 'Sesión del día', start: null, minutes: input.plannedSession.minutes, rpe: input.plannedSession.rpe, cost, done: false });
   }
   if (input.plannedProgram && !done.some((i) => i.kind === 'programa')) {
     const { rpe, minutes } = input.plannedProgram;
-    pendingItems.push({ id: 'programa-previsto', kind: 'programa', name: 'Programa de fuerza', start: null, minutes, rpe, cost: costOfSrpe(rpe * minutes), done: false, color: PROGRAM_COLOR });
+    pendingItems.push({ id: 'programa-previsto', kind: 'programa', activity: 'programa', name: 'Programa de fuerza', start: null, minutes, rpe, cost: costOfSrpe(rpe * minutes), done: false });
   }
 
   const spent = done.reduce((s, i) => s + i.cost, 0);

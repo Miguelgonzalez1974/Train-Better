@@ -46,7 +46,7 @@ import type { StrainView } from './StrainRing';
 import { isoDiffDays, toLocalIsoDate } from '../../engine/periodization';
 import { BalanceBox, DayRing } from './DayRing';
 import { buildDayEnergy, tomorrowEstimate } from './dayEnergy';
-import { EnergyChart, MorningCard, NightCard } from './EnergyCards';
+import { MorningCard, NightCard } from './EnergyCards';
 import { WorkoutSheet } from './WorkoutSheet';
 import { explainEnergy } from '../../engine/explainNumbers';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness, type ExplainId } from '../../engine/explainNumbers';
@@ -323,16 +323,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     session: dayMacroSession ?? null,
     plannedSession: isToday && !todayEntry && todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias, null) : null,
     plannedProgram: isToday ? companionExtra : null,
-    workLog: athleteRepository.getWorkLog(),
   };
   const dayEnergy = buildDayEnergy(dayEnergyInput);
-  /** Lo que restaría un entreno aún sin guardar y la energía que quedaría: la misma cuenta que luego pinta el anillo. */
-  function previewWorkout(draft: DayWorkout) {
+  /** Lo que restaría un entreno aún sin guardar: la misma cuenta que luego sale en su fila. */
+  function workoutCost(draft: DayWorkout) {
     const workouts = [...(profile.workouts ?? []).filter((w) => w.id !== draft.id), draft];
     const day = buildDayEnergy({ ...dayEnergyInput, profile: { ...profile, workouts } });
-    return { cost: day.items.find((i) => i.workoutId === draft.id)?.cost ?? 0, energy: day.energy, withNight: day.nightFeel !== undefined };
+    return day.items.find((i) => i.workoutId === draft.id)?.cost ?? 0;
   }
-  /** «+ Entreno»: null cerrada; `editing` es el que se corrige. */
+  /** «Añadir entreno»: null cerrada; `editing` es el que se corrige. */
   const [workoutSheet, setWorkoutSheet] = useState<{ editing: DayWorkout | null } | null>(null);
   function applyWorkouts(change: (list: DayWorkout[]) => DayWorkout[]) {
     const current = athleteRepository.getProfile();
@@ -797,8 +796,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
             />
           ) : null
         }
-        // Antes de entrenar, de dónde sales; después, cómo ha ido bajando. Las dos van debajo de la sesión, que es lo primero.
-        chart={showMorning ? <MorningCard readiness={readiness} /> : <EnergyChart energy={dayEnergy} />}
+        // Antes de entrenar, de dónde sales, debajo de la sesión.
+        morning={showMorning ? <MorningCard readiness={readiness} /> : null}
         onOpenDone={() => setShowDone(true)}
         onNavigateToPlanificacion={onNavigateToPlanificacion}
         onAddWorkout={() => setWorkoutSheet({ editing: null })}
@@ -873,7 +872,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           <WorkoutSheet
             dateIso={dayIso}
             editing={workoutSheet.editing}
-            preview={previewWorkout}
+            costOf={workoutCost}
             onSave={(w) => saveWorkout(w, workoutSheet.editing ? 'Entreno corregido' : 'Entreno añadido')}
             onDelete={deleteWorkout}
           />

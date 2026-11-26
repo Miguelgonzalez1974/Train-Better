@@ -5,15 +5,15 @@ import { pctOfMark } from '../../engine/movementProgress';
 import { describeSkipped } from '../../engine/sessionParts';
 import { companionStatus, isCompanionProgram } from '../../engine/strengthCompanion';
 import { wodResultsOf } from '../../engine/wodScoring';
-import { estimateSessionMinutes } from '../../lib/sessionDuration';
 import { competitionHeadline } from '../shell/competitionMeta';
 import { buildPreviewLine } from './previewLine';
 import { wodHow, wodWhat } from './sessionCardWod';
 import type { StrainView } from './StrainRing';
 
 /**
- * La tarjeta de sesión del Resumen: arriba el título y el esfuerzo; en medio dos columnas (el peso principal y el WOD) y abajo una sola línea más con
- * los minutos. Antes de entrenar dice de dónde partes («La última vez: 97,5 kg»); después, qué has conseguido («+5 kg frente a la última vez»).
+ * La tarjeta de sesión del Resumen: arriba el título y el esfuerzo; en medio dos columnas (el peso principal y el WOD) y abajo una sola línea más.
+ * Es lo que se ve antes de entrenar («La última vez: 97,5 kg»); una vez hecha, la sesión pasa a ser una fila (ver `DayRows`) y este modelo solo
+ * queda como respaldo.
  * Puro: lo pinta `SessionCard`.
  */
 
@@ -156,7 +156,6 @@ function pendingModel(input: SessionCardInput, session: DailySession): SessionCa
   const effort: CardEffort | undefined = planned === null ? undefined : { value: planned, planned: true, label: over ? 'se pasa' : 'previsto', over, high: strain.target.high };
 
   const name = session.source === 'custom' ? session.customTitle || 'Sesión propia' : session.doubleWod ? 'Doble WOD' : main ? `${blockName(main)}${wod ? ' + WOD' : ''}` : buildPreviewLine(session);
-  const minutes = estimateSessionMinutes(session);
 
   // Una sola línea más, por este orden: el coach ha cambiado la sesión, toca el programa de fuerza, o de dónde partes.
   let line: CardLine | undefined;
@@ -171,7 +170,7 @@ function pendingModel(input: SessionCardInput, session: DailySession): SessionCa
     if (last) line = { icon: 'history', text: `Última vez: ${kg(last.kg)} · ${agoText(last.date, dayIso)}`, spark: tops.slice(-SPARK_POINTS).map((t) => t.kg) };
   }
 
-  return { kind: 'pending', title: pendingTitle(name), meta: minutes > 0 ? `${minutes} min` : undefined, ...(effort ? { effort } : {}), figures, ...(line ? { line } : {}), action: 'plan' };
+  return { kind: 'pending', title: pendingTitle(name), ...(effort ? { effort } : {}), figures, ...(line ? { line } : {}), action: 'plan' };
 }
 
 /** La columna del WOD ya hecho: el resultado en grande y debajo lo que era. */
