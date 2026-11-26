@@ -24,6 +24,8 @@ import type {
   WodSplitsRecord,
 } from '../../data/athlete/types';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
+import { dropPendingCorrection, keepPendingCorrection } from '../../data/athlete/pendingCorrection';
+import { restoreInterruptedCorrection } from '../shell/restoreInterruptedCorrection';
 import type { DaySnapshot } from '../../data/athlete/localRepository';
 import { toast } from '../../lib/toast';
 import { confirmSheet } from '../../lib/confirmSheet';
@@ -622,7 +624,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   // estados de "hoy" que dependen de ella) con el dia real la proxima vez que algo dispare un
   // render, en vez de quedarse mostrando el dia de ayer hasta recargar la pagina a mano.
   useEffect(() => {
-    setSession(loadTodaySession(profile, history, goals, todayIso));
+    // Si el día cambia con una corrección abierta, las tarjetas se cierran: el registro de ayer vuelve a su sitio.
+    if (correctionRef.current) {
+      correctionRef.current = null;
+      restoreInterruptedCorrection();
+      setHistory(athleteRepository.getHistory());
+      setWorkLog(athleteRepository.getWorkLog());
+    }
+    setSession(loadTodaySession(athleteRepository.getProfile(), athleteRepository.getHistory(), goals, todayIso));
     // `loadTodaySession` puede haber bloqueado la semana (`ensureWeekLocked`) escribiendo
     // directamente en el repositorio — se relee aqui para que el estado de React no se quede con un
     // `profile.weeklyLocks` desactualizado (un `handleSaveProfile` posterior partiria de este estado).
@@ -898,6 +907,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setShowCompletePanel(false);
     setReviewMode(false);
     correctionRef.current = null;
+    dropPendingCorrection();
     toast.show('Sesión registrada');
     // Un test que no actualizó el PR no deja rastro en el registro de PRs: se dice aquí, antes de pasar al Dashboard.
     if (nextMessage && !nextMessage.startsWith('Nuevo PR')) toast.show(nextMessage, { tone: 'warn', ttlMs: 12000 });
@@ -914,6 +924,8 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     if (!session) return;
     const snapshot = athleteRepository.snapshotDay(session.date);
     const sessionBefore = session;
+    // La copia queda en el dispositivo antes de quitar nada: si la app se cierra a medias, el día no se pierde (ver `pendingCorrection.ts`).
+    keepPendingCorrection({ snapshot, session: sessionBefore });
     athleteRepository.deleteHistoryEntry(session.date);
     for (const e of snapshot.workLog) athleteRepository.saveWorkSet(e);
     const entry = snapshot.entry;
@@ -941,6 +953,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     correctionRef.current = null;
     if (!c) return;
     restoreRegistration(c.snapshot, c.sessionBefore);
+    dropPendingCorrection();
   }
 
   /** Devuelve un registro que se acaba de quitar («Volver a registrar»): la entrada, las series, la progresión y la sesión tal como estaba. */
@@ -994,6 +1007,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     athleteRepository.saveCachedSession(next);
     setSession(next);
     athleteRepository.appendHistoryEntry(toHistoryEntry(next, 'rx', otherForm.rpe, otherForm.minutes));
+    // El día ya está registrado: si venía de una corrección, queda terminada.
+    correctionRef.current = null;
+    dropPendingCorrection();
     setHistory(athleteRepository.getHistory());
     setProfile(athleteRepository.getProfile());
     setShowQuickLog(false);

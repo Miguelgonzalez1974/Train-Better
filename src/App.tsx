@@ -12,6 +12,7 @@ import { useSession } from './features/auth/useSession';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { pullRemoteOrSeed } from './data/athlete/remoteSync';
 import { athleteRepository } from './data/athlete/athleteRepository';
+import { restoreInterruptedCorrection } from './features/shell/restoreInterruptedCorrection';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard';
 import { getReadinessCheckForDate } from './engine/readiness';
 import { ensureEmphasisPlan } from './engine/programmingEmphasis';
@@ -49,6 +50,8 @@ export default function App() {
   // Objetivos se abre en una sección concreta cuando se llega desde un aviso (p. ej. la revisión del perfil).
   const [objetivosSection, setObjetivosSection] = useState<ObjetivosSection | undefined>(undefined);
   const goTo = (tab: TabId, section?: ObjetivosSection) => {
+    // Al salir de Planificación con una corrección sin guardar, el día vuelve a su sitio antes de pintar la otra pestaña.
+    if (tab !== 'planificacion') restoreInterruptedCorrection();
     setObjetivosSection(section);
     setActiveTab(tab);
   };
@@ -66,7 +69,11 @@ export default function App() {
     // todavía desactualizada, haciendo que lo borrado "reaparezca".
     if (!userId) return;
     setSyncing(true);
-    pullRemoteOrSeed().finally(() => setSyncing(false));
+    pullRemoteOrSeed().finally(() => {
+      // Con lo remoto ya fusionado y antes de pintar las pestañas: una corrección que quedó a medias se devuelve.
+      restoreInterruptedCorrection();
+      setSyncing(false);
+    });
   }, [userId]);
 
   useEffect(() => {

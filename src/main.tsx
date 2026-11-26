@@ -6,6 +6,8 @@ import App from './App';
 import { ErrorBoundary } from './features/shell/ErrorBoundary';
 import { recoverFromChunkError } from './lib/chunkError';
 import { initAppUpdate } from './lib/appUpdate';
+import { restoreInterruptedCorrection } from './features/shell/restoreInterruptedCorrection';
+import { isSupabaseConfigured } from './lib/supabaseClient';
 import './index.css';
 
 // Tras publicar una versión nueva, un móvil con la app instalada puede pedir trozos de JavaScript que ya no existen. Vite avisa con este
@@ -19,6 +21,9 @@ window.addEventListener('unhandledrejection', (event) => {
 
 // Registra el service worker y avisa cuando hay una versión nueva (franja «Actualizar» de `UpdateBanner`).
 void initAppUpdate();
+
+// Sin sincronización, una corrección que quedó a medias se devuelve al arrancar (con ella, después de fusionar lo remoto: ver `App`).
+if (!isSupabaseConfigured) restoreInterruptedCorrection();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
