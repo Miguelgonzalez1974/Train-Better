@@ -52,6 +52,7 @@ describe('el día en energía', () => {
     expect(day).toMatchObject({ morning: 70, computed: 34, energy: 34, pending: 0, projected: 34 });
     expect(day.items[1].start).toBeCloseTo(19.667 - 70 / 60, 2);
     expect(day.items.map((i) => [i.name, i.activity])).toEqual([['Running', 'running'], ['CrossFit', 'sesion']]);
+    expect(day.items.map((i) => i.detail)).toEqual([undefined, 'BS + WOD']);
     expect(day.effort).toBeGreaterThan(60);
   });
 

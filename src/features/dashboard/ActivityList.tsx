@@ -18,7 +18,7 @@ export interface ActivityEntry {
   onOpen: () => void;
 }
 
-/** Una fila por entreno: la pastilla con la energía, el tipo y el RPE. Al tocarla se abre lo que hiciste (o se corrige, si lo añadiste a mano). */
+/** Una fila por entreno: la pastilla con la energía, el tipo (y debajo de qué iba) y el RPE. Al tocarla se abre lo que hiciste (o se corrige, si lo añadiste a mano). */
 function ActivityRow({ item, onOpen }: ActivityEntry) {
   return (
     <button
@@ -31,7 +31,14 @@ function ActivityRow({ item, onOpen }: ActivityEntry) {
       <span className="flex min-w-[5.25rem] *:w-full">
         <EnergyPill cost={item.cost} planned={!item.done} icon={ICON[item.activity]} />
       </span>
-      <span className={`truncate text-sm font-semibold ${item.done ? 'text-white' : 'text-neutral-400'}`}>{item.name}</span>
+      <span className="min-w-0">
+        <span className={`block truncate text-sm font-semibold leading-tight ${item.done ? 'text-white' : 'text-neutral-400'}`}>{item.name}</span>
+        {item.detail && (
+          <span className="mt-0.5 block truncate text-xs leading-tight text-neutral-400" data-testid="activity-detail">
+            {item.detail}
+          </span>
+        )}
+      </span>
       {item.done && item.rpe > 0 ? <span className="num whitespace-nowrap text-[13px] text-neutral-400">RPE {String(item.rpe).replace('.', ',')}</span> : <span />}
     </button>
   );

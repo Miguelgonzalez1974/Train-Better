@@ -1,8 +1,9 @@
-import type { AthleteProfile, DailySession, DayWorkout, NightFeel, SessionHistoryEntry, WorkoutKind } from '../../data/athlete/types';
+import type { AthleteProfile, DailySession, DayWorkout, NightFeel, SessionHistoryEntry, WorkoutKind, WorkSetEntry } from '../../data/athlete/types';
 import { clampEnergy, costOfSrpe, nightAdjust, shiftIso, sleepGain, CARRY_SHARE, spendOfEntry } from '../../engine/energy';
 import { loadHistoryFor } from '../../engine/readinessAt';
 import { strainFromSrpe } from '../../engine/strain';
 import { otherKindInfo } from '../planificacion/otherActivity';
+import { sessionLabel } from './sessionLabel';
 
 /**
  * El día contado en energía: cada cosa entrenada (la sesión, el programa de fuerza y los entrenos añadidos), lo que ha restado, lo que queda por
@@ -18,6 +19,8 @@ export interface EnergyItem {
   activity: ActivityKind;
   /** El tipo de entreno tal como se lee en su fila: «CrossFit», «Running»… */
   name: string;
+  /** De qué iba, en pequeño debajo del nombre («DL + WOD», «Recovery»); sin ello la fila va en una línea. */
+  detail?: string;
   /** Hora de inicio en horas («13,5»), solo para ordenar; null si no se sabe. */
   start: number | null;
   minutes: number;
@@ -83,6 +86,8 @@ export interface DayEnergyInput {
   /** Lo que se espera de la sesión de hoy y del programa de fuerza aceptado, si aún no se han hecho. */
   plannedSession?: { rpe: number; minutes: number } | null;
   plannedProgram?: { rpe: number; minutes: number } | null;
+  /** Las series anotadas: de ellas sale la línea pequeña de la sesión. */
+  workLog?: WorkSetEntry[];
 }
 
 export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
@@ -92,11 +97,13 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
   const entry = history.find((h) => h.date === dateIso);
   if (entry) {
     const end = hourOf(entry.closedAt);
+    const detail = sessionLabel({ entry, session, workLog: input.workLog ?? [] });
     done.push({
       id: 'sesion',
       kind: 'sesion',
       activity: 'sesion',
       name: session?.source === 'custom' ? session.customTitle || 'Sesión propia' : 'CrossFit',
+      ...(detail ? { detail } : {}),
       start: end === null ? null : Math.max(0, end - entry.durationMin / 60),
       minutes: entry.durationMin,
       rpe: entry.rpe,
@@ -106,7 +113,7 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
   }
   for (const c of profile.companionLog ?? []) {
     if (c.date !== dateIso || c.outcome !== 'hecha' || !c.rpe || !c.durationMin) continue;
-    done.push({ id: `programa:${c.id}`, kind: 'programa', activity: 'programa', name: c.label ?? 'Programa de fuerza', start: hourOf(c.time) === null ? null : Math.max(0, hourOf(c.time)! - c.durationMin / 60), minutes: c.durationMin, rpe: c.rpe, cost: costOfSrpe(c.rpe * c.durationMin), done: true });
+    done.push({ id: `programa:${c.id}`, kind: 'programa', activity: 'programa', name: 'Programa de fuerza', ...(c.label ? { detail: c.label } : {}), start: hourOf(c.time) === null ? null : Math.max(0, hourOf(c.time)! - c.durationMin / 60), minutes: c.durationMin, rpe: c.rpe, cost: costOfSrpe(c.rpe * c.durationMin), done: true });
   }
   for (const w of profile.workouts ?? []) {
     if (w.date !== dateIso) continue;

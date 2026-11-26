@@ -323,6 +323,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     session: dayMacroSession ?? null,
     plannedSession: isToday && !todayEntry && todaySession ? estimatePlannedStrain(todaySession, history, strainLearned.bias, null) : null,
     plannedProgram: isToday ? companionExtra : null,
+    workLog: athleteRepository.getWorkLog(),
   };
   const dayEnergy = buildDayEnergy(dayEnergyInput);
   /** Lo que restaría un entreno aún sin guardar: la misma cuenta que luego sale en su fila. */
