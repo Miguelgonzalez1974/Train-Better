@@ -4,6 +4,7 @@ import { ACCESSORY_ANIMATIONS } from './movementAnimationAccessory';
 import { LIFT_ANIMATIONS } from './movementAnimationLifts';
 import { COOLDOWN_ANIMATIONS } from './movementAnimationCooldown';
 import { WARMUP_ANIMATIONS } from './movementAnimationWarmup';
+import { STRETCH_ANIMATIONS } from './movementAnimationStretch';
 
 /**
  * El registro de las animaciones de movimientos: cada movimiento del catálogo con su dibujo propio, más los alias (variantes que se ven
@@ -17,6 +18,7 @@ export const ANIMATIONS: Record<string, MovementAnimation> = {
   ...LIFT_ANIMATIONS,
   ...COOLDOWN_ANIMATIONS,
   ...WARMUP_ANIMATIONS,
+  ...STRETCH_ANIMATIONS,
 };
 
 /** Movimiento → animación que comparte (variantes que de perfil se ven igual o casi). */
@@ -39,6 +41,15 @@ export const ANIMATION_ALIASES: Record<string, string> = {
   'man-maker': 'devils-press',
   'single-under': 'double-under',
   'pvc-pass-through': 'band-shoulder-dislocate',
+  // Calentamiento y vuelta a la calma que se ven como otro
+  'side-lunge-stretch': 'sumo-squat-rocking-stretch',
+  'cossack-lunge': 'sumo-squat-rocking-stretch',
+  'pike-stretch': 'standing-forward-bend',
+  'hamstring-stretch': 'standing-forward-bend',
+  'figure-4-stretch-wall': 'lying-glute-stretch',
+  'general-aerobic-warmup': 'run',
+  'goblet-squat-hold': 'kettlebell-goblet-squat',
+  'glute-activation': 'hip-halo',
   // Accesorios que de perfil se ven como otro
   'hammer-curl': 'bicep-curl',
   'dumbbell-floor-press': 'dumbbell-bench-press',

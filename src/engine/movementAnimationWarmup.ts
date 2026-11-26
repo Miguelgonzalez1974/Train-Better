@@ -33,7 +33,7 @@ interface Front {
 }
 
 /** Un cuerpo visto de frente: las dos piernas y los dos brazos van en el mismo trazo, del mismo color. */
-function front({ hip, left, right, armLeft, armRight, dyn = [] }: Front): FigurePose {
+export function front({ hip, left, right, armLeft, armRight, dyn = [] }: Front): FigurePose {
   const shoulder: Point = [hip[0], hip[1] - L_TORSO];
   const [lf, lk] = left;
   const [rf, rk] = right;
@@ -49,7 +49,7 @@ function front({ hip, left, right, armLeft, armRight, dyn = [] }: Front): Figure
 }
 
 /** Un brazo recto desde el hombro, a `angle` grados desde «hacia abajo»; positivo = hacia la derecha de la pantalla. */
-const straight = (shoulder: Point, angle: number, length = L_UPPER + L_FORE - 0.5): [Point, Point] => [at(shoulder, length * 0.52, angle), at(shoulder, length, angle)];
+export const straight = (shoulder: Point, angle: number, length = L_UPPER + L_FORE - 0.5): [Point, Point] => [at(shoulder, length * 0.52, angle), at(shoulder, length, angle)];
 
 /** La rodilla de una pierna vista de frente: a una distancia fija del pie, hacia fuera. */
 function kneeFrom(foot: Point, hip: Point, out: number, length: number): Point {

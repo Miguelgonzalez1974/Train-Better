@@ -8,7 +8,7 @@ import { FLOOR, dir, line, makeAnim, plus } from './movementAnimationMore';
  */
 
 /** Cuánto se ha entrado en la postura (0 = a medias, 1 = del todo) en una vuelta de `d` segundos: entra, aguanta y vuelve. */
-const hold = (t: number, d: number) =>
+export const hold = (t: number, d: number) =>
   interpolate(
     [
       [0, [0]],
@@ -21,11 +21,11 @@ const hold = (t: number, d: number) =>
   )[0];
 /** Ida y vuelta continua entre −1 y 1 (rodar sobre el rodillo, mecerse). */
 const swing = (t: number, d: number) => Math.sin((t / d) * Math.PI * 2);
-const mix = (a: number, b: number, k: number) => a + (b - a) * k;
-const between = (a: Point, b: Point, k: number): Point => [mix(a[0], b[0], k), mix(a[1], b[1], k)];
+export const mix = (a: number, b: number, k: number) => a + (b - a) * k;
+export const between = (a: Point, b: Point, k: number): Point => [mix(a[0], b[0], k), mix(a[1], b[1], k)];
 const dist = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 /** La mano, como mucho a un brazo de distancia del hombro. */
-const reach = (shoulder: Point, hand: Point, max = L_UPPER + L_FORE - 0.5): Point => (dist(shoulder, hand) <= max ? hand : between(shoulder, hand, max / dist(shoulder, hand)));
+export const reach = (shoulder: Point, hand: Point, max = L_UPPER + L_FORE - 0.5): Point => (dist(shoulder, hand) <= max ? hand : between(shoulder, hand, max / dist(shoulder, hand)));
 
 /** La espalda redondeada (o hundida): una curva de la cadera al hombro. `lift` es cuánto se separa de la línea recta en el centro, hacia arriba. */
 const back = (hip: Point, shoulder: Point, lift: number): Point[] =>

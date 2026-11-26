@@ -5,7 +5,7 @@ import { ANIMATIONS, ANIMATION_ALIASES, animatedMovementIds, animationFor } from
 /** Las que interpolan punto a punto entre posturas con anclajes distintos: el tronco se acorta un poco en las transiciones. */
 const MIXED = ['bar-facing-burpee', 'burpee', 'burpee-to-target', 'burpee-pull-up', 'devils-press', 'burpee-box-jump-over', 'box-jump', 'box-jump-over'];
 /** De frente, inclinarse hacia delante se ve como un tronco más corto. */
-const FORESHORTENED = ['butterfly-stretch'];
+const FORESHORTENED = ['butterfly-stretch', 'straddle-stretch'];
 import { getMovementById } from '../data/movements';
 
 const dist = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -260,10 +260,12 @@ describe('los movimientos de la tanda 2', () => {
 });
 
 describe('la vuelta a la calma', () => {
-  it('los estiramientos que más se programan tienen muñeco; el de glúteo tumbado, todavía no', () => {
+  it('los estiramientos que más se programan tienen muñeco; el de pecho tumbado, todavía no', () => {
     for (const id of ['band-pec-stretch', 'shoulder-stretch', 'upward-facing-dog', 'butterfly-stretch', 'foam-roll-calves', 'shoulder-extension-hands-clasped', 'foam-roll-hamstrings', 'downward-facing-dog', 'foam-roll-quads', 'cat-cow-stretch', 'childs-pose', 'legs-up-the-wall'])
       expect(animationFor(id), id).not.toBeNull();
-    expect(animationFor('lying-glute-stretch')).toBeNull();
+    for (const id of ['sumo-squat-rocking-stretch', 'reclining-butterfly', 'lying-glute-stretch', 'figure-4-stretch-wall', 'standing-forward-bend', 'foam-roll-glutes', 'straddle-stretch', 'foam-roll-lower-back', 'lying-knee-to-chest', 'hip-flexor-stretch', 'pike-stretch', 'hamstring-stretch', 'side-lunge-stretch'])
+      expect(animationFor(id), id).not.toBeNull();
+    expect(animationFor('lying-pectoral-stretch')).toBeNull();
   });
 
   it('perro boca abajo: las manos no se mueven y la cadera es el punto más alto', () => {
@@ -288,10 +290,21 @@ describe('la vuelta a la calma', () => {
 });
 
 describe('el calentamiento', () => {
-  it('los ejercicios que más se programan tienen muñeco; el escorpión, todavía no', () => {
+  it('los ejercicios que más se programan tienen muñeco', () => {
     for (const id of ['crossover-symmetry', 'hip-halo', 'jumping-jacks', 'butt-kicks', 'arm-hugs', 'inchworm-push-up', 'backward-sprint', 'pvc-around-the-world', 'arm-circles', 'side-shuffle', 'sit-up-to-pike', 'high-knees', 'mountain-climbers', 'band-shoulder-dislocate', 'pvc-pass-through'])
       expect(animationFor(id), id).not.toBeNull();
-    expect(animationFor('scorpions')).toBeNull();
+    for (const id of ['scorpions', 'sit-up-to-straddle', 'thoracic-mobility-stretch', 'spiderman-lunge', 'lateral-leg-swings', 'thoracic-spine-bb-stretch', 'cossack-lunge', 'general-aerobic-warmup', 'goblet-squat-hold', 'glute-activation'])
+      expect(animationFor(id), id).not.toBeNull();
+  });
+
+  it('escorpión (visto desde arriba): una pierna cruza al otro lado y los brazos no se mueven', () => {
+    const a = ANIMATIONS.scorpions;
+    const rest = a.pose(0);
+    const crossed = a.pose(a.duration * 0.25);
+    expect(rest.legs[0][0]).toBeLessThan(rest.torso[0][0]);
+    expect(crossed.legs[0][0]).toBeGreaterThan(crossed.torso[0][0] + 30);
+    expect(dist(crossed.hand, rest.hand)).toBeLessThan(0.001);
+    expect(a.pose(a.duration * 0.75).legs2![0][0]).toBeLessThan(rest.torso[0][0] - 30);
   });
 
   it('jumping jacks: se abren los pies y las manos suben por encima de la cabeza', () => {
