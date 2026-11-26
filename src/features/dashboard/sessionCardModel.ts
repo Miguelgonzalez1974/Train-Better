@@ -54,7 +54,7 @@ export interface SessionCardModel {
   effort?: CardEffort;
   figures: CardFigure[];
   line?: CardLine;
-  /** Qué abre al tocarla: la sesión en Planificación, «Lo que hiciste», o nada. */
+  /** Qué abre al tocarla: la sesión en Planificación, la pantalla del entreno hecho, o nada. */
   action: 'plan' | 'done' | 'none';
 }
 
@@ -124,7 +124,7 @@ function liftFigure(b: SessionBlockResult, profile: AthleteProfile, named = fals
 }
 
 /** El resultado que ya tienes en un benchmark que se repite («tu marca 4:58»), el más reciente. */
-function previousBenchmarkMark(history: SessionHistoryEntry[], benchmarkId: string, beforeIso: string): string | null {
+export function previousBenchmarkMark(history: SessionHistoryEntry[], benchmarkId: string, beforeIso: string): string | null {
   const past = history.filter((h) => h.date < beforeIso && h.movementIds?.includes(benchmarkId) && h.wodResult?.value && !h.wodResult.capped).sort((a, b) => a.date.localeCompare(b.date));
   return past.length > 0 ? past[past.length - 1].wodResult!.value : null;
 }

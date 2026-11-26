@@ -1335,7 +1335,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const [openDay] = useState(() => (dashboardAct.current?.startsWith('dia:') ? dashboardAct.current.slice(4) : null));
   useEffect(() => {
     const node = handoff.take('support-start');
-    const pending = ['cerrar', 'anotar', 'otra-cosa'].includes(dashboardAct.current ?? '') ? dashboardAct.current : null;
+    const pending = ['cerrar', 'anotar', 'otra-cosa', 'corregir'].includes(dashboardAct.current ?? '') ? dashboardAct.current : null;
     const act = handoff.take('plan-act') ?? pending;
     const canOpen = Boolean(session && !session.isRestDay && session.source !== 'custom' && session.blocks.length > 0 && !alreadyCompletedToday);
     if (node) openSupport(node);
@@ -1346,6 +1346,12 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
       else openQuickLog();
     }
     else if (act === 'otra-cosa' && session && !alreadyCompletedToday) openQuickLog();
+    // «Corregir la sesión» desde la pantalla del entreno. La corrección empieza una sola vez (repetirla perdería la copia de cómo estaba); si el
+    // efecto se repite (modo desarrollo) solo se vuelven a abrir las tarjetas.
+    else if (act === 'corregir' && alreadyCompletedToday) {
+      if (correctionRef.current) openReview();
+      else handleCorrectDay();
+    }
     else if (act === 'otro-wod' && hasWodBlock && !alreadyCompletedToday) {
       const t = window.setTimeout(() => handleRexAct('otro-wod'), 400);
       return () => window.clearTimeout(t);

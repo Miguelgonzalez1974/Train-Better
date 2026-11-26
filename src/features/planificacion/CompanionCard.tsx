@@ -199,7 +199,7 @@ export function CompanionCard({
         durationMin: minutes ?? mins,
         time: clockTime(new Date()),
         achieved: plan.intensity ? achieved : undefined,
-        // Lo que se hizo, levantamiento a levantamiento: el Dashboard lo enseña después («Lo que hiciste»).
+        // Lo que se hizo, levantamiento a levantamiento: el Dashboard lo enseña después (la pantalla del entreno).
         lifts: plan.lifts.map((l) => ({
           movementId: l.movementId,
           sets: l.sets,

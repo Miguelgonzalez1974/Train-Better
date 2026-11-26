@@ -39,7 +39,7 @@ export function DayRows({
   top?: ReactNode;
   /** De dónde sales, antes de entrenar. */
   morning?: ReactNode;
-  /** Abre «Lo que hiciste»: la sesión del macro y la del programa de ese día. */
+  /** Abre la pantalla del entreno hecho: la sesión del macro y la del programa de ese día. */
   onOpenDone: () => void;
   onNavigateToPlanificacion: () => void;
   onAddWorkout: () => void;

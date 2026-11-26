@@ -35,6 +35,8 @@ import {
 import { buildOpenItems } from '../objetivos/openItems';
 import { MyWeek, type WeekView } from './MyWeek';
 import { STRENGTH_METHOD_LABEL } from '../../engine/strengthPrograms';
+import { summarizeCompanionEntry } from '../../engine/companionSummary';
+import { resolveMovementDisplayName } from '../../data/movements';
 import { LevelSummaryCard } from './LevelSummaryCard';
 import { LevelScreen, type LevelChip } from './LevelScreen';
 import { buildLevelCard } from './myLevelModel';
@@ -65,7 +67,8 @@ import { markRingHintSeen, ringHintSeen } from '../../lib/ringHint';
 import { DayHeader, DaySelector, dayLabel, ringDayLabel, shiftDay, useDaySwipe } from './DashNav';
 import { DayRows } from './DayRows';
 import { buildSessionCard } from './sessionCardModel';
-import { DaySummaryModal } from './DaySummaryModal';
+import { ActivityScreen, type ActivityScreenProps } from './ActivityScreen';
+import { buildActivityDetail } from './activityDetail';
 import { nutritionPct, type NutritionSummary } from './nutritionSummary';
 import { FormScreen, type FormChip } from './FormScreen';
 import { LoadPanel } from './LoadPanel';
@@ -144,7 +147,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [formChip, setFormChip] = useState<FormChip | null>(null);
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [showMobility, setShowMobility] = useState(false);
-  /** «Lo que hiciste»: la sesión del macro y la del programa de fuerza del día elegido. */
+  /** La pantalla del entreno hecho: la sesión y, debajo, la del programa de fuerza del día elegido. */
   // Se abre sola cuando Planificación manda aquí a ver el resumen («Ver resumen» de Rex tras cerrar la sesión).
   const [showDone, setShowDone] = useState(() => handoff.peek('dash-act') === 'resumen');
   useEffect(() => {
@@ -361,6 +364,45 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     athleteRepository.saveProfile({ ...current, nightLog });
     resetUpcomingSessions(todayIso);
     setProfile(athleteRepository.getProfile());
+  }
+  /** Lo que enseña la pantalla del entreno del día elegido (solo se calcula al abrirla). */
+  function activityScreen(): Omit<ActivityScreenProps, 'onClose'> {
+    // La sesión tal como se registró, sin la carga del programa sumada (esa sale aparte).
+    const entry = history.find((h) => h.date === dayIso);
+    const session = (isToday ? athleteRepository.getCachedSession(dayIso) : profile.sessionCache?.[dayIso]) ?? null;
+    const item = dayEnergy.items.find((i) => i.kind === 'sesion' && i.done);
+    const detail = entry ? buildActivityDetail({ entry, session, history, profile, workLog: athleteRepository.getWorkLog() }) : null;
+    const date = new Date(`${dayIso}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+    return {
+      backLabel: dayLabel(dayIso, todayIso),
+      title: item?.name ?? 'Programa de fuerza',
+      subtitle: [item?.detail, date].filter(Boolean).join(' · '),
+      ...(entry ? { stats: { cost: item?.cost ?? null, rpe: entry.rpe, minutes: entry.durationMin, rx: detail?.wods.some((w) => w.result) ? (entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado') : null } } : {}),
+      effort: dayEnergy.items.some((i) => i.done) ? { value: dayEnergy.effort, low: shown.strain.target.low, high: shown.strain.target.high } : null,
+      detail,
+      programs: dayCompanion.map((c) => {
+        const method = (profile.strengthPrograms ?? []).find((p) => p.id === c.programId)?.method;
+        return { ...summarizeCompanionEntry(c, resolveMovementDisplayName), method: method ? STRENGTH_METHOD_LABEL[method] : null };
+      }),
+      ...(isToday
+        ? {
+            today: {
+              session,
+              summary: summaryData,
+              suggestions: e1rmSuggestions,
+              onConfirm: confirmE1rm,
+              onDismiss: dismissE1rm,
+              onCorrect: entry
+                ? () => {
+                    setShowDone(false);
+                    handoff.put('plan-act', 'corregir');
+                    onNavigateToPlanificacion();
+                  }
+                : null,
+            },
+          }
+        : {}),
+    };
   }
   // La pregunta de la noche sale a partir de las 20:00 (o si ya la contestaste); de dónde sales, antes de entrenar.
   const askNight = isToday && dayEnergy.computed !== null && (new Date().getHours() >= NIGHT_FROM_HOUR || dayEnergy.nightFeel !== undefined);
@@ -899,27 +941,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           <BalanceBox balance={dayBalanceNow} target={shown.strain.target} isToday notDone={describeSkipped(shown.entry?.skipped)} />
         </Modal>
       )}
-      {showDone && (
-        <DaySummaryModal
-          open
-          onClose={() => setShowDone(false)}
-          dayLabel={dayLabel(dayIso, todayIso)}
-          // La sesión del macro tal como se registró, sin la carga del programa sumada (esa sale debajo, en su propio bloque).
-          entry={history.find((h) => h.date === dayIso)}
-          session={isToday ? athleteRepository.getCachedSession(dayIso) : (profile.sessionCache?.[dayIso] ?? null)}
-          workLog={athleteRepository.getWorkLog()}
-          companion={dayCompanion}
-          methodOf={(programId) => {
-            const m = (profile.strengthPrograms ?? []).find((p) => p.id === programId)?.method;
-            return m ? STRENGTH_METHOD_LABEL[m] : null;
-          }}
-          onOpenPlan={isToday ? () => {
-            setShowDone(false);
-            onNavigateToPlanificacion();
-          } : undefined}
-          summary={isToday && summaryData ? { data: summaryData, e1rmSuggestions, onConfirmE1rm: confirmE1rm, onDismissE1rm: dismissE1rm } : undefined}
-        />
-      )}
+      {showDone && <ActivityScreen onClose={() => setShowDone(false)} {...activityScreen()} />}
       {trainingView && (
         <Modal open onClose={() => setTrainingView(null)} title="Historial">
           <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-white/[0.05] p-1" role="tablist" aria-label="Historial">

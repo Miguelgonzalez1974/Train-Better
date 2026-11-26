@@ -1,7 +1,7 @@
 import type { CompanionLogEntry } from '../data/athlete/types';
 
 /**
- * «Lo que hiciste» del programa de fuerza que convive con el macro: una sesión del registro, redactada para enseñarla (el título, una línea por
+ * Lo que se hizo del programa de fuerza que convive con el macro: una sesión del registro, redactada para enseñarla (el título, una línea por
  * levantamiento y cómo salió). Puro: el nombre de cada movimiento entra por `nameOf`.
  */
 
