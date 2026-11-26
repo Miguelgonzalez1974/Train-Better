@@ -4,6 +4,8 @@ import { ANIMATIONS, ANIMATION_ALIASES, animatedMovementIds, animationFor } from
 
 /** Las que interpolan punto a punto entre posturas con anclajes distintos: el tronco se acorta un poco en las transiciones. */
 const MIXED = ['bar-facing-burpee', 'burpee', 'burpee-to-target', 'burpee-pull-up', 'devils-press', 'burpee-box-jump-over', 'box-jump', 'box-jump-over'];
+/** De frente, inclinarse hacia delante se ve como un tronco más corto. */
+const FORESHORTENED = ['butterfly-stretch'];
 import { getMovementById } from '../data/movements';
 
 const dist = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -85,11 +87,12 @@ describe('animaciones de movimientos', () => {
     for (const [id, a] of Object.entries(ANIMATIONS)) {
       for (const t of samples(a.duration)) {
         const p = a.pose(t);
-        // Tronco, muslo y pierna: largos fijos.
+        // Tronco, muslo y pierna: largos fijos. El tronco se mide de la cadera al hombro (una espalda redondeada lleva puntos en medio).
         // El burpee interpola punto a punto entre posturas con anclajes distintos: en el salto el tronco se acorta un poco, nunca se alarga.
-        if (MIXED.includes(id)) expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeGreaterThan(40);
-        else expect(dist(p.torso[0], p.torso[1]), `${id} torso t=${t}`).toBeCloseTo(52, 1);
-        expect(dist(p.torso[0], p.torso[1])).toBeLessThanOrEqual(52.05);
+        const torso = dist(p.torso[0], p.torso[p.torso.length - 1]);
+        if (MIXED.includes(id) || FORESHORTENED.includes(id)) expect(torso, `${id} torso t=${t}`).toBeGreaterThan(40);
+        else expect(torso, `${id} torso t=${t}`).toBeCloseTo(52, 1);
+        expect(torso).toBeLessThanOrEqual(52.05);
         expect(dist(p.legs[0], p.legs[1]), `${id} t=${t}`).toBeGreaterThan(40);
         // El brazo: dos tramos que suman como mucho su largo completo.
         expect(dist(p.arm[0], p.arm[1]) + dist(p.arm[1], p.arm[2])).toBeLessThanOrEqual(58.6);
@@ -253,6 +256,34 @@ describe('los movimientos de la tanda 2', () => {
     expect(Math.abs(air.legs[0][0] - 222)).toBeLessThan(2);
     expect(a.pose(3.3).legs[0][0]).toBeCloseTo(272, 0);
     expect(a.pose(a.duration).legs[0][0]).toBeCloseTo(170, 0);
+  });
+});
+
+describe('la vuelta a la calma', () => {
+  it('los estiramientos que más se programan tienen muñeco; el de glúteo tumbado, todavía no', () => {
+    for (const id of ['band-pec-stretch', 'shoulder-stretch', 'upward-facing-dog', 'butterfly-stretch', 'foam-roll-calves', 'shoulder-extension-hands-clasped', 'foam-roll-hamstrings', 'downward-facing-dog', 'foam-roll-quads', 'cat-cow-stretch', 'childs-pose', 'legs-up-the-wall'])
+      expect(animationFor(id), id).not.toBeNull();
+    expect(animationFor('lying-glute-stretch')).toBeNull();
+  });
+
+  it('perro boca abajo: las manos no se mueven y la cadera es el punto más alto', () => {
+    const a = ANIMATIONS['downward-facing-dog'];
+    for (const t of samples(a.duration, 20)) {
+      const p = a.pose(t);
+      expect(dist(p.hand, a.pose(0).hand)).toBeLessThan(0.001);
+      expect(p.torso[0][1]).toBeLessThan(p.torso[1][1] - 20);
+      expect(p.torso[0][1]).toBeLessThan(p.legs[0][1] - 40);
+    }
+  });
+
+  it('gato-vaca: la espalda sube y baja respecto a la línea de la cadera al hombro', () => {
+    const a = ANIMATIONS['cat-cow-stretch'];
+    const middle = (t: number) => {
+      const torso = a.pose(t).torso;
+      return torso[Math.floor(torso.length / 2)][1] - torso[0][1];
+    };
+    expect(middle(a.duration * 0.25)).toBeLessThan(-12);
+    expect(middle(a.duration * 0.75)).toBeGreaterThan(12);
   });
 });
 
