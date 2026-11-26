@@ -85,6 +85,13 @@ const FEEL_TEXT = { facil: 'Te pareció fácil', justo: 'Te pareció justo', dur
 
 export const num = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',');
 
+/** La cifra de una serie y lo que se lee debajo. Con peso mandan los kilos; sin él (dominadas, fondos), las repeticiones, o que se hizo. */
+export function setFigure(s: SetDetail): { value: string; unit: string } {
+  const unit = s.reps === 1 ? 'rep' : 'reps';
+  if (s.kg > 0) return { value: num(s.kg), unit: s.reps > 0 ? `${s.reps} ${unit}` : 'kg' };
+  return s.reps > 0 ? { value: String(s.reps), unit } : { value: '✓', unit: 'hecha' };
+}
+
 const nameOf = (id: string) => resolveMovementDisplayName(id);
 
 /** El nombre de un levantamiento anotado: un complejo propio solo se llama por su nombre mientras la sesión sigue guardada. */

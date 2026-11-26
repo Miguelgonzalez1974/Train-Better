@@ -7,7 +7,7 @@ import type { DailySession } from '../../data/athlete/types';
 import { resolveMovementDisplayName } from '../../data/movements';
 import { secondsText } from '../../engine/wodGhost';
 import { NutritionTip } from '../planificacion/NutritionTip';
-import { num, type ActivityDetail, type LiftDetail, type WodDetail } from './activityDetail';
+import { num, setFigure, type ActivityDetail, type LiftDetail, type WodDetail } from './activityDetail';
 import { EnergyPill } from './EnergyPill';
 import { ACCENT as EFFORT, OVER } from './StrainRing';
 
@@ -96,9 +96,9 @@ function LiftCard({ lift }: { lift: LiftDetail }) {
         <ol className="mt-2.5 grid grid-cols-4 gap-1.5" aria-label={`Series de ${lift.name}`}>
           {lift.sets.map((s, i) => (
             <li key={i} className={`flex flex-col items-center rounded-lg px-1 py-1.5 ${s.quality === 'fallada' ? 'bg-bad/10' : 'bg-white/[0.05]'}`}>
-              <span className={`num text-[15px] font-semibold ${s.quality === 'fallada' ? 'text-bad' : 'text-white'}`}>{s.kg > 0 ? num(s.kg) : '—'}</span>
+              <span className={`num text-[15px] font-semibold ${s.quality === 'fallada' ? 'text-bad' : 'text-white'}`}>{setFigure(s).value}</span>
               <span className={`text-[11px] ${s.quality === 'fallada' ? 'text-bad' : s.quality === 'justa' ? 'text-warn' : 'text-neutral-500'}`}>
-                {s.quality === 'fallada' ? 'fallada' : s.quality === 'justa' ? 'justa' : s.reps > 0 ? `${s.reps} ${s.reps === 1 ? 'rep' : 'reps'}` : 'kg'}
+                {s.quality === 'fallada' ? 'fallada' : s.quality === 'justa' ? 'justa' : setFigure(s).unit}
               </span>
             </li>
           ))}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DailySession, SessionHistoryEntry, WorkSetEntry } from '../../data/athlete/types';
 import { makeProfile } from '../../engine/__fixtures';
-import { buildActivityDetail } from './activityDetail';
+import { buildActivityDetail, setFigure } from './activityDetail';
 
 const DAY = '2026-11-25';
 const entry = (over: Partial<SessionHistoryEntry> = {}): SessionHistoryEntry => ({ date: DAY, mesocycleWeek: 2, movementIds: ['push-press'], rxOrScaled: 'rx', rpe: 7, durationMin: 80, ...over });
@@ -42,6 +42,13 @@ describe('la fuerza y la halterofilia del entreno', () => {
     expect(lift).toMatchObject({ block: 'strength', topKg: 62.5, delta: 2.5, record: true });
     expect(lift.sets[2]).toMatchObject({ kg: 70, quality: 'fallada' });
     expect(lift.pct).toBeGreaterThan(0);
+  });
+
+  it('una serie sin peso enseña las repeticiones, o que se hizo', () => {
+    expect(setFigure({ kg: 62.5, reps: 3 })).toEqual({ value: '62,5', unit: '3 reps' });
+    expect(setFigure({ kg: 40, reps: 0 })).toEqual({ value: '40', unit: 'kg' });
+    expect(setFigure({ kg: 0, reps: 8 })).toEqual({ value: '8', unit: 'reps' });
+    expect(setFigure({ kg: 0, reps: 0 })).toEqual({ value: '✓', unit: 'hecha' });
   });
 
   it('sin series anotadas enseña lo previsto; lo saltado no sale', () => {
