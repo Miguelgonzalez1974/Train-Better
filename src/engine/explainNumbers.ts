@@ -64,11 +64,11 @@ export function explainReadiness(r: ReadinessScore): Explanation {
   const lead = level === 'alta' ? 'Llegas con ganas.' : level === 'baja' ? 'Llegas cansado.' : 'Llegas normal.';
   const tone: ExplainTone = level === 'alta' ? 'good' : level === 'baja' ? 'bad' : 'mid';
   const rows: ExplainRow[] = morningRows(r.energy).map((row) =>
-    row.base ? { kind: 'plain', label: row.label, value: String(row.value), detail: row.detail } : { kind: 'delta', label: row.label, value: row.value, detail: row.detail },
+    row.base ? { kind: 'plain', label: row.label, value: `${row.value} %`, detail: row.detail } : { kind: 'delta', label: row.label, value: row.value, detail: row.detail },
   );
   const text = r.estimated
-    ? `Tu preparación es ${r.total} sobre 100, estimada: falta el check-in de hoy. Esto es lo que la ha formado:`
-    : `Tu preparación es ${r.total} sobre 100. Esto es lo que la ha formado:`;
+    ? `Tu preparación es del ${r.total} %, estimada: falta el check-in de hoy. Esto es lo que la ha formado:`
+    : `Tu preparación es del ${r.total} %. Esto es lo que la ha formado:`;
   const foot = 'Es la energía con la que sales por la mañana: no cambia al entrenar. Lo que entrenes gasta energía y cuenta mañana.';
   const actions: Explanation['actions'] = [{ label: 'Ver la evolución', action: 'ver-preparacion' }];
   if (level !== 'alta') actions.push({ label: 'Hacer recovery', action: 'recovery' });
@@ -103,13 +103,13 @@ export function explainEnergy(i: EnergyExplainInput): Explanation {
       actions: [{ label: 'Ver la preparación', action: 'ver-preparacion' }],
     };
   }
-  const rows: ExplainRow[] = [{ kind: 'plain', label: i.isToday ? 'Has salido con' : 'Saliste con', value: String(i.morning) }];
+  const rows: ExplainRow[] = [{ kind: 'plain', label: i.isToday ? 'Has salido con' : 'Saliste con', value: `${i.morning} %` }];
   for (const d of i.done) rows.push({ kind: 'delta', label: d.name, value: -d.cost });
   if (i.energy !== i.computed) rows.push({ kind: 'delta', label: 'Tu respuesta de la noche', value: i.energy - i.computed });
-  if (i.pending > 0 && i.projected !== null) rows.push({ kind: 'plain', label: 'Si haces lo que falta', value: String(i.projected) });
+  if (i.pending > 0 && i.projected !== null) rows.push({ kind: 'plain', label: 'Si haces lo que falta', value: `${i.projected} %` });
   return {
     id: 'energia',
-    lead: i.isToday ? `Te quedan ${i.energy}.` : `Acabaste en ${i.energy}.`,
+    lead: i.isToday ? `Te queda un ${i.energy} %.` : `Acabaste con un ${i.energy} %.`,
     tone: 'neutral',
     text: i.done.length === 0 ? 'Aún no has gastado nada: es la energía con la que sales.' : 'Cada entreno resta 1 punto por cada 20 de RPE por minutos.',
     rows,
@@ -291,7 +291,7 @@ export function explainObjective(target: StrainTarget): Explanation {
     text: target.provisional
       ? 'Es la zona de esfuerzo que te conviene hoy. Aún sin tu check-in: la rehago cuando lo contestes.'
       : target.readiness !== null
-        ? `Es la zona de esfuerzo que te conviene hoy, con una preparación de ${Math.round(target.readiness)}. Por las razones de abajo, este es tu rango.`
+        ? `Es la zona de esfuerzo que te conviene hoy, con una preparación del ${Math.round(target.readiness)} %. Por las razones de abajo, este es tu rango.`
         : 'Es la zona de esfuerzo que te conviene hoy, según cómo estás.',
     rows,
     foot: 'Con más preparación el rango sube; si vienes cargado, baja.',

@@ -20,7 +20,7 @@ export function ringQuestion(id: ExplainId, n: RingNumbers): string {
   const r = (v: number) => Math.round(v);
   switch (id) {
     case 'preparacion':
-      return n.readiness !== null ? `¿Por qué mi preparación es ${r(n.readiness)}?` : '¿Cómo se calcula mi preparación?';
+      return n.readiness !== null ? `¿Por qué mi preparación es del ${r(n.readiness)} %?` : '¿Cómo se calcula mi preparación?';
     case 'energia':
       return '¿Cuánta energía me queda?';
     case 'carga':

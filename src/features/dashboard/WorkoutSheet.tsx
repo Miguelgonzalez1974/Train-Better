@@ -91,7 +91,7 @@ export function WorkoutSheet({
         Resta <strong className="num font-semibold text-white">{cost}</strong> de energía
         {energy !== null && (
           <>
-            . Te quedarán <strong className="num font-semibold text-white">{energy}</strong>
+            . Te quedará un <strong className="num font-semibold text-white">{energy} %</strong>
             {withNight && ' (contando tu respuesta de la noche)'}
           </>
         )}

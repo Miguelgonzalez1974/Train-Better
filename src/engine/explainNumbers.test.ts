@@ -41,9 +41,9 @@ describe('explicar la preparación', () => {
   it('lead y color según el nivel, y de dónde sale: anoche, el sueño y lo que resta', () => {
     const e = explainReadiness(readiness());
     expect(e).toMatchObject({ id: 'preparacion', lead: 'Llegas normal.', tone: 'mid' });
-    expect(e.text).toBe('Tu preparación es 58 sobre 100. Esto es lo que la ha formado:');
+    expect(e.text).toBe('Tu preparación es del 58 %. Esto es lo que la ha formado:');
     expect(e.rows).toEqual([
-      { kind: 'plain', label: 'Anoche acabaste en', value: '33', detail: undefined },
+      { kind: 'plain', label: 'Anoche acabaste en', value: '33 %', detail: undefined },
       { kind: 'delta', label: 'Sueño · 6 h 24', value: 33, detail: undefined },
       { kind: 'delta', label: 'Lo entrenado estos días', value: -6, detail: undefined },
       { kind: 'delta', label: 'Estrés y ánimo', value: -2, detail: undefined },
@@ -125,7 +125,7 @@ describe('explicar lo previsto, lo realizado y el objetivo', () => {
       { kind: 'plain', label: 'Preparación normal', value: '' },
       { kind: 'plain', label: 'Carga óptima', value: '' },
     ]);
-    expect(e.text).toContain('preparación de 58');
+    expect(e.text).toContain('preparación del 58 %');
     expect(explainObjective(target({ provisional: true })).text).toContain('Aún sin tu check-in');
     expect(explainObjective(target({ readiness: null })).text).toBe('Es la zona de esfuerzo que te conviene hoy, según cómo estás.');
   });

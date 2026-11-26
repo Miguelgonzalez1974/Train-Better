@@ -70,7 +70,7 @@ export function trendSentence(points: TrendPoint[], todayIso?: string): string |
   const rough = over.filter((p) => p.readiness !== null && readinessBand(p.readiness) !== 'good');
   if (rough.length === 1) {
     const p = rough[0];
-    return `Te pasaste del objetivo ${dayWord(p.iso, long)} con la preparación en ${Math.round(p.readiness!)}: es el tipo de día que cuesta recuperar.`;
+    return `Te pasaste del objetivo ${dayWord(p.iso, long)} con la preparación en el ${Math.round(p.readiness!)} %: es el tipo de día que cuesta recuperar.`;
   }
   if (rough.length > 1) {
     const last = rough[rough.length - 1];

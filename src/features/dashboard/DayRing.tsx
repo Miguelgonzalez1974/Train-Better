@@ -26,8 +26,8 @@ export const ZONE_COLOR: Record<AcwrResult['zone'], string> = {
   moderada: `rgb(var(${ZONE_TOKEN.moderada}))`,
   alta: `rgb(var(${ZONE_TOKEN.alta}))`,
 };
-/** La frase corta bajo la cifra de Preparación (las mismas palabras que el apartado Preparación: «Llegas con ganas / normal / cansado»). */
-const PREP_WORD: Record<NonNullable<ReadinessScore['level']>, string> = { alta: 'con ganas', normal: 'normal', baja: 'cansado' };
+/** La palabra bajo la cifra de Preparación (las mismas del apartado Preparación: con ganas / normal / cansado). */
+const PREP_WORD: Record<NonNullable<ReadinessScore['level']>, string> = { alta: 'Con ganas', normal: 'Normal', baja: 'Cansado' };
 
 /** El aro de la energía: el círculo entero son 100 puntos. */
 const R = 42;
@@ -142,6 +142,11 @@ export function BalanceBox({ balance, target, isToday, notDone }: { balance: Day
   );
 }
 
+/** El signo de la energía: más pequeño que la cifra a la que acompaña. */
+function Percent() {
+  return <span className="ml-px text-[0.52em] font-semibold">%</span>;
+}
+
 /** Un tramo del aro, de `from` a `to` puntos (0 a 100), empezando arriba. */
 function Arc({ from, to, color, opacity = 1, show }: { from: number; to: number; color: string; opacity?: number; show: boolean }) {
   const length = show ? (Math.max(0, to - from) / 100) * AROUND : 0;
@@ -162,38 +167,10 @@ function Arc({ from, to, color, opacity = 1, show }: { from: number; to: number;
   );
 }
 
-/** Una marca que cruza el aro en un valor (con cuánto saliste, o lo calculado antes de tu respuesta de la noche). */
-function Tick({ at, color }: { at: number; color: string }) {
-  const a = (at / 100) * 2 * Math.PI;
-  const point = (r: number) => ({ x: 50 + r * Math.cos(a), y: 50 + r * Math.sin(a) });
-  const from = point(R - STROKE / 2 - 1.5);
-  const to = point(R + STROKE / 2 + 1.5);
-  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} strokeWidth="1.8" strokeLinecap="round" style={{ stroke: color }} />;
-}
-
-/** Los trozos gastados del aro, desde la energía de salida hacia abajo: uno por bloque de la sesión o por entreno, cada uno con su color. */
-function spentSegments(day: DayEnergy): { from: number; to: number; color: string }[] {
-  if (day.morning === null) return [];
-  let top = day.morning;
-  const out: { from: number; to: number; color: string }[] = [];
-  for (const item of day.items.filter((i) => i.done)) {
-    const parts = item.blocks && item.blocks.length > 0 ? item.blocks : [item];
-    for (const part of parts) {
-      if (part.cost <= 0 || top <= 0) continue;
-      const bottom = Math.max(0, top - part.cost);
-      // Lo que tu respuesta de la noche devuelve a «lo que queda» ya no se pinta como gastado.
-      const from = Math.max(bottom, day.energy ?? 0);
-      if (top > from) out.push({ from, to: top, color: part.color });
-      top = bottom;
-    }
-  }
-  return out;
-}
-
 /**
- * El estado del día: un solo aro de energía. Lo brillante es lo que te queda; cada trozo apagado, lo que ha gastado un bloque o un entreno (con el
- * color de su tarjeta), y la marca, con cuánto saliste. A la izquierda la preparación de la mañana (que no cambia) y la carga; a la derecha el
- * esfuerzo del día frente a tu objetivo. Tocar un número le pregunta a Rex de dónde sale.
+ * El estado del día: un solo aro de energía, de un solo color. Lo fuerte es lo que te queda y el tramo suave, lo que ya no tienes de la energía
+ * con la que saliste (el reparto por bloques va en las tarjetas). A la izquierda la preparación de la mañana (que no cambia) y la carga; a la
+ * derecha el esfuerzo del día frente a tu objetivo. Todo lo que lleva % es energía. Tocar un número le pregunta a Rex de dónde sale.
  */
 export function DayRing({
   readiness,
@@ -202,7 +179,7 @@ export function DayRing({
   energy,
   start,
   notDone,
-  centerLabel,
+  dayKey,
   isToday,
   onAsk,
   hintPending,
@@ -221,8 +198,8 @@ export function DayRing({
   start?: { planned: number | null } | null;
   /** Lo que no se hizo de la sesión ya cerrada, en una frase ("Sin el WOD, por la molestia."); null si se hizo todo. */
   notDone?: string | null;
-  /** Lo que va sobre la cifra del centro: "Hoy", "Ayer" o el día. */
-  centerLabel: string;
+  /** El día que se enseña: al cambiar, el aro se vuelve a llenar. */
+  dayKey: string;
   isToday: boolean;
   /** Tocar el aro o un número es preguntar a Rex de dónde sale: el Dashboard abre el panel de Rex con esa pregunta y su respuesta. */
   onAsk: (id: ExplainId) => void;
@@ -232,7 +209,7 @@ export function DayRing({
     setFilled(false);
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
-  }, [centerLabel]);
+  }, [dayKey]);
   const ask = (id: ExplainId) => {
     onAsk(id);
     if (hintPending) onHintSeen();
@@ -248,7 +225,10 @@ export function DayRing({
   const plannedValue = planned?.strain ?? null;
   const estimated = isToday && readiness.estimated && !trained;
   const now = energy.energy;
-  const word = now === null ? 'sin datos' : estimated ? 'estimada' : energy.nightFeel && energy.computed !== now ? `calculada ${energy.computed}` : isToday ? 'de 100' : 'al acabar';
+  const word = now === null ? 'Sin datos' : estimated ? 'Estimada' : 'Energía';
+  /** Con cuánta se salió, si ya queda menos: es el tramo suave del aro. */
+  const started = now !== null && !estimated && energy.morning !== null && energy.morning > now ? energy.morning : null;
+  const prepEstimated = isToday && readiness.estimated;
   const balance = !isToday && start ? dayBalance({ planned: start.planned, real: strain.real, target, status: strain.status, isToday, prepMorning: null, prepNow: total }) : null;
 
   return (
@@ -261,11 +241,19 @@ export function DayRing({
               Preparación
             </span>
             <span className="num mt-1 text-[2rem] font-semibold leading-none tracking-tight" style={{ color: prepTint }} data-testid="prep-number">
-              {total !== null ? total : '—'}
+              {total !== null ? (
+                <>
+                  {prepEstimated ? '~' : ''}
+                  {total}
+                  <Percent />
+                </>
+              ) : (
+                '—'
+              )}
             </span>
             {total !== null && readiness.level && (
               <span className="mt-1 text-[11px] font-semibold leading-tight" style={{ color: prepTint }} data-testid="prep-word">
-                {isToday ? 'Llegas' : 'Llegabas'} {PREP_WORD[readiness.level]}
+                {PREP_WORD[readiness.level]}
               </span>
             )}
           </button>
@@ -286,7 +274,7 @@ export function DayRing({
         <button
           type="button"
           onClick={() => ask('energia')}
-          aria-label={now === null ? 'Energía sin datos' : `Energía ${now} de 100. Rex lo explica`}
+          aria-label={now === null ? 'Energía sin datos. Rex lo explica' : `Energía ${now} %${started === null ? '' : `, has salido con ${started} %`}. Rex lo explica`}
           className={`relative aspect-square w-[min(46vw,11rem)] rounded-full ${hintPending ? 'animate-ring-hint motion-reduce:animate-none' : ''}`}
           data-testid="energy-ring"
         >
@@ -297,21 +285,24 @@ export function DayRing({
               {now !== null && !estimated && (
                 <>
                   <Arc from={0} to={now} color="rgb(var(--c-white))" show={filled} />
-                  {spentSegments(energy).map((seg, i) => (
-                    <Arc key={i} from={seg.from} to={seg.to} color={seg.color} opacity={0.6} show={filled} />
-                  ))}
-                  {trained && energy.morning !== null && <Tick at={energy.morning} color="rgb(var(--c-white) / 0.55)" />}
-                  {energy.nightFeel && energy.computed !== null && energy.computed !== now && <Tick at={energy.computed} color="rgb(var(--c-brand-orange))" />}
+                  {started !== null && <Arc from={now} to={started} color="rgb(var(--c-white))" opacity={0.28} show={filled} />}
                 </>
               )}
             </g>
           </svg>
           <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{centerLabel}</span>
-            <span className="num mt-0.5 text-[2.6rem] font-bold leading-none tracking-tight text-white" data-testid="energy-number">
-              {now === null ? '—' : `${estimated ? '~' : ''}${now}`}
+            <span className="num text-[2.75rem] font-bold leading-none tracking-tight text-white" data-testid="energy-number">
+              {now === null ? (
+                '—'
+              ) : (
+                <>
+                  {estimated ? '~' : ''}
+                  {now}
+                  <Percent />
+                </>
+              )}
             </span>
-            <span className="mt-0.5 text-[11px] text-neutral-500">{word}</span>
+            <span className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">{word}</span>
           </span>
         </button>
 

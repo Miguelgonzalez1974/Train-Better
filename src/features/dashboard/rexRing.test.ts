@@ -6,7 +6,7 @@ const IDS: ExplainId[] = ['preparacion', 'carga', 'esfuerzo', 'realizado', 'prev
 
 describe('tocar un aro es preguntar a Rex', () => {
   it('la pregunta lleva la cifra que se ve, y sin cifra pregunta cómo se calcula', () => {
-    expect(ringQuestion('preparacion', { readiness: 71.6, real: null, planned: 57 })).toBe('¿Por qué mi preparación es 72?');
+    expect(ringQuestion('preparacion', { readiness: 71.6, real: null, planned: 57 })).toBe('¿Por qué mi preparación es del 72 %?');
     expect(ringQuestion('preparacion', { readiness: null, real: null, planned: null })).toBe('¿Cómo se calcula mi preparación?');
     expect(ringQuestion('realizado', { readiness: 70, real: 64.4, planned: 57 })).toBe('¿Por qué mi esfuerzo de hoy es 64?');
     expect(ringQuestion('previsto', { readiness: 70, real: null, planned: 56.6 })).toBe('¿Qué significa el esfuerzo previsto de 57?');

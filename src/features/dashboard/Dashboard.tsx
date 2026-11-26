@@ -627,7 +627,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           const prep = explanations.preparacion;
           const effort = explanations.esfuerzo;
           const tone = prep.tone === 'good' || prep.tone === 'mid' || prep.tone === 'bad' || prep.tone === 'info' ? prep.tone : 'info';
-          return { lead: prep.lead, tone, text: `${shown.readiness.total !== null ? `Preparación ${shown.readiness.total} sobre 100. ` : ''}${effort.text}`, actions: [{ label: 'Ver la preparación', target: 'preparacion' }] };
+          return { lead: prep.lead, tone, text: `${shown.readiness.total !== null ? `Preparación ${shown.readiness.total} %. ` : ''}${effort.text}`, actions: [{ label: 'Ver la preparación', target: 'preparacion' }] };
         },
         modulo: (intent) => {
           runRexTarget(intent.target);
@@ -773,7 +773,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         notDone={describeSkipped(shown.entry?.skipped)}
         readiness={shown.readiness}
         acwr={shown.acwr}
-        centerLabel={ringDayLabel(dayIso, todayIso)}
+        dayKey={dayIso}
         isToday={isToday}
         onAsk={askRing}
         hintPending={ringHintPending}

@@ -45,7 +45,7 @@ export function NightCard({ energy, onPick, estimates }: { energy: DayEnergy; on
       </div>
       {estimates.length > 0 && (
         <p className="mt-2 text-[11px] leading-snug text-neutral-500">
-          {estimates.map((e, i) => `${i === 0 ? 'Si duermes' : 'con'} ${hoursText(e.hours)}${i === 0 ? ' amanecerás sobre ' : ', sobre '}${e.energy}`).join('; ')}.
+          {estimates.map((e, i) => `${i === 0 ? 'Si duermes' : 'con'} ${hoursText(e.hours)}${i === 0 ? ' amanecerás sobre ' : ', sobre '}${e.energy} %`).join('; ')}.
         </p>
       )}
     </section>
@@ -161,7 +161,7 @@ export function EnergyChart({ energy }: { energy: DayEnergy }) {
     <section className="day-card px-[13px] py-3" aria-label="Cómo ha bajado tu energía" data-testid="energy-chart">
       <p className="mb-1.5 text-[13px] font-semibold text-white">Cómo ha bajado</p>
       <div ref={boxRef}>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} className="block" role="img" aria-label={`Has salido con ${morning} y te quedan ${energy.energy ?? computed}`}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} className="block" role="img" aria-label={`Has salido con ${morning} % y te queda un ${energy.energy ?? computed} %`}>
           {[0, 50, 100].map((v) => (
             <g key={v}>
               <line x1={LEFT} x2={W - 6} y1={y(v)} y2={y(v)} style={{ stroke: 'rgb(var(--c-white) / 0.09)' }} />

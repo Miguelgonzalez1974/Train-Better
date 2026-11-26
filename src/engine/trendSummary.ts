@@ -103,7 +103,7 @@ function nowRow(points: TrendPoint[], opts: SummaryOptions): SummaryRow | null {
   const yesterday = points[points.length - 2];
   const yOver = yesterday ? effortFit(yesterday) === 'over' : false;
   const band = readinessBand(last.readiness);
-  if (band === 'low') return { label, segs: [`Llegas justo (${r} de preparación${yOver ? ' después de un día pasado' : ''}): conviene ir suave.`] };
+  if (band === 'low') return { label, segs: [`Llegas justo (preparación ${r} %${yOver ? ' después de un día pasado' : ''}): conviene ir suave.`] };
   if (band === 'good') return { label, segs: [`Llegas bien (${r}): hay margen para entrenar fuerte.`] };
   return { label, segs: [`Llegas normal (${r}): sigue el plan.`] };
 }

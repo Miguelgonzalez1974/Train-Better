@@ -98,12 +98,12 @@ describe('el día en energía', () => {
 
   it('Rex lo explica con lo que resta cada cosa y tu respuesta', () => {
     const e = explainEnergy({ morning: 70, done: [{ name: 'Running', cost: 8 }], energy: 66, computed: 62, pending: 20, projected: 46, isToday: true });
-    expect(e.lead).toBe('Te quedan 66.');
+    expect(e.lead).toBe('Te queda un 66 %.');
     expect(e.rows).toEqual([
-      { kind: 'plain', label: 'Has salido con', value: '70' },
+      { kind: 'plain', label: 'Has salido con', value: '70 %' },
       { kind: 'delta', label: 'Running', value: -8 },
       { kind: 'delta', label: 'Tu respuesta de la noche', value: 4 },
-      { kind: 'plain', label: 'Si haces lo que falta', value: '46' },
+      { kind: 'plain', label: 'Si haces lo que falta', value: '46 %' },
     ]);
     expect(explainEnergy({ morning: null, done: [], energy: null, computed: null, pending: 0, projected: null, isToday: true }).rows).toEqual([]);
   });

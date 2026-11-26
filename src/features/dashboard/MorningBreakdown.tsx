@@ -16,7 +16,7 @@ export function MorningBreakdown({ readiness }: { readiness: ReadinessScore }) {
           <div className="flex items-baseline justify-between gap-3">
             <dt className="min-w-0 text-[13px] text-neutral-200">{row.label}</dt>
             <dd className={`num shrink-0 text-sm font-semibold ${row.base ? 'text-white' : row.value < 0 ? 'text-bad' : row.key === 'sueno' ? 'text-sleep' : 'text-good'}`}>
-              {row.base ? row.value : `${row.value > 0 ? '+' : row.value < 0 ? '−' : ''}${Math.abs(row.value)}`}
+              {row.base ? `${row.value} %` : `${row.value > 0 ? '+' : row.value < 0 ? '−' : ''}${Math.abs(row.value)}`}
             </dd>
           </div>
           {row.detail && <p className="mt-0.5 text-[11px] leading-snug text-neutral-500">{row.detail}</p>}
@@ -24,7 +24,7 @@ export function MorningBreakdown({ readiness }: { readiness: ReadinessScore }) {
       ))}
       <div className="flex items-baseline justify-between gap-3 pt-2.5">
         <dt className="text-[13px] font-semibold text-white">Sales con</dt>
-        <dd className="num text-base font-bold text-white">{readiness.total}</dd>
+        <dd className="num text-base font-bold text-white">{readiness.total} %</dd>
       </div>
     </dl>
   );
