@@ -7,7 +7,7 @@ import { loadHistoryFor, readinessAt } from '../../engine/readinessAt';
 import { computeReadinessLearning } from '../../engine/readinessLearning';
 import { dayStrain, strainStatus } from '../../engine/strain';
 import { buildStrainTarget, ensureStrainTarget, withPlannedStrain } from '../../engine/strainTarget';
-import { acceptedCompanionLoad, companionTrainedDates, withCompanionLoad } from '../../engine/companionLoad';
+import { acceptedCompanionLoad, companionTrainedDates, withExtraLoad } from '../../engine/companionLoad';
 import { generateCompanionSession } from '../../engine/generateSession';
 import { estimatePlannedStrain, planFit } from '../../engine/plannedStrain';
 import { learnStrain } from '../../engine/strainLearning';
@@ -85,7 +85,6 @@ import { VolumeContent } from './VolumeSummaryModal';
 import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { hrvLogWith } from '../../engine/hrv';
-import { buildPrepCompare } from './prepCompare';
 import { REX_HINTS } from './rexHints';
 import type { AthleteProfile } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
@@ -176,12 +175,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const swipe = useDaySwipe((delta) => setDayIso((cur) => shiftDay(cur, delta, toLocalIsoDate(new Date()))));
 
   // Los días en que solo hiciste el programa de fuerza también cuentan como entrenados (calendario y días del año).
-  const trainedDates = useMemo(() => [...new Set([...(profile.trainingDatesLog ?? []), ...companionTrainedDates(profile)])], [profile.trainingDatesLog, profile.companionLog]);
+  const trainedDates = useMemo(() => [...new Set([...(profile.trainingDatesLog ?? []), ...companionTrainedDates(profile)])], [profile.trainingDatesLog, profile.companionLog, profile.workouts]);
   const stats = useMemo(() => getMonthlyStats(history, trainedDates), [history, trainedDates]);
   // La carga y el esfuerzo cuentan también el programa de fuerza que convive con el macro (Texas): ver `engine/companionLoad.ts`. Lo que aprende el coach de tus aciertos sigue con el historial del macro solo.
-  const loadHistory = useMemo(() => withCompanionLoad(history, profile.companionLog), [history, profile.companionLog]);
+  const loadHistory = useMemo(() => withExtraLoad(profile, history), [history, profile.companionLog, profile.workouts]);
   // La carga acumulada cuenta todos los días de entreno (también los de solo programa de fuerza), igual que la preparación.
-  const engineLoad = useMemo(() => loadHistoryFor(profile, history), [history, profile.companionLog]);
+  const engineLoad = useMemo(() => loadHistoryFor(profile, history), [history, profile.companionLog, profile.workouts]);
   const acwr = useMemo(() => computeAcwr(engineLoad), [engineLoad]);
   const acwrTrend = useMemo(() => getAcwrTrend(engineLoad), [engineLoad]);
   const todayIso = toLocalIsoDate(new Date());
@@ -278,8 +277,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const buildTrend = useCallback((days: number, offsetDays = 0) => buildTrendPoints(profile, loadHistory, dayIso, todayIso, days, plannedToday, offsetDays), [profile, loadHistory, dayIso, todayIso, plannedToday]);
   const readinessSeries = useMemo(() => (formChip !== null ? buildReadinessSeries(profile, loadHistory, dayIso, 14) : []), [formChip, profile, loadHistory, dayIso]);
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
-  /** La prueba del reparto de pesos de la preparación, solo en su apartado (cuesta calcular dos notas por día). */
-  const prepCompare = useMemo(() => (formChip === 'preparacion' ? buildPrepCompare(profile, history, todayIso) : []), [formChip, profile, history, todayIso]);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
   const restMarked = isRestMarked(profile.restDates, todayIso);
   function toggleRest() {
@@ -762,7 +759,6 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
                     setFormChip(null);
                     onOpenMorning();
                   }}
-                  compare={prepCompare}
                   pain={getActivePainFlags(profile.painFlags, dayIso).map((f) => PAIN_AREA_LABEL[f.area])}
                 />
               ) : chip === 'sueno' ? (

@@ -52,6 +52,20 @@ export function withCompanionLoad(history: SessionHistoryEntry[], log: Companion
   return merged.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** Lo que se suma al historial del macro: el programa de fuerza hecho y los entrenos añadidos a mano. */
+type ExtraSources = Pick<AthleteProfile, 'companionLog' | 'workouts'>;
+
+/** Los dos orígenes en un solo registro de carga (un entreno libre cuenta igual que una sesión del programa: RPE por minutos). */
+export function extraLoadLog(profile: ExtraSources): CompanionLogEntry[] {
+  const workouts: CompanionLogEntry[] = (profile.workouts ?? []).map((w) => ({ id: w.id, programId: 'libre', index: 0, date: w.date, outcome: 'hecha', rpe: w.rpe, durationMin: w.minutes }));
+  return [...(profile.companionLog ?? []), ...workouts];
+}
+
+/** El historial con todo lo que se ha entrenado cada día (ver `withCompanionLoad`). */
+export function withExtraLoad(profile: ExtraSources, history: SessionHistoryEntry[], opts: { orphans?: boolean } = {}): SessionHistoryEntry[] {
+  return withCompanionLoad(history, extraLoadLog(profile), opts);
+}
+
 /** Lo mínimo que hace falta saber de la sesión del programa para estimar su esfuerzo (lo cumple `CompanionSessionPlan`). */
 export interface CompanionPlanLike {
   role: string;
@@ -92,6 +106,6 @@ export function combinedPlannedStrain(macro: { rpe: number; minutes: number }, e
  * y el calendario cuenten el día como entrenado aunque solo hicieras el programa. Son fechas sueltas: no se mezclan con el historial,
  * así que «hoy ya entrenaste» y las pantallas de sesión no cambian.
  */
-export function companionTrainedDates(profile: Pick<AthleteProfile, 'companionLog'>): string[] {
-  return [...new Set((profile.companionLog ?? []).filter((c) => c.outcome === 'hecha').map((c) => c.date))];
+export function companionTrainedDates(profile: ExtraSources): string[] {
+  return [...new Set(extraLoadLog(profile).filter((c) => c.outcome === 'hecha').map((c) => c.date))];
 }

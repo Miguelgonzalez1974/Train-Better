@@ -192,8 +192,38 @@ export interface CompanionLogEntry {
   loadKg?: number;
   rpe?: number;
   durationMin?: number;
+  /** Hora a la que se apuntó («09:30»): sitúa la sesión en el día de «Tu energía». Ausente en las anteriores. */
+  time?: string;
   /** Cada levantamiento de la sesión (el Texas lleva dos), con lo que se hizo. */
   lifts?: CompanionLogLift[];
+}
+
+/** Qué tipo de entreno libre es (ver `features/planificacion/otherActivity.ts`). */
+export type WorkoutKind = 'clase' | 'running' | 'bici' | 'fuerza' | 'equipo' | 'otro';
+
+/**
+ * Un entreno que se suma al día además de la sesión prevista («+ Entreno»): salir a correr, una clase, un partido. Cuenta como carga igual que
+ * lo demás (RPE por minutos) y gasta energía ese día. Se puede corregir y borrar.
+ */
+export interface DayWorkout {
+  id: string;
+  date: string;
+  /** Hora de inicio aproximada («13:00»). */
+  time: string;
+  kind: WorkoutKind;
+  /** Cómo la llama el atleta; sin él vale el nombre del tipo. */
+  name?: string;
+  minutes: number;
+  /** Percepción de esfuerzo, escala 1-10. */
+  rpe: number;
+}
+
+/** Cómo acaba el atleta el día («¿Cómo acabas el día?»): corrige la energía con la que se va a dormir. */
+export type NightFeel = 'reventado' | 'cansado' | 'normal' | 'bien';
+
+export interface NightEntry {
+  date: string;
+  feel: NightFeel;
 }
 
 /** Un levantamiento de una sesión de programa ya hecha. */
@@ -436,6 +466,10 @@ export interface AthleteProfile {
   mobilityLog?: MobilityLogEntry[];
   /** Sesiones hechas o saltadas de los programas de fuerza que conviven con el macro (ver `engine/strengthCompanion.ts`). */
   companionLog?: CompanionLogEntry[];
+  /** Entrenos añadidos a mano además de la sesión («+ Entreno»). Ver `engine/energy.ts`. */
+  workouts?: DayWorkout[];
+  /** Las respuestas de la noche («¿Cómo acabas el día?»), una por fecha. */
+  nightLog?: NightEntry[];
   /** Zonas que el atleta quiere potenciar: Rex las tiene en cuenta en las rutinas siguientes. */
   mobilityFocus?: MobilityZone[];
   /** Cómo nota el atleta cada zona prioritaria (1 = muy limitada, 5 = fenomenal), para ver si la movilidad le sirve. */
@@ -1052,6 +1086,8 @@ export interface SessionHistoryEntry {
   wodResult?: WodResult;
   /** Resultado de la parte 2 de un día de doble WOD (`wodResult` guarda el de la parte 1). Ausente en un día de un solo WOD. */
   wodResult2?: WodResult;
+  /** Hora a la que se cerró la sesión («19:40»), solo en las cerradas el mismo día: sitúa el entreno en «Tu energía». */
+  closedAt?: string;
   /** Carga real levantada en un dia de test 1RM (fuerza u oly), si la sesion incluia uno */
   testLoadKg?: number;
   /**

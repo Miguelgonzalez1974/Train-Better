@@ -18,7 +18,7 @@ function isoAddDays(iso: string, delta: number): string {
 export function buildReadinessSeries(profile: AthleteProfile, history: SessionHistoryEntry[], endIso: string, days: number): { iso: string; total: number | null }[] {
   return Array.from({ length: days }, (_, i) => {
     const iso = isoAddDays(endIso, i - (days - 1));
-    return { iso, total: readinessAt(profile, history, new Date(`${iso}T12:00:00`), { before: true }).total };
+    return { iso, total: readinessAt(profile, history, new Date(`${iso}T12:00:00`)).total };
   });
 }
 
@@ -60,7 +60,7 @@ export function buildTrendPoints(profile: AthleteProfile, history: SessionHistor
     const readiness =
       iso > todayIso || iso < firstIso
         ? null
-        : readinessAt(profile, history, new Date(`${iso}T12:00:00`), { before: true }).total;
+        : readinessAt(profile, history, new Date(`${iso}T12:00:00`)).total;
     return { iso, strain, target: target ? { low: target.low, high: target.high } : null, readiness, planned: iso === todayIso && strain === null ? plannedToday : null, plan: plannedFor(profile.strainTargets?.[iso], iso, todayIso, strain, plannedToday, firstPlannedIso) };
   });
 }
@@ -86,7 +86,7 @@ export function buildPastDayView(profile: AthleteProfile, history: SessionHistor
   const target = profile.strainTargets?.[dayIso] ?? buildStrainTarget(profile, history, dayIso);
   const real = dayStrain(entry);
   return {
-    readiness: readinessAt(profile, history, ref, { before: true }),
+    readiness: readinessAt(profile, history, ref),
     acwr: computeAcwr(prior, ref),
     trend: getAcwrTrend(prior, undefined, ref),
     strain: { target, planned: null, fit: null, real, status: strainStatus(real, target), learning },

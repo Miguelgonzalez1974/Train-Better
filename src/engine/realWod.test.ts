@@ -298,7 +298,8 @@ describe('WOD real — historial e interruptor', () => {
       return out;
     };
     const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
-    const bad = loadsOf(simulate({}, BAD));
+    // Flojo sin llegar a día rojo: con todo en contra cada día, casi todos serían de recuperación y apenas habría cargas que comparar.
+    const bad = loadsOf(simulate({}, (date) => ({ ...BAD(date), soreness: 'leve', stress: 'medio' })));
     const good = loadsOf(simulate({}, GOOD));
     expect(bad.length).toBeGreaterThan(10);
     expect(mean(bad)).toBeLessThan(mean(good));

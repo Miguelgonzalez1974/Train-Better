@@ -2,6 +2,7 @@ import type { StrainTarget } from '../data/athlete/types';
 import type { AcwrResult } from './loadMetrics';
 import { strainFit, type PlanFit, type PlannedStrain } from './plannedStrain';
 import type { ReadinessScore } from './readinessScore';
+import { morningRows } from './energy';
 import type { StrainStatus } from './strain';
 
 /**
@@ -43,18 +44,18 @@ const comma = (n: number) => String(n).replace('.', ',');
 // Preparación
 
 /**
- * Cómo se ha formado la preparación: la media de lo que cuentas en el check-in (60 %) y de cómo te salen las sesiones (40 %), y después lo
- * que suma o resta (molestias, carga alta, HRV y pulso, descanso de ayer). Solo salen las piezas que hoy cuentan.
+ * Cómo se ha formado la preparación: la energía con la que te acostaste, lo recuperado durmiendo y lo que resta o suma esa mañana. Solo salen
+ * las piezas que hoy cuentan (ver `engine/energy.ts`).
  */
 export function explainReadiness(r: ReadinessScore): Explanation {
-  if (r.total === null) {
+  if (r.total === null || r.energy === null) {
     return {
       id: 'preparacion',
       lead: 'Aún sin datos.',
       tone: 'neutral',
       text: 'Todavía no tengo con qué calcular tu preparación: contesta el check-in unos días y entrena para que pueda leerte.',
       rows: [],
-      foot: 'Con el check-in de unos días y alguna sesión, la nota se calcula sola.',
+      foot: 'Con el check-in de unos días y alguna sesión, la cifra se calcula sola.',
       actions: [{ label: 'Ver la preparación', action: 'ver-preparacion' }],
     };
   }
@@ -62,22 +63,13 @@ export function explainReadiness(r: ReadinessScore): Explanation {
   const level = r.level ?? 'normal';
   const lead = level === 'alta' ? 'Llegas con ganas.' : level === 'baja' ? 'Llegas cansado.' : 'Llegas normal.';
   const tone: ExplainTone = level === 'alta' ? 'good' : level === 'baja' ? 'bad' : 'mid';
-
-  const rows: ExplainRow[] = [];
-  const both = r.feel.score !== null && r.performance.score !== null;
-  if (r.feel.score !== null) rows.push({ kind: 'score', label: 'Lo que cuentas (check-in)', value: r.feel.score, detail: r.feel.detail, weight: both ? '60 %' : undefined });
-  if (r.performance.score !== null) rows.push({ kind: 'score', label: 'Cómo te salen las sesiones', value: r.performance.score, detail: r.performance.detail, weight: both ? '40 %' : undefined });
-  if (r.pain.penalty > 0) rows.push({ kind: 'delta', label: 'Molestias activas', value: -r.pain.penalty, detail: r.pain.areas.join(' y ') });
-  if (r.loadPenalty > 0) rows.push({ kind: 'delta', label: 'Carga', value: -r.loadPenalty, detail: r.load.detail });
-  if (r.hrv.penalty > 0) rows.push({ kind: 'delta', label: 'HRV y pulso', value: -r.hrv.penalty });
-  if (r.rest.credit > 0) rows.push({ kind: 'delta', label: 'Descanso de ayer', value: r.rest.credit, detail: r.rest.detail });
-
+  const rows: ExplainRow[] = morningRows(r.energy).map((row) =>
+    row.base ? { kind: 'plain', label: row.label, value: String(row.value), detail: row.detail } : { kind: 'delta', label: row.label, value: row.value, detail: row.detail },
+  );
   const text = r.estimated
-    ? `Tu preparación es ${r.total} sobre 100. Aún sin check-in de esta semana: sale solo de lo que mide tu entrenamiento.`
+    ? `Tu preparación es ${r.total} sobre 100, estimada: falta el check-in de hoy. Esto es lo que la ha formado:`
     : `Tu preparación es ${r.total} sobre 100. Esto es lo que la ha formado:`;
-  const foot = both
-    ? 'Base: 60 % lo que cuentas en el check-in y 40 % cómo te salen las sesiones. Después resta las molestias, una carga alta o el HRV bajo, y suma el descanso de ayer.'
-    : 'Base: lo único que hay con datos. Después resta las molestias, una carga alta o el HRV bajo, y suma el descanso de ayer.';
+  const foot = 'Es la energía con la que sales por la mañana: no cambia al entrenar. Lo que entrenes gasta energía y cuenta mañana.';
   const actions: Explanation['actions'] = [{ label: 'Ver la evolución', action: 'ver-preparacion' }];
   if (level !== 'alta') actions.push({ label: 'Hacer recovery', action: 'recovery' });
   return { id: 'preparacion', lead, tone, text, rows, foot, actions };

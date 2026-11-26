@@ -55,12 +55,6 @@ const toPct = (sum: number) => Math.round(((sum + 4) / 8) * 100);
 /** La nota de un solo check-in, de 0 a 100. */
 export const checkPct = (check: ReadinessCheck): number => toPct(scoreCheck(check));
 
-/**
- * Cuánto pesa cada día de la última semana si se da más peso a lo reciente (hoy, ayer, anteayer…): el check-in de hoy cuenta la mitad y cada día
- * hacia atrás, menos. Si faltan días, los que hay se reparten el peso. Es la alternativa a la media simple de 7 días (cada día 1/7).
- */
-export const RECENCY_WEIGHTS = [0.5, 0.25, 0.12, 0.06, 0.03, 0.02, 0.02] as const;
-
 function dayDiff(fromIso: string, toIso: string): number {
   const a = new Date(`${fromIso}T00:00:00`);
   const b = new Date(`${toIso}T00:00:00`);
@@ -73,21 +67,14 @@ function addDays(iso: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export function computeRecoverySummary(log: ReadinessCheck[] | undefined, todayIso: string, opts: { recency?: boolean } = {}): RecoverySummary {
+export function computeRecoverySummary(log: ReadinessCheck[] | undefined, todayIso: string): RecoverySummary {
   const entries = log ?? [];
   const age = (c: ReadinessCheck) => dayDiff(c.date, todayIso);
   const week = entries.filter((c) => age(c) >= 0 && age(c) <= 6);
   const before = entries.filter((c) => age(c) >= 7 && age(c) <= 34);
 
   const avg = (list: ReadinessCheck[]) => (list.length === 0 ? null : toPct(list.reduce((s, c) => s + scoreCheck(c), 0) / list.length));
-  // Con la opción recency, hoy pesa más que hace seis días: media ponderada por lo reciente de los días que hay.
-  const recentAvg = (list: ReadinessCheck[]) => {
-    const weights = list.map((c) => RECENCY_WEIGHTS[age(c)] ?? 0);
-    const total = weights.reduce((s, w) => s + w, 0);
-    return total === 0 ? null : toPct(list.reduce((s, c, i) => s + scoreCheck(c) * weights[i], 0) / total);
-  };
-
-  const score = week.length >= MIN_CHECKS ? (opts.recency ? recentAvg(week) : avg(week)) : null;
+  const score = week.length >= MIN_CHECKS ? avg(week) : null;
   const baseline = before.length >= MIN_BASELINE_CHECKS ? avg(before) : null;
   const delta = score !== null && baseline !== null ? score - baseline : null;
   const level: RecoveryLevel | null = score === null ? null : score >= HIGH_FROM ? 'alta' : score <= LOW_UNTIL ? 'baja' : 'normal';

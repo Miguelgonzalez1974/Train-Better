@@ -39,7 +39,7 @@ export function buildStrainTarget(profile: AthleteProfile, history: SessionHisto
   const prior = loadHistoryFor(profile, history, { before: todayIso });
   const hasCheckIn = (profile.readinessLog ?? []).some((c) => c.date === todayIso);
 
-  const readiness = readinessAt(profile, history, reference, { before: true });
+  const readiness = readinessAt(profile, history, reference);
   const acwr = computeAcwr(prior, reference);
   const zone = acwr.acwr !== null && !acwr.coldStart ? acwr.zone : null;
   const yesterday = dayStrain(prior.find((h) => h.date === isoAddDays(todayIso, -1)));

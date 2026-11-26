@@ -76,7 +76,7 @@ function preparationAverage(profile: AthleteProfile, history: SessionHistoryEntr
   const totals: number[] = [];
   for (let back = 0; back < PREP_WINDOW; back++) {
     const dayIso = isoAdd(iso, -back);
-    const total = readinessAt(profile, history, new Date(`${dayIso}T12:00:00`), { before: true }).total;
+    const total = readinessAt(profile, history, new Date(`${dayIso}T12:00:00`)).total;
     if (total !== null) totals.push(total);
   }
   return totals.length >= PREP_MIN_DAYS ? Math.round(totals.reduce((s, v) => s + v, 0) / totals.length) : null;

@@ -1,7 +1,7 @@
-import { HeartPulse } from 'lucide-react';
 import type { RecoveryAxisKey, RecoveryLevel } from '../../engine/recovery';
-import type { ReadinessPart, ReadinessScore } from '../../engine/readinessScore';
+import type { ReadinessScore } from '../../engine/readinessScore';
 import { SectionLabel } from '../shell/SectionLabel';
+import { MorningBreakdown } from './MorningBreakdown';
 
 const DAY_INITIAL = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
 
@@ -32,84 +32,15 @@ function axisWord(score: number): string {
   return score <= -0.34 ? 'mal' : score >= 0.34 ? 'bien' : 'regular';
 }
 
-/** Una de las partes de la nota: título, barra con su valor y, debajo, el porqué. */
-function PartRow({ title, part }: { title: string; part: ReadinessPart }) {
-  return (
-    <div>
-      <div className="flex items-baseline gap-3">
-        <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">{title}</span>
-        <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/[0.08]">
-          {part.score !== null && (
-            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(6, part.score)}%`, background: recoveryColor(part.score) }} />
-          )}
-        </div>
-        <span className="num w-7 shrink-0 text-right text-sm font-semibold text-white">{part.score ?? '—'}</span>
-      </div>
-      <p className="mt-1 text-[11px] leading-snug text-neutral-500">{part.detail}</p>
-    </div>
-  );
-}
-
 /**
- * De dónde sale la nota de recuperación: cómo te sientes (check-in) y cómo te está saliendo el entreno, más los
- * check-ins de la última semana. La carga (ACWR) va aparte, en el otro anillo.
+ * De dónde sale la preparación (la energía con la que sales esa mañana, ver `engine/energy.ts`) y los check-ins de la última semana.
  */
 export function RecoveryDetail({ readiness, inFold = false }: { readiness: ReadinessScore; inFold?: boolean }) {
   const r = readiness.checkins;
   return (
     <div className="flex flex-col gap-6">
       {!inFold && <SectionLabel>Preparación</SectionLabel>}
-      <div className="flex flex-col gap-3.5">
-        <PartRow title="Cómo te sientes" part={readiness.feel} />
-        <PartRow title="Cómo te está saliendo" part={readiness.performance} />
-        {/* La carga no se promedia: solo resta cuando va alta, para que unos buenos check-ins no tapen que vas pasado. */}
-        <div>
-          <div className="flex items-baseline gap-3">
-            <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">Tu carga</span>
-            <span className="flex-1 text-[11px] text-neutral-500">{readiness.load.score === null ? 'sin datos aún' : readiness.loadPenalty > 0 ? 'resta a la nota' : 'no resta nada'}</span>
-            <span className="num w-9 shrink-0 text-right text-sm font-semibold" style={{ color: readiness.loadPenalty > 0 ? RECOVERY_LOW : RECOVERY_GOOD }}>
-              {readiness.load.score === null ? '—' : readiness.loadPenalty > 0 ? `−${readiness.loadPenalty}` : '0'}
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.load.detail}</p>
-        </div>
-        {/* HRV y pulso de la mañana frente a tu rango y tu media: solo restan cuando caen fuera, y la HRV solo con rango. */}
-        {readiness.hrv.detail !== '' && (
-          <div>
-            <div className="flex items-baseline gap-3">
-              <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">Tu HRV</span>
-              <span className="flex-1 text-[11px] text-neutral-500">
-                {readiness.hrv.status.state === 'listo'
-                  ? `${readiness.hrv.status.provisional ? 'rango provisional · ' : ''}${readiness.hrv.penalty > 0 ? 'resta a la nota' : 'no resta nada'}`
-                  : 'reuniendo datos'}
-              </span>
-              <span className="num w-9 shrink-0 text-right text-sm font-semibold" style={{ color: readiness.hrv.penalty > 0 ? RECOVERY_LOW : RECOVERY_GOOD }}>
-                {readiness.hrv.penalty > 0 ? `−${readiness.hrv.penalty}` : '0'}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.hrv.detail}</p>
-          </div>
-        )}
-        {/* El descanso de ayer suma: haber parado tras una racha de días entrenando (y dormir bien hoy) sube un poco la nota. */}
-        {readiness.rest.credit > 0 && (
-          <div>
-            <div className="flex items-baseline gap-3">
-              <span className="w-[8.5rem] shrink-0 text-xs font-medium text-neutral-200">Tu descanso</span>
-              <span className="flex-1 text-[11px] text-neutral-500">suma a la nota</span>
-              <span className="num w-9 shrink-0 text-right text-sm font-semibold" style={{ color: RECOVERY_GOOD }}>
-                +{readiness.rest.credit}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] leading-snug text-neutral-500">{readiness.rest.detail}</p>
-          </div>
-        )}
-        {readiness.pain.count > 0 && (
-          <p className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-            <HeartPulse size={12} className="shrink-0 text-bad" aria-hidden="true" />
-            Molestia activa ({readiness.pain.areas.join(', ')}): resta {readiness.pain.penalty} puntos a la nota.
-          </p>
-        )}
-      </div>
+      <MorningBreakdown readiness={readiness} />
 
       <div>
         <SectionLabel className="mb-3">Tus check-ins</SectionLabel>
@@ -148,7 +79,7 @@ export function RecoveryDetail({ readiness, inFold = false }: { readiness: Readi
         {r.weakest && <p className="mt-4 text-xs leading-relaxed text-neutral-400">{WEAKEST_TIP[r.weakest.key]}</p>}      </div>
 
       <p className="text-[11px] leading-relaxed text-neutral-600">
-        Orientativo: mezcla lo que dices que sientes con cómo te salen las sesiones, y la carga acumulada solo resta cuando va alta. El coach ya ajusta los kilos de cada día con todo esto.
+        Orientativo: es una estimación con tu check-in, tu sueño y lo que entrenas. El coach ya ajusta cada día con ella.
       </p>
     </div>
   );

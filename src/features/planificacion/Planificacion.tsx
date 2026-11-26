@@ -110,7 +110,7 @@ import { handoff } from '../../lib/handoff';
 import { rexBus } from '../../lib/rexBus';
 import type { LabSection } from '../dashboard/RexCorner';
 import { generateCompanionSession } from '../../engine/generateSession';
-import { acceptedCompanionLoad, withCompanionLoad } from '../../engine/companionLoad';
+import { acceptedCompanionLoad, withExtraLoad } from '../../engine/companionLoad';
 import { acceptCompanion, companionStatus, declineCompanion, isCompanionTestSession, pauseCompanion, skipCompanion } from '../../engine/strengthCompanion';
 import { LIGHT_LABEL } from '../../engine/dayLight';
 import type { WodScaleState } from './WodScaleBox';
@@ -397,7 +397,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
   const hardnessLearn = useMemo(() => learnHardness(profile, history, todayIso), [profile, history, todayIso]);
   // La carga del programa de fuerza que convive con el macro cuenta en el esfuerzo (ver `engine/companionLoad.ts`): la tira de la semana lo enseña con ella
   // y la previsión de hoy suma la sesión del programa si ya has aceptado hacerla. Lo que aprende el coach sigue con el historial del macro solo.
-  const loadHistory = useMemo(() => withCompanionLoad(history, profile.companionLog), [history, profile.companionLog]);
+  const loadHistory = useMemo(() => withExtraLoad(profile, history), [history, profile.companionLog, profile.workouts]);
   const companionExtra = useMemo(() => acceptedCompanionLoad(profile, todayIso, (p) => generateCompanionSession(profile, history, p, todayIso, { neutral: true })), [profile, history, todayIso]);
   const plannedStrain = useMemo(
     () => (session && !alreadyCompletedToday ? estimatePlannedStrain(session, history, strainBias + (session.hardness ? hardnessLearn.bias : 0), companionExtra) : null),

@@ -144,7 +144,7 @@ import {
   type ResponseProfile,
 } from './responseProfile';
 import { getActiveStrengthProgram, resolveStrengthProgramDay } from './strengthPrograms';
-import { withCompanionLoad } from './companionLoad';
+import { withExtraLoad } from './companionLoad';
 import { companionPhaseAdjust } from './companionPhase';
 import { companionPosition, companionTotalSessions, companionWeeks, isCompanionTestSession, supportsCompanion } from './strengthCompanion';
 import { texasSessionAt } from './texasClassic';
@@ -5310,7 +5310,7 @@ export function generateCompanionSession(
 ): CompanionSessionPlan | null {
   if (!supportsCompanion(program.method)) return null;
   // Sus propias sesiones anteriores también son carga: el programa se autorregula con lo que ya hizo (ver `companionLoad.ts`).
-  history = withCompanionLoad(history, profile.companionLog, { orphans: true });
+  history = withExtraLoad(profile, history, { orphans: true });
   const today = new Date(`${todayIso}T00:00:00`);
   const index = program.companion.cursor;
   const pos = companionPosition(program, index);
@@ -5434,7 +5434,7 @@ export function generateSessionForDate(
 ): DailySession {
   const dateIso = toLocalIsoDate(date);
   // La carga del programa de fuerza que convive con el macro cuenta: el semáforo, la carga acumulada y la autorregulación la ven (ver `companionLoad.ts`).
-  history = withCompanionLoad(history, profile.companionLog, { orphans: true });
+  history = withExtraLoad(profile, history, { orphans: true });
   // Un programa que convive con el macro no sustituye la sesión: el macro manda y el programa se ofrece aparte (`strengthCompanion.ts`).
   const activeProgram = getActiveStrengthProgram((profile.strengthPrograms ?? []).filter((p) => !p.companion), dateIso);
   const activeMacro = getActiveMacrocycle(profile.macrocycles, dateIso);

@@ -1,21 +1,16 @@
-import type { HrvHistoryEntry, PainFlag, SessionHistoryEntry, SetFeedbackEntry, SetFeel, ReadinessCheck } from '../data/athlete/types';
-import { computeAcwr } from './loadMetrics';
-import { PAIN_AREA_LABEL, getActivePainFlags } from './painFlags';
 import { computeRecoverySummary, type RecoveryLevel, type RecoverySummary } from './recovery';
-import { getReadinessCheckForDate } from './readiness';
-import { computeHrvPart, hrvLogWith, type HrvPart } from './hrv';
+import type { HrvPart } from './hrv';
+import { morningEnergy, shiftIso, type EnergyInput, type MorningEnergy } from './energy';
 
 /**
- * "Cómo estás de recuperado hoy", más allá del check-in: junto a lo que DICES que sientes (60 %) entra cómo te está saliendo
- * el entrenamiento (40 %: RPE reciente frente a tu norma y sensación en las primeras series). Un aviso de molestia activo
- * la baja un poco, y haber descansado ayer tras una racha de días entrenando la sube otro poco (`restPart`). La carga que
- * llevas encima (ACWR y días seguidos sin descansar) resta cuando va alta, y el Dashboard la enseña aparte en su propio
- * icono. Orientativo: son indicios, no un diagnóstico.
+ * La PREPARACIÓN de un día: la energía con la que sales esa mañana (ver `engine/energy.ts`), con su nivel y el desglose que se enseña. Es la
+ * cifra que usa el coach para el semáforo, el objetivo de esfuerzo, el taper y la descarga. No cambia al entrenar: lo que se mueve durante
+ * el día es la energía que te queda.
  */
 
-export interface ReadinessPart {
-  /** 0-100 (más alto = mejor preparado) o null si todavía no hay datos para esa parte. */
-  score: number | null;
+export interface LoadPart {
+  /** Puntos que la carga resta (0 mientras esté dentro de lo seguro). */
+  penalty: number;
   /** Una línea con el porqué, en lenguaje de atleta. */
   detail: string;
 }
@@ -23,217 +18,50 @@ export interface ReadinessPart {
 export interface ReadinessScore {
   total: number | null;
   level: RecoveryLevel | null;
-  /** true si no hay check-ins y la nota sale solo de las señales objetivas. */
+  /** true si aún no hay check-in de ese día: las horas de sueño se suponen. */
   estimated: boolean;
-  feel: ReadinessPart;
-  /** La carga (ACWR): no se promedia con lo demás, solo resta (`loadPenalty`) cuando va alta. */
+  /** De dónde sale la cifra, pieza a pieza; null si no hay datos. */
+  energy: MorningEnergy | null;
   load: LoadPart;
-  /** Puntos que la carga resta a la nota (0 con carga baja u óptima). */
   loadPenalty: number;
-  /** El descanso de ayer: lo que suma a la nota haber parado tras una racha de días entrenando (ver `restPart`). */
-  rest: RestPart;
   /** HRV y pulso de la mañana frente a tu rango y tu media: solo restan, y solo con rango (ver `computeHrvPart`). */
   hrv: HrvPart;
-  performance: ReadinessPart;
   pain: { count: number; areas: string[]; penalty: number };
-  /** La lectura del check-in (barras por día, ejes...) — la tarjeta la sigue enseñando debajo. */
+  /** La lectura de los check-ins de la semana (barras por día, ejes...). */
   checkins: RecoverySummary;
 }
 
-/** Peso de las dos partes que se promedian. La carga y la molestia no se promedian: restan (ver `computeReadinessScore`). */
-const WEIGHT = { feel: 0.6, performance: 0.4 };
 const HIGH_FROM = 65;
 const LOW_UNTIL = 40;
-const PAIN_PENALTY_EACH = 8;
-const PAIN_PENALTY_MAX = 16;
-const FEEL_SCORE: Record<SetFeel, number> = { sobro: 100, justo: 75, duro: 40, 'muy-duro': 15 };
-
-const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
-
-function dayDiff(fromIso: string, toIso: string): number {
-  const a = new Date(`${fromIso}T00:00:00`);
-  const b = new Date(`${toIso}T00:00:00`);
-  return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
-}
+/** Para dar una cifra hacen falta al menos estos días con datos (check-in o entreno) en la ventana reciente. */
+const RECENT_DAYS = 14;
+const MIN_DATA_DAYS = 2;
 
 const es1 = (n: number) => n.toFixed(1).replace('.', ',');
+const ZONE_TEXT = { baja: 'carga baja', optima: 'dentro de lo seguro', moderada: 'carga algo alta', alta: 'carga muy alta' } as const;
 
-/** Qué tan "tuyo" es el check-in: la nota absoluta de la semana, tirando hacia tu propia media si ya la hay (ver `computeRecoverySummary`). */
-function feelPart(r: RecoverySummary): ReadinessPart {
-  if (r.score === null) return { score: null, detail: 'Contesta «¿Cómo llegas hoy?» al menos dos días esta semana.' };
-  const relative = r.baseline !== null ? clamp(50 + (r.score - (r.baseline as number))) : null;
-  const score = relative !== null ? clamp(0.6 * r.score + 0.4 * relative) : r.score;
-  const vs =
-    r.delta === null ? '' : Math.abs(r.delta) < 4 ? ' · como tu media' : ` · ${Math.abs(r.delta)} puntos ${r.delta > 0 ? 'por encima' : 'por debajo'} de tu media`;
-  return { score, detail: `${r.checks} check-ins esta semana${vs}` };
+function loadPart(energy: MorningEnergy): LoadPart {
+  const { acwr, penalty } = energy.load;
+  if (acwr.coldStart || acwr.acwr === null) return { penalty: 0, detail: 'Aún sin sesiones suficientes para medir tu carga.' };
+  return { penalty, detail: `ACWR ${es1(acwr.acwr)} · ${ZONE_TEXT[acwr.zone]}` };
 }
 
-export interface RestPart {
-  /** Puntos que suma a la nota (0 si ayer no fue descanso, o si no había mucho que recuperar). */
-  credit: number;
-  /** Días seguidos entrenando antes de parar. */
-  streak: number;
-  /** Días de descanso seguidos hasta ayer (0 si ayer entrenaste). */
-  restDays: number;
-  /** Una línea con el porqué; vacía si ayer no fue descanso. */
-  detail: string;
-}
-
-/** Lo máximo que suma el descanso a la nota (una racha larga de días seguidos entrenando seguida de un descanso con buen sueño). */
-export const REST_CREDIT_MAX = 6;
-/** Hasta cuántos días de descanso seguidos cuentan: más de 3 ya no es descansar, es parar. */
-const REST_DAYS_MAX = 2;
-/** Cuánto de la racha previa cuenta: entrenar 1 día no deja nada que recuperar; 6 o más, el máximo. */
-const REST_BASE_BY_STREAK = [0, 0, 2, 3, 4, 5, 6];
-/** Lo que se queda del crédito según el sueño de hoy: dormir mal tras descansar lo recorta (sin check-in, un término medio). */
-const REST_SLEEP_FACTOR = { bien: 1, regular: 0.7, mal: 0.3 } as const;
-const REST_SLEEP_UNKNOWN = 0.7;
-/** Con dos días de descanso seguidos, el segundo ya aporta menos. */
-const REST_SECOND_DAY_FACTOR = 0.6;
-
-function isoMinus(iso: string, days: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() - days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/**
- * Descansar también puntúa: si ayer no entrenaste (1 o 2 días de descanso seguidos) tras una racha de días seguidos, la
- * nota de hoy sube un poco, tanto más cuanto más larga era la racha (hasta `REST_CREDIT_MAX`) y siempre que hoy hayas dormido
- * bien (el sueño de hoy lo recorta si fue malo). Se suma a lo que el descanso ya hace por su cuenta (la carga aguda baja y la
- * resta por días seguidos desaparece); aquí es el bonus visible por haber parado a tiempo. Tres o más días sin entrenar no
- * cuentan: eso es parar, no descansar.
- */
-export function restPart(history: SessionHistoryEntry[], todayIso: string, todayCheck: ReadinessCheck | undefined): RestPart {
-  const dates = new Set(history.map((h) => h.date));
-  let restDays = 0;
-  let cursor = isoMinus(todayIso, 1);
-  while (!dates.has(cursor) && restDays <= REST_DAYS_MAX) {
-    restDays += 1;
-    cursor = isoMinus(cursor, 1);
-  }
-  if (restDays === 0) return { credit: 0, streak: 0, restDays: 0, detail: '' };
-  if (restDays > REST_DAYS_MAX) return { credit: 0, streak: 0, restDays, detail: '' };
-
-  let streak = 0;
-  while (dates.has(cursor) && streak < 30) {
-    streak += 1;
-    cursor = isoMinus(cursor, 1);
-  }
-  const base = REST_BASE_BY_STREAK[Math.min(streak, REST_BASE_BY_STREAK.length - 1)];
-  const sleepFactor = todayCheck ? REST_SLEEP_FACTOR[todayCheck.sleep] : REST_SLEEP_UNKNOWN;
-  const credit = Math.min(REST_CREDIT_MAX, Math.round(base * (restDays === 1 ? 1 : REST_SECOND_DAY_FACTOR) * sleepFactor));
-
-  const rested = restDays === 1 ? 'Descansaste ayer' : `Llevas ${restDays} días de descanso`;
-  if (credit === 0) {
-    const why = base === 0 ? 'venías de pocos días seguidos, no había mucho que recuperar' : 'hoy has dormido mal y eso se come lo que suma el descanso';
-    return { credit, streak, restDays, detail: `${rested}, pero ${why}.` };
-  }
-  const after = streak >= 2 ? ` tras ${streak} días seguidos entrenando` : '';
-  const sleepNote = todayCheck && todayCheck.sleep !== 'bien' ? ' · el sueño de hoy lo recorta' : '';
-  return { credit, streak, restDays, detail: `${rested}${after}${sleepNote}.` };
-}
-
-export type LoadPart = ReadinessPart & { penalty: number };
-
-/** Lo que la carga resta a la nota: nada con carga baja u óptima, y más cuanto más alta o más días seguidos sin descansar. */
-const ZONE_PENALTY = { baja: 0, optima: 0, moderada: 10, alta: 20 } as const;
-const LOAD_PENALTY_MAX = 25;
-
-function loadPart(history: SessionHistoryEntry[], today: Date, todayIso: string): LoadPart {
-  const acwr = computeAcwr(history, today);
-  if (acwr.coldStart || acwr.acwr === null) return { score: null, detail: 'Aún sin sesiones suficientes para medir tu carga.', penalty: 0 };
-  const base = acwr.zone === 'optima' ? 90 : acwr.zone === 'baja' ? 75 : acwr.zone === 'moderada' ? 45 : 20;
-
-  // Días seguidos entrenando hasta hoy (o hasta ayer, si hoy todavía no).
-  const dates = new Set(history.map((h) => h.date));
-  let cursor = dates.has(todayIso) ? todayIso : null;
-  if (cursor === null) {
-    const y = new Date(today);
-    y.setDate(y.getDate() - 1);
-    const yIso = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
-    cursor = dates.has(yIso) ? yIso : null;
-  }
-  let streak = 0;
-  while (cursor !== null && dates.has(cursor)) {
-    streak++;
-    const d = new Date(`${cursor}T00:00:00`);
-    d.setDate(d.getDate() - 1);
-    cursor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-  const streakPenalty = streak >= 7 ? 12 : streak >= 5 ? 8 : 0;
-  const streakScoreDrop = streak >= 7 ? 25 : streak >= 5 ? 12 : 0;
-
-  const zoneText = acwr.zone === 'optima' ? 'zona óptima' : acwr.zone === 'baja' ? 'carga baja' : acwr.zone === 'moderada' ? 'carga algo alta' : 'carga muy alta';
-  const streakText = streak >= 5 ? ` · ${streak} días seguidos sin descansar` : '';
-  return {
-    score: clamp(base - streakScoreDrop),
-    detail: `ACWR ${es1(acwr.acwr)} · ${zoneText}${streakText}`,
-    penalty: Math.min(LOAD_PENALTY_MAX, ZONE_PENALTY[acwr.zone] + streakPenalty),
-  };
-}
-
-function performancePart(history: SessionHistoryEntry[], feedback: SetFeedbackEntry[], todayIso: string): ReadinessPart {
-  const parts: { score: number; text: string }[] = [];
-
-  // RPE de las últimas sesiones frente a tu norma de las semanas anteriores: si lo mismo te cuesta más, algo pesa.
-  const sorted = [...history].filter((h) => dayDiff(h.date, todayIso) >= 0 && dayDiff(h.date, todayIso) <= 35).sort((a, b) => a.date.localeCompare(b.date));
-  const recent = sorted.filter((h) => dayDiff(h.date, todayIso) <= 10).slice(-3);
-  const older = sorted.filter((h) => !recent.includes(h));
-  if (recent.length >= 3 && older.length >= 4) {
-    const mean = (xs: SessionHistoryEntry[]) => xs.reduce((s, h) => s + h.rpe, 0) / xs.length;
-    const diff = mean(recent) - mean(older);
-    const text = Math.abs(diff) < 0.5 ? 'RPE reciente como lo habitual' : diff > 0 ? `RPE ${es1(diff)} por encima de lo habitual` : `RPE ${es1(Math.abs(diff))} por debajo de lo habitual`;
-    parts.push({ score: clamp(70 - 20 * diff), text });
-  }
-
-  // Sensación en la primera serie de trabajo de fuerza/oly, de las últimas dos semanas.
-  const feels = feedback.filter((f) => dayDiff(f.date, todayIso) >= 0 && dayDiff(f.date, todayIso) <= 14);
-  if (feels.length >= 2) {
-    const avg = feels.reduce((s, f) => s + FEEL_SCORE[f.feel], 0) / feels.length;
-    const hard = feels.filter((f) => f.feel === 'duro' || f.feel === 'muy-duro').length;
-    parts.push({ score: clamp(avg), text: hard === 0 ? 'primeras series con margen' : `${hard} de ${feels.length} primeras series «duras»` });
-  }
-
-  if (parts.length === 0) return { score: null, detail: 'Aún sin datos de cómo te están saliendo las sesiones.' };
-  return { score: clamp(parts.reduce((s, p) => s + p.score, 0) / parts.length), detail: parts.map((p) => p.text).join(' · ') };
-}
-
-export function computeReadinessScore(input: {
-  readinessLog: ReadinessCheck[] | undefined;
-  /** HRV de días anteriores cargado a mano (ver `hrvLogWith`): solo entra en la parte de HRV y pulso. */
-  hrvHistory?: HrvHistoryEntry[];
-  /** Prueba: da más peso a los check-ins recientes que a los de hace una semana (ver `RECENCY_WEIGHTS`). Por defecto, la media simple de siempre. */
-  recency?: boolean;
-  history: SessionHistoryEntry[];
-  setFeedbackLog: SetFeedbackEntry[] | undefined;
-  painFlags: PainFlag[] | undefined;
-  today: Date;
-}): ReadinessScore {
+export function computeReadinessScore(input: EnergyInput & { today: Date }): ReadinessScore {
   const { today } = input;
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const checkins = computeRecoverySummary(input.readinessLog, todayIso, { recency: input.recency });
-  const feel = feelPart(checkins);
-  const load = loadPart(input.history, today, todayIso);
-  const performance = performancePart(input.history, input.setFeedbackLog ?? [], todayIso);
+  const checkins = computeRecoverySummary(input.readinessLog, todayIso);
+  const since = shiftIso(todayIso, -RECENT_DAYS);
+  const dataDays = new Set([
+    ...(input.readinessLog ?? []).filter((c) => c.date > since && c.date <= todayIso).map((c) => c.date),
+    ...input.history.filter((h) => h.date > since && h.date < todayIso).map((h) => h.date),
+  ]);
+  const hasData = dataDays.size >= MIN_DATA_DAYS;
 
-  const active = getActivePainFlags(input.painFlags, todayIso);
-  const areas = [...new Set(active.map((f) => PAIN_AREA_LABEL[f.area].toLowerCase()))];
-  const penalty = Math.min(PAIN_PENALTY_MAX, areas.length * PAIN_PENALTY_EACH);
-
-  const pain = { count: areas.length, areas, penalty };
-  const rest = restPart(input.history, todayIso, getReadinessCheckForDate(input.readinessLog, todayIso));
-  const hrv = computeHrvPart(hrvLogWith(input.readinessLog, input.hrvHistory), todayIso);
-  const available = (['feel', 'performance'] as const).filter((k) => ({ feel, performance })[k].score !== null);
-  if (available.length === 0) {
-    return { total: null, level: null, estimated: false, feel, load, loadPenalty: load.penalty, rest, hrv, performance, pain, checkins };
-  }
-  const weightSum = available.reduce((s, k) => s + WEIGHT[k], 0);
-  const raw = available.reduce((s, k) => s + ({ feel, performance })[k].score! * WEIGHT[k], 0) / weightSum;
-  // La carga no es una parte que se promedie: es un LÍMITE. Una carga alta (o muchos días seguidos sin descansar) resta,
-  // y una carga baja u óptima no suma nada — así unos buenos check-ins no pueden tapar que vas pasado de carga. El descanso
-  // de ayer, en cambio, suma un poco (ver `restPart`).
-  const total = clamp(raw - penalty - load.penalty + rest.credit - hrv.penalty);
-  const level: RecoveryLevel = total >= HIGH_FROM ? 'alta' : total <= LOW_UNTIL ? 'baja' : 'normal';
-  return { total, level, estimated: feel.score === null, feel, load, loadPenalty: load.penalty, rest, hrv, performance, pain, checkins };
+  const energy = morningEnergy(input, todayIso);
+  const load = loadPart(energy);
+  const pain = { count: energy.pain.areas.length, areas: energy.pain.areas, penalty: energy.pain.penalty };
+  const base = { estimated: !energy.hasCheckIn, load, loadPenalty: load.penalty, hrv: energy.hrv, pain, checkins };
+  if (!hasData) return { total: null, level: null, energy: null, ...base };
+  const level: RecoveryLevel = energy.total >= HIGH_FROM ? 'alta' : energy.total <= LOW_UNTIL ? 'baja' : 'normal';
+  return { total: energy.total, level, energy, ...base };
 }

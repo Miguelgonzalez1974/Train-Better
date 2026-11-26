@@ -124,7 +124,7 @@ function buildResult(
     factor: getReadinessFactor(check).factor,
     flags,
     hrv: score.hrv,
-    rest: score.rest,
+    ...(score.energy?.sleepKnown ? { sleep: { hours: score.energy.sleepHours, gain: score.energy.sleepGain } } : {}),
     light: lightInfo,
     simulacro,
     learned,

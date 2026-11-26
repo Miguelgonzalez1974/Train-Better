@@ -15,6 +15,8 @@ const Q = {
   good: { sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' },
   mid: { sleep: 'regular', soreness: 'leve', stress: 'medio', motivation: 'normal' },
   bad: { sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' },
+  /** Días flojos sin llegar a malos: la preparación queda entre la mitad y lo bajo. */
+  low: { sleep: 'mal', sleepHours: 5.25, soreness: 'leve', stress: 'alto', motivation: 'normal' },
 } as const;
 /** Check-ins de hoy y de los `back` días anteriores. */
 const log = (kind: keyof typeof Q, back = 3, todayExtra: Partial<ReadinessCheck> = {}): ReadinessCheck[] =>
@@ -40,9 +42,9 @@ describe('descarga por tendencia de la preparación', () => {
   });
 
   it('una HRV por debajo de tu rango con la preparación floja dos días también lo dispara', () => {
-    expect(sustainedLowReadiness(profile(log('mid', 3, { hrvVs: 'bajo' })), [], TODAY)).toBe('hrv');
+    expect(sustainedLowReadiness(profile(log('low', 3, { hrvVs: 'bajo' })), [], TODAY)).toBe('hrv');
     // sin HRV baja, con la misma preparación, no
-    expect(sustainedLowReadiness(profile(log('mid', 3, { hrvVs: 'normal' })), [], TODAY)).toBeNull();
+    expect(sustainedLowReadiness(profile(log('low', 3, { hrvVs: 'normal' })), [], TODAY)).toBeNull();
     // con buena preparación una HRV baja suelta no basta
     expect(sustainedLowReadiness(profile(log('good', 3, { hrvVs: 'bajo' })), [], TODAY)).toBeNull();
   });
@@ -74,7 +76,7 @@ describe('descarga por tendencia: en la sesión', () => {
     Array.from({ length: 4 }, (_, back) => {
       const day = new Date(d);
       day.setDate(day.getDate() - back);
-      return { date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`, ...Q.mid, ...(back === 0 ? todayExtra : {}) };
+      return { date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`, ...Q.low, ...(back === 0 ? todayExtra : {}) };
     }).reverse();
   const trainingDays = dates.filter((d) => {
     const s = generateSessionForDate(profile([]), [], d, []);

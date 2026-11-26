@@ -31,6 +31,11 @@ describe('semáforo del día: el color', () => {
     expect(computeDayLight({ ...base, readiness: 55, loadHigh: true, soreStrong: true })!.color).toBe('ambar');
   });
 
+  it('si dices que amaneces mal, no sale verde, y no hunde un ámbar', () => {
+    expect(computeDayLight({ ...base, readiness: 80, feltBad: true })).toMatchObject({ color: 'ambar', reasons: ['Preparación 80 %', 'amaneces mal'] });
+    expect(computeDayLight({ ...base, readiness: 55, feltBad: true })!.color).toBe('ambar');
+  });
+
   it('cerca de una competición los umbrales son más exigentes', () => {
     expect(computeDayLight({ ...base, readiness: 67 })!.color).toBe('verde');
     expect(computeDayLight({ ...base, readiness: 67, nearCompetition: true })!.color).toBe('ambar');
@@ -46,7 +51,7 @@ describe('semáforo del día: lo que hace a la sesión', () => {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const MIX = {
     verde: { sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' },
-    ambar: { sleep: 'regular', soreness: 'leve', stress: 'medio', motivation: 'normal' },
+    ambar: { sleep: 'mal', soreness: 'alto', stress: 'medio', motivation: 'normal' },
     rojo: { sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' },
   } as const;
   /** Cuatro check-ins seguidos hasta `d` (hacen falta 2 en la semana para que haya nota). */

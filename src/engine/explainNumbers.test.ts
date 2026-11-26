@@ -3,19 +3,33 @@ import type { StrainTarget } from '../data/athlete/types';
 import { explainDone, explainEffort, explainLoad, explainObjective, explainPlanned, explainReadiness } from './explainNumbers';
 import type { AcwrResult } from './loadMetrics';
 import type { ReadinessScore } from './readinessScore';
+import type { MorningEnergy } from './energy';
 
-const part = (score: number | null, detail = '') => ({ score, detail });
+const energy = (o: Partial<MorningEnergy> = {}) =>
+  ({
+    total: 58,
+    from: 33,
+    sleepHours: 6.4,
+    sleepKnown: true,
+    sleepGain: 33,
+    carry: 6,
+    carryFrom: 'entreno',
+    checkin: -2,
+    hrv: { penalty: 0, detail: '' },
+    load: { penalty: 0 },
+    pain: { areas: [], penalty: 0 },
+    hasCheckIn: true,
+    ...o,
+  }) as MorningEnergy;
 const readiness = (o: Partial<ReadinessScore> = {}): ReadinessScore =>
   ({
     total: 58,
     level: 'normal',
     estimated: false,
-    feel: part(72, '3 check-ins esta semana'),
-    load: { score: 90, detail: 'ACWR 1,1 · zona óptima', penalty: 0 },
+    energy: energy(),
+    load: { detail: 'ACWR 1,1 · dentro de lo seguro', penalty: 0 },
     loadPenalty: 0,
-    rest: { credit: 0, streak: 0, restDays: 0, detail: '' },
     hrv: { penalty: 0 } as ReadinessScore['hrv'],
-    performance: part(55, 'RPE 0,6 por encima de lo habitual'),
     pain: { count: 0, areas: [], penalty: 0 },
     checkins: {} as ReadinessScore['checkins'],
     ...o,
@@ -24,48 +38,40 @@ const readiness = (o: Partial<ReadinessScore> = {}): ReadinessScore =>
 const target = (o: Partial<StrainTarget> = {}): StrainTarget => ({ low: 55, high: 75, readiness: 58, yesterday: 52, reasons: ['Preparación normal', 'Carga óptima'], provisional: false, setOn: '2026-11-06', ...o });
 
 describe('explicar la preparación', () => {
-  it('lead y color según el nivel, y las dos partes de la media con su peso', () => {
+  it('lead y color según el nivel, y de dónde sale: anoche, el sueño y lo que resta', () => {
     const e = explainReadiness(readiness());
     expect(e).toMatchObject({ id: 'preparacion', lead: 'Llegas normal.', tone: 'mid' });
     expect(e.text).toBe('Tu preparación es 58 sobre 100. Esto es lo que la ha formado:');
     expect(e.rows).toEqual([
-      { kind: 'score', label: 'Lo que cuentas (check-in)', value: 72, detail: '3 check-ins esta semana', weight: '60 %' },
-      { kind: 'score', label: 'Cómo te salen las sesiones', value: 55, detail: 'RPE 0,6 por encima de lo habitual', weight: '40 %' },
+      { kind: 'plain', label: 'Anoche acabaste en', value: '33', detail: undefined },
+      { kind: 'delta', label: 'Sueño · 6 h 24', value: 33, detail: undefined },
+      { kind: 'delta', label: 'Lo entrenado estos días', value: -6, detail: undefined },
+      { kind: 'delta', label: 'Estrés y ánimo', value: -2, detail: undefined },
     ]);
     expect(explainReadiness(readiness({ total: 82, level: 'alta' }))).toMatchObject({ lead: 'Llegas con ganas.', tone: 'good' });
     expect(explainReadiness(readiness({ total: 31, level: 'baja' }))).toMatchObject({ lead: 'Llegas cansado.', tone: 'bad' });
   });
 
-  it('suma lo que resta y lo que suma, solo si cuenta hoy y con su porqué', () => {
-    const e = explainReadiness(
-      readiness({
-        pain: { count: 1, areas: ['rodilla'], penalty: 8 },
-        loadPenalty: 10,
-        hrv: { penalty: 4 } as ReadinessScore['hrv'],
-        rest: { credit: 3, streak: 4, restDays: 1, detail: 'Descansaste ayer tras 4 días seguidos entrenando.' },
-      }),
-    );
-    const deltas = e.rows.filter((r) => r.kind === 'delta');
-    expect(deltas.map((r) => [r.label, r.value])).toEqual([
-      ['Molestias activas', -8],
-      ['Carga', -10],
+  it('HRV, carga y molestias solo salen cuando restan', () => {
+    const e = explainReadiness(readiness({ energy: energy({ carry: 0, checkin: 0, hrv: { penalty: 4, detail: '' } as MorningEnergy['hrv'], load: { penalty: 10 } as MorningEnergy['load'], pain: { areas: ['rodilla'], penalty: 8 } }) }));
+    expect(e.rows.filter((r) => r.kind === 'delta').map((r) => [r.label, r.value])).toEqual([
+      ['Sueño · 6 h 24', 33],
       ['HRV y pulso', -4],
-      ['Descanso de ayer', 3],
+      ['Carga fuera de lo seguro', -10],
+      ['Molestias activas', -8],
     ]);
-    expect(deltas.reduce((s, r) => s + (r.kind === 'delta' ? r.value : 0), 0)).toBe(-19); // −8 −10 −4 +3
   });
 
-  it('sin una de las dos partes no enseña el peso, y sin check-in lo dice', () => {
-    const e = explainReadiness(readiness({ feel: part(null), estimated: true }));
-    expect(e.rows).toEqual([{ kind: 'score', label: 'Cómo te salen las sesiones', value: 55, detail: 'RPE 0,6 por encima de lo habitual', weight: undefined }]);
-    expect(e.text).toContain('Aún sin check-in');
-    expect(e.foot).toContain('lo único que hay con datos');
+  it('sin check-in de hoy lo dice', () => {
+    const e = explainReadiness(readiness({ estimated: true, energy: energy({ sleepKnown: false, hasCheckIn: false }) }));
+    expect(e.text).toContain('falta el check-in');
+    expect(e.rows[1]).toMatchObject({ detail: 'Horas supuestas: falta el check-in' });
   });
 
   it('ofrece recovery salvo con la preparación alta, y sin datos no inventa nada', () => {
     expect(explainReadiness(readiness()).actions.map((a) => a.action)).toEqual(['ver-preparacion', 'recovery']);
     expect(explainReadiness(readiness({ total: 82, level: 'alta' })).actions.map((a) => a.action)).toEqual(['ver-preparacion']);
-    const none = explainReadiness(readiness({ total: null, level: null }));
+    const none = explainReadiness(readiness({ total: null, level: null, energy: null }));
     expect(none).toMatchObject({ lead: 'Aún sin datos.', rows: [], tone: 'neutral' });
   });
 });

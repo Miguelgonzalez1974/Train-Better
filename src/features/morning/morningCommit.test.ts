@@ -38,7 +38,7 @@ describe('la preparación de la tarjeta de la mañana', () => {
 
     const profile = repo.getProfile();
     const today: ReadinessCheck = { date: TODAY, sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta', overall: 'bien' };
-    const score = (h: SessionHistoryEntry[]) => computeReadinessScore({ readinessLog: [...readinessLog, today], hrvHistory: profile.hrvHistory, history: h, setFeedbackLog: profile.setFeedbackLog, painFlags: profile.painFlags, today: new Date(`${TODAY}T12:00:00`) }).total;
+    const score = (h: SessionHistoryEntry[]) => computeReadinessScore({ readinessLog: [...readinessLog, today], hrvHistory: profile.hrvHistory, history: h, painFlags: profile.painFlags, today: new Date(`${TODAY}T12:00:00`) }).total;
 
     const withProgram = score(withCompanionLoad(history, companionLog));
     const withoutProgram = score(history);

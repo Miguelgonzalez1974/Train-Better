@@ -1,4 +1,4 @@
-import type { DailySession } from '../../data/athlete/types';
+import type { DailySession, WorkoutKind } from '../../data/athlete/types';
 import { customDaySession } from './pastDayLog';
 
 /**
@@ -7,7 +7,7 @@ import { customDaySession } from './pastDayLog';
  * hizo lo prescrito: no hay series anotadas, así que nada de la sesión prevista sube cargas ni cuenta como cumplido. Puro.
  */
 
-export type OtherKind = 'clase' | 'running' | 'bici' | 'fuerza' | 'equipo' | 'otro';
+export type OtherKind = WorkoutKind;
 
 export interface OtherKindInfo {
   id: OtherKind;

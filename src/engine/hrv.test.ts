@@ -142,7 +142,7 @@ describe('HRV: lo que resta a la preparación y a la carga', () => {
   it('entra en la nota de preparación: restada tal cual', () => {
     const sane = [...log, check(0, 64, 55)];
     const low = [...log, check(0, 30, 55)];
-    const input = (readinessLog: ReadinessCheck[]) => ({ readinessLog, history: [], setFeedbackLog: undefined, painFlags: undefined, today: new Date(`${TODAY}T12:00:00`) });
+    const input = (readinessLog: ReadinessCheck[]) => ({ readinessLog, history: [], painFlags: undefined, today: new Date(`${TODAY}T12:00:00`) });
     // los checks base se parecen entre sí; con feel idéntico la diferencia es solo la HRV
     const a = computeReadinessScore(input(sane));
     const b = computeReadinessScore(input(low));

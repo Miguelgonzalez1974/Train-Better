@@ -246,8 +246,8 @@ export interface MorningDescribeInput {
   learned?: LearnedShift | null;
   /** Agujetas fuertes en la zona del patrón de fuerza de hoy: la fuerza lleva una serie menos (ver `DailySession.soreStrengthCut`). */
   soreStrengthCut?: boolean;
-  /** El descanso de ayer (ver `restPart`): si suma a la nota de hoy, se cuenta como uno de los cambios. */
-  rest?: { credit: number; streak: number; restDays: number };
+  /** Las horas que has contado y lo que te devuelven (ver `engine/energy.ts`): se cuenta como uno de los cambios. */
+  sleep?: { hours: number; gain: number };
 }
 
 const fmtHours = (h: number) => {
@@ -262,7 +262,7 @@ const fmtHours = (h: number) => {
  * solo se anota para aprender.
  */
 export function describeMorning(input: MorningDescribeInput): { changes: MorningLine[]; notes: MorningLine[] } {
-  const { check, day, hasAccessory, factor, flags, hrv, rest, light, simulacro, learned, soreStrengthCut } = input;
+  const { check, day, hasAccessory, factor, flags, hrv, sleep, light, simulacro, learned, soreStrengthCut } = input;
   const changes: MorningLine[] = [];
   const notes: MorningLine[] = [];
   const seen = new Set<string>();
@@ -312,10 +312,8 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
     }
   }
 
-  if (rest && rest.credit > 0) {
-    const when = rest.restDays === 1 ? 'Descansaste ayer' : `Llevas ${rest.restDays} días de descanso`;
-    const after = rest.streak >= 2 ? ` tras ${rest.streak} días seguidos` : '';
-    add(changes, { icon: 'moon', tone: 'good', text: `${when}${after}: suma ${rest.credit} ${rest.credit === 1 ? 'punto' : 'puntos'} a tu preparación` });
+  if (sleep && sleep.gain > 0) {
+    add(changes, { icon: 'moon', tone: 'sleep', text: `Dormir ${fmtHours(sleep.hours)} te devuelve ${sleep.gain} ${sleep.gain === 1 ? 'punto' : 'puntos'} de energía` });
   }
 
   for (const { flag, answer } of flags) {
@@ -356,7 +354,7 @@ export function describeMorning(input: MorningDescribeInput): { changes: Morning
   const shortSleep = (check.sleepHours !== undefined && check.sleepHours < 7) || (check.sleepQuality !== undefined && check.sleepQuality <= 2);
   if (shortSleep) {
     const what = check.sleepHours !== undefined && check.sleepHours < 7 ? `Sueño corto (${fmtHours(check.sleepHours)})` : 'Sueño de mala calidad';
-    add(notes, { icon: 'moon', tone: 'sleep', text: `${what}: lo apunto para aprender cuánto te afecta` });
+    add(notes, { icon: 'moon', tone: 'sleep', text: `${what}: hoy recuperas menos` });
   }
 
   // HRV y pulso: con rango resta si cae por debajo (y una HRV baja pesa como señal en contra para la carga); sin rango solo se cuenta.

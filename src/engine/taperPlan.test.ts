@@ -17,15 +17,17 @@ const iso = (base: string, offset: number) => {
 const MID = { sleep: 'regular', soreness: 'leve', stress: 'medio', motivation: 'normal' } as const;
 const GOOD = { sleep: 'bien', soreness: 'ninguno', stress: 'bajo', motivation: 'alta' } as const;
 const BAD = { sleep: 'mal', soreness: 'alto', stress: 'alto', motivation: 'baja' } as const;
+/** Ni bien ni mal: la preparación media queda entre los dos umbrales del taper. */
+const SOSO = { sleep: 'mal', soreness: 'alto', stress: 'medio', motivation: 'normal' } as const;
 
-const entry = (date: string, q: typeof MID | typeof GOOD | typeof BAD, hrv?: number, hr?: number): ReadinessCheck => ({
+const entry = (date: string, q: typeof MID | typeof GOOD | typeof BAD | typeof SOSO, hrv?: number, hr?: number): ReadinessCheck => ({
   date,
   ...q,
   ...(hrv !== undefined ? { hrv } : {}),
   ...(hr !== undefined ? { restingHr: hr } : {}),
 });
 /** Un check-in por día entre `from` y `to` (ambos incluidos) con la HRV que dé `hrvOf`. */
-function days(from: string, to: string, q: typeof MID | typeof GOOD | typeof BAD, hrvOf?: (i: number) => number | undefined, hr?: number): ReadinessCheck[] {
+function days(from: string, to: string, q: typeof MID | typeof GOOD | typeof BAD | typeof SOSO, hrvOf?: (i: number) => number | undefined, hr?: number): ReadinessCheck[] {
   const out: ReadinessCheck[] = [];
   for (let d = from, i = 0; d <= to; d = iso(d, 1), i++) out.push(entry(d, q, hrvOf?.(i), hr));
   return out;
@@ -88,7 +90,7 @@ describe('taper: cómo llegas', () => {
   });
 
   it('una HRV alta sin buena preparación no afina: taper estándar', () => {
-    const d = decideTaper(profile(days('2026-10-10', '2026-10-29', MID, hrvSeries(5, 120))), [], '2026-11-06');
+    const d = decideTaper(profile(days('2026-10-10', '2026-10-29', SOSO, hrvSeries(5, 120))), [], '2026-11-06');
     expect(d.kind).toBe('estandar');
   });
 

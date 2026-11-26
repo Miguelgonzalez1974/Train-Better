@@ -1,28 +1,28 @@
 import { describe, expect, it } from 'vitest';
+import type { MorningEnergy } from './energy';
 import { prepSentence } from './prepSentence';
 import type { ReadinessScore } from './readinessScore';
 
-const part = { score: 70, detail: '' };
+const energy = (over: Partial<MorningEnergy> = {}) => ({ total: 62, sleepHours: 7.5, sleepKnown: true, carry: 0, carryFrom: null, checkin: 0, ...over }) as MorningEnergy;
+
 function score(over: Partial<ReadinessScore> = {}): ReadinessScore {
   return {
-    total: 72,
+    total: 62,
     level: 'normal',
     estimated: false,
-    feel: part,
-    load: { ...part, penalty: 0 },
+    energy: energy(),
+    load: { penalty: 0, detail: '' },
     loadPenalty: 0,
-    rest: { credit: 0, streak: 0, restDays: 0, detail: '' },
     hrv: { penalty: 0 } as ReadinessScore['hrv'],
-    performance: part,
     pain: { count: 0, areas: [], penalty: 0 },
-    checkins: { checks: 5, score: 72, baseline: 70, delta: 2, level: 'normal', axes: [], weakest: null, days: [] } as unknown as ReadinessScore['checkins'],
+    checkins: {} as ReadinessScore['checkins'],
     ...over,
   };
 }
 
 describe('prepSentence', () => {
-  it('sin nota pide el check-in', () => {
-    expect(prepSentence(score({ total: null, level: null }))).toMatch(/check-in/);
+  it('sin cifra pide el check-in', () => {
+    expect(prepSentence(score({ total: null, level: null, energy: null }))).toMatch(/check-in/);
   });
 
   it('un día normal sin nada que restar sigue el plan', () => {
@@ -34,12 +34,14 @@ describe('prepSentence', () => {
     expect(s).toBe('Tienes una molestia activa (hombro) y tu carga acumulada va alta. Hoy mejor intensidad moderada que volumen.');
   });
 
-  it('sin penalizaciones, señala el eje más flojo de la semana', () => {
-    const checkins = { ...score().checkins, weakest: { key: 'sleep', label: 'Sueño', score: -0.5 } } as ReadinessScore['checkins'];
-    expect(prepSentence(score({ level: 'baja', checkins }))).toMatch(/^El sueño es lo que más te baja esta semana\./);
+  it('dice la noche corta, lo que arrastras y el ánimo', () => {
+    expect(prepSentence(score({ level: 'baja', energy: energy({ sleepHours: 5 }) }))).toMatch(/^Has dormido poco\./);
+    expect(prepSentence(score({ energy: energy({ carry: 12, carryFrom: 'entreno' }) }))).toMatch(/^Arrastras lo entrenado estos días\./);
+    expect(prepSentence(score({ energy: energy({ carry: 10, carryFrom: 'agujetas' }) }))).toMatch(/^Las agujetas pesan\./);
+    expect(prepSentence(score({ energy: energy({ checkin: -12 }) }))).toMatch(/^El estrés y el ánimo van flojos\./);
   });
 
-  it('con buena nota y descanso de ayer, lo dice', () => {
-    expect(prepSentence(score({ level: 'alta', rest: { credit: 4, streak: 5, restDays: 1, detail: '' } }))).toMatch(/^El descanso de ayer te suma\./);
+  it('unas horas supuestas no se dan por noche corta', () => {
+    expect(prepSentence(score({ energy: energy({ sleepHours: 5, sleepKnown: false }) }))).toBe('Sigue el plan del día.');
   });
 });

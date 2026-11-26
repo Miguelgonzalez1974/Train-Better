@@ -289,17 +289,17 @@ describe('qué cambia hoy y qué solo se apunta', () => {
     expect(texts(describeMorning({ ...input, day: 'rest', check }).changes).some((t) => t.startsWith('Con agujetas fuertes'))).toBe(false);
   });
 
-  it('el descanso de ayer cuenta como un cambio cuando suma a la nota, y no sale si no suma', () => {
-    const r = describeMorning({ ...input, rest: { credit: 4, streak: 6, restDays: 1 } });
-    expect(texts(r.changes)).toContain('Descansaste ayer tras 6 días seguidos: suma 4 puntos a tu preparación');
-    const two = describeMorning({ ...input, rest: { credit: 1, streak: 5, restDays: 2 } });
-    expect(texts(two.changes)).toContain('Llevas 2 días de descanso tras 5 días seguidos: suma 1 punto a tu preparación');
-    expect(texts(describeMorning({ ...input, rest: { credit: 0, streak: 1, restDays: 1 } }).changes).some((t) => t.includes('Descansaste'))).toBe(false);
+  it('lo que devuelve el sueño cuenta como un cambio, y no sale si no devuelve nada', () => {
+    const r = describeMorning({ ...input, sleep: { hours: 7, gain: 38 } });
+    expect(texts(r.changes)).toContain('Dormir 7 h te devuelve 38 puntos de energía');
+    const one = describeMorning({ ...input, sleep: { hours: 6.5, gain: 1 } });
+    expect(texts(one.changes)).toContain('Dormir 6 h 30 te devuelve 1 punto de energía');
+    expect(texts(describeMorning({ ...input, sleep: { hours: 0, gain: 0 } }).changes).some((t) => t.startsWith('Dormir'))).toBe(false);
   });
 
   it('el sueño corto solo se apunta, y no inventa nada si no hay nada', () => {
     const r = describeMorning({ ...input, check: { ...base, sleepHours: 6.5 } });
-    expect(texts(r.notes)).toEqual(['Sueño corto (6 h 30): lo apunto para aprender cuánto te afecta']);
+    expect(texts(r.notes)).toEqual(['Sueño corto (6 h 30): hoy recuperas menos']);
     const quiet = describeMorning({ ...input, day: 'trained' });
     expect(texts(quiet.changes)).toEqual([]);
     expect(texts(quiet.notes)).toEqual(['Nada más cambia hoy']);

@@ -37,6 +37,8 @@ export interface DayLightInput {
   loadHigh: boolean;
   /** Agujetas fuertes en alguna zona (o el eje de agujetas en "alto"). */
   soreStrong: boolean;
+  /** Has dicho que amaneces mal: el día no sale verde aunque la cifra lo permita. */
+  feltBad?: boolean;
   /** Hay una competición cerca (pico, taper o activación): umbrales más exigentes. */
   nearCompetition: boolean;
 }
@@ -50,7 +52,7 @@ export const LIGHT_LABEL: Record<DayLightColor, { name: string; short: string }>
 
 /** El color del día y sus motivos, a partir de los datos de hoy (puro: sin perfil ni historial). */
 export function computeDayLight(input: DayLightInput): DayLightInfo | null {
-  const { readiness, hrvLow, loadHigh, soreStrong, nearCompetition } = input;
+  const { readiness, hrvLow, loadHigh, soreStrong, feltBad, nearCompetition } = input;
   if (readiness === null) return null;
   const greenFrom = nearCompetition ? LIGHT_GREEN_FROM_PEAK : LIGHT_GREEN_FROM;
   const redUntil = nearCompetition ? LIGHT_RED_UNTIL_PEAK : LIGHT_RED_UNTIL;
@@ -71,6 +73,10 @@ export function computeDayLight(input: DayLightInput): DayLightInfo | null {
   if (soreStrong && level === 2) {
     level = 1;
     reasons.push('agujetas fuertes');
+  }
+  if (feltBad && level === 2) {
+    level = 1;
+    reasons.push('amaneces mal');
   }
   if (nearCompetition && level === 2) reasons.push('cerca de la competición: sin empujar de más');
   return { color: COLORS[level], reasons };
@@ -95,6 +101,7 @@ export function resolveDayLight(
     hrvLow: check.hrvVs === 'bajo',
     loadHigh: !acwr.coldStart && acwr.zone === 'alta',
     soreStrong: check.soreness === 'alto' || Object.values(check.soreZones ?? {}).some((level) => level === 2),
+    feltBad: check.overall === 'mal',
     nearCompetition: comp !== null && (comp.phase === 'pico-1' || comp.phase === 'pico' || comp.phase === 'taper' || comp.phase === 'activacion'),
   });
 }

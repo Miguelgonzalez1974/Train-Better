@@ -12,8 +12,6 @@ import { HrvChart } from './HrvChart';
 import { LearnedInsights } from './LearnedInsights';
 import { LEVEL_TEXT, RECOVERY_GOOD, RECOVERY_LOW, RECOVERY_MID, RecoveryDetail, recoveryColor } from './RecoveryCard';
 import { ReadinessTrendChart } from './WeekCharts';
-import { PrepCompareCard } from './PrepCompareCard';
-import type { PrepCompareRow } from './prepCompare';
 
 const AXIS_WORD = (score: number) => (score <= -0.34 ? 'mal' : score >= 0.34 ? 'bien' : 'regular');
 const AXIS_COLOR = (score: number) => (score <= -0.34 ? RECOVERY_LOW : score >= 0.34 ? RECOVERY_GOOD : RECOVERY_MID);
@@ -32,7 +30,6 @@ export function PreparationTab({
   learning,
   onSelect,
   onOpenMorning,
-  compare,
   pain,
 }: {
   readiness: ReadinessScore;
@@ -44,8 +41,6 @@ export function PreparationTab({
   learning: ReadinessLearning;
   onSelect: (iso: string) => void;
   onOpenMorning: () => void;
-  /** La prueba del reparto de pesos de la preparación con tus últimos días (ver `PrepCompareCard`). */
-  compare: PrepCompareRow[];
   /** Las zonas con una molestia activa ese día. */
   pain: string[];
 }) {
@@ -124,13 +119,7 @@ export function PreparationTab({
         </Fold>
       )}
       <Fold title="Lo que sé de ti" summary={learning.ready ? undefined : `${learning.pairs}/${learning.needed}`}>
-        <div className="flex flex-col gap-5">
-          <LearnedInsights learning={learning} bare />
-          <div className="border-t border-white/[0.06] pt-4">
-            <SectionLabel className="mb-3">Probar un reparto distinto</SectionLabel>
-            <PrepCompareCard rows={compare} />
-          </div>
-        </div>
+        <LearnedInsights learning={learning} bare />
       </Fold>
     </div>
   );

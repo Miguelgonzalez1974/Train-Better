@@ -36,6 +36,8 @@ export interface SyncBase {
   history?: string[];
   /** Fechas marcadas como descanso elegido (`AthleteProfile.restDates`). */
   restDates?: string[];
+  /** Ids de los entrenos añadidos a mano (`AthleteProfile.workouts`). */
+  workouts?: string[];
   /** Fecha de inicio de la rampa de vuelta que habia (null si no habia). */
   rampStart?: string | null;
 }
@@ -58,6 +60,7 @@ export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistor
     progressionLog: (profile.progressionLog ?? []).map(feedbackKey),
     history: history.map((h) => h.date),
     restDates: profile.restDates ?? [],
+    workouts: (profile.workouts ?? []).map((w) => w.id),
     rampStart: profile.intensityRamp?.startDate ?? null,
   };
 }
@@ -116,6 +119,8 @@ const NUTRITION_EXTRA_DAYS_LIMIT = 60;
 const NUTRITION_EXTRAS_PER_DAY_LIMIT = 50;
 
 const REGEN_VARIANTS_LIMIT = 14;
+const WORKOUTS_LIMIT = 200;
+const NIGHT_LOG_LIMIT = 120;
 
 /** Union de las veces que se regenero cada dia: gana la mayor, y solo se guardan las fechas mas recientes. */
 function mergeRegenVariants(remote?: Record<string, number>, local?: Record<string, number>): Record<string, number> | undefined {
@@ -370,6 +375,13 @@ export function mergeProfile(
     // Sesiones hechas o saltadas de los programas que conviven con el macro: un log, union por id (programa|sesión).
     companionLog:
       remote.companionLog || local.companionLog ? mergeByKey(remote.companionLog, local.companionLog, (e) => e.id, (e) => e.date, 500) : undefined,
+    // Entrenos añadidos a mano: union por id (gana el local); lo borrado desde la ultima sincronizacion no vuelve.
+    workouts:
+      remote.workouts || local.workouts
+        ? dropDeleted(mergeByKey(remote.workouts, local.workouts, (w) => w.id, (w) => `${w.date}|${w.time}`, WORKOUTS_LIMIT), (w) => w.id, base?.workouts, remote.workouts, local.workouts)
+        : undefined,
+    // La respuesta de la noche: una por fecha, gana la local (es la que acabas de dar).
+    nightLog: remote.nightLog || local.nightLog ? mergeByKey(remote.nightLog, local.nightLog, (e) => e.date, (e) => e.date, NIGHT_LOG_LIMIT) : undefined,
     // Los complejos propios se unen por id (gana el local si el mismo id cambió en los dos sitios); lo borrado no vuelve. Favoritos y
     // ocultos son preferencias: gana el local si las ha tocado en este dispositivo.
     customComplexes: dropDeleted(

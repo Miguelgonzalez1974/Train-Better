@@ -8,10 +8,9 @@ import { readinessLastDays } from '../../engine/readinessTrend';
 import { buildStrainTarget } from '../../engine/strainTarget';
 import { learnStrain } from '../../engine/strainLearning';
 import { buildPastDayView, buildReadinessSeries, buildTrendPoints } from './pastDay';
-import { buildPrepCompare } from './prepCompare';
 
 /**
- * La preparación de un día sale igual por todos los caminos (Dashboard, día pasado, gráficas, objetivo del día, tendencia, comparación), con o sin
+ * La preparación de un día sale igual por todos los caminos (Dashboard, día pasado, gráficas, objetivo del día, tendencia), con o sin
  * la carga del programa de fuerza ya sumada, y cuenta los días en los que solo se hizo ese programa.
  */
 
@@ -59,7 +58,7 @@ describe('una sola preparación', () => {
   });
 
   it('el objetivo de esfuerzo, la tendencia, la gráfica y el día pasado usan la misma nota que el Dashboard', () => {
-    const expected = readinessAt(profile, history, noon(yesterday), { before: true }).total;
+    const expected = readinessAt(profile, history, noon(yesterday)).total;
     expect(expected).not.toBeNull();
 
     expect(buildStrainTarget(profile, history, yesterday).readiness).toBe(expected);
@@ -68,7 +67,6 @@ describe('una sola preparación', () => {
     expect(buildReadinessSeries(profile, history, yesterday, 1)[0].total).toBe(expected);
     expect(buildPastDayView(profile, history, yesterday, learnStrain(profile, history, yesterday)).readiness.total).toBe(expected);
     expect(buildTrendPoints(profile, history, yesterday, TODAY, 3).find((p) => p.iso === yesterday)?.readiness).toBe(expected);
-    expect(buildPrepCompare(profile, history, TODAY).find((r) => r.iso === yesterday)?.now).toBe(expected);
   });
 
   it('un día pasado de solo programa de fuerza tiene su esfuerzo', () => {

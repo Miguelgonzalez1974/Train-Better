@@ -26,7 +26,7 @@ function isoMinus(iso: string, days: number): string {
 export function readinessLastDays(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string, days: number): (number | null)[] {
   return Array.from({ length: days }, (_, back) => {
     const dayIso = isoMinus(todayIso, back);
-    return readinessAt(profile, history, new Date(`${dayIso}T12:00:00`), { before: true }).total;
+    return readinessAt(profile, history, new Date(`${dayIso}T12:00:00`)).total;
   });
 }
 
