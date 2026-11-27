@@ -81,9 +81,9 @@ describe('la propuesta de mover un día, en palabras de Rex', () => {
     expect(withAdvice.indexOf('semana-mover')).toBeLessThan(withAdvice.indexOf('consejo'));
   });
 
-  it('la energía se cuenta como a tope, normal o cansado', () => {
-    expect(energyWord(80)).toBe('a tope');
+  it('la energía se cuenta con las palabras del aro', () => {
+    expect(energyWord(80)).toBe('con ganas');
     expect(energyWord(50)).toBe('normal');
-    expect(energyWord(15)).toBe('cansado');
+    expect(energyWord(30)).toBe('cansado');
   });
 });

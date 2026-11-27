@@ -42,7 +42,7 @@ function EnergyChart({ days, from, to }: { days: WeekMoveDay[]; from: string; to
 }
 
 /**
- * La ficha donde el coach propone mover un día de la semana según tu curva de forma: la frase de Rex, tu energía de cada día antes y con el
+ * La ficha donde el coach propone mover un día de la semana según la energía con la que llegas: la frase de Rex, tu energía de cada día antes y con el
  * cambio, la semana tal como quedaría y el porqué. Se aplica con un botón (con deshacer, igual que cuando mueves un día con Rex) o se deja
  * para luego («Ahora no»: esa semana no vuelve a insistir). Todo el contenido sale de `proposeWeekMove` (`lib/weekCoach.ts`).
  */
@@ -103,9 +103,9 @@ export function WeekMoveCard({
 
       <section className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3.5" aria-label="Tu energía esta semana">
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">Tu energía esta semana</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">Con cuánta energía llegas</p>
           <p className="whitespace-nowrap text-xs text-neutral-400">
-            <span className="text-bad">{proposal.energyFrom}</span> → <span className="font-semibold text-good">{proposal.energyTo}</span>
+            <span className="text-bad">{proposal.energyFrom} %</span> → <span className="font-semibold text-good">{proposal.energyTo} %</span>
             <span className="text-neutral-500"> · {word}</span>
           </p>
         </div>
@@ -165,7 +165,7 @@ export function WeekMoveCard({
           Ahora no
         </button>
       </div>
-      <p className="text-[11px] text-neutral-500">Es una estimación con tus últimas semanas: el check-in de cada mañana manda sobre ella. Se puede deshacer durante 24 horas.</p>
+      <p className="text-[11px] text-neutral-500">Es una estimación con lo que has entrenado estas semanas, suponiendo que duermes unas 7 h: el check-in de cada mañana manda sobre ella. Se puede deshacer durante 24 horas.</p>
     </div>
   );
 }

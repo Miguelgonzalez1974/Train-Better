@@ -2,7 +2,7 @@
  * Lo que dice Rex cuando el coach propone mover un día de la semana (cálculo en `lib/weekCoach.ts`): la frase de la burbuja, el titular de la
  * ficha y el estado de energía de cada número. Puras, para poder probarlas.
  */
-import { ENERGY_LOW, ENERGY_TOP } from '../../engine/formCurve';
+import { HIGH_FROM, LOW_UNTIL } from '../../engine/readinessScore';
 import { dayLabel } from '../../lib/sessionMove';
 import type { WeekMoveProposal } from '../../lib/weekCoach';
 import type { RexSuggestion } from './rexDashboard';
@@ -10,9 +10,9 @@ import type { RexSuggestion } from './rexDashboard';
 /** «el viernes», «mañana». */
 const when = (iso: string, todayIso: string) => dayLabel(iso, todayIso);
 
-/** El estado de una energía en palabras del atleta. */
-export function energyWord(energy: number): 'a tope' | 'normal' | 'cansado' {
-  return energy >= ENERGY_TOP ? 'a tope' : energy <= ENERGY_LOW ? 'cansado' : 'normal';
+/** El estado de una energía en palabras del atleta: las mismas del aro. */
+export function energyWord(energy: number): 'con ganas' | 'normal' | 'cansado' {
+  return energy >= HIGH_FROM ? 'con ganas' : energy <= LOW_UNTIL ? 'cansado' : 'normal';
 }
 
 /** «Mejor el sábado.» */
@@ -24,7 +24,7 @@ export function weekMoveLead(p: WeekMoveProposal, todayIso: string): string {
 export function weekMoveSentence(p: WeekMoveProposal, todayIso: string): string {
   const from = when(p.from, todayIso);
   const to = when(p.to, todayIso);
-  return `Tu ${p.sessionLabel} ${ofDay(from)} te pilla con la energía en ${p.energyFrom}; ${to} llegas con ${p.energyTo}. Misma sesión, mejor día.`;
+  return `Tu ${p.sessionLabel} ${ofDay(from)} te pilla con la energía al ${p.energyFrom} %; ${to} llegas con un ${p.energyTo} %. Misma sesión, mejor día.`;
 }
 
 /** «a mañana», «al jueves». */

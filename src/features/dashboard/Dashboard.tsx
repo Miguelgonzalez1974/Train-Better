@@ -167,7 +167,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [dismissedE1rm, setDismissedE1rm] = useState<string[]>([]);
   /** «Mi semana» abierta: el botón elegido y la revisión de la pasada, guardada aquí porque al darla por vista deja de existir como pendiente. */
   const [weekWindow, setWeekWindow] = useState<{ view: WeekView; review: WeeklyReview | null } | null>(null);
-  // El coach propone mover un día de la semana según tu curva de forma (ver `lib/weekCoach.ts`): la ficha y lo que se hizo ya esta semana.
+  // El coach propone mover un día de la semana según la energía con la que llegas (ver `lib/weekCoach.ts`): la ficha y lo que se hizo ya esta semana.
   // La propuesta abierta se guarda aparte: al aplicarla (o dejarla) deja de salir en Rex, pero la ficha sigue abierta para enseñar «Hecho» y «Deshacer».
   const [openWeekMove, setOpenWeekMove] = useState<WeekMoveProposal | null>(null);
   const [weekMoveMemory, setWeekMoveMemory] = useState<WeekMoveMemory>(() => loadWeekMoveMemory(typeof window !== 'undefined' ? window.localStorage : null));

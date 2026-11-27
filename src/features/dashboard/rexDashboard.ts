@@ -9,7 +9,7 @@
 export type RexTarget =
   | 'checkin'
   | 'semana'
-  /** La ficha donde el coach propone mover un día de la semana (según tu curva de forma). */
+  /** La ficha donde el coach propone mover un día de la semana (según la energía con la que llegas). */
   | 'semana-mover'
   | 'revision-enfasis'
   /** La ventana Historial: abre en el Diario; «constancia» y «volumen» abren la misma ventana en su pestaña. */

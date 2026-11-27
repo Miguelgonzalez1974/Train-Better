@@ -31,8 +31,8 @@ export interface ReadinessScore {
   checkins: RecoverySummary;
 }
 
-const HIGH_FROM = 65;
-const LOW_UNTIL = 40;
+export const HIGH_FROM = 65;
+export const LOW_UNTIL = 40;
 /** Para dar una cifra hacen falta al menos estos días con datos (check-in o entreno) en la ventana reciente. */
 const RECENT_DAYS = 14;
 const MIN_DATA_DAYS = 2;
