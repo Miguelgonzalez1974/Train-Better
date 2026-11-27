@@ -18,6 +18,11 @@ export const ZONE_ORDER: WodZone[] = ['gimnasticos', 'barra', 'cardio', 'corpora
 
 const LOAD_EQUIPMENT = /barbell|barra(?! de dominadas)|dumbbell|mancuerna|kettlebell|pesa rusa|balón|balon|medicine|wall ?ball|disco|plate/i;
 
+/** Un movimiento que se hace con carga externa (se puede escalar bajando el peso). */
+export function isLoadable(movementId: string): boolean {
+  return Boolean(getMovementById(movementId)?.equipment.some((e) => LOAD_EQUIPMENT.test(e)));
+}
+
 /** La zona del WOD a la que pertenece un movimiento, o null si no encaja en ninguna. */
 export function zoneOf(movementId: string): WodZone | null {
   const m = getMovementById(movementId);

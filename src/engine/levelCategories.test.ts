@@ -195,11 +195,11 @@ describe('los últimos entrenos de una categoría', () => {
     expect(items.every((i) => i.counts)).toBe(true);
   });
 
-  it('un WOD escalado de esa categoría sale atenuado, con el motivo, y no cuenta', () => {
+  it('un WOD escalado sin detalle sale atenuado, con el motivo, y no cuenta', () => {
     const e = entry(5, { movementIds: ['benchmark:diane'], rxOrScaled: 'scaled', wodResult: { scoreType: 'time', value: '8:00' }, wodCategories: { 1: 'pesado' } });
     const items = recentOfCategory({ profile: makeProfile(), history: [e], key: 'pesado' });
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ title: 'Diane', value: '8:00', counts: false, note: 'Escalado: no cuenta' });
+    expect(items[0]).toMatchObject({ title: 'Diane', value: '8:00', counts: false, note: 'Escalado sin detalle: no cuenta', fix: { date: e.date, part: 1 } });
   });
 
   it('de barra: tus mejores series por día con el 1RM estimado y el porcentaje de tu mejor marca; los tests también', () => {

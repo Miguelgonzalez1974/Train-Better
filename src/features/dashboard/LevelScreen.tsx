@@ -26,6 +26,7 @@ import { PR_ROWS } from './prRows';
 import { analysisRexLine, openGoalMovements, PROPOSAL_WEEKS } from './rexAnalysis';
 import type { MarkKey } from './rexMarks';
 import { ResponseProfileCard } from './ResponseProfileCard';
+import type { SaveScaling } from './ScaleFix';
 import type { MonthlyStats } from './stats';
 import { VolumeContent } from './VolumeSummaryModal';
 import { WodPacingCard } from './WodPacingCard';
@@ -59,6 +60,8 @@ interface LevelScreenProps {
   /** El levantamiento que «Marcas» abre desplegado. */
   marksKey: MarkKey | null;
   onSaveProfile: (patch: Partial<AthleteProfile>) => void;
+  /** Guardar qué se escaló en un WOD ya cerrado. */
+  onSaveScaling: SaveScaling;
   /** Guardar marcas corregidas (recalcula las sesiones preparadas). */
   onSaveMarks: (patch: Pick<AthleteProfile, 'prs' | 'variantPrs'>) => void;
   /** Rex crea un objetivo «Subir PR» con lo que ha visto. */
@@ -95,7 +98,7 @@ function LevelNote({ profile, history, imbalanceGroups, strengthRatio, todayIso,
     const text =
       level.overall !== null
         ? `Estás en ${level.overall}${level.delta ? ` (${level.delta > 0 ? '+' : '−'}${Math.abs(level.delta)} en 3 meses)` : ''}, con ${level.filled} de ${level.categories.length} categorías con datos. Toca una para ver sus últimos entrenos.`
-        : `Tienes ${level.filled} de ${level.categories.length} categorías con datos. Se van rellenando con tus marcas de barra y tus WODs en Rx.`;
+        : `Tienes ${level.filled} de ${level.categories.length} categorías con datos. Se van rellenando con tus marcas de barra y tus WODs (en Rx, o escalados diciendo qué cambiaste).`;
     return { text, proposal: line.proposal };
   }, [profile, history, imbalanceGroups, strengthRatio, todayIso]);
 
@@ -334,6 +337,7 @@ export function LevelScreen(props: LevelScreenProps) {
                   onChange={props.onSaveProfile}
                   mode="analisis"
                   onOpenOther={props.onOpenProgramming}
+                  onSaveScaling={props.onSaveScaling}
                   extra={<EnergyDomainsCard profile={profile} history={history} collapsed={!energyOpen} onToggleCollapsed={() => setEnergyOpen((v) => !v)} />}
                 />
               </>

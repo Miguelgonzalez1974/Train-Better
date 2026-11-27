@@ -232,7 +232,7 @@ function mergeStringSet(a: string[] | undefined, b: string[] | undefined, limit:
 /** En una entrada de historial de un mismo dia, gana la que trae mas informacion (testLoadKg / wodResult rellenados despues). */
 function pickRicherHistory(remote: SessionHistoryEntry, local: SessionHistoryEntry): SessionHistoryEntry {
   const score = (e: SessionHistoryEntry) =>
-    (e.testLoadKg != null ? 1 : 0) + (e.wodResult != null ? 1 : 0) + (e.wodResult2 != null ? 1 : 0) + (e.wodMovementIds != null ? 1 : 0);
+    (e.testLoadKg != null ? 1 : 0) + (e.wodResult != null ? 1 : 0) + (e.wodResult2 != null ? 1 : 0) + (e.wodMovementIds != null ? 1 : 0) + (e.wodScaling?.length ? 1 : 0);
   return score(local) >= score(remote) ? local : remote;
 }
 
@@ -480,6 +480,9 @@ export function mergeProfile(
       remote.levelTests || local.levelTests
         ? dropDeleted(mergeByKey(remote.levelTests, local.levelTests, testKey, (e) => e.date, 200), testKey, base?.levelTests, remote.levelTests, local.levelTests)
         : undefined,
+    // Escalados de «Tu nivel»: uno por fecha y parte, gana el local.
+    levelScaledLog:
+      remote.levelScaledLog || local.levelScaledLog ? mergeByKey(remote.levelScaledLog, local.levelScaledLog, (e) => `${e.date}|${e.part}`, (e) => e.date, 400) : undefined,
     // Descansos elegidos: union, pero quitar la marca ("Deshacer") debe sobrevivir a la sincronizacion como cualquier borrado.
     restDates: dropDeleted(mergeStringSet(remote.restDates, local.restDates, REST_DATES_LIMIT), (d) => d, base?.restDates, remote.restDates, local.restDates),
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),

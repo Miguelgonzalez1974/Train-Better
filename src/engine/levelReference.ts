@@ -1,6 +1,7 @@
 import type { AthleteProfile, LevelTestKey, PersonalRecords, SessionHistoryEntry } from '../data/athlete/types';
 import powerlifting from '../data/reference/powerliftingPercentiles.json';
 import run5k from '../data/reference/run5kAgeStandards.json';
+import { scalingOfPart } from './levelCategories';
 import { toLocalIsoDate } from './periodization';
 import { historyWodKey, parseTimeSeconds } from './wodGhost';
 
@@ -12,7 +13,8 @@ import { historyWodKey, parseTimeSeconds } from './wodGhost';
  *  - Fran: puntuaciones de atletas de CrossFit de 35 años o más (Mangine, Cebulla y Feito, 2018, CC BY 4.0). «orientativo».
  *  - 5 km: porcentaje corregido por edad (tablas de Alan Jones, CC0). «medido».
  *  - Remo 2 km: sin referencia que se pueda usar; solo contra ti.
- * Solo hay tablas de hombres. Puro: lee el perfil y el historial.
+ * Un Fran escalado (diciendo qué se cambió) solo se usa si no hay uno en Rx vigente: el tiempo se divide por lo que vale (`scaling.ts`) y nunca
+ * pasa de Novato. Solo hay tablas de hombres. Puro: lee el perfil y el historial.
  */
 export const ZONES = ['Principiante', 'Novato', 'Intermedio', 'Avanzado', 'Élite'] as const;
 
@@ -45,6 +47,8 @@ export interface RefMark {
   value: string;
   /** Escalón y posición; null si no hay con qué compararlo. */
   placement: Placement | null;
+  /** Líneas que explican cómo se ha contado un resultado escalado. */
+  notes?: string[];
   /** «a 3 kg de Novato»; null arriba del todo o sin comparación. */
   next: string | null;
   /** Una línea más: el percentil, el porcentaje por edad, de cuándo es el test. */
@@ -68,6 +72,8 @@ export interface RefCategory {
   warning: string | null;
   /** El test que se puede apuntar aquí. */
   test: LevelTestKey | null;
+  /** El escalón sale de un resultado escalado, con tope. */
+  scaled?: boolean;
 }
 
 export interface ReferenceLevel {
@@ -289,7 +295,7 @@ export function testResults(profile: AthleteProfile, history: SessionHistoryEntr
   const byDate = new Map<string, TestResult>();
   const keys = new Set(TEST_WOD_KEYS[key]);
   const capped = new Set<string>();
-  for (const r of profile.levelLog ?? []) if (keys.has(r.key) && r.scoreType === 'time' && r.value > 0) byDate.set(r.date, { date: r.date, seconds: r.value, manual: false });
+  for (const r of profile.levelLog ?? []) if (r.factor === undefined && keys.has(r.key) && r.scoreType === 'time' && r.value > 0) byDate.set(r.date, { date: r.date, seconds: r.value, manual: false });
   for (const e of history) {
     const id = historyWodKey(e);
     if (!id || !keys.has(id) || !e.wodResult || e.wodResult.scoreType !== 'time') continue;
@@ -304,6 +310,24 @@ export function testResults(profile: AthleteProfile, history: SessionHistoryEntr
   for (const t of profile.levelTests ?? []) if (t.key === key && t.seconds > 0) byDate.set(t.date, { date: t.date, seconds: t.seconds, manual: true });
   return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
+
+/** Un Fran (u otro test) escalado: tu tiempo y lo que vale el WOD; del más reciente al más antiguo. */
+export function scaledTestResults(profile: AthleteProfile, history: SessionHistoryEntry[], key: LevelTestKey): { date: string; seconds: number; factor: number }[] {
+  const keys = new Set(TEST_WOD_KEYS[key]);
+  const inHistory = new Set(history.map((e) => e.date));
+  const out = (profile.levelScaledLog ?? []).flatMap((r) => (!inHistory.has(r.date) && r.factor && keys.has(r.key) && r.scoreType === 'time' && r.value > 0 ? [{ date: r.date, seconds: r.value, factor: r.factor }] : []));
+  for (const e of history) {
+    const id = historyWodKey(e);
+    if (!id || !keys.has(id) || e.wodResult?.scoreType !== 'time' || e.wodResult.capped) continue;
+    const how = scalingOfPart(e, 1);
+    const seconds = how.kind === 'scaled' ? parseTimeSeconds(e.wodResult.value) : null;
+    if (how.kind === 'scaled' && seconds !== null) out.push({ date: e.date, seconds, factor: how.factor });
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/** Un resultado escalado nunca pasa de este escalón (Novato). */
+export const SCALED_TOP_ZONE = 1;
 
 const dayNumber = (iso: string) => Math.round(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 86_400_000);
 const SHORT_DATE = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -320,6 +344,12 @@ function currentTest(profile: AthleteProfile, history: SessionHistoryEntry[], ke
   const others = live.filter((r) => r !== best);
   const previous = others.length > 0 ? others.reduce((a, b) => (b.seconds < a.seconds ? b : a)) : null;
   return { best, previous, missing: null };
+}
+
+/** El escalado vigente (12 meses) que mejor queda una vez ajustado. */
+function bestScaled(results: { date: string; seconds: number; factor: number }[], todayIso: string) {
+  const live = results.filter((r) => r.date <= todayIso && dayNumber(todayIso) - dayNumber(r.date) <= TEST_WINDOW_DAYS).map((r) => ({ ...r, adjusted: r.seconds / r.factor }));
+  return live.length === 0 ? null : live.reduce((a, b) => (b.adjusted < a.adjusted ? b : a));
 }
 
 /** Fran en atletas de CrossFit de 35 años o más: [segundos, percentil]. Más percentil es más rápido. Mangine, Cebulla y Feito (2018), tabla 2. */
@@ -358,6 +388,39 @@ function franCategory(profile: AthleteProfile, history: SessionHistoryEntry[], a
       mark.detail = `${ahead} · ${testDateText(best.date)}`;
     }
     marks.push(mark);
+  }
+  // Sin un Rx vigente, vale el mejor escalado del año, ajustado y con tope.
+  const scaled = best || !comparable ? null : bestScaled(scaledTestResults(profile, history, 'fran'), todayIso);
+  if (scaled) {
+    const cuts: [number, number, number, number] = [franAt(10), franAt(35), franAt(65), franAt(90)];
+    const raw = placeOnScale(scaled.adjusted, cuts, 660, 100);
+    const capped = raw.zone > SCALED_TOP_ZONE;
+    const placement = capped ? { zone: SCALED_TOP_ZONE, position: (SCALED_TOP_ZONE + 0.999) / 5 } : raw;
+    marks.push({
+      key: 'fran',
+      label: 'Fran',
+      value: timeText(scaled.seconds),
+      placement,
+      next: null,
+      detail: `Escalado \u00b7 ${testDateText(scaled.date)}`,
+      notes: [
+        `Lo cuento como ${timeText(scaled.adjusted)} por lo que escalaste (vale el ${Math.round(scaled.factor * 100)} %).`,
+        ...(capped ? [`Ser\u00eda ${ZONES[raw.zone]}, pero un escalado no pasa de ${ZONES[SCALED_TOP_ZONE]}.`] : []),
+        'Haz uno en Rx para ver tu nivel real.',
+      ],
+    });
+    return {
+      key: 'velocidad',
+      label: 'Velocidad',
+      tag: 'orientativo',
+      placement,
+      marks,
+      against: 'Frente a tiempos que declararon atletas de CrossFit de 35 a\u00f1os o m\u00e1s (Rx).',
+      missing: null,
+      warning: null,
+      test: 'fran',
+      scaled: true,
+    };
   }
   return {
     key: 'velocidad',

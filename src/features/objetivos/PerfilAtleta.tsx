@@ -19,6 +19,7 @@ import { Modal } from '../shell/Modal';
 import { computeLevel, LEVEL_ORDER, levelSeries, recentOfCategory, type LevelKey, type RecentItem } from '../../engine/levelCategories';
 import { CategoryRadar } from '../dashboard/CategoryRadar';
 import { CategoryRecent } from '../dashboard/CategoryRecent';
+import { ScaleFix, type SaveScaling } from '../dashboard/ScaleFix';
 
 const TONE_COLOR: Record<Tone, string> = {
   good: 'rgb(var(--c-state-good))',
@@ -296,6 +297,7 @@ export function PerfilAtleta({
   mode = 'analisis',
   onOpenOther,
   extra,
+  onSaveScaling,
 }: {
   profile: AthleteProfile;
   history: SessionHistoryEntry[];
@@ -305,6 +307,8 @@ export function PerfilAtleta({
   onOpenOther?: () => void;
   /** Detalle plegable que va tras «Qué priorizaría» (en el Dashboard: la energía y las parejas de levantamientos). */
   extra?: React.ReactNode;
+  /** Guardar qué se escaló en un WOD ya cerrado. */
+  onSaveScaling?: SaveScaling;
 }) {
   const diagnosis = useMemo(() => computeAthleteDiagnosis({ profile, history }), [profile, history]);
   // Tu nivel con las 8 categorías: la foto de hoy, su evolución mes a mes y los 3 últimos entrenos de cada una (solo se calcula en la pantalla del perfil).
@@ -403,7 +407,7 @@ export function PerfilAtleta({
                     <span className="flex items-baseline justify-between gap-2">
                       <span className={`text-[13px] font-semibold ${empty ? 'text-neutral-500' : 'text-white'}`}>{c.label}</span>
                       <span className="flex shrink-0 items-baseline gap-2">
-                        {c.confidence === 'provisional' && <span className="rounded-md bg-warn/15 px-1.5 py-0.5 text-[11px] font-semibold text-warn">provisional</span>}
+                        {c.confidence === 'provisional' && <span className="rounded-md bg-warn/15 px-1.5 py-0.5 text-[11px] font-semibold text-warn">{c.scaled ? 'con escalados' : 'provisional'}</span>}
                         {!empty && <span className="num text-[15px] font-bold text-white">{c.score}</span>}
                         {c.delta !== null && (
                           <span className="num text-[11px] font-semibold" style={{ color: c.delta > 0 ? TONE_COLOR.good : c.delta < 0 ? TONE_COLOR.mid : TONE_COLOR.none }}>
@@ -421,7 +425,19 @@ export function PerfilAtleta({
                   {open && (
                     <div className="px-3.5 pb-3.5">
                       <p className="mb-3 text-xs leading-relaxed text-neutral-400">{c.detail}</p>
-                      <CategoryRecent items={recents[c.key]} series={series[c.key]} need={c.need} />
+                      <CategoryRecent
+                        items={recents[c.key]}
+                        series={series[c.key]}
+                        // Sin datos, lo que falta ya se lee en la propia fila.
+                        need={empty ? null : c.need}
+                        renderFix={
+                          onSaveScaling &&
+                          ((fix, close) => {
+                            const entry = history.find((e) => e.date === fix.date);
+                            return entry ? <ScaleFix entry={entry} part={fix.part} prs={profile.prs} onSave={onSaveScaling} onClose={close} /> : null;
+                          })
+                        }
+                      />
                     </div>
                   )}
                 </article>

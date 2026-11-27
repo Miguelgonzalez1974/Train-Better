@@ -1,5 +1,6 @@
 import type { AthleteProfile, LevelResult, PersonalRecords, SessionBlockResult, SessionHistoryEntry, WodResult } from '../data/athlete/types';
 import { benchmarkWorkouts, getMovementById } from '../data/movements';
+import { MAX_SCALED_FACTOR, partScaling, type PartScaling } from './scaling';
 import { OLY_ROOT_PR_MAP, resolveOlyPRKey, resolveStrengthPRKey, STRENGTH_ROOT_PR_MAP } from './prResolution';
 import { toLocalIsoDate } from './periodization';
 import { classifyWodBlocks, WOD_CATEGORY_LABEL, type WodCategory } from './wodCategory';
@@ -13,7 +14,8 @@ import { computeYearConsistency } from './yearConsistency';
  *
  *  - Cada categoría puntúa de 0 a 100: 100 = estás en tu mejor marca de los últimos 12 meses. Baja si rindes menos que tu mejor vez y, poco a poco, si pasa el tiempo sin repetirla.
  *  - Con un solo resultado la categoría es «provisional»; hace falta un segundo para fiarse (como en BTWB). Los resultados caducan a los 12 meses.
- *  - Solo cuentan los WODs hechos en Rx (uno escalado no mide lo mismo). La constancia NO entra: es un hábito, va aparte.
+ *  - Cuentan los WODs en Rx. Uno escalado solo cuenta si se dijo qué se cambió, con descuento (`scaling.ts`), y únicamente en una categoría sin ningún
+ *    Rx: un Rx siempre pasa por delante. La constancia NO entra: es un hábito, va aparte.
  * Puro: lee el perfil y el historial y devuelve la foto de hoy y la de hace 3 meses.
  */
 export type LevelKey = 'power-lifts' | 'olimpicos' | WodCategory;
@@ -134,6 +136,49 @@ export function levelResultsOfEntry(entry: SessionHistoryEntry, prs: Partial<Per
   return out;
 }
 
+/** Los movimientos de una parte del WOD de una entrada (para saber cuánto pesa lo escalado). */
+export function partMovementIds(entry: SessionHistoryEntry, part: 1 | 2): string[] {
+  const blocks = blocksOfEntry(entry, part)?.filter((b) => b.block === 'wod' && (b.wodPart ?? 1) === part) ?? [];
+  const ids = blocks.flatMap((b) => {
+    if (b.wodCatalogId) return getCatalogWod(b.wodCatalogId)?.movementIds ?? [b.movementId];
+    if (b.movementId.startsWith('benchmark:')) return benchmarkWorkouts.find((w) => `benchmark:${w.id}` === b.movementId)?.movements ?? [];
+    return [b.movementId];
+  });
+  const found = ids.length > 0 || part === 2 ? ids : (entry.wodMovementIds ?? []);
+  return [...new Set(found)].filter((id) => getMovementById(id));
+}
+
+/** Cómo se hizo una parte (Rx, escalada con su valor, o escalada sin decir qué). */
+export const scalingOfPart = (entry: SessionHistoryEntry, part: 1 | 2): PartScaling => partScaling(entry, part, partMovementIds(entry, part));
+
+/** Los resultados escalados de una entrada que cuentan con descuento (`factor`): una sesión marcada como escalada en la que se dijo qué se cambió. */
+export function scaledResultsOfEntry(entry: SessionHistoryEntry, prs: Partial<PersonalRecords>): LevelResult[] {
+  if (entry.rxOrScaled !== 'scaled') return [];
+  const out: LevelResult[] = [];
+  for (const part of [1, 2] as const) {
+    const result = part === 1 ? entry.wodResult : entry.wodResult2;
+    if (!result || result.capped || (entry.skipped ?? []).some((s) => s.block === 'wod' && (s.part ?? 1) === part)) continue;
+    const category = categoryOfEntryPart(entry, part, prs);
+    if (!category) continue;
+    const how = scalingOfPart(entry, part);
+    // En un doble WOD la parte sin nada anotado se hizo como estaba: cuenta entera, pero dentro de los escalados (la sesión no es Rx).
+    if (how.kind === 'sin-detalle') continue;
+    const factor = how.kind === 'scaled' ? how.factor : MAX_SCALED_FACTOR;
+    const key = part === 1 ? historyWodKey(entry) : entry.wodBlocks ? wodKeyOfBlocks(entry.wodBlocks, 2) : null;
+    const r = buildLevelResult({ date: entry.date, part, category, key: key ?? `${entry.date}|${part}`, result, rx: true });
+    if (r) out.push({ ...r, factor });
+  }
+  return out;
+}
+
+/** Todos los escalados que cuentan: los del historial y, de días que ya no están en él, los del registro largo. */
+export function allScaledResults(profile: AthleteProfile, history: SessionHistoryEntry[]): LevelResult[] {
+  const inHistory = new Set(history.map((e) => e.date));
+  const out = (profile.levelScaledLog ?? []).filter((r) => !inHistory.has(r.date) && r.factor !== undefined);
+  for (const e of history) out.push(...scaledResultsOfEntry(e, profile.prs));
+  return out;
+}
+
 /** Todos los resultados conocidos: el registro largo y los del historial que aún no estén en él. */
 export function allLevelResults(profile: AthleteProfile, history: SessionHistoryEntry[]): LevelResult[] {
   const byId = new Map<string, LevelResult>();
@@ -232,6 +277,8 @@ export interface CategoryLevel {
   confidence: LevelConfidence;
   /** Resultados que hay detrás (barras con marca, o WODs). */
   results: number;
+  /** La nota sale solo de WODs escalados (con descuento): en cuanto haya un Rx, manda el Rx. */
+  scaled?: boolean;
   /** Una línea con lo que hay detrás. */
   detail: string;
   /** Lo que falta para fiarse, si falta algo. */
@@ -278,6 +325,15 @@ function wodScore(results: LevelResult[], category: WodCategory, asOf: string): 
   return { score: round(100 * mean(levels)), count: mine.length, last: mine.reduce((d, r) => (r.date > d ? r.date : d), mine[0].date) };
 }
 
+/** La nota de una categoría que solo tiene escalados: lo que vale el último de cada WOD, con el desgaste del tiempo. */
+function scaledScore(results: LevelResult[], category: WodCategory, asOf: string): { score: number; count: number; last: string } | null {
+  const mine = results.filter((r) => r.category === category && r.date <= asOf && daysBetween(r.date, asOf) <= WINDOW_DAYS).sort((a, b) => a.date.localeCompare(b.date) || a.part - b.part);
+  if (mine.length === 0) return null;
+  const latest = new Map(mine.map((r) => [r.key, r]));
+  const levels = [...latest.values()].map((r) => (r.factor ?? 0) * recency(daysBetween(r.date, asOf)));
+  return { score: round(100 * mean(levels)), count: mine.length, last: mine[mine.length - 1].date };
+}
+
 const agoText = (days: number) => (days <= 0 ? 'hoy' : days === 1 ? 'ayer' : days < 14 ? `hace ${days} días` : days < 60 ? `hace ${Math.round(days / 7)} semanas` : `hace ${Math.round(days / 30)} meses`);
 
 /** La foto de «Tu nivel» de hoy y de hace 3 meses. */
@@ -288,6 +344,7 @@ export function computeLevel(input: { profile: AthleteProfile; history: SessionH
   const beforeIso = addDays(todayIso, -BEFORE_DAYS);
   const marks = liftMarks(profile, history);
   const results = allLevelResults(profile, history);
+  const scaledOnes = allScaledResults(profile, history);
 
   const categories: CategoryLevel[] = LEVEL_ORDER.map((key): CategoryLevel => {
     const label = LEVEL_LABEL[key];
@@ -309,19 +366,31 @@ export function computeLevel(input: { profile: AthleteProfile; history: SessionH
         need: count === 0 ? 'Anota tus marcas de barra en Objetivos.' : count < RELIABLE_RESULTS ? `Te falta una marca más (${missing[0]}).` : null,
       };
     }
-    const now = wodScore(results, key, todayIso);
-    const before = wodScore(results, key, beforeIso);
+    const rxNow = wodScore(results, key, todayIso);
+    const scaledNow = rxNow ? null : scaledScore(scaledOnes, key, todayIso);
+    const now = rxNow ?? scaledNow;
+    const before = wodScore(results, key, beforeIso) ?? scaledScore(scaledOnes, key, beforeIso);
     const count = now?.count ?? 0;
+    const noun = scaledNow ? (count === 1 ? 'resultado escalado' : 'resultados escalados') : count === 1 ? 'resultado' : 'resultados';
     return {
       key,
       label,
       score: now?.score ?? null,
       before: before?.score ?? null,
       delta: now && before ? now.score - before.score : null,
-      confidence: confidenceOf(count),
+      // Una nota que solo sale de escalados nunca es fiable del todo.
+      confidence: scaledNow ? 'provisional' : confidenceOf(count),
       results: count,
-      detail: now ? `${count} ${count === 1 ? 'resultado' : 'resultados'} · el último ${agoText(daysBetween(now.last, todayIso))}` : 'Aún sin resultados',
-      need: count === 0 ? `Hace falta un WOD de ${label.toLowerCase()} hecho en Rx.` : count < RELIABLE_RESULTS ? 'Te falta un resultado más para fiarme.' : null,
+      ...(scaledNow ? { scaled: true } : {}),
+      detail: now ? `${count} ${noun} · el último ${agoText(daysBetween(now.last, todayIso))}` : 'Aún sin resultados',
+      need:
+        count === 0
+          ? `Hace falta un WOD de ${label.toLowerCase()}: en Rx, o escalado diciendo qué cambiaste.`
+          : scaledNow
+            ? 'Un WOD en Rx de este tipo lo mide de verdad.'
+            : count < RELIABLE_RESULTS
+              ? 'Te falta un resultado más para fiarme.'
+              : null,
     };
   });
 
@@ -446,9 +515,11 @@ export interface RecentItem {
   value: string;
   /** Frente a tu mejor marca de eso («tu mejor marca», «+8 % más lento», «92 % de tu mejor»), o null. */
   vs: string | null;
-  /** Cuenta para el nivel (un WOD escalado no). */
+  /** Cuenta para el nivel (un WOD escalado, solo si dice qué se cambió y no hay Rx). */
   counts: boolean;
   note: string | null;
+  /** Un escalado sin detalle de un día del historial: se puede decir ahora qué se cambió. */
+  fix?: { date: string; part: 1 | 2 };
 }
 
 /** El nombre de un WOD a partir de su clave (la del modo fantasma): el del benchmark o del catálogo, o los movimientos de uno generado. */
@@ -470,6 +541,8 @@ export function wodTitleOfKey(key: string): string {
   }
   return key;
 }
+
+const scaledNote = (factor: number, hasRx: boolean) => `Escalado, vale el ${round(100 * factor)} %${hasRx ? ': no te baja, ya tienes un Rx' : ''}`;
 
 const secText = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
 function valueText(r: LevelResult): string {
@@ -498,7 +571,7 @@ function versusEarlier(r: LevelResult, all: LevelResult[]): string | null {
  * Los últimos entrenos de una categoría (hasta `n`, de más reciente a más antiguo). Las de WOD: los resultados en Rx del registro largo y del historial, más los entrenos
  * clasificados que no cuentan (escalados), para entender por qué no se mueve. Las de barra: tus mejores series de cada día (con su 1RM estimado frente a tu mejor marca) y tus tests.
  */
-export function recentOfCategory(input: { profile: AthleteProfile; history: SessionHistoryEntry[]; key: LevelKey; n?: number }): RecentItem[] {
+export function recentOfCategory(input: { profile: AthleteProfile; history: SessionHistoryEntry[]; key: LevelKey; n?: number; today?: Date }): RecentItem[] {
   const { profile, history, key } = input;
   const n = input.n ?? 3;
   if (key === 'power-lifts' || key === 'olimpicos') {
@@ -552,6 +625,15 @@ export function recentOfCategory(input: { profile: AthleteProfile; history: Sess
     .filter((r) => r.category === key)
     .map((r) => ({ date: r.date, title: titleByDate.get(`${r.date}|${r.part}`) ?? wodTitleOfKey(r.key), value: valueText(r), vs: versusEarlier(r, counted), counts: true, note: null }));
   const have = new Set(counted.filter((r) => r.category === key).map((r) => `${r.date}|${r.part}`));
+  const todayIso = toLocalIsoDate(input.today ?? new Date());
+  const hasRx = counted.some((r) => r.category === key && r.date <= todayIso && daysBetween(r.date, todayIso) <= WINDOW_DAYS);
+  const scaledByDay = new Map(allScaledResults(profile, history).filter((r) => r.category === key).map((r) => [`${r.date}|${r.part}`, r]));
+  // Los escalados de días que ya no están en el historial (solo en el registro largo).
+  const inHistory = new Set(history.map((e) => e.date));
+  for (const [id, r] of scaledByDay) {
+    if (inHistory.has(r.date) || have.has(id)) continue;
+    items.push({ date: r.date, title: wodTitleOfKey(r.key), value: valueText(r), vs: null, counts: !hasRx, note: scaledNote(r.factor ?? 0, hasRx) });
+  }
   for (const e of history) {
     for (const part of [1, 2] as const) {
       const result = part === 1 ? e.wodResult : e.wodResult2;
@@ -563,7 +645,18 @@ export function recentOfCategory(input: { profile: AthleteProfile; history: Sess
       }
       if (category !== key) continue;
       const k = part === 1 ? historyWodKey(e) : null;
-      items.push({ date: e.date, title: k ? wodTitleOfKey(k) : (e.wodBlocks?.[0]?.title ?? 'WOD'), value: result.value, vs: null, counts: false, note: e.rxOrScaled === 'rx' ? 'No cuenta: no se pudo medir' : 'Escalado: no cuenta' });
+      const title = titleByDate.get(`${e.date}|${part}`) ?? (k ? wodTitleOfKey(k) : (e.wodBlocks?.[0]?.title ?? 'WOD'));
+      const scaled = scaledByDay.get(`${e.date}|${part}`);
+      const undetailed = e.rxOrScaled !== 'rx' && !result.capped && scalingOfPart(e, part).kind === 'sin-detalle';
+      items.push({
+        date: e.date,
+        title,
+        value: result.value,
+        vs: null,
+        counts: Boolean(scaled) && !hasRx,
+        note: scaled ? scaledNote(scaled.factor ?? 0, hasRx) : e.rxOrScaled === 'rx' ? 'No cuenta: no se pudo medir' : result.capped ? 'Escalado y sin terminar: no cuenta' : 'Escalado sin detalle: no cuenta',
+        ...(undetailed ? { fix: { date: e.date, part } } : {}),
+      });
     }
   }
   return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, n);

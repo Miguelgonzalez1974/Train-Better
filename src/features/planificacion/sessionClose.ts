@@ -3,7 +3,7 @@ import { athleteRepository } from '../../data/athlete/athleteRepository';
 import { getMovementById } from '../../data/movements';
 import { estimateE1RMFromRpe } from '../../engine/e1rm';
 import { resolveOlyPRKey, resolveStrengthPRKey, resolveVariantPRKey, toHistoryEntry } from '../../engine/generateSession';
-import { levelResultsOfEntry } from '../../engine/levelCategories';
+import { levelResultsOfEntry, scaledResultsOfEntry } from '../../engine/levelCategories';
 import { countsForProgression, evaluateLiftSession, mainLiftBlock, type ProgressionKind } from '../../engine/progression';
 import { feelFromRpe, parseWorkingReps } from '../../engine/setFeedback';
 import { applySkips, skippedParts, type Skips } from '../../engine/sessionParts';
@@ -55,7 +55,8 @@ export function buildClosedEntry(i: CloseInput): SessionHistoryEntry {
     ...(Object.keys(wodCategories).length > 0 ? { wodCategories } : {}),
   };
   const levelResults = levelResultsOfEntry(built, i.prs);
-  return levelResults.length > 0 ? { ...built, levelResults } : built;
+  const levelScaled = scaledResultsOfEntry(built, i.prs);
+  return { ...built, ...(levelResults.length > 0 ? { levelResults } : {}), ...(levelScaled.length > 0 ? { levelScaled } : {}) };
 }
 
 /**

@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from 'react';
 import type { RecentItem } from '../../engine/levelCategories';
 
 const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -41,9 +42,11 @@ export function Sparkline({ series }: { series: (number | null)[] }) {
 
 /**
  * Lo que hay detrás de una categoría: cómo ha ido en el último año y sus 3 últimos entrenos (con lo que hiciste y cómo quedó frente a tu mejor marca). Un entreno que no cuenta
- * (un WOD escalado) sale atenuado con el motivo. Solo pinta: lo calcula `engine/levelCategories.ts`.
+ * (un escalado sin detalle, o con un Rx por delante) sale atenuado con el motivo; si le falta el detalle, se puede decir ahora (`renderFix`).
+ * Solo pinta: lo calcula `engine/levelCategories.ts`.
  */
-export function CategoryRecent({ items, series, need }: { items: RecentItem[]; series: (number | null)[]; need: string | null }) {
+export function CategoryRecent({ items, series, need, renderFix }: { items: RecentItem[]; series: (number | null)[]; need: string | null; renderFix?: (fix: NonNullable<RecentItem['fix']>, close: () => void) => ReactNode }) {
+  const [fixing, setFixing] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-2.5 pt-1" data-testid="category-recent">
       <Sparkline series={series} />
@@ -53,19 +56,30 @@ export function CategoryRecent({ items, series, need }: { items: RecentItem[]; s
           <p className="text-xs leading-relaxed text-neutral-500">Aún no hay entrenos de esta categoría con detalle.</p>
         ) : (
           <ul className="divide-y divide-white/[0.06]">
-            {items.map((it, i) => (
-              <li key={`${it.date}-${i}`} className={`flex items-baseline justify-between gap-3 py-1.5 ${it.counts ? '' : 'opacity-60'}`}>
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-semibold text-neutral-100">{it.title}</span>
-                  <span className="block text-[11px] text-neutral-500">
-                    {shortDate(it.date)}
-                    {it.vs ? ` · ${it.vs}` : ''}
-                    {it.note ? ` · ${it.note}` : ''}
-                  </span>
-                </span>
-                <span className="num shrink-0 text-sm font-bold text-white">{it.value}</span>
-              </li>
-            ))}
+            {items.map((it, i) => {
+              const id = it.fix ? `${it.fix.date}|${it.fix.part}` : null;
+              return (
+                <li key={`${it.date}-${i}`} className="py-1.5">
+                  <div className={`flex items-baseline justify-between gap-3 ${it.counts ? '' : 'opacity-60'}`}>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-neutral-100">{it.title}</span>
+                      <span className="block text-[11px] text-neutral-500">
+                        {shortDate(it.date)}
+                        {it.vs ? ` · ${it.vs}` : ''}
+                        {it.note ? ` · ${it.note}` : ''}
+                      </span>
+                    </span>
+                    <span className="num shrink-0 text-sm font-bold text-white">{it.value}</span>
+                  </div>
+                  {it.fix && renderFix && fixing !== id && (
+                    <button type="button" onClick={() => setFixing(id)} className="mt-1 rounded-full border border-brand-border px-3 py-1 text-[11px] font-semibold text-neutral-200 transition-colors hover:text-white">
+                      Decir qué escalé
+                    </button>
+                  )}
+                  {it.fix && renderFix && fixing === id && <div className="mt-2">{renderFix(it.fix, () => setFixing(null))}</div>}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

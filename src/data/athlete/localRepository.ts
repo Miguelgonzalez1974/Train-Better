@@ -1,4 +1,4 @@
-import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, PrLogEntry, ProgressionRecord, ProgressionSettings, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
+import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, LevelResult, WodScalingEntry, PrLogEntry, ProgressionRecord, ProgressionSettings, ReadinessCheck, SESSION_GEN_VERSION, SessionHistoryEntry, SetFeedbackEntry, WorkSetEntry } from './types';
 
 import { isExcludedMovement } from '../movements/excluded';
 import { stripLegacyNutritionPrefs } from './legacyNutrition';
@@ -62,6 +62,8 @@ export interface AthleteRepository {
   restoreDay(snapshot: DaySnapshot): boolean;
   /** Rellena a posteriori el testLoadKg de un dia ya registrado — para cuando una estimacion de e1RM (ver src/engine/e1rm.ts) se confirma despues de guardar la sesion, y el punto debil/progreso de objetivo (que leen testLoadKg) tambien deben verlo. */
   updateHistoryTestLoad(date: string, testLoadKg: number): void;
+  /** Decir (después) qué se escaló del WOD de un día: lo guarda en su entrada, en el registro del WOD y en los resultados escalados de «Tu nivel». */
+  updateHistoryScaling(date: string, scaling: WodScalingEntry[], scaled: LevelResult[]): void;
   getCachedSession(dateIso: string): DailySession | null;
   saveCachedSession(session: DailySession): void;
   /** Descarta la sesion planificada de un dia (sin tocar el historial) para volver a elegir de cero. */
@@ -265,7 +267,11 @@ export const localAthleteRepository: AthleteRepository = {
     const levelLog = entry.levelResults && entry.levelResults.length > 0
       ? [...(profile.levelLog ?? []).filter((r) => r.date !== entry.date), ...entry.levelResults].sort((a, b) => a.date.localeCompare(b.date) || a.part - b.part).slice(-LEVEL_LOG_LIMIT)
       : profile.levelLog;
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, ...(wodLog ? { wodLog } : {}), ...(wodGhosts ? { wodGhosts } : {}), ...(levelLog ? { levelLog } : {}), ...(restDates ? { restDates } : {}) }));
+    // Los escalados con descuento van aparte (`levelLog` es solo Rx).
+    const levelScaledLog = entry.levelScaled && entry.levelScaled.length > 0
+      ? [...(profile.levelScaledLog ?? []).filter((r) => r.date !== entry.date), ...entry.levelScaled].sort((a, b) => a.date.localeCompare(b.date) || a.part - b.part).slice(-LEVEL_LOG_LIMIT)
+      : profile.levelScaledLog;
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, ...(wodLog ? { wodLog } : {}), ...(wodGhosts ? { wodGhosts } : {}), ...(levelLog ? { levelLog } : {}), ...(levelScaledLog ? { levelScaledLog } : {}), ...(restDates ? { restDates } : {}) }));
   },
   replaceHistory(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)));
@@ -304,7 +310,21 @@ export const localAthleteRepository: AthleteRepository = {
     const wodLog = profile.wodLog?.filter((e) => e.date !== date);
     const wodGhosts = profile.wodGhosts?.filter((g) => g.date !== date);
     const levelLog = profile.levelLog?.filter((r) => r.date !== date);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog, progressionLog, ...(wodLog ? { wodLog } : {}), ...(wodGhosts ? { wodGhosts } : {}), ...(levelLog ? { levelLog } : {}) }));
+    const levelScaledLog = profile.levelScaledLog?.filter((r) => r.date !== date);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, trainingDatesLog, workLog, progressionLog, ...(wodLog ? { wodLog } : {}), ...(wodGhosts ? { wodGhosts } : {}), ...(levelLog ? { levelLog } : {}), ...(levelScaledLog ? { levelScaledLog } : {}) }));
+  },
+  updateHistoryScaling(date, scaling, scaled) {
+    const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
+    const entry = history.find((e) => e.date === date);
+    if (!entry) return;
+    const next: SessionHistoryEntry = { ...entry, rxOrScaled: 'scaled', wodScaling: scaling, ...(scaled.length > 0 ? { levelScaled: scaled } : { levelScaled: undefined }) };
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.map((e) => (e.date === date ? next : e))));
+    const profile = localAthleteRepository.getProfile();
+    const wodLog = (next.wodMovementIds?.length ?? 0) > 0
+      ? [...(profile.wodLog ?? []).filter((e) => e.date !== date), { date, movementIds: next.wodMovementIds as string[], scaling, ...(next.wodResult?.capped || next.wodResult2?.capped ? { capped: true } : {}), ...(next.wodFeel ? { feel: next.wodFeel } : {}) }].sort((a, b) => a.date.localeCompare(b.date)).slice(-WOD_LOG_LIMIT)
+      : profile.wodLog;
+    const levelScaledLog = [...(profile.levelScaledLog ?? []).filter((r) => r.date !== date), ...scaled].sort((a, b) => a.date.localeCompare(b.date) || a.part - b.part).slice(-LEVEL_LOG_LIMIT);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, ...(wodLog ? { wodLog } : {}), levelScaledLog }));
   },
   updateHistoryTestLoad(date, testLoadKg) {
     const history = readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);

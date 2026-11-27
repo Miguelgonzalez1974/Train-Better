@@ -1076,6 +1076,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               setProfile(athleteRepository.getProfile());
             }}
             onSaveMarks={saveMarks}
+            onSaveScaling={(date, scaling, scaled) => {
+              athleteRepository.updateHistoryScaling(date, scaling, scaled);
+              setHistory(athleteRepository.getHistory());
+              setProfile(athleteRepository.getProfile());
+            }}
             onCreateWorkGoal={(goal) => {
               athleteRepository.saveProfile({ ...athleteRepository.getProfile(), goals: [...athleteRepository.getProfile().goals, goal] });
               // Un objetivo nuevo cambia lo que sale en las sesiones: las ya preparadas se vuelven a generar.

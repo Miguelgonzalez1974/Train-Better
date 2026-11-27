@@ -38,17 +38,21 @@ const TAG_STYLE: Record<RefTag, string> = {
   'solo contra ti': 'bg-white/10 text-neutral-400',
 };
 
-/** Cinco tramos, el tuyo encendido y una marca en el punto exacto. */
-function ZoneBar({ placement, labels = false }: { placement: Placement; labels?: boolean }) {
+/** Cinco tramos, el tuyo encendido y una marca en el punto exacto. `hollow`: el escalón sale de un escalado (tramo sin rellenar y marca hueca). */
+function ZoneBar({ placement, labels = false, hollow = false }: { placement: Placement; labels?: boolean; hollow?: boolean }) {
   return (
     <div>
       <div className="relative py-1" role="img" aria-label={`Escalón ${placement.zone + 1} de ${ZONES.length}: ${ZONES[placement.zone]}`}>
         <div className="grid grid-cols-5 gap-[3px]">
           {ZONES.map((z, i) => (
-            <span key={z} className={`h-1.5 rounded-full ${i < placement.zone ? 'bg-brand-orange/40' : i === placement.zone ? 'bg-brand-orange' : 'bg-white/10'}`} />
+            <span key={z} className={`h-1.5 rounded-full ${i < placement.zone ? 'bg-brand-orange/40' : i === placement.zone ? (hollow ? 'border border-brand-orange' : 'bg-brand-orange') : 'bg-white/10'}`} />
           ))}
         </div>
-        <span className="absolute top-0 h-3.5 w-[3px] -translate-x-1/2 rounded-full bg-white" style={{ left: `${placement.position * 100}%` }} data-testid="zone-marker" />
+        <span
+          className={`absolute -translate-x-1/2 rounded-full ${hollow ? 'top-[2px] h-2.5 w-2.5 border-2 border-white bg-brand-surface' : 'top-0 h-3.5 w-[3px] bg-white'}`}
+          style={{ left: `${placement.position * 100}%` }}
+          data-testid="zone-marker"
+        />
       </div>
       {labels && (
         <div className="grid grid-cols-5 gap-[3px]" aria-hidden="true">
@@ -183,7 +187,7 @@ function CategoryCard({ category, ...props }: { category: RefCategory } & LevelR
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 items-center gap-2">
           <span className="text-[13px] font-semibold text-white">{label}</span>
-          <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${TAG_STYLE[tag]}`}>{tag}</span>
+          <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${category.scaled ? TAG_STYLE.orientativo : TAG_STYLE[tag]}`}>{category.scaled ? 'escalado, con tope' : tag}</span>
         </p>
         {placement && (
           <span className="shrink-0 text-[13px] font-bold text-white" data-testid="ref-zone">
@@ -193,7 +197,7 @@ function CategoryCard({ category, ...props }: { category: RefCategory } & LevelR
       </div>
       {placement && (
         <div className="mt-2">
-          <ZoneBar placement={placement} />
+          <ZoneBar placement={placement} hollow={category.scaled} />
         </div>
       )}
       {marks.length > 0 && (
@@ -212,6 +216,11 @@ function CategoryCard({ category, ...props }: { category: RefCategory } & LevelR
               )}
               {single && m.next && <p className="mt-0.5 text-[11px] text-neutral-300">Estás {m.next}</p>}
               {m.detail && <p className="mt-0.5 text-[11px] text-neutral-500">{m.detail}</p>}
+              {m.notes?.map((n) => (
+                <p key={n} className="mt-0.5 text-[11px] leading-snug text-neutral-300">
+                  {n}
+                </p>
+              ))}
             </li>
           ))}
         </ul>

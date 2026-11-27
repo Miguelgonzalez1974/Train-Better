@@ -421,6 +421,8 @@ export interface AthleteProfile {
   wodGhosts?: WodSplitsRecord[];
   /** Los resultados de WOD (en Rx) que cuentan para cada categoría de «Tu nivel», de más atrás que el historial. Ver `engine/levelCategories.ts`. */
   levelLog?: LevelResult[];
+  /** Los resultados de WOD escalados que cuentan con descuento (con su `factor`), aparte de `levelLog`, que es solo Rx. Ver `engine/scaling.ts`. */
+  levelScaledLog?: LevelResult[];
   /** Año de nacimiento: solo para comparar tus marcas con gente de tu edad (`engine/levelReference.ts`). Sin él no se compara. */
   birthYear?: number;
   /** Tests de tiempo apuntados a mano en «Tu nivel» (remo 2 km, carrera 5 km, Fran). Uno por fecha y test. */
@@ -1030,6 +1032,8 @@ export interface LevelResult {
   value: number;
   /** Lo que el motor estimaba para ese WOD (misma unidad que `value`), si lo sabía. */
   ref?: number;
+  /** Solo en un resultado escalado: cuánto vale frente al Rx (0-1). Sin él, es Rx. */
+  factor?: number;
 }
 
 /** Una línea del registro del WOD (`AthleteProfile.wodLog`). */
@@ -1157,6 +1161,8 @@ export interface SessionHistoryEntry {
   wodCategories?: Partial<Record<1 | 2, 'velocidad' | 'resistencia' | 'peso-corporal' | 'pesado' | 'ligero' | 'largo'>>;
   /** Los resultados de este día que cuentan para «Tu nivel» (van también al registro largo `levelLog` del perfil al guardar la entrada). */
   levelResults?: LevelResult[];
+  /** Los resultados escalados de este día con su `factor` (ver `AthleteProfile.levelScaledLog`). */
+  levelScaled?: LevelResult[];
   /**
    * Punto medio de la banda BASE (sin calibrar) del objetivo del WOD de ese dia, con su formato y
    * unidad — junto a `wodResult` permite medir cuanto rinde el atleta respecto a la estimacion del

@@ -22,6 +22,10 @@ export const athleteRepository: AthleteRepository = {
     if (restored) void pushRemote();
     return restored;
   },
+  updateHistoryScaling(date, scaling, scaled) {
+    localAthleteRepository.updateHistoryScaling(date, scaling, scaled);
+    void pushRemote();
+  },
   updateHistoryTestLoad(date, testLoadKg) {
     localAthleteRepository.updateHistoryTestLoad(date, testLoadKg);
     void pushRemote();
