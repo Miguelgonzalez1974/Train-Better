@@ -29,6 +29,8 @@ import type {
   WodResult,
 } from '../data/athlete/types';
 import { SESSION_GEN_VERSION } from '../data/athlete/types';
+import type { LevelTestPostpone } from '../data/athlete/types';
+import { POSTPONE_TEXT, TEST_WOD_ID, testBriefing, testCandidate, testName, testNote, testSkippedByAthlete } from './levelTestPlan';
 import {
   expectedStrengthSessionsPerWeek,
   getActiveMacrocycle,
@@ -2110,6 +2112,9 @@ export interface SessionWodMovement {
   rxKg?: number;
 }
 
+/** El peso Rx del thruster de Fran (hombres). */
+const FRAN_THRUSTER_KG = 43;
+
 /** Los movimientos del WOD de una sesión (sin repetir), con su parte y, si se conoce, su carga Rx. */
 export function wodMovementsOfSession(session: DailySession): SessionWodMovement[] {
   const out: SessionWodMovement[] = [];
@@ -2123,7 +2128,8 @@ export function wodMovementsOfSession(session: DailySession): SessionWodMovement
     for (const id of ids) {
       if (!getMovementById(id) || seen.has(`${part}|${id}`)) continue;
       seen.add(`${part}|${id}`);
-      out.push({ movementId: id, part, ...(!b.wodCatalogId && b.loadKg ? { rxKg: b.loadKg } : {}) });
+      const known = b.movementId === 'benchmark:fran' && id === 'thruster' ? FRAN_THRUSTER_KG : !b.wodCatalogId ? b.loadKg : undefined;
+      out.push({ movementId: id, part, ...(known ? { rxKg: known } : {}) });
     }
   }
   return out;
@@ -2302,8 +2308,14 @@ function buildWodBlock(
     allowedSources?: readonly WodSource[];
     /** Hay una competición cerca (ver `competition.ts`): tope de minutos del WOD, simulacro de competición y sin tests. */
     competition?: { maxMinutes: number | null; simulacro: boolean; noTests: boolean };
+    /** Hoy toca un test de nivel (ver `levelTestPlan.ts`): es el WOD del día, tal cual. */
+    levelTest?: { wod: BenchmarkWorkout; note: string };
   },
 ): SessionBlockResult[] {
+  if (opts?.levelTest) {
+    const { wod, note } = opts.levelTest;
+    return [{ block: 'wod', movementId: `benchmark:${wod.id}`, format: wod.format, notes: note }];
+  }
   // Patrones que evitan los avisos de molestia activos — SOLO los del aviso, no los de interferencia con la fuerza de
   // hoy (`excludePatterns` los mezcla): un movimiento se descarta por un aviso tambien por sus patrones secundarios
   // (`alsoPatterns`), pero la interferencia sigue siendo por patron principal.
@@ -2429,7 +2441,7 @@ function buildWodBlock(
       }
     }
 
-    const completeBenchmarks = benchmarkWorkouts.filter((w) => benchmarkHasExplicitScheme(w) && isUsable(w));
+    const completeBenchmarks = benchmarkWorkouts.filter((w) => !w.testOnly && benchmarkHasExplicitScheme(w) && isUsable(w));
     const freshBenchmarks = completeBenchmarks.filter((w) => !recentBenchmarkIds.has(w.id));
     const pool = freshBenchmarks.length > 0 ? freshBenchmarks : completeBenchmarks;
     // Con un aviso activo puede no quedar ningun benchmark valido (hoy no hay); sin aviso `pool` nunca esta vacio.
@@ -4414,6 +4426,10 @@ function generateDailySessionCore(
       isRestDay: false,
       blocks: [...warmupBlock, ...recoveryWodBlock, ...recoverySkillBlock, ...armsBlock, ...cooldownBlock],
       ...(light ? { dayLight: light, coachReasons: [lightReason(light, { push: false, hasAccessory: false })] } : {}),
+      ...(() => {
+        const due = light?.color === 'rojo' && dayPlan.trainingDayIndex === 0 ? testCandidate(profile, history, dateIso) : null;
+        return due ? { levelTestPostponed: { key: due.key, reason: testSkippedByAthlete(profile, dateIso) ? ('tu' as const) : ('preparacion' as const) } } : {};
+      })(),
       phaseWeekInPhase: phaseProgress.weekInPhase,
       phaseLengthWeeks: phaseProgress.phaseLengthWeeks,
     };
@@ -4484,6 +4500,28 @@ function generateDailySessionCore(
   const strengthRampFactor = getRampFactor(profile.intensityRamp, 'strength', date);
   const olyRampFactor = getRampFactor(profile.intensityRamp, 'oly', date);
   const wodRampActive = isWodRampActive(profile.intensityRamp, date);
+  // Test de «Tu nivel» (ver `levelTestPlan.ts`): el primer día de entreno de la semana, si toca y el día lo permite.
+  const testDue = dayPlan.trainingDayIndex === 0 ? testCandidate(profile, history, dateIso) : null;
+  const testWod = testDue ? benchmarkWorkouts.find((w) => w.id === TEST_WOD_ID[testDue.key]) : undefined;
+  const testPostpone: LevelTestPostpone | null = !testDue || !testWod
+    ? null
+    : testSkippedByAthlete(profile, dateIso)
+      ? 'tu'
+      : comp && (comp.noTests || comp.simulacro || comp.recoverySession || comp.technicalLight || isTaper)
+        ? 'competicion'
+        : wodRampActive
+          ? 'rampa'
+          : deloadReason
+            ? deloadReason === 'preparacion' ? 'preparacion' : 'descarga'
+            : !planningPass && (light?.color === 'ambar' || getReadinessFactor(readinessCheck).isLow)
+              ? 'preparacion'
+              : testDayFocus
+                ? 'maximo'
+                : benchmarkConflictsWithPain(testWod, avoidedPatterns, getMovementById) || usesExcludedMovement(testWod.movements, testWod.format)
+                  ? 'molestia'
+                  : null;
+  const levelTest = testDue && testWod && !testPostpone ? { key: testDue.key, wod: testWod } : null;
+  const levelTestNote = levelTest ? testNote(testBriefing(profile, history, levelTest.key, dateIso)) : null;
   // Sesgo de desbalance entre levantamientos relacionados (Front Squat flojo vs Back Squat, etc.) —
   // se calcula una vez y lo comparten fuerza y oly. Solo el motor periodizado lo usa (no mantenimiento
   // ni programas con nombre), igual que el resto de senales del macrociclo.
@@ -4557,11 +4595,13 @@ function generateDailySessionCore(
   if (weeksSinceStart(macro.startDate, date) === 0) dayEmphasis = 'mixto';
   // El dia de solo fuerza lo es siempre (tambien la primera semana y en taper), salvo un test de maximos, que ya es mixto.
   if (strengthOnlyDay && !testDayFocus) dayEmphasis = 'fuerza';
+  if (levelTest) dayEmphasis = 'mixto';
   // Esqueleto fijo: warm up + fuerza + WOD + oly TODOS los días de entreno. El énfasis del día ya no
   // quita bloques; en los días de "afinar" de la fase pico (antes 'metcon' = sin barra) la fuerza y
   // el oly siguen, pero en TÉCNICO-LIGERO (menos series, ~85% de carga) y con el WOD como prioridad.
   // Un día de test de 1RM o de retest de benchmark nunca es ligero.
-  const technicalLight = dayEmphasis === 'metcon' && !testDayFocus;
+  // En un día de test la fuerza y el oly van ligeros (y sin accesorio), para llegar al test y que las marcas sean comparables.
+  const technicalLight = (dayEmphasis === 'metcon' && !testDayFocus) || Boolean(levelTest);
 
   const n = profile.trainingDaysPerWeek;
   const idx = dayPlan.trainingDayIndex;
@@ -4574,7 +4614,7 @@ function generateDailySessionCore(
   // queda para el ultimo dia de entreno de la semana (el sabado de 6 dias, que sigue como antes).
   const accessoryDays = weeklySplit ? [n - 1] : ACCESSORY_DAY_INDICES[n];
   const accessoryToday = !technicalLight && accessoryDays.includes(idx);
-  const coreToday = CORE_DAY_INDICES[n].includes(idx);
+  const coreToday = !levelTest && CORE_DAY_INDICES[n].includes(idx);
   const armsToday = accessoryToday && n < 6 && idx === accessoryDays[accessoryDays.length - 1];
 
   // Control de dosis por acumulación: si hoy caen varios bloques secundarios, se recortan un poco el
@@ -4620,7 +4660,7 @@ function generateDailySessionCore(
   // activación, el simulacro ni la víspera: ahí no se ofrece. Un día técnico-ligero (solo metcon) sí admite subirlo: el WOD es el foco.
   // Va DESPUÉS del semáforo: lo pedido manda sobre el recorte ámbar.
   const requestedHardness: HardnessLevel =
-    profile.hardness?.[dateIso] && !testDayFocus && !comp?.recoverySession && !comp?.simulacro && comp?.phase !== 'activacion' ? profile.hardness[dateIso] : 0;
+    profile.hardness?.[dateIso] && !testDayFocus && !levelTest && !comp?.recoverySession && !comp?.simulacro && comp?.phase !== 'activacion' ? profile.hardness[dateIso] : 0;
   const hardMode = hardnessMode({ competition: Boolean(comp), week });
   const hardVolume = requestedHardness > 0 && hardMode === 'volume';
   const hardIntensity = requestedHardness > 0 && hardMode === 'intensity';
@@ -4816,6 +4856,7 @@ function generateDailySessionCore(
       painAvoided: avoidedPatterns,
       allowedSources: profile.wodSources,
       competition: comp ? { maxMinutes: comp.maxWodMinutes, simulacro: comp.simulacro, noTests: comp.noTests } : undefined,
+      levelTest: levelTest && levelTestNote ? { wod: levelTest.wod, note: levelTestNote } : undefined,
     },
   ));
   const wodBlock = wodKindOut.kind ? wodBlockRaw.map((b) => ({ ...b, wodKind: wodKindOut.kind })) : wodBlockRaw;
@@ -4855,8 +4896,14 @@ function generateDailySessionCore(
   // es asi" para no tener que leer bloque a bloque para enterarte. El deload va primero por ser el
   // motivo de mayor peso cuando aplica. Ver DailySession.coachReasons.
   const deloadNote = deloadReason ? DELOAD_REASON_NOTE[deloadReason] : undefined;
-  const emphasisNote =
-    dayEmphasis === 'fuerza'
+  const levelTestReason = levelTest
+    ? `Hoy toca test de ${testName(levelTest.key)}: es el WOD del día y va antes de la barra; la fuerza y el oly van ligeros y sin accesorio.`
+    : testDue && testPostpone
+      ? `El test de ${testName(testDue.key)} se aplaza porque ${POSTPONE_TEXT[testPostpone]}.`
+      : undefined;
+  const emphasisNote = levelTest
+    ? undefined
+    : dayEmphasis === 'fuerza'
       ? strengthOnlyDay
         ? 'Sábado de solo fuerza: fuerza, accesorio y skill, sin WOD ni oly — el sábado lo dejas para lo de equipo. El viernes ya llevó el doble WOD y el oly.'
         : 'Hoy es día de fuerza — el WOD es corto y de bajo impacto, la prioridad está en la barra.'
@@ -4927,6 +4974,7 @@ function generateDailySessionCore(
   const coachReasons = Array.from(
     new Set(
       collectReasons(
+        levelTestReason,
         lightNote,
         soreNote,
         deloadNote,
@@ -4966,7 +5014,9 @@ function generateDailySessionCore(
     date: dateIso,
     mesocycleWeek: week,
     isRestDay: false,
-    blocks: [...warmupBlock, ...strengthBlock, ...wodBlock, ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
+    blocks: [...warmupBlock, ...(levelTest ? [...wodBlock, ...strengthBlock] : [...strengthBlock, ...wodBlock]), ...olyBlock, ...accessoryBlock, ...skillBlock, ...cooldownBlock],
+    ...(levelTest ? { levelTest: { key: levelTest.key } } : {}),
+    ...(testDue && testPostpone ? { levelTestPostponed: { key: testDue.key, reason: testPostpone } } : {}),
     ...(profileEmphasis ? { profileEmphasis } : {}),
     ...(light ? { dayLight: light } : {}),
     ...(requestedHardness === 1 || requestedHardness === 2 ? { hardness: requestedHardness, hardnessMode: hardMode } : {}),
@@ -5627,7 +5677,8 @@ export function planWeekLocks(
     // WOD "normal" (no-benchmark) no se bloquea, sigue variando hasta que se entrena.
     // Un WOD de programación real servido como tarjeta (`wodCatalogId`) lleva tambien id `benchmark:`, pero no es un dia de test: no se bloquea.
     const wodBlockToday = session.blocks.find((b) => b.block === 'wod');
-    const wodBenchmarkMovementId = wodBlockToday?.wodCatalogId ? undefined : wodBlockToday?.movementId;
+    // Un test de nivel tampoco se bloquea: si se aplaza, ese lunes debe volver a su WOD de referencia.
+    const wodBenchmarkMovementId = wodBlockToday?.wodCatalogId || session.levelTest ? undefined : wodBlockToday?.movementId;
     const wodBenchmarkId = wodBenchmarkMovementId?.startsWith('benchmark:')
       ? wodBenchmarkMovementId.replace('benchmark:', '')
       : undefined;

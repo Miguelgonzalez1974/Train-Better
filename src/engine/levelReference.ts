@@ -29,7 +29,7 @@ export const TEST_RANGE: Record<LevelTestKey, [number, number]> = { row2k: [320,
 /** Los WODs del historial que son ese mismo test. */
 const TEST_WOD_KEYS: Record<LevelTestKey, string[]> = {
   row2k: ['benchmark:2k-row', 'bm:2k-row', 'benchmark:comptrain-2017-open-103', 'bm:comptrain-2017-open-103'],
-  run5k: [],
+  run5k: ['benchmark:5k-run', 'bm:5k-run'],
   fran: ['benchmark:fran', 'bm:fran'],
 };
 
@@ -494,6 +494,14 @@ function rowCategory(profile: AthleteProfile, history: SessionHistoryEntry[], to
 }
 
 // ---------------------------------------------------------------------------------------------
+
+/** Los segundos que piden Novato e Intermedio en un test para tu edad; vacío si no hay referencia. */
+export function testTargets(key: LevelTestKey, age: number | null): { zone: string; seconds: number }[] {
+  if (age === null) return [];
+  if (key === 'fran' && age >= FRAN_MIN_AGE) return [franAt(10), franAt(35)].map((s, i) => ({ zone: ZONES[i + 1], seconds: Math.floor(s) }));
+  if (key === 'run5k') return [RUN_CUTS[0], RUN_CUTS[1]].map((pct, i) => ({ zone: ZONES[i + 1], seconds: Math.floor((100 * runStandard(age)) / pct) }));
+  return [];
+}
 
 export function ageOf(profile: AthleteProfile, today: Date): number | null {
   return profile.birthYear ? today.getFullYear() - profile.birthYear : null;

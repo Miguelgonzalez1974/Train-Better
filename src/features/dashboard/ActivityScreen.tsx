@@ -28,6 +28,8 @@ export interface ActivityScreenProps {
   /** El esfuerzo del día frente a tu objetivo. */
   effort?: { value: number; low: number; high: number } | null;
   detail: ActivityDetail | null;
+  /** El resultado del test de nivel de ese día, si lo hubo. */
+  test?: ReactNode;
   programs: (CompanionSummary & { method: string | null })[];
   today?: {
     session: DailySession | null;
@@ -187,7 +189,7 @@ function NextTime({ lifts }: { lifts: LiftDetail[] }) {
   );
 }
 
-export function ActivityScreen({ onClose, backLabel, title, subtitle, stats, effort, detail, programs, today }: ActivityScreenProps) {
+export function ActivityScreen({ onClose, backLabel, title, subtitle, stats, effort, detail, test, programs, today }: ActivityScreenProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     const overflow = document.body.style.overflow;
@@ -216,6 +218,8 @@ export function ActivityScreen({ onClose, backLabel, title, subtitle, stats, eff
           <h1 className="text-[22px] font-semibold leading-tight text-white">{title}</h1>
           <p className="mt-0.5 text-[13px] text-neutral-400">{subtitle}</p>
         </header>
+
+        {test}
 
         {(prMessage || (today?.suggestions.length ?? 0) > 0) && today && (
           <section className="flex flex-col gap-2.5 rounded-2xl bg-brand-gold/10 p-3.5" aria-label="Logros de hoy" data-testid="detail-achievements">

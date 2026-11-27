@@ -62,6 +62,8 @@ interface LevelScreenProps {
   onSaveProfile: (patch: Partial<AthleteProfile>) => void;
   /** Guardar qué se escaló en un WOD ya cerrado. */
   onSaveScaling: SaveScaling;
+  /** Encender o apagar los tests programados (rehace las sesiones afectadas). */
+  onToggleTests: (enabled: boolean) => void;
   /** Guardar marcas corregidas (recalcula las sesiones preparadas). */
   onSaveMarks: (patch: Pick<AthleteProfile, 'prs' | 'variantPrs'>) => void;
   /** Rex crea un objetivo «Subir PR» con lo que ha visto. */
@@ -327,6 +329,7 @@ export function LevelScreen(props: LevelScreenProps) {
                 onSaveProfile={props.onSaveProfile}
                 onOpenMarks={() => onChip('marcas')}
                 onOpenBody={() => onChip('cuerpo')}
+                onToggleTests={props.onToggleTests}
               />
             ) : (
               <>

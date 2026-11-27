@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { appNav } from '../../lib/appNav';
 import { handoff } from '../../lib/handoff';
-import { Check, ChevronLeft, ChevronRight, Dumbbell, Ghost, Moon, Shuffle, Zap } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Dumbbell, Ghost, Moon, Shuffle, Zap, Flag } from 'lucide-react';
 import { addDaysIso, getDayPlan, getWeekdayIndex, toLocalIsoDate } from '../../engine/periodization';
 import { buildFormModel } from '../dashboard/formModel';
 import { generateSessionForDate, hasActiveTrainingStructure, isCachedSessionOrphaned, isCachedSessionStale } from '../../engine/generateSession';
 import { athleteRepository } from '../../data/athlete/athleteRepository';
-import type { AthleteProfile, DailySession, DayLightInfo, Goal, SessionHistoryEntry } from '../../data/athlete/types';
+import type { AthleteProfile, DailySession, DayLightInfo, Goal, SessionHistoryEntry, LevelTestKey } from '../../data/athlete/types';
 import { Modal } from '../shell/Modal';
 import { CompanionDayBlock } from './CompanionDayBlock';
 import { DaySessionBlocks } from './DaySessionBlocks';
+import { testName } from '../../engine/levelTestPlan';
+import { TestPostponed } from './LevelTestCards';
 import { TrainingTimer } from './TrainingTimer';
 import { clockPropsFor } from './clockProps';
 import { ensureWeekLocked } from './weeklyLock';
@@ -50,6 +52,8 @@ function RestButton({ onClick, children }: { onClick: () => void; children: Reac
 /** Lo que se dibuja de cada día de la semana. */
 interface WeekDay {
   kind: 'done' | 'missed' | 'planned' | 'rest';
+  /** El test de nivel previsto ese día (si se aplaza, no se marca). */
+  test?: LevelTestKey;
   /** Descanso que el atleta marcó a propósito ("Hoy descanso"), no el que toca por la plantilla. */
   chosen?: boolean;
   /** Esfuerzo (0-100): el real si está hecho, el previsto si no. */
@@ -220,7 +224,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onLogge
         const session = isTrainingDay ? sessionFor(date) : null;
         if (!session || session.isRestDay) return { kind: 'rest', strain: 0 };
         const planned = estimatePlannedStrain(session, history);
-        return { kind: 'planned', strain: planned?.strain ?? 0, emphasis: session.dayEmphasis, light: dateIso === todayIso ? session.dayLight?.color : undefined, band: bandInfo };
+        return { kind: 'planned', strain: planned?.strain ?? 0, emphasis: session.dayEmphasis, light: dateIso === todayIso ? session.dayLight?.color : undefined, band: bandInfo, test: session.levelTest?.key };
       }),
     [weekOffset, profile, history, goals],
   );
@@ -306,7 +310,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onLogge
                   : day.chosen
                     ? 'Descanso elegido'
                     : 'Descanso';
-          const text = inWindow ? `${baseText} · en ventana de forma` : baseText;
+          const text = `${inWindow ? `${baseText} · en ventana de forma` : baseText}${day.test ? ` · test de ${testName(day.test)}` : ''}`;
           return (
             <button
               key={label}
@@ -352,6 +356,8 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onLogge
                   <Check size={14} strokeWidth={3} className="text-brand-neon" />
                 ) : day.kind === 'missed' ? (
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-bad/60" />
+                ) : day.test ? (
+                  <Flag size={13} strokeWidth={2.5} className="text-brand-orange" data-testid="week-test" />
                 ) : day.kind === 'planned' ? (
                   // Pesa = fuerza, rayo = metcon, y los días mixtos (fuerza y WOD en equilibrio) llevan los dos juntos.
                   day.emphasis === 'metcon' ? (
@@ -444,6 +450,11 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onLogge
                 <p className="text-sm text-neutral-400">Descanso</p>
               ) : expandedPreview ? (
                 <>
+                  {expandedPreview.levelTestPostponed && (
+                    <div className="mb-3">
+                      <TestPostponed profile={profile} history={history} testKey={expandedPreview.levelTestPostponed.key} reason={expandedPreview.levelTestPostponed.reason} date={dateIso} />
+                    </div>
+                  )}
                   <DaySessionBlocks session={expandedPreview} clockScope="preview" />
                   {/* Cambiar el WOD de un día que aún no ha llegado (el de hoy se cambia desde RexLab). */}
                   {expandedPreview.blocks.some((b) => b.block === 'wod') && (

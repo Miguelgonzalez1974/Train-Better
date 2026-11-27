@@ -5,6 +5,17 @@ import type { BenchmarkWorkout } from './types';
  * Fuente: nomenclatura y estructura de dominio publico documentada en crossfit.com.
  */
 export const benchmarkWorkouts: BenchmarkWorkout[] = [
+  // --- TESTS DE NIVEL ---
+  {
+    id: '5k-run',
+    name: '5 km carrera',
+    category: 'custom',
+    format: 'For time: 5000m Run',
+    movements: ['run'],
+    scoreType: 'time',
+    tags: ['benchmark', 'largo', 'monoestructural'],
+    testOnly: true,
+  },
   // --- THE GIRLS ---
   {
     id: 'fran',

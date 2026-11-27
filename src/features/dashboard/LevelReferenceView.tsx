@@ -9,11 +9,13 @@ import {
   testResults,
   timeText,
   ZONES,
-  type Placement,
   type RefCategory,
   type RefTag,
 } from '../../engine/levelReference';
+import { testPlanEnabled, upcomingTests } from '../../engine/levelTestPlan';
+import { testDayText } from '../planificacion/LevelTestCards';
 import { toast } from '../../lib/toast';
+import { ZoneBar } from './ZoneBar';
 
 /**
  * «Tu nivel» frente a gente de tu edad y tu peso (ver `engine/levelReference.ts`): un escalón por categoría, lo que te falta para el siguiente y de
@@ -26,6 +28,8 @@ interface LevelReferenceViewProps {
   onSaveProfile: (patch: Partial<AthleteProfile>) => void;
   onOpenMarks: () => void;
   onOpenBody: () => void;
+  /** Encender o apagar los tests que programa el coach. */
+  onToggleTests: (enabled: boolean) => void;
 }
 
 const input = 'w-full min-w-0 rounded-lg border border-brand-border bg-brand-bg px-3 py-1.5 text-sm text-white focus:border-brand-gold focus:outline-none';
@@ -37,35 +41,6 @@ const TAG_STYLE: Record<RefTag, string> = {
   orientativo: 'bg-warn/15 text-warn',
   'solo contra ti': 'bg-white/10 text-neutral-400',
 };
-
-/** Cinco tramos, el tuyo encendido y una marca en el punto exacto. `hollow`: el escalón sale de un escalado (tramo sin rellenar y marca hueca). */
-function ZoneBar({ placement, labels = false, hollow = false }: { placement: Placement; labels?: boolean; hollow?: boolean }) {
-  return (
-    <div>
-      <div className="relative py-1" role="img" aria-label={`Escalón ${placement.zone + 1} de ${ZONES.length}: ${ZONES[placement.zone]}`}>
-        <div className="grid grid-cols-5 gap-[3px]">
-          {ZONES.map((z, i) => (
-            <span key={z} className={`h-1.5 rounded-full ${i < placement.zone ? 'bg-brand-orange/40' : i === placement.zone ? (hollow ? 'border border-brand-orange' : 'bg-brand-orange') : 'bg-white/10'}`} />
-          ))}
-        </div>
-        <span
-          className={`absolute -translate-x-1/2 rounded-full ${hollow ? 'top-[2px] h-2.5 w-2.5 border-2 border-white bg-brand-surface' : 'top-0 h-3.5 w-[3px] bg-white'}`}
-          style={{ left: `${placement.position * 100}%` }}
-          data-testid="zone-marker"
-        />
-      </div>
-      {labels && (
-        <div className="grid grid-cols-5 gap-[3px]" aria-hidden="true">
-          {ZONES.map((z, i) => (
-            <span key={z} className={`min-w-0 whitespace-nowrap text-[10px] tracking-tight ${i === 0 ? 'text-left' : 'text-center'} ${i === placement.zone ? 'font-semibold text-white' : 'text-neutral-500'}`}>
-              {z}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** Pide (o corrige) el año de nacimiento. */
 function BirthYearForm({ current, thisYear, onSave, onCancel }: { current: number | undefined; thisYear: number; onSave: (year: number) => void; onCancel?: () => void }) {
@@ -240,6 +215,49 @@ function CategoryCard({ category, ...props }: { category: RefCategory } & LevelR
   );
 }
 
+const TEST_CATEGORY: Record<LevelTestKey, string> = { fran: 'Velocidad', row2k: 'Resistencia', run5k: 'Largo' };
+
+/** Los tests que programa el coach: el interruptor y los tres siguientes. */
+function TestPlanCard({ profile, history, todayIso, onToggle }: Pick<LevelReferenceViewProps, 'profile' | 'history' | 'todayIso'> & { onToggle: (enabled: boolean) => void }) {
+  const enabled = testPlanEnabled(profile);
+  const upcoming = upcomingTests(profile, history, todayIso, 3);
+  return (
+    <section className="rounded-2xl bg-white/[0.03] p-4" aria-label="Tests que te programa el coach" data-testid="test-plan">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[13px] font-semibold text-white">Tests que te programa el coach</p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Tests programados"
+          onClick={() => onToggle(!enabled)}
+          className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors ${enabled ? 'bg-brand-orange' : 'bg-white/15'}`}
+        >
+          <span className={`absolute top-[3px] h-4 w-4 rounded-full bg-brand-bg transition-all ${enabled ? 'right-[3px]' : 'left-[3px]'}`} />
+        </button>
+      </div>
+      {enabled ? (
+        <>
+          <ul className="mt-1.5 divide-y divide-white/[0.06]">
+            {upcoming.map((t) => (
+              <li key={t.date} className="flex items-center justify-between gap-3 py-2" data-testid="test-upcoming">
+                <span>
+                  <span className="block text-[13px] text-neutral-200">{TEST_LABEL[t.key]}</span>
+                  <span className="block text-[11px] text-neutral-500">{TEST_CATEGORY[t.key]}</span>
+                </span>
+                <span className="text-[13px] font-semibold text-white">{testDayText(t.date)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] leading-snug text-neutral-500">Uno cada 4 semanas, en lunes y antes de la barra; cada uno se repite a las 12. Se aplaza solo si no llegas bien.</p>
+        </>
+      ) : (
+        <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">Apagado: el coach no te programa tests.</p>
+      )}
+    </section>
+  );
+}
+
 export function LevelReferenceView(props: LevelReferenceViewProps) {
   const { profile, history, todayIso, onSaveProfile, onOpenBody } = props;
   const [editingAge, setEditingAge] = useState(false);
@@ -302,6 +320,8 @@ export function LevelReferenceView(props: LevelReferenceViewProps) {
       {level.categories.map((c) => (
         <CategoryCard key={c.key} category={c} {...props} />
       ))}
+
+      <TestPlanCard profile={profile} history={history} todayIso={todayIso} onToggle={props.onToggleTests} />
 
       <p className="px-1 text-xs leading-relaxed text-neutral-500">Peso corporal, Pesado y Ligero no tienen referencia fuera: los ves contra ti en «Progreso».</p>
       <p className="px-1 text-[11px] leading-relaxed text-neutral-500" data-testid="ref-sources">

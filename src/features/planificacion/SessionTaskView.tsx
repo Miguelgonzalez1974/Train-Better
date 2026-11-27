@@ -2,7 +2,7 @@ import type { Block } from '../../data/movements/types';
 import type { DailySession, SessionBlockResult } from '../../data/athlete/types';
 import { getMovementById, benchmarkWorkouts } from '../../data/movements';
 import { BLOCK_META, ACCENT_CLASSES } from './SessionBlockCard';
-import { BLOCK_ORDER } from './DaySessionBlocks';
+import { blockOrderOf } from './DaySessionBlocks';
 import { groupWodByPart } from './wodPartGroups';
 
 interface TaskItem {
@@ -28,7 +28,7 @@ export interface TaskSection {
 export function buildTaskSections(session: DailySession): TaskSection[] {
   const sections: TaskSection[] = [];
 
-  for (const block of BLOCK_ORDER) {
+  for (const block of blockOrderOf(session)) {
     const entries = session.blocks.filter((e) => e.block === block);
     if (entries.length === 0) continue;
 

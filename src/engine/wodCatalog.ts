@@ -300,7 +300,7 @@ let byIdCache: Map<string, CatalogWod> | null = null;
 
 /** El catálogo entero (se construye una vez): biblioteca PushJerk + catálogo de benchmarks y programaciones. */
 export function getWodCatalog(): CatalogWod[] {
-  if (!cached) cached = [...libraryWods.map(fromLibrary), ...benchmarkWorkouts.map(fromBenchmark)];
+  if (!cached) cached = [...libraryWods.map(fromLibrary), ...benchmarkWorkouts.filter((w) => !w.testOnly).map(fromBenchmark)];
   return cached;
 }
 

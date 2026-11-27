@@ -14,6 +14,9 @@ import type { WodDoneInfo } from '../../engine/wodDone';
 import type { ClockScope } from '../../lib/clockState';
 
 export const BLOCK_ORDER: Block[] = ['warmup', 'strength', 'wod', 'oly', 'accessory', 'skill', 'cooldown'];
+/** En un día de test de nivel el WOD (el test) va antes de la fuerza. */
+const TEST_BLOCK_ORDER: Block[] = ['warmup', 'wod', 'strength', 'oly', 'accessory', 'skill', 'cooldown'];
+export const blockOrderOf = (session: Pick<DailySession, 'levelTest'>) => (session.levelTest ? TEST_BLOCK_ORDER : BLOCK_ORDER);
 
 interface DaySessionBlocksProps {
   session: DailySession;
@@ -60,7 +63,7 @@ export function DaySessionBlocks({
   const [tab, setTab] = useState<'session' | 'task'>('session');
   // Todo plegado por defecto: un bloque abierto a la vez (al abrir otro se cierra el anterior), o todos con "Abrir todo".
   const [openBlocks, setOpenBlocks] = useState<Set<Block>>(new Set());
-  const mainBlock = ((['strength', 'oly', 'wod'] as Block[]).find((b) => session.blocks.some((x) => x.block === b)));
+  const mainBlock = ((session.levelTest ? (['wod'] as Block[]) : (['strength', 'oly', 'wod'] as Block[])).find((b) => session.blocks.some((x) => x.block === b)));
   useEffect(() => {
     setTab('session');
     setOpenBlocks(new Set(autoOpenMain && mainBlock ? [mainBlock] : []));
@@ -85,7 +88,7 @@ export function DaySessionBlocks({
     );
   }
 
-  const blocksWithResults = BLOCK_ORDER.map((block) => {
+  const blocksWithResults = blockOrderOf(session).map((block) => {
     const withIndex = session.blocks.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.block === block);
     return { block, results: withIndex.map((w) => w.entry), entryIndices: withIndex.map((w) => w.index) };
   }).filter((group) => group.results.length > 0);

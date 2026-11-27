@@ -128,6 +128,9 @@ import { applyRepeatedWod, listRepeatableWods } from '../../engine/wodRepeat';
 import { RepeatWodModal } from './RepeatWodModal';
 import { readWod, type WodReading } from '../../engine/wodRead';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
+import { testNotice } from '../../engine/levelTestPlan';
+import { TestDayCard, TestNotice, TestPostponed, TestResultCard } from './LevelTestCards';
+import { postponeTest } from './testActions';
 import { ProfileEmphasisLine } from './ProfileEmphasis';
 import { clockFormFor, isFormUntouched, pickClockStop, readClockRuns } from './workoutClockResult';
 import { estimateSessionMinutes } from '../../lib/sessionDuration';
@@ -759,6 +762,22 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
     setRegenNote('Hoy el WOD está fijado por la semana (día de test o de referencia), así que no hay otro que dar.');
     setTimeout(() => setRegenNote(null), 6000);
   }
+
+  /** «Hoy no, aplazar» o «pasarlo a la semana siguiente»: se rehacen las sesiones afectadas. */
+  function handlePostponeTest(date: string) {
+    postponeTest(todayIso, date);
+    const fresh = athleteRepository.getProfile();
+    if (date === todayIso) setSession(loadTodaySession(fresh, history, goals, todayIso));
+    setProfile(athleteRepository.getProfile());
+    toast.show('Test aplazado a la semana siguiente');
+  }
+  const upcomingNotice = testNotice(profile, history, todayIso);
+  // Lo que daría ese día con lo que se sabe hoy: si el test se va a aplazar, el aviso lo dice.
+  const noticePostponed = useMemo(
+    () => (upcomingNotice ? generateSessionForDate(profile, history, new Date(`${upcomingNotice.date}T12:00:00`), profile.goals).levelTestPostponed?.reason : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [upcomingNotice?.date, profile, history],
+  );
 
   function openCustomEditor(mode: 'replace' | 'append' = 'replace') {
     setCustomEditorMode(mode);
@@ -1719,6 +1738,9 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
 
       {/* El resumen de la sesión hecha vive en el Dashboard («Sesión completada» → Lo que hiciste); aquí solo queda la sesión y lo hecho bajo cada bloque. */}
 
+      {/* El aviso de que se acerca un test de nivel. */}
+      {!editMode && upcomingNotice && <TestNotice profile={profile} history={history} test={upcomingNotice} postponed={noticePostponed} onPostpone={handlePostponeTest} />}
+
       {session.competition?.eventDay ? (
         <div className="card flex flex-col gap-2 p-4">
           <p className="flex items-center gap-2 text-lg font-semibold text-white">
@@ -1744,6 +1766,14 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           </button>
         </div>
       ) : (
+        <>
+        {!editMode && !alreadyCompletedToday && session.levelTest && (
+          <TestDayCard profile={profile} history={history} testKey={session.levelTest.key} date={session.date} onPostpone={handlePostponeTest} />
+        )}
+        {!editMode && !alreadyCompletedToday && session.levelTestPostponed && (
+          <TestPostponed profile={profile} history={history} testKey={session.levelTestPostponed.key} reason={session.levelTestPostponed.reason} date={session.date} />
+        )}
+        {alreadyCompletedToday && session.levelTest && <TestResultCard profile={profile} history={history} testKey={session.levelTest.key} date={session.date} />}
         <DaySessionBlocks
           session={session}
           autoOpenMain={!alreadyCompletedToday}
@@ -1763,6 +1793,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           setFeedbackByIndex={editMode || showCompletePanel ? undefined : sessionCardFeedbackByIndex}
           onRateSet={editMode || showCompletePanel ? undefined : handleRateSet}
         />
+        </>
       )}
 
       {/* Al acabar de entrenar: el mazo de tarjetas para anotar lo hecho (una por parte y el cierre al final). Es la misma acción que «Anotar lo que hice» de Rex. */}

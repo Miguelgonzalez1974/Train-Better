@@ -421,6 +421,8 @@ export interface AthleteProfile {
   wodGhosts?: WodSplitsRecord[];
   /** Los resultados de WOD (en Rx) que cuentan para cada categoría de «Tu nivel», de más atrás que el historial. Ver `engine/levelCategories.ts`. */
   levelLog?: LevelResult[];
+  /** Los tests de «Tu nivel» que programa el coach (`engine/levelTestPlan.ts`): encendido salvo que se apague, y los lunes que has aplazado. */
+  testPlan?: { enabled?: boolean; skipped?: string[] };
   /** Los resultados de WOD escalados que cuentan con descuento (con su `factor`), aparte de `levelLog`, que es solo Rx. Ver `engine/scaling.ts`. */
   levelScaledLog?: LevelResult[];
   /** Año de nacimiento: solo para comparar tus marcas con gente de tu edad (`engine/levelReference.ts`). Sin él no se compara. */
@@ -842,7 +844,7 @@ export interface SessionBlockResult {
  * dispositivos" se auto-cura tras cada deploy sin tocar nada a mano. Las sesiones propias
  * (`source: 'custom'`), las elegidas a mano (`swapLabel`) y las ya registradas no se tocan.
  */
-export const SESSION_GEN_VERSION = 83;
+export const SESSION_GEN_VERSION = 84;
 
 /** Un día en que el atleta subió la dureza: lo que se sabía en ese momento, para compararlo después con lo que pasó. */
 export interface HardnessLogEntry {
@@ -888,6 +890,10 @@ export interface DailySession {
   soreStrengthCut?: boolean;
   /** Sello de `SESSION_GEN_VERSION` con el que se genero — lo pone `saveCachedSession`. Ausente en sesiones cacheadas antes de introducir el sello (se tratan como version 0). */
   genVersion?: number;
+  /** Hoy toca un test de «Tu nivel»: sustituye al WOD, va antes de la fuerza y esta va ligera. */
+  levelTest?: { key: LevelTestKey };
+  /** Hoy tocaba un test pero se ha aplazado (y por qué). */
+  levelTestPostponed?: { key: LevelTestKey; reason: LevelTestPostpone };
   /** Si la semana de hoy fue sustituida por una descarga (fatiga acumulada o taper pre-competicion), no por calendario. */
   deloadReason?: 'fatiga' | 'taper' | 'rpe-alto' | 'preparacion';
   deloadNote?: string;
@@ -1009,6 +1015,9 @@ export interface WodScalingEntry {
 }
 
 export type LevelTestKey = 'row2k' | 'run5k' | 'fran';
+
+/** Por qué un test programado no sale el día que tocaba (ver `engine/levelTestPlan.ts`). */
+export type LevelTestPostpone = 'tu' | 'competicion' | 'rampa' | 'descarga' | 'preparacion' | 'maximo' | 'molestia';
 
 /** Un test de tiempo apuntado a mano para «Tu nivel» (`AthleteProfile.levelTests`). */
 export interface LevelTest {

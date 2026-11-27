@@ -31,7 +31,7 @@ import {
 import { clockBus } from '../../lib/clockState';
 import { fmtKgValue } from '../../lib/format';
 import { useVisibleViewport } from '../../lib/useVisibleViewport';
-import { BLOCK_ORDER } from './DaySessionBlocks';
+import { blockOrderOf } from './DaySessionBlocks';
 import { groupWodByPart } from './wodPartGroups';
 import { WodResultBig } from './WodResultBig';
 import { GhostSummaryCard } from './GhostSummaryCard';
@@ -172,7 +172,7 @@ export function ReviewDeck(p: ReviewDeckProps) {
 
   const cards = useMemo<Card[]>(() => {
     const out: Card[] = [{ kind: 'start', key: 'start' }];
-    for (const block of BLOCK_ORDER) {
+    for (const block of blockOrderOf(session)) {
       const entries = session.blocks.map((entry, index) => ({ entry, index })).filter((e) => e.entry.block === block);
       if (entries.length === 0) continue;
       if (block === 'wod') {

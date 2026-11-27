@@ -47,7 +47,9 @@ export function sessionParts(session: DailySession): SessionPart[] {
     const b = session.blocks.find((x) => x.block === key && !x.subgroup) ?? session.blocks.find((x) => x.block === key);
     return b ? (b.complex?.name ?? getMovementById(b.movementId)?.name) : undefined;
   };
-  return BLOCK_ORDER.filter((k) => present.has(k)).map((key) => {
+  // En un día de test de nivel el WOD va primero.
+  const order = session.levelTest ? [...BLOCK_ORDER].sort((a, b) => Number(b === 'wod1') - Number(a === 'wod1')) : BLOCK_ORDER;
+  return order.filter((k) => present.has(k)).map((key) => {
     switch (key) {
       case 'strength':
         return { key, label: nameOf('strength') ? `Fuerza · ${nameOf('strength')}` : 'Fuerza' };

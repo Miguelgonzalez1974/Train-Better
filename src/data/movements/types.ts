@@ -72,6 +72,8 @@ export interface BenchmarkWorkout {
   timeCapMinutes?: number;
   /** El `format` se ha revisado a mano y describe el WOD entero aunque `benchmarkHasExplicitScheme` no lo detecte (p.ej. bloques cronometrados "1:00 de cada movimiento"). */
   reviewed?: boolean;
+  /** Solo para los tests de «Tu nivel»: no entra en los sorteos ni en el catálogo de WODs. */
+  testOnly?: boolean;
   scoreType: 'time' | 'reps' | 'load' | 'rounds+reps';
   tags: string[];
 }

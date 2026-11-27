@@ -9,7 +9,8 @@ const byId = new Map(catalog.map((w) => [w.id, w]));
 
 describe('catálogo unificado de WODs reales', () => {
   it('une la biblioteca PushJerk y el catálogo de benchmarks, sin ids repetidos', () => {
-    expect(catalog.length).toBe(libraryWods.length + benchmarkWorkouts.length);
+    // El 5 km solo existe para los tests de nivel: no entra en el catálogo.
+    expect(catalog.length).toBe(libraryWods.length + benchmarkWorkouts.filter((w) => !w.testOnly).length);
     expect(new Set(catalog.map((w) => w.id)).size).toBe(catalog.length);
     expect(catalog.filter((w) => w.origin === 'library').length).toBe(libraryWods.length);
   });

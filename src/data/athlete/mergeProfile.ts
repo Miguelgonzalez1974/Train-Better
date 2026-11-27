@@ -363,6 +363,14 @@ export function mergeProfile(
     wodEffortMode: (localIsFresh ? remote.wodEffortMode : local.wodEffortMode) ?? remote.wodEffortMode,
     skillFocus: (localIsFresh ? remote.skillFocus : local.skillFocus) ?? remote.skillFocus,
     birthYear: (localIsFresh ? remote.birthYear : local.birthYear) ?? remote.birthYear,
+    // Tests programados: el interruptor es config (gana el local); los lunes aplazados se unen.
+    testPlan:
+      remote.testPlan || local.testPlan
+        ? {
+            enabled: (localIsFresh ? remote.testPlan?.enabled : local.testPlan?.enabled) ?? remote.testPlan?.enabled,
+            skipped: mergeStringSet(remote.testPlan?.skipped, local.testPlan?.skipped, 30),
+          }
+        : undefined,
     onboardedAt: local.onboardedAt ?? remote.onboardedAt,
     intensityRamp: mergeRamp(remote, local, localIsFresh, base),
 

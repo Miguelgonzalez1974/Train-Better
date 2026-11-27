@@ -101,6 +101,8 @@ import { toast } from '../../lib/toast';
 import { appNav } from '../../lib/appNav';
 import { buildSessionSummaryData, e1rmSuggestionKey, summaryHighlight, type E1rmSuggestion } from '../../engine/sessionSummary';
 import { resetUpcomingSessions } from '../../lib/sessionCacheReset';
+import { TestResultCard } from '../planificacion/LevelTestCards';
+import { dropTestDaySessions } from '../planificacion/testActions';
 import { addSubirPrGoal } from './rexAnalysis';
 import { Movilidad } from '../movilidad/Movilidad';
 import { Modal } from '../shell/Modal';
@@ -434,6 +436,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       ...(entry ? { stats: { cost: item?.cost ?? null, gain: item?.gain, rpe: entry.rpe, minutes: entry.durationMin, rx: detail?.wods.some((w) => w.result) ? (entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado') : null } } : {}),
       effort: dayEnergy.items.some((i) => i.done) ? { value: dayEnergy.effort, low: shown.strain.target.low, high: shown.strain.target.high } : null,
       detail,
+      test: entry && session?.levelTest ? <TestResultCard profile={profile} history={history} testKey={session.levelTest.key} date={dayIso} /> : null,
       programs: dayCompanion.map((c) => {
         const method = (profile.strengthPrograms ?? []).find((p) => p.id === c.programId)?.method;
         return { ...summarizeCompanionEntry(c, resolveMovementDisplayName), method: method ? STRENGTH_METHOD_LABEL[method] : null };
@@ -906,7 +909,16 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         onAddWorkout={() => setWorkoutSheet({ editing: null })}
         onEditWorkout={(id) => setWorkoutSheet({ editing: (profile.workouts ?? []).find((w) => w.id === id) ?? null })}
         // Tu nivel: tus mediciones, solo hoy.
-        extra={isToday && levelCard ? <LevelSummaryCard model={levelCard.model} level={levelCard.level} onOpen={() => openLevel('nivel')} /> : null}
+        extra={
+          <>
+            {/* El resultado del test de nivel de ese día, nada más anotarlo. */}
+            {(() => {
+              const test = (isToday ? athleteRepository.getCachedSession(dayIso) : profile.sessionCache?.[dayIso])?.levelTest;
+              return test ? <TestResultCard profile={profile} history={history} testKey={test.key} date={dayIso} /> : null;
+            })()}
+            {isToday && levelCard ? <LevelSummaryCard model={levelCard.model} level={levelCard.level} onOpen={() => openLevel('nivel')} /> : null}
+          </>
+        }
       />
 
       {formChip !== null && (
@@ -1076,6 +1088,12 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               setProfile(athleteRepository.getProfile());
             }}
             onSaveMarks={saveMarks}
+            onToggleTests={(enabled) => {
+              const current = athleteRepository.getProfile();
+              athleteRepository.saveProfile({ ...current, testPlan: { ...current.testPlan, enabled } });
+              dropTestDaySessions(todayIso);
+              setProfile(athleteRepository.getProfile());
+            }}
             onSaveScaling={(date, scaling, scaled) => {
               athleteRepository.updateHistoryScaling(date, scaling, scaled);
               setHistory(athleteRepository.getHistory());
