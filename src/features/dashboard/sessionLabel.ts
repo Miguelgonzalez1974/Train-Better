@@ -1,5 +1,6 @@
 import type { DailySession, SessionBlockResult, SessionHistoryEntry, SkippedPart, WorkSetEntry } from '../../data/athlete/types';
 import { resolveMovementDisplayName } from '../../data/movements';
+import { isRecoveryBlock } from '../../engine/energyBonus';
 
 /**
  * De qué iba el entreno, en pocas palabras, para la línea pequeña de su fila: «Recovery», «DL + WOD», «Snatch + WOD», «Doble WOD»… Sale de lo que
@@ -34,8 +35,6 @@ export function olyName(name: string): string {
   return shortLift(name);
 }
 
-const isRecovery = (b: SessionBlockResult) => b.title === 'Recuperación activa' || /^RPE 2\b/.test(b.format ?? '');
-
 export interface SessionLabelInput {
   entry: SessionHistoryEntry;
   /** La sesión guardada de ese día; en un día antiguo puede no estar ya. */
@@ -67,7 +66,7 @@ function labelFor({ entry, session, workLog }: SessionLabelInput): string | unde
   const wodSkipped = session?.doubleWod ? wodSkips.some((p) => p.part === undefined) || new Set(wodSkips.map((p) => p.part)).size > 1 : wodSkips.length > 0;
   const wodBlocks = entry.wodBlocks?.length ? entry.wodBlocks : planned('wod');
   const didWod = !wodSkipped && (wodBlocks.length > 0 || Boolean(entry.wodResult));
-  if (didWod && wodBlocks.some(isRecovery)) return 'Recovery';
+  if (didWod && wodBlocks.some(isRecoveryBlock)) return 'Recovery';
 
   /** El levantamiento principal de un bloque: el de la sesión, salvo que lo anotado diga que hiciste otro. */
   function lift(block: 'strength' | 'oly'): string | undefined {

@@ -4,7 +4,7 @@ import type { AcwrResult } from '../../engine/loadMetrics';
 import type { DayAdvice } from '../../engine/dayAdvice';
 import { dayBalance, type DayBalance } from '../../engine/dayBalance';
 import type { ReadinessScore } from '../../engine/readinessScore';
-import type { DayEnergy } from './dayEnergy';
+import { isTraining, type DayEnergy } from './dayEnergy';
 import { ACCENT as EFFORT, OVER, PLAN, type StrainView } from './StrainRing';
 import type { ExplainId } from '../../engine/explainNumbers';
 import { ZONE_WORD } from './loadWords';
@@ -180,6 +180,7 @@ export function DayRing({
   start,
   notDone,
   dayKey,
+  resting = false,
   isToday,
   onAsk,
   hintPending,
@@ -200,6 +201,8 @@ export function DayRing({
   notDone?: string | null;
   /** El día que se enseña: al cambiar, el aro se vuelve a llenar. */
   dayKey: string;
+  /** Hoy es un descanso elegido: no hay esfuerzo previsto que enseñar. */
+  resting?: boolean;
   isToday: boolean;
   /** Tocar el aro o un número es preguntar a Rex de dónde sale: el Dashboard abre el panel de Rex con esa pregunta y su respuesta. */
   onAsk: (id: ExplainId) => void;
@@ -219,11 +222,11 @@ export function DayRing({
   const prepTint = total !== null ? ringPrepColor(total) : undefined;
   const hasLoad = acwr.acwr !== null && !acwr.coldStart;
   const { target, planned } = strain;
-  const trained = energy.items.some((i) => i.done);
+  const trained = energy.items.some((i) => i.done && isTraining(i));
   const effort = trained ? energy.effort : strain.real;
   const over = effort !== null && effort > target.high;
   const plannedValue = planned?.strain ?? null;
-  const estimated = isToday && readiness.estimated && !trained;
+  const estimated = isToday && readiness.estimated && !trained && energy.gained === 0;
   const now = energy.energy;
   const word = now === null ? 'Sin datos' : estimated ? 'Estimada' : 'Energía';
   /** Con cuánta se salió, si ya queda menos: es el tramo suave del aro. */
@@ -325,7 +328,7 @@ export function DayRing({
               obj. {target.low}–{target.high}
             </span>
           </button>
-          {strain.real === null && plannedValue !== null && (
+          {!resting && strain.real === null && plannedValue !== null && (
             <button onClick={() => ask('previsto')} className="-mx-1 mt-2 flex flex-col items-start px-1 py-0.5 text-left">
               <span className="text-[11px] font-semibold uppercase tracking-[0.03em] underline decoration-dotted decoration-1 underline-offset-[3px]" style={{ color: PLAN }}>
                 Previsto
@@ -344,7 +347,7 @@ export function DayRing({
           <BalanceBox balance={balance} target={target} isToday={isToday} notDone={notDone} />
         ) : (
           <p className="mx-auto mt-5 max-w-[23rem] text-center text-[13px] leading-relaxed text-neutral-400">
-            {sentence(strain, isToday)}
+            {strain.real === null && energy.items.some((i) => i.kind === 'descanso') ? 'Ese día descansaste.' : sentence(strain, isToday)}
             {strain.real !== null && notDone ? <> {notDone}</> : null}
           </p>
         ))}

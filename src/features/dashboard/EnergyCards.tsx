@@ -36,6 +36,11 @@ export function NightCard({ energy, onPick, estimates }: { energy: DayEnergy; on
           );
         })}
       </div>
+      {energy.nightFeel === 'bien' && energy.computed !== null && energy.energy !== null && energy.energy > energy.computed && (
+        <p className="mt-2 text-[11px] font-semibold leading-snug text-good" data-testid="night-gain">
+          «Bien» te ha sumado {energy.energy - energy.computed}&nbsp;%.
+        </p>
+      )}
       {estimates.length > 0 && (
         <p className="mt-2 text-[11px] leading-snug text-neutral-500">
           {estimates.map((e, i) => `${i === 0 ? 'Si duermes' : 'con'} ${hoursText(e.hours)}${i === 0 ? ' amanecerás sobre ' : ', sobre '}${e.energy} %`).join('; ')}.

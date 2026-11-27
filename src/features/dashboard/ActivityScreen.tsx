@@ -24,7 +24,7 @@ export interface ActivityScreenProps {
   /** «PP + WOD · miércoles, 25 nov». */
   subtitle: string;
   /** El resumen de arriba; ausente en un día con solo el programa de fuerza. */
-  stats?: { cost: number | null; rpe: number; minutes: number; rx: string | null };
+  stats?: { cost: number | null; gain?: number; rpe: number; minutes: number; rx: string | null };
   /** El esfuerzo del día frente a tu objetivo. */
   effort?: { value: number; low: number; high: number } | null;
   detail: ActivityDetail | null;
@@ -242,7 +242,7 @@ export function ActivityScreen({ onClose, backLabel, title, subtitle, stats, eff
         {stats && (
           <section className={CARD} aria-label="Resumen" data-testid="detail-summary">
             <div className="flex items-center justify-between gap-2">
-              {stats.cost !== null && <EnergyPill cost={stats.cost} />}
+              {stats.cost !== null && <EnergyPill cost={stats.cost} gain={stats.gain} />}
               <Stat value={num(stats.rpe)} label="RPE" />
               <Stat value={num(stats.minutes)} label="minutos" />
               {stats.rx && <Stat value={stats.rx} label="WOD" />}

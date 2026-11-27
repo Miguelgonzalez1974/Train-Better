@@ -6,12 +6,14 @@ import { getReadinessCheckForDate } from '../../engine/readiness';
 import {
   activePainAreas,
   buildRoutine,
+  mobilitySeed,
   PURPOSE_LABEL,
   ratingDue,
   ratingTrend,
   routineSeconds,
   sessionPatterns,
   suggestMobilityZones,
+  TRANSITION_SECONDS,
   weeklyMobilityMinutes,
   withMobilityDone,
   withMobilityFocus,
@@ -24,18 +26,12 @@ import { MobilityGuide } from './MobilityGuide';
 
 type Step = 'rate' | 'purpose' | 'zones' | 'time' | 'routine' | 'guide' | 'done';
 
-const MINUTES = [5, 10, 15];
+const MINUTES = [5, 10, 15, 30];
 const RATING_WORD: Record<number, string> = { 1: 'Muy limitada', 2: 'Limitada', 3: 'Normal', 4: 'Bien', 5: 'Fenomenal' };
 
 const chip = 'rounded-full border border-brand-border px-3.5 py-2 text-sm font-semibold text-neutral-200 transition-colors duration-200 hover:border-white/30 hover:bg-white/5';
 const chipOn = 'rounded-full border border-good/60 bg-good/15 px-3.5 py-2 text-sm font-semibold text-good transition-colors duration-200';
 const primary = 'rounded-full bg-brand-orange px-4 py-2 text-sm font-semibold text-black transition-colors duration-200 hover:bg-brand-orange-dark';
-
-/** El día del año, para que la rutina cambie de un día a otro sin ser aleatoria. */
-function dayOfYear(iso: string): number {
-  const d = new Date(`${iso}T12:00:00`);
-  return Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000);
-}
 
 /**
  * Movilidad y estiramientos con Rex: te pregunta qué quieres (estirar, una sesión de movilidad o calentar), qué zonas, y cuánto tiempo
@@ -48,6 +44,7 @@ export function Movilidad({
   todayIso,
   session,
   trainedToday,
+  preset,
   onProfileChange,
   onClose,
 }: {
@@ -55,6 +52,8 @@ export function Movilidad({
   todayIso: string;
   session: DailySession | null;
   trainedToday: boolean;
+  /** Abrir con la rutina ya armada (la movilidad propuesta de un día de descanso). */
+  preset?: { zones: MobilityZone[]; minutes: number };
   onProfileChange: (profile: AthleteProfile) => void;
   onClose: () => void;
 }) {
@@ -68,12 +67,12 @@ export function Movilidad({
   const due = ratingDue(profile, todayIso);
   const recommended: MobilityPurpose = trainedToday ? 'recuperar' : session && !session.isRestDay ? 'calentar' : 'movilidad';
 
-  const [step, setStep] = useState<Step>(due ? 'rate' : 'purpose');
-  const [purpose, setPurpose] = useState<MobilityPurpose>(recommended);
-  const [zones, setZones] = useState<MobilityZone[]>(suggestions.map((s) => s.zone));
+  const [step, setStep] = useState<Step>(preset ? 'routine' : due ? 'rate' : 'purpose');
+  const [purpose, setPurpose] = useState<MobilityPurpose>(preset ? 'movilidad' : recommended);
+  const [zones, setZones] = useState<MobilityZone[]>(preset?.zones ?? suggestions.map((s) => s.zone));
   const [saveFocus, setSaveFocus] = useState(false);
-  const [minutes, setMinutes] = useState(10);
-  const [routine, setRoutine] = useState<RoutineItem[]>([]);
+  const [minutes, setMinutes] = useState(preset?.minutes ?? 10);
+  const [routine, setRoutine] = useState<RoutineItem[]>(() => (preset ? buildRoutine({ purpose: 'movilidad', zones: preset.zones, minutes: preset.minutes, painAreas, seed: mobilitySeed(todayIso) }) : []));
   const [result, setResult] = useState<{ minutes: number; weekly: number; exercises: number } | null>(null);
 
   const mood: RexMood = step === 'done' ? 'happy' : step === 'routine' || step === 'guide' ? 'lift' : 'idle';
@@ -84,7 +83,7 @@ export function Movilidad({
   }
 
   function makeRoutine() {
-    setRoutine(buildRoutine({ purpose, zones, minutes, painAreas, seed: dayOfYear(todayIso) }));
+    setRoutine(buildRoutine({ purpose, zones, minutes, painAreas, seed: mobilitySeed(todayIso) }));
     setStep('routine');
   }
 
@@ -94,7 +93,9 @@ export function Movilidad({
       setStep('routine');
       return;
     }
-    const mins = Math.max(1, Math.round(elapsedSeconds / 60));
+    // Los segundos cronometrados más el cambio de postura entre ejercicios (la parte que corresponde a lo hecho), como en la duración anunciada.
+    const transitions = total > 0 ? TRANSITION_SECONDS * routine.length * (done / total) : 0;
+    const mins = Math.max(1, Math.round((elapsedSeconds + transitions) / 60));
     let next = withMobilityDone(profile, {
       id: `mov${Date.now()}`,
       date: todayIso,

@@ -47,7 +47,11 @@ import { resolveTodaySession } from './todaySession';
 import type { StrainView } from './StrainRing';
 import { isoDiffDays, toLocalIsoDate } from '../../engine/periodization';
 import { BalanceBox, DayRing } from './DayRing';
-import { buildDayEnergy, tomorrowEstimate } from './dayEnergy';
+import { buildDayEnergy, isTraining, tomorrowEstimate } from './dayEnergy';
+import { MobilitySuggestion } from './MobilitySuggestion';
+import { shiftIso } from '../../engine/energy';
+import { MOBILITY_ZONE_LABEL, type MobilityZone } from '../../data/mobility';
+import { activePainAreas, mobilitySeed, restRoutine, sessionPatterns, suggestMobilityZones, withMobilityDone } from '../../engine/mobility';
 import { MorningCard, NightCard } from './EnergyCards';
 import { WorkoutSheet } from './WorkoutSheet';
 import { explainEnergy } from '../../engine/explainNumbers';
@@ -89,7 +93,7 @@ import { ThemeToggle } from '../shell/ThemeToggle';
 import { computeImbalances } from '../../engine/imbalances';
 import { hrvLogWith } from '../../engine/hrv';
 import { REX_HINTS } from './rexHints';
-import type { AthleteProfile, DayWorkout, NightFeel } from '../../data/athlete/types';
+import type { AthleteProfile, DayWorkout, MobilityLogEntry, NightFeel } from '../../data/athlete/types';
 import type { MarkKey } from './rexMarks';
 import { competitionToClose, nextCompetitionGoal } from '../../engine/postCompetition';
 import { handoff } from '../../lib/handoff';
@@ -147,6 +151,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const [formChip, setFormChip] = useState<FormChip | null>(null);
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [showMobility, setShowMobility] = useState(false);
+  /** La movilidad propuesta de un día de descanso: el módulo se abre con la rutina ya armada. */
+  const [mobilityPreset, setMobilityPreset] = useState<{ zones: MobilityZone[]; minutes: number } | undefined>(undefined);
   /** La pantalla del entreno hecho: la sesión y, debajo, la del programa de fuerza del día elegido. */
   // Se abre sola cuando Planificación manda aquí a ver el resumen («Ver resumen» de Rex tras cerrar la sesión).
   const [showDone, setShowDone] = useState(() => handoff.peek('dash-act') === 'resumen');
@@ -283,11 +289,15 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const todayReadiness = getReadinessCheckForDate(profile.readinessLog ?? [], todayIso);
   // Descanso elegido ("Hoy descanso"): se guarda en el perfil y se ve en el consejo, en la cinta de la semana y en el cumplimiento.
   const restMarked = isRestMarked(profile.restDates, todayIso);
+  /** Guarda un cambio que solo mueve la energía de mañana (descanso, movilidad): la sesión de hoy se queda como está. */
+  function saveForTomorrow(next: AthleteProfile) {
+    athleteRepository.saveProfile(next);
+    resetUpcomingSessions(shiftIso(todayIso, 1));
+    setProfile(athleteRepository.getProfile());
+  }
   function toggleRest() {
     const current = athleteRepository.getProfile();
-    const next = restMarked ? withRestUnmarked(current, todayIso) : withRestMarked(current, todayIso);
-    athleteRepository.saveProfile(next);
-    setProfile(next);
+    saveForTomorrow(restMarked ? withRestUnmarked(current, todayIso) : withRestMarked(current, todayIso));
   }
   // La revisión de las 4 semanas: al abrir el aviso deja de salir y se lleva a Objetivos → Perfil, donde se da por vista.
   function openEmphasisReview() {
@@ -335,8 +345,29 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     const day = buildDayEnergy({ ...dayEnergyInput, profile: { ...profile, workouts } });
     return day.items.find((i) => i.workoutId === draft.id)?.cost ?? 0;
   }
-  /** «Añadir entreno»: null cerrada; `editing` es el que se corrige. */
-  const [workoutSheet, setWorkoutSheet] = useState<{ editing: DayWorkout | null } | null>(null);
+  /** Lo que sumaría una movilidad aún sin guardar (con el tope del día). */
+  function mobilityGain(draft: MobilityLogEntry) {
+    const mobilityLog = [...(profile.mobilityLog ?? []).filter((m) => m.id !== draft.id), draft];
+    const day = buildDayEnergy({ ...dayEnergyInput, profile: { ...profile, mobilityLog } });
+    return day.items.find((i) => i.mobilityId === draft.id)?.gain ?? 0;
+  }
+  /** «Añadir entreno»: null cerrada; `editing` o `mobility` es lo que se corrige. */
+  const [workoutSheet, setWorkoutSheet] = useState<{ editing: DayWorkout | null; mobility?: MobilityLogEntry } | null>(null);
+  /** Hoy marcado como descanso y sin haber entrenado: la sesión se aparta y se propone movilidad. */
+  const trainedOnDay = dayEnergy.items.some((i) => i.done && isTraining(i));
+  const resting = isToday && restMarked && !trainedOnDay;
+  function saveMobility(entry: MobilityLogEntry, message: string) {
+    saveForTomorrow(withMobilityDone(athleteRepository.getProfile(), entry));
+    setWorkoutSheet(null);
+    toast.show(message);
+  }
+  function deleteMobility(id: string) {
+    const removed = athleteRepository.getProfile().mobilityLog?.find((m) => m.id === id);
+    const current = athleteRepository.getProfile();
+    saveForTomorrow({ ...current, mobilityLog: (current.mobilityLog ?? []).filter((m) => m.id !== id) });
+    setWorkoutSheet(null);
+    toast.show('Movilidad borrada', removed ? { action: { label: 'Deshacer', run: () => saveForTomorrow(withMobilityDone(athleteRepository.getProfile(), removed)) } } : {});
+  }
   function applyWorkouts(change: (list: DayWorkout[]) => DayWorkout[]) {
     const current = athleteRepository.getProfile();
     athleteRepository.saveProfile({ ...current, workouts: change(current.workouts ?? []) });
@@ -345,6 +376,8 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     setProfile(athleteRepository.getProfile());
   }
   function saveWorkout(workout: DayWorkout, message: string) {
+    // Si al final entrenas, el día deja de ser un descanso.
+    if (workout.date === todayIso && restMarked) athleteRepository.saveProfile(withRestUnmarked(athleteRepository.getProfile(), todayIso));
     applyWorkouts((list) => [...list.filter((x) => x.id !== workout.id), workout]);
     setWorkoutSheet(null);
     toast.show(message);
@@ -361,9 +394,30 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   function saveNight(feel: NightFeel) {
     const current = athleteRepository.getProfile();
     const nightLog = [...(current.nightLog ?? []).filter((n) => n.date !== todayIso), { date: todayIso, feel }];
-    athleteRepository.saveProfile({ ...current, nightLog });
-    resetUpcomingSessions(todayIso);
-    setProfile(athleteRepository.getProfile());
+    saveForTomorrow({ ...current, nightLog });
+  }
+  /** La movilidad que se propone hoy que descansas: las zonas salen de tus agujetas, tus prioridades y lo que entrenaste ayer. */
+  function mobilitySuggestion() {
+    const yesterday = profile.sessionCache?.[shiftIso(todayIso, -1)] ?? null;
+    const suggestions = suggestMobilityZones({ patterns: sessionPatterns(yesterday), soreZones: todayReadiness?.soreZones, focus: profile.mobilityFocus });
+    const painAreas = activePainAreas(profile, todayIso);
+    const routineFor = (minutes: number) => restRoutine({ suggested: suggestions.map((s) => s.zone), minutes, painAreas, seed: mobilitySeed(todayIso) });
+    // Se nombran las tres primeras, que son las que lo piden.
+    const names = routineFor(15).zones.slice(0, 3).map((z, i) => (i === 0 ? MOBILITY_ZONE_LABEL[z] : MOBILITY_ZONE_LABEL[z].toLowerCase()));
+    return (
+      <MobilitySuggestion
+        zones={names.join(', ')}
+        why={suggestions.some((x) => x.why.startsWith('agujetas')) ? 'por tus agujetas' : suggestions[0]?.why}
+        gainFor={(minutes) => {
+          const routine = routineFor(minutes);
+          return mobilityGain({ id: 'propuesta', date: todayIso, purpose: 'movilidad', zones: routine.zones, minutes: routine.minutes, exercises: 0 });
+        }}
+        onStart={(minutes) => {
+          setMobilityPreset({ zones: routineFor(minutes).zones, minutes });
+          setShowMobility(true);
+        }}
+      />
+    );
   }
   /** Lo que enseña la pantalla del entreno del día elegido (solo se calcula al abrirla). */
   function activityScreen(): Omit<ActivityScreenProps, 'onClose'> {
@@ -377,7 +431,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
       backLabel: dayLabel(dayIso, todayIso),
       title: item?.name ?? 'Programa de fuerza',
       subtitle: [item?.detail, date].filter(Boolean).join(' · '),
-      ...(entry ? { stats: { cost: item?.cost ?? null, rpe: entry.rpe, minutes: entry.durationMin, rx: detail?.wods.some((w) => w.result) ? (entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado') : null } } : {}),
+      ...(entry ? { stats: { cost: item?.cost ?? null, gain: item?.gain, rpe: entry.rpe, minutes: entry.durationMin, rx: detail?.wods.some((w) => w.result) ? (entry.rxOrScaled === 'rx' ? 'Rx' : 'Escalado') : null } } : {}),
       effort: dayEnergy.items.some((i) => i.done) ? { value: dayEnergy.effort, low: shown.strain.target.low, high: shown.strain.target.high } : null,
       detail,
       programs: dayCompanion.map((c) => {
@@ -512,7 +566,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     low: shown.strain.target?.low ?? null,
     high: shown.strain.target?.high ?? null,
     real: shown.strain.real,
-    planned: isToday ? (dayStart.planned ?? shown.strain.planned?.strain ?? null) : null,
+    planned: restMarked && isToday ? null : (isToday ? (dayStart.planned ?? shown.strain.planned?.strain ?? null) : null),
     // Si la frase de Rex ya dice el rango del objetivo, no se repite en la línea de cifras.
     skipTarget: shown.strain.target ? rexPick.current.text.includes(`${shown.strain.target.low}–${shown.strain.target.high}`) : false,
   });
@@ -611,7 +665,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
     preparacion: explainReadiness(shown.readiness),
     energia: explainEnergy({
       morning: dayEnergy.morning,
-      done: dayEnergy.items.filter((i) => i.done).map((i) => ({ name: i.name, cost: i.cost })),
+      done: dayEnergy.items.filter((i) => i.done).map((i) => ({ name: i.name, cost: i.cost, gain: i.gain })),
       energy: dayEnergy.energy,
       computed: dayEnergy.computed,
       pending: dayEnergy.pending,
@@ -816,6 +870,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         readiness={shown.readiness}
         acwr={shown.acwr}
         dayKey={dayIso}
+        resting={resting}
         isToday={isToday}
         onAsk={askRing}
         hintPending={ringHintPending}
@@ -830,6 +885,11 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
         card={buildSessionCard({ isToday, session: isToday ? todaySession : null, entry: shown.entry, strain: shown.strain, profile, history, workLog: athleteRepository.getWorkLog(), dayIso, companionDone: dayCompanion })}
         sessionEnergy={dayEnergy.items.find((i) => i.kind === 'sesion')}
         others={dayEnergy.items.filter((i) => i.kind !== 'sesion')}
+        resting={resting}
+        onRest={isToday && !restMarked && !trainedOnDay ? toggleRest : undefined}
+        onRemoveRest={isToday ? toggleRest : undefined}
+        suggestion={resting && !dayEnergy.items.some((i) => i.kind === 'movilidad') ? mobilitySuggestion() : undefined}
+        onEditMobility={(id) => setWorkoutSheet({ editing: null, mobility: profile.mobilityLog?.find((m) => m.id === id) })}
         top={
           askNight ? (
             <NightCard
@@ -915,24 +975,36 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
           <WorkoutSheet
             dateIso={dayIso}
             editing={workoutSheet.editing}
+            mobility={workoutSheet.mobility}
             costOf={workoutCost}
+            gainOf={mobilityGain}
+            onSaveMobility={(m) => saveMobility(m, workoutSheet.mobility ? 'Movilidad corregida' : 'Movilidad añadida')}
+            onDeleteMobility={deleteMobility}
             onSave={(w) => saveWorkout(w, workoutSheet.editing ? 'Entreno corregido' : 'Entreno añadido')}
             onDelete={deleteWorkout}
           />
         </Modal>
       )}
       {showMobility && (
-        <Modal open onClose={() => setShowMobility(false)} title="Recovery">
+        <Modal
+          open
+          onClose={() => {
+            setShowMobility(false);
+            setMobilityPreset(undefined);
+          }}
+          title="Recovery"
+        >
           <Movilidad
+            preset={mobilityPreset}
             profile={profile}
             todayIso={todayIso}
             session={todaySession}
             trainedToday={todayStrain !== null}
-            onProfileChange={(next) => {
-              athleteRepository.saveProfile(next);
-              setProfile(next);
+            onProfileChange={saveForTomorrow}
+            onClose={() => {
+              setShowMobility(false);
+              setMobilityPreset(undefined);
             }}
-            onClose={() => setShowMobility(false)}
           />
         </Modal>
       )}

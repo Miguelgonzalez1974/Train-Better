@@ -1,5 +1,6 @@
 import type { AthleteProfile, SessionHistoryEntry } from '../data/athlete/types';
 import { withExtraLoad } from './companionLoad';
+import { dayBonuses } from './energyBonus';
 import { computeReadinessScore, type ReadinessScore } from './readinessScore';
 
 /**
@@ -27,6 +28,7 @@ export function readinessAt(profile: AthleteProfile, history: SessionHistoryEntr
     history: loadHistoryFor(profile, history),
     painFlags: profile.painFlags,
     nightLog: profile.nightLog,
+    bonus: dayBonuses(profile, history),
     today: date,
   });
 }

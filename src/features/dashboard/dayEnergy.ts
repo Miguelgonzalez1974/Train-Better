@@ -1,5 +1,8 @@
 import type { AthleteProfile, DailySession, DayWorkout, NightFeel, SessionHistoryEntry, WorkoutKind, WorkSetEntry } from '../../data/athlete/types';
-import { clampEnergy, costOfSrpe, nightAdjust, shiftIso, sleepGain, CARRY_SHARE, spendOfEntry } from '../../engine/energy';
+import { MOBILITY_ZONE_LABEL } from '../../data/mobility';
+import { clampEnergy, costOfSrpe, daySpend, nightAdjust, shiftIso, sleepGain, CARRY_SHARE } from '../../engine/energy';
+import { dayBonuses, NO_BONUS } from '../../engine/energyBonus';
+import { isRestMarked } from '../../engine/restDays';
 import { loadHistoryFor } from '../../engine/readinessAt';
 import { strainFromSrpe } from '../../engine/strain';
 import { otherKindInfo } from '../planificacion/otherActivity';
@@ -10,12 +13,12 @@ import { sessionLabel } from './sessionLabel';
  * hacer y con cuánta energía se acaba. La mañana es la preparación (ver `engine/energy.ts`). Puro: lo pintan el aro y las filas del Dashboard.
  */
 
-/** Qué fue cada cosa entrenada: decide su icono. */
-export type ActivityKind = WorkoutKind | 'sesion' | 'programa';
+/** Qué fue cada cosa del día: decide su icono. */
+export type ActivityKind = WorkoutKind | 'sesion' | 'programa' | 'descanso' | 'movilidad';
 
 export interface EnergyItem {
   id: string;
-  kind: 'sesion' | 'programa' | 'libre';
+  kind: 'sesion' | 'programa' | 'libre' | 'descanso' | 'movilidad';
   activity: ActivityKind;
   /** El tipo de entreno tal como se lee en su fila: «CrossFit», «Running»… */
   name: string;
@@ -26,10 +29,17 @@ export interface EnergyItem {
   minutes: number;
   rpe: number;
   cost: number;
+  /** Lo que ha sumado (descanso, movilidad o recuperación suave); sin él, es algo que gasta. */
+  gain?: number;
   done: boolean;
   /** El id en `profile.workouts` (solo los entrenos libres, que se pueden corregir). */
   workoutId?: string;
+  /** El id en `profile.mobilityLog` (las filas de movilidad, que se pueden corregir). */
+  mobilityId?: string;
 }
+
+/** ¿Es un entreno? El descanso y la movilidad no cuentan como haber entrenado. */
+export const isTraining = (item: Pick<EnergyItem, 'kind'>): boolean => item.kind !== 'descanso' && item.kind !== 'movilidad';
 
 /** Cómo se llama un entreno añadido en su fila: el tipo, o el nombre que le pusiste. */
 export function workoutName(w: Pick<DayWorkout, 'kind' | 'name'>): string {
@@ -43,6 +53,8 @@ export interface DayEnergy {
   items: EnergyItem[];
   /** Lo gastado por lo hecho. */
   spent: number;
+  /** Lo sumado ese día (descanso, movilidad, recuperación suave). */
+  gained: number;
   /** La energía de ahora (o la del final del día) sin la respuesta de la noche. */
   computed: number | null;
   nightFeel: NightFeel | undefined;
@@ -123,16 +135,42 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
   }
 
   // El total manda (es el mismo que usa la preparación de mañana): los redondeos de cada parte se ajustan a él.
-  const total = spendOfEntry(loadHistoryFor(profile, history).find((h) => h.date === dateIso));
-  if (done.length > 0) shareOut(total, done.map((i) => i.rpe * i.minutes)).forEach((cost, i) => (done[i].cost = cost));
+  const bonus = dayBonuses(profile, history).get(dateIso) ?? NO_BONUS;
+  const total = daySpend(loadHistoryFor(profile, history).find((h) => h.date === dateIso), bonus);
+  // Una recuperación suave no gasta: suma.
+  const recovered = bonus.recovery > 0 ? done.find((i) => i.kind === 'sesion') : undefined;
+  if (recovered) Object.assign(recovered, { cost: 0, gain: bonus.recovery });
+  const spending = done.filter((i) => i !== recovered);
+  if (spending.length > 0) shareOut(total, spending.map((i) => i.rpe * i.minutes)).forEach((cost, i) => (spending[i].cost = cost));
   done.sort((a, b) => (a.start ?? 24) - (b.start ?? 24));
 
+  const extras: EnergyItem[] = [];
+  if (bonus.rest > 0) extras.push({ id: 'descanso', kind: 'descanso', activity: 'descanso', name: 'Descanso', start: null, minutes: 0, rpe: 0, cost: 0, gain: bonus.rest, done: true });
+  const mobility = (profile.mobilityLog ?? []).filter((m) => m.date === dateIso);
+  const mobilityGains = shareOut(bonus.mobility, mobility.map((m) => m.minutes));
+  const mobilityItems: EnergyItem[] = mobility.map((m, i) => ({
+    id: `mov:${m.id}`,
+    kind: 'movilidad',
+    activity: 'movilidad',
+    name: 'Movilidad',
+    detail: [`${m.minutes} min`, m.zones.slice(0, 3).map((z, k) => (k === 0 ? MOBILITY_ZONE_LABEL[z] : MOBILITY_ZONE_LABEL[z].toLowerCase())).join(', ') || null].filter(Boolean).join(' · '),
+    start: null,
+    minutes: m.minutes,
+    rpe: 0,
+    cost: 0,
+    gain: mobilityGains[i],
+    done: true,
+    mobilityId: m.id,
+  }));
+
+  // Con el día marcado como descanso (y sin haber entrenado) no queda nada previsto.
+  const resting = done.length === 0 && isRestMarked(profile.restDates, dateIso);
   const pendingItems: EnergyItem[] = [];
-  if (!entry && input.plannedSession && session && !session.isRestDay) {
+  if (!resting && !entry && input.plannedSession && session && !session.isRestDay) {
     const cost = costOfSrpe(input.plannedSession.rpe * input.plannedSession.minutes);
     pendingItems.push({ id: 'sesion-prevista', kind: 'sesion', activity: 'sesion', name: 'Sesión del día', start: null, minutes: input.plannedSession.minutes, rpe: input.plannedSession.rpe, cost, done: false });
   }
-  if (input.plannedProgram && !done.some((i) => i.kind === 'programa')) {
+  if (!resting && input.plannedProgram && !done.some((i) => i.kind === 'programa')) {
     const { rpe, minutes } = input.plannedProgram;
     pendingItems.push({ id: 'programa-previsto', kind: 'programa', activity: 'programa', name: 'Programa de fuerza', start: null, minutes, rpe, cost: costOfSrpe(rpe * minutes), done: false });
   }
@@ -140,12 +178,14 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
   const spent = done.reduce((s, i) => s + i.cost, 0);
   const pending = pendingItems.reduce((s, i) => s + i.cost, 0);
   const nightFeel = profile.nightLog?.find((n) => n.date === dateIso)?.feel;
-  const computed = morning === null ? null : clampEnergy(morning - spent);
+  const computed = morning === null ? null : clampEnergy(morning - spent + bonus.total);
   const energy = computed === null ? null : nightAdjust(computed, nightFeel);
   return {
     morning,
-    items: [...done, ...pendingItems],
+    // El descanso encabeza el día; después, lo entrenado en su orden, la movilidad y lo que falta.
+    items: [...extras, ...done, ...mobilityItems, ...pendingItems],
     spent,
+    gained: bonus.total,
     computed,
     nightFeel,
     energy,
@@ -158,7 +198,8 @@ export function buildDayEnergy(input: DayEnergyInput): DayEnergy {
 /** Con cuánta energía se amanecería mañana si se acaba así y se duermen esas horas (sin el check-in, que luego lo ajusta). */
 export function tomorrowEstimate(profile: AthleteProfile, history: SessionHistoryEntry[], dateIso: string, energy: number, hours: number): number {
   const load = loadHistoryFor(profile, history);
-  const spend = (iso: string) => spendOfEntry(load.find((h) => h.date === iso));
+  const bonuses = dayBonuses(profile, history);
+  const spend = (iso: string) => daySpend(load.find((h) => h.date === iso), bonuses.get(iso));
   const carry = Math.round(CARRY_SHARE[0] * spend(dateIso) + CARRY_SHARE[1] * spend(shiftIso(dateIso, -1)));
   return clampEnergy(energy + sleepGain(energy, hours) - carry);
 }

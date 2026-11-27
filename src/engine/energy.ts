@@ -5,12 +5,14 @@
  *     horas), menos lo que arrastras (parte de lo entrenado los dos últimos días o las agujetas, lo mayor), tu estrés y tu ánimo, un HRV
  *     bajo, una carga fuera de lo seguro y las molestias. Esa cifra es tu PREPARACIÓN y no se mueve en todo el día.
  *   - Cada entreno resta: 1 punto por cada 20 de RPE × minutos.
- *   - Por la noche, si contestas cómo acabas el día, tu respuesta corrige la cifra con la que te vas a dormir.
+ *   - Un descanso que decides, la movilidad y una recuperación suave SUMAN (ver `energyBonus.ts`); esa recuperación no resta ni se arrastra.
+ *   - Por la noche, si contestas cómo acabas el día, tu respuesta corrige la cifra con la que te vas a dormir. «Bien» y «Normal» nunca la bajan.
  *
  * Es una ESTIMACIÓN, no una medición: las proporciones son de partida (orientadas por la literatura sobre RPE de sesión, recuperación y sueño)
  * y están juntas aquí para poder ajustarlas. Puro.
  */
 import type { HrvHistoryEntry, NightEntry, NightFeel, PainFlag, ReadinessCheck, SessionHistoryEntry } from '../data/athlete/types';
+import type { DayBonus } from './energyBonus';
 import { nightHours } from './formCurve';
 import { computeHrvPart, hrvLogWith, type HrvPart } from './hrv';
 import { computeAcwr, type AcwrResult } from './loadMetrics';
@@ -39,6 +41,8 @@ export const MOTIVATION_POINTS: Record<ReadinessCheck['motivation'], number> = {
 /** Lo que vale cada respuesta de la noche y cuánto pesa frente a lo calculado (a medias). */
 export const NIGHT_VALUE: Record<NightFeel, number> = { reventado: 10, cansado: 30, normal: 50, bien: 70 };
 export const NIGHT_WEIGHT = 0.5;
+/** Lo que suma, como mínimo, acabar el día «Bien». */
+export const NIGHT_GOOD_MIN = 8;
 /** La carga solo resta cuando se sale de lo seguro (ACWR). */
 export const LOAD_PENALTY: Record<AcwrResult['zone'], number> = { baja: 0, optima: 0, moderada: 10, alta: 20 };
 export const PAIN_PENALTY_EACH = 8;
@@ -79,9 +83,20 @@ export const costOfSrpe = (srpe: number): number => (srpe > 0 ? Math.round(srpe 
 /** Lo gastado en una entrada de la carga del día (la suma de todo lo entrenado, ver `withExtraLoad`). */
 export const spendOfEntry = (entry: Pick<SessionHistoryEntry, 'rpe' | 'durationMin'> | undefined): number => (entry ? costOfSrpe(entry.rpe * entry.durationMin) : 0);
 
-/** La energía con la que te vas a dormir: la calculada, corregida a medias por cómo dices que acabas. */
+/** El RPE × minutos de un día que sí gasta: todo menos la recuperación suave. */
+export const daySpend = (entry: Pick<SessionHistoryEntry, 'rpe' | 'durationMin'> | undefined, bonus?: Pick<DayBonus, 'recoverySrpe'>): number =>
+  entry ? costOfSrpe(entry.rpe * entry.durationMin - (bonus?.recoverySrpe ?? 0)) : 0;
+
+/**
+ * La energía con la que te vas a dormir: la calculada, corregida a medias por cómo dices que acabas. «Bien» siempre suma algo y «Normal» solo
+ * puede subirla: decir que estás bien nunca te quita energía.
+ */
 export function nightAdjust(computed: number, feel: NightFeel | undefined): number {
-  return feel ? clampEnergy(computed + (NIGHT_VALUE[feel] - computed) * NIGHT_WEIGHT) : computed;
+  if (!feel) return computed;
+  const halfway = computed + (NIGHT_VALUE[feel] - computed) * NIGHT_WEIGHT;
+  if (feel === 'bien') return clampEnergy(Math.max(computed + NIGHT_GOOD_MIN, halfway));
+  if (feel === 'normal') return clampEnergy(Math.max(computed, halfway));
+  return clampEnergy(halfway);
 }
 
 export interface EnergyInput {
@@ -91,6 +106,8 @@ export interface EnergyInput {
   hrvHistory?: HrvHistoryEntry[];
   painFlags: PainFlag[] | undefined;
   nightLog?: NightEntry[];
+  /** Lo que suma cada día: descanso, movilidad y recuperación suave (ver `dayBonuses`). */
+  bonus?: Map<string, DayBonus>;
 }
 
 /** De dónde sale la energía de una mañana, pieza a pieza (los restos van en positivo y se restan). */
@@ -115,9 +132,9 @@ export interface MorningEnergy {
   hasCheckIn: boolean;
 }
 
-/** La energía con la que se acaba un día: la de la mañana menos lo gastado, y la respuesta de la noche si la hay. */
-export function eveningEnergy(morning: number, spend: number, feel?: NightFeel): { computed: number; value: number } {
-  const computed = clampEnergy(morning - spend);
+/** La energía con la que se acaba un día: la de la mañana menos lo gastado más lo sumado, y la respuesta de la noche si la hay. */
+export function eveningEnergy(morning: number, spend: number, feel?: NightFeel, gain = 0): { computed: number; value: number } {
+  const computed = clampEnergy(morning - spend + gain);
   return { computed, value: nightAdjust(computed, feel) };
 }
 
@@ -131,7 +148,7 @@ export function morningEnergy(input: EnergyInput, dateIso: string): MorningEnerg
   const checks = new Map((input.readinessLog ?? []).map((c) => [c.date, c]));
   const nights = new Map((input.nightLog ?? []).map((n) => [n.date, n.feel]));
   const hrvLog = hrvLogWith(input.readinessLog, input.hrvHistory);
-  const spend = (iso: string) => spendOfEntry(byDate.get(iso));
+  const spend = (iso: string) => daySpend(byDate.get(iso), input.bonus?.get(iso));
 
   // La cadena empieza en el primer día con datos dentro de la ventana (antes no hay nada que encadenar).
   const windowStart = shiftIso(dateIso, -CHAIN_DAYS);
@@ -174,7 +191,7 @@ export function morningEnergy(input: EnergyInput, dateIso: string): MorningEnerg
         hasCheckIn: check !== undefined,
       };
     }
-    previous = eveningEnergy(total, spend(day), nights.get(day)).value;
+    previous = eveningEnergy(total, spend(day), nights.get(day), input.bonus?.get(day)?.total).value;
     day = shiftIso(day, 1);
   }
 }

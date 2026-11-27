@@ -38,6 +38,8 @@ export interface SyncBase {
   restDates?: string[];
   /** Ids de los entrenos añadidos a mano (`AthleteProfile.workouts`). */
   workouts?: string[];
+  /** Ids de las rutinas de movilidad (`AthleteProfile.mobilityLog`). */
+  mobilityLog?: string[];
   /** Fecha de inicio de la rampa de vuelta que habia (null si no habia). */
   rampStart?: string | null;
 }
@@ -61,6 +63,7 @@ export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistor
     history: history.map((h) => h.date),
     restDates: profile.restDates ?? [],
     workouts: (profile.workouts ?? []).map((w) => w.id),
+    mobilityLog: (profile.mobilityLog ?? []).map((m) => m.id),
     rampStart: profile.intensityRamp?.startDate ?? null,
   };
 }
@@ -414,8 +417,11 @@ export function mergeProfile(
       (r, l) => (l.clearedDate ? l : r.clearedDate ? r : l),
     ),
     reviewedMacroWeeks: mergeStringSet(remote.reviewedMacroWeeks, local.reviewedMacroWeeks, 999),
-    // Movilidad: las rutinas y las valoraciones son logs (union por clave, no se borran); las zonas prioritarias son config (gana el local).
-    mobilityLog: remote.mobilityLog || local.mobilityLog ? mergeByKey(remote.mobilityLog, local.mobilityLog, (e) => e.id, (e) => e.date, 200) : undefined,
+    // Movilidad: las rutinas y las valoraciones son logs (union por clave; una rutina borrada no vuelve); las zonas prioritarias son config (gana el local).
+    mobilityLog:
+      remote.mobilityLog || local.mobilityLog
+        ? dropDeleted(mergeByKey(remote.mobilityLog, local.mobilityLog, (e) => e.id, (e) => e.date, 200), (e) => e.id, base?.mobilityLog, remote.mobilityLog, local.mobilityLog)
+        : undefined,
     mobilityRatings:
       remote.mobilityRatings || local.mobilityRatings ? mergeByKey(remote.mobilityRatings, local.mobilityRatings, (r) => `${r.date}|${r.zone}`, (r) => r.date, 200) : undefined,
     mobilityFocus: local.mobilityFocus ?? remote.mobilityFocus,

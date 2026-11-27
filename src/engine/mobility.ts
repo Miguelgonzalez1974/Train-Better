@@ -208,6 +208,28 @@ export function buildRoutine(input: RoutineInput): RoutineItem[] {
   return picked.sort((a, b) => kinds.indexOf(a.exercise.kind) - kinds.indexOf(b.exercise.kind));
 }
 
+/** La semilla de la rutina de un día: el día del año, para que cambie de un día a otro sin ser aleatoria. */
+export function mobilitySeed(iso: string): number {
+  const d = new Date(`${iso}T12:00:00`);
+  return Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000);
+}
+
+/** Con qué zonas se completa la rutina de un descanso cuando las que lo piden no llenan el tiempo. */
+const FILL_ZONES: MobilityZone[] = ['caderas', 'hombros', 'isquios', 'toracica', 'tobillos', 'cuadriceps', 'munecas', 'cuello'];
+
+/**
+ * La rutina que se propone en un día de descanso: primero las zonas que lo piden (nunca menos de tres) y, si con ellas no se llena el tiempo,
+ * otras. Devuelve las zonas y lo que dura de verdad.
+ */
+export function restRoutine(input: { suggested: MobilityZone[]; minutes: number; painAreas: PainArea[]; seed?: number }): { zones: MobilityZone[]; minutes: number } {
+  const order = [...new Set([...input.suggested, ...FILL_ZONES])];
+  for (let count = Math.max(3, input.suggested.length); ; count++) {
+    const zones = order.slice(0, count);
+    const seconds = routineSeconds(buildRoutine({ purpose: 'movilidad', zones, minutes: input.minutes, painAreas: input.painAreas, seed: input.seed }));
+    if (seconds >= input.minutes * 60 - 60 || count >= order.length) return { zones, minutes: Math.round(seconds / 60) };
+  }
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // La guía paso a paso
 

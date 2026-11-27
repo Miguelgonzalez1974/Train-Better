@@ -80,8 +80,8 @@ export function explainReadiness(r: ReadinessScore): Explanation {
 
 export interface EnergyExplainInput {
   morning: number | null;
-  /** Lo hecho, en orden, con lo que ha restado cada cosa. */
-  done: { name: string; cost: number }[];
+  /** Lo hecho, en orden, con lo que ha restado (o sumado) cada cosa. */
+  done: { name: string; cost: number; gain?: number }[];
   /** La energía que queda (con la respuesta de la noche si la hay) y la calculada sin ella. */
   energy: number | null;
   computed: number | null;
@@ -104,14 +104,14 @@ export function explainEnergy(i: EnergyExplainInput): Explanation {
     };
   }
   const rows: ExplainRow[] = [{ kind: 'plain', label: i.isToday ? 'Has salido con' : 'Saliste con', value: `${i.morning} %` }];
-  for (const d of i.done) rows.push({ kind: 'delta', label: d.name, value: -d.cost });
+  for (const d of i.done) rows.push({ kind: 'delta', label: d.name, value: (d.gain ?? 0) - d.cost });
   if (i.energy !== i.computed) rows.push({ kind: 'delta', label: 'Tu respuesta de la noche', value: i.energy - i.computed });
   if (i.pending > 0 && i.projected !== null) rows.push({ kind: 'plain', label: 'Si haces lo que falta', value: `${i.projected} %` });
   return {
     id: 'energia',
     lead: i.isToday ? `Te queda un ${i.energy} %.` : `Acabaste con un ${i.energy} %.`,
     tone: 'neutral',
-    text: i.done.length === 0 ? 'Aún no has gastado nada: es la energía con la que sales.' : 'Cada entreno resta 1 punto por cada 20 de RPE por minutos.',
+    text: i.done.length === 0 ? 'Aún no has gastado nada: es la energía con la que sales.' : 'Cada entreno resta 1 punto por cada 20 de RPE por minutos. El descanso, la movilidad y la recuperación suave suman.',
     rows,
     foot: 'Es una estimación con tu RPE, la duración y tu sueño. Si dices cómo acabas el día, se corrige.',
     actions: [{ label: 'Ir a la sesión', action: 'planificacion' }],
