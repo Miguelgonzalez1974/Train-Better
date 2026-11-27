@@ -19,6 +19,7 @@ import { BodyweightCard } from './BodyweightCard';
 import { CoachAccuracyCard } from './CoachAccuracyCard';
 import { EnergyDomainsCard } from './EnergyDomainsCard';
 import { ImbalancesCard } from './ImbalancesCard';
+import { LevelReferenceView } from './LevelReferenceView';
 import { MarksContent } from './MarksContent';
 import { recentWods } from './myLevelModel';
 import { PR_ROWS } from './prRows';
@@ -102,7 +103,7 @@ function LevelNote({ profile, history, imbalanceGroups, strengthRatio, todayIso,
   return (
     <RexNote tone="info" mood={created ? 'happy' : 'idle'}>
       <p className="text-[13px] leading-relaxed text-neutral-200">
-        <strong className="font-bold text-white">Tu nivel.</strong> {rex.text}
+        <strong className="font-bold text-white">Tu progreso.</strong> {rex.text}
       </p>
       {created ? (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -288,21 +289,55 @@ function MarksPanel(props: LevelScreenProps) {
 export function LevelScreen(props: LevelScreenProps) {
   const { chip, onChip, profile, history } = props;
   const [energyOpen, setEnergyOpen] = useState(false);
+  // Dentro de «Nivel»: frente a gente como tú, o tu progreso contra ti.
+  const [view, setView] = useState<'nivel' | 'progreso'>('nivel');
   return (
     <div className="flex flex-col gap-3">
       <ChipTabs items={CHIPS} active={chip} onChange={onChip} label="Tu nivel" />
       <PartGuard key={chip} name={`el apartado ${chip} de Tu nivel`} fallback={<p className="rounded-2xl bg-white/[0.03] p-4 text-sm text-neutral-400">Esta parte no se ha podido mostrar. Prueba con otra.</p>}>
         {chip === 'nivel' ? (
           <div className="flex flex-col gap-3">
-            <LevelNote {...props} />
-            <PerfilAtleta
-              profile={profile}
-              history={history}
-              onChange={props.onSaveProfile}
-              mode="analisis"
-              onOpenOther={props.onOpenProgramming}
-              extra={<EnergyDomainsCard profile={profile} history={history} collapsed={!energyOpen} onToggleCollapsed={() => setEnergyOpen((v) => !v)} />}
-            />
+            <div className="grid grid-cols-2 rounded-full bg-white/[0.06] p-0.5" role="radiogroup" aria-label="Qué ver de tu nivel">
+              {(
+                [
+                  ['nivel', 'Nivel'],
+                  ['progreso', 'Progreso'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={view === id}
+                  onClick={() => setView(id)}
+                  className={`min-h-8 rounded-full text-xs font-semibold transition-colors ${view === id ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-neutral-100'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {view === 'nivel' ? (
+              <LevelReferenceView
+                profile={profile}
+                history={history}
+                todayIso={props.todayIso}
+                onSaveProfile={props.onSaveProfile}
+                onOpenMarks={() => onChip('marcas')}
+                onOpenBody={() => onChip('cuerpo')}
+              />
+            ) : (
+              <>
+                <LevelNote {...props} />
+                <PerfilAtleta
+                  profile={profile}
+                  history={history}
+                  onChange={props.onSaveProfile}
+                  mode="analisis"
+                  onOpenOther={props.onOpenProgramming}
+                  extra={<EnergyDomainsCard profile={profile} history={history} collapsed={!energyOpen} onToggleCollapsed={() => setEnergyOpen((v) => !v)} />}
+                />
+              </>
+            )}
           </div>
         ) : chip === 'marcas' ? (
           <MarksPanel {...props} />

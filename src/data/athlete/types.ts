@@ -421,6 +421,10 @@ export interface AthleteProfile {
   wodGhosts?: WodSplitsRecord[];
   /** Los resultados de WOD (en Rx) que cuentan para cada categoría de «Tu nivel», de más atrás que el historial. Ver `engine/levelCategories.ts`. */
   levelLog?: LevelResult[];
+  /** Año de nacimiento: solo para comparar tus marcas con gente de tu edad (`engine/levelReference.ts`). Sin él no se compara. */
+  birthYear?: number;
+  /** Tests de tiempo apuntados a mano en «Tu nivel» (remo 2 km, carrera 5 km, Fran). Uno por fecha y test. */
+  levelTests?: LevelTest[];
   /**
    * Días (ISO) que el atleta marcó como descanso a propósito ("Hoy descanso"). Sin marca, un día previsto sin registrar se
    * pinta "no registrado" y cuenta como fallo del plan; con ella es un descanso elegido: se pinta como descanso y no resta.
@@ -1000,6 +1004,15 @@ export interface WodScalingEntry {
   rxKg?: number;
   /** Escalado de movimiento: el movimiento por el que lo cambiaste, si lo dijiste. */
   substituteId?: string;
+}
+
+export type LevelTestKey = 'row2k' | 'run5k' | 'fran';
+
+/** Un test de tiempo apuntado a mano para «Tu nivel» (`AthleteProfile.levelTests`). */
+export interface LevelTest {
+  date: string;
+  key: LevelTestKey;
+  seconds: number;
 }
 
 /**

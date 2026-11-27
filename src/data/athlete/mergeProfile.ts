@@ -40,12 +40,15 @@ export interface SyncBase {
   workouts?: string[];
   /** Ids de las rutinas de movilidad (`AthleteProfile.mobilityLog`). */
   mobilityLog?: string[];
+  /** `fecha|test` de los tests de nivel (`AthleteProfile.levelTests`). */
+  levelTests?: string[];
   /** Fecha de inicio de la rampa de vuelta que habia (null si no habia). */
   rampStart?: string | null;
 }
 
 const workKey = (e: WorkSetEntry) => `${e.date}|${e.movementId}|${e.setNumber}`;
 const feedbackKey = (e: { date: string; movementId: string }) => `${e.date}|${e.movementId}`;
+const testKey = (e: { date: string; key: string }) => `${e.date}|${e.key}`;
 
 /** Foto de las claves del estado ya fusionado, para la siguiente fusion. */
 export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistoryEntry[]): SyncBase {
@@ -64,6 +67,7 @@ export function snapshotSyncBase(profile: AthleteProfile, history: SessionHistor
     restDates: profile.restDates ?? [],
     workouts: (profile.workouts ?? []).map((w) => w.id),
     mobilityLog: (profile.mobilityLog ?? []).map((m) => m.id),
+    levelTests: (profile.levelTests ?? []).map(testKey),
     rampStart: profile.intensityRamp?.startDate ?? null,
   };
 }
@@ -358,6 +362,7 @@ export function mergeProfile(
     wodSources: (localIsFresh ? remote.wodSources : local.wodSources) ?? remote.wodSources,
     wodEffortMode: (localIsFresh ? remote.wodEffortMode : local.wodEffortMode) ?? remote.wodEffortMode,
     skillFocus: (localIsFresh ? remote.skillFocus : local.skillFocus) ?? remote.skillFocus,
+    birthYear: (localIsFresh ? remote.birthYear : local.birthYear) ?? remote.birthYear,
     onboardedAt: local.onboardedAt ?? remote.onboardedAt,
     intensityRamp: mergeRamp(remote, local, localIsFresh, base),
 
@@ -470,6 +475,11 @@ export function mergeProfile(
     wodGhosts: mergeByKey(remote.wodGhosts, local.wodGhosts, (e) => `${e.date}|${e.part}`, (e) => e.date, 120),
     // Resultados de WOD para «Tu nivel»: uno por fecha y parte, gana el local.
     levelLog: remote.levelLog || local.levelLog ? mergeByKey(remote.levelLog, local.levelLog, (e) => `${e.date}|${e.part}`, (e) => e.date, 400) : undefined,
+    // Tests de nivel: uno por fecha y test (gana el local); lo quitado desde la ultima sincronizacion no vuelve.
+    levelTests:
+      remote.levelTests || local.levelTests
+        ? dropDeleted(mergeByKey(remote.levelTests, local.levelTests, testKey, (e) => e.date, 200), testKey, base?.levelTests, remote.levelTests, local.levelTests)
+        : undefined,
     // Descansos elegidos: union, pero quitar la marca ("Deshacer") debe sobrevivir a la sincronizacion como cualquier borrado.
     restDates: dropDeleted(mergeStringSet(remote.restDates, local.restDates, REST_DATES_LIMIT), (d) => d, base?.restDates, remote.restDates, local.restDates),
     sessionCache: mergeSessionCache(remote.sessionCache, local.sessionCache, remote.workLog, local.workLog, remoteHistory, localHistory),
