@@ -6,7 +6,8 @@
  *     bajo, una carga fuera de lo seguro y las molestias. Esa cifra es tu PREPARACIÓN y no se mueve en todo el día.
  *   - Cada entreno resta: 1 punto por cada 20 de RPE × minutos.
  *   - Un descanso que decides, la movilidad y una recuperación suave SUMAN (ver `energyBonus.ts`); esa recuperación no resta ni se arrastra.
- *   - Por la noche, si contestas cómo acabas el día, tu respuesta corrige la cifra con la que te vas a dormir. «Bien» y «Normal» nunca la bajan.
+ *   - Por la noche, si contestas cómo acabas el día, tu respuesta corrige la cifra con la que te vas a dormir. «Bien» y «Normal» nunca la bajan;
+ *     «Cansado» y «Reventado» nunca la suben.
  *
  * Es una ESTIMACIÓN, no una medición: las proporciones son de partida (orientadas por la literatura sobre RPE de sesión, recuperación y sueño)
  * y están juntas aquí para poder ajustarlas. Puro.
@@ -89,14 +90,14 @@ export const daySpend = (entry: Pick<SessionHistoryEntry, 'rpe' | 'durationMin'>
 
 /**
  * La energía con la que te vas a dormir: la calculada, corregida a medias por cómo dices que acabas. «Bien» siempre suma algo y «Normal» solo
- * puede subirla: decir que estás bien nunca te quita energía.
+ * puede subirla; «Cansado» y «Reventado» solo pueden bajarla: decir que estás bien nunca te quita energía, y decir que estás cansado nunca te la da.
  */
 export function nightAdjust(computed: number, feel: NightFeel | undefined): number {
   if (!feel) return computed;
   const halfway = computed + (NIGHT_VALUE[feel] - computed) * NIGHT_WEIGHT;
   if (feel === 'bien') return clampEnergy(Math.max(computed + NIGHT_GOOD_MIN, halfway));
   if (feel === 'normal') return clampEnergy(Math.max(computed, halfway));
-  return clampEnergy(halfway);
+  return clampEnergy(Math.min(computed, halfway));
 }
 
 export interface EnergyInput {

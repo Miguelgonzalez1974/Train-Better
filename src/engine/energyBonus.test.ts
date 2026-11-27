@@ -83,15 +83,17 @@ describe('el día de descanso en la pantalla', () => {
 });
 
 describe('la respuesta de la noche', () => {
-  it('«Bien» y «Normal» nunca bajan la cifra', () => {
+  it('«Bien» y «Normal» nunca bajan la cifra; «Cansado» y «Reventado» nunca la suben', () => {
     expect(nightAdjust(80, 'bien')).toBe(88);
     expect(nightAdjust(97, 'bien')).toBe(100);
     expect(nightAdjust(20, 'bien')).toBe(45);
     expect(nightAdjust(80, 'normal')).toBe(80);
     expect(nightAdjust(20, 'normal')).toBe(35);
-    // «Cansado» y «Reventado» siguen como estaban: acercan la cifra a la suya.
+    // «Cansado» y «Reventado» acercan la cifra a la suya solo hacia abajo: nunca la suben.
     expect(nightAdjust(80, 'cansado')).toBe(55);
-    expect(nightAdjust(10, 'cansado')).toBe(20);
+    expect(nightAdjust(27, 'cansado')).toBe(27);
+    expect(nightAdjust(10, 'cansado')).toBe(10);
+    expect(nightAdjust(5, 'reventado')).toBe(5);
     expect(eveningEnergy(52, 0, 'bien', 13)).toEqual({ computed: 65, value: 73 });
   });
 });

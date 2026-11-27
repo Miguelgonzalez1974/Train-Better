@@ -169,7 +169,7 @@ function Arc({ from, to, color, opacity = 1, show }: { from: number; to: number;
 
 /**
  * El estado del día: un solo aro de energía, de un solo color. Lo fuerte es lo que te queda y el tramo suave, lo que ya no tienes de la energía
- * con la que saliste (el reparto por bloques va en las tarjetas). A la izquierda la preparación de la mañana (que no cambia) y la carga; a la
+ * con la que saliste; debajo, una línea lo dice (el reparto por bloques va en las tarjetas). A la izquierda la preparación de la mañana (que no cambia) y la carga; a la
  * derecha el esfuerzo del día frente a tu objetivo. Todo lo que lleva % es energía. Tocar un número le pregunta a Rex de dónde sale.
  */
 export function DayRing({
@@ -340,6 +340,16 @@ export function DayRing({
           )}
         </div>
       </div>
+
+      {/* La leyenda del tramo suave: cuánto has bajado desde que saliste. Sin nada gastado no hay tramo ni línea. */}
+      {started !== null && now !== null && (
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-neutral-400" data-testid="energy-legend">
+          <span className="h-[7px] w-4 shrink-0 rounded-full bg-white/[0.28]" aria-hidden="true" />
+          <span>
+            {isToday ? 'Has bajado' : 'Bajaste'} <span className="num font-semibold text-neutral-200">{started - now} %</span> · saliste con <span className="num font-semibold text-neutral-200">{started} %</span>
+          </span>
+        </p>
+      )}
 
       {/* Hoy, Rex dice el consejo y el cierre del día. Un día pasado conserva el balance y la frase. */}
       {!isToday &&
