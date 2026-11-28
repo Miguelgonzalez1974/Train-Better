@@ -53,6 +53,8 @@ export interface RefMark {
   next: string | null;
   /** Una línea más: el percentil, el porcentaje por edad, de cuándo es el test. */
   detail: string | null;
+  /** El siguiente escalón en cifras (kilos o segundos): lo que tienes, donde empieza y cuál es. Sin él arriba del todo, sin comparación o escalado. */
+  goal?: { kind: 'kg' | 'time'; current: number; cut: number; zone: number };
 }
 
 export type RefKey = 'fuerza' | 'olimpicos' | 'velocidad' | 'largo' | 'resistencia';
@@ -182,6 +184,9 @@ function aheadText(values: number[], kg: number): string {
   return `por delante del ${wholePct(p)} %`;
 }
 
+/** El siguiente corte de la escala desde donde estás; nada arriba del todo. */
+const goalOf = (kind: 'kg' | 'time', current: number, cuts: number[], zone: number): RefMark['goal'] => (zone >= 4 ? undefined : { kind, current, cut: cuts[zone], zone: zone + 1 });
+
 /** «a 3 kg de Novato» (redondeado hacia arriba al medio kilo). */
 function kgToNext(kg: number, cuts: number[], zone: number): string | null {
   if (zone >= 4) return null;
@@ -215,7 +220,7 @@ function strengthCategory(prs: PersonalRecords, age: number | null, bw: number |
     // Percentiles de la tabla: 1, 10, 35, 65, 90 y 99. Los cortes son 10, 35, 65 y 90.
     const cuts: [number, number, number, number] = [values[1], values[2], values[3], values[4]];
     const placement = placeOnScale(kg, cuts, values[0], values[5]);
-    return { key, label, value: `${comma(kg)} kg`, placement, next: kgToNext(kg, cuts, placement.zone), detail: aheadText(values, kg) };
+    return { key, label, value: `${comma(kg)} kg`, placement, next: kgToNext(kg, cuts, placement.zone), detail: aheadText(values, kg), goal: goalOf('kg', kg, cuts, placement.zone) };
   });
   return {
     key: 'fuerza',
@@ -255,7 +260,7 @@ function olympicCategory(profile: AthleteProfile, age: number | null, bw: number
     if (age === null || bw === null) return kgMark(key, label, kg);
     const cuts = OLY_RATIOS[key].map((r) => Math.round(r * bw * olyAgeFactor(age) * 2) / 2) as [number, number, number, number];
     const placement = placeOnScale(kg, cuts, cuts[0] * 0.5, cuts[3] * 1.25);
-    return { key, label, value: `${comma(kg)} kg`, placement, next: kgToNext(kg, cuts, placement.zone), detail: `${comma(kg / bw)} veces tu peso` };
+    return { key, label, value: `${comma(kg)} kg`, placement, next: kgToNext(kg, cuts, placement.zone), detail: `${comma(kg / bw)} veces tu peso`, goal: goalOf('kg', kg, cuts, placement.zone) };
   });
   const over = (
     [
@@ -386,6 +391,7 @@ function franCategory(profile: AthleteProfile, history: SessionHistoryEntry[], a
       mark.placement = placement;
       mark.next = placement.zone >= 4 ? null : `a ${gapText(Math.max(1, Math.ceil(best.seconds - cuts[placement.zone])))} de ${ZONES[placement.zone + 1]}`;
       mark.detail = `${ahead} · ${testDateText(best.date)}`;
+      mark.goal = goalOf('time', best.seconds, cuts, placement.zone);
     }
     marks.push(mark);
   }
@@ -456,6 +462,7 @@ function runCategory(profile: AthleteProfile, history: SessionHistoryEntry[], ag
       mark.placement = placement;
       mark.next = placement.zone >= 4 ? null : `a ${gapText(Math.max(1, Math.ceil(best.seconds - (100 * std) / RUN_CUTS[placement.zone])))} de ${ZONES[placement.zone + 1]}`;
       mark.detail = `${Math.round(pct)} % por edad · ${testDateText(best.date)}`;
+      mark.goal = goalOf('time', best.seconds, RUN_CUTS.map((c) => (100 * std) / c), placement.zone);
     }
     marks.push(mark);
   }

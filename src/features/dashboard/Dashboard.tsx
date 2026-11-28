@@ -40,6 +40,7 @@ import { resolveMovementDisplayName } from '../../data/movements';
 import { LevelSummaryCard } from './LevelSummaryCard';
 import { LevelScreen, type LevelChip } from './LevelScreen';
 import { buildLevelCard } from './myLevelModel';
+import { previewSession } from './upcomingSession';
 import { computeLevel } from '../../engine/levelCategories';
 import { applyGoalAdjustment, buildWeeklyReview, withWeekReviewed, type WeeklyReview } from './weeklyReview';
 import { applyMacroReview, withMacroWeekReviewed } from '../../engine/macroReview';
@@ -469,12 +470,21 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
   const levelCard = useMemo(() => {
     try {
       const level = computeLevel({ profile, history });
-      return { level, model: buildLevelCard({ profile, level, todayIso }) };
+      const todayPlan = todaySession ?? athleteRepository.getCachedSession(todayIso);
+      return { level, model: buildLevelCard({ profile, history, level, todayIso, todayPlan, sessionOn: (iso) => previewSession(profile, history, iso), readiness: readiness.total }) };
     } catch (error) {
       console.error('La tarjeta Tu nivel no se pudo calcular:', error);
       return null;
     }
-  }, [profile, history, todayIso]);
+  }, [profile, history, todayIso, todaySession, readiness.total]);
+  // El peso apuntado desde la tarjeta: se guarda y se recalculan con él los escalones.
+  function saveWeight(kg: number) {
+    athleteRepository.appendBodyweightEntry({ date: todayIso, kg });
+    const saved = athleteRepository.getProfile();
+    setBodyweightLog(athleteRepository.getBodyweightLog());
+    setProfile((prev) => ({ ...prev, bodyweightLog: saved.bodyweightLog }));
+    toast.show(`Peso apuntado: ${String(kg).replace('.', ',')} kg`);
+  }
 
   // Rex, arriba del todo: qué toca ahora y atajos a los módulos. Lee lo mismo que el resto del Dashboard.
   const goalsBehind = useMemo(() => buildOpenItems(profile, history, todayIso).objetivos.filter((i) => i.chip.tone === 'warn').length, [profile, history, todayIso]);
@@ -916,7 +926,7 @@ export function Dashboard({ onNavigateToPlanificacion, onNavigateToObjetivos, on
               const test = (isToday ? athleteRepository.getCachedSession(dayIso) : profile.sessionCache?.[dayIso])?.levelTest;
               return test ? <TestResultCard profile={profile} history={history} testKey={test.key} date={dayIso} /> : null;
             })()}
-            {isToday && levelCard ? <LevelSummaryCard model={levelCard.model} level={levelCard.level} onOpen={() => openLevel('nivel')} /> : null}
+            {isToday && levelCard ? <LevelSummaryCard model={levelCard.model} level={levelCard.level} onOpen={() => openLevel('nivel')} onSaveWeight={saveWeight} /> : null}
           </>
         }
       />

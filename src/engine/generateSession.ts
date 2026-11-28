@@ -133,6 +133,7 @@ import { getImbalanceBias, type ImbalanceBias } from './imbalances';
 import { buildMicrocyclePlan, type DayIntensity } from './weekPlan';
 import { ACCESSORY_ROLE_FOR_PATTERN, emphasisLevers, sessionEmphasis } from './programmingEmphasis';
 import { rng, seededRng, withSeededRng } from './rng';
+import { COMBINED_TAIL_PREFIX } from './levelNextStep';
 import { liftProgressionFactor, OLY_PRIMER_REPS, progressionNote } from './progression';
 import {
   computeResponseProfile,
@@ -1709,7 +1710,7 @@ function buildOlyBlock(
         sets: 3,
         reps: '1',
         loadKg: otherLoadKg,
-        notes: `Día combinado (estilo Day 5 de Mayhem): cierra con 3 singles técnicos de ${
+        notes: `${COMBINED_TAIL_PREFIX} (estilo Day 5 de Mayhem): cierra con 3 singles técnicos de ${
           otherFamily === 'snatch' ? 'snatch' : 'clean & jerk'
         } al ~72% (${otherLoadKg} kg) — velocidad y posición, sin buscar máximos.`,
       },
