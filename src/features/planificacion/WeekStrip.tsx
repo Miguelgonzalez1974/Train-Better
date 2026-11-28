@@ -434,7 +434,7 @@ export function WeekStrip({ profile, history, goals, today = new Date(), onLogge
                 <>
                   {expandedPreview.levelTestPostponed && (
                     <div className="mb-3">
-                      <TestPostponed profile={profile} history={history} testKey={expandedPreview.levelTestPostponed.key} reason={expandedPreview.levelTestPostponed.reason} date={dateIso} />
+                      <TestPostponed profile={profile} testKey={expandedPreview.levelTestPostponed.key} reason={expandedPreview.levelTestPostponed.reason} date={dateIso} />
                     </div>
                   )}
                   <DaySessionBlocks session={expandedPreview} clockScope="preview" />

@@ -5,7 +5,7 @@ import { goalPrKey } from '../../engine/goalTarget';
 import type { LevelSnapshot } from '../../engine/levelCategories';
 import { isLiftStep, isNoProbeSession, isProbeDay, nextSteps, recentLevelUp, type NextStep, type StepKey } from '../../engine/levelNextStep';
 import { computeReferenceLevel, timeText, ZONES, type ReferenceLevel } from '../../engine/levelReference';
-import { nextTestOfSameKind, testName, testSlotOf, upcomingTests } from '../../engine/levelTestPlan';
+import { testName, testRetryDate, upcomingTests } from '../../engine/levelTestPlan';
 import { addDaysIso, isoDiffDays } from '../../engine/periodization';
 import { LOW_UNTIL } from '../../engine/readinessScore';
 import { parseTimeSeconds } from '../../engine/wodGhost';
@@ -169,8 +169,7 @@ function buildTestLine({ profile, history, todayIso, todayPlan, sessionOn }: Lev
   const inDays = isoDiffDays(todayIso, next.date);
   const session = inDays === 0 ? todayPlan : inDays <= 7 ? sessionOn(next.date) : null;
   if (session?.levelTestPostponed) {
-    const week = addDaysIso(next.date, 7);
-    const retry = testSlotOf(week)?.index === testSlotOf(next.date)?.index ? week : nextTestOfSameKind(next.date);
+    const retry = testRetryDate(profile, next.date);
     return { text: `${testName(next.key)} aplazado`, when: retry ? `nueva fecha: ${dayText(retry, todayIso)}` : '' };
   }
   if (inDays === 0) return { text: `Hoy: test ${testName(next.key)}`, when: '' };

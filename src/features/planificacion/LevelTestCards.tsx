@@ -1,5 +1,5 @@
 import type { AthleteProfile, LevelTestKey, LevelTestPostpone, SessionHistoryEntry } from '../../data/athlete/types';
-import { nextTestOfSameKind, POSTPONE_TEXT, testBriefing, testName, upcomingTests } from '../../engine/levelTestPlan';
+import { nextTestOfSameKind, POSTPONE_TEXT, testBriefing, testName, testRetryDate } from '../../engine/levelTestPlan';
 import { computeReferenceLevel, testDateText, testResults, timeText, ZONES, type RefKey } from '../../engine/levelReference';
 import { ZoneBar } from '../dashboard/ZoneBar';
 
@@ -16,7 +16,7 @@ const Tag = ({ text }: { text: string }) => <span className="shrink-0 whitespace
 
 /** «El lunes toca test», unos días antes. Si con lo que se sabe hoy ese día se va a aplazar (`postponed`), lo dice en su lugar. */
 export function TestNotice({ profile, history, test, postponed, onPostpone }: { profile: AthleteProfile; history: SessionHistoryEntry[]; test: { key: LevelTestKey; date: string; inDays: number }; postponed?: LevelTestPostpone; onPostpone: (date: string) => void }) {
-  if (postponed) return <TestPostponed profile={profile} history={history} testKey={test.key} reason={postponed} date={test.date} />;
+  if (postponed) return <TestPostponed profile={profile} testKey={test.key} reason={postponed} date={test.date} />;
   const { previous } = testBriefing(profile, history, test.key, test.date);
   return (
     <section className={CARD} aria-label="Próximo test" data-testid="test-notice">
@@ -67,11 +67,11 @@ export function TestDayCard({ profile, history, testKey, date, onPostpone }: { p
 }
 
 /** Un día tocaba un test y no sale: por qué y cuándo vuelve. */
-export function TestPostponed({ profile, history, testKey, reason, date }: { profile: AthleteProfile; history: SessionHistoryEntry[]; testKey: LevelTestKey; reason: LevelTestPostpone; date: string }) {
-  const next = upcomingTests(profile, history, date, 4).find((t) => t.date > date && t.key === testKey);
+export function TestPostponed({ profile, testKey, reason, date }: { profile: AthleteProfile; testKey: LevelTestKey; reason: LevelTestPostpone; date: string }) {
+  const next = testRetryDate(profile, date);
   return (
     <p className="rounded-xl bg-white/[0.04] px-3 py-2 text-xs leading-relaxed text-neutral-400" data-testid="test-postponed">
-      El test de {testName(testKey)} del {testDayText(date)} se aplaza porque {POSTPONE_TEXT[reason]}.{next ? ` Vuelve el ${testDayText(next.date)}.` : ''}
+      El test de {testName(testKey)} del {testDayText(date)} se aplaza porque {POSTPONE_TEXT[reason]}.{next ? ` Vuelve el ${testDayText(next)}.` : ''}
     </p>
   );
 }

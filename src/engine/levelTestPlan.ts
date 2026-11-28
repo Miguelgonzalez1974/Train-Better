@@ -101,6 +101,23 @@ export function nextTestOfSameKind(dateIso: string): string | null {
   return slot ? slotAt(slot.index + TEST_ROTATION.length).start : null;
 }
 
+/**
+ * Cuándo vuelve un test que no sale ese lunes: el siguiente lunes libre de su mismo hueco de 4 semanas y, si no queda ninguno, el primero libre
+ * de su siguiente turno. No es lo mismo que `upcomingTests`, que para un aplazamiento del coach sigue contando ese mismo lunes.
+ */
+export function testRetryDate(profile: AthleteProfile, dateIso: string): string | null {
+  const slot = testPlanEnabled(profile) ? testSlotOf(dateIso) : null;
+  if (!slot) return null;
+  for (const index of [slot.index, slot.index + TEST_ROTATION.length]) {
+    const { start } = slotAt(index);
+    for (let week = 0; week < TEST_SLOT_DAYS / 7; week++) {
+      const date = addDaysIso(start, week * 7);
+      if (date > dateIso && !testSkippedByAthlete(profile, date)) return date;
+    }
+  }
+  return null;
+}
+
 /** El aviso previo: el próximo test si cae dentro de la semana que viene (sin contar hoy). */
 export function testNotice(profile: AthleteProfile, history: SessionHistoryEntry[], todayIso: string): (UpcomingTest & { inDays: number }) | null {
   const next = upcomingTests(profile, history, todayIso, 1)[0];

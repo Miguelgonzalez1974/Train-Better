@@ -1771,7 +1771,7 @@ export function Planificacion({ onNavigateToObjetivos, onNavigateToPerfil }: Pla
           <TestDayCard profile={profile} history={history} testKey={session.levelTest.key} date={session.date} onPostpone={handlePostponeTest} />
         )}
         {!editMode && !alreadyCompletedToday && session.levelTestPostponed && (
-          <TestPostponed profile={profile} history={history} testKey={session.levelTestPostponed.key} reason={session.levelTestPostponed.reason} date={session.date} />
+          <TestPostponed profile={profile} testKey={session.levelTestPostponed.key} reason={session.levelTestPostponed.reason} date={session.date} />
         )}
         {alreadyCompletedToday && session.levelTest && <TestResultCard profile={profile} history={history} testKey={session.levelTest.key} date={session.date} />}
         <DaySessionBlocks

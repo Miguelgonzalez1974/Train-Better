@@ -5,7 +5,7 @@ import { benchmarkWorkouts } from '../data/movements';
 import { blockOrderOf } from '../features/planificacion/DaySessionBlocks';
 import { makeMacro, makeProfile } from './__fixtures';
 import { generateSessionForDate, planWeekLocks, wodMovementsOfSession } from './generateSession';
-import { nextTestOfSameKind, TEST_PLAN_ANCHOR, TEST_WOD_ID, testBriefing, testCandidate, testNotice, testNote, upcomingTests, withTestSkipped } from './levelTestPlan';
+import { nextTestOfSameKind, TEST_PLAN_ANCHOR, TEST_WOD_ID, testBriefing, testCandidate, testNotice, testNote, testRetryDate, upcomingTests, withTestSkipped } from './levelTestPlan';
 import { computeReferenceLevel } from './levelReference';
 import { sessionParts } from './sessionParts';
 import { getWodCatalog } from './wodCatalog';
@@ -54,6 +54,17 @@ describe('el calendario de tests', () => {
     expect(upcomingTests(profile, [], '2026-11-27', 1)).toEqual([{ key: 'fran', date: '2026-12-07' }]);
     for (const d of ['2026-12-07', '2026-12-14', '2026-12-21']) profile = withTestSkipped(profile, d);
     expect(upcomingTests(profile, [], '2026-11-27', 1)).toEqual([{ key: 'row2k', date: '2026-12-28' }]);
+  });
+
+  it('un test que no sale vuelve el lunes siguiente mientras quede hueco, no tres meses después', () => {
+    // Aplazado por el coach (nada apuntado): el siguiente lunes del mismo hueco.
+    expect(testRetryDate(athlete(), '2026-11-30')).toBe('2026-12-07');
+    expect(testRetryDate(athlete(), '2026-12-14')).toBe('2026-12-21');
+    // En el último lunes del hueco ya no queda sitio: su siguiente turno.
+    expect(testRetryDate(athlete(), '2026-12-21')).toBe('2027-02-22');
+    // Se saltan los lunes que hayas aplazado tú.
+    expect(testRetryDate(withTestSkipped(athlete(), '2026-12-07'), '2026-11-30')).toBe('2026-12-14');
+    expect(testRetryDate(athlete({ testPlan: { enabled: false } }), '2026-11-30')).toBeNull();
   });
 
   it('avisa la semana antes y se puede apagar', () => {
