@@ -2,6 +2,7 @@ import { AthleteProfile, BodyweightEntry, DailySession, DEFAULT_PROFILE, LevelRe
 
 import { isExcludedMovement } from '../movements/excluded';
 import { stripLegacyNutritionPrefs } from './legacyNutrition';
+import { stampPrChanges } from './prSync';
 
 const PROFILE_KEY = 'train-better:profile';
 import { historyStamp, painStamp } from './historyStamp';
@@ -239,7 +240,8 @@ export const localAthleteRepository: AthleteRepository = {
   saveProfile(profile) {
     const prev = migrateProfile(readJson<AthleteProfile & { mesocycleStartDate?: string }>(PROFILE_KEY, DEFAULT_PROFILE));
     const prLog = appendPrChanges(prev, profile);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prLog }));
+    const prsAt = stampPrChanges(prev, profile);
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, prLog, ...(prsAt ? { prsAt } : {}) }));
   },
   getHistory() {
     return readJson<SessionHistoryEntry[]>(HISTORY_KEY, []);
@@ -453,6 +455,8 @@ export const localAthleteRepository: AthleteRepository = {
         ...profile,
         prs,
         variantPrs: {},
+        // El borrado es un cambio de ahora: las marcas antiguas de otro dispositivo no vuelven.
+        prsAt: Object.fromEntries([...Object.keys(prs), ...Object.keys(profile.variantPrs ?? {})].map((k) => [k, Date.now()])),
         trainingDatesLog: [],
         prLog: [],
         setFeedbackLog: [],

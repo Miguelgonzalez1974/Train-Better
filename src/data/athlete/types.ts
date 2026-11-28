@@ -395,6 +395,8 @@ export interface CustomMealItem {
 
 export interface AthleteProfile {
   prs: PersonalRecords;
+  /** Cuándo cambió cada marca (ms), por clave de `prs` o `variantPrs`: al sincronizar gana la más reciente (ver `prSync.ts`). */
+  prsAt?: Record<string, number>;
   trainingDaysPerWeek: 3 | 4 | 5 | 6;
   /** ISO del momento en que el atleta terminó (o saltó) el asistente de alta — ausente = no lo ha visto. */
   onboardedAt?: string;

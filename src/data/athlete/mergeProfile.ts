@@ -1,5 +1,6 @@
 import type { AthleteProfile, DailySession, DiagnosisAreaKey, DiagnosisCheck, ExtraFoodEntry, SessionHistoryEntry, StrainTarget, WorkSetEntry } from './types';
 import { REST_DATES_LIMIT } from '../../engine/restDays';
+import { mergePrs } from './prSync';
 
 /**
  * Fusion de dos estados del atleta (remoto y local) para la sincronizacion. Antes cada `pushRemote`
@@ -205,6 +206,11 @@ function mergeNutritionPrefs(remote: AthleteProfile['nutritionPrefs'], local: At
   };
 }
 
+/** El registro de cambios de marcas de los dos dispositivos, unido. */
+function mergePrLog(remote: AthleteProfile, local: AthleteProfile) {
+  return mergeByKey(remote.prLog, local.prLog, (e) => `${e.date}|${e.key}|${e.kg}`, (e) => e.date, PR_LOG_LIMIT);
+}
+
 /** Une dos listas por una clave; en colision gana `pick` (por defecto, la de `b` = local). Ordena por `sortKey` y recorta a `limit` (los mas recientes). */
 function mergeByKey<T>(
   a: T[] | undefined,
@@ -355,8 +361,8 @@ export function mergeProfile(
     // Base = remoto, para que un campo NUEVO que aun no contemple esta funcion no se pierda al subir.
     ...remote,
     // --- config: gana el local, salvo que el local sea un perfil recien instalado sin configurar ---
-    prs: localIsFresh ? remote.prs : local.prs,
-    variantPrs: (localIsFresh ? remote.variantPrs : local.variantPrs) ?? remote.variantPrs,
+    // Las marcas (1RM) no son «del último que sincroniza»: gana el cambio más reciente de cada una (ver `prSync.ts`).
+    ...mergePrs(remote, local, mergePrLog(remote, local), localIsFresh),
     trainingDaysPerWeek: localIsFresh ? remote.trainingDaysPerWeek : local.trainingDaysPerWeek,
     strengthSplit: (localIsFresh ? remote.strengthSplit : local.strengthSplit) ?? remote.strengthSplit,
     wodSources: (localIsFresh ? remote.wodSources : local.wodSources) ?? remote.wodSources,
@@ -469,13 +475,7 @@ export function mergeProfile(
       remote.setFeedbackLog,
       local.setFeedbackLog,
     ),
-    prLog: mergeByKey(
-      remote.prLog,
-      local.prLog,
-      (e) => `${e.date}|${e.key}|${e.kg}`,
-      (e) => e.date,
-      PR_LOG_LIMIT,
-    ),
+    prLog: mergePrLog(remote, local),
     trainingDatesLog: mergeStringSet(remote.trainingDatesLog, local.trainingDatesLog, TRAINING_DATES_LOG_LIMIT),
     // Registro del WOD: una línea por fecha, gana la local (es lo que acabas de anotar).
     wodLog: mergeByKey(remote.wodLog, local.wodLog, (e) => e.date, (e) => e.date, 400),
