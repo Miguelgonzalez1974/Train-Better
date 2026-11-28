@@ -5,6 +5,7 @@ import type { WodCap } from '../../engine/wodCap';
 import { clockBus, clockState, type ClockScope } from '../../lib/clockState';
 import { WodRibbon } from './WodRibbon';
 import { RexPaceCard } from './RexPaceCard';
+import { ClockBpm, HeartRatePanel, StripBpm } from './HeartRate';
 import { amrapDeltaText, amrapStanding, deltaText, ghostPosition, liveDelta, marksToSegments, trackTotal, type Ghost, type TrackMode, type WodTrackInfo } from '../../engine/wodGhost';
 import { paceGhost, type PaceTip } from '../../engine/wodPace';
 
@@ -238,9 +239,12 @@ function FullscreenClock({ label, sub, time, tone, tint, primary, onReset, extra
             {track.delta !== null && <p className={`text-2xl font-black tabular-nums ${track.neutral ? 'text-neutral-200' : track.deltaGood ? 'text-brand-neon' : 'text-brand-orange'}`}>{track.delta}</p>}
           </div>
         )}
-        <button onClick={onClose} aria-label="Salir de pantalla completa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-white active:bg-white/30">
-          <Minimize2 size={22} />
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <ClockBpm />
+          <button onClick={onClose} aria-label="Salir de pantalla completa" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-white active:bg-white/30">
+            <Minimize2 size={22} />
+          </button>
+        </div>
       </div>
 
       {progress && (
@@ -1393,6 +1397,7 @@ export function TrainingTimer({
               {strip.sub ? ` · ${strip.sub}` : ''}
             </span>
             {strip.badge && <span className="shrink-0 rounded-full bg-black/15 px-2 py-0.5 text-xs font-bold">{strip.badge}</span>}
+            <StripBpm />
           </button>
           {strip.onToggle && (
             <button onClick={strip.onToggle} aria-label={strip.toggleLabel ?? (strip.running ? 'Pausa' : 'Reanudar')} className={btn}>
@@ -1472,6 +1477,8 @@ export function TrainingTimer({
           <X size={16} />
         </button>
       </div>
+
+      <HeartRatePanel />
 
       {preStartFor === mode ? (
         <button onClick={skipPreStart} className="flex w-full flex-col items-center gap-1 py-2" aria-label="Saltar cuenta atrás y empezar ya">
