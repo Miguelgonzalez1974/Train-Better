@@ -41,6 +41,12 @@ describe('las marcas al sincronizar', () => {
     expect(both(stamped, oldApp)).toEqual([67.5, 67.5]);
   });
 
+  it('si la versión antigua la pisa conservando el sello, desempata el registro', () => {
+    const stamp = { snatch: ms('2026-11-27') };
+    const records = log(['2026-08-30', 50], ['2026-11-27', 65]);
+    expect(both(athlete(65, { prsAt: stamp, prLog: records }), athlete(50, { prsAt: stamp, prLog: records }))).toEqual([65, 65]);
+  });
+
   it('una marca borrada no resucita', () => {
     const base = athlete(50);
     const removed = { ...base, variantPrs: { powerSnatch: 0 }, prsAt: { powerSnatch: ms('2026-11-28') }, prLog: [{ date: '2026-08-30', key: 'powerSnatch', kg: 60 }] };

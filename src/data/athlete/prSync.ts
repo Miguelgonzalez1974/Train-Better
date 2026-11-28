@@ -59,7 +59,10 @@ export function mergePrs(
       const lastDate = mineOfKey.reduce((d, e) => (e.date > d ? e.date : d), '');
       let value = lv ?? rv;
       let sealed = stamp;
-      if (lastDate !== '' && lv !== 0 && lastDate > (stamp ? isoDayOf(stamp) : '')) {
+      const stampDay = stamp ? isoDayOf(stamp) : '';
+      // Mismo sello y valores distintos: uno de los dos lo pisó con la versión antigua, así que desempata el registro.
+      const tied = ls === rs && lv !== rv;
+      if (lastDate !== '' && lv !== 0 && (lastDate > stampDay || (tied && lastDate >= stampDay))) {
         // Hay un cambio apuntado posterior a los sellos (o no hay sellos): manda ese. A igual fecha, el que ya tenga uno de los dos.
         const latest = mineOfKey.filter((e) => e.date === lastDate).map((e) => e.kg);
         value = lv !== undefined && latest.includes(lv) ? lv : rv !== undefined && latest.includes(rv) ? rv : latest[latest.length - 1];
